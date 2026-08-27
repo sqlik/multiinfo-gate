@@ -1,0 +1,31 @@
+# zależności i wynik budowania
+node_modules/
+dist/
+
+# dane środowiska uruchomieniowego (tylko katalog główny)
+/data/
+.env
+.env.*
+
+# materiał kryptograficzny - nigdy w repozytorium
+*.pfx
+*.p12
+*.key
+*.pem
+/secrets/
+test/fixtures/*.pfx
+test/fixtures/*.pem
+
+# materiał wewnętrzny (spec, plany, makiety, dokumentacja Polkomtela) żyje poza repo
+docs/superpowers/
+design/
+*.pdf
+
+# przykład PHP: konfiguracja z kluczem i dane runtime
+examples/php/config.php
+examples/php/data/*
+!examples/php/data/.htaccess
+
+# stan narzędzi lokalnych
+.remember/
+.DS_Store

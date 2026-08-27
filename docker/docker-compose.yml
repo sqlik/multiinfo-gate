@@ -1,0 +1,28 @@
+services:
+  multiinfo-gate:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    environment:
+      MIG_MASTER_KEY: ${MIG_MASTER_KEY:?ustaw MIG_MASTER_KEY, 32 bajty w base64}
+      MIG_API_PORT: "8080"
+      MIG_ADMIN_PORT: "8081"
+      # W kontenerze panel musi nasłuchiwać na wszystkich interfejsach sieci kontenera,
+      # żeby mapowanie portów poniżej mogło go dostarczyć na pętlę zwrotną hosta.
+      MIG_ADMIN_HOST: 0.0.0.0
+      MIG_DATA_DIR: /data
+      MIG_LOG_LEVEL: info
+      # Webhooki tylko pod adresy publiczne. Aplikacja na tym samym serwerze (np. przykład PHP
+      # pod adresem hosta widzianym z kontenera) wymaga MIG_WEBHOOK_ALLOW_PRIVATE=1 w docker/.env.
+      MIG_WEBHOOK_ALLOW_PRIVATE: ${MIG_WEBHOOK_ALLOW_PRIVATE:-0}
+    ports:
+      # API i panel tylko na pętli zwrotnej hosta. Na świat API wystawia odwrotne proxy
+      # (docker-compose.caddy.yml albo nginx na hoście) - docs/uruchomienie.md, rozdział 6.
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - gate-data:/data
+
+volumes:
+  gate-data:
