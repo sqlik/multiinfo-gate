@@ -1,4 +1,5 @@
 import type { Flash } from '../flash.ts';
+import { FAVICON_LINK } from './favicon.ts';
 
 export type NavKey = 'przeglad' | 'wiadomosci' | 'rozsylki' | 'konta' | 'klucze' | 'uzytkownicy' | 'dziennik';
 
@@ -65,6 +66,7 @@ export function layout(opts: {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(opts.title)} - Multiinfo Gate</title>
 <link rel="stylesheet" href="/style.css">
+${FAVICON_LINK}
 <script src="/panel.js" defer></script>
 </head>
 <body>

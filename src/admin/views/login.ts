@@ -1,4 +1,5 @@
 import { esc } from './layout.ts';
+import { FAVICON_LINK } from './favicon.ts';
 
 /** Ekran logowania stoi poza ramą panelu - bez szyny nawigacji i bez liczników. */
 export function gate(title: string, inner: string, wide = false): string {
@@ -9,6 +10,7 @@ export function gate(title: string, inner: string, wide = false): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)} - Multiinfo Gate</title>
 <link rel="stylesheet" href="/style.css">
+${FAVICON_LINK}
 </head>
 <body>
 <div class="gate">
