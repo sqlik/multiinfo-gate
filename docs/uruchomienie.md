@@ -343,6 +343,8 @@ Następnie w przeglądarce należy otworzyć `http://127.0.0.1:8081`, zalogować
 z rozdziału 3.4, zeskanować wyświetlony kod QR aplikacją uwierzytelniającą, wpisać kod z aplikacji
 i zapisać kody zapasowe.
 
+![Ekran logowania do panelu: pola login i hasło, przycisk Dalej](obrazki/logowanie.png)
+
 Gdy nie działa:
 
 - przeglądarka zgłasza odmowę połączenia - okno z tunelem zostało zamknięte albo tunel nie
@@ -367,6 +369,8 @@ W panelu: **Konta Multiinfo → Dodaj konto**. Pola formularza:
 | Plik .pfx albo .p12 | plik z punktu 1.2, z dowolnym z tych dwóch rozszerzeń |
 | Hasło do pliku .pfx | hasło nadane przy tworzeniu pliku |
 
+![Formularz nowego konta Multiinfo wypełniony danymi przykładowymi, z wybranym plikiem .pfx](obrazki/konto.png)
+
 Po zapisaniu bramka otwiera kartę konta z sekcją **Odczytane dane certyfikatu**: podmiot (CN),
 wystawca, odcisk SHA-1 i daty ważności. Te trzy pierwsze wartości należy teraz wpisać w panelu
 Multiinfo, w edycji użytkownika API, w zakładce Uwierzytelnianie (punkt 1.2, krok 5). Jeżeli CN
@@ -388,6 +392,8 @@ i hasło, a odrzuciło jedynie treść zapytania. Inne kody:
 
 Karta konta zachowuje ślad ostatniego sprawdzenia (żądanie i odpowiedź, z hasłem zamaskowanym).
 
+![Karta konta po sprawdzeniu połączenia: odczytane dane certyfikatu i ślad zapytania z kodem -31](obrazki/polaczenie.png)
+
 ### 4.4. Słownik nadpisów
 
 Na liście kont, przy każdym koncie, znajduje się formularz **Słownik nadpisów, jeden w wierszu**
@@ -396,6 +402,8 @@ Polkomtel (punkt 1.4). Bramka odrzuca żądanie z nadpisem spoza słownika kodem
 trafi ono do Multiinfo; nadpis wpisany do słownika, ale nieuruchomiony przez Polkomtel, przejdzie
 przez bramkę i zostanie odrzucony przez Multiinfo kodem `-14` - wiadomość dostanie wtedy stan
 `failed` z tym kodem.
+
+![Lista kont ze słownikiem nadpisów konta Firma i wartością domyślną Firma Info](obrazki/nadpisy.png)
 
 ### 4.5. Klucz API
 
@@ -415,12 +423,16 @@ odpowiedzialnej za aplikację kliencką. Utracony klucz zastępuje się nowym (w
 nowego, przekazanie aplikacji, odwołanie starego); utracony sekret webhooka wydaje ponownie
 edycja klucza ze zmianą adresu webhooka.
 
+![Ekran kluczy API tuż po wygenerowaniu klucza: klucz i sekret webhooka pokazane jeden raz](obrazki/klucz.png)
+
 ### 4.6. Użytkownicy panelu
 
 Kolejne osoby otrzymują konta z ekranu **Użytkownicy → Dodaj użytkownika**. Formularz przyjmuje
 login i hasło startowe; hasło przekazuje się tej osobie bezpośrednio, ponieważ panel nie
 wyświetla go ponownie. Przy pierwszym logowaniu panel wymusza włączenie drugiego składnika, tak
 jak dla pierwszego konta.
+
+![Lista użytkowników panelu po dodaniu drugiego konta, z akcjami Reset 2FA i Usuń](obrazki/uzytkownicy.png)
 
 Na liście użytkowników dostępne są akcje:
 
@@ -475,6 +487,14 @@ curl -s http://127.0.0.1:8080/v1/messages/<ID> -H "Authorization: Bearer <TWOJ-K
 gdzie `<ID>` to wartość `id` z poprzedniej odpowiedzi. Oczekiwany wynik: po kilku sekundach
 `"status":"sent"`, po kilkunastu `"status":"delivered"` i wiadomość na telefonie. Ten sam stan
 pokazuje panel na ekranie **Wiadomości**.
+
+![Lista wiadomości w panelu z filtrami stanu, kodowaniem, liczbą części i stanem doręczenia](obrazki/wiadomosci.png)
+
+Szczegół wiadomości (odnośnik w kolumnie identyfikatora) pokazuje podgląd segmentów, przebieg
+z czasami kolejnych zdarzeń oraz ślad protokołu: pełne żądanie do Multiinfo z zamaskowanym hasłem
+i odpowiedź linia po linii.
+
+![Szczegół doręczonej wiadomości: podgląd segmentów, dane, przebieg i ślad protokołu](obrazki/wiadomosc.png)
 
 Gdy stan to `failed`, odpowiedź zawiera pola `providerCode` i `error` z powodem:
 
