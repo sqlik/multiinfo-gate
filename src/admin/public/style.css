@@ -1,0 +1,288 @@
+@font-face { font-family: 'IBM Plex Sans'; src: url('/fonts/IBMPlexSans-Regular.woff2') format('woff2');
+             font-weight: 400; font-display: swap; }
+@font-face { font-family: 'IBM Plex Sans'; src: url('/fonts/IBMPlexSans-SemiBold.woff2') format('woff2');
+             font-weight: 600; font-display: swap; }
+@font-face { font-family: 'IBM Plex Mono'; src: url('/fonts/IBMPlexMono-Regular.woff2') format('woff2');
+             font-weight: 400; font-display: swap; }
+@font-face { font-family: 'IBM Plex Mono'; src: url('/fonts/IBMPlexMono-Medium.woff2') format('woff2');
+             font-weight: 500; font-display: swap; }
+
+:root {
+  --ground: #F4F5F2;
+  --surface: #FFFFFF;
+  --ink: #1A1D1B;
+  --muted: #5C625E;
+  --rule: #DDE0DA;
+  --signal: #B4531A;
+  --ok: #146C43;
+  --wait: #94670A;
+  --fail: #A32320;
+  /* Tła i tekst pasków komunikatów: ten sam ton, jaśniej pod spodem, ciemniej w piśmie. */
+  --ok-bg: #E4F1E8;   --ok-ink: #0E4A2E;
+  --wait-bg: #FAF0D6; --wait-ink: #5E3F04;
+  --fail-bg: #F8E4E3; --fail-ink: #741816;
+  --radius: 3px;
+}
+
+/* Odcienie pomocnicze wzięte z makiety: krawędzie, tła drugiego planu i tekst wygaszony. */
+:root {
+  --signal-dark: #8E4014;
+  --rail: #EFF1EC;
+  --rail-on: #E6E9E2;
+  --rule-soft: #ECEEE8;
+  --edge: #C9CEC5;
+  --faint: #8A908B;
+  --mast-dim: #A8ADA6;
+  --mast-edge: #3A3F3B;
+}
+
+*:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
+body { margin: 0; background: var(--ground); color: var(--ink);
+       font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; }
+a { color: var(--signal); text-decoration: none; } a:hover { color: var(--signal-dark); }
+
+/* Makieta ma sztywny kadr 1440×900, bo jest deską kreślarską. Panel zajmuje całe okno. */
+.root { width: 100%; min-height: 100vh; display: flex; flex-direction: column; background: var(--ground); }
+.mast { height: 44px; background: var(--ink); color: var(--ground); display: flex; align-items: center;
+        justify-content: space-between; padding: 0 18px; flex-shrink: 0; }
+.brand { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600;
+         letter-spacing: 0.14em; text-transform: uppercase; }
+.brand span { color: var(--signal); }
+.mast-right { display: flex; align-items: center; gap: 18px;
+              font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--mast-dim); }
+.mast-right a { color: var(--mast-dim); }
+.mast-right a:hover { color: var(--ground); }
+.mast-acct { color: var(--ground); border: 1px solid var(--mast-edge); border-radius: var(--radius); padding: 4px 9px; }
+.body { flex: 1; display: flex; min-height: 0; }
+.rail { width: 208px; flex-shrink: 0; border-right: 1px solid var(--rule); background: var(--rail);
+        display: flex; flex-direction: column; padding: 14px 0; }
+.rail-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.12em;
+              text-transform: uppercase; color: var(--faint); padding: 0 18px 8px; }
+.rail-label + .nav { margin-bottom: 14px; }
+.nav { display: flex; flex-direction: column; }
+.nav a { display: flex; justify-content: space-between; align-items: center; padding: 7px 18px 7px 16px;
+         color: var(--muted); font-size: 13px; border-left: 2px solid transparent; }
+.nav a.on { color: var(--ink); font-weight: 600; border-left-color: var(--signal); background: var(--rail-on); }
+.nav .ct { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--faint); }
+.main { flex: 1; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+.head { display: flex; align-items: flex-end; justify-content: space-between;
+        padding: 20px 24px 14px; border-bottom: 1px solid var(--rule); flex-shrink: 0; }
+.h1 { font-size: 21px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+.sub { font-size: 12.5px; color: var(--muted); margin: 4px 0 0; }
+.btn { border-radius: var(--radius); font-size: 12.5px; font-weight: 500; padding: 8px 13px; cursor: pointer;
+       border: 1px solid transparent; font-family: 'IBM Plex Sans', sans-serif; }
+.btn-p { background: var(--signal); color: var(--surface); }
+.btn-s { background: var(--surface); color: var(--ink); border-color: var(--edge); }
+.scroll { flex: 1; overflow: auto; padding: 18px 24px 24px; display: flex;
+          flex-direction: column; gap: 16px; }
+.lab { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.11em;
+       text-transform: uppercase; color: var(--muted); }
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); }
+.panel-h { display: flex; align-items: center; justify-content: space-between;
+           padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 500;
+     letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted);
+     padding: 8px 14px; border-bottom: 1px solid var(--rule); }
+td { padding: 9px 14px; border-bottom: 1px solid var(--rule-soft); font-size: 12.5px; vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+.m { font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+.dim { color: var(--muted); }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px;
+       vertical-align: 1px; }
+/* Makieta barwi kropki wprost w atrybucie style; w panelu robią to klasy, bo znacznik
+   powstaje z danych, a strona nie potrzebuje stylów pisanych w locie. */
+.dot-ok { background: var(--ok); }
+.dot-wait { background: var(--wait); }
+.dot-fail { background: var(--fail); }
+.st { display: inline-flex; align-items: center; font-size: 12.5px; }
+
+/* Logowanie: jedyny widok bez szyny nawigacji, więc karta stoi samotnie na tle. */
+.gate { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.gate-card { width: 340px; background: var(--surface); border: 1px solid var(--rule);
+             border-radius: var(--radius); padding: 26px 26px 22px; }
+.gate-brand { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600;
+              letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 20px; }
+.gate-brand span { color: var(--signal); }
+.field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+.field label { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.07em;
+               text-transform: uppercase; color: var(--muted); }
+.field input { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; color: var(--ink);
+               background: var(--surface); border: 1px solid var(--edge); border-radius: var(--radius);
+               padding: 8px 10px; }
+.field input.code { font-family: 'IBM Plex Mono', monospace; font-size: 15px; letter-spacing: 0.28em; }
+.gate-card .btn { width: 100%; }
+.warn { border-left: 3px solid var(--fail); background: var(--fail-bg); color: var(--fail-ink);
+        font-size: 12.5px; padding: 9px 11px; margin-bottom: 16px; }
+
+/* Jednorazowy komunikat po akcji: cały pasek w tonie wyniku, x po prawej. */
+.flash { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+         border-left: 3px solid var(--ok); background: var(--ok-bg); color: var(--ok-ink);
+         font-size: 12.5px; line-height: 1.5; padding: 9px 11px; margin-bottom: 16px; }
+.flash-warn { border-left-color: var(--wait); background: var(--wait-bg); color: var(--wait-ink); }
+.flash-fail { border-left-color: var(--fail); background: var(--fail-bg); color: var(--fail-ink); }
+.flash-close { background: none; border: 0; padding: 0 2px; font-size: 16px; line-height: 1;
+               color: inherit; opacity: 0.7; cursor: pointer; }
+.flash-close:hover { opacity: 1; }
+
+/* Potwierdzenie akcji nieodwracalnej: własne okno zamiast confirm() przeglądarki. */
+.modal-back { position: fixed; inset: 0; background: rgba(28, 32, 36, 0.45); display: flex;
+              align-items: center; justify-content: center; z-index: 20; }
+.modal { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius);
+         padding: 18px 20px; width: 400px; max-width: calc(100vw - 32px);
+         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18); }
+.modal p { margin: 0 0 16px; font-size: 13px; line-height: 1.5; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Włączanie drugiego składnika: karta szersza, bo mieści kod graficzny i sekret do przepisania. */
+.gate-card.wide { width: 420px; }
+.setup-lead { margin: 0 0 16px; line-height: 1.5; }
+.qr { display: flex; justify-content: center; padding: 14px; background: var(--surface);
+      border: 1px solid var(--rule); border-radius: var(--radius); }
+.secret { font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; letter-spacing: 0.1em;
+          text-align: center; color: var(--ink); background: var(--rule-soft);
+          border-radius: var(--radius); padding: 8px 10px; margin: 10px 0 4px; word-break: break-all; }
+.codes { list-style: none; margin: 0 0 18px; padding: 0; display: grid;
+         grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.codes .code { font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; letter-spacing: 0.08em;
+               text-align: center; background: var(--rule-soft); border-radius: var(--radius); padding: 7px 0; }
+.gate-card .btn[href] { display: block; box-sizing: border-box; text-align: center; text-decoration: none; }
+/* Ekran ma cztery bloki jeden pod drugim - bez tych odstępów link zlewa się z etykietą pola. */
+.gate-card.wide form { margin-top: 20px; }
+.gate-card.wide form + .sub { margin-top: 14px; }
+
+/* Ekran kont: dwie kolumny, karta wymiany certyfikatu, odczytane pola i ślad połączenia. */
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px; }
+.stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.form { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.field .box { border: 1px solid var(--edge); border-radius: var(--radius); padding: 8px 10px; background: var(--surface);
+              font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; }
+.field .box.ph { color: var(--faint); }
+.field .hint { font-size: 11.5px; color: var(--muted); }
+.field textarea { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--ink);
+                  background: var(--surface); border: 1px solid var(--edge); border-radius: var(--radius);
+                  padding: 8px 10px; resize: vertical; }
+/* Własna strzałka listy: przeglądarkowa siedzi na samej krawędzi i ignoruje padding. */
+.field select, select.inp {
+  -webkit-appearance: none; appearance: none;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; color: var(--ink);
+  background: var(--surface) url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%235C625E' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 12px center;
+  border: 1px solid var(--edge); border-radius: var(--radius);
+  padding: 7px 34px 7px 10px; }
+.drop { border: 1px dashed var(--signal); border-radius: var(--radius); background: #FCF7EC; padding: 14px 16px;
+        display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.kv { display: grid; grid-template-columns: 150px minmax(0, 1fr); }
+.kv > div { padding: 7px 16px; border-bottom: 1px solid var(--rule-soft); font-size: 12.5px; }
+.kv > div:nth-child(odd) { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px;
+                           letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted);
+                           padding-top: 9px; }
+.check { display: flex; gap: 9px; align-items: flex-start; font-size: 12.5px; line-height: 1.5;
+         padding: 0 16px; }
+.check .sq { width: 8px; height: 8px; margin-top: 5px; flex-shrink: 0; }
+.sq-ok { background: var(--ok); }
+.sq-wait { background: var(--wait); }
+.sq-fail { background: var(--fail); }
+.trace { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; line-height: 1.75;
+         padding: 14px 16px; white-space: pre-wrap; word-break: break-word; }
+.trace .ar { color: var(--signal); font-weight: 600; }
+.trace .ln { color: #A0A69F; }
+/* Akcje w wierszu: link, przycisk i plakietka w jednej linii, od prawej. */
+.row-actions { text-align: right; white-space: nowrap; }
+.row-actions > * + * { margin-left: 10px; }
+.row-actions form { display: inline; }
+/* Formularz w komórce tabeli: pole i przycisk w jednej linii, bez marginesów pola. */
+.inline { display: flex; align-items: center; gap: 6px; }
+.inline input { font-size: 12px; color: var(--ink); background: var(--surface);
+                border: 1px solid var(--edge); border-radius: var(--radius); padding: 5px 7px; min-width: 0; }
+.wait { color: var(--wait); }
+.fail { color: var(--fail); }
+
+/* Ekran kluczy: jednorazowe pokazanie wygenerowanej wartości. */
+.reveal { border: 1px solid var(--signal); border-radius: var(--radius); background: var(--surface); }
+.reveal-h { display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 16px; border-bottom: 1px solid #F0E1CE; }
+.keyline { display: flex; align-items: center; gap: 12px; padding: 16px; }
+.keybox { flex: 1; font-family: 'IBM Plex Mono', monospace; font-size: 15px; letter-spacing: 0.01em;
+          background: #FBF4E9; border: 1px solid #EBD9C1; border-radius: var(--radius); padding: 11px 14px;
+          word-break: break-all; }
+.revoked td { color: var(--faint); }
+.tag { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; border: 1px solid var(--rule);
+       border-radius: var(--radius); padding: 2px 6px; color: var(--muted); }
+.choices { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.choice { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+
+/* Przegląd: kafelki liczb i pasek ostrzeżenia. */
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tiles-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+a.tile { color: inherit; display: block; }
+a.tile:hover { border-color: var(--edge); }
+.btn.disabled { opacity: 0.45; cursor: default; pointer-events: none; }
+.tile { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 13px 15px 15px; }
+.tile .n { font-family: 'IBM Plex Mono', monospace; font-size: 27px; font-weight: 600;
+           letter-spacing: -0.02em; margin-top: 7px; }
+.tile .n.ok { color: var(--ok); }
+.tile .n.fail { color: var(--fail); }
+.tile .d { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+/* Ostrzeżenie o stanie bramki. Nazwa różni się od `.warn`, które niesie błąd formularza. */
+.alert { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+         border: 1px solid #E2C58A; background: #FCF7EC; border-radius: var(--radius); padding: 10px 14px; }
+.alert .sq { width: 9px; height: 9px; background: var(--wait); flex-shrink: 0; }
+.alert.stop { border-color: #E0B3B2; background: #FBF1F0; }
+.alert.stop .sq { background: var(--fail); }
+
+/* Lista wiadomości: filtry, skrócona treść i stopka strony. */
+.bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.seg { display: flex; border: 1px solid var(--edge); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+.seg a { padding: 6px 12px; font-size: 12.5px; color: var(--muted); border-right: 1px solid var(--rail-on); }
+.seg a:last-child { border-right: none; }
+.seg a.on { background: var(--ink); color: var(--ground); font-weight: 500; }
+.inp { background: var(--surface); border: 1px solid var(--edge); border-radius: var(--radius); padding: 6px 10px;
+       font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink); }
+.txt { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.enc { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.04em;
+       border: 1px solid var(--rule); border-radius: var(--radius); padding: 2px 6px; color: var(--muted); }
+.foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
+        border-top: 1px solid var(--rule); color: var(--muted); font-size: 12px; }
+
+/* Szczegół wiadomości: znacznik stanu i przebieg w czasie. */
+.pill { display: inline-flex; align-items: center; border: 1px solid var(--rule); border-radius: var(--radius);
+        padding: 3px 9px; font-size: 12px; background: var(--surface); }
+.crumb { font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+.h1.id { font-family: 'IBM Plex Mono', monospace; font-size: 19px; }
+.tl { padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 0; }
+.tl-i { display: grid; grid-template-columns: 96px 12px minmax(0, 1fr); align-items: start; column-gap: 10px; }
+.tl-i .t { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--muted); padding-top: 1px; }
+.tl-i .r { display: flex; flex-direction: column; align-items: center; height: 100%; }
+.tl-i .r span { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; }
+.tl-i .r i { flex: 1; width: 1px; background: var(--rule); }
+.tl-i .c { padding-bottom: 14px; font-size: 12.5px; line-height: 1.45; }
+.dot-dim { background: var(--edge); }
+/* Linijka segmentów: znaki rozszerzone GSM-7 podkreślone akcentem, granica części jako kreska z numerem,
+   parzyste części na jaśniejszym tle - żeby oko widziało, gdzie tekst się łamie. */
+.ruler { padding: 18px 20px 4px; font-family: 'IBM Plex Mono', monospace; font-size: 14.5px;
+         line-height: 2.05; letter-spacing: 0.01em; word-break: break-word; }
+.x2 { background: #F6E3CD; box-shadow: 0 1.5px 0 var(--signal); }
+.cut { display: inline-block; width: 0; border-left: 2px solid var(--signal); height: 20px;
+       vertical-align: -4px; position: relative; margin: 0 3px; }
+.cut i { position: absolute; top: -15px; left: -6px; font-family: 'IBM Plex Mono', monospace;
+         font-size: 9.5px; font-style: normal; color: var(--surface); background: var(--signal);
+         border-radius: 2px; padding: 0 3px; }
+.s2 { background: var(--rule-soft); }
+.segrow { display: flex; align-items: center; gap: 12px; padding: 7px 20px; font-size: 12.5px; }
+.segno { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--surface);
+         background: var(--ink); border-radius: 2px; padding: 1px 5px; }
+.meter { flex: 1; height: 7px; background: #E6E9E2; border-radius: 1px; overflow: hidden; }
+.meter b { display: block; height: 100%; background: var(--ink); }
+/* Ślad protokołu: żądanie i odpowiedź jak w terminalu, strzałki akcentem, numery linii wyciszone. */
+.trace { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; line-height: 1.75;
+         padding: 14px 16px; white-space: pre-wrap; word-break: break-all; }
+.trace .ar { color: var(--signal); font-weight: 600; }
+.trace .ln { color: var(--edge); }
+.notes { border-top: 1px solid var(--rule); padding: 12px 20px 14px; display: flex; flex-direction: column; gap: 7px; }
+.note { display: flex; gap: 9px; align-items: flex-start; font-size: 12.5px; line-height: 1.5; }
+.note .sq { width: 8px; height: 8px; margin-top: 5px; flex-shrink: 0; }

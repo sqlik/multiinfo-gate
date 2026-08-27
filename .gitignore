@@ -1,0 +1,23 @@
+# zależności i wynik budowania
+node_modules/
+dist/
+site/
+
+# środowisko uruchomieniowe
+/data/
+/secrets/
+.env
+.env.*
+
+# materiał kryptograficzny
+*.pfx
+*.p12
+*.key
+*.pem
+
+# przykład PHP: konfiguracja i dane
+examples/php/config.php
+examples/php/data/*
+!examples/php/data/.htaccess
+
+.DS_Store

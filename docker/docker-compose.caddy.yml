@@ -1,0 +1,24 @@
+# Wariant A: Caddy jako odwrotne proxy z HTTPS (Let's Encrypt) dla publicznego API.
+# Włączenie: w docker/.env dopisz
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.caddy.yml
+#   MIG_DOMENA=<TWOJA-DOMENA>
+# i uruchom docker compose up -d. Panel (8081) nie jest wystawiany.
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - multiinfo-gate
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      MIG_DOMENA: ${MIG_DOMENA:?ustaw MIG_DOMENA w docker/.env na domenę bramki}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:
