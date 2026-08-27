@@ -4,6 +4,10 @@ Bramka SMS między Twoimi aplikacjami a API Multiinfo (Plus, Polkomtel). Trzyma 
 kliencki, login i hasło do Multiinfo w jednym miejscu, a aplikacjom wystawia proste HTTP API
 z kluczem w nagłówku. Aplikacja wysyłająca SMS-y nie instaluje certyfikatów i nie zna ASPX.
 
+![Przegląd: liczniki doręczeń z ostatniej doby, stan połączeń z Multiinfo i ostatnie niepowodzenia](docs/obrazki/przeglad.png)
+
+![Szczegół wiadomości z podziałem na pięć części UCS-2, przebiegiem doręczenia i śladem protokołu](docs/obrazki/wiadomosc-dluga.png)
+
 ## Dla kogo
 
 Dla firmy z kontem Multiinfo, która chce dać własnym systemom albo agencji zewnętrznej

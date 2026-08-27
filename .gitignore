@@ -29,3 +29,4 @@ examples/php/data/*
 # stan narzędzi lokalnych
 .remember/
 .DS_Store
+.playwright-mcp/
