@@ -1,0 +1,11 @@
+# Budowanie obrazu ze źródeł zamiast pobierania gotowego z GitHuba - dla tych, którzy chcą
+# uruchomić dokładnie ten kod, który mają w katalogu, albo własne zmiany.
+# Włączenie: w docker/.env dopisz
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml
+# (do listy można dołożyć plik Caddy albo Traefika) i uruchamiaj docker compose up -d --build.
+services:
+  multiinfo-gate:
+    image: multiinfo-gate:lokalny
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile

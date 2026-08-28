@@ -215,16 +215,26 @@ Gdy wynik jest inny:
 
 ## 3. Instalacja bramki
 
-### 3.1. Pobranie kodu
+### 3.1. Pobranie plików
+
+Bramka działa z gotowego obrazu kontenera publikowanego przy każdym wydaniu w GitHub Container
+Registry pod adresem `ghcr.io/sqlik/multiinfo-gate` (dla procesorów x86-64 i ARM64). Z repozytorium
+potrzebne są tylko pliki uruchomieniowe z katalogu `docker/` i dokumentacja; kodu nie trzeba
+budować.
 
 ```bash
-git clone <ADRES-REPO> multiinfo-gate
+sudo apt install -y git
+git clone https://github.com/sqlik/multiinfo-gate.git
 cd multiinfo-gate/docker
 ```
 
-`<ADRES-REPO>` to adres repozytorium bramki (z GitHuba albo z kopii wewnętrznej). Po wykonaniu
-polecenia kod znajduje się w katalogu `~/multiinfo-gate`, a bieżącym katalogiem jest
-`~/multiinfo-gate/docker`, skąd wydaje się wszystkie polecenia `docker compose`.
+Po wykonaniu poleceń pliki znajdują się w katalogu `~/multiinfo-gate`, a bieżącym katalogiem
+jest `~/multiinfo-gate/docker`, skąd wydaje się wszystkie polecenia `docker compose`.
+
+Kto woli uruchomić obraz zbudowany z kodu, który ma przed sobą (np. po własnych zmianach), dopisuje
+w `docker/.env` wiersz `COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml` i zamiast
+`docker compose up -d` używa w dalszych krokach `docker compose up -d --build`. Budowanie trwa
+od dwóch do czterech minut.
 
 ### 3.2. Klucz główny i plik `.env`
 
@@ -261,11 +271,12 @@ znakiem `=`.
 ### 3.3. Uruchomienie
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
-Polecenie buduje obraz kontenera (przy pierwszym uruchomieniu pobiera obraz Node.js i instaluje
-zależności - od dwóch do czterech minut) i uruchamia bramkę w tle. Sprawdzenie:
+Polecenie pobiera obraz bramki (około minuty) i uruchamia ją w tle. Bez dodatkowych ustawień
+pobierany jest najnowszy obraz z serii `1` - wersję da się przypiąć zmienną `MIG_WERSJA`
+w `docker/.env` (rozdział 7.4). Sprawdzenie:
 
 ```bash
 curl http://127.0.0.1:8080/healthz
@@ -590,8 +601,9 @@ MIG_DOMENA=<TWOJA-DOMENA>
 ```
 
 Wiersz `COMPOSE_FILE` sprawia, że każde polecenie `docker compose` uwzględnia od tej pory także
-plik Caddy - bez podawania go za każdym razem opcją `-f`. Następnie, w katalogu
-`~/multiinfo-gate/docker`:
+plik Caddy - bez podawania go za każdym razem opcją `-f`. Jeżeli wiersz `COMPOSE_FILE` już
+istnieje (budowanie ze źródeł z rozdziału 3.1), plik Caddy dopisuje się do niego po dwukropku,
+zamiast dodawać drugi wiersz. Następnie, w katalogu `~/multiinfo-gate/docker`:
 
 ```bash
 docker compose up -d
@@ -669,7 +681,8 @@ MIG_DOMENA=<TWOJA-DOMENA>
 ```
 
 Gdy się różnią, dochodzą `MIG_TRAEFIK_SIEC`, `MIG_TRAEFIK_WEJSCIE` i `MIG_TRAEFIK_RESOLVER`
-z właściwymi nazwami (tabela w rozdziale 7.7). Następnie, w katalogu `~/multiinfo-gate/docker`:
+z właściwymi nazwami (tabela w rozdziale 7.7). Istniejący wiersz `COMPOSE_FILE` uzupełnia się
+jak w wariancie A. Następnie, w katalogu `~/multiinfo-gate/docker`:
 
 ```bash
 docker compose up -d
@@ -761,6 +774,15 @@ zawiera treści wiadomości, haseł ani pełnych kluczy. Zdarzenia warte uwagi:
 
 ### 7.4. Aktualizacja
 
+Wydania są numerowane według schematu `1.2.3`: pierwsza liczba zmienia się przy zmianach
+niezgodnych wstecz, druga przy nowych możliwościach, trzecia przy poprawkach. Numer bieżącej
+wersji pokazuje maszt panelu oraz `/healthz` na porcie panelu. Lista wydań z opisem zmian:
+`https://github.com/sqlik/multiinfo-gate/releases`.
+
+Obraz jest oznaczony trzema tagami: `1.2.3` (dokładnie ta wersja), `1.2` (najnowsza poprawka
+tej serii) i `1` (najnowsze wydanie zgodne wstecz). Zmienna `MIG_WERSJA` w `docker/.env` wybiera,
+który z nich śledzi bramka; domyślnie `1`, czyli każda aktualizacja w obrębie pierwszej liczby.
+
 Przed aktualizacją wykonuje się kopię bazy; migracje schematu bazy uruchamiają się same przy
 starcie nowej wersji.
 
@@ -768,12 +790,19 @@ starcie nowej wersji.
 cd ~/multiinfo-gate/docker
 docker compose exec multiinfo-gate cp /data/multiinfo-gate.sqlite /data/backups/przed-aktualizacja.sqlite
 git -C ~/multiinfo-gate pull
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
-Oczekiwany wynik: `curl http://127.0.0.1:8080/healthz` → `{"status":"ok"}`. W razie błędu
-przywraca się kopię `przed-aktualizacja.sqlite` według punktu 7.2 i wraca do poprzedniej wersji
-kodu (`git -C ~/multiinfo-gate checkout <poprzedni commit>` i ponowne `docker compose up -d --build`).
+Kolejno: kopia bazy; pobranie nowych plików uruchomieniowych i dokumentacji; pobranie nowego
+obrazu; uruchomienie. Oczekiwany wynik: `curl http://127.0.0.1:8080/healthz` → `{"status":"ok"}`,
+a `curl http://127.0.0.1:8081/healthz` pokazuje w polu `version` nowy numer.
+
+W razie błędu przywraca się kopię `przed-aktualizacja.sqlite` według punktu 7.2 i wraca do
+poprzedniej wersji: wpis `MIG_WERSJA=<poprzedni numer>` w `docker/.env` (np. `MIG_WERSJA=1.1.0`)
+i ponowne `docker compose up -d`. Przy budowaniu ze źródeł (`docker-compose.build.yml`) zamiast
+`docker compose pull` wykonuje się `docker compose up -d --build`, a cofnięcie to
+`git -C ~/multiinfo-gate checkout v<poprzedni numer>` i ponowne budowanie.
 
 ### 7.5. Certyfikat Multiinfo
 
@@ -810,8 +839,9 @@ Ustawiane w `docker/.env` (klucz główny, domena) albo w sekcji `environment` p
 | `MIG_LOG_LEVEL` | `info` | Jeden z `silent`, `error`, `warn`, `info`, `debug` |
 | `MIG_BACKUP_RETENTION_DAYS` | `14` | Ile dni trzymać kopie bazy |
 | `MIG_WEBHOOK_ALLOW_PRIVATE` | `0` | `1` pozwala na adresy webhooków w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów); domyślnie bramka woła wyłącznie adresy publiczne i takie tylko przyjmuje w panelu. Potrzebne, gdy aplikacja odbierająca webhooki stoi na tym samym serwerze, np. przykład PHP z rozdziału 5 |
+| `MIG_WERSJA` | `1` | Tag obrazu do pobrania: `1`, `1.1` albo `1.1.0` (rozdział 7.4) |
 | `MIG_DOMENA` | - | Domena bramki dla wariantu Caddy i Traefik |
-| `COMPOSE_FILE` | - | `docker-compose.yml:docker-compose.caddy.yml` włącza Caddy, `docker-compose.yml:docker-compose.traefik.yml` - Traefik |
+| `COMPOSE_FILE` | - | Dodatkowe pliki Compose oddzielone dwukropkiem: `docker-compose.caddy.yml` włącza Caddy, `docker-compose.traefik.yml` - Traefik, `docker-compose.build.yml` - budowanie ze źródeł; zawsze po `docker-compose.yml` |
 | `MIG_TRAEFIK_SIEC` | `traefik` | Wariant Traefik: sieć Dockera, w której Traefik szuka kontenerów |
 | `MIG_TRAEFIK_WEJSCIE` | `websecure` | Wariant Traefik: punkt wejścia HTTPS |
 | `MIG_TRAEFIK_RESOLVER` | `letsencrypt` | Wariant Traefik: nazwa resolvera certyfikatów |

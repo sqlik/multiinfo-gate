@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { AccountsRepo } from '../store/accounts.ts';
+import { GATE_VERSION } from '../version.ts';
 
 /** Poniżej tylu dni do wygaśnięcia certyfikatu bramka zgłasza stan pogorszony. */
 const CERT_WARNING_DAYS = 7;
@@ -29,6 +30,7 @@ export function registerHealthRoute(app: FastifyInstance, deps: HealthDeps, mode
 
     return {
       status,
+      version: GATE_VERSION,
       queueDepth: deps.queueDepth(),
       accounts: accounts.map((a) => ({
         name: a.name,

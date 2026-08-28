@@ -53,6 +53,7 @@ a { color: var(--signal); text-decoration: none; } a:hover { color: var(--signal
 .brand { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600;
          letter-spacing: 0.14em; text-transform: uppercase; }
 .brand span { color: var(--signal); }
+.brand .ver { color: var(--mast-dim); font-weight: 400; margin-left: 6px; }
 .mast-right { display: flex; align-items: center; gap: 18px;
               font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--mast-dim); }
 .mast-right a { color: var(--mast-dim); }
