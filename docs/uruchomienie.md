@@ -974,9 +974,9 @@ informacją, a próbę zalogowania odrzuca. Do panelu prowadzą dwie drogi:
   dla API. Panel jest wtedy dostępny z każdego komputera w sieci, nadal za hasłem i drugim składnikiem
 
 Bez logowania z sieci widać jedynie ekran logowania i `http://<ADRES-KONTENERA>:8081/healthz`
-z numerem wersji, stanem kolejki i listą kont Multiinfo (nazwa, ewentualne wstrzymanie, dni do
-końca ważności certyfikatu) - to samo, co punkt 7.4 podaje dla monitoringu. Jeżeli i to jest
-niepożądane (np. kontener stoi w sieci z obcymi urządzeniami), w pliku `/etc/multiinfo-gate/env` należy wpisać `MIG_ADMIN_HOST=127.0.0.1`,
+z samym polem `status`; szczegóły (wersja, kolejka, konta Multiinfo z dniami do końca certyfikatu)
+panel podaje wyłącznie tam, gdzie da się zalogować - tunelem albo przez HTTPS. Jeżeli i ekran
+logowania w sieci jest niepożądany (np. kontener stoi w sieci z obcymi urządzeniami), w pliku `/etc/multiinfo-gate/env` należy wpisać `MIG_ADMIN_HOST=127.0.0.1`,
 wykonać `systemctl restart multiinfo-gate` i wchodzić tunelem do samego kontenera według punktu 4.1,
 po włączeniu w nim serwera SSH (`systemctl enable --now ssh` i hasło `root` ustawione poleceniem
 `passwd`, albo dostęp SSH z ustawień zaawansowanych kreatora).
@@ -1023,8 +1023,8 @@ update
 Polecenie sprawdza na GitHubie, czy jest nowsze wydanie, i jeżeli tak: zatrzymuje usługę,
 zapisuje kopię bazy jako `backups/przed-aktualizacja-<WERSJA>.sqlite`, pobiera i buduje nowe
 wydanie, uruchamia usługę. Migracje bazy wykonują się same przy starcie. Oczekiwany wynik:
-`Zaktualizowano do wydania <WERSJA>` i nowy numer w polu `version` pod
-`http://<ADRES-KONTENERA>:8081/healthz`. Gdy nowszego wydania nie ma, polecenie kończy się
+`Zaktualizowano do wydania <WERSJA>` i nowy numer w polu `version` z polecenia
+`curl http://127.0.0.1:8081/healthz` w kontenerze. Gdy nowszego wydania nie ma, polecenie kończy się
 komunikatem o braku aktualizacji.
 
 Powrót do poprzedniego wydania po nieudanej aktualizacji: przywrócenie kopii

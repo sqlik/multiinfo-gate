@@ -10,6 +10,7 @@ import type { AdminUsersRepo } from '../store/admin-users.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { AuditRepo } from '../store/audit.ts';
 import { registerHealthRoute } from '../api/health.ts';
+import { secureContext } from './secure-context.ts';
 import type { JobsRepo } from '../store/jobs.ts';
 import type { MessageEventsRepo } from '../store/message-events.ts';
 import type { MessagesRepo } from '../store/messages.ts';
@@ -106,19 +107,6 @@ const TOO_MANY_ATTEMPTS = 'Zbyt wiele nieudanych prób logowania z tego adresu. 
 const INSECURE_CONTEXT = 'Panel bez HTTPS działa tylko pod adresem 127.0.0.1 albo localhost (tunel SSH). '
   + 'Ciasteczko sesji wymaga HTTPS albo adresu lokalnego, więc logowanie z tego adresu nie powiodłoby się.';
 
-/** Przeglądarki uznają pętlę zwrotną za kontekst bezpieczny także bez TLS. */
-function isLoopbackHost(hostname: string): boolean {
-  return hostname === 'localhost' || hostname.endsWith('.localhost')
-    || hostname === '127.0.0.1' || hostname.startsWith('127.') || hostname === '[::1]' || hostname === '::1';
-}
-
-/** Czy przeglądarka przyjmie ciasteczko Secure z tej odpowiedzi. */
-function secureContext(request: FastifyRequest): boolean {
-  if (request.protocol === 'https' || request.headers['x-forwarded-proto'] === 'https') return true;
-  const host = request.headers.host ?? '';
-  const hostname = host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : host.replace(/:\d+$/, '');
-  return isLoopbackHost(hostname);
-}
 const TOO_MANY_CODES = 'Zbyt wiele błędnych kodów. Zaloguj się od nowa.';
 
 const publicPath = fileURLToPath(new URL('./public', import.meta.url));
@@ -169,9 +157,12 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
 
   app.decorateRequest('adminUserId', null);
 
-  // Szczegółowy stan dla monitoringu, bez sesji: port panelu jest na pętli zwrotnej hosta
-  // albo w sieci własnej bramki, a przeglądarkowe logowanie nie nadaje się dla sondy.
-  registerHealthRoute(app, { accounts: deps.accounts, queueDepth: () => deps.jobs.depth(), now }, 'admin');
+  // Szczegółowy stan dla monitoringu, bez sesji, ale tylko w kontekście bezpiecznym (pętla zwrotna,
+  // tunel SSH, HTTPS za proxy) - tam, gdzie da się też zalogować. Z sieci bez TLS zostaje sam status,
+  // bo nazwy kont i daty certyfikatów nie są dla każdego, kto widzi port panelu (np. LXC na eth0).
+  registerHealthRoute(
+    app, { accounts: deps.accounts, queueDepth: () => deps.jobs.depth(), now, detailsAllowed: secureContext }, 'admin',
+  );
 
   app.addHook('onRequest', async (request, reply) => {
     const path = request.url.split('?')[0] ?? '';

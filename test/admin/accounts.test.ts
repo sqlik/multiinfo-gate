@@ -203,6 +203,20 @@ describe('POST /konta/:id/sprawdz', () => {
     expect(body.accounts.some((a: { name: string }) => a.name === 'Firma Info')).toBe(true);
   });
 
+  it('/healthz spoza pętli zwrotnej i bez HTTPS podaje sam status, bez wersji i kont', async () => {
+    const res = await h.app.inject({ method: 'GET', url: '/healthz', headers: { host: '10.10.10.159:8081' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: 'ok' });
+  });
+
+  it('/healthz za odwrotnym proxy z HTTPS podaje szczegóły', async () => {
+    const res = await h.app.inject({
+      method: 'GET', url: '/healthz', headers: { host: 'panel.example.com', 'x-forwarded-proto': 'https' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().accounts.some((a: { name: string }) => a.name === 'Firma Info')).toBe(true);
+  });
+
   it('maszt panelu pokazuje numer wersji bramki', async () => {
     const res = await h.app.inject({ method: 'GET', url: `/konta/${accountId}`, headers: { cookie: h.cookie } });
     expect(res.body).toMatch(/<span class="ver">\d+\.\d+\.\d+<\/span>/);
