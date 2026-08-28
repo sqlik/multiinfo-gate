@@ -18,12 +18,12 @@ const REQUEST_TIMEOUT_MS = 10_000;
 /** Tyle odpowiedzi odbiorcy zachowujemy do diagnozy. */
 const RESPONSE_CHARS = 300;
 
-/** `sha256=` + HMAC-SHA256 z sekretu po `<znacznik czasu>.<ciało>`. */
+/** `sha256=` + HMAC-SHA256 z sekretu po `<znacznik czasu>.<body>`. */
 export function signWebhook(secret: string, timestamp: number, body: string): string {
   return `sha256=${createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')}`;
 }
 
-/** Bez podążania za przekierowaniami - podpisane ciało ma trafić dokładnie pod zapisany adres. */
+/** Bez podążania za przekierowaniami - podpisane body ma trafić dokładnie pod zapisany adres. */
 export const httpPost: HttpPost = async (url, headers, body) => {
   const res = await fetch(url, {
     method: 'POST', headers, body, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), redirect: 'manual',
