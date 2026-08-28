@@ -83,13 +83,25 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
-      - name: Release z opisem z tagu
+      - name: Release z opisem z tagu i danymi obrazu
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # checkout pobiera tag jako sam commit; treść tagu adnotowanego trzeba dociągnąć osobno
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          wersja="${GITHUB_REF_NAME#v}"
+          obraz="ghcr.io/${{ github.repository }}:$wersja"
+          platformy=$(docker buildx imagetools inspect "$obraz" \
+            --format '{{range .Manifest.Manifests}}{{if ne .Platform.OS "unknown"}}{{.Platform.OS}}/{{.Platform.Architecture}} {{end}}{{end}}')
+          {
+            git tag -l --format='%(contents:body)' "$GITHUB_REF_NAME"
+            echo
+            echo "**Obraz kontenera:** \`docker pull $obraz\` - $(echo $platformy | sed 's/ /, /g')"
+            echo "(jeden tag dla obu architektur; Docker pobiera wariant właściwy dla serwera). Tagi \`${wersja%.*}\` i \`${wersja%%.*}\` wskazują to samo wydanie."
+          } > opis-wydania.md
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "release $GITHUB_REF_NAME już istnieje"
-            exit 0
+            gh release edit "$GITHUB_REF_NAME" --notes-file opis-wydania.md
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag \
+              --title "Multiinfo Gate $wersja" --notes-file opis-wydania.md
           fi
-          gh release create "$GITHUB_REF_NAME" --verify-tag \
-            --title "Multiinfo Gate ${GITHUB_REF_NAME#v}" --notes-from-tag
