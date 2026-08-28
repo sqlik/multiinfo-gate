@@ -193,6 +193,16 @@ describe('POST /konta/:id/sprawdz', () => {
     expect(h.accounts.get(accountId)!.pausedReason).toMatch(/-85/);
   });
 
+  it('/healthz na porcie panelu odpowiada bez sesji szczegółami i numerem wersji', async () => {
+    const res = await h.app.inject({ method: 'GET', url: '/healthz' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.status).toBe('ok');
+    expect(body.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(body.queueDepth).toBe(0);
+    expect(body.accounts.some((a: { name: string }) => a.name === 'Firma Info')).toBe(true);
+  });
+
   it('maszt panelu pokazuje numer wersji bramki', async () => {
     const res = await h.app.inject({ method: 'GET', url: `/konta/${accountId}`, headers: { cookie: h.cookie } });
     expect(res.body).toMatch(/<span class="ver">\d+\.\d+\.\d+<\/span>/);
