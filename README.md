@@ -18,7 +18,15 @@ doręczeń.
 
 - Konto Multiinfo z użytkownikiem API i certyfikatem (`.pfx` z hasłem)
 - ID usługi (z panelu Multiinfo albo od opiekuna technicznego Polkomtela) i, jeżeli mają być używane, nadpisy nadawcy uruchomione przez Polkomtel na wniosek z panelu Multiinfo
-- Serwer Linux (Ubuntu 24.04) z Dockerem; wystarczy najmniejsza maszyna w chmurze
+- Serwer Linux (Ubuntu 24.04) z Dockerem; wystarczy najmniejsza maszyna w chmurze, x86-64 albo ARM64
+
+## Instalacja
+
+Bramka działa z gotowego obrazu `ghcr.io/sqlik/multiinfo-gate`, publikowanego przy każdym
+wydaniu. Do uruchomienia wystarczą pliki z katalogu `docker/`, klucz główny w `docker/.env`
+i `docker compose up -d`; HTTPS pod własną domeną daje Caddy, nginx albo Traefik według
+wyboru. Kolejne kroki, od konta Multiinfo po wystawienie API na świat, opisuje instrukcja
+poniżej.
 
 ## Dokumentacja
 

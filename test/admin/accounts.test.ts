@@ -193,6 +193,11 @@ describe('POST /konta/:id/sprawdz', () => {
     expect(h.accounts.get(accountId)!.pausedReason).toMatch(/-85/);
   });
 
+  it('maszt panelu pokazuje numer wersji bramki', async () => {
+    const res = await h.app.inject({ method: 'GET', url: `/konta/${accountId}`, headers: { cookie: h.cookie } });
+    expect(res.body).toMatch(/<span class="ver">\d+\.\d+\.\d+<\/span>/);
+  });
+
   it('szczegół konta pokazuje powód wstrzymania', async () => {
     h.accounts.pause(accountId, 'Certyfikat odrzucony przez Multiinfo, kod -84: nie potwierdzono odcisku');
     const res = await h.app.inject({ method: 'GET', url: `/konta/${accountId}`, headers: { cookie: h.cookie } });

@@ -1,8 +1,9 @@
 services:
   multiinfo-gate:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    # Gotowy obraz z GitHuba, budowany z otagowanego wydania dla amd64 i arm64.
+    # MIG_WERSJA w docker/.env przypina wersję: "1" śledzi wydania 1.x, "1.1" - poprawki 1.1.x,
+    # "1.1.0" - dokładnie tę. Budowanie ze źródeł: docker-compose.build.yml.
+    image: ghcr.io/sqlik/multiinfo-gate:${MIG_WERSJA:-1}
     restart: unless-stopped
     environment:
       MIG_MASTER_KEY: ${MIG_MASTER_KEY:?ustaw MIG_MASTER_KEY, 32 bajty w base64}

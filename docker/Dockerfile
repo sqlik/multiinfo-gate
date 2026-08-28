@@ -9,6 +9,9 @@ COPY src ./src
 RUN npm run build && npm prune --omit=dev
 
 FROM node:22-alpine
+# Adres źródeł w etykiecie wiąże obraz z repozytorium także przy budowaniu lokalnym;
+# pozostałe etykiety OCI (wersja, commit) dokłada workflow wydania.
+LABEL org.opencontainers.image.source="https://github.com/sqlik/multiinfo-gate"
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules

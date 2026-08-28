@@ -1,0 +1,68 @@
+# Wydanie: tag v1.2.3 na main buduje obraz dla amd64 i arm64 i publikuje go w GitHub Container
+# Registry jako ghcr.io/sqlik/multiinfo-gate:1.2.3, :1.2 i :1 (oraz :latest). Numer tagu musi
+# zgadzać się z wersją w package.json - to ona trafia do masztu panelu i /healthz.
+name: Wydanie
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  testy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run check:tekst
+      - name: Tag zgodny z wersją w package.json
+        run: |
+          wersja="v$(node -p "require('./package.json').version")"
+          if [ "$wersja" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME, a package.json mówi $wersja" >&2
+            exit 1
+          fi
+
+  obraz:
+    needs: testy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+          labels: |
+            org.opencontainers.image.title=Multiinfo Gate
+            org.opencontainers.image.description=Bramka SMS między aplikacjami a API Multiinfo (Plus, Polkomtel)
+            org.opencontainers.image.licenses=MIT
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

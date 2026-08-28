@@ -193,12 +193,14 @@ describe('GET /healthz', () => {
     const res = await app.inject({ method: 'GET', url: '/healthz' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: 'ok' });
+    expect(res.body).not.toContain('version');
     expect(res.body).not.toContain('Firma');
     expect(res.body).not.toContain('2027-03-14');
   });
 
   it('na porcie panelu zwraca głębokość kolejki i dni do wygaśnięcia certyfikatów', async () => {
     const body = (await adminApp.inject({ method: 'GET', url: '/healthz' })).json();
+    expect(body.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(body.queueDepth).toBe(0);
     const firma = body.accounts.find((a: { name: string }) => a.name === 'Firma Info');
     expect(firma.certificateDaysLeft).toBeGreaterThan(190);

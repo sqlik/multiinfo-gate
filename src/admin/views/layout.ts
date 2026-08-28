@@ -1,4 +1,5 @@
 import type { Flash } from '../flash.ts';
+import { GATE_VERSION } from '../../version.ts';
 import { FAVICON_LINK } from './favicon.ts';
 
 export type NavKey = 'przeglad' | 'wiadomosci' | 'rozsylki' | 'konta' | 'klucze' | 'uzytkownicy' | 'dziennik';
@@ -72,7 +73,7 @@ ${FAVICON_LINK}
 <body>
 <div class="root">
   <div class="mast">
-    <div class="brand">Multiinfo<span> / </span>Gate</div>
+    <div class="brand">Multiinfo<span> / </span>Gate <span class="ver">${esc(GATE_VERSION)}</span></div>
     <div class="mast-right"><a href="/haslo">Zmień hasło</a><a href="/wyloguj">Wyloguj</a></div>
   </div>
   <div class="body">
