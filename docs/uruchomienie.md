@@ -1023,8 +1023,9 @@ update
 Polecenie sprawdza na GitHubie, czy jest nowsze wydanie, i jeżeli tak: zatrzymuje usługę,
 zapisuje kopię bazy jako `backups/przed-aktualizacja-<WERSJA>.sqlite`, pobiera i buduje nowe
 wydanie, uruchamia usługę. Migracje bazy wykonują się same przy starcie. Oczekiwany wynik:
-`Zaktualizowano do wydania <WERSJA>` i nowy numer w polu `version` z polecenia
-`curl http://127.0.0.1:8081/healthz` w kontenerze. Gdy nowszego wydania nie ma, polecenie kończy się
+`Zaktualizowano do wydania <WERSJA>`, a po zalogowaniu maszt panelu pokazuje nowy numer (panel
+w kontenerze nasłuchuje na adresie kontenera, nie na `127.0.0.1`, więc `curl` z punktu 7.4 tu nie
+zadziała). Gdy nowszego wydania nie ma, polecenie kończy się
 komunikatem o braku aktualizacji.
 
 Powrót do poprzedniego wydania po nieudanej aktualizacji: przywrócenie kopii
