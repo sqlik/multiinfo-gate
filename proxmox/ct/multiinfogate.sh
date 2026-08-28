@@ -91,7 +91,8 @@ function update_script() {
 
 # Zamiast description() silnika: tamten opis kontenera prowadzi do katalogu community-scripts,
 # w którym bramki nie ma. Ten podaje adresy, plik z danymi logowania, sposób aktualizacji
-# i odnośniki do repozytorium bramki, a z tagów usuwa dopisany przez silnik "community-script".
+# i odnośniki do repozytorium bramki (jako HTML, bo Markdown nie otwiera w nowej karcie, a przeglądarka
+# opuszczałaby interfejs Proxmoxa), a z tagów usuwa dopisany przez silnik "community-script".
 function mig_description() {
   IP=$(pct exec "$CTID" ip a s dev eth0 | awk '/inet / {print $2}' | cut -d/ -f1)
   pct set "$CTID" -tags "${var_tags}" >/dev/null
@@ -107,7 +108,7 @@ Bramka SMS między Twoimi aplikacjami a API Multiinfo (Plus, Polkomtel).
 - Konfiguracja: \`/etc/multiinfo-gate/env\`, dane i kopie: \`/var/lib/multiinfo-gate\`
 - Aktualizacja do najnowszego wydania: polecenie \`update\` w kontenerze
 
-[Repozytorium](https://github.com/sqlik/multiinfo-gate) · [Instrukcja](https://github.com/sqlik/multiinfo-gate/blob/main/docs/uruchomienie.md) · [Wydania](https://github.com/sqlik/multiinfo-gate/releases) · [Zgłoszenia](https://github.com/sqlik/multiinfo-gate/issues)
+<a href="https://github.com/sqlik/multiinfo-gate" target="_blank" rel="noopener noreferrer">Repozytorium</a> · <a href="https://github.com/sqlik/multiinfo-gate/blob/main/docs/uruchomienie.md" target="_blank" rel="noopener noreferrer">Instrukcja</a> · <a href="https://github.com/sqlik/multiinfo-gate/releases" target="_blank" rel="noopener noreferrer">Wydania</a> · <a href="https://github.com/sqlik/multiinfo-gate/issues" target="_blank" rel="noopener noreferrer">Zgłoszenia</a>
 OPIS
   )"
 }
