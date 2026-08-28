@@ -18,7 +18,7 @@ services:
       MIG_WEBHOOK_ALLOW_PRIVATE: ${MIG_WEBHOOK_ALLOW_PRIVATE:-0}
     ports:
       # API i panel tylko na pętli zwrotnej hosta. Na świat API wystawia odwrotne proxy
-      # (docker-compose.caddy.yml albo nginx na hoście) - docs/uruchomienie.md, rozdział 6.
+      # (docker-compose.caddy.yml, nginx na hoście albo docker-compose.traefik.yml) - docs/uruchomienie.md, rozdział 6.
       - "127.0.0.1:8080:8080"
       - "127.0.0.1:8081:8081"
     volumes:

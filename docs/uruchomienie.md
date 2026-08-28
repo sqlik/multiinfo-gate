@@ -572,9 +572,9 @@ Portów 8080 i 8081 nie należy otwierać - mają pozostać dostępne wyłączni
 
 ### 6.4. Wybór wariantu
 
-Poniżej dwa równoważne sposoby. Wariant A jest właściwy, gdy na serwerze nie działa inny serwer
-WWW; wariant B - gdy nginx już jest zainstalowany albo administrator go zna. Należy wykonać
-jeden z nich.
+Poniżej trzy równoważne sposoby. Wariant A jest właściwy, gdy na serwerze nie działa inny serwer
+WWW; wariant B - gdy nginx już jest zainstalowany albo administrator go zna; wariant C - gdy
+serwer obsługuje już inne kontenery przez Traefik. Należy wykonać jeden z nich.
 
 ### 6.5. Wariant A: Caddy w kontenerze
 
@@ -645,7 +645,49 @@ Gdy nie działa: `nginx -t` wskazuje wiersz z błędem składni; odpowiedź `502
 oznacza, że bramka nie działa (`docker compose ps` w katalogu `docker/`); komunikat certbota
 `Challenge failed` - domena nie wskazuje na serwer albo port 80 jest zamknięty.
 
-### 6.7. Przekazanie dostępu aplikacji zewnętrznej
+### 6.7. Wariant C: Traefik już działający na serwerze
+
+Traefik to odwrotne proxy dla kontenerów: obserwuje Dockera i buduje trasy z etykiet
+(`labels`) na kontenerach, sam uzyskując certyfikaty Let's Encrypt. Ten wariant zakłada, że
+Traefik jest już uruchomiony na serwerze i obsługuje inne usługi - repozytorium nie zawiera
+jego instalacji, tylko plik `docker/docker-compose.traefik.yml`, który podłącza bramkę do
+sieci Traefika i opisuje ją etykietami.
+
+Z konfiguracji Traefika potrzebne są trzy nazwy, które administrator zna z jego uruchomienia:
+
+| Wartość | Gdzie w konfiguracji Traefika | Domyślnie w bramce |
+|---|---|---|
+| sieć Dockera, w której Traefik szuka kontenerów | `--providers.docker.network` albo sekcja `networks` jego pliku Compose | `traefik` |
+| punkt wejścia HTTPS | `--entrypoints.<nazwa>.address=:443` | `websecure` |
+| resolver certyfikatów | `--certificatesresolvers.<nazwa>.acme...` | `letsencrypt` |
+
+Gdy nazwy zgadzają się z domyślnymi, w `docker/.env` wystarczą dwa wiersze:
+
+```
+COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml
+MIG_DOMENA=<TWOJA-DOMENA>
+```
+
+Gdy się różnią, dochodzą `MIG_TRAEFIK_SIEC`, `MIG_TRAEFIK_WEJSCIE` i `MIG_TRAEFIK_RESOLVER`
+z właściwymi nazwami (tabela w rozdziale 7.7). Następnie, w katalogu `~/multiinfo-gate/docker`:
+
+```bash
+docker compose up -d
+```
+
+Traefik wykrywa kontener w ciągu kilku sekund i uzyskuje certyfikat w ciągu około minuty.
+Sprawdzenie jak w wariancie A: `curl https://<TWOJA-DOMENA>/healthz` → `{"status":"ok"}`.
+
+Gdy nie działa: `network <nazwa> declared as external, but could not be found` przy
+`docker compose up` oznacza złą nazwę sieci w `MIG_TRAEFIK_SIEC` (listę sieci daje
+`docker network ls`); `404 page not found` z Traefika - trasa nie powstała, najczęściej przez
+zły punkt wejścia albo domenę, którą Traefik obsługuje już dla innego kontenera; ostrzeżenie
+o certyfikacie w przeglądarce (certyfikat `TRAEFIK DEFAULT CERT`) - zła nazwa resolvera albo
+port 80 zamknięty; dziennik Traefika (`docker logs <kontener-traefika> --tail 30`) podaje
+przyczynę w każdym z tych przypadków. Porty `127.0.0.1:8080` i `:8081` z `docker-compose.yml`
+pozostają na pętli zwrotnej hosta - Traefik dochodzi do bramki przez wspólną sieć, nie przez nie.
+
+### 6.8. Przekazanie dostępu aplikacji zewnętrznej
 
 Aplikacja (albo obsługująca ją agencja) potrzebuje:
 
@@ -768,8 +810,11 @@ Ustawiane w `docker/.env` (klucz główny, domena) albo w sekcji `environment` p
 | `MIG_LOG_LEVEL` | `info` | Jeden z `silent`, `error`, `warn`, `info`, `debug` |
 | `MIG_BACKUP_RETENTION_DAYS` | `14` | Ile dni trzymać kopie bazy |
 | `MIG_WEBHOOK_ALLOW_PRIVATE` | `0` | `1` pozwala na adresy webhooków w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów); domyślnie bramka woła wyłącznie adresy publiczne i takie tylko przyjmuje w panelu. Potrzebne, gdy aplikacja odbierająca webhooki stoi na tym samym serwerze, np. przykład PHP z rozdziału 5 |
-| `MIG_DOMENA` | - | Domena dla wariantu Caddy |
-| `COMPOSE_FILE` | - | `docker-compose.yml:docker-compose.caddy.yml` włącza Caddy |
+| `MIG_DOMENA` | - | Domena bramki dla wariantu Caddy i Traefik |
+| `COMPOSE_FILE` | - | `docker-compose.yml:docker-compose.caddy.yml` włącza Caddy, `docker-compose.yml:docker-compose.traefik.yml` - Traefik |
+| `MIG_TRAEFIK_SIEC` | `traefik` | Wariant Traefik: sieć Dockera, w której Traefik szuka kontenerów |
+| `MIG_TRAEFIK_WEJSCIE` | `websecure` | Wariant Traefik: punkt wejścia HTTPS |
+| `MIG_TRAEFIK_RESOLVER` | `letsencrypt` | Wariant Traefik: nazwa resolvera certyfikatów |
 
 ## 8. Lista kontrolna po wdrożeniu
 
