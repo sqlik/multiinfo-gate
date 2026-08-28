@@ -140,6 +140,43 @@ describe('POST /konta/:id/sprawdz', () => {
     expect(res.body).toContain('hasło');
   });
 
+  it('pokazuje certyfikat tak, jak widzi go Multiinfo na stronie test.aspx', async () => {
+    h.probe.result = { ok: true };
+    const res = await check();
+    expect(res.body).toContain('GET api2.multiinfo.plus.pl/test.aspx');
+    expect(res.body).toContain('Certyfikat widziany przez Multiinfo');
+    expect(res.body).toContain('GCP Signing CA');
+    expect(res.body).toContain('2028-04-19 13:01:04');
+    expect(res.body).toContain('CN widziane przez Multiinfo zgadza się z loginem');
+  });
+
+  it('ostrzega, gdy CN widziane przez Multiinfo różni się od loginu konta', async () => {
+    h.probe.result = { ok: false, code: -85, message: 'Pole CN podmiotu nie jest zgodne z loginem' };
+    h.probe.certificate = {
+      seen: true, subject: 'CN=inna_firma', subjectCn: 'inna_firma',
+      issuer: 'CN=GCP Signing CA', issuerCn: 'GCP Signing CA', validTo: '2028-04-19 13:01:04',
+    };
+    const res = await check();
+    expect(res.body).toContain('inna_firma');
+    expect(res.body).toContain('nie zgadza się z loginem konta');
+  });
+
+  it('przy -80 mówi wprost, że Multiinfo nie zobaczyło certyfikatu', async () => {
+    h.probe.result = { ok: false, code: -80, message: 'Brak certyfikatu' };
+    h.probe.certificate = { seen: false, message: 'Brak certyfikatu.' };
+    const res = await check();
+    expect(res.body).toContain('Multiinfo nie zobaczyło certyfikatu');
+  });
+
+  it('błąd sieci przy test.aspx nie psuje wyniku sprawdzenia', async () => {
+    h.probe.result = { ok: true };
+    h.probe.certificate = new Error('ECONNRESET');
+    const res = await check();
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Certyfikat przyjęty');
+    expect(res.body).toContain('test.aspx nie odpowiedziała');
+  });
+
   it('udane sprawdzenie wznawia konto wstrzymane przez workera', async () => {
     h.accounts.pause(accountId, 'Certyfikat odrzucony przez Multiinfo, kod -85');
     h.probe.result = { ok: true };

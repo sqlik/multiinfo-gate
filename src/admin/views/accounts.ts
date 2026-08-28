@@ -1,5 +1,6 @@
 import type { AccountRow } from '../../store/accounts.ts';
 import type { CertBundle } from '../../secrets/pkcs12.ts';
+import type { CertificateView } from '../../multiinfo/client.ts';
 import { warsawDay, warsawStamp } from '../../time/warsaw.ts';
 import { esc } from './layout.ts';
 
@@ -20,6 +21,8 @@ export interface ProbeView {
   at: Date;
   /** Czy to sprawdzenie zdjęło wstrzymanie założone przez workera. */
   resumed: boolean;
+  /** Odpowiedź strony test.aspx; null, gdy nie odpowiedziała. */
+  certificate: CertificateView | null;
 }
 
 /** Poniżej tylu dni certyfikat opisujemy jako wygasający, a nie ważny. */
@@ -408,12 +411,55 @@ function probePanel(v: AccountView, probe: ProbeView): string {
         <div class="lab">Sprawdzenie połączenia</div>
         <div class="m dim">${esc(stamp)}</div>
       </div>
-      <div class="trace">${trace}</div>
-      <div style="padding: 0 16px 16px;">
+      <div class="trace">${trace}\n\n${certificateTrace(v, probe.certificate)}</div>
+      <div style="padding: 0 16px 16px; display: flex; flex-direction: column; gap: 7px;">
         <div class="check" style="padding: 0;">
           <div class="sq ${probe.ok ? 'sq-ok' : 'sq-fail'}"></div>
           <div>${esc(verdict)}</div>
         </div>
+        ${certificateCheck(v, probe.certificate)}
       </div>
     </div>`;
+}
+
+/**
+ * Ślad drugiego zapytania: strona test.aspx pokazuje certyfikat oczami serwera Multiinfo.
+ * To jedyne miejsce, gdzie widać, co Polkomtel odczytał, a nie co my odczytaliśmy z .pfx.
+ */
+function certificateTrace(v: AccountView, certificate: CertificateView | null): string {
+  const head = `<span class="ar">→</span> GET ${esc(host(v.row.baseUrl))}/test.aspx\n\n`;
+  if (certificate === null) return `${head}<span class="ar">←</span> brak odpowiedzi`;
+  if (!certificate.seen) {
+    return `${head}<span class="ar">←</span> 200 OK\n<span class="ln">   1</span>  ${esc(certificate.message)}`;
+  }
+  return `${head}<span class="ar">←</span> 200 OK · Certyfikat widziany przez Multiinfo\n` +
+    `<span class="ln">   1</span>  Podmiot: ${esc(certificate.subject)}\n` +
+    `<span class="ln">   2</span>  Wystawca: ${esc(certificate.issuer)}\n` +
+    `<span class="ln">   3</span>  Ważny do: ${esc(certificate.validTo)}`;
+}
+
+function certificateCheck(v: AccountView, certificate: CertificateView | null): string {
+  if (certificate === null) {
+    return `<div class="check" style="padding: 0;">
+          <div class="sq sq-wait"></div>
+          <div>Strona test.aspx nie odpowiedziała. Wynik powyżej pozostaje w mocy - ta strona
+            tylko pokazuje, co Multiinfo odczytało z certyfikatu.</div>
+        </div>`;
+  }
+  if (!certificate.seen) {
+    return `<div class="check" style="padding: 0;">
+          <div class="sq sq-fail"></div>
+          <div>Multiinfo nie zobaczyło certyfikatu w uzgodnieniu TLS. Bramka wysłała plik wczytany
+            na tej karcie - jeżeli był wgrany ponownie, sprawdź, czy wczytanie się powiodło.</div>
+        </div>`;
+  }
+  const cnMatches = certificate.subjectCn === v.row.login;
+  return `<div class="check" style="padding: 0;">
+          <div class="sq ${cnMatches ? 'sq-ok' : 'sq-fail'}"></div>
+          <div>${cnMatches
+            ? `CN widziane przez Multiinfo zgadza się z loginem konta (${esc(v.row.login)}).`
+            : `CN widziane przez Multiinfo (${esc(certificate.subjectCn ?? '-')}) nie zgadza się z loginem konta ` +
+              `(${esc(v.row.login)}). Wystaw certyfikat z CN równym loginowi.`}
+            Wystawca ${esc(certificate.issuerCn ?? certificate.issuer)}, ważny do ${esc(certificate.validTo)}.</div>
+        </div>`;
 }

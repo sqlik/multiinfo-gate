@@ -47,6 +47,15 @@ export interface MessageInfo {
 
 export type ProbeResult = { ok: true } | { ok: false; code: number; message: string };
 
+/**
+ * Certyfikat kliencki tak, jak widzi go serwer Multiinfo na stronie test.aspx.
+ * `seen: false` oznacza, że uzgodnienie TLS przeszło bez certyfikatu albo strona
+ * odpowiedziała czymś, czego nie umiemy odczytać - wtedy `message` niesie jej tekst.
+ */
+export type CertificateView =
+  | { seen: true; subject: string; subjectCn: string | null; issuer: string; issuerCn: string | null; validTo: string }
+  | { seen: false; message: string };
+
 export interface SendResult { miIds: string[]; trace: ProtocolTrace }
 
 export interface PackageRecipient { dest: string; text: string | null; clientId: string | null }
@@ -150,7 +159,15 @@ export class MultiinfoClient {
     const url = new URL(script, this.creds.baseUrl);
     const form = new URLSearchParams({ login: this.creds.login, password: this.creds.password });
     for (const [k, v] of params) form.append(k, v);
-    const body = form.toString();
+    return this.transport(url, 'POST', form.toString());
+  }
+
+  /** Żądanie GET bez poświadczeń - tylko dla strony test.aspx, która ich nie czyta. */
+  private fetchPage(url: URL): Promise<RawReply> {
+    return this.transport(url, 'GET', null);
+  }
+
+  private transport(url: URL, method: 'GET' | 'POST', body: string | null): Promise<RawReply> {
     const started = process.hrtime.bigint();
     const elapsedMs = () => Number((process.hrtime.bigint() - started) / 1_000_000n);
 
@@ -161,9 +178,9 @@ export class MultiinfoClient {
           hostname: url.hostname,
           port: url.port,
           path: `${url.pathname}${url.search}`,
-          method: 'POST',
+          method,
           agent: this.agent,
-          headers: {
+          headers: body === null ? {} : {
             'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
             'content-length': Buffer.byteLength(body),
           },
@@ -189,7 +206,7 @@ export class MultiinfoClient {
       req.on('error', (e) => {
         reject(e instanceof ProviderError ? e : new ProviderError(-71, `Nie udało się połączyć: ${e.message}`, 'transient'));
       });
-      req.end(body);
+      req.end(body ?? undefined);
     });
   }
 
@@ -313,4 +330,56 @@ export class MultiinfoClient {
     if (parsed.code === -31) return { ok: true };
     return { ok: false, code: parsed.code, message: parsed.message };
   }
+
+  /**
+   * Pyta stronę test.aspx, jak serwer Multiinfo widzi przedstawiony certyfikat. Strona
+   * nie jest opisana w dokumentacji API, stoi pod korzeniem hosta (nie pod /Api61/),
+   * nie czyta loginu ani hasła i zawsze odpowiada HTML z kodem 200 - stąd osobne żądanie
+   * GET i czytanie tekstu po zdjęciu znaczników. Wynik uzupełnia probe(): tamto mówi,
+   * czy Multiinfo przyjęło certyfikat i logowanie, to - co dokładnie zobaczyło.
+   */
+  async inspectCertificate(): Promise<CertificateView> {
+    const url = new URL('/test.aspx', this.creds.baseUrl);
+    const reply = await this.fetchPage(url);
+    return parseCertificatePage(reply.body.toString('utf8'));
+  }
+}
+
+/** Tekst strony test.aspx bez znaczników; <br> jako koniec wiersza, puste wiersze pominięte. */
+function pageLines(html: string): string[] {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+}
+
+/** Wartość pola z nazwy wyróżnionej (DN), np. CN z "C=PL, O=Polkomtel, CN=firma". */
+function dnField(dn: string, name: string): string | null {
+  const match = new RegExp(`(?:^|,\\s*)${name}=([^,]*)`).exec(dn);
+  return match?.[1] === undefined ? null : match[1].trim();
+}
+
+export function parseCertificatePage(html: string): CertificateView {
+  const lines = pageLines(html);
+  const field = (label: string): string | null => {
+    const line = lines.find((l) => l.startsWith(label));
+    return line === undefined ? null : line.slice(label.length).trim();
+  };
+  const subject = field('Podmiot:');
+  const issuer = field('Wystawca:');
+  const validTo = field('Ważny do:');
+  if (subject !== null && issuer !== null && validTo !== null) {
+    return {
+      seen: true,
+      subject,
+      subjectCn: dnField(subject, 'CN'),
+      issuer,
+      issuerCn: dnField(issuer, 'CN'),
+      validTo,
+    };
+  }
+  return { seen: false, message: lines[0] ?? '' };
 }

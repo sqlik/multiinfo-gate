@@ -390,7 +390,17 @@ i hasło, a odrzuciło jedynie treść zapytania. Inne kody:
 | `-81` do `-84`, `-86` | certyfikat nierozpoznany przez Multiinfo | dane z zakładki Uwierzytelnianie w panelu Multiinfo nie zostały jeszcze wpisane albo różnią się od odczytanych przez bramkę |
 | `-85` | CN certyfikatu nie zgadza się z loginem | wystawić certyfikat z CN równym loginowi |
 
-Karta konta zachowuje ślad ostatniego sprawdzenia (żądanie i odpowiedź, z hasłem zamaskowanym).
+Sprawdzenie wysyła jeszcze drugie zapytanie, na stronę diagnostyczną Multiinfo `test.aspx`,
+która odpowiada tym, co serwer Polkomtela odczytał z przedstawionego certyfikatu: podmiotem,
+wystawcą i datą ważności. Karta pokazuje te dane pod wynikiem sprawdzenia jako **Certyfikat
+widziany przez Multiinfo** i porównuje CN z loginem konta. Różnica między tym, co bramka
+odczytała z pliku `.pfx` (punkt 4.2), a tym, co widzi Multiinfo, wskazuje przyczynę kodów
+`-80` do `-86` bez zgadywania: gdy strona odpowiada „Brak certyfikatu”, certyfikat nie dotarł
+do serwera; gdy pokazuje inne CN niż login, plik pochodzi z innego wniosku. Strona nie sprawdza
+loginu ani hasła, więc nie zastępuje wyniku `-31` - jest do niego uzupełnieniem.
+
+Karta konta zachowuje ślad ostatniego sprawdzenia (oba żądania i odpowiedzi, z hasłem
+zamaskowanym).
 
 ![Karta konta po sprawdzeniu połączenia: odczytane dane certyfikatu i ślad zapytania z kodem -31](obrazki/polaczenie.png)
 

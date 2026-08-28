@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import type { CertificateView } from '../../src/multiinfo/client.ts';
 import { authenticator } from 'otplib';
 import { buildAdminServer } from '../../src/admin/server.ts';
 import { SessionStore, hashPassword } from '../../src/admin/session.ts';
@@ -39,10 +40,23 @@ export interface AdminHarness {
 interface ProbeStub {
   result: { ok: true } | { ok: false; code: number; message: string };
   calls: number;
+  /** Co zwraca strona test.aspx; Error oznacza błąd sieci przy tym drugim zapytaniu. */
+  certificate: CertificateView | Error;
 }
 
 function makeProbeStub(): ProbeStub {
-  return { result: { ok: true }, calls: 0 };
+  return {
+    result: { ok: true },
+    calls: 0,
+    certificate: {
+      seen: true,
+      subject: 'C=PL, O=Polkomtel, CN=firma_test',
+      subjectCn: 'firma_test',
+      issuer: 'C=PL, O=Grupa Polsat, CN=GCP Signing CA',
+      issuerCn: 'GCP Signing CA',
+      validTo: '2028-04-19 13:01:04',
+    },
+  };
 }
 
 /**
@@ -76,7 +90,13 @@ export async function startAdminHarness(
   const probe = makeProbeStub();
   const invalidated: number[] = [];
   const clients = {
-    for: () => ({ probe: async () => { probe.calls += 1; return probe.result; } }),
+    for: () => ({
+      probe: async () => { probe.calls += 1; return probe.result; },
+      inspectCertificate: async () => {
+        if (probe.certificate instanceof Error) throw probe.certificate;
+        return probe.certificate;
+      },
+    }),
     invalidate: (id: number) => { invalidated.push(id); },
     closeAll: () => {},
   };
