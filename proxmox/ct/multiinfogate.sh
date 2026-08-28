@@ -89,12 +89,35 @@ function update_script() {
   exit
 }
 
+# Zamiast description() silnika: tamten opis kontenera prowadzi do katalogu community-scripts,
+# w którym bramki nie ma. Ten podaje adresy, plik z danymi logowania, sposób aktualizacji
+# i odnośniki do repozytorium bramki, a z tagów usuwa dopisany przez silnik "community-script".
+function mig_description() {
+  IP=$(pct exec "$CTID" ip a s dev eth0 | awk '/inet / {print $2}' | cut -d/ -f1)
+  pct set "$CTID" -tags "${var_tags}" >/dev/null
+  pct set "$CTID" -description "$(
+    cat <<OPIS
+# Multiinfo Gate
+
+Bramka SMS między Twoimi aplikacjami a API Multiinfo (Plus, Polkomtel).
+
+- Panel: http://${IP}:8081 (tunel SSH przez hosta albo HTTPS przez odwrotne proxy - instrukcja, punkt 9.2)
+- API dla aplikacji: http://${IP}:8080
+- Dane pierwszego konta panelu: \`/root/multiinfo-gate.creds\` w kontenerze
+- Konfiguracja: \`/etc/multiinfo-gate/env\`, dane i kopie: \`/var/lib/multiinfo-gate\`
+- Aktualizacja do najnowszego wydania: polecenie \`update\` w kontenerze
+
+[Repozytorium](https://github.com/sqlik/multiinfo-gate) · [Instrukcja](https://github.com/sqlik/multiinfo-gate/blob/main/docs/uruchomienie.md) · [Wydania](https://github.com/sqlik/multiinfo-gate/releases) · [Zgłoszenia](https://github.com/sqlik/multiinfo-gate/issues)
+OPIS
+  )"
+}
+
 start
 # Telemetria silnika trafia do statystyk community-scripts, a bramka nie jest w ich katalogu;
 # wyłączona niezależnie od ustawienia hosta. Silnik czyta tę zmienną dopiero w build_container.
 DIAGNOSTICS="no"
 build_container
-description
+mig_description
 
 msg_ok "Zakończono pomyślnie\n"
 echo -e "${CREATING}${GN}${APP} jest zainstalowana w kontenerze ${CTID}${CL}"
