@@ -10,14 +10,18 @@
 #   MIG_TRAEFIK_RESOLVER=letsencrypt   nazwa certificatesResolvers w konfiguracji Traefika
 # Panel (8081) nie jest wystawiany przez Traefika. Porty 127.0.0.1:8080 i :8081 z docker-compose.yml
 # zostają na pętli zwrotnej hosta - Traefik dochodzi do bramki przez wspólną sieć, nie przez nie.
-# Uwaga: każdy kontener w sieci Traefika może połączyć się z bramką na obu portach, także z panelem
-# (wymaga hasła i drugiego składnika). Gdy w tej sieci działają kontenery obcych aplikacji, lepiej
-# podłączyć Traefika do osobnej sieci przeznaczonej dla bramki i podać ją w MIG_TRAEFIK_SIEC.
+# Sieć Traefika jest wspólna z innymi kontenerami, więc panel nasłuchuje wyłącznie na interfejsie
+# sieci własnej bramki (eth0, sieć default z wyższym priorytetem): z sieci Traefika osiągalne jest
+# tylko API na 8080, a mapowanie 127.0.0.1:8081 z hosta trafia do sieci własnej i działa jak dotąd.
 services:
   multiinfo-gate:
+    environment:
+      MIG_ADMIN_HOST: eth0
     networks:
-      - default
-      - traefik
+      default:
+        priority: 100
+      traefik:
+        priority: 10
     labels:
       traefik.enable: "true"
       traefik.docker.network: ${MIG_TRAEFIK_SIEC:-traefik}

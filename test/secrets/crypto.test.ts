@@ -67,6 +67,29 @@ describe('loadEnv', () => {
     expect(cfg.adminHost).toBe('0.0.0.0');
   });
 
+  it('nazwę interfejsu w adresie nasłuchu zamienia na jego adres IPv4', () => {
+    const interfaces = {
+      eth0: [
+        { address: 'fe80::1', family: 'IPv6' as const, internal: false },
+        { address: '172.30.0.5', family: 'IPv4' as const, internal: false },
+      ],
+      eth1: [{ address: '172.31.0.5', family: 'IPv4' as const, internal: false }],
+    };
+    const cfg = loadEnv({ ...base, MIG_ADMIN_HOST: 'eth0', MIG_API_HOST: 'eth1' }, interfaces);
+    expect(cfg.adminHost).toBe('172.30.0.5');
+    expect(cfg.apiHost).toBe('172.31.0.5');
+  });
+
+  it('odrzuca nazwę interfejsu, którego nie ma', () => {
+    expect(() => loadEnv({ ...base, MIG_ADMIN_HOST: 'eth7' }, { eth0: [{ address: '172.30.0.5', family: 'IPv4' as const, internal: false }] }))
+      .toThrow(/MIG_ADMIN_HOST.*eth7/);
+  });
+
+  it('adres IP i nazwę hosta zostawia bez zmian', () => {
+    const cfg = loadEnv({ ...base, MIG_ADMIN_HOST: 'localhost' }, {});
+    expect(cfg.adminHost).toBe('localhost');
+  });
+
   it('odrzuca nieznany poziom logowania', () => {
     expect(() => loadEnv({ ...base, MIG_LOG_LEVEL: 'verbose' })).toThrow(/MIG_LOG_LEVEL/);
   });
