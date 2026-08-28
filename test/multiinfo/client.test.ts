@@ -269,6 +269,52 @@ describe('MultiinfoClient.probe', () => {
   });
 });
 
+describe('MultiinfoClient.inspectCertificate', () => {
+  const PAGE = 'Twój certyfikat to:<br>\r\n'
+    + 'Podmiot:C=PL, S=Mazowieckie, L=Warszawa, O=Polkomtel, OU=Polkomtel, CN=firma_test, E=jan@firma.pl<br>\r\n'
+    + 'Wystawca:C=PL, S=Mazowieckie, L=Warszawa, O=Grupa Polsat, CN=GCP Signing CA<br>\r\n'
+    + 'Ważny do:2028-04-19 13:01:04<br>\r\n'
+    + 'Pamiętaj, Twój login powinien być zgodny z polem CN podmiotu.<br>\r\n';
+
+  it('pyta stronę test.aspx pod korzeniem hosta metodą GET, nie pod /Api61/', async () => {
+    fake.reply(PAGE, 200, 'text/html; charset=utf-8');
+    await client.inspectCertificate();
+    const req = fake.requests.at(-1)!;
+    expect(req.path).toBe('/test.aspx');
+    expect(req.method).toBe('GET');
+    expect(req.clientCn).toBe('firma_test');
+  });
+
+  it('odczytuje podmiot, wystawcę i datę ważności z odpowiedzi HTML', async () => {
+    fake.reply(PAGE, 200, 'text/html; charset=utf-8');
+    await expect(client.inspectCertificate()).resolves.toEqual({
+      seen: true,
+      subject: 'C=PL, S=Mazowieckie, L=Warszawa, O=Polkomtel, OU=Polkomtel, CN=firma_test, E=jan@firma.pl',
+      subjectCn: 'firma_test',
+      issuer: 'C=PL, S=Mazowieckie, L=Warszawa, O=Grupa Polsat, CN=GCP Signing CA',
+      issuerCn: 'GCP Signing CA',
+      validTo: '2028-04-19 13:01:04',
+    });
+  });
+
+  it('rozpoznaje odpowiedź o braku certyfikatu', async () => {
+    fake.reply('\r\nBrak certyfikatu.<br>\r\nJeśli łączyłeś się z przeglądarki, upewnij się, iż masz '
+      + 'zainstalowany odpowiedni certyfikat w repozytorium przeglądarki.<br>\r\n', 200, 'text/html; charset=utf-8');
+    await expect(client.inspectCertificate()).resolves.toEqual({ seen: false, message: 'Brak certyfikatu.' });
+  });
+
+  it('nieznaną odpowiedź oddaje jako tekst bez znaczników', async () => {
+    fake.reply('<html><body><h1>Serwis w przebudowie</h1></body></html>', 200, 'text/html; charset=utf-8');
+    await expect(client.inspectCertificate()).resolves.toEqual({ seen: false, message: 'Serwis w przebudowie' });
+  });
+
+  it('nie wysyła loginu ani hasła - strona ich nie czyta', async () => {
+    fake.reply(PAGE, 200, 'text/html; charset=utf-8');
+    await client.inspectCertificate();
+    expect(fake.requests.at(-1)!.params).toEqual({});
+  });
+});
+
 describe('MultiinfoClient - błędy transportu', () => {
   it('zgłasza ProviderError przy odpowiedzi HTTP 5xx', async () => {
     fake.reply('Service Unavailable', 503);

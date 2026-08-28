@@ -310,7 +310,11 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
     // Zegar mierzymy własnym licznikiem, a nie zegarem wstrzykniętym przez testy:
     // ten drugi bywa nieruchomy i pokazałby zawsze zero milisekund.
     const started = process.hrtime.bigint();
-    const result = await deps.clients.for(view.row.id).probe();
+    const client = deps.clients.for(view.row.id);
+    const result = await client.probe();
+    // Drugie zapytanie jest pomocnicze: gdy strona diagnostyczna nie odpowie,
+    // wynik sprawdzenia i tak stoi na kodzie z infosms.aspx.
+    const certificate = await client.inspectCertificate().catch(() => null);
     const durationMs = Number((process.hrtime.bigint() - started) / 1_000_000n);
 
     deps.audit.record({
@@ -326,8 +330,8 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
     const resumed = result.ok && resumeIfPaused(view.row, request.adminUserId, request.ip, 'udane sprawdzenie');
 
     const probe: ProbeView = result.ok
-      ? { accountId: view.row.id, ok: true, code: null, message: '', durationMs, at: now(), resumed }
-      : { accountId: view.row.id, ok: false, code: result.code, message: result.message, durationMs, at: now(), resumed: false };
+      ? { accountId: view.row.id, ok: true, code: null, message: '', durationMs, at: now(), resumed, certificate }
+      : { accountId: view.row.id, ok: false, code: result.code, message: result.message, durationMs, at: now(), resumed: false, certificate };
 
     return detailPage(request, viewOf(view.row.id) ?? view, { probe });
   });

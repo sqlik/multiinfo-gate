@@ -3,6 +3,7 @@ import forge from 'node-forge';
 
 export interface FakeRequest {
   path: string;
+  method: string;
   params: Record<string, string>;
   /** Wszystkie wartości każdego parametru - dla parametrów powtarzanych, jak `dest` w package.aspx. */
   multi: Record<string, string[]>;
@@ -89,6 +90,7 @@ export async function startFakeMultiinfo(): Promise<FakeMultiinfo> {
         }).getPeerCertificate?.(true);
         requests.push({
           path: url.pathname,
+          method: req.method ?? 'GET',
           params: Object.fromEntries(source.entries()),
           multi: Object.fromEntries([...new Set(source.keys())].map((k) => [k, source.getAll(k)])),
           clientCn: peer?.subject?.CN,
