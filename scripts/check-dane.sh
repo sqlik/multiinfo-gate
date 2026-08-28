@@ -6,7 +6,7 @@ if [ ! -f "$plik" ]; then
   echo "check:dane: pominięte (brak pliku wzorców)"
   exit 0
 fi
-if grep -rsniF -f "$plik" src docs test examples docker scripts README.md LICENSE package.json; then
+if grep -rsniF -f "$plik" src docs test examples docker scripts proxmox README.md LICENSE package.json; then
   echo "check:dane: znaleziono dane prywatne (wyżej)"
   exit 1
 fi

@@ -141,6 +141,9 @@ Dane z zakładki Uwierzytelnianie (punkt 1.2, krok 5) uzupełnia się dopiero po
 
 ## 2. Serwer
 
+Jeżeli zamiast serwera z Dockerem masz własny Proxmox VE, przejdź do rozdziału 9; rozdziały 2 i 3
+Ciebie nie dotyczą.
+
 ### 2.1. Wymagania
 
 - Ubuntu Server 24.04 LTS. Wystarczy najmniejsza maszyna wirtualna u dowolnego dostawcy
@@ -869,3 +872,187 @@ Do sprawdzenia na docelowym serwerze, na koncie produkcyjnym i numerze testowym:
 - [ ] Konto panelu ma drugi składnik, kody zapasowe są przechowywane poza serwerem
 - [ ] Drugi użytkownik panelu zalogował się hasłem startowym i włączył drugi składnik
 - [ ] Po nocy w `backups/` leży plik z datą
+
+## 9. Proxmox VE
+
+Jeżeli posiadasz własny serwer z Proxmox VE, możesz uruchomić bramkę w kontenerze LXC zamiast na
+maszynie wirtualnej z Dockerem. Poniższy rozdział zastępuje rozdziały 2 i 3 oraz punkty 7.1 do 7.4; rozdział 1
+(przygotowania po stronie Multiinfo), 4 (panel), 5 (pierwsza wysyłka) i 8 (lista kontrolna)
+obowiązują bez zmian, a rozdział 6 dotyczy serwera, który wystawia API bramki na świat - w sieci
+firmowej jest to zwykle istniejące odwrotne proxy albo osobny kontener z nginx według punktu 6.6.
+
+Do wyboru są dwa warianty: kontener bez Dockera, tworzony jednym skryptem (punkt 9.1), i kontener
+z Dockerem, w którym bramka działa dokładnie tak jak na serwerze z rozdziału 3 (punkt 9.4).
+
+### 9.1. Kontener LXC skryptem
+
+Skrypt `proxmox/ct/multiinfogate.sh` z repozytorium bramki jest napisany w formacie skryptów
+[community-scripts](https://github.com/community-scripts/ProxmoxVE) i korzysta z ich silnika
+kreatora, ale leży w repozytorium bramki i nie wymaga niczego z ich katalogu. Kolejno: pobiera
+szablon Debiana 13, tworzy nieuprzywilejowany kontener (1 rdzeń, 1 GB pamięci, 4 GB dysku, adres
+z DHCP), instaluje Node.js 22, pobiera źródła najnowszego wydania bramki z GitHuba i buduje je,
+tworzy konto systemowe `multiinfo-gate`, generuje klucz główny, rejestruje usługę systemd
+i zakłada pierwsze konto panelu. Dockera w kontenerze nie ma.
+
+Polecenie wykonuje się w powłoce hosta Proxmox jako `root` (w interfejsie Proxmox: węzeł →
+**Shell**, albo przez SSH na adres hosta):
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/sqlik/multiinfo-gate/main/proxmox/ct/multiinfogate.sh)"
+```
+
+Kreator pyta, czy użyć ustawień domyślnych, czy zaawansowanych (nazwa kontenera, adres IP,
+mostek sieciowy, rozmiar dysku, hasło `root`). Przy pierwszym uruchomieniu dowolnego skryptu
+w tym formacie silnik pyta też o zgodę na wysyłanie anonimowych statystyk do community-scripts;
+odpowiedź jest zapisywana na hoście i dotyczy skryptów z ich katalogu - skrypt bramki statystyk
+nie wysyła niezależnie od odpowiedzi. Instalacja trwa od trzech do pięciu minut, z czego
+większość zajmuje pobranie zależności i budowa.
+
+Oczekiwany wynik: komunikat `Zakończono pomyślnie`, numer kontenera oraz dwa adresy - panel na
+porcie 8081 i API na porcie 8080 - pod adresem, który kontener dostał z DHCP.
+
+Instalacja bez pytań, np. w skrypcie automatyzującym, przyjmuje ustawienia w zmiennych przed
+poleceniem:
+
+```bash
+var_admin_user=janek var_admin_pass='<HASLO-CO-NAJMNIEJ-12-ZNAKOW>' var_ram=2048 \
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/sqlik/multiinfo-gate/main/proxmox/ct/multiinfogate.sh)"
+```
+
+`var_admin_user` i `var_admin_pass` ustalają login i hasło pierwszego konta panelu (zasady jak
+w punkcie 3.4); bez nich login to `admin`, a hasło losuje instalator. `var_cpu`, `var_ram`
+(w MB) i `var_disk` (w GB) zmieniają zasoby kontenera; pozostałe zmienne silnika opisuje
+dokumentacja community-scripts.
+
+Gdy nie działa:
+
+- kreator kończy się komunikatem o braku szablonu albo błędem pobierania - host Proxmox nie ma
+  dostępu do internetu albo do repozytorium szablonów; sprawdzeniem jest `pveam update` w powłoce hosta
+- instalacja przerywa się na budowaniu bramki - dziennik instalacji wskazany w komunikacie
+  pokazuje ostatnie wiersze; najczęściej brakuje pamięci (`var_ram=2048` przy ponownym
+  uruchomieniu) albo GitHub odmówił kolejnego pobrania z tego adresu (limit zapytań bez
+  logowania; odczekać godzinę)
+- `Bramka nie odpowiada na /healthz` - usługa nie wystartowała; przyczynę pokazuje
+  `pct exec <NUMER-KONTENERA> -- journalctl -u multiinfo-gate -n 20`
+- `Please run this script as root` mimo `sudo` - silnik wymaga sesji `root`, nie polecenia
+  poprzedzonego `sudo`; najpierw `sudo -i`, potem polecenie kreatora
+- `/etc/pve/storage.cfg does not exist` - Proxmox zainstalowany na gotowym Debianie nie tworzy
+  tego pliku, dopóki konfiguracja magazynu nie zostanie zapisana; naprawia to jednorazowe
+  `pvesm set local --content vztmpl,rootdir,images,iso,backup,snippets` w powłoce hosta
+
+### 9.2. Konto panelu i dostęp
+
+Login i hasło pierwszego konta leżą w kontenerze w pliku dostępnym tylko dla `root`:
+
+```bash
+pct exec <NUMER-KONTENERA> -- cat /root/multiinfo-gate.creds
+```
+
+`<NUMER-KONTENERA>` to numer wypisany przez kreator (widoczny też na liście w interfejsie
+Proxmox). Po zalogowaniu i włączeniu drugiego składnika plik można usunąć.
+
+Panel nasłuchuje na adresie kontenera (`MIG_ADMIN_HOST=eth0`), a nie tylko na pętli zwrotnej
+jak w rozdziale 4, bo w kontenerze LXC nie ma domyślnie serwera SSH, przez który dałoby się
+zestawić tunel z punktu 4.1. Nie oznacza to logowania zwykłym HTTP z sieci: panel wymaga HTTPS
+albo adresu lokalnego i pod `http://<ADRES-KONTENERA>:8081` pokazuje ekran logowania z tą
+informacją, a próbę zalogowania odrzuca. Do panelu prowadzą dwie drogi:
+
+- **Tunel SSH przez hosta Proxmox** - polecenie na własnym komputerze, w osobnym oknie
+  terminala, które zostaje otwarte na czas pracy:
+
+  ```bash
+  ssh -N -L 8081:<ADRES-KONTENERA>:8081 root@<ADRES-HOSTA-PROXMOX>
+  ```
+
+  `<ADRES-KONTENERA>` to adres wypisany przez kreator (np. `10.10.10.159`), `<ADRES-HOSTA-PROXMOX>`
+  to adres, pod którym host jest dostępny przez SSH. Następnie w przeglądarce `http://127.0.0.1:8081`
+  i dalej jak w punkcie 4.1: logowanie danymi z pliku wyżej, kod QR, kody zapasowe. Tunel prowadzi
+  do adresu kontenera, ale przeglądarka widzi adres lokalny, i to wystarcza panelowi
+- **Odwrotne proxy z HTTPS w sieci firmowej** - jeżeli w sieci działa już nginx, Caddy albo Traefik
+  z certyfikatem, może kierować `https://panel.<TWOJA-DOMENA>` na `http://<ADRES-KONTENERA>:8081`
+  z nagłówkiem `X-Forwarded-Proto: https`, tak jak przykładowe konfiguracje z rozdziału 6 robią to
+  dla API. Panel jest wtedy dostępny z każdego komputera w sieci, nadal za hasłem i drugim składnikiem
+
+Bez logowania z sieci widać jedynie ekran logowania i `http://<ADRES-KONTENERA>:8081/healthz`
+z numerem wersji, stanem kolejki i listą kont Multiinfo (nazwa, ewentualne wstrzymanie, dni do
+końca ważności certyfikatu) - to samo, co punkt 7.4 podaje dla monitoringu. Jeżeli i to jest
+niepożądane (np. kontener stoi w sieci z obcymi urządzeniami), w pliku `/etc/multiinfo-gate/env` należy wpisać `MIG_ADMIN_HOST=127.0.0.1`,
+wykonać `systemctl restart multiinfo-gate` i wchodzić tunelem do samego kontenera według punktu 4.1,
+po włączeniu w nim serwera SSH (`systemctl enable --now ssh` i hasło `root` ustawione poleceniem
+`passwd`, albo dostęp SSH z ustawień zaawansowanych kreatora).
+
+Dalej obowiązuje rozdział 4 od punktu 4.2: konto Multiinfo, sprawdzenie połączenia, klucz API.
+
+### 9.3. Utrzymanie w kontenerze
+
+Polecenia wykonuje się w kontenerze: `pct enter <NUMER-KONTENERA>` w powłoce hosta otwiera
+w nim sesję `root` (wyjście: `exit`).
+
+| Co | Gdzie |
+|---|---|
+| Kod bramki (podmieniany przy aktualizacji) | `/opt/multiinfo-gate` |
+| Konfiguracja, w tym klucz główny | `/etc/multiinfo-gate/env` |
+| Baza danych, raporty i kopie | `/var/lib/multiinfo-gate`, kopie w `backups/` |
+| Dane pierwszego konta panelu | `/root/multiinfo-gate.creds` |
+| Usługa | `systemctl status multiinfo-gate`, `systemctl restart multiinfo-gate` |
+| Dziennik | `journalctl -u multiinfo-gate -f` (opis zdarzeń w punkcie 7.3) |
+
+Plik `/etc/multiinfo-gate/env` zastępuje `docker/.env` i sekcję `environment` z rozdziału 7.7;
+zmiana zmiennej wymaga `systemctl restart multiinfo-gate`. Klucz główny z tego pliku warto od razu
+skopiować do menedżera haseł, z powodów opisanych w punkcie 3.2.
+
+Kopie bazy powstają jak w punkcie 7.1, w `/var/lib/multiinfo-gate/backups`. Przywrócenie kopii:
+
+```bash
+systemctl stop multiinfo-gate
+cd /var/lib/multiinfo-gate
+install -o multiinfo-gate -g multiinfo-gate -m 640 backups/multiinfo-gate-RRRR-MM-DD.sqlite multiinfo-gate.sqlite
+rm -f multiinfo-gate.sqlite-wal multiinfo-gate.sqlite-shm
+systemctl start multiinfo-gate
+```
+
+`install` kopiuje plik i nadaje mu właściciela usługi; pliki `-wal` i `-shm` należą do
+poprzedniej bazy i muszą zniknąć, jak w punkcie 7.2.
+
+Aktualizacja do najnowszego wydania to jedno polecenie w kontenerze:
+
+```bash
+update
+```
+
+Polecenie sprawdza na GitHubie, czy jest nowsze wydanie, i jeżeli tak: zatrzymuje usługę,
+zapisuje kopię bazy jako `backups/przed-aktualizacja-<WERSJA>.sqlite`, pobiera i buduje nowe
+wydanie, uruchamia usługę. Migracje bazy wykonują się same przy starcie. Oczekiwany wynik:
+`Zaktualizowano do wydania <WERSJA>` i nowy numer w polu `version` pod
+`http://<ADRES-KONTENERA>:8081/healthz`. Gdy nowszego wydania nie ma, polecenie kończy się
+komunikatem o braku aktualizacji.
+
+Powrót do poprzedniego wydania po nieudanej aktualizacji: przywrócenie kopii
+`przed-aktualizacja-<WERSJA>.sqlite` według przepisu wyżej i ręczne pobranie tamtego wydania:
+
+```bash
+systemctl stop multiinfo-gate
+rm -rf /opt/multiinfo-gate && mkdir /opt/multiinfo-gate
+curl -fsSL https://github.com/sqlik/multiinfo-gate/archive/refs/tags/v<WERSJA>.tar.gz | tar -xz --strip-components=1 -C /opt/multiinfo-gate
+cd /opt/multiinfo-gate && npm ci --no-audit --no-fund && npm run build && npm prune --omit=dev
+rm -f ~/.multiinfo-gate
+systemctl start multiinfo-gate
+```
+
+`<WERSJA>` to numer sprzed aktualizacji, np. `1.1.2`. Usunięcie pliku `~/.multiinfo-gate`
+sprawia, że kolejne `update` znów zaproponuje najnowsze wydanie.
+
+### 9.4. Kontener z Dockerem
+
+Jeżeli wolisz mieć w kontenerze dokładnie ten układ, który opisują rozdziały 3 i 7 (obraz z GHCR,
+`docker compose`, warianty Caddy i Traefik), utwórz kontener LXC z Dockerem skryptem z katalogu
+community-scripts, w powłoce hosta Proxmox:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/docker.sh)"
+```
+
+Skrypt tworzy kontener Debiana z zainstalowanym Dockerem (w kreatorze warto podnieść dysk do
+8 GB). Dalej, już w kontenerze (`pct enter <NUMER-KONTENERA>`), obowiązuje rozdział 3 od punktu
+3.1, z pominięciem `sudo` (sesja jest sesją `root`) i punktu 2.2 (Docker już jest). Panel jest
+wtedy dostępny wyłącznie przez tunel SSH do kontenera, jak w punkcie 4.1.
