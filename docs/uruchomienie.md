@@ -700,6 +700,13 @@ port 80 zamknięty; dziennik Traefika (`docker logs <kontener-traefika> --tail 3
 przyczynę w każdym z tych przypadków. Porty `127.0.0.1:8080` i `:8081` z `docker-compose.yml`
 pozostają na pętli zwrotnej hosta - Traefik dochodzi do bramki przez wspólną sieć, nie przez nie.
 
+Sieć Traefika jest wspólna dla wszystkich obsługiwanych przez niego kontenerów, a każdy z nich
+może połączyć się z bramką na obu portach - także z panelem na 8081, którego Traefik nie
+wystawia. Panel wymaga hasła i drugiego składnika, ale jeżeli w tej sieci działają kontenery
+obcych aplikacji (np. innych klientów na współdzielonym serwerze), bramce należy dać osobną
+sieć: `docker network create bramka`, dopisanie tej sieci do kontenera Traefika w jego pliku
+Compose i `MIG_TRAEFIK_SIEC=bramka` w `docker/.env`.
+
 ### 6.8. Przekazanie dostępu aplikacji zewnętrznej
 
 Aplikacja (albo obsługująca ją agencja) potrzebuje:
