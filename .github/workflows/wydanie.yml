@@ -1,6 +1,7 @@
-# Wydanie: tag v1.2.3 na main buduje obraz dla amd64 i arm64 i publikuje go w GitHub Container
-# Registry jako ghcr.io/sqlik/multiinfo-gate:1.2.3, :1.2 i :1 (oraz :latest). Numer tagu musi
-# zgadzać się z wersją w package.json - to ona trafia do masztu panelu i /healthz.
+# Wydanie: tag v1.2.3 na main buduje obraz dla amd64 i arm64, publikuje go w GitHub Container
+# Registry jako ghcr.io/sqlik/multiinfo-gate:1.2.3, :1.2 i :1 (oraz :latest) i tworzy release
+# na GitHubie z opisem wziętym z treści tagu (git tag -a). Numer tagu musi zgadzać się z wersją
+# w package.json - to ona trafia do masztu panelu i /healthz.
 name: Wydanie
 
 on:
@@ -8,7 +9,7 @@ on:
     tags: ['v[0-9]+.[0-9]+.[0-9]+']
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -66,3 +67,19 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    needs: obraz
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Release z opisem z tagu
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME już istnieje"
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" --verify-tag \
+            --title "Multiinfo Gate ${GITHUB_REF_NAME#v}" --notes-from-tag
