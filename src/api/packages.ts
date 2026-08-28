@@ -10,7 +10,7 @@ import { ApiError } from './errors.ts';
 import { resolveOrig } from './orig.ts';
 import type { ApiDeps } from './server.ts';
 
-/** Górna granica jednej rozsyłki - powyżej niej ciało żądania i wywołanie package.aspx rosną bez sensu. */
+/** Górna granica jednej rozsyłki - powyżej niej body żądania i wywołanie package.aspx rosną bez sensu. */
 const MAX_RECIPIENTS = 5000;
 
 const recipientSchema = z.object({

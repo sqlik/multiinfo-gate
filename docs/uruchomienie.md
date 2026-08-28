@@ -21,7 +21,7 @@ nadpisów przez Polkomtel (od kilku godzin do kilku dni).
 
 Bramka korzysta z konta Multiinfo jak każda inna aplikacja kliencka: potrzebuje użytkownika
 API z certyfikatem i identyfikatora usługi; opcjonalnie także nadpisów nadawcy. Wszystkie te
-elementy załatwia się w panelu Multiinfo i z opiekunem technicznym Polkomtela, zanim bramka
+elementy są realizowane w panelu Multiinfo i z opiekunem technicznym Polkomtela, zanim bramka
 zostanie zainstalowana. Bez podpisanego certyfikatu nie da się sprawdzić połączenia, więc obieg
 certyfikatu warto rozpocząć jako pierwszy.
 
@@ -60,7 +60,7 @@ następujący:
    dalszej części tej samej instrukcji - połączyć go z kluczem prywatnym w jeden plik chroniony
    hasłem. Instrukcje Polkomtela kończą się plikiem z rozszerzeniem `.p12`; jest to ten sam format
    co `.pfx` (PKCS#12) - różni się wyłącznie rozszerzeniem, żadna konwersja nie jest potrzebna.
-   Bramka przyjmuje plik z obu rozszerzeniami. Ten plik i hasło do niego wgrywa się do bramki
+   Bramka przyjmuje plik z obydwoma rozszerzeniami. Ten plik i hasło do niego wgrywa się do bramki
    (rozdział 4.2). Bramka odczytuje z pliku podmiot (CN), wystawcę, odcisk SHA-1 i daty ważności,
    a klucz prywatny zapisuje zaszyfrowany.
 
@@ -96,7 +96,7 @@ wybranych. Wysyłka z nieznanym identyfikatorem kończy się kodem `-24`.
 ### 1.4. Nadpisy nadawcy
 
 Nadpis nadawcy to tekst wyświetlany na telefonie odbiorcy w miejscu numeru (np. `Firma Info`).
-Nadpis jest opcjonalny: wiadomość wysłana bez nadpisu ma jako nadawcę numer przydzielony kontu
+Nadpis jest opcjonalny: wiadomość wysłana bez nadpisu ma jako nadawcę numer przydzielony do konta
 w Multiinfo. Bramka obsługuje oba przypadki - pole `orig` w żądaniu można pominąć, a konto i klucz
 mogą nie mieć nadpisu domyślnego; bramka nie przekazuje wtedy parametru `orig` do Multiinfo.
 O nadawcy widocznym na telefonie decyduje ostatecznie konfiguracja użytkownika API po stronie
@@ -133,7 +133,7 @@ opiekun techniczny. Adres wpisuje się w bramce jako adres bazowy konta (rozdzia
 - plik `.p12` (albo `.pfx`) z podpisanym certyfikatem i kluczem prywatnym oraz hasło do pliku
 - identyfikator usługi (jeden albo kilka)
 - lista nadpisów uruchomionych przez Polkomtel, jeżeli mają być używane (bez nadpisu nadawcą jest
-  numer przydzielony kontu w Multiinfo)
+  numer przydzielony do konta w Multiinfo)
 - adres API (`api1` albo `api2`)
 
 Dane z zakładki Uwierzytelnianie (punkt 1.2, krok 5) uzupełnia się dopiero po wgraniu pliku
@@ -350,7 +350,7 @@ Gdy nie działa:
 - przeglądarka zgłasza odmowę połączenia - okno z tunelem zostało zamknięte albo tunel nie
   zestawił się; należy uruchomić polecenie ponownie i przeczytać jego komunikat
 - `bind [127.0.0.1]:8081: Address already in use` - port 8081 na własnym komputerze zajmuje
-  inny program; należy użyć innego portu lokalnego, np. `-L 18081:127.0.0.1:8081`, i adresu
+  inny program; należy użyć innego portu lokalnego, np. `-L 18081:127.0.0.1:8081` i adresu
   `http://127.0.0.1:18081`
 
 ### 4.2. Konto Multiinfo

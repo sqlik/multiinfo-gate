@@ -23,7 +23,7 @@ try {
     $event = verifyWebhook($raw, $headers, (string) $config['WEBHOOK_SECRET']);
 } catch (WebhookRejected $ex) {
     appendJsonl($dataDir, 'odrzucone.jsonl', [
-        'czas' => date('c'), 'powod' => $ex->getMessage(), 'cialo' => mb_substr($raw, 0, 300),
+        'czas' => date('c'), 'powod' => $ex->getMessage(), 'body' => mb_substr($raw, 0, 300),
     ]);
     http_response_code(401);
     exit;

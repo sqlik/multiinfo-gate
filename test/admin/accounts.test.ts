@@ -29,7 +29,7 @@ beforeEach(async () => {
   accountId = seedAccount(h, { login: 'firma_test' });
 });
 
-/** Buduje ciało wieloczęściowe z plikiem i hasłem. */
+/** Buduje wieloczęściowe body z plikiem i hasłem. */
 function multipart(file: Buffer, passphrase: string) {
   const b = '----mig';
   const head = Buffer.from(
@@ -247,7 +247,7 @@ describe('POST /konta/:id/nadpisy', () => {
 });
 
 describe('zakładanie konta', () => {
-  /** Ciało wieloczęściowe z polami formularza i plikiem .pfx. */
+  /** Wieloczęściowe body z polami formularza i plikiem .pfx. */
   function form(fields: Record<string, string>, file: Buffer | null) {
     const b = '----mig2';
     const parts: Buffer[] = [];
