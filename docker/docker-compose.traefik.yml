@@ -8,8 +8,11 @@
 #   MIG_TRAEFIK_SIEC=traefik           sieć Dockera, w której Traefik szuka kontenerów
 #   MIG_TRAEFIK_WEJSCIE=websecure      punkt wejścia HTTPS (entryPoint) w konfiguracji Traefika
 #   MIG_TRAEFIK_RESOLVER=letsencrypt   nazwa certificatesResolvers w konfiguracji Traefika
-# Panel (8081) nie jest wystawiany. Porty 127.0.0.1:8080 i :8081 z docker-compose.yml zostają
-# na pętli zwrotnej hosta - Traefik dochodzi do bramki przez wspólną sieć, nie przez nie.
+# Panel (8081) nie jest wystawiany przez Traefika. Porty 127.0.0.1:8080 i :8081 z docker-compose.yml
+# zostają na pętli zwrotnej hosta - Traefik dochodzi do bramki przez wspólną sieć, nie przez nie.
+# Uwaga: każdy kontener w sieci Traefika może połączyć się z bramką na obu portach, także z panelem
+# (wymaga hasła i drugiego składnika). Gdy w tej sieci działają kontenery obcych aplikacji, lepiej
+# podłączyć Traefika do osobnej sieci przeznaczonej dla bramki i podać ją w MIG_TRAEFIK_SIEC.
 services:
   multiinfo-gate:
     networks:
