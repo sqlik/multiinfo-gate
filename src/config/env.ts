@@ -1,3 +1,4 @@
+import { networkInterfaces } from 'node:os';
 import { LOG_LEVELS, type LogLevel } from '../log.ts';
 
 export class MissingMasterKeyError extends Error {
@@ -51,7 +52,28 @@ function logLevelOr(value: string | undefined, fallback: LogLevel): LogLevel {
   throw new Error(`MIG_LOG_LEVEL musi być jednym z: ${LOG_LEVELS.join(', ')}; podano ${value}`);
 }
 
-export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppConfig {
+/** Tyle z os.networkInterfaces(), ile potrzeba do wyboru adresu; osobny typ ułatwia testy. */
+export type Interfaces = Record<string, { address: string; family: string; internal: boolean }[] | undefined>;
+
+/**
+ * Adres nasłuchu może być nazwą interfejsu (np. `eth0`) - wtedy nasłuch idzie na jego adres
+ * IPv4. Potrzebne w kontenerze podłączonym do kilku sieci naraz (wariant Traefika): panel ma
+ * być osiągalny z sieci własnej bramki, a niewidoczny z sieci wspólnej z innymi kontenerami.
+ * Adresy IP i nazwy hostów przechodzą bez zmian - Docker nadaje interfejsom nazwy eth0, eth1...,
+ * które nie kolidują z niczym, co ktoś wpisałby jako host.
+ */
+function listenAddress(variable: string, value: string, interfaces: Interfaces): string {
+  if (!/^[a-z][a-z0-9]*\d$/i.test(value)) return value;
+  const entries = interfaces[value];
+  if (entries === undefined) {
+    throw new Error(`${variable}: interfejs ${value} nie istnieje (dostępne: ${Object.keys(interfaces).join(', ') || 'brak'})`);
+  }
+  const ipv4 = entries.find((e) => e.family === 'IPv4');
+  if (!ipv4) throw new Error(`${variable}: interfejs ${value} nie ma adresu IPv4`);
+  return ipv4.address;
+}
+
+export function loadEnv(source: NodeJS.ProcessEnv = process.env, interfaces: Interfaces = networkInterfaces() as Interfaces): AppConfig {
   const raw = source.MIG_MASTER_KEY;
   if (!raw) throw new MissingMasterKeyError('zmienna MIG_MASTER_KEY nie jest ustawiona');
 
@@ -64,8 +86,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppConfig {
     masterKey,
     apiPort: intOr(source.MIG_API_PORT, 8080),
     adminPort: intOr(source.MIG_ADMIN_PORT, 8081),
-    apiHost: source.MIG_API_HOST || '0.0.0.0',
-    adminHost: source.MIG_ADMIN_HOST || '127.0.0.1',
+    apiHost: listenAddress('MIG_API_HOST', source.MIG_API_HOST || '0.0.0.0', interfaces),
+    adminHost: listenAddress('MIG_ADMIN_HOST', source.MIG_ADMIN_HOST || '127.0.0.1', interfaces),
     dataDir: source.MIG_DATA_DIR ?? '/data',
     logLevel: logLevelOr(source.MIG_LOG_LEVEL, 'info'),
     backupRetentionDays: intOr(source.MIG_BACKUP_RETENTION_DAYS, 14),

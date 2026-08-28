@@ -700,12 +700,13 @@ port 80 zamknięty; dziennik Traefika (`docker logs <kontener-traefika> --tail 3
 przyczynę w każdym z tych przypadków. Porty `127.0.0.1:8080` i `:8081` z `docker-compose.yml`
 pozostają na pętli zwrotnej hosta - Traefik dochodzi do bramki przez wspólną sieć, nie przez nie.
 
-Sieć Traefika jest wspólna dla wszystkich obsługiwanych przez niego kontenerów, a każdy z nich
-może połączyć się z bramką na obu portach - także z panelem na 8081, którego Traefik nie
-wystawia. Panel wymaga hasła i drugiego składnika, ale jeżeli w tej sieci działają kontenery
-obcych aplikacji (np. innych klientów na współdzielonym serwerze), bramce należy dać osobną
-sieć: `docker network create bramka`, dopisanie tej sieci do kontenera Traefika w jego pliku
-Compose i `MIG_TRAEFIK_SIEC=bramka` w `docker/.env`.
+Sieć Traefika jest wspólna dla wszystkich obsługiwanych przez niego kontenerów, dlatego w tym
+wariancie panel nasłuchuje wyłącznie na interfejsie sieci własnej bramki (`MIG_ADMIN_HOST=eth0`
+w pliku Traefika): z sieci Traefika osiągalne jest tylko API na porcie 8080, a port panelu 8081
+odmawia połączeń. Dostęp do panelu przez tunel SSH (rozdział 4.1) działa bez zmian, bo mapowanie
+`127.0.0.1:8081` prowadzi do sieci własnej. Sprawdzenie z kontenera Traefika:
+`docker exec <kontener-traefika> wget -qO- http://multiinfo-gate:8081/healthz` ma zakończyć się
+błędem `Connection refused`, a to samo z portem `8080` - odpowiedzią `{"status":"ok"}`.
 
 ### 6.8. Przekazanie dostępu aplikacji zewnętrznej
 
@@ -841,7 +842,7 @@ Ustawiane w `docker/.env` (klucz główny, domena) albo w sekcji `environment` p
 | `MIG_API_PORT` | `8080` | Port publicznego API |
 | `MIG_ADMIN_PORT` | `8081` | Port panelu |
 | `MIG_API_HOST` | `0.0.0.0` | Adres nasłuchu API |
-| `MIG_ADMIN_HOST` | `127.0.0.1` | Adres nasłuchu panelu, poza kontenerem zostaw domyślny |
+| `MIG_ADMIN_HOST` | `127.0.0.1` | Adres nasłuchu panelu, poza kontenerem zostaw domyślny; nazwa interfejsu (np. `eth0`) oznacza jego adres IPv4 |
 | `MIG_DATA_DIR` | `/data` | Katalog bazy, raportów i kopii |
 | `MIG_LOG_LEVEL` | `info` | Jeden z `silent`, `error`, `warn`, `info`, `debug` |
 | `MIG_BACKUP_RETENTION_DAYS` | `14` | Ile dni trzymać kopie bazy |
