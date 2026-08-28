@@ -1,0 +1,30 @@
+# Wariant C: Traefik już uruchomiony na serwerze (w osobnym projekcie Compose) przejmuje HTTPS
+# dla publicznego API. Plik nie uruchamia Traefika - dokłada bramkę do jego sieci i opisuje
+# ją etykietami, z których Traefik sam buduje trasę i pobiera certyfikat.
+# Włączenie: w docker/.env dopisz
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml
+#   MIG_DOMENA=<TWOJA-DOMENA>
+# i, jeżeli Traefik jest skonfigurowany inaczej niż domyślnie:
+#   MIG_TRAEFIK_SIEC=traefik           sieć Dockera, w której Traefik szuka kontenerów
+#   MIG_TRAEFIK_WEJSCIE=websecure      punkt wejścia HTTPS (entryPoint) w konfiguracji Traefika
+#   MIG_TRAEFIK_RESOLVER=letsencrypt   nazwa certificatesResolvers w konfiguracji Traefika
+# Panel (8081) nie jest wystawiany. Porty 127.0.0.1:8080 i :8081 z docker-compose.yml zostają
+# na pętli zwrotnej hosta - Traefik dochodzi do bramki przez wspólną sieć, nie przez nie.
+services:
+  multiinfo-gate:
+    networks:
+      - default
+      - traefik
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${MIG_TRAEFIK_SIEC:-traefik}
+      traefik.http.routers.multiinfo-gate.rule: "Host(`${MIG_DOMENA:?ustaw MIG_DOMENA w docker/.env na domenę bramki}`)"
+      traefik.http.routers.multiinfo-gate.entrypoints: ${MIG_TRAEFIK_WEJSCIE:-websecure}
+      traefik.http.routers.multiinfo-gate.tls: "true"
+      traefik.http.routers.multiinfo-gate.tls.certresolver: ${MIG_TRAEFIK_RESOLVER:-letsencrypt}
+      traefik.http.services.multiinfo-gate.loadbalancer.server.port: "8080"
+
+networks:
+  traefik:
+    external: true
+    name: ${MIG_TRAEFIK_SIEC:-traefik}
