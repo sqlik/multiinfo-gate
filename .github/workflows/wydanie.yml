@@ -8,9 +8,10 @@ on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+']
 
+# Uprawnienia tokenu tylko tam, gdzie są potrzebne: testy nic nie zapisują, obraz idzie
+# do rejestru pakietów, release zapisuje w repozytorium.
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
   testy:
@@ -36,6 +37,9 @@ jobs:
   obraz:
     needs: testy
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v5
       - uses: docker/setup-qemu-action@v3
@@ -71,6 +75,8 @@ jobs:
   release:
     needs: obraz
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
       - name: Release z opisem z tagu

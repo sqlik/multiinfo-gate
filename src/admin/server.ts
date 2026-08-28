@@ -9,6 +9,7 @@ import type { AccountsRepo } from '../store/accounts.ts';
 import type { AdminUsersRepo } from '../store/admin-users.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { AuditRepo } from '../store/audit.ts';
+import { registerHealthRoute } from '../api/health.ts';
 import type { JobsRepo } from '../store/jobs.ts';
 import type { MessageEventsRepo } from '../store/message-events.ts';
 import type { MessagesRepo } from '../store/messages.ts';
@@ -73,7 +74,7 @@ const STAGE_MAX_FAILURES = 5;
 
 /** Ścieżki dostępne bez sesji: ekran logowania i pliki, z których się składa. */
 function isPublicPath(path: string): boolean {
-  return path === '/zaloguj' || path.startsWith('/zaloguj/')
+  return path === '/zaloguj' || path.startsWith('/zaloguj/') || path === '/healthz'
     || path === '/style.css' || path === '/panel.js' || path.startsWith('/fonts/');
 }
 
@@ -167,6 +168,10 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   app.register(fastifyMultipart, { limits: { fileSize: 512 * 1024, files: 1 } });
 
   app.decorateRequest('adminUserId', null);
+
+  // Szczegółowy stan dla monitoringu, bez sesji: port panelu jest na pętli zwrotnej hosta
+  // albo w sieci własnej bramki, a przeglądarkowe logowanie nie nadaje się dla sondy.
+  registerHealthRoute(app, { accounts: deps.accounts, queueDepth: () => deps.jobs.depth(), now }, 'admin');
 
   app.addHook('onRequest', async (request, reply) => {
     const path = request.url.split('?')[0] ?? '';
