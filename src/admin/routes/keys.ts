@@ -252,6 +252,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       maxParts: checked.maxParts, ratePerMin: checked.ratePerMin, webhookUrl: checked.webhookUrl,
       ...(webhookSecret === undefined ? {} : { webhookSecret }),
       expiresAt: checked.expiresAt, serviceIds: v.serviceIds, origs: v.origs,
+      inboundSubscribed: key.inboundSubscribed,
     });
     const after = valuesOf(deps.apiKeys.get(key.id)!);
     const changed: string[] = (Object.keys(after) as Array<keyof KeyFormValues>)
