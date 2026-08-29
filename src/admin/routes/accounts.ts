@@ -43,16 +43,18 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
   const viewOf = (id: number): AccountView | null => {
     const row = deps.accounts.get(id);
     if (!row) return null;
+    const serviceIds = deps.accounts.serviceIds(id);
+    const states = new Map(deps.inboundServices.states(id).map((s) => [s.serviceId, s]));
+    const at = now();
     return {
       row,
-      serviceIds: deps.accounts.serviceIds(id),
+      serviceIds,
       origs: deps.accounts.origs(id),
       keyCount: deps.apiKeys.list().filter((k) => k.accountId === id && k.revokedAt === null).length,
-      inbound: deps.accounts.serviceIds(id).map((serviceId) => ({
+      inbound: serviceIds.map((serviceId) => ({
         serviceId,
-        subscribers: deps.apiKeys.inboundSubscribers(id, serviceId, now()).map((k) => k.name),
-        state: deps.inboundServices.states(id).find((s) => s.serviceId === serviceId)
-          ?? { serviceId, lastPollAt: null, lastReceivedAt: null, error: null },
+        subscribers: deps.apiKeys.inboundSubscribers(id, serviceId, at).map((k) => k.name),
+        state: states.get(serviceId) ?? { serviceId, lastPollAt: null, lastReceivedAt: null, error: null },
       })),
     };
   };

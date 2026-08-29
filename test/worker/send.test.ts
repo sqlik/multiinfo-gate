@@ -49,7 +49,7 @@ beforeEach(() => {
   sendLong = vi.fn();
   cancel = vi.fn();
   deps = {
-    accounts, apiKeys, messages, jobs, events: new MessageEventsRepo(db), deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), reportsDir: '',
+    accounts, apiKeys, messages, jobs, events: new MessageEventsRepo(db), deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '',
     clients: { for: () => ({ sendLong, cancel }), invalidate: vi.fn(), closeAll: vi.fn() } as never,
   };
 });

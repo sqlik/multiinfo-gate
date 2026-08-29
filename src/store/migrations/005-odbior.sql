@@ -32,6 +32,9 @@ CREATE INDEX idx_inbound_created ON inbound_messages(created_at DESC);
 -- Wątek wiąże obie tabele w cykl; SET NULL, żeby kasowanie (retencja) nie utknęło na kluczu obcym.
 -- Odpowiedź na wiadomość przychodzącą (smsInId w sendsmslong.aspx).
 ALTER TABLE messages ADD COLUMN in_reply_to TEXT REFERENCES inbound_messages(id) ON DELETE SET NULL;
+CREATE INDEX idx_messages_in_reply_to ON messages(in_reply_to) WHERE in_reply_to IS NOT NULL;
+-- Ostatnia wysłana na numer nadawcy w oknie 7 dni (related_message_id) - liczona przy każdej odebranej.
+CREATE INDEX idx_messages_dest_created ON messages(account_id, service_id, dest, created_at DESC);
 
 -- Dostawa zdarzenia message.received: której wiadomości dotyczy i czy po zakończeniu
 -- usunąć z payloadu treść (konto bez przechowywania treści).
