@@ -51,9 +51,11 @@ describe('GET /przeglad', () => {
     seed('m5');
     const res = await page('/przeglad');
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Przyjęte');
+    expect(res.body).toContain('Wychodzące');
     expect(res.body).not.toContain('>Wysłane<');
-    expect(res.body).toMatch(/Przyjęte<\/div>\s*<div class="n">5</);
+    expect(res.body).not.toContain('>Przyjęte<');
+    expect(res.body).toMatch(/Wychodzące<\/div>\s*<div class="n">5</);
+    expect(res.body).toContain('% wychodzących');
     expect(res.body).toMatch(/Anulowane<\/div>\s*<div class="n">1</);
     expect(res.body).toMatch(/W drodze<\/div>\s*<div class="n">1</);
     expect(res.body).toContain('href="/wiadomosci?status=cancelled"');

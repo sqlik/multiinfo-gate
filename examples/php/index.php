@@ -231,7 +231,7 @@ $webhooki = readJsonl($dataDir, 'webhooki.jsonl', 20);
 </table>
 
 <h2>Odebrane SMS-y</h2>
-<form method="post" class="inline">
+<form method="post" class="inline" style="display: block; margin-bottom: 10px;">
   <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
   <input type="hidden" name="akcja" value="dociagnij">
   <button type="submit">Dociągnij z bramki</button>

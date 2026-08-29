@@ -41,7 +41,7 @@ function host(baseUrl: string): string {
 /** Udział doręczeń liczony bez dzielenia przez zero, w formacie z przecinkiem. */
 function share(part: number, whole: number): string {
   if (whole === 0) return 'brak ruchu';
-  return `${((part / whole) * 100).toFixed(1).replace('.', ',')} % przyjętych`;
+  return `${((part / whole) * 100).toFixed(1).replace('.', ',')} % wychodzących`;
 }
 
 function alerts(data: OverviewData, now: Date): string {
@@ -141,9 +141,9 @@ export function overviewPage(data: OverviewData, now: Date): string {
     ${alerts(data, now)}
     <div class="tiles tiles-6">
       <a class="tile" href="/wiadomosci">
-        <div class="lab">Przyjęte</div>
+        <div class="lab">Wychodzące</div>
         <div class="n">${esc(data.counts.total)}</div>
-        <div class="d">wiadomości przyjętych przez bramkę</div>
+        <div class="d">wiadomości zleconych do wysyłki przez aplikacje</div>
       </a>
       <a class="tile" href="/wiadomosci?status=delivered">
         <div class="lab">Doręczone</div>
