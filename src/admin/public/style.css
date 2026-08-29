@@ -79,6 +79,10 @@ a { color: var(--signal); text-decoration: none; } a:hover { color: var(--signal
        border: 1px solid transparent; font-family: 'IBM Plex Sans', sans-serif; }
 .btn-p { background: var(--signal); color: var(--surface); }
 .btn-s { background: var(--surface); color: var(--ink); border-color: var(--edge); }
+/* Najechanie: pełny przycisk ciemnieje tłem, obrysowany - ramką. Napis nie zmienia barwy,
+   bo ogólne a:hover (odnośniki) barwiłoby go na tle w tym samym odcieniu. */
+.btn-p:hover { background: var(--signal-dark); color: var(--surface); }
+.btn-s:hover { color: var(--ink); border-color: var(--ink); }
 .scroll { flex: 1; overflow: auto; padding: 18px 24px 24px; display: flex;
           flex-direction: column; gap: 16px; }
 .lab { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.11em;
