@@ -16,7 +16,7 @@ describe('favicon panelu', () => {
   });
 
   it('trafia do nagłówka układu panelu i ekranów logowania', () => {
-    const inside = layout({ title: 'Test', active: 'przeglad', body: '', counts: { wiadomosci: 0, konta: 0, klucze: 0, uzytkownicy: 0 } });
+    const inside = layout({ title: 'Test', active: 'przeglad', body: '', counts: { wiadomosci: 0, odebrane: 0, konta: 0, klucze: 0, uzytkownicy: 0 } });
     const outside = gate('Logowanie', '<p></p>');
     for (const html of [inside, outside]) {
       const head = html.slice(html.indexOf('<head>'), html.indexOf('</head>'));
