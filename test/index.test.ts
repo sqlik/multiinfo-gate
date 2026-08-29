@@ -16,6 +16,19 @@ afterEach(async () => {
 });
 
 describe('startGate', () => {
+  it('uruchamia odbiornik i zatrzymuje go razem z bramką', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'mig-start-'));
+    const config = loadEnv({
+      MIG_MASTER_KEY: randomBytes(32).toString('base64'),
+      MIG_DATA_DIR: dir, MIG_API_PORT: '0', MIG_ADMIN_PORT: '0', MIG_LOG_LEVEL: 'silent', MIG_INBOUND_IDLE_MS: '1000',
+    });
+    running = await startGate(config);
+    const health = await fetch(`http://127.0.0.1:${running.adminPort}/healthz`);
+    expect((await health.json()).inbound).toEqual({ services: 0, listening: 0, errors: [] });
+    await running.stop();
+    running = null;
+  });
+
   it('tworzy bazę, uruchamia oba serwery i odpowiada na /healthz', async () => {
     dir = mkdtempSync(join(tmpdir(), 'mig-start-'));
     const config = loadEnv({

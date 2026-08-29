@@ -67,6 +67,9 @@ export function registerMessageViewRoutes(app: FastifyInstance, deps: AdminDeps,
         storeContent: account?.storeContent === 1,
         host: hostOf(account?.baseUrl ?? ''),
         events: deps.events.list(row.id),
+        deliveries: deps.deliveries.listForMessage(row.id).map((delivery) => ({
+          delivery, keyName: deps.apiKeys.get(delivery.apiKeyId)?.name ?? `klucz ${delivery.apiKeyId}`,
+        })),
       }),
     });
   });

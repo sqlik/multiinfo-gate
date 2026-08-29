@@ -1,4 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { shortId } from '../ids.ts';
+import { sha256Hex } from '../text/hash.ts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { measureText } from '../text/measure.ts';
@@ -22,10 +23,10 @@ const bodySchema = z.object({
   deliveryReport: z.boolean().default(true),
   validTo: z.string().datetime().optional(),
   costCenter: z.string().optional(),
+  /** Wiadomość przychodząca, na którą to odpowiedź; identyfikator ma stały kształt, reszta to sprawdzenie w bazie. */
+  inReplyTo: z.string().regex(/^in_[A-Za-z0-9_]{1,40}$/).optional(),
 });
 
-const shortId = () => `msg_${randomUUID().replace(/-/g, '').slice(0, 20)}`;
-const bodyHash = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
 
 export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void {
   const now = deps.now ?? (() => new Date());
@@ -56,6 +57,23 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
       throw new ApiError(403, 'service_not_allowed', `Klucz nie ma dostępu do usługi ${serviceId}.`);
     }
 
+    let inReplyTo: string | null = null;
+    if (input.inReplyTo !== undefined) {
+      // Odpowiedź dotyczy jednej rozmowy: jeden odbiorca, wiadomość z tej samej usługi konta.
+      if (Array.isArray(input.to)) throw new ApiError(400, 'in_reply_to_single', 'inReplyTo dopuszcza jednego odbiorcę.');
+      const original = deps.inbound.get(input.inReplyTo);
+      if (!original || original.accountId !== auth.accountId || original.serviceId !== serviceId) {
+        throw new ApiError(400, 'in_reply_to_unknown', 'Nie ma takiej wiadomości przychodzącej w tej usłudze.');
+      }
+      // Odpowiedź idzie do tego, kto pisał: Multiinfo dostaje smsInId, a panel łączy wątek po numerze.
+      let recipient: string;
+      try { recipient = normalizePhone(input.to, account.defaultCountryCode); } catch { recipient = input.to.trim(); }
+      if (recipient !== original.sender) {
+        throw new ApiError(400, 'in_reply_to_recipient', `Odpowiedź na ${original.id} musi iść do jej nadawcy (${original.sender}).`);
+      }
+      inReplyTo = original.id;
+    }
+
     const orig = resolveOrig(input.orig, auth, account, deps.accounts);
 
     let validTo: Date | undefined;
@@ -80,7 +98,7 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
 
     const idempotencyKey = request.headers['idempotency-key'];
     const idem = typeof idempotencyKey === 'string' ? idempotencyKey : undefined;
-    const hash = bodyHash(input.text);
+    const hash = sha256Hex(input.text);
 
     const recipients = Array.isArray(input.to) ? input.to : [input.to];
 
@@ -116,7 +134,7 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
         };
       }
 
-      const id = shortId();
+      const id = shortId('msg');
       deps.messages.insert({
         id, apiKeyId: auth.apiKeyId, accountId: auth.accountId, serviceId, dest,
         body: account.storeContent ? input.text : null, bodyHash: hash,
@@ -124,6 +142,7 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
         orig: orig ?? null, costCenter: input.costCenter ?? null,
         validTo: validTo?.toISOString() ?? null,
         idempotencyKey: perRecipientIdem ?? null,
+        inReplyTo,
         createdAt: now().toISOString(),
       });
       deps.jobs.enqueue('send', { messageId: id, text: input.text, deliveryReport: input.deliveryReport }, now());
@@ -183,6 +202,7 @@ function present(m: MessageRow) {
     slots: m.slots,
     orig: m.orig,
     serviceId: m.serviceId,
+    inReplyTo: m.inReplyTo,
     createdAt: m.createdAt,
     sentAt: m.sentAt,
     finalAt: m.finalAt,

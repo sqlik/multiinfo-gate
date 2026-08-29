@@ -49,3 +49,26 @@ function verifyWebhook(string $rawBody, array $headers, string $secret, ?int $no
     }
     return $decoded;
 }
+
+/**
+ * Wiersz dziennika odebranych z payloadu message.received. Treść binarna dostaje przedrostek,
+ * żeby na liście nie wyglądała jak tekst od abonenta. Te same pola zwraca GET /v1/inbound,
+ * więc wpis z dociągania wygląda tak samo jak wpis z webhooka.
+ */
+function inboundEntry(array $event): array
+{
+    $kind = (string) ($event['kind'] ?? 'text');
+    $tresc = $kind === 'binary'
+        ? '[binarna] ' . (string) ($event['hex'] ?? '')
+        : (string) ($event['text'] ?? '');
+    return [
+        'czas' => date('c'),
+        'id' => (string) ($event['id'] ?? '?'),
+        'usluga' => (string) ($event['serviceId'] ?? ''),
+        'od' => (string) ($event['from'] ?? ''),
+        'na' => (string) ($event['to'] ?? ''),
+        'odebrana' => (string) ($event['receivedAt'] ?? ''),
+        'tresc' => $tresc,
+        'odpowiedz_na' => isset($event['relatedMessageId']) ? (string) $event['relatedMessageId'] : null,
+    ];
+}

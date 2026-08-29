@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { endOfWarsawDay, lastValidDay, warsawDay, warsawStamp, warsawTime, warsawTimeMs } from '../../src/time/warsaw.ts';
+import { endOfWarsawDay, lastValidDay, warsawCompactToIso, warsawDay, warsawStamp, warsawTime, warsawTimeMs } from '../../src/time/warsaw.ts';
 
 describe('endOfWarsawDay', () => {
   it('latem koniec dnia to 22:00 UTC', () => {
@@ -59,5 +59,17 @@ describe('warsawTime', () => {
 
   it('wariant z milisekundami zachowuje ułamek sekundy', () => {
     expect(warsawTimeMs('2026-08-27T11:52:13.457Z')).toBe('13:52:13.457');
+  });
+});
+
+describe('warsawCompactToIso', () => {
+  it('lato: czas polski to UTC+2', () => {
+    expect(warsawCompactToIso('20260829091400')).toBe('2026-08-29T07:14:00.000Z');
+  });
+  it('zima: czas polski to UTC+1', () => {
+    expect(warsawCompactToIso('20260115120000')).toBe('2026-01-15T11:00:00.000Z');
+  });
+  it('odrzuca zły format', () => {
+    expect(() => warsawCompactToIso('2026-08-29')).toThrow(/yyyyMMddhhmmss/);
   });
 });

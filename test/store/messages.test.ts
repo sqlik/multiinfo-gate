@@ -189,3 +189,28 @@ describe('MessagesRepo', () => {
     expect(messages.list({ status: 'transit', limit: 10, offset: 0 }).map((m) => m.id).sort()).toEqual(['q', 't']);
   });
 });
+
+describe('MessagesRepo - wątek z wiadomością przychodzącą', () => {
+  it('lastTo zwraca ostatnią wiadomość na numer z tej usługi w oknie czasu', () => {
+    const { messages: repo, accountId, apiKeyId } = setup();
+    const base = { accountId, apiKeyId, dest: '48601000001' };
+    repo.insert(messageInput({ ...base, id: 'msg_old', createdAt: '2026-08-20T10:00:00.000Z' }));
+    repo.insert(messageInput({ ...base, id: 'msg_a', createdAt: '2026-08-28T10:00:00.000Z' }));
+    repo.insert(messageInput({ ...base, id: 'msg_b', createdAt: '2026-08-29T10:00:00.000Z' }));
+    repo.insert(messageInput({ ...base, id: 'msg_other', serviceId: '24902', createdAt: '2026-08-29T11:00:00.000Z' }));
+    const since = new Date('2026-08-22T00:00:00Z');
+    expect(repo.lastTo(accountId, '24138', '48601000001', since)?.id).toBe('msg_b');
+    expect(repo.lastTo(accountId, '24138', '48605000001', since)).toBeUndefined();
+    expect(repo.lastTo(accountId, '24138', '48601000001', new Date('2026-08-30T00:00:00Z'))).toBeUndefined();
+  });
+
+  it('zapisuje inReplyTo i wylicza odpowiedzi', () => {
+    const { db, messages: repo, accountId, apiKeyId } = setup();
+    db.prepare("INSERT INTO inbound_messages (id, account_id, service_id, mi_id, sender, dest, kind, body_hash, protocol_id, coding_scheme, received_at, created_at) VALUES ('in_1', ?, '24138', '22', '48601000001', '7968', 'text', 'h', 0, 0, '2026-08-29T07:14:00.000Z', '2026-08-29T07:14:02.000Z')").run(accountId);
+    repo.insert(messageInput({ accountId, apiKeyId, id: 'msg_r', inReplyTo: 'in_1' }));
+    repo.insert(messageInput({ accountId, apiKeyId, id: 'msg_n' }));
+    expect(repo.get('msg_r')!.inReplyTo).toBe('in_1');
+    expect(repo.get('msg_n')!.inReplyTo).toBeNull();
+    expect(repo.repliesTo('in_1').map((m) => m.id)).toEqual(['msg_r']);
+  });
+});

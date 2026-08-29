@@ -127,7 +127,19 @@ Konta Multiinfo są obsługiwane pod jednym z dwóch adresów: `https://api1.mul
 albo `https://api2.multiinfo.plus.pl/Api61/`. Który dotyczy konkretnego konta, mówi umowa albo
 opiekun techniczny. Adres wpisuje się w bramce jako adres bazowy konta (rozdział 4.2).
 
-### 1.6. Co powinno być gotowe przed rozdziałem 2
+### 1.6. Wiadomości przychodzące
+
+Każde konto Multiinfo ma numer (krótki albo długi), na który abonenci mogą odpisywać. Domyślnie
+odebrane SMS-y są widoczne wyłącznie w panelu WWW Multiinfo. Jeżeli aplikacja ma je dostawać
+przez bramkę, administrator Polkomtel musi ustawić na koncie kierowanie odebranych wiadomości do
+API - wszystkich albo tylko zaczynających się od określonego prefiksu. Bez tego ustawienia bramka
+pyta Multiinfo i zawsze dostaje pustą odpowiedź. Jak bramka odbiera i przekazuje wiadomości,
+opisuje punkt 4.5 (włączenie przy kluczu) i 5.5 (pierwsza próba).
+
+Multiinfo zamienia polskie znaki w odebranych wiadomościach na łacińskie odpowiedniki i skleja
+wiadomości wieloczęściowe w jedną.
+
+### 1.7. Co powinno być gotowe przed rozdziałem 2
 
 - login i hasło użytkownika API
 - plik `.p12` (albo `.pfx`) z podpisanym certyfikatem i kluczem prywatnym oraz hasło do pliku
@@ -135,6 +147,8 @@ opiekun techniczny. Adres wpisuje się w bramce jako adres bazowy konta (rozdzia
 - lista nadpisów uruchomionych przez Polkomtel, jeżeli mają być używane (bez nadpisu nadawcą jest
   numer przydzielony do konta w Multiinfo)
 - adres API (`api1` albo `api2`)
+- jeżeli aplikacja ma odbierać SMS-y od abonentów: kierowanie odebranych wiadomości do API
+  ustawione na koncie (punkt 1.6)
 
 Dane z zakładki Uwierzytelnianie (punkt 1.2, krok 5) uzupełnia się dopiero po wgraniu pliku
 `.pfx` do bramki, bo to bramka odczytuje i pokazuje potrzebne wartości.
@@ -366,6 +380,11 @@ Gdy nie działa:
 - `bind [127.0.0.1]:8081: Address already in use` - port 8081 na własnym komputerze zajmuje
   inny program; należy użyć innego portu lokalnego, np. `-L 18081:127.0.0.1:8081` i adresu
   `http://127.0.0.1:18081`
+- po wpisaniu kodu z aplikacji panel wraca do ekranu hasła z komunikatem „Logowanie trwało zbyt
+  długo” - przeglądarka nie zapisała ciasteczka logowania; ciasteczka panelu mają znacznik
+  `Secure`, który przez tunel (`http://127.0.0.1`) honorują Chrome i Firefox, ale nie Safari.
+  Panel przez tunel należy otwierać w Chrome albo Firefoksie; pod własną domeną z HTTPS
+  (rozdział 6) działa każda przeglądarka
 
 ### 4.2. Konto Multiinfo
 
@@ -439,6 +458,18 @@ W panelu: **Klucze API → Wygeneruj klucz**. Formularz pozwala wybrać konto Mu
 nazwę, ograniczyć klucz do wybranych usług i nadpisów, ustawić limit części jednej wiadomości
 (1-9), limit żądań na minutę, datę ważności oraz adres webhooka - jeśli aplikacja ma otrzymywać
 powiadomienia o doręczeniu (opis w `docs/api.md`, rozdział 6).
+
+Pole **Odbiera wiadomości przychodzące** włącza dla klucza odbiór SMS-ów od abonentów: bramka
+zaczyna pytać Multiinfo o wiadomości z usług klucza i przekazuje każdą powiadomieniem
+`message.received` na adres webhooka (pole wymaga adresu webhooka). Kilka kluczy z dostępem do tej
+samej usługi może odbierać naraz. Gdy ostatni odbierający klucz zostanie odwołany, wygaśnie albo
+straci zaznaczenie, bramka przestaje pytać o tę usługę. Stan odbioru widać na karcie konta
+w sekcji „Odbiór wiadomości”: czy jest aktywny, kiedy bramka ostatnio pytała i kiedy ostatnio
+coś przyszło; usługa zatrzymana błędem Multiinfo (np. nieaktywna) pokazuje przyczynę, a bramka
+sama ponawia pytanie co kwadrans - gdy administrator Polkomtel aktywuje usługę, odbiór rusza
+bez ingerencji; zapis klucza albo tego konta w panelu ponawia od razu.
+
+![Karta konta, sekcja Odbiór wiadomości: usługa z odbierającym kluczem, stan aktywny z czasem ostatniego pytania i ostatniej odebranej](obrazki/konto-odbior.png)
 
 Po zapisaniu panel wyświetla jeden raz dwie wartości: **klucz** (`mig_live_...`) oraz - gdy
 podano adres webhooka - **sekret webhooka**. W bazie bramki pozostaje tylko skrót klucza; panel
@@ -537,6 +568,36 @@ Repozytorium zawiera w katalogu `examples/php/` przykładową aplikację w PHP: 
 pojedynczej wiadomości i rozsyłki, listą wysyłek oraz odbiornikiem webhooków. Służy jako narzędzie
 testowe i jako wzorzec kodu do przeniesienia do własnej aplikacji. Instrukcja uruchomienia
 znajduje się w `examples/php/README.md`.
+
+### 5.5. Pierwsza wiadomość przychodząca
+
+Po ustawieniu kierowania do API w Multiinfo (punkt 1.6) i zaznaczeniu odbioru przy kluczu
+(punkt 4.5) wyślij z telefonu SMS-a na numer usługi. W ciągu kilku sekund wiadomość pojawi się
+w panelu w zakładce **Odebrane** (ekran poniżej), a aplikacja dostanie powiadomienie
+`message.received`. Szczegół wiadomości pokazuje, do których kluczy poszło powiadomienie i z jakim
+skutkiem. Jeżeli lista pozostaje pusta, sprawdź na karcie konta sekcję „Odbiór wiadomości”: stan
+„nieaktywny” oznacza brak odbierającego klucza, „zatrzymany” podaje kod błędu Multiinfo,
+a „aktywny” z bieżącym czasem pytania oznacza, że bramka pyta, ale Multiinfo nic nie wydaje -
+wtedy wiadomości najpewniej trafiają do panelu WWW Multiinfo zamiast do API.
+
+![Zakładka Odebrane z trzema wiadomościami od abonentów, jedna powiązana z wysłaną wiadomością](obrazki/odebrane.png)
+
+Szczegół odebranej wiadomości (odnośnik w kolumnie identyfikatora) pokazuje dane z Multiinfo
+(numer nadawcy, numer usługi, identyfikator w Multiinfo, protokół), wiadomość wysłaną, na którą
+abonent najpewniej odpowiada, odpowiedzi wysłane w wątku oraz ślad dostaw do aplikacji: który
+klucz dostał powiadomienie, ile było prób i jaka była odpowiedź aplikacji. Dostawę nieudaną
+(aplikacja odpowiedziała `4xx` albo wyczerpała ponowienia) można ponowić przyciskiem „Ponów”
+w tym samym wierszu - wraca do kolejki jak nowa, z podpisem bieżącym sekretem klucza; ten sam
+przycisk jest w szczególe wiadomości wysłanej, w sekcji „Dostawy do aplikacji”. Wyjątek: konto
+bez przechowywania treści - po zakończeniu dostawy bramka nie ma już treści SMS-a, więc zamiast
+przycisku jest podpis, a aplikacja dociąga wiadomość przez `GET /v1/inbound`.
+
+![Szczegół odebranej wiadomości: treść, dane, powiązana wysłana wiadomość i dostawa do aplikacji ze stanem doręczony](obrazki/odebrana.png)
+
+Odpowiedź na odebraną wiadomość wysyła się zwykłym `POST /v1/messages` z polem `inReplyTo`
+(`docs/api.md`, rozdział 5a.3); przykładowa aplikacja ma do tego formularz w sekcji „Odebrane
+SMS-y”, a wysłana w ten sposób wiadomość ma w panelu wiersz „Odpowiedź na” z odnośnikiem do
+odebranej.
 
 ## 6. Wystawienie API pod własną domeną
 
@@ -779,6 +840,12 @@ zawiera treści wiadomości, haseł ani pełnych kluczy. Zdarzenia warte uwagi:
 | `webhook.odmowa_sieci_wewnetrznej` | adres webhooka wskazuje sieć wewnętrzną, a `MIG_WEBHOOK_ALLOW_PRIVATE` nie jest ustawione; dostawa porzucona |
 | `status.porzucony` | Multiinfo nie podało stanu ostatecznego przez siedem dni od przekazania; wiadomość zakończona jako `expired` |
 | `rozsylka.zakonczona`, `rozsylka.nieudana` | zakończenie rozsyłki |
+| `odbior.start`, `odbior.stop` | bramka zaczęła albo przestała pytać Multiinfo o wiadomości z usługi (zmiana subskrypcji przy kluczach) |
+| `odbior.wiadomosc`, `odbior.duplikat` | odebrano wiadomość od abonenta; duplikat to ta sama wiadomość wydana przez Multiinfo ponownie, pominięta |
+| `odbior.blad` | błąd sieci albo Multiinfo przy pytaniu o wiadomości; bramka ponowi z rosnącym odstępem |
+| `odbior.zatrzymany`, `odbior.nadal_zatrzymany` | Multiinfo odrzuciło pytanie kodem `-23` albo `-24` (usługa nieznana albo nieaktywna); bramka ponawia co kwadrans (kolejne odmowy jako `nadal_zatrzymany` na poziomie `info`) i od razu po zapisie klucza albo tego konta w panelu |
+| `odbior.potwierdzenie_nieudane`, `odbior.wyjatek` | wiadomość zapisana, ale nie potwierdzona w Multiinfo (wróci i zostanie pominięta jako duplikat) albo błąd wewnętrzny przy odbiorze (wiadomość wróci z Multiinfo po kilku minutach; bramka pyta dalej z rosnącym odstępem) |
+| `odbior.data_nieczytelna` | Multiinfo podało datę odbioru w nieoczekiwanej postaci; wiadomość jest zapisana z czasem zapisu w bramce zamiast czasu odbioru |
 | `kopia.zapisana`, `kopia.blad` | wynik nocnej kopii; brak `kopia.zapisana` przez dwie doby oznacza, że proces nie działa albo nie ma prawa zapisu do wolumenu |
 | `worker.wyjatek`, `api.wyjatek` | błąd wewnętrzny; treść wpisu jest materiałem do zgłoszenia. Zadanie workera wraca z rosnącym odstępem (od minuty do pół godziny) |
 | `worker.zadanie_porzucone` | ósmy z rzędu błąd wewnętrzny tego samego zadania; wysyłka kończy wiadomość stanem `failed`, odpytywanie zostawia w przebiegu wpis o przerwaniu |
@@ -850,6 +917,8 @@ Ustawiane w `docker/.env` (klucz główny, domena) albo w sekcji `environment` p
 | `MIG_LOG_LEVEL` | `info` | Jeden z `silent`, `error`, `warn`, `info`, `debug` |
 | `MIG_BACKUP_RETENTION_DAYS` | `14` | Ile dni trzymać kopie bazy |
 | `MIG_WEBHOOK_ALLOW_PRIVATE` | `0` | `1` pozwala na adresy webhooków w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów); domyślnie bramka woła wyłącznie adresy publiczne i takie tylko przyjmuje w panelu. Potrzebne, gdy aplikacja odbierająca webhooki stoi na tym samym serwerze, np. przykład PHP z rozdziału 5 |
+| `MIG_INBOUND_TIMEOUT_MS` | `60000` | Ile milisekund Multiinfo może trzymać pytanie o wiadomości przychodzące bez odpowiedzi (1-60000); wartość domyślna to długie oczekiwanie zalecane w dokumentacji Multiinfo, mała wartość razem z `MIG_INBOUND_IDLE_MS` daje odpytywanie okresowe |
+| `MIG_INBOUND_IDLE_MS` | `0` | Przerwa po pustej odpowiedzi, zanim bramka zapyta ponownie; `0` to pytanie od razu |
 | `MIG_WERSJA` | `1` | Tag obrazu do pobrania: `1`, `1.1` albo `1.1.0` (rozdział 7.4) |
 | `MIG_DOMENA` | - | Domena bramki dla wariantu Caddy i Traefik |
 | `COMPOSE_FILE` | - | Dodatkowe pliki Compose oddzielone dwukropkiem: `docker-compose.caddy.yml` włącza Caddy, `docker-compose.traefik.yml` - Traefik, `docker-compose.build.yml` - budowanie ze źródeł; zawsze po `docker-compose.yml` |
@@ -868,6 +937,7 @@ Do sprawdzenia na docelowym serwerze, na koncie produkcyjnym i numerze testowym:
 - [ ] Wiadomość z nadpisem dociera z tym nadpisem jako nadawcą
 - [ ] Rozsyłka na dwa numery testowe dociera, raport CSV pobiera się z panelu
 - [ ] Webhook `message.delivered` dociera do przykładowej aplikacji z poprawnym podpisem
+- [ ] SMS wysłany z telefonu na numer usługi jest w zakładce Odebrane, a przykładowa aplikacja dostała `message.received`
 - [ ] Odwołany klucz dostaje `401`
 - [ ] Konto panelu ma drugi składnik, kody zapasowe są przechowywane poza serwerem
 - [ ] Drugi użytkownik panelu zalogował się hasłem startowym i włączył drugi składnik

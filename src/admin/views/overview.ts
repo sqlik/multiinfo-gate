@@ -12,6 +12,8 @@ export interface OverviewData {
   failures: MessageRow[];
   keyNames: Map<number, string>;
   webhooks: { pending: number; failed: number };
+  /** Odebrane od abonentów w oknie przeglądu. */
+  inboundToday: number;
 }
 
 /** „1 webhook nie dotarł”, „3 webhooki nie dotarły”, „5 webhooków nie dotarło”. */
@@ -39,7 +41,7 @@ function host(baseUrl: string): string {
 /** Udział doręczeń liczony bez dzielenia przez zero, w formacie z przecinkiem. */
 function share(part: number, whole: number): string {
   if (whole === 0) return 'brak ruchu';
-  return `${((part / whole) * 100).toFixed(1).replace('.', ',')} % przyjętych`;
+  return `${((part / whole) * 100).toFixed(1).replace('.', ',')} % wychodzących`;
 }
 
 function alerts(data: OverviewData, now: Date): string {
@@ -49,7 +51,7 @@ function alerts(data: OverviewData, now: Date): string {
     items.push(`<div class="alert stop">
       <div style="display: flex; align-items: center; gap: 10px;">
         <div class="sq"></div>
-        <div>${esc(undeliveredWebhooks(data.webhooks.failed))} do odbiorcy mimo ponowień.
+        <div>${esc(undeliveredWebhooks(data.webhooks.failed))} do odbiorcy mimo ponowień w ostatniej dobie.
           Aplikacja kliencka nie wie o tych zdarzeniach - sprawdź adres webhooka przy kluczu.</div>
       </div>
       <a href="/klucze">Zobacz klucze</a>
@@ -137,11 +139,11 @@ export function overviewPage(data: OverviewData, now: Date): string {
   </div>
   <div class="scroll">
     ${alerts(data, now)}
-    <div class="tiles tiles-5">
+    <div class="tiles tiles-6">
       <a class="tile" href="/wiadomosci">
-        <div class="lab">Przyjęte</div>
+        <div class="lab">Wychodzące</div>
         <div class="n">${esc(data.counts.total)}</div>
-        <div class="d">wiadomości przyjętych przez bramkę</div>
+        <div class="d">wiadomości zleconych do wysyłki przez aplikacje</div>
       </a>
       <a class="tile" href="/wiadomosci?status=delivered">
         <div class="lab">Doręczone</div>
@@ -162,6 +164,11 @@ export function overviewPage(data: OverviewData, now: Date): string {
         <div class="lab">W drodze</div>
         <div class="n">${esc(data.counts.transit)}</div>
         <div class="d">${esc(share(data.counts.transit, data.counts.total))}<br>${esc(data.queueDepth)} zadań czeka w kolejce workera</div>
+      </a>
+      <a class="tile" href="/odebrane">
+        <div class="lab">Odebrane</div>
+        <div class="n">${esc(data.inboundToday)}</div>
+        <div class="d">SMS-ów od abonentów</div>
       </a>
     </div>
 

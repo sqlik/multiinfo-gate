@@ -10,6 +10,7 @@ import { JobsRepo } from '../../src/store/jobs.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
 import { MessagesRepo } from '../../src/store/messages.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
+import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 
 const masterKey = randomBytes(32);
 const NOW = new Date('2026-08-25T10:00:00Z');
@@ -18,6 +19,8 @@ let apiKey: string;
 let jobs: JobsRepo;
 let messages: MessagesRepo;
 let events: MessageEventsRepo;
+let inbound: InboundMessagesRepo;
+let accountId: number;
 
 beforeEach(async () => {
   const db = openDatabase(':memory:');
@@ -27,7 +30,8 @@ beforeEach(async () => {
   events = new MessageEventsRepo(db);
   jobs = new JobsRepo(db);
 
-  const accountId = accounts.insert({
+  inbound = new InboundMessagesRepo(db);
+  accountId = accounts.insert({
     name: 'Firma Info', baseUrl: 'https://api2.multiinfo.plus.pl/Api61/',
     login: 'firma_api', password: 'tajne', certPem: 'CERT', keyPem: 'KEY', caPem: null,
     certCn: 'firma_api', certIssuerCn: 'Plus MultiInfo CA', certFingerprintSha1: 'AA:BB',
@@ -46,7 +50,7 @@ beforeEach(async () => {
 
   app = buildApiServer({
     accounts, apiKeys, messages, events, jobs, packages: new PackagesRepo(db), clients: {} as never,
-    rateLimiter: new RateLimiter(), now: () => NOW,
+    inbound, rateLimiter: new RateLimiter(), now: () => NOW,
   });
   await app.ready();
 });
@@ -215,5 +219,45 @@ describe('POST /v1/messages', () => {
     for (let i = 0; i < 60; i += 1) await post({ to: '48601135134', text: 'x' });
     const res = await post({ to: '48601135134', text: 'x' });
     expect(res.statusCode).toBe(429);
+  });
+});
+
+describe('POST /v1/messages - inReplyTo', () => {
+  const seedInbound = (serviceId = '24138') => inbound.insertIfNew({
+    id: 'in_1', accountId, serviceId, miId: '22', sender: '48601135134', dest: '7968', kind: 'text', body: 'Pytanie',
+    bodyHash: 'h', protocolId: 0, codingScheme: 0, connectorId: null, relatedMessageId: null,
+    receivedAt: NOW.toISOString(), createdAt: NOW.toISOString(),
+  });
+
+  it('zapisuje odpowiedź w wątku', async () => {
+    seedInbound();
+    const res = await post({ to: '48601135134', text: 'Odpowiedź', inReplyTo: 'in_1' });
+    expect(res.statusCode).toBe(202);
+    expect(messages.get(res.json().id)!.inReplyTo).toBe('in_1');
+  });
+
+  it('odrzuca nieznaną wiadomość i wiadomość z innej usługi', async () => {
+    seedInbound('24902');
+    for (const id of ['in_1', 'in_nie_ma']) {
+      const res = await post({ to: '48601135134', text: 'Odpowiedź', inReplyTo: id });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe('in_reply_to_unknown');
+    }
+  });
+
+  it('odpowiedź musi iść do nadawcy tej wiadomości', async () => {
+    seedInbound();
+    const res = await post({ to: '48601135135', text: 'Odpowiedź', inReplyTo: 'in_1' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('in_reply_to_recipient');
+    // Ten sam numer w innym zapisie przechodzi po normalizacji.
+    expect((await post({ to: '+48 601 135 134', text: 'Odpowiedź', inReplyTo: 'in_1' })).statusCode).toBe(202);
+  });
+
+  it('inReplyTo z listą odbiorców jest odrzucane', async () => {
+    seedInbound();
+    const res = await post({ to: ['48601135134', '48601135135'], text: 'Odpowiedź', inReplyTo: 'in_1' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('in_reply_to_single');
   });
 });

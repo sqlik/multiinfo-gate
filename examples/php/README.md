@@ -35,12 +35,22 @@ Dwa pierwsze przypadki to adresy w sieci wewnętrznej. Bramka domyślnie ich nie
 pozwala zapisać w panelu - trzeba w jej środowisku ustawić `MIG_WEBHOOK_ALLOW_PRIVATE=1`
 (`docker/.env`, opis w `docs/uruchomienie.md`, rozdział 7.7), a potem uruchomić bramkę ponownie.
 
+## Wiadomości od abonentów
+
+Gdy przy kluczu w panelu bramki zaznaczono „Odbiera wiadomości przychodzące”, każdy SMS od abonenta
+przychodzi zdarzeniem `message.received` na `webhook.php` i trafia do `data/odebrane.jsonl`. Sekcja
+„Odebrane SMS-y” na stronie pokazuje te wpisy z formularzem odpowiedzi w wierszu: odpowiedź idzie
+przez `sendMessage()` z parametrem `$inReplyTo`, więc bramka przekazuje Multiinfo identyfikator
+wiadomości, na którą odpisujesz. Przycisk „Dociągnij z bramki” woła `listInbound()` i dopisuje
+do dziennika wiadomości, których jeszcze w nim nie ma - tak aplikacja odzyskuje zaległość, gdy
+odbiornik webhooków był niedostępny.
+
 ## Pliki
 
 | Plik | Rola |
 |---|---|
-| `lib/gate.php` | klasa `MultiinfoGate` - wywołania API, błędy jako `GateException` |
-| `lib/webhook.php` | `verifyWebhook()` - podpis HMAC, tolerancja czasu 300 s |
+| `lib/gate.php` | klasa `MultiinfoGate` - wywołania API (także `listInbound()`, `getInbound()`), błędy jako `GateException` |
+| `lib/webhook.php` | `verifyWebhook()` - podpis HMAC, tolerancja czasu 300 s; `inboundEntry()` - wiersz odebranej |
 | `lib/store.php` | zapis i odczyt plików jsonl w `data/` |
 | `index.php` | formularze i listy |
 | `webhook.php` | odbiornik zdarzeń |

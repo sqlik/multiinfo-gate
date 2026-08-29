@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { shortId } from '../ids.ts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { PackageRow, RecipientInput, RecipientRow } from '../store/packages.ts';
@@ -36,7 +36,6 @@ const bodySchema = z.object({
  */
 const CLIENT_ID = /^[A-Za-z0-9._-]{1,20}$/;
 
-const shortId = () => `pkg_${randomUUID().replace(/-/g, '').slice(0, 20)}`;
 
 /** Nagłówek CSV; średnik jako separator, bo tak otwierają go polskie arkusze. */
 const CSV_HEADER = 'numer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas';
@@ -132,7 +131,7 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
     });
 
     const encoding = ucs2 && input.encoding !== 'gsm' ? 'ucs2' : 'gsm';
-    const id = shortId();
+    const id = shortId('pkg');
     const at = now();
     deps.packages.insert({
       id, apiKeyId: auth.apiKeyId, accountId: auth.accountId, serviceId,

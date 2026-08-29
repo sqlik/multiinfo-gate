@@ -2,8 +2,8 @@
 declare(strict_types=1);
 
 // Odbiornik webhooków bramki. Poprawny podpis: wpis w webhooki.jsonl, aktualizacja stanu
-// w wyslane.jsonl, odpowiedź 204. Odrzucony: wpis w odrzucone.jsonl, odpowiedź 401
-// (bramka nie ponawia po 4xx - to decyzja odbiorcy).
+// w wyslane.jsonl (statusy) albo wpis w odebrane.jsonl (SMS od abonenta), odpowiedź 204.
+// Odrzucony: wpis w odrzucone.jsonl, odpowiedź 401 (bramka nie ponawia po 4xx - to decyzja odbiorcy).
 
 require __DIR__ . '/lib/webhook.php';
 require __DIR__ . '/lib/store.php';
@@ -37,6 +37,14 @@ appendJsonl($dataDir, 'webhooki.jsonl', [
     'do' => isset($event['to']) ? (string) $event['to'] : null,
     'blad' => isset($event['error']) ? (string) $event['error'] : null,
 ]);
+
+// SMS od abonenta: treść jest tylko w tym powiadomieniu, gdy konto nie przechowuje treści -
+// zapisujemy ją od razu, zanim odpowiemy 204.
+if (($event['event'] ?? '') === 'message.received') {
+    appendJsonl($dataDir, 'odebrane.jsonl', inboundEntry($event));
+    http_response_code(204);
+    exit;
+}
 
 if (isset($event['id'])) {
     $patch = [];

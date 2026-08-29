@@ -1,4 +1,5 @@
 import type { AccountRow } from '../../store/accounts.ts';
+import type { InboundServiceState } from '../../store/inbound-services.ts';
 import type { CertBundle } from '../../secrets/pkcs12.ts';
 import type { CertificateView } from '../../multiinfo/client.ts';
 import { warsawDay, warsawStamp } from '../../time/warsaw.ts';
@@ -9,6 +10,8 @@ export interface AccountView {
   serviceIds: string[];
   origs: string[];
   keyCount: number;
+  /** Stan odbioru per usługa: kto subskrybuje i co ostatnio robił odbiornik. */
+  inbound: Array<{ serviceId: string; subscribers: string[]; state: InboundServiceState }>;
 }
 
 /** Wynik sprawdzenia połączenia, gotowy do pokazania razem ze śladem żądania. */
@@ -311,6 +314,7 @@ export function accountPage(
       <div class="stack">
         ${certificatePanel(v, now, bundle)}
         ${probe === null ? '' : probePanel(v, probe)}
+        ${inboundPanel(v, now)}
       </div>
     </div>
   </div>`;
@@ -462,4 +466,46 @@ function certificateCheck(v: AccountView, certificate: CertificateView | null): 
               `(${esc(v.row.login)}). Wystaw certyfikat z CN równym loginowi.`}
             Wystawca ${esc(certificate.issuerCn ?? certificate.issuer)}, ważny do ${esc(certificate.validTo)}.</div>
         </div>`;
+}
+
+/** „12 s temu”, „3 min temu”, „2 h temu” - do stanu odbiornika; dokładny czas i tak jest w dzienniku. */
+function ago(iso: string, now: Date): string {
+  const s = Math.max(0, Math.round((now.getTime() - Date.parse(iso)) / 1000));
+  if (s < 60) return `${s} s temu`;
+  if (s < 3600) return `${Math.round(s / 60)} min temu`;
+  return `${Math.round(s / 3600)} h temu`;
+}
+
+/**
+ * Odbiór wiadomości przychodzących per usługa. Kolejność rozstrzygania jest celowa: konto
+ * wstrzymane gasi wszystko, błąd Multiinfo jest ważniejszy niż lista subskrybentów, a brak
+ * subskrybentów to stan zwykły, nie awaria.
+ */
+function inboundPanel(v: AccountView, now: Date): string {
+  const rows = v.inbound.map(({ serviceId, subscribers, state }) => {
+    let status: string;
+    if (v.row.pausedReason !== null) status = '<span class="st"><span class="dot dot-wait"></span>wstrzymany razem z kontem</span>';
+    else if (state.error !== null) status = `<span class="st"><span class="dot dot-fail"></span>zatrzymany: ${esc(state.error)}</span>`;
+    else if (subscribers.length === 0) status = '<span class="dim">nieaktywny (brak subskrybujących kluczy)</span>';
+    else {
+      const polled = state.lastPollAt === null ? 'jeszcze nie pytano' : `ostatnio pytano ${ago(state.lastPollAt, now)}`;
+      const received = state.lastReceivedAt === null ? 'nic jeszcze nie odebrano' : `ostatnia odebrana ${warsawStamp(state.lastReceivedAt)}`;
+      status = `<span class="st"><span class="dot dot-ok"></span>aktywny</span>
+        <div class="dim" style="font-size: 11.5px; margin-top: 2px;">${esc(polled)} · ${esc(received)}</div>`;
+    }
+    return `<tr>
+      <td class="m">${esc(serviceId)}</td>
+      <td>${subscribers.length === 0 ? '<span class="dim">-</span>' : esc(subscribers.join(', '))}</td>
+      <td>${status}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="panel">
+    <div class="panel-h"><div class="lab">Odbiór wiadomości</div><a href="/klucze">Subskrypcje przy kluczach</a></div>
+    <table>
+      <tr><th style="width: 70px;">ID usługi</th><th style="width: 140px;">Odbierają klucze</th><th>Stan odbiornika</th></tr>
+      ${rows}
+    </table>
+    <div class="hint" style="padding: 10px 16px;">Odebrane SMS-y trafiają do API Multiinfo tylko wtedy, gdy administrator Polkomtel ustawi
+      na koncie kierowanie do API - domyślnie lądują w panelu WWW Multiinfo.</div>
+  </div>`;
 }

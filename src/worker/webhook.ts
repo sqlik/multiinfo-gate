@@ -4,7 +4,17 @@ import { PRIVATE_TARGET_MESSAGE, systemResolver, webhookTarget } from '../net/pr
 import type { Job } from '../store/jobs.ts';
 import type { WorkerDeps } from './send.ts';
 
-export type WebhookEvent = 'message.sent' | 'message.delivered' | 'message.failed' | 'package.completed';
+export type WebhookEvent = 'message.sent' | 'message.delivered' | 'message.failed' | 'package.completed' | 'message.received';
+
+/** Tyle z zależności workera, ile trzeba do zakolejkowania dostawy - korzysta też odbiornik. */
+export type WebhookEmitDeps = Pick<WorkerDeps, 'apiKeys' | 'deliveries' | 'jobs'>;
+
+export interface EmitOptions {
+  /** Wiadomość przychodząca, której dotyczy dostawa - do śladu w panelu i plakietki. */
+  inboundId?: string;
+  /** Po zakończeniu dostawy zastąpić treść skrótem (konto bez przechowywania treści). */
+  scrubAfter?: boolean;
+}
 
 export type HttpPost = (
   url: string, headers: Record<string, string>, body: string,
@@ -33,12 +43,16 @@ export const httpPost: HttpPost = async (url, headers, body) => {
 
 /** Zapisuje dostawę i zadanie. Klucz bez adresu webhooka nic nie dostaje. */
 export function emitWebhook(
-  deps: WorkerDeps, apiKeyId: number, event: WebhookEvent, payload: Record<string, unknown>, now: Date,
+  deps: WebhookEmitDeps, apiKeyId: number, event: WebhookEvent, payload: Record<string, unknown>, now: Date,
+  opts: EmitOptions = {},
 ): number | null {
   const key = deps.apiKeys.get(apiKeyId);
   if (!key?.webhookUrl) return null;
   const body = JSON.stringify({ event, at: now.toISOString(), ...payload });
-  const id = deps.deliveries.insert({ apiKeyId, event, payload: body, url: key.webhookUrl, createdAt: now });
+  const id = deps.deliveries.insert({
+    apiKeyId, event, payload: body, url: key.webhookUrl, createdAt: now,
+    inboundId: opts.inboundId ?? null, scrubAfter: opts.scrubAfter === true,
+  });
   deps.jobs.enqueue('webhook', { deliveryId: id }, now);
   return id;
 }
@@ -72,7 +86,7 @@ export async function handleWebhook(job: Job, deps: WorkerDeps, now: Date): Prom
     const delay = WEBHOOK_BACKOFF_MS[job.attempts];
     if (delay === undefined) {
       deps.deliveries.markFailed(delivery.id, response);
-      deps.jobs.complete(job.id);
+        deps.jobs.complete(job.id);
       log.warn('webhook.nieudany', { deliveryId: delivery.id, event: delivery.event, response });
       return;
     }

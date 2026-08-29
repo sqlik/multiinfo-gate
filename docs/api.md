@@ -1,10 +1,16 @@
 # API bramki dla aplikacji klienckich
 
-Bramka udostępnia aplikacjom interfejs HTTP z danymi w formacie JSON. Aplikacja przekazuje numer
-odbiorcy i treść, a bramka odpowiada za dobór kodowania, podział na części, uwierzytelnienie
-certyfikatem w Multiinfo, ponowienia, raporty doręczeń i powiadomienia. Dokument opisuje każde
-wywołanie w tym samym układzie: przeznaczenie, pełne żądanie `curl`, odpowiedź oraz błędy tego
-wywołania wraz z zalecanym postępowaniem.
+Bramka udostępnia aplikacjom interfejs HTTP z danymi w formacie JSON i obsługuje ruch w obie
+strony. W stronę abonenta: aplikacja przekazuje numer odbiorcy i treść, a bramka odpowiada za
+dobór kodowania, podział na części, uwierzytelnienie certyfikatem w Multiinfo, ponowienia,
+raporty doręczeń i powiadomienia (rozdziały 3-6). Od abonenta: SMS-y wysłane na numer usługi
+bramka odbiera z Multiinfo sama, w tle, i przekazuje aplikacji powiadomieniem `message.received`
+na adres webhooka klucza, a ponadto udostępnia je do odczytu (`GET /v1/inbound`) i pozwala na nie
+odpowiedzieć w wątku (`inReplyTo`) - rozdział 5a. Odbiór wymaga dwóch ustawień: kierowania
+odebranych wiadomości do API na koncie Multiinfo (ustawia administrator Polkomtel) oraz
+zaznaczenia odbioru przy kluczu API w panelu bramki. Dokument opisuje każde wywołanie w tym samym
+układzie: przeznaczenie, pełne żądanie `curl`, odpowiedź oraz błędy tego wywołania wraz
+z zalecanym postępowaniem.
 
 ## 1. Informacje ogólne
 
@@ -27,7 +33,9 @@ identyfikator usługi `24138` oraz identyfikatory `msg_...` i `pkg_...` w przyk�
 **Model przetwarzania.** Przyjęcie wiadomości i rozsyłki jest asynchroniczne: bramka odpowiada
 kodem `202` natychmiast po zapisaniu żądania w kolejce, a wysyłka do Multiinfo, raport doręczenia
 i ewentualna odmowa operatora następują później. Aktualny stan uzyskuje się odczytem
-(rozdział 4) albo z powiadomień webhook (rozdział 6).
+(rozdział 4) albo z powiadomień webhook (rozdział 6). Wiadomości przychodzące (SMS-y od
+abonentów na numer usługi) bramka odbiera z Multiinfo sama i przekazuje aplikacji powiadomieniem
+`message.received` (rozdział 6) oraz udostępnia do odczytu (rozdział 5a).
 
 ## 2. Uwierzytelnianie
 
@@ -77,6 +85,7 @@ Pola body żądania:
 | `deliveryReport` | nie | domyślnie `true`; `false` oznacza rezygnację z raportu doręczenia - stan wiadomości kończy się na `sent` |
 | `validTo` | nie | ISO 8601, najwyżej 72 godziny od przyjęcia; wiadomość niedoręczona do tego czasu otrzymuje stan `expired` |
 | `costCenter` | nie | dowolny znacznik na potrzeby rozliczeń aplikacji; zwracany w odczycie wiadomości |
+| `inReplyTo` | nie | identyfikator wiadomości przychodzącej (`in_...`), na którą to odpowiedź (rozdział 5a.3); bramka przekazuje go Multiinfo jako `smsInId`; dopuszczalny tylko przy jednym odbiorcy, którym jest nadawca tej wiadomości, i w tej samej usłudze, z której przyszła |
 
 **Odpowiedź `202 Accepted`** (dla tablicy `to` - tablica takich obiektów, w kolejności numerów):
 
@@ -161,6 +170,7 @@ curl -s https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f \
   "slots": 39,
   "orig": "Firma Info",
   "serviceId": "24138",
+  "inReplyTo": null,
   "costCenter": null,
   "createdAt": "2026-08-26T10:00:00.000Z",
   "sentAt": "2026-08-26T10:00:01.000Z",
@@ -171,7 +181,8 @@ curl -s https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f \
 ```
 
 Pole `text` występuje tylko wtedy, gdy konto Multiinfo ma włączone przechowywanie treści.
-Wartości `status` objaśnia rozdział 7.
+Pole `inReplyTo` to identyfikator wiadomości przychodzącej, gdy wysyłka była odpowiedzią
+w wątku (rozdział 5a.3), w pozostałych przypadkach `null`. Wartości `status` objaśnia rozdział 7.
 
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
@@ -389,11 +400,104 @@ słownika z rozdziału 7; wartość `null` oznacza, że raport nie objął tego 
 | 404 | `package_not_found` | brak rozsyłki | sprawdzić identyfikator |
 | 409 | `report_not_ready` | raport w stanie `none`, `pending` albo `failed`; odpowiedź zawiera `report.status` | przy `pending` powtórzyć po minucie; przy `failed` zamówić ponownie (5.3) |
 
+## 5a. Wiadomości przychodzące
+
+Abonent może odpowiedzieć na SMS-a albo napisać na numer usługi z własnej inicjatywy. Multiinfo
+domyślnie kieruje takie wiadomości do swojego panelu WWW; administrator Polkomtel może przełączyć
+kierowanie na API (wszystkie wiadomości albo tylko z określonym prefiksem treści). Bramka odbiera
+je wtedy sama, bez udziału aplikacji, i przekazuje dwoma kanałami: powiadomieniem
+`message.received` (rozdział 6) do każdego klucza, który ma włączony odbiór, oraz do odczytu
+opisanego niżej. Odczyt nie wymaga włączonego odbioru - wystarczy, że klucz ma dostęp do usługi.
+
+Bramka pyta Multiinfo o wiadomości tylko z tych usług, dla których odbiór ma włączony choć jeden
+czynny klucz z adresem webhooka. Dopóki żaden klucz nie odbiera, wiadomości czekają po stronie
+Multiinfo.
+
+Polskie znaki w wiadomościach przychodzących Multiinfo zamienia na łacińskie odpowiedniki
+(„Zażółć” dociera jako „Zazolc”). Wiadomości wieloczęściowe docierają sklejone.
+
+### 5a.1. Lista: `GET /v1/inbound`
+
+**Przeznaczenie.** Odczyt odebranych wiadomości z usług klucza - do pierwszego zasilenia
+aplikacji, do dociągnięcia zaległości po awarii odbiornika webhooków i do sprawdzenia, czy
+webhook niczego nie pominął.
+
+```bash
+curl -s "https://<TWOJA-DOMENA>/v1/inbound?since=2026-08-29T00:00:00Z&limit=50" \
+  -H "Authorization: Bearer <TWOJ-KLUCZ>"
+```
+
+Parametry zapytania (wszystkie opcjonalne):
+
+| Parametr | Opis |
+|---|---|
+| `serviceId` | jedna z usług klucza; inna daje `403 service_not_allowed` |
+| `from` | numer nadawcy w dowolnym zapisie (`+48 601 000 001`, `601000001`); bramka sprowadza go do postaci, w jakiej zapisała nadawcę |
+| `since`, `until` | zakres czasu odbioru przez Multiinfo, ISO 8601; zła data daje `400 invalid_query` |
+| `limit` | liczba wyników, domyślnie 25, najwyżej 200 |
+| `offset` | liczba pominiętych wyników od początku listy |
+
+**Odpowiedź `200`:** `{ "data": [ ... ], "hasMore": true }` - obiekty jak w 5a.2, od najnowszej.
+
+### 5a.2. Jedna wiadomość: `GET /v1/inbound/{id}`
+
+```bash
+curl -s https://<TWOJA-DOMENA>/v1/inbound/in_5c1d9e2b7a3f4d8e6b0a \
+  -H "Authorization: Bearer <TWOJ-KLUCZ>"
+```
+
+**Odpowiedź `200`:**
+
+```json
+{
+  "id": "in_5c1d9e2b7a3f4d8e6b0a",
+  "serviceId": "24138",
+  "from": "48601000001",
+  "to": "7968",
+  "kind": "text",
+  "text": "Dziekuje, wszystko jasne",
+  "receivedAt": "2026-08-29T07:14:00.000Z",
+  "relatedMessageId": "msg_3f9c2a7b1e4d8c6a5b2f",
+  "protocolId": 0,
+  "codingScheme": 0,
+  "createdAt": "2026-08-29T07:14:02.000Z"
+}
+```
+
+| Pole | Znaczenie |
+|---|---|
+| `from` | numer nadawcy; numer krótki albo nietypowy przepisany bez zmian |
+| `to` | numer usługi, na który wiadomość przyszła |
+| `kind` | `text` albo `binary`; przy `binary` zamiast `text` jest `hex` (dane szesnastkowe od Multiinfo, bez interpretacji) |
+| `text` / `hex` | treść; brak obu pól, gdy konto Multiinfo ma wyłączone przechowywanie treści - wtedy treść jest tylko w powiadomieniu `message.received`, a tu zamiast niej `bodyHash` |
+| `bodyHash` | SHA-256 treści (szesnastkowo), tylko gdy `text`/`hex` nie występują; pozwala dopasować odczyt do treści dostarczonej powiadomieniem |
+| `receivedAt` | chwila odbioru przez Multiinfo (czas polski przeliczony na UTC) |
+| `relatedMessageId` | identyfikator ostatniej wiadomości wysłanej z tej samej usługi na numer nadawcy w ciągu 7 dni; podpowiedź, na co abonent odpowiada; `null`, gdy brak |
+| `protocolId`, `codingScheme` | parametry protokołu SMS przepisane z Multiinfo; dla zwykłego tekstu `0` i `0` |
+
+| HTTP | `error.code` | Przyczyna | Postępowanie |
+|---|---|---|---|
+| 404 | `inbound_not_found` | brak wiadomości albo wiadomość z usługi spoza klucza | sprawdzić identyfikator z powiadomienia |
+
+### 5a.3. Odpowiedź w wątku
+
+`POST /v1/messages` z polem `inReplyTo` wysyła odpowiedź powiązaną z wiadomością przychodzącą:
+bramka przekazuje Multiinfo identyfikator tej wiadomości (`smsInId`), a `GET /v1/messages/{id}`
+i powiadomienia o tej wysyłce zwracają `inReplyTo`. Wiadomość przychodząca musi pochodzić
+z tej samej usługi, z której idzie odpowiedź, a odpowiedź ma jednego odbiorcę - nadawcę tej
+wiadomości (pole `from` z `message.received`).
+
+```bash
+curl -s -X POST https://<TWOJA-DOMENA>/v1/messages \
+  -H "Authorization: Bearer <TWOJ-KLUCZ>" -H "Content-Type: application/json" \
+  -d '{ "to": "48601000001", "text": "Dziekujemy za potwierdzenie.", "inReplyTo": "in_5c1d9e2b7a3f4d8e6b0a" }'
+```
+
 ## 6. Powiadomienia webhook
 
 Webhook to mechanizm powiadomień zwrotnych: aplikacja udostępnia adres HTTP, a bramka wysyła
 na niego żądanie `POST` przy każdej zmianie stanu - wysłaniu, doręczeniu, niepowodzeniu,
-zakończeniu rozsyłki. Dzięki temu aplikacja nie musi cyklicznie odpytywać bramki o stan każdej
+zakończeniu rozsyłki - oraz przy odebraniu SMS-a od abonenta. Dzięki temu aplikacja nie musi cyklicznie odpytywać bramki o stan każdej
 wiadomości. Adres i sekret ustawia administrator bramki przy kluczu API; sekret służy do
 weryfikacji, że żądanie pochodzi od bramki.
 
@@ -402,7 +506,7 @@ Każde żądanie zawiera nagłówki:
 | Nagłówek | Wartość |
 |---|---|
 | `Content-Type` | `application/json` |
-| `X-MIG-Event` | `message.sent`, `message.delivered`, `message.failed` albo `package.completed` |
+| `X-MIG-Event` | `message.sent`, `message.delivered`, `message.failed`, `package.completed` albo `message.received` |
 | `X-MIG-Timestamp` | czas uniksowy w sekundach, użyty do obliczenia podpisu |
 | `X-MIG-Signature` | `sha256=<hex>`, gdzie `<hex>` to HMAC-SHA256 z sekretu obliczony z ciągu `<X-MIG-Timestamp>.<body żądania>` |
 
@@ -498,6 +602,9 @@ a ponadto:
 | `message.delivered` | `status: "delivered"`, `to`, `miStatus`, `miSubstatus`, `error: null` |
 | `message.failed` | `status` (`failed`, `blocked`, `expired` albo `cancelled`), `to`, `error`; przy odmowie Multiinfo `providerCode`, przy raporcie doręczenia `miStatus` i `miSubstatus` |
 | `package.completed` | `recipients`, `status` (`completed`, `failed`, `cancelled`); po pobraniu raportu `report: "ready"` i `summary`, przy nieudanym raporcie `report: "failed"`; przy odmowie `providerCode` i `error` |
+| `message.received` | `serviceId`, `from`, `to`, `kind`, `text` albo `hex`, `receivedAt`, `relatedMessageId` - pola jak w 5a.2; `id` to identyfikator wiadomości przychodzącej `in_...` |
+
+Powiadomienia o wysyłce będącej odpowiedzią w wątku (5a.3) zawierają dodatkowo pole `inReplyTo`.
 
 Przykład `message.delivered`:
 
@@ -506,6 +613,20 @@ Przykład `message.delivered`:
   "status": "delivered", "to": "48601000001", "miStatus": 21, "miSubstatus": 0, "error": null }
 ```
 
+Przykład `message.received`:
+
+```json
+{ "event": "message.received", "at": "2026-08-29T07:14:02.000Z", "id": "in_5c1d9e2b7a3f4d8e6b0a",
+  "serviceId": "24138", "from": "48601000001", "to": "7968", "kind": "text",
+  "text": "Dziekuje, wszystko jasne", "receivedAt": "2026-08-29T07:14:00.000Z",
+  "relatedMessageId": "msg_3f9c2a7b1e4d8c6a5b2f" }
+```
+
+Powiadomienie `message.received` zawiera treść zawsze, także gdy konto nie przechowuje treści -
+to jedyna chwila, w której aplikacja może ją dostać. Odbiór włącza się dla klucza w panelu (pole
+„Odbiera wiadomości przychodzące”); kilka kluczy z dostępem do tej samej usługi może odbierać
+jednocześnie, każdy dostaje własne powiadomienie.
+
 ### 6.3. Ponowienia i kolejność
 
 Odpowiedź aplikacji z kodem `2xx` oznacza dostarczenie. Odpowiedź `4xx` kończy dostawę bez
@@ -513,11 +634,16 @@ ponowień - w ten sposób aplikacja sygnalizuje, że zdarzenie zostało świadom
 z powodu błędnego podpisu). Odpowiedź `5xx`, brak odpowiedzi w ciągu 10 sekund i błędy sieci
 powodują ponowienie po 1 minucie, 5 minutach, 15 minutach, 1 godzinie i 6 godzinach. Po
 wyczerpaniu ponowień zdarzenie jest oznaczane jako niedostarczone i widoczne na ekranie przeglądu
-w panelu bramki. Bramka nie podąża za przekierowaniami HTTP - podany adres musi odpowiadać
+w panelu bramki, a administrator może je ponowić z panelu (szczegół wiadomości albo odebranej,
+przycisk „Ponów”) - takie zdarzenie przychodzi z nowym podpisem i bieżącym `at`. Bramka nie podąża za przekierowaniami HTTP - podany adres musi odpowiadać
 bezpośrednio.
 
 Kolejność dostarczania nie jest gwarantowana: przy ponowieniach `message.delivered` może dotrzeć
 przed `message.sent`. O kolejności zdarzeń rozstrzyga pole `at`.
+
+Dla `message.received` obowiązuje ta sama zasada co dla statusów: wiadomość jest zapisana
+w bramce przed pierwszą próbą dostawy, więc po awarii aplikacja dociąga zaległość
+z `GET /v1/inbound?since=` (5a.1).
 
 Adres webhooka musi wskazywać adres publiczny. Bramka sprawdza cel przy zapisie adresu w panelu
 i przed każdą dostawą: adres literalny albo nazwę rozwiązującą się na pętlę zwrotną, sieć
@@ -571,10 +697,14 @@ zredagowane po polsku z myślą o dzienniku aplikacji, nie o wyświetlaniu użyt
 | 400 | `service_required` | klucz bez usługi domyślnej, `serviceId` nie podano | podać `serviceId` |
 | 400 | `valid_to_in_past`, `valid_to_too_far` | `validTo` w przeszłości albo dalej niż 72 godziny | poprawić `validTo` |
 | 400 | `start_at_in_past` | `startAt` rozsyłki w przeszłości | poprawić `startAt` albo pominąć |
+| 400 | `in_reply_to_unknown` | `inReplyTo` wskazuje wiadomość, której nie ma w tej usłudze | użyć identyfikatora z `message.received` tej samej usługi |
+| 400 | `in_reply_to_single` | `inReplyTo` razem z listą odbiorców | jeden odbiorca |
+| 400 | `in_reply_to_recipient` | odbiorca odpowiedzi to nie nadawca wskazanej wiadomości | w `to` podać `from` z `message.received` |
+| 400 | `invalid_query` | `since` albo `until` nie są datami ISO 8601, albo parametr zapytania podano więcej niż raz | poprawić parametry zapytania |
 | 401 | `missing_api_key`, `invalid_api_key`, `revoked_api_key`, `expired_api_key` | brak, nieprawidłowy, odwołany albo wygasły klucz | rozdział 2 |
 | 403 | `service_not_allowed` | usługa spoza uprawnień klucza | użyć usługi przypisanej do klucza |
 | 403 | `orig_not_allowed` | nadpis spoza uprawnień klucza; `message` wymienia dozwolone | użyć jednego z wymienionych |
-| 404 | `message_not_found`, `package_not_found` | brak obiektu albo obiekt innego klucza | sprawdzić identyfikator |
+| 404 | `message_not_found`, `package_not_found`, `inbound_not_found` | brak obiektu albo obiekt innego klucza | sprawdzić identyfikator |
 | 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią wiadomości albo numerem | użyć nowego klucza idempotencji |
 | 409 | `already_final`, `already_passed` | anulowanie niemożliwe (4.3) | brak |
 | 409 | `package_not_completed`, `report_not_ready` | raport rozsyłki jeszcze niedostępny | powtórzyć po minucie |
@@ -590,8 +720,10 @@ Odmowy Multiinfo przy wysyłce asynchronicznej nie są kodami HTTP: pojawiają s
 ## 10. Stan bramki: `GET /healthz`
 
 Wywołanie bez klucza. Odpowiedź `{ "status": "ok" }` albo `{ "status": "degraded" }`; stan
-`degraded` oznacza, że któreś konto Multiinfo jest wstrzymane albo jego certyfikat wygasa w ciągu
-siedmiu dni - wysyłka może nie działać, a administrator widzi przyczynę w panelu. Wywołanie nadaje
+`degraded` oznacza, że któreś konto Multiinfo jest wstrzymane, jego certyfikat wygasa w ciągu
+siedmiu dni albo odbiór wiadomości przychodzących z którejś usługi zatrzymał się na błędzie
+Multiinfo (np. `-24`, usługa nieaktywna) - wysyłka albo odbiór mogą nie działać, a administrator
+widzi przyczynę w panelu (na karcie konta). Wywołanie nadaje
 się do monitoringu zewnętrznego (np. sprawdzenie co minutę z alarmem po dwóch kolejnych
 niepowodzeniach).
 

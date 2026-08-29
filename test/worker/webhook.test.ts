@@ -6,6 +6,7 @@ import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
 import { MessagesRepo } from '../../src/store/messages.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
+import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
@@ -18,11 +19,13 @@ let deps: Parameters<typeof handleWebhook>[1];
 let post: ReturnType<typeof vi.fn>;
 let apiKeyId: number;
 let mutedKeyId: number;
+let db: ReturnType<typeof openDatabase>;
+let accountId: number;
 
 beforeEach(() => {
-  const db = openDatabase(':memory:');
+  db = openDatabase(':memory:');
   const accounts = new AccountsRepo(db, masterKey);
-  const accountId = accounts.insert({
+  accountId = accounts.insert({
     name: 'Firma Info', baseUrl: 'https://api2.multiinfo.plus.pl/Api61/',
     login: 'firma_api', password: 'tajne', certPem: 'C', keyPem: 'K', caPem: null,
     certCn: 'firma_api', certIssuerCn: 'CA', certFingerprintSha1: 'AA',
@@ -39,7 +42,7 @@ beforeEach(() => {
   post = vi.fn();
   deps = {
     accounts, apiKeys, messages: new MessagesRepo(db), jobs: new JobsRepo(db), events: new MessageEventsRepo(db),
-    deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), reportsDir: '', clients: {} as never, post,
+    deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '', clients: {} as never, post,
     resolve: async () => ['93.184.216.34'],
   };
 });
@@ -112,7 +115,7 @@ describe('emitWebhook', () => {
   it('nic nie robi dla klucza bez adresu', () => {
     expect(emitWebhook(deps, mutedKeyId, 'message.sent', { id: 'msg_1' }, NOW)).toBeNull();
     expect(deps.jobs.depth()).toBe(0);
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
   });
 });
 
@@ -132,7 +135,7 @@ describe('handleWebhook', () => {
     expect(headers['X-MIG-Signature']).toBe(signWebhook('sekret', TIMESTAMP, body));
     expect(headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(body)).toMatchObject({ event: 'message.delivered', id: 'msg_1' });
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
     expect(deps.deliveries.listRecent(1)[0]!.deliveredAt).toBe(NOW.toISOString());
     expect(deps.deliveries.listRecent(1)[0]!.lastResponse).toBe('200 ok');
     expect(deps.jobs.depth()).toBe(0);
@@ -157,14 +160,14 @@ describe('handleWebhook', () => {
     post.mockResolvedValue({ status: 500, body: 'x' });
     const j = job();
     await handleWebhook({ ...j, attempts: WEBHOOK_BACKOFF_MS.length }, deps, NOW);
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 1 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 1 });
     expect(deps.jobs.depth()).toBe(0);
   });
 
   it('nie ponawia po odpowiedzi 4xx - to błąd odbiorcy, nie sieci', async () => {
     post.mockResolvedValue({ status: 410, body: 'gone' });
     await handleWebhook(job(), deps, NOW);
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 1 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 1 });
     expect(deps.jobs.depth()).toBe(0);
   });
 
@@ -181,6 +184,58 @@ describe('handleWebhook', () => {
     deps.apiKeys.setWebhook(apiKeyId, null, null);
     await handleWebhook(j, deps, NOW);
     expect(post).not.toHaveBeenCalled();
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 1 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 1 });
+  });
+});
+
+describe('handleWebhook - message.received', () => {
+  const received = (scrubAfter: boolean) => {
+    // Dostawa wskazuje wiadomość przychodzącą kluczem obcym - musi być w bazie.
+    db.prepare(`INSERT INTO inbound_messages (id, account_id, service_id, mi_id, sender, dest, kind, body_hash, protocol_id, coding_scheme, received_at, created_at)
+      VALUES ('in_1', ?, '24138', '22', '48601000001', '7968', 'text', 'h', 0, 0, ?, ?)`).run(accountId, NOW.toISOString(), NOW.toISOString());
+    const id = emitWebhook(deps, apiKeyId, 'message.received',
+      { id: 'in_1', serviceId: '24138', from: '48601000001', to: '7968', kind: 'text', text: 'Ala', receivedAt: NOW.toISOString(), relatedMessageId: null },
+      NOW, { inboundId: 'in_1', scrubAfter })!;
+    const job = deps.jobs.claim(NOW, 10).find((j) => j.payload.deliveryId === id)!;
+    return { id, job };
+  };
+
+  it('dostawa pamięta wiadomość przychodzącą i idzie z nagłówkiem zdarzenia', async () => {
+    const { id, job } = received(false);
+    post.mockResolvedValue({ status: 204, body: '' });
+    await handleWebhook(job, deps, NOW);
+    expect(post.mock.calls[0][1]['X-MIG-Event']).toBe('message.received');
+    expect(JSON.parse(post.mock.calls[0][2]).text).toBe('Ala');
+    expect(deps.deliveries.get(id)!.inboundId).toBe('in_1');
+    expect(JSON.parse(deps.deliveries.get(id)!.payload).text).toBe('Ala');
+  });
+
+  it('po doręczeniu z konta bez przechowywania treści zostaje skrót', async () => {
+    const { id, job } = received(true);
+    post.mockResolvedValue({ status: 204, body: '' });
+    await handleWebhook(job, deps, NOW);
+    expect(JSON.parse(post.mock.calls[0][2]).text).toBe('Ala');
+    const stored = JSON.parse(deps.deliveries.get(id)!.payload);
+    expect(stored.text).toBeUndefined();
+    expect(stored.bodyHash).toHaveLength(64);
+  });
+
+  it('treść zostaje na czas ponowień i znika po ostatecznym niepowodzeniu', async () => {
+    const { id, job } = received(true);
+    post.mockResolvedValue({ status: 500, body: 'awaria' });
+    await handleWebhook(job, deps, NOW);
+    expect(JSON.parse(deps.deliveries.get(id)!.payload).text).toBe('Ala');
+    post.mockResolvedValue({ status: 400, body: 'nie' });
+    await handleWebhook({ ...job, attempts: 1 }, deps, NOW);
+    expect(deps.deliveries.get(id)!.status).toBe('failed');
+    expect(JSON.parse(deps.deliveries.get(id)!.payload).text).toBeUndefined();
+  });
+
+  it('odmowa sieci wewnętrznej też czyści treść', async () => {
+    const { id, job } = received(true);
+    deps.resolve = async () => ['10.0.0.5'];
+    await handleWebhook(job, deps, NOW);
+    expect(deps.deliveries.get(id)!.status).toBe('failed');
+    expect(JSON.parse(deps.deliveries.get(id)!.payload).text).toBeUndefined();
   });
 });

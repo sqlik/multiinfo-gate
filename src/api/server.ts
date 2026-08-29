@@ -6,12 +6,14 @@ import type { JobsRepo } from '../store/jobs.ts';
 import type { MessageEventsRepo } from '../store/message-events.ts';
 import type { MessagesRepo } from '../store/messages.ts';
 import type { PackagesRepo } from '../store/packages.ts';
+import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
 import type { ClientPool } from '../worker/clients.ts';
 import { AuthError } from './auth.ts';
 import { registerCancelRoute } from './cancel.ts';
 import { ApiError } from './errors.ts';
-import { registerHealthRoute } from './health.ts';
+import { registerHealthRoute, type InboundHealth } from './health.ts';
 import { registerMessageRoutes } from './messages.ts';
+import { registerInboundRoutes } from './inbound.ts';
 import { registerPackageRoutes } from './packages.ts';
 import type { RateLimiter } from './rate-limit.ts';
 
@@ -24,8 +26,11 @@ export interface ApiDeps {
   jobs: JobsRepo;
   /** Anulowanie woła Multiinfo synchronicznie - to jedyna trasa API, która tego potrzebuje. */
   clients: ClientPool;
+  inbound: InboundMessagesRepo;
   rateLimiter: RateLimiter;
   healthMode?: 'public' | 'admin';
+  /** Stan odbiornika do /healthz; bez niego pole nie występuje. */
+  inboundHealth?: () => InboundHealth;
   now?: () => Date;
   log?: Logger;
 }
@@ -47,9 +52,13 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
   registerMessageRoutes(app, deps);
   registerCancelRoute(app, deps);
   registerPackageRoutes(app, deps);
+  registerInboundRoutes(app, deps);
   registerHealthRoute(
     app,
-    { accounts: deps.accounts, queueDepth: () => deps.jobs.depth(), ...(deps.now ? { now: deps.now } : {}) },
+    {
+      accounts: deps.accounts, queueDepth: () => deps.jobs.depth(), ...(deps.now ? { now: deps.now } : {}),
+      ...(deps.inboundHealth ? { inbound: deps.inboundHealth } : {}),
+    },
     deps.healthMode ?? 'public',
   );
   return app;
