@@ -47,6 +47,34 @@ export type PollOutcome =
   | { kind: 'stopped'; error: string }
   | { kind: 'error'; error: string };
 
+export interface InboundHealth {
+  /** Usługi z choć jednym subskrybentem (cele). */
+  services: number;
+  /** Pętle działające w tej chwili. */
+  listening: number;
+  errors: Array<{ account: string; serviceId: string; error: string }>;
+}
+
+interface Loop { target: InboundTarget; controller: AbortController; done: Promise<void> }
+
+const keyOf = (t: InboundTarget) => `${t.accountId}:${t.serviceId}`;
+
+/** Czekanie, które kończy się wcześniej po sygnale - żeby stop() nie czekał na koniec przerwy. */
+export function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted || ms <= 0) { resolve(); return; }
+    const onAbort = () => { clearTimeout(timer); resolve(); };
+    const timer = setTimeout(() => { signal.removeEventListener('abort', onAbort); resolve(); }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
+ * Oddanie tury pętli zdarzeń. Pytanie, które kończy się natychmiast (atrapa w testach, błąd
+ * zwracany bez sieci), nie może zamienić pętli odbiornika w ciąg samych mikrozadań.
+ */
+const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve));
+
 /** Kody, po których nie ma sensu pytać dalej bez zmiany konfiguracji: usługa nie istnieje albo jest nieaktywna. */
 const STOPPING_CODES = new Set([-23, -24]);
 
@@ -63,7 +91,96 @@ export function normalizeSender(raw: string, countryCode: string): string {
 }
 
 export class Receiver {
+  private readonly loops = new Map<string, Loop>();
+  /** Cele zatrzymane kodem -23/-24; wracają tylko po refresh({ retryStopped: true }). */
+  private readonly stopped = new Set<string>();
+  private timer: NodeJS.Timeout | null = null;
+  private stopping = false;
+
   constructor(private readonly deps: ReceiverDeps) {}
+
+  start(): void {
+    if (this.timer) return;
+    this.refresh();
+    this.timer = setInterval(() => this.refresh(), REFRESH_INTERVAL_MS);
+    this.timer.unref();
+  }
+
+  async stop(): Promise<void> {
+    this.stopping = true;
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    for (const loop of this.loops.values()) loop.controller.abort();
+    await Promise.all([...this.loops.values()].map((l) => l.done));
+    this.loops.clear();
+    this.stopping = false;
+  }
+
+  /**
+   * Uzgadnia pętle z subskrypcjami: zapala dla nowych celów, gasi dla tych, które straciły
+   * subskrybentów (konto wstrzymane, klucz odwołany albo wyłączony). Cel zatrzymany błędem
+   * konfiguracji Multiinfo wraca tylko na jawne życzenie - po zmianie w panelu.
+   */
+  refresh(opts: { retryStopped?: boolean } = {}): void {
+    if (this.stopping) return;
+    const now = (this.deps.now ?? (() => new Date()))();
+    if (opts.retryStopped) this.stopped.clear();
+    const wanted = new Map(this.deps.services.activeTargets(now).map((t) => [keyOf(t), t]));
+    for (const [key, loop] of this.loops) {
+      if (!wanted.has(key)) {
+        loop.controller.abort();
+        this.loops.delete(key);
+      }
+    }
+    for (const [key, target] of wanted) {
+      if (this.loops.has(key) || this.stopped.has(key)) continue;
+      const controller = new AbortController();
+      const loop: Loop = { target, controller, done: Promise.resolve() };
+      loop.done = this.run(target, controller.signal).finally(() => {
+        if (this.loops.get(key) === loop) this.loops.delete(key);
+      });
+      this.loops.set(key, loop);
+    }
+  }
+
+  listening(): InboundTarget[] {
+    return [...this.loops.values()].map((l) => l.target);
+  }
+
+  health(): InboundHealth {
+    const now = (this.deps.now ?? (() => new Date()))();
+    return {
+      services: this.deps.services.activeTargets(now).length,
+      listening: this.loops.size,
+      errors: this.deps.services.errors().map((e) => ({ account: e.accountName, serviceId: e.serviceId, error: e.error })),
+    };
+  }
+
+  /** Pętla jednej usługi: pyta, aż zostanie zgaszona albo zatrzymana błędem konfiguracji. */
+  private async run(target: InboundTarget, signal: AbortSignal): Promise<void> {
+    const log = this.deps.log ?? silentLogger;
+    const sleep = this.deps.sleep ?? abortableSleep;
+    log.info('odbior.start', { ...target });
+    let failures = 0;
+    while (!signal.aborted) {
+      const outcome = await this.pollOnce(target, signal);
+      await nextTurn();
+      if (signal.aborted) break;
+      if (outcome.kind === 'stopped') {
+        this.stopped.add(keyOf(target));
+        break;
+      }
+      if (outcome.kind === 'error') {
+        const delay = INBOUND_BACKOFF_MS[Math.min(failures, INBOUND_BACKOFF_MS.length - 1)]!;
+        failures += 1;
+        await sleep(delay, signal);
+        continue;
+      }
+      failures = 0;
+      if (outcome.kind === 'empty' && this.deps.idleMs > 0) await sleep(this.deps.idleMs, signal);
+    }
+    log.info('odbior.stop', { ...target });
+  }
 
   /**
    * Jedno pytanie do Multiinfo o jedną wiadomość. Kolejność jest celowa: zapis w bazie
