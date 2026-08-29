@@ -161,6 +161,13 @@ describe('Receiver.pollOnce', () => {
     expect(deps.inbound.list({ limit: 10, offset: 0 })).toHaveLength(1);
   });
 
+  it('data odbioru w postaci Plusa (ddMMyyHHmmss) trafia do bazy jako czas odbioru', async () => {
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockResolvedValue({ ...SMS, receivedAt: '290826191802' });
+    const out = await receiver.pollOnce(target()) as { id: string };
+    expect(deps.inbound.get(out.id)!.receivedAt).toBe('2026-08-29T17:18:02.000Z');
+  });
+
   it('data odbioru nieczytelna: wiadomość zapisana z czasem bramki, nie zgubiona', async () => {
     deps.apiKeys.insert(keyInput(accountId));
     getSms.mockResolvedValue({ ...SMS, receivedAt: 'zla-data' });
