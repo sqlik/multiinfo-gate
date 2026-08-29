@@ -109,6 +109,22 @@ export class WebhookDeliveriesRepo {
     this.db.prepare('UPDATE webhook_deliveries SET payload = ?, scrub_after = 0 WHERE id = ?').run(JSON.stringify(payload), id);
   }
 
+  /** Nieudana dostawa wraca do kolejki jak nowa: bez prób i bez starej odpowiedzi. */
+  requeue(id: number): void {
+    this.db
+      .prepare(`UPDATE webhook_deliveries SET status = 'pending', attempts = 0, next_retry_at = NULL,
+                  last_response = NULL, delivered_at = NULL WHERE id = ?`)
+      .run(id);
+  }
+
+  /** Dostawy zdarzeń o wysyłce (message.sent/delivered/failed) - identyfikator jest w payloadzie. */
+  listForMessage(messageId: string): DeliveryRow[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM webhook_deliveries WHERE inbound_id IS NULL AND json_extract(payload, '$.id') = ? ORDER BY id`)
+      .all(messageId) as Raw[];
+    return rows.map(toRow);
+  }
+
   listForInbound(inboundId: string): DeliveryRow[] {
     const rows = this.db.prepare('SELECT * FROM webhook_deliveries WHERE inbound_id = ? ORDER BY id').all(inboundId) as Raw[];
     return rows.map(toRow);

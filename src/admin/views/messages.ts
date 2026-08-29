@@ -1,6 +1,7 @@
 import type { ProtocolTrace } from '../../multiinfo/client.ts';
 import { describeSubstatus, mapStatus } from '../../multiinfo/status.ts';
 import type { MessageEvent } from '../../store/message-events.ts';
+import { deliveriesTable, type DeliveryView } from './deliveries.ts';
 import type { MessageRow } from '../../store/messages.ts';
 import { measureText } from '../../text/measure.ts';
 import { segmentText } from '../../text/segment.ts';
@@ -125,6 +126,8 @@ export interface MessageDetail {
   /** Host Multiinfo konta - ślad protokołu nie zapisuje adresu. */
   host: string;
   events: MessageEvent[];
+  /** Dostawy webhooków o tej wiadomości; pusta lista, gdy klucz nie ma adresu webhooka. */
+  deliveries: DeliveryView[];
 }
 
 type Tone = 'ok' | 'wait' | 'fail' | 'dim';
@@ -279,6 +282,11 @@ export function messagePage(d: MessageDetail): string {
         <div class="panel-h"><div class="lab">Przebieg</div></div>
         <div class="tl">${timeline}</div>
       </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><div class="lab">Dostawy do aplikacji</div></div>
+      ${deliveriesTable(d.deliveries, 'Klucz nie ma adresu webhooka - aplikacja odczytuje stan przez GET /v1/messages/{id}.', true)}
     </div>
 
     ${tracePanel(m.trace, d.host)}

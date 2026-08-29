@@ -273,6 +273,28 @@ describe('GET /wiadomosci/:id', () => {
   });
 });
 
+describe('GET /wiadomosci/:id - dostawy do aplikacji', () => {
+  it('pokazuje dostawy o tej wiadomości z przyciskiem ponowienia przy nieudanej, a ponowienie wraca do wiadomości', async () => {
+    // Klucz z adresem webhooka - ten z beforeEach go nie ma, a bez adresu nie ma dokąd ponawiać.
+    const hookKeyId = h.apiKeys.insert({
+      accountId, name: 'CRM z webhookiem', keyHash: 'argon2:bbb', keyPrefix: 'b1b2c3d4', defaultServiceId: '24138', defaultOrig: null,
+      maxParts: 5, ratePerMin: 60, webhookUrl: 'https://crm.example/hook', webhookSecret: 's', serviceIds: ['24138'],
+    });
+    seed('msg_1');
+    const id = h.deliveries.insert({ apiKeyId: hookKeyId, event: 'message.sent', payload: '{"event":"message.sent","id":"msg_1"}', url: 'https://crm.example/hook', createdAt: NOW });
+    h.deliveries.markFailed(id, '503 Service Unavailable');
+    h.deliveries.insert({ apiKeyId: hookKeyId, event: 'message.sent', payload: '{"event":"message.sent","id":"msg_2"}', url: 'https://crm.example/hook', createdAt: NOW });
+    const body = (await page('/wiadomosci/msg_1')).body;
+    expect(body).toContain('Dostawy do aplikacji');
+    expect(body).toContain('message.sent');
+    expect(body).toContain('503 Service Unavailable');
+    expect(body).toContain(`action="/dostawy/${id}/ponow"`);
+    const res = await h.app.inject({ method: 'POST', url: `/dostawy/${id}/ponow`, headers: { cookie: h.cookie, 'content-type': 'application/x-www-form-urlencoded' }, payload: '' });
+    expect(res.headers.location).toBe('/wiadomosci/msg_1');
+    expect(h.deliveries.get(id)!.status).toBe('pending');
+  });
+});
+
 describe('GET /wiadomosci/:id - odpowiedź w wątku', () => {
   it('pokazuje odnośnik do wiadomości przychodzącej', async () => {
     h.inbound.insertIfNew({ id: 'in_1', accountId, serviceId: '24138', miId: '22', sender: '48601135134', dest: '7968', kind: 'text', body: 'Pytanie', bodyHash: 'h',

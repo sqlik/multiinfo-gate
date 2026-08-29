@@ -133,3 +133,61 @@ describe('GET /odebrane/:id', () => {
     expect((await page('/odebrane/in_x')).statusCode).toBe(404);
   });
 });
+
+describe('POST /dostawy/:id/ponow', () => {
+  const post = (id: number) => h.app.inject({
+    method: 'POST', url: `/dostawy/${id}/ponow`,
+    headers: { cookie: h.cookie, 'content-type': 'application/x-www-form-urlencoded' }, payload: '',
+  });
+  const failedDelivery = (payload = '{"event":"message.received","id":"in_1","kind":"text","text":"Ala"}') => {
+    const id = h.deliveries.insert({ apiKeyId, event: 'message.received', payload, url: 'https://crm.example/hook', createdAt: NOW, inboundId: 'in_1' });
+    h.deliveries.markFailed(id, '410 Gone');
+    return id;
+  };
+
+  it('szczegół odebranej pokazuje przycisk tylko przy nieudanej dostawie', async () => {
+    seed('in_1');
+    const failed = failedDelivery();
+    const ok = h.deliveries.insert({ apiKeyId, event: 'message.received', payload: '{}', url: 'https://crm.example/hook', createdAt: NOW, inboundId: 'in_1' });
+    h.deliveries.markDelivered(ok, NOW, '204');
+    const body = (await page('/odebrane/in_1')).body;
+    expect(body).toContain(`action="/dostawy/${failed}/ponow"`);
+    expect(body).not.toContain(`action="/dostawy/${ok}/ponow"`);
+  });
+
+  it('ponawia nieudaną dostawę: oczekująca, zadanie w kolejce, wpis w dzienniku, powrót do odebranej', async () => {
+    seed('in_1');
+    const id = failedDelivery();
+    const res = await post(id);
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe('/odebrane/in_1');
+    expect(h.deliveries.get(id)!.status).toBe('pending');
+    expect(h.jobs.claim(NOW, 10).map((j) => j.payload.deliveryId)).toEqual([id]);
+    expect(h.audit.list(10, 0)[0]).toMatchObject({ action: 'dostawa.ponowienie', target: `dostawa:${id}` });
+    expect((await page('/odebrane/in_1')).body).toContain('Dostawa ponowiona');
+  });
+
+  it('odmawia, gdy treść została już usunięta z dostawy (konto bez przechowywania treści)', async () => {
+    seed('in_1', { body: null });
+    const id = failedDelivery('{"event":"message.received","id":"in_1","kind":"text","bodyHash":"h"}');
+    const body = (await page('/odebrane/in_1')).body;
+    expect(body).not.toContain(`action="/dostawy/${id}/ponow"`);
+    expect(body).toContain('GET /v1/inbound');
+    expect((await post(id)).statusCode).toBe(302);
+    expect(h.deliveries.get(id)!.status).toBe('failed');
+    expect(h.jobs.claim(NOW, 10)).toEqual([]);
+  });
+
+  it('odmawia, gdy dostawa nie jest nieudana albo klucz odwołany', async () => {
+    seed('in_1');
+    const ok = h.deliveries.insert({ apiKeyId, event: 'message.received', payload: '{"text":"Ala"}', url: 'https://crm.example/hook', createdAt: NOW, inboundId: 'in_1' });
+    h.deliveries.markDelivered(ok, NOW, '204');
+    await post(ok);
+    expect(h.deliveries.get(ok)!.status).toBe('delivered');
+    const failed = failedDelivery();
+    h.apiKeys.revoke(apiKeyId);
+    await post(failed);
+    expect(h.deliveries.get(failed)!.status).toBe('failed');
+    expect((await post(9999)).statusCode).toBe(404);
+  });
+});

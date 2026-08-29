@@ -96,6 +96,24 @@ describe('WebhookDeliveriesRepo - dostawy odebranych', () => {
     expect(repo.troubledInboundCount(new Date(0))).toBe(2);
   });
 
+  it('requeue cofa nieudaną dostawę do oczekującej, jak nową', () => {
+    const { repo, apiKeyId } = setup();
+    const id = repo.insert({ apiKeyId, event: 'message.sent', payload: '{"id":"msg_1"}', url: 'https://crm.example/hook', createdAt: NOW });
+    repo.markFailed(id, '410 Gone');
+    repo.requeue(id);
+    expect(repo.get(id)).toMatchObject({ status: 'pending', attempts: 0, nextRetryAt: null, lastResponse: null });
+  });
+
+  it('listForMessage znajduje dostawy o wysyłce po identyfikatorze w payloadzie', () => {
+    const { repo, apiKeyId } = setup();
+    const base = { apiKeyId, url: 'https://crm.example/hook', createdAt: NOW };
+    const sent = repo.insert({ ...base, event: 'message.sent', payload: '{"event":"message.sent","id":"msg_1"}' });
+    const delivered = repo.insert({ ...base, event: 'message.delivered', payload: '{"event":"message.delivered","id":"msg_1"}' });
+    repo.insert({ ...base, event: 'message.sent', payload: '{"event":"message.sent","id":"msg_2"}' });
+    repo.insert({ ...base, event: 'message.received', payload: '{"event":"message.received","id":"msg_1"}', inboundId: 'in_1' });
+    expect(repo.listForMessage('msg_1').map((d) => d.id)).toEqual([sent, delivered]);
+  });
+
   it('scrub podmienia treść na skrót i zostawia resztę payloadu', () => {
     const { repo, apiKeyId } = setup();
     const id = repo.insert({ apiKeyId, event: 'message.received', payload: JSON.stringify({ event: 'message.received', id: 'in_1', kind: 'text', text: 'Ala ma kota' }), url: 'https://crm.example/hook', createdAt: NOW, inboundId: 'in_1', scrubAfter: true });
