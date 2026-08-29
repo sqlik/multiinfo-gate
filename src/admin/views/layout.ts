@@ -22,6 +22,15 @@ export function esc(value: unknown): string {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ENTITIES[c]!);
 }
 
+/** Tyle znaków treści pokazują listy wiadomości - reszta jest w szczególe. */
+const PREVIEW_CHARS = 90;
+
+/** Treść na liście: skrócona, uciekniona; brak treści (konto bez przechowywania) podpisany. */
+export function preview(body: string | null): string {
+  if (body === null) return '<span class="dim">treść nieprzechowywana</span>';
+  return body.length <= PREVIEW_CHARS ? esc(body) : `${esc(body.slice(0, PREVIEW_CHARS))}…`;
+}
+
 const NAV: Array<{ key: NavKey; label: string; group: string }> = [
   { key: 'przeglad', label: 'Przegląd', group: 'Ruch' },
   { key: 'wiadomosci', label: 'Wiadomości', group: 'Ruch' },

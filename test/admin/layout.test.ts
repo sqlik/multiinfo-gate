@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { layout } from '../../src/admin/views/layout.ts';
+import { layout, preview } from '../../src/admin/views/layout.ts';
 
 const base = { title: 'Test', active: 'przeglad' as const, body: '<p>treść</p>' };
 
@@ -44,5 +44,14 @@ describe('layout', () => {
     expect(html).toMatch(/href="\/odebrane" class="on">Odebrane<span class="ct">3<\/span>/);
     const quiet = layout({ title: 't', active: null, counts: { wiadomosci: 0, odebrane: 0, konta: 1, klucze: 1, uzytkownicy: 1 }, body: '' });
     expect(quiet).toContain('>Odebrane</a>');
+  });
+});
+
+describe('preview', () => {
+  it('skraca treść na listach do 90 znaków z wielokropkiem, ucieka HTML, podpisuje brak treści', () => {
+    expect(preview(null)).toBe('<span class="dim">treść nieprzechowywana</span>');
+    expect(preview('<b>krótko</b>')).toBe('&lt;b&gt;krótko&lt;/b&gt;');
+    const long = 'a'.repeat(95);
+    expect(preview(long)).toBe(`${'a'.repeat(90)}…`);
   });
 });
