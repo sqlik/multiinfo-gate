@@ -71,6 +71,11 @@ describe('openDatabase', () => {
     expect(cols('api_keys')).toContain('inbound_subscribed');
     expect(cols('account_services')).toEqual(expect.arrayContaining(['inbound_last_poll_at', 'inbound_last_received_at', 'inbound_error']));
     expect(cols('messages')).toContain('in_reply_to');
+    // Wątek wiąże obie tabele w cykl; kasowanie (przyszła retencja) nie może utknąć na kluczu obcym.
+    const fk = (table: string) => db.pragma(`foreign_key_list(${table})`) as Array<{ from: string; on_delete: string }>;
+    expect(fk('inbound_messages').find((f) => f.from === 'related_message_id')!.on_delete).toBe('SET NULL');
+    expect(fk('messages').find((f) => f.from === 'in_reply_to')!.on_delete).toBe('SET NULL');
+    expect(fk('webhook_deliveries').find((f) => f.from === 'inbound_id')!.on_delete).toBe('CASCADE');
     expect(cols('webhook_deliveries')).toEqual(expect.arrayContaining(['inbound_id', 'scrub_after']));
     // Ten sam identyfikator MI na tym samym koncie nie wchodzi dwa razy.
     db.prepare("INSERT INTO accounts (name, base_url, login, password_enc, cert_pem_enc, key_pem_enc, cert_cn, cert_issuer_cn, cert_fingerprint_sha1, cert_not_before, cert_not_after, default_country_code) VALUES ('a','u','l','p','c','k','cn','i','f','2026','2027','48')").run();

@@ -21,7 +21,7 @@ CREATE TABLE inbound_messages (
   protocol_id        INTEGER NOT NULL,
   coding_scheme      INTEGER NOT NULL,
   connector_id       TEXT,
-  related_message_id TEXT    REFERENCES messages(id),
+  related_message_id TEXT    REFERENCES messages(id) ON DELETE SET NULL,
   received_at        TEXT    NOT NULL,
   created_at         TEXT    NOT NULL
 );
@@ -29,11 +29,12 @@ CREATE UNIQUE INDEX idx_inbound_mi ON inbound_messages(account_id, mi_id);
 CREATE INDEX idx_inbound_service_created ON inbound_messages(service_id, created_at DESC);
 CREATE INDEX idx_inbound_created ON inbound_messages(created_at DESC);
 
+-- Wątek wiąże obie tabele w cykl; SET NULL, żeby kasowanie (retencja) nie utknęło na kluczu obcym.
 -- Odpowiedź na wiadomość przychodzącą (smsInId w sendsmslong.aspx).
-ALTER TABLE messages ADD COLUMN in_reply_to TEXT REFERENCES inbound_messages(id);
+ALTER TABLE messages ADD COLUMN in_reply_to TEXT REFERENCES inbound_messages(id) ON DELETE SET NULL;
 
 -- Dostawa zdarzenia message.received: której wiadomości dotyczy i czy po zakończeniu
 -- usunąć z payloadu treść (konto bez przechowywania treści).
-ALTER TABLE webhook_deliveries ADD COLUMN inbound_id TEXT REFERENCES inbound_messages(id);
+ALTER TABLE webhook_deliveries ADD COLUMN inbound_id TEXT REFERENCES inbound_messages(id) ON DELETE CASCADE;
 ALTER TABLE webhook_deliveries ADD COLUMN scrub_after INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX idx_webhook_deliveries_inbound ON webhook_deliveries(inbound_id) WHERE inbound_id IS NOT NULL;
