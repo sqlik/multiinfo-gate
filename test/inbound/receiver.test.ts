@@ -110,6 +110,26 @@ describe('Receiver.pollOnce', () => {
     expect(deps.inbound.get(out.id)!.sender).toBe('7968');
   });
 
+  it('czas zapisu to chwila odpowiedzi Plusa, nie początek pytania', async () => {
+    deps.apiKeys.insert(keyInput(accountId));
+    const later = new Date(NOW.getTime() + 55_000);
+    let clock = NOW;
+    deps.now = () => clock;
+    getSms.mockImplementation(async () => { clock = later; return SMS; });
+    const out = await receiver.pollOnce(target()) as { id: string };
+    expect(deps.inbound.get(out.id)!.createdAt).toBe(later.toISOString());
+    expect(deps.services.states(accountId)[0]!.lastPollAt).toBe(later.toISOString());
+    expect(JSON.parse(deps.deliveries.listForInbound(out.id)[0]!.payload).at).toBe(later.toISOString());
+  });
+
+  it('błąd certyfikatu wstrzymuje konto jak przy wysyłce i zatrzymuje pętlę', async () => {
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockRejectedValue(new ProviderError(-85, 'CN inny niż login', 'certificate'));
+    expect(await receiver.pollOnce(target())).toMatchObject({ kind: 'stopped' });
+    expect(deps.accounts.get(accountId)!.pausedReason).toContain('-85');
+    expect(deps.clients.invalidate).toHaveBeenCalledWith(accountId);
+  });
+
   it('-23 i -24 zatrzymują pętlę i zapisują błąd przy usłudze', async () => {
     getSms.mockRejectedValue(new ProviderError(-24, 'Usluga nie jest aktywna', 'permanent'));
     expect(await receiver.pollOnce(target())).toEqual({ kind: 'stopped', error: '-24: Usluga nie jest aktywna' });

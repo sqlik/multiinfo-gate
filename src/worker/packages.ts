@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { silentLogger, type Logger } from '../log.ts';
 import { parseReport } from '../multiinfo/report.ts';
 import { ProviderError } from '../multiinfo/response.ts';
+import { pauseForCertificate } from './certificate.ts';
 import { unzipFirstFile } from '../multiinfo/zip.ts';
 import type { Job } from '../store/jobs.ts';
 import type { PackageRow } from '../store/packages.ts';
@@ -52,10 +53,7 @@ function handleProviderFailure(
   const message = error instanceof Error ? error.message : String(error);
 
   if (provider?.kind === 'certificate') {
-    const reason = `Certyfikat odrzucony przez Multiinfo, kod ${provider.code}: ${provider.message}`;
-    deps.accounts.pause(pkg.accountId, reason);
-    deps.clients.invalidate(pkg.accountId);
-    log.error('konto.wstrzymane', { accountId: pkg.accountId, code: provider.code, reason: provider.message });
+    const reason = pauseForCertificate(deps, pkg.accountId, provider, log);
     deps.jobs.defer(job.id, new Date(now.getTime() + PAUSED_RECHECK_MS), reason);
     return;
   }

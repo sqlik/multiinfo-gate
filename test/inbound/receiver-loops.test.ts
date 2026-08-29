@@ -119,6 +119,48 @@ describe('Receiver - pętle', () => {
     await receiver.stop();
   });
 
+  it('błąd przejściowy nie pogarsza /healthz - tylko zatrzymanie', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockRejectedValue(new ProviderError(-71, 'sieć', 'transient'));
+    const receiver = new Receiver({ ...deps, sleep: async () => {} });
+    receiver.refresh();
+    await until(() => getSms.mock.calls.length >= 1);
+    await receiver.stop();
+    expect(deps.services.states(accountId)[0]!.error).toContain('sieć');
+    expect(receiver.health().errors).toEqual([]);
+  });
+
+  it('po stop() refresh() niczego już nie zapala', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockResolvedValue(null);
+    const receiver = new Receiver({ ...deps, idleMs: 20, sleep: undefined });
+    receiver.refresh();
+    await receiver.stop();
+    const calls = getSms.mock.calls.length;
+    receiver.refresh({ retryStopped: true });
+    expect(receiver.listening()).toEqual([]);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(getSms.mock.calls.length).toBe(calls);
+  });
+
+  it('wyjątek przy zapisie błędu (np. pełny dysk) też nie zabija pętli', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockResolvedValue(null);
+    const client = deps.clients.for(accountId);
+    vi.spyOn(deps.clients, 'for')
+      .mockImplementationOnce(() => { throw new Error('SQLITE_IOERR'); })
+      .mockImplementation(() => client);
+    vi.spyOn(deps.services, 'setError').mockImplementationOnce(() => { throw new Error('SQLITE_FULL'); });
+    const receiver = new Receiver({ ...deps, idleMs: 20, sleep: async () => {} });
+    receiver.refresh();
+    await until(() => getSms.mock.calls.length >= 2);
+    expect(receiver.listening()).toHaveLength(1);
+    await receiver.stop();
+  });
+
   it('stop() przerywa oczekujące pytanie', async () => {
     const { deps, accountId, getSms } = buildReceiverDeps();
     deps.apiKeys.insert(keyInput(accountId));
