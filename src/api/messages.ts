@@ -66,6 +66,12 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
       if (!original || original.accountId !== auth.accountId || original.serviceId !== serviceId) {
         throw new ApiError(400, 'in_reply_to_unknown', 'Nie ma takiej wiadomości przychodzącej w tej usłudze.');
       }
+      // Odpowiedź idzie do tego, kto pisał: Multiinfo dostaje smsInId, a panel łączy wątek po numerze.
+      let recipient: string;
+      try { recipient = normalizePhone(input.to, account.defaultCountryCode); } catch { recipient = input.to.trim(); }
+      if (recipient !== original.sender) {
+        throw new ApiError(400, 'in_reply_to_recipient', `Odpowiedź na ${original.id} musi iść do jej nadawcy (${original.sender}).`);
+      }
       inReplyTo = original.id;
     }
 

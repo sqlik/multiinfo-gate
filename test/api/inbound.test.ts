@@ -55,6 +55,13 @@ const get = (url: string, key = keyA) => app.inject({ method: 'GET', url, header
 const ids = (res: { json: () => { data: Array<{ id: string }> } }) => res.json().data.map((r) => r.id);
 
 describe('GET /v1/inbound', () => {
+  it('parametr podany więcej niż raz to 400, nie błąd wewnętrzny', async () => {
+    seed('in_1');
+    const res = await get('/v1/inbound?from=48601000001&from=48601000002');
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('invalid_query');
+  });
+
   it('zwraca wiadomości z usług klucza, od najnowszej, z hasMore', async () => {
     seed('in_1', { createdAt: '2026-08-29T07:00:00.000Z' });
     seed('in_2', { createdAt: '2026-08-29T08:00:00.000Z' });
