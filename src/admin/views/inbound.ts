@@ -1,6 +1,6 @@
 import type { InboundRow } from '../../store/inbound-messages.ts';
-import type { DeliveryRow } from '../../store/webhook-deliveries.ts';
 import type { MessageRow } from '../../store/messages.ts';
+import { deliveriesTable, type DeliveryView } from './deliveries.ts';
 import { warsawStamp, warsawTime } from '../../time/warsaw.ts';
 import { esc, preview } from './layout.ts';
 import { statusLabel, statusTone } from './status-labels.ts';
@@ -80,31 +80,15 @@ export function inboundPage(d: InboundListData): string {
 
 export interface InboundDetail {
   row: InboundRow; accountName: string;
-  deliveries: Array<{ delivery: DeliveryRow; keyName: string }>;
+  deliveries: DeliveryView[];
   related: MessageRow | null; replies: MessageRow[];
 }
-
-const deliveryState = (d: DeliveryRow) =>
-  d.status === 'delivered' ? '<span class="st"><span class="dot dot-ok"></span>doręczony</span>'
-    : d.status === 'failed' ? '<span class="st"><span class="dot dot-fail"></span>nieudany</span>'
-      : '<span class="st"><span class="dot dot-wait"></span>w toku</span>';
 
 export function inboundDetailPage(d: InboundDetail): string {
   const r = d.row;
   const content = r.body === null
     ? `<div class="ruler dim" style="font-size: 13px; line-height: 1.7;">Treść nieprzechowywana - konto ${esc(d.accountName)} ma wyłączone przechowywanie treści.</div>`
     : `<div class="ruler"${r.kind === 'binary' ? ' style="font-family: monospace;"' : ''}>${esc(r.body)}</div>`;
-  const deliveries = d.deliveries.length === 0
-    ? '<tr><td class="dim" colspan="4">Żaden klucz nie subskrybował tej usługi w chwili odbioru.</td></tr>'
-    : d.deliveries.map(({ delivery, keyName }) => `<tr>
-        <td class="txt">
-          <strong>${esc(keyName)}</strong>
-          <div class="m dim txt" style="font-size: 11px; margin-top: 2px;" title="${esc(delivery.url)}">${esc(delivery.url)}</div>
-        </td>
-        <td class="m">${esc(delivery.attempts)}</td>
-        <td class="nw">${deliveryState(delivery)}</td>
-        <td class="m dim txt" title="${esc(delivery.lastResponse ?? '')}">${esc(delivery.lastResponse ?? '')}</td>
-      </tr>`).join('');
   const replies = d.replies.length === 0
     ? '<span class="dim">brak</span>'
     : d.replies.map((m) => `<a href="/wiadomosci/${esc(m.id)}">${esc(m.id)}</a> <span class="st"><span class="dot dot-${statusTone(m.status)}"></span>${esc(statusLabel(m.status))}</span>`).join('<br>');
@@ -137,10 +121,7 @@ export function inboundDetailPage(d: InboundDetail): string {
       </div>
       <div class="panel">
         <div class="panel-h"><div class="lab">Dostawy do aplikacji</div></div>
-        <table style="table-layout: fixed;">
-          <tr><th>Klucz · adres</th><th style="width: 36px;">Próby</th><th style="width: 80px;">Stan</th><th style="width: 72px;">Odpowiedź</th></tr>
-          ${deliveries}
-        </table>
+        ${deliveriesTable(d.deliveries, 'Żaden klucz nie subskrybował tej usługi w chwili odbioru.')}
       </div>
     </div>
   </div>`;

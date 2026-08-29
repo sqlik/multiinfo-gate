@@ -634,7 +634,8 @@ ponowień - w ten sposób aplikacja sygnalizuje, że zdarzenie zostało świadom
 z powodu błędnego podpisu). Odpowiedź `5xx`, brak odpowiedzi w ciągu 10 sekund i błędy sieci
 powodują ponowienie po 1 minucie, 5 minutach, 15 minutach, 1 godzinie i 6 godzinach. Po
 wyczerpaniu ponowień zdarzenie jest oznaczane jako niedostarczone i widoczne na ekranie przeglądu
-w panelu bramki. Bramka nie podąża za przekierowaniami HTTP - podany adres musi odpowiadać
+w panelu bramki, a administrator może je ponowić z panelu (szczegół wiadomości albo odebranej,
+przycisk „Ponów”) - takie zdarzenie przychodzi z nowym podpisem i bieżącym `at`. Bramka nie podąża za przekierowaniami HTTP - podany adres musi odpowiadać
 bezpośrednio.
 
 Kolejność dostarczania nie jest gwarantowana: przy ponowieniach `message.delivered` może dotrzeć

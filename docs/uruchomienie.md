@@ -585,7 +585,12 @@ wtedy wiadomości najpewniej trafiają do panelu WWW Multiinfo zamiast do API.
 Szczegół odebranej wiadomości (odnośnik w kolumnie identyfikatora) pokazuje dane z Multiinfo
 (numer nadawcy, numer usługi, identyfikator w Multiinfo, protokół), wiadomość wysłaną, na którą
 abonent najpewniej odpowiada, odpowiedzi wysłane w wątku oraz ślad dostaw do aplikacji: który
-klucz dostał powiadomienie, ile było prób i jaka była odpowiedź aplikacji.
+klucz dostał powiadomienie, ile było prób i jaka była odpowiedź aplikacji. Dostawę nieudaną
+(aplikacja odpowiedziała `4xx` albo wyczerpała ponowienia) można ponowić przyciskiem „Ponów”
+w tym samym wierszu - wraca do kolejki jak nowa, z podpisem bieżącym sekretem klucza; ten sam
+przycisk jest w szczególe wiadomości wysłanej, w sekcji „Dostawy do aplikacji”. Wyjątek: konto
+bez przechowywania treści - po zakończeniu dostawy bramka nie ma już treści SMS-a, więc zamiast
+przycisku jest podpis, a aplikacja dociąga wiadomość przez `GET /v1/inbound`.
 
 ![Szczegół odebranej wiadomości: treść, dane, powiązana wysłana wiadomość i dostawa do aplikacji ze stanem doręczony](obrazki/odebrana.png)
 
