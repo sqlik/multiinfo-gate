@@ -25,6 +25,7 @@ import { registerAccountRoutes } from './routes/accounts.ts';
 import { registerAuditRoutes } from './routes/audit.ts';
 import { registerKeyRoutes } from './routes/keys.ts';
 import { registerUserRoutes } from './routes/users.ts';
+import { registerInboundViewRoutes } from './routes/inbound.ts';
 import { registerMessageViewRoutes } from './routes/messages.ts';
 import { registerOverviewRoutes } from './routes/overview.ts';
 import { registerPackageViewRoutes } from './routes/packages.ts';
@@ -338,6 +339,7 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   registerOverviewRoutes(app, deps, render);
   registerPackageViewRoutes(app, deps, render);
   registerMessageViewRoutes(app, deps, render);
+  registerInboundViewRoutes(app, deps, render);
   registerAuditRoutes(app, deps, render);
 
   /**

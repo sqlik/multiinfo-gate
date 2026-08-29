@@ -271,6 +271,7 @@ export function messagePage(d: MessageDetail): string {
           <div>Odbiorca</div><div class="m">${esc(m.dest)}</div>
           <div>Nadpis</div><div class="m">${esc(m.orig ?? '-')}</div>
           <div>ID usługi</div><div class="m">${esc(m.serviceId)}</div>
+          ${m.inReplyTo === null ? '' : `<div>Odpowiedź na</div><div class="m"><a href="/odebrane/${esc(m.inReplyTo)}">${esc(m.inReplyTo)}</a></div>`}
           <div>Części w Multiinfo</div><div>${parts}</div>
           <div>Status Multiinfo</div><div class="m">${substatus === null
             ? '<span class="dim">brak</span>'
