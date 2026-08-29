@@ -104,7 +104,22 @@ describe('GET /v1/messages/:id', () => {
     expect(body.parts).toBe(1);
     expect(body.slots).toBe(11);
     expect(body.serviceId).toBe('24138');
+    expect(body.inReplyTo).toBeNull();
     expect(body.createdAt).toBeTruthy();
+  });
+
+  it('podaje inReplyTo dla odpowiedzi w wątku', async () => {
+    baseDeps.inbound.insertIfNew({
+      id: 'in_1', accountId, serviceId: '24138', miId: '22', sender: '48601135134', dest: '7968', kind: 'text', body: 'Pytanie',
+      bodyHash: 'h', protocolId: 0, codingScheme: 0, connectorId: null, relatedMessageId: null,
+      receivedAt: NOW.toISOString(), createdAt: NOW.toISOString(),
+    });
+    messages.insert({
+      id: 'msg_r', apiKeyId: apiKeyAId, accountId, serviceId: '24138', dest: '48601135134', body: null, bodyHash: 'h',
+      encoding: 'gsm', parts: 1, slots: 11, orig: null, costCenter: null, validTo: null, idempotencyKey: null, inReplyTo: 'in_1',
+    });
+    expect((await get('/v1/messages/msg_r')).json().inReplyTo).toBe('in_1');
+    expect((await get('/v1/messages')).json().data[0].inReplyTo).toBe('in_1');
   });
 
   it('podaje treść, gdy konto ją przechowuje', async () => {
