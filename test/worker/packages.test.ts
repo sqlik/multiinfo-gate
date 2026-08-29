@@ -125,7 +125,7 @@ describe('handlePackageCreate', () => {
     expect(pkg.providerCode).toBe(-63);
     expect(pkg.error).toBe('Zbyt wielu odbiorców');
     expect(pkg.completedAt).toBe(NOW.toISOString());
-    expect(deps.deliveries.counts()).toEqual({ pending: 1, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 1, failed: 0 });
     expect(lastWebhook()).toMatchObject({ event: 'package.completed', id: 'pkg_1', status: 'failed', providerCode: -63, recipients: 2 });
     expect(deps.jobs.claim(new Date(NOW.getTime() + 86_400_000), 10).map((j) => j.type)).toEqual(['webhook']);
   });
@@ -201,7 +201,7 @@ describe('handlePackagePoll', () => {
     expect(pkg.remainingCount).toBe(0);
     const jobs = deps.jobs.claim(NOW, 10);
     expect(jobs.map((j) => j.type)).toEqual(['package.report']);
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
   });
 
   it('przy -62 po rozpoczęciu wysyłki traktuje rozsyłkę jako zakończoną', async () => {
@@ -276,7 +276,7 @@ describe('handlePackageReport', () => {
     expect(pkg.reportId).toBe('123');
     expect(deps.jobs.claim(new Date(NOW.getTime() + REPORT_RETRY_MS - 1), 10)).toHaveLength(0);
     expect(deps.jobs.claim(new Date(NOW.getTime() + REPORT_RETRY_MS + 1), 10)).toHaveLength(1);
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
   });
 
   it('przy błędzie generowania oznacza raport jako nieudany i kolejkuje webhook', async () => {

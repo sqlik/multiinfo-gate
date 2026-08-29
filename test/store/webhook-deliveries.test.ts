@@ -30,7 +30,7 @@ describe('WebhookDeliveriesRepo', () => {
     expect(row.status).toBe('pending');
     expect(row.attempts).toBe(0);
     expect(row.createdAt).toBe(NOW.toISOString());
-    expect(repo.counts()).toEqual({ pending: 1, failed: 0 });
+    expect(repo.counts(new Date(0))).toEqual({ pending: 1, failed: 0 });
   });
 
   it('odnotowuje ponowienie, dostarczenie i porażkę', () => {
@@ -47,7 +47,7 @@ describe('WebhookDeliveriesRepo', () => {
     expect(repo.get(id)!.deliveredAt).toBe(NOW.toISOString());
     const id2 = repo.insert({ apiKeyId, event: 'message.failed', payload: '{}', url: 'u', createdAt: NOW });
     repo.markFailed(id2, 'timeout');
-    expect(repo.counts()).toEqual({ pending: 0, failed: 1 });
+    expect(repo.counts(new Date(0))).toEqual({ pending: 0, failed: 1 });
     expect(repo.listRecent(5).map((d) => d.id)).toEqual([id2, id]);
   });
 
@@ -83,6 +83,19 @@ describe('WebhookDeliveriesRepo - dostawy odebranych', () => {
     expect(JSON.parse(repo.get(kept)!.payload).text).toBe('Ala ma kota');
   });
 
+  it('liczniki: w toku zawsze, nieudane tylko z okna - stara awaria nie straszy bez końca', () => {
+    const { repo, apiKeyId } = setup();
+    const twoDaysAgo = new Date(NOW.getTime() - 2 * 86_400_000);
+    const base = { apiKeyId, event: 'message.received', payload: '{}', url: 'https://crm.example/hook', inboundId: 'in_1' };
+    repo.markFailed(repo.insert({ ...base, createdAt: twoDaysAgo }), '410');
+    repo.markFailed(repo.insert({ ...base, createdAt: NOW, inboundId: 'in_2' }), '410');
+    repo.insert({ ...base, createdAt: twoDaysAgo });
+    const since = new Date(NOW.getTime() - 86_400_000);
+    expect(repo.counts(since)).toEqual({ pending: 1, failed: 1 });
+    expect(repo.troubledInboundCount(since)).toBe(2);
+    expect(repo.troubledInboundCount(new Date(0))).toBe(2);
+  });
+
   it('scrub podmienia treść na skrót i zostawia resztę payloadu', () => {
     const { repo, apiKeyId } = setup();
     const id = repo.insert({ apiKeyId, event: 'message.received', payload: JSON.stringify({ event: 'message.received', id: 'in_1', kind: 'text', text: 'Ala ma kota' }), url: 'https://crm.example/hook', createdAt: NOW, inboundId: 'in_1', scrubAfter: true });
@@ -100,10 +113,10 @@ describe('WebhookDeliveriesRepo - dostawy odebranych', () => {
     repo.insert({ apiKeyId, event: 'message.received', payload: '{}', url: 'u', createdAt: NOW, inboundId: 'in_1' });
     const c = repo.insert({ apiKeyId, event: 'message.received', payload: '{}', url: 'u', createdAt: NOW, inboundId: 'in_2' });
     repo.insert({ apiKeyId, event: 'message.sent', payload: '{}', url: 'u', createdAt: NOW });
-    expect(repo.troubledInboundCount()).toBe(2);
+    expect(repo.troubledInboundCount(new Date(0))).toBe(2);
     repo.markDelivered(a, NOW, '204');
-    expect(repo.troubledInboundCount()).toBe(2);
+    expect(repo.troubledInboundCount(new Date(0))).toBe(2);
     repo.markFailed(c, '500');
-    expect(repo.troubledInboundCount()).toBe(2);
+    expect(repo.troubledInboundCount(new Date(0))).toBe(2);
   });
 });

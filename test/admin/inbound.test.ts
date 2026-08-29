@@ -64,6 +64,16 @@ describe('GET /odebrane', () => {
     expect((await page(`/odebrane?konto=${accountId}&od=601000001`)).body).toContain('href="/odebrane/in_1"');
   });
 
+  it('plakietka Odebrane liczy dostawy w toku i nieudane z ostatniej doby', async () => {
+    seed('in_1');
+    seed('in_2');
+    const base = { apiKeyId, event: 'message.received', payload: '{}', url: 'https://crm.example/hook' };
+    h.deliveries.markFailed(h.deliveries.insert({ ...base, inboundId: 'in_1', createdAt: new Date(NOW.getTime() - 2 * 86_400_000) }), '410');
+    expect((await page('/odebrane')).body).not.toContain('Odebrane<span class="ct">');
+    h.deliveries.markFailed(h.deliveries.insert({ ...base, inboundId: 'in_2', createdAt: NOW }), '410');
+    expect((await page('/odebrane')).body).toContain('Odebrane<span class="ct">1</span>');
+  });
+
   it('treść nieprzechowywana ma podpis zamiast treści', async () => {
     seed('in_1', { body: null });
     expect((await page('/odebrane')).body).toContain('treść nieprzechowywana');
