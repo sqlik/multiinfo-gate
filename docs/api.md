@@ -413,8 +413,11 @@ Bramka pyta Multiinfo o wiadomości tylko z tych usług, dla których odbiór ma
 czynny klucz z adresem webhooka. Dopóki żaden klucz nie odbiera, wiadomości czekają po stronie
 Multiinfo.
 
-Polskie znaki w wiadomościach przychodzących Multiinfo zamienia na łacińskie odpowiedniki
-(„Zażółć” dociera jako „Zazolc”). Wiadomości wieloczęściowe docierają sklejone.
+Polskie znaki w wiadomościach przychodzących zależą od kodowania, jakie wybrał telefon nadawcy:
+przy Unicode (`codingScheme` = `8`, tak wysyłają współczesne telefony, gdy treść zawiera znak
+spoza alfabetu GSM) „Zażółć” dociera jako „Zażółć”; przy alfabecie GSM (`codingScheme` = `0`)
+Multiinfo zastępuje polskie znaki łacińskimi odpowiednikami („Zazolc”). Wiadomości
+wieloczęściowe docierają sklejone.
 
 ### 5a.1. Lista: `GET /v1/inbound`
 
@@ -473,7 +476,7 @@ curl -s https://<TWOJA-DOMENA>/v1/inbound/in_5c1d9e2b7a3f4d8e6b0a \
 | `bodyHash` | SHA-256 treści (szesnastkowo), tylko gdy `text`/`hex` nie występują; pozwala dopasować odczyt do treści dostarczonej powiadomieniem |
 | `receivedAt` | chwila odbioru przez Multiinfo (czas polski przeliczony na UTC) |
 | `relatedMessageId` | identyfikator ostatniej wiadomości wysłanej z tej samej usługi na numer nadawcy w ciągu 48 godzin; podpowiedź kontekstu, nie stwierdzenie - Multiinfo nie przekazuje, na co abonent odpowiada, więc na numerze, na który aplikacja wysyła regularnie, pole będzie wypełnione także wtedy, gdy SMS nie jest odpowiedzią; `null`, gdy brak |
-| `protocolId`, `codingScheme` | parametry protokołu SMS przepisane z Multiinfo; dla zwykłego tekstu `0` i `0` |
+| `protocolId`, `codingScheme` | parametry protokołu SMS przepisane z Multiinfo; `protocolId` dla zwykłego tekstu `0`, `codingScheme` `0` dla alfabetu GSM i `8` dla Unicode (UCS-2, z zachowanymi polskimi znakami) |
 
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
