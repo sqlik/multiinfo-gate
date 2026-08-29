@@ -127,7 +127,7 @@ export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne
         : esc(v.row.allowedOrigs.join(', '))}</td>
       <td class="m">${esc(v.row.ratePerMin)} / min</td>
       ${expiryCell(v.row, now)}
-      <td>${host === null ? '<span class="dim">-</span>' : `<span class="m">${esc(host)}</span>`}${v.row.inboundSubscribed === 1 ? ' <span class="tag">odbiera</span>' : ''}</td>
+      <td>${host === null ? '<span class="dim">-</span>' : `<span class="m">${esc(host)}</span>`}${v.row.inboundSubscribed === 1 ? '<div style="margin-top: 5px;"><span class="tag">odbiera</span></div>' : ''}</td>
       <td class="m">${v.row.lastUsedAt === null
         ? '<span class="dim" style="font-size: 12px;">jeszcze nieużywany</span>'
         : esc(stamp(v.row.lastUsedAt, ''))}</td>
