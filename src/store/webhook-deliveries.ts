@@ -62,22 +62,35 @@ export class WebhookDeliveriesRepo {
       .run(nextAt.toISOString(), response.slice(0, RESPONSE_CHARS), id);
   }
 
+  /** Stan końcowy; dostawa ze znacznikiem `scrub_after` traci przy tym treść - nie ma już czego ponawiać. */
   markDelivered(id: number, at: Date, response: string): void {
-    this.db
-      .prepare(
-        `UPDATE webhook_deliveries SET status = 'delivered', attempts = attempts + 1, delivered_at = ?,
-           next_retry_at = NULL, last_response = ? WHERE id = ?`,
-      )
-      .run(at.toISOString(), response.slice(0, RESPONSE_CHARS), id);
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE webhook_deliveries SET status = 'delivered', attempts = attempts + 1, delivered_at = ?,
+             next_retry_at = NULL, last_response = ? WHERE id = ?`,
+        )
+        .run(at.toISOString(), response.slice(0, RESPONSE_CHARS), id);
+      this.scrubIfMarked(id);
+    })();
   }
 
+  /** Stan końcowy; jak `markDelivered`. */
   markFailed(id: number, response: string): void {
-    this.db
-      .prepare(
-        `UPDATE webhook_deliveries SET status = 'failed', attempts = attempts + 1,
-           next_retry_at = NULL, last_response = ? WHERE id = ?`,
-      )
-      .run(response.slice(0, RESPONSE_CHARS), id);
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE webhook_deliveries SET status = 'failed', attempts = attempts + 1,
+             next_retry_at = NULL, last_response = ? WHERE id = ?`,
+        )
+        .run(response.slice(0, RESPONSE_CHARS), id);
+      this.scrubIfMarked(id);
+    })();
+  }
+
+  private scrubIfMarked(id: number): void {
+    const row = this.db.prepare('SELECT scrub_after FROM webhook_deliveries WHERE id = ?').get(id) as { scrub_after: 0 | 1 } | undefined;
+    if (row?.scrub_after === 1) this.scrub(id);
   }
 
   /**

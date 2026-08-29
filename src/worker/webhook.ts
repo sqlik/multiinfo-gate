@@ -65,16 +65,9 @@ export async function handleWebhook(job: Job, deps: WorkerDeps, now: Date): Prom
     return;
   }
 
-  // Treść odebranej wiadomości ma zostać w payloadzie do ostatniej próby - ponowienia
-  // wysyłają to, co podpisano. Po stanie końcowym zostaje z niej skrót.
-  const finish = () => {
-    if (delivery.scrubAfter === 1) deps.deliveries.scrub(delivery.id);
-  };
-
   const secret = deps.apiKeys.webhookSecret(delivery.apiKeyId);
   if (secret === null) {
     deps.deliveries.markFailed(delivery.id, 'klucz nie ma już sekretu webhooka');
-    finish();
     deps.jobs.complete(job.id);
     return;
   }
@@ -84,7 +77,6 @@ export async function handleWebhook(job: Job, deps: WorkerDeps, now: Date): Prom
   const target = await webhookTarget(delivery.url, deps.resolve ?? systemResolver);
   if (target.kind === 'private' && !deps.allowPrivateWebhooks) {
     deps.deliveries.markFailed(delivery.id, `${PRIVATE_TARGET_MESSAGE} (${target.address})`);
-    finish();
     deps.jobs.complete(job.id);
     log.warn('webhook.odmowa_sieci_wewnetrznej', { deliveryId: delivery.id, event: delivery.event, address: target.address });
     return;
@@ -94,8 +86,7 @@ export async function handleWebhook(job: Job, deps: WorkerDeps, now: Date): Prom
     const delay = WEBHOOK_BACKOFF_MS[job.attempts];
     if (delay === undefined) {
       deps.deliveries.markFailed(delivery.id, response);
-      finish();
-      deps.jobs.complete(job.id);
+        deps.jobs.complete(job.id);
       log.warn('webhook.nieudany', { deliveryId: delivery.id, event: delivery.event, response });
       return;
     }
@@ -122,7 +113,6 @@ export async function handleWebhook(job: Job, deps: WorkerDeps, now: Date): Prom
 
   if (outcome && outcome.status >= 200 && outcome.status < 300) {
     deps.deliveries.markDelivered(delivery.id, now, `${outcome.status} ${outcome.body}`);
-    finish();
     deps.jobs.complete(job.id);
     log.info('webhook.dostarczony', { deliveryId: delivery.id, event: delivery.event, attempt: job.attempts + 1 });
     return;
@@ -134,7 +124,6 @@ export async function handleWebhook(job: Job, deps: WorkerDeps, now: Date): Prom
   const delay = WEBHOOK_BACKOFF_MS[job.attempts];
   if (permanent || delay === undefined) {
     deps.deliveries.markFailed(delivery.id, response);
-    finish();
     deps.jobs.complete(job.id);
     log.warn('webhook.nieudany', { deliveryId: delivery.id, event: delivery.event, response: response.slice(0, 120) });
     return;

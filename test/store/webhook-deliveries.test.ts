@@ -69,6 +69,20 @@ describe('WebhookDeliveriesRepo - dostawy odebranych', () => {
     expect(repo.listForInbound('in_1').map((d) => d.id)).toEqual([id]);
   });
 
+  it('stan końcowy sam czyści treść, gdy dostawa ma znacznik', () => {
+    const { repo, apiKeyId } = setup();
+    const payload = JSON.stringify({ event: 'message.received', id: 'in_1', kind: 'text', text: 'Ala ma kota' });
+    const failed = repo.insert({ apiKeyId, event: 'message.received', payload, url: 'https://crm.example/hook', createdAt: NOW, inboundId: 'in_1', scrubAfter: true });
+    const delivered = repo.insert({ apiKeyId, event: 'message.received', payload, url: 'https://crm.example/hook', createdAt: NOW, inboundId: 'in_1', scrubAfter: true });
+    const kept = repo.insert({ apiKeyId, event: 'message.received', payload, url: 'https://crm.example/hook', createdAt: NOW, inboundId: 'in_1', scrubAfter: false });
+    repo.markFailed(failed, '410 Gone');
+    repo.markDelivered(delivered, NOW, '204');
+    repo.markDelivered(kept, NOW, '204');
+    expect(JSON.parse(repo.get(failed)!.payload).text).toBeUndefined();
+    expect(JSON.parse(repo.get(delivered)!.payload).bodyHash).toHaveLength(64);
+    expect(JSON.parse(repo.get(kept)!.payload).text).toBe('Ala ma kota');
+  });
+
   it('scrub podmienia treść na skrót i zostawia resztę payloadu', () => {
     const { repo, apiKeyId } = setup();
     const id = repo.insert({ apiKeyId, event: 'message.received', payload: JSON.stringify({ event: 'message.received', id: 'in_1', kind: 'text', text: 'Ala ma kota' }), url: 'https://crm.example/hook', createdAt: NOW, inboundId: 'in_1', scrubAfter: true });
