@@ -1,10 +1,16 @@
 # API bramki dla aplikacji klienckich
 
-Bramka udostępnia aplikacjom interfejs HTTP z danymi w formacie JSON. Aplikacja przekazuje numer
-odbiorcy i treść, a bramka odpowiada za dobór kodowania, podział na części, uwierzytelnienie
-certyfikatem w Multiinfo, ponowienia, raporty doręczeń i powiadomienia. Dokument opisuje każde
-wywołanie w tym samym układzie: przeznaczenie, pełne żądanie `curl`, odpowiedź oraz błędy tego
-wywołania wraz z zalecanym postępowaniem.
+Bramka udostępnia aplikacjom interfejs HTTP z danymi w formacie JSON i obsługuje ruch w obie
+strony. W stronę abonenta: aplikacja przekazuje numer odbiorcy i treść, a bramka odpowiada za
+dobór kodowania, podział na części, uwierzytelnienie certyfikatem w Multiinfo, ponowienia,
+raporty doręczeń i powiadomienia (rozdziały 3-6). Od abonenta: SMS-y wysłane na numer usługi
+bramka odbiera z Multiinfo sama, w tle, i przekazuje aplikacji powiadomieniem `message.received`
+na adres webhooka klucza, a ponadto udostępnia je do odczytu (`GET /v1/inbound`) i pozwala na nie
+odpowiedzieć w wątku (`inReplyTo`) - rozdział 5a. Odbiór wymaga dwóch ustawień: kierowania
+odebranych wiadomości do API na koncie Multiinfo (ustawia administrator Polkomtel) oraz
+zaznaczenia odbioru przy kluczu API w panelu bramki. Dokument opisuje każde wywołanie w tym samym
+układzie: przeznaczenie, pełne żądanie `curl`, odpowiedź oraz błędy tego wywołania wraz
+z zalecanym postępowaniem.
 
 ## 1. Informacje ogólne
 
@@ -397,7 +403,7 @@ słownika z rozdziału 7; wartość `null` oznacza, że raport nie objął tego 
 ## 5a. Wiadomości przychodzące
 
 Abonent może odpowiedzieć na SMS-a albo napisać na numer usługi z własnej inicjatywy. Multiinfo
-domyślnie kieruje takie wiadomości do swojego panelu WWW; administrator Multiinfo może przełączyć
+domyślnie kieruje takie wiadomości do swojego panelu WWW; administrator Polkomtel może przełączyć
 kierowanie na API (wszystkie wiadomości albo tylko z określonym prefiksem treści). Bramka odbiera
 je wtedy sama, bez udziału aplikacji, i przekazuje dwoma kanałami: powiadomieniem
 `message.received` (rozdział 6) do każdego klucza, który ma włączony odbiór, oraz do odczytu
