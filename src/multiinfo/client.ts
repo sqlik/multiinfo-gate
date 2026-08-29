@@ -187,6 +187,8 @@ export class MultiinfoClient {
 
     return new Promise<RawReply>((resolve, reject) => {
       if (opts.signal?.aborted) { reject(aborted()); return; }
+      let settled = false;
+      const settle = (fn: () => void) => { if (!settled) { settled = true; opts.signal?.removeEventListener('abort', onAbort); fn(); } };
       const req = httpsRequest(
         {
           protocol: url.protocol,
@@ -203,15 +205,17 @@ export class MultiinfoClient {
         (res) => {
           const chunks: Buffer[] = [];
           res.on('data', (c: Buffer) => chunks.push(c));
-          res.on('end', () => {
-            opts.signal?.removeEventListener('abort', onAbort);
+          // Bez odbiorcy błędu na odpowiedzi Node przemilcza urwane połączenie (nie ma ani
+          // 'end', ani 'error' na żądaniu) - obietnica wisiałaby bez końca.
+          res.on('error', (e: Error) => settle(() => reject(new ProviderError(-71, `Połączenie przerwane: ${e.message}`, 'transient'))));
+          res.on('end', () => settle(() => {
             const status = res.statusCode ?? 0;
             if (status < 200 || status >= 300) {
               reject(new ProviderError(-71, `Multiinfo odpowiedziało kodem HTTP ${status}`, 'transient'));
               return;
             }
             resolve({ body: Buffer.concat(chunks), status, durationMs: elapsedMs() });
-          });
+          }));
         },
       );
 
@@ -222,10 +226,11 @@ export class MultiinfoClient {
       const onAbort = () => req.destroy(aborted());
       opts.signal?.addEventListener('abort', onAbort, { once: true });
       // Komunikat błędu sieci nie zawiera poświadczeń - w żądaniu idą one w treści, nie w adresie.
-      req.on('error', (e) => {
-        opts.signal?.removeEventListener('abort', onAbort);
+      req.on('error', (e) => settle(() => {
         reject(e instanceof ProviderError ? e : new ProviderError(-71, `Nie udało się połączyć: ${e.message}`, 'transient'));
-      });
+      }));
+      // Ostatnia deska: żądanie zamknięte bez odpowiedzi i bez błędu nie może zostać bez wyniku.
+      req.on('close', () => settle(() => reject(new ProviderError(-71, 'Połączenie zamknięte przed końcem odpowiedzi', 'transient'))));
       req.end(body ?? undefined);
     });
   }

@@ -1,3 +1,4 @@
+import type { ServerResponse } from 'node:http';
 import { createServer, type Server } from 'node:https';
 import forge from 'node-forge';
 
@@ -12,6 +13,9 @@ export interface FakeRequest {
   clientIssuerCn: string | undefined;
 }
 
+/** Odpowiedź atrapy: treść albo funkcja z surowym dostępem do odpowiedzi HTTP (np. urwanie połączenia). */
+export type FakeReply = string | Buffer | ((res: ServerResponse) => void);
+
 export interface FakeMultiinfo {
   baseUrl: string;
   requests: FakeRequest[];
@@ -21,7 +25,7 @@ export interface FakeMultiinfo {
    * Odpowiedź liczona z żądania, także z opóźnieniem - do long pollingu. `null` wraca do `reply`.
    * Handler dostaje żądanie już zapisane w `requests`.
    */
-  respond: (handler: ((req: FakeRequest) => string | Buffer | Promise<string | Buffer>) | null) => void;
+  respond: (handler: ((req: FakeRequest) => FakeReply | Promise<FakeReply>) | null) => void;
   clientCertPem: string;
   clientKeyPem: string;
   /** Łańcuch certyfikatu klienta (CA pośrednie), jak z pliku .pfx. */
@@ -76,7 +80,7 @@ export async function startFakeMultiinfo(): Promise<FakeMultiinfo> {
   let body: string | Buffer = '0\n1';
   let statusCode = 200;
   let contentType = 'text/plain; charset=utf-8';
-  let handler: ((req: FakeRequest) => string | Buffer | Promise<string | Buffer>) | null = null;
+  let handler: ((req: FakeRequest) => FakeReply | Promise<FakeReply>) | null = null;
 
   const httpsServer: Server = createServer(
     { key: server.keyPem, cert: server.pem, ca: [clientRoot.pem], requestCert: true, rejectUnauthorized: true },
@@ -103,8 +107,9 @@ export async function startFakeMultiinfo(): Promise<FakeMultiinfo> {
           clientIssuerCn: peer?.issuerCertificate?.subject?.CN,
         };
         requests.push(entry);
-        const send = (b: string | Buffer) => {
+        const send = (b: FakeReply) => {
           if (res.destroyed) return;
+          if (typeof b === 'function') { b(res); return; }
           res.writeHead(statusCode, { 'content-type': contentType });
           res.end(b);
         };
