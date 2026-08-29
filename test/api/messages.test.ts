@@ -10,6 +10,7 @@ import { JobsRepo } from '../../src/store/jobs.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
 import { MessagesRepo } from '../../src/store/messages.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
+import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 
 const masterKey = randomBytes(32);
 const NOW = new Date('2026-08-25T10:00:00Z');
@@ -46,7 +47,7 @@ beforeEach(async () => {
 
   app = buildApiServer({
     accounts, apiKeys, messages, events, jobs, packages: new PackagesRepo(db), clients: {} as never,
-    rateLimiter: new RateLimiter(), now: () => NOW,
+    inbound: new InboundMessagesRepo(db), rateLimiter: new RateLimiter(), now: () => NOW,
   });
   await app.ready();
 });

@@ -1,6 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { InboundHealth } from '../inbound/receiver.ts';
 import type { AccountsRepo } from '../store/accounts.ts';
 import { GATE_VERSION } from '../version.ts';
+
+export type { InboundHealth };
 
 /** Poniżej tylu dni do wygaśnięcia certyfikatu bramka zgłasza stan pogorszony. */
 const CERT_WARNING_DAYS = 7;
@@ -8,6 +11,8 @@ const CERT_WARNING_DAYS = 7;
 export interface HealthDeps {
   accounts: AccountsRepo;
   queueDepth: () => number;
+  /** Stan odbiornika wiadomości przychodzących; bez niego pole nie występuje. */
+  inbound?: () => InboundHealth;
   now?: () => Date;
   /** Wariant panelu: czy to żądanie może dostać szczegóły; bez predykatu dostaje zawsze. */
   detailsAllowed?: (request: FastifyRequest) => boolean;
@@ -27,7 +32,9 @@ export function registerHealthRoute(app: FastifyInstance, deps: HealthDeps, mode
     const accounts = deps.accounts.list();
     const paused = accounts.filter((a) => a.pausedReason !== null);
     const expiring = accounts.filter((a) => daysLeft(a.certNotAfter, now) <= CERT_WARNING_DAYS);
-    const status = paused.length > 0 || expiring.length > 0 ? 'degraded' : 'ok';
+    const inbound = deps.inbound?.();
+    // Usługa zatrzymana błędem Multiinfo (-23/-24) też pogarsza stan: ktoś musi to naprawić w panelu.
+    const status = paused.length > 0 || expiring.length > 0 || (inbound?.errors.length ?? 0) > 0 ? 'degraded' : 'ok';
 
     if (mode === 'public' || (deps.detailsAllowed && !deps.detailsAllowed(request))) return { status };
 
@@ -40,6 +47,7 @@ export function registerHealthRoute(app: FastifyInstance, deps: HealthDeps, mode
         paused: a.pausedReason,
         certificateDaysLeft: daysLeft(a.certNotAfter, now),
       })),
+      ...(inbound ? { inbound } : {}),
     };
   });
 }

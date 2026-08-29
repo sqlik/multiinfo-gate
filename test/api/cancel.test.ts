@@ -11,6 +11,7 @@ import { JobsRepo } from '../../src/store/jobs.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
 import { MessagesRepo } from '../../src/store/messages.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
+import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 
 const masterKey = randomBytes(32);
 const NOW = new Date('2026-08-25T10:00:00Z');
@@ -64,7 +65,8 @@ beforeEach(async () => {
 
   cancel = vi.fn();
   app = buildApiServer({
-    accounts, apiKeys, messages, jobs, events, packages: new PackagesRepo(db), rateLimiter: new RateLimiter(), now: () => NOW,
+    accounts, apiKeys, messages, jobs, events, packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db),
+    rateLimiter: new RateLimiter(), now: () => NOW,
     clients: { for: () => ({ cancel }), invalidate: vi.fn(), closeAll: vi.fn() } as never,
   });
   await app.ready();

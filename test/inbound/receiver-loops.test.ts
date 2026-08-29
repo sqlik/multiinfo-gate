@@ -42,9 +42,10 @@ describe('Receiver - pętle', () => {
     getSms.mockResolvedValueOnce(SMS).mockResolvedValueOnce({ ...SMS, miId: '23' }).mockResolvedValue(null);
     const receiver = new Receiver({ ...deps, idleMs: 30_000, sleep: async (ms) => { sleeps.push(ms); await new Promise((r) => setTimeout(r, 1)); } });
     receiver.refresh();
-    await until(() => getSms.mock.calls.length >= 4);
+    await until(() => sleeps.length >= 2);
     await receiver.stop();
     // Dwie wiadomości bez czekania, potem każda pusta odpowiedź z przerwą.
+    expect(getSms.mock.calls.length).toBeGreaterThanOrEqual(4);
     expect(sleeps.slice(0, 2)).toEqual([30_000, 30_000]);
     expect(deps.inbound.list({ limit: 10, offset: 0 })).toHaveLength(2);
   });
