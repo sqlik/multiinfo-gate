@@ -2,10 +2,12 @@ import type { Flash } from '../flash.ts';
 import { GATE_VERSION } from '../../version.ts';
 import { FAVICON_LINK } from './favicon.ts';
 
-export type NavKey = 'przeglad' | 'wiadomosci' | 'rozsylki' | 'konta' | 'klucze' | 'uzytkownicy' | 'dziennik';
+export type NavKey = 'przeglad' | 'wiadomosci' | 'rozsylki' | 'odebrane' | 'konta' | 'klucze' | 'uzytkownicy' | 'dziennik';
 
 export interface NavCounts {
   wiadomosci: number;
+  /** Odebrane, których aplikacja jeszcze nie dostała albo nie przyjęła - nie liczba odebranych. */
+  odebrane: number;
   konta: number;
   klucze: number;
   uzytkownicy: number;
@@ -24,6 +26,7 @@ const NAV: Array<{ key: NavKey; label: string; group: string }> = [
   { key: 'przeglad', label: 'Przegląd', group: 'Ruch' },
   { key: 'wiadomosci', label: 'Wiadomości', group: 'Ruch' },
   { key: 'rozsylki', label: 'Rozsyłki', group: 'Ruch' },
+  { key: 'odebrane', label: 'Odebrane', group: 'Ruch' },
   { key: 'konta', label: 'Konta Multiinfo', group: 'Konfiguracja' },
   { key: 'klucze', label: 'Klucze API', group: 'Konfiguracja' },
   { key: 'uzytkownicy', label: 'Użytkownicy', group: 'Konfiguracja' },
@@ -34,6 +37,7 @@ const NAV: Array<{ key: NavKey; label: string; group: string }> = [
 function countOf(counts: NavCounts, key: NavKey): number | undefined {
   switch (key) {
     case 'wiadomosci': return counts.wiadomosci;
+    case 'odebrane': return counts.odebrane;
     case 'konta': return counts.konta;
     case 'klucze': return counts.klucze;
     case 'uzytkownicy': return counts.uzytkownicy;
