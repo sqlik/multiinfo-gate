@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ProviderError } from '../../src/multiinfo/response.ts';
-import { INBOUND_BACKOFF_MS, Receiver } from '../../src/inbound/receiver.ts';
+import { INBOUND_BACKOFF_MS, MIN_EMPTY_INTERVAL_MS, Receiver } from '../../src/inbound/receiver.ts';
 import { SMS, buildReceiverDeps, keyInput } from './helpers.ts';
 
 /** Czeka, aż warunek się spełni albo minie limit - pętle działają w tle. */
@@ -35,6 +35,21 @@ describe('Receiver - pętle', () => {
     await receiver.stop();
   });
 
+  it('pusta odpowiedź, która wraca od razu, nie zamienia pętli w młyn: co najmniej sekunda między pytaniami', async () => {
+    // Gdyby Plus nie honorował `timeout` albo proxy zamykało bezczynne POST-y, MIG_INBOUND_IDLE_MS=0
+    // oznaczałoby dziesiątki żądań na sekundę przez cały czas życia procesu.
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockResolvedValue(null);
+    const sleeps: number[] = [];
+    const receiver = new Receiver({ ...deps, idleMs: 0, sleep: async (ms) => { sleeps.push(ms); } });
+    receiver.refresh();
+    await until(() => sleeps.length >= 2);
+    await receiver.stop();
+    expect(sleeps[0]).toBeGreaterThan(MIN_EMPTY_INTERVAL_MS - 200);
+    expect(sleeps[0]).toBeLessThanOrEqual(MIN_EMPTY_INTERVAL_MS);
+  });
+
   it('po wiadomości pyta od razu, po pustej odpowiedzi czeka idleMs', async () => {
     const { deps, accountId, getSms } = buildReceiverDeps();
     deps.apiKeys.insert(keyInput(accountId));
@@ -64,7 +79,9 @@ describe('Receiver - pętle', () => {
     receiver.refresh();
     await until(() => getSms.mock.calls.length >= 5);
     await receiver.stop();
-    expect(sleeps.slice(0, 3)).toEqual([INBOUND_BACKOFF_MS[0], INBOUND_BACKOFF_MS[1], INBOUND_BACKOFF_MS[0]]);
+    // Pusta odpowiedź dokłada własną przerwę (próg sekundy) - liczą się tylko przerwy wycofywania.
+    const backoffs = sleeps.filter((ms) => ms > MIN_EMPTY_INTERVAL_MS);
+    expect(backoffs.slice(0, 3)).toEqual([INBOUND_BACKOFF_MS[0], INBOUND_BACKOFF_MS[1], INBOUND_BACKOFF_MS[0]]);
   });
 
   it('-24 zatrzymuje pętlę do czasu refresh() po zmianie konfiguracji', async () => {

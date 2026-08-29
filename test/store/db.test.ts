@@ -76,6 +76,9 @@ describe('openDatabase', () => {
     expect(fk('inbound_messages').find((f) => f.from === 'related_message_id')!.on_delete).toBe('SET NULL');
     expect(fk('messages').find((f) => f.from === 'in_reply_to')!.on_delete).toBe('SET NULL');
     expect(fk('webhook_deliveries').find((f) => f.from === 'inbound_id')!.on_delete).toBe('CASCADE');
+    // lastTo() w gorącej ścieżce odbiornika i repliesTo() w szczególe odebranej - bez indeksu skan wysłanych.
+    const indexes = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'messages'").all() as Array<{ name: string }>).map((i) => i.name);
+    expect(indexes).toEqual(expect.arrayContaining(['idx_messages_in_reply_to', 'idx_messages_dest_created']));
     expect(cols('webhook_deliveries')).toEqual(expect.arrayContaining(['inbound_id', 'scrub_after']));
     // Ten sam identyfikator MI na tym samym koncie nie wchodzi dwa razy.
     db.prepare("INSERT INTO accounts (name, base_url, login, password_enc, cert_pem_enc, key_pem_enc, cert_cn, cert_issuer_cn, cert_fingerprint_sha1, cert_not_before, cert_not_after, default_country_code) VALUES ('a','u','l','p','c','k','cn','i','f','2026','2027','48')").run();

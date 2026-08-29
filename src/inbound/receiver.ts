@@ -42,6 +42,13 @@ export const INBOUND_BACKOFF_MS = [5_000, 30_000, 120_000, 600_000] as const;
 /** Co ile odbiornik sprawdza, które usługi mają subskrybentów. */
 export const REFRESH_INTERVAL_MS = 10_000;
 
+/**
+ * Najkrótszy odstęp między pytaniami po pustej odpowiedzi, niezależnie od MIG_INBOUND_IDLE_MS.
+ * Plus trzyma połączenie przez `timeout`, więc zwykle nie ma znaczenia; gdyby jednak odpowiadał
+ * od razu (proxy zamykające bezczynne POST-y, niski limit), pętla nie może pytać w kółko.
+ */
+export const MIN_EMPTY_INTERVAL_MS = 1_000;
+
 export type PollOutcome =
   | { kind: 'message'; id: string; duplicate: boolean }
   | { kind: 'empty' }
@@ -192,6 +199,7 @@ export class Receiver {
     log.info('odbior.start', { ...target });
     let failures = 0;
     while (!signal.aborted) {
+      const started = Date.now();
       const outcome = await this.pollOnce(target, signal).catch((error: unknown): PollOutcome => {
         // Wyjątek spoza obsługi wiadomości (np. sekrety konta, baza): pętla ma przeżyć, a nie
         // odrzucić obietnicę, którą nikt nie łapie - to zamknęłoby cały proces bramki.
@@ -216,7 +224,10 @@ export class Receiver {
         continue;
       }
       failures = 0;
-      if (outcome.kind === 'empty' && this.deps.idleMs > 0) await sleep(this.deps.idleMs, signal);
+      if (outcome.kind === 'empty') {
+        const pause = Math.max(this.deps.idleMs, MIN_EMPTY_INTERVAL_MS - (Date.now() - started));
+        if (pause > 0) await sleep(pause, signal);
+      }
     }
     log.info('odbior.stop', { ...target });
   }
@@ -256,7 +267,6 @@ export class Receiver {
     // Chwila odpowiedzi, nie początku pytania - Plus mógł trzymać połączenie przez minutę.
     const now = clock();
     this.deps.services.markPolled(target, now);
-    this.deps.services.setError(target, null);
     if (sms === null) return { kind: 'empty' };
 
     let stored: { id: string; duplicate: boolean };

@@ -48,8 +48,9 @@ export class InboundServicesRepo {
     }));
   }
 
+  /** Udane pytanie: zapis chwili i zdjęcie błędu w jednym zapisie - to gorąca ścieżka pętli. */
   markPolled(t: InboundTarget, at: Date): void {
-    this.db.prepare('UPDATE account_services SET inbound_last_poll_at = ? WHERE account_id = ? AND service_id = ?')
+    this.db.prepare('UPDATE account_services SET inbound_last_poll_at = ?, inbound_error = NULL WHERE account_id = ? AND service_id = ?')
       .run(at.toISOString(), t.accountId, t.serviceId);
   }
 

@@ -22,8 +22,8 @@ export interface WorkerDeps {
   packages: PackagesRepo;
   jobs: JobsRepo;
   clients: ClientPool;
-  /** Magazyn odebranych - do smsInId przy odpowiedzi w wątku; stare testy workera go nie budują. */
-  inbound?: InboundMessagesRepo;
+  /** Magazyn odebranych - do smsInId przy odpowiedzi w wątku. */
+  inbound: InboundMessagesRepo;
   /** Katalog na surowe raporty rozsyłek (CSV) - `MIG_DATA_DIR/reports`. */
   reportsDir: string;
   /** Wysyłka HTTP webhooków; testy podstawiają atrapę. */
@@ -97,9 +97,8 @@ export async function handleSend(job: Job, deps: WorkerDeps, now: Date): Promise
 
   const text = String(job.payload.text ?? message.body ?? '');
   const deliveryReport = job.payload.deliveryReport !== false;
-  // Odpowiedź w wątku: Multiinfo dostaje identyfikator wiadomości przychodzącej. Bez magazynu
-  // odebranych (stare testy) albo bez wiadomości - wysyłamy zwyczajnie.
-  const inReplyTo = message.inReplyTo && deps.inbound ? deps.inbound.get(message.inReplyTo) : undefined;
+  // Odpowiedź w wątku: Multiinfo dostaje identyfikator wiadomości przychodzącej; bez niej wysyłamy zwyczajnie.
+  const inReplyTo = message.inReplyTo ? deps.inbound.get(message.inReplyTo) : undefined;
 
   try {
     const { miIds, trace } = await deps.clients.for(message.accountId).sendLong({

@@ -6,6 +6,7 @@ import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
 import { MessagesRepo } from '../../src/store/messages.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
+import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
@@ -41,7 +42,7 @@ beforeEach(() => {
   post = vi.fn();
   deps = {
     accounts, apiKeys, messages: new MessagesRepo(db), jobs: new JobsRepo(db), events: new MessageEventsRepo(db),
-    deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), reportsDir: '', clients: {} as never, post,
+    deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '', clients: {} as never, post,
     resolve: async () => ['93.184.216.34'],
   };
 });
