@@ -14,6 +14,8 @@ export interface MessageRow {
   createdAt: string; sentAt: string | null; finalAt: string | null;
   /** Ślad ostatniego wywołania sendsmslong.aspx; brak przed przekazaniem do Multiinfo. */
   trace: ProtocolTrace | null;
+  /** Wiadomość przychodząca, na którą to odpowiedź (`in_...`); Multiinfo dostaje ją jako smsInId. */
+  inReplyTo: string | null;
 }
 
 export interface MessageInput {
@@ -24,6 +26,7 @@ export interface MessageInput {
   idempotencyKey: string | null;
   /** Czas przyjęcia z zegara bramki. Pominięcie oznacza zegar bazy - tylko dla testów. */
   createdAt?: string;
+  inReplyTo?: string | null;
 }
 
 export interface MessageFilter {
@@ -49,7 +52,7 @@ interface RawMessage {
   provider_code: number | null; error: string | null;
   idempotency_key: string | null;
   created_at: string; sent_at: string | null; final_at: string | null;
-  trace: string | null;
+  trace: string | null; in_reply_to: string | null;
 }
 
 /** Statusy, po których wiadomość nie zmieni już stanu i trafia na listę nieudanych. */
@@ -84,6 +87,7 @@ function toRow(r: RawMessage): MessageRow {
     sentAt: r.sent_at,
     finalAt: r.final_at,
     trace: r.trace === null ? null : JSON.parse(r.trace) as ProtocolTrace,
+    inReplyTo: r.in_reply_to,
   };
 }
 
@@ -103,8 +107,8 @@ export class MessagesRepo {
       .prepare(
         `INSERT INTO messages (
            id, api_key_id, account_id, service_id, dest, body, body_hash,
-           encoding, parts, slots, orig, cost_center, valid_to, idempotency_key, created_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           encoding, parts, slots, orig, cost_center, valid_to, idempotency_key, in_reply_to, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                    COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))`,
       )
       .run(
@@ -122,8 +126,28 @@ export class MessagesRepo {
         input.costCenter,
         input.validTo,
         input.idempotencyKey,
+        input.inReplyTo ?? null,
         input.createdAt ?? null,
       );
+  }
+
+  /**
+   * Ostatnia wiadomość wysłana z tej usługi na ten numer w oknie czasu - podpowiedź dla
+   * aplikacji, na co abonent odpowiada. Multiinfo tego nie mówi.
+   */
+  lastTo(accountId: number, serviceId: string, dest: string, since: Date): MessageRow | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM messages WHERE account_id = ? AND service_id = ? AND dest = ? AND created_at >= ?
+          ORDER BY created_at DESC, id DESC LIMIT 1`,
+      )
+      .get(accountId, serviceId, dest, since.toISOString()) as RawMessage | undefined;
+    return row ? toRow(row) : undefined;
+  }
+
+  repliesTo(inboundId: string): MessageRow[] {
+    const rows = this.db.prepare('SELECT * FROM messages WHERE in_reply_to = ? ORDER BY created_at').all(inboundId) as RawMessage[];
+    return rows.map(toRow);
   }
 
   get(id: string): MessageRow | undefined {
