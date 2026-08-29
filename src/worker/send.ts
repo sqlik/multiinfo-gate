@@ -7,6 +7,7 @@ import type { MessageEventsRepo } from '../store/message-events.ts';
 import type { MessageRow, MessagesRepo } from '../store/messages.ts';
 import type { PackagesRepo } from '../store/packages.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
+import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
 import type { Resolver } from '../net/private-address.ts';
 import type { ClientPool } from './clients.ts';
 import { emitWebhook, type HttpPost, type WebhookEvent } from './webhook.ts';
@@ -20,6 +21,8 @@ export interface WorkerDeps {
   packages: PackagesRepo;
   jobs: JobsRepo;
   clients: ClientPool;
+  /** Magazyn odebranych - do smsInId przy odpowiedzi w wątku; stare testy workera go nie budują. */
+  inbound?: InboundMessagesRepo;
   /** Katalog na surowe raporty rozsyłek (CSV) - `MIG_DATA_DIR/reports`. */
   reportsDir: string;
   /** Wysyłka HTTP webhooków; testy podstawiają atrapę. */
@@ -33,10 +36,11 @@ export interface WorkerDeps {
 
 /** Kolejkuje webhook i odnotowuje to w przebiegu wiadomości, jeśli klucz ma adres. */
 export function notify(
-  deps: WorkerDeps, message: { id: string; apiKeyId: number }, event: WebhookEvent,
+  deps: WorkerDeps, message: { id: string; apiKeyId: number; inReplyTo?: string | null }, event: WebhookEvent,
   payload: Record<string, unknown>, now: Date,
 ): void {
-  if (emitWebhook(deps, message.apiKeyId, event, { id: message.id, ...payload }, now) !== null) {
+  const thread = message.inReplyTo ? { inReplyTo: message.inReplyTo } : {};
+  if (emitWebhook(deps, message.apiKeyId, event, { id: message.id, ...thread, ...payload }, now) !== null) {
     deps.events.record(message.id, now, 'webhook', event);
   }
 }
@@ -92,12 +96,16 @@ export async function handleSend(job: Job, deps: WorkerDeps, now: Date): Promise
 
   const text = String(job.payload.text ?? message.body ?? '');
   const deliveryReport = job.payload.deliveryReport !== false;
+  // Odpowiedź w wątku: Multiinfo dostaje identyfikator wiadomości przychodzącej. Bez magazynu
+  // odebranych (stare testy) albo bez wiadomości - wysyłamy zwyczajnie.
+  const inReplyTo = message.inReplyTo && deps.inbound ? deps.inbound.get(message.inReplyTo) : undefined;
 
   try {
     const { miIds, trace } = await deps.clients.for(message.accountId).sendLong({
       serviceId: message.serviceId,
       dest: message.dest,
       text,
+      ...(inReplyTo ? { smsInId: inReplyTo.miId } : {}),
       ...(message.orig ? { orig: message.orig } : {}),
       ...(message.validTo ? { validTo: new Date(message.validTo) } : {}),
       ...(message.costCenter ? { costCenter: message.costCenter } : {}),
