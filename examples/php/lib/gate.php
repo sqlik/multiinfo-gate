@@ -27,8 +27,11 @@ final class MultiinfoGate
     ) {
     }
 
-    /** Pojedynczy SMS. Zwraca odpowiedź 202: id, status, encoding, parts, characters, slots. */
-    public function sendMessage(string $to, string $text, ?string $orig = null, ?string $serviceId = null): array
+    /**
+     * Pojedynczy SMS. Zwraca odpowiedź 202: id, status, encoding, parts, characters, slots.
+     * $inReplyTo: identyfikator wiadomości przychodzącej (in_...), gdy to odpowiedź w wątku.
+     */
+    public function sendMessage(string $to, string $text, ?string $orig = null, ?string $serviceId = null, ?string $inReplyTo = null): array
     {
         $body = ['to' => $to, 'text' => $text];
         if ($orig !== null && $orig !== '') {
@@ -37,7 +40,22 @@ final class MultiinfoGate
         if ($serviceId !== null && $serviceId !== '') {
             $body['serviceId'] = $serviceId;
         }
+        if ($inReplyTo !== null && $inReplyTo !== '') {
+            $body['inReplyTo'] = $inReplyTo;
+        }
         return $this->call('POST', '/v1/messages', $body);
+    }
+
+    /** Odebrane SMS-y z usług klucza, od najnowszego. $query: serviceId, from, since, until, limit, offset. */
+    public function listInbound(array $query = []): array
+    {
+        $qs = $query === [] ? '' : '?' . http_build_query($query);
+        return $this->call('GET', '/v1/inbound' . $qs);
+    }
+
+    public function getInbound(string $id): array
+    {
+        return $this->call('GET', '/v1/inbound/' . rawurlencode($id));
     }
 
     public function getMessage(string $id): array

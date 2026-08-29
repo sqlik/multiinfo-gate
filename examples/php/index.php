@@ -1,11 +1,13 @@
 <?php
 declare(strict_types=1);
 
-// Strona testowa integratora: pojedynczy SMS, rozsyłka, ostatnie wysyłki, odebrane webhooki.
+// Strona testowa integratora: pojedynczy SMS, rozsyłka, ostatnie wysyłki, odebrane SMS-y
+// z odpowiedzią w wątku, odebrane webhooki.
 // Narzędzie i wzorzec kodu, nie produkt - nie wystawiaj tej strony do internetu.
 
 require __DIR__ . '/lib/gate.php';
 require __DIR__ . '/lib/store.php';
+require __DIR__ . '/lib/webhook.php';
 
 $configFile = __DIR__ . '/config.php';
 if (!is_file($configFile)) {
@@ -85,6 +87,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $r = $gate->orderReport($id);
                 updateJsonl($dataDir, 'wyslane.jsonl', $id, ['raport' => $r['report']['status']]);
                 redirectWith('ok', "Raport $id zamówiony - odśwież stan za minutę.");
+            case 'odpowiedz':
+                // Odpowiedź w wątku: bramka przekaże Multiinfo identyfikator wiadomości przychodzącej.
+                $r = $gate->sendMessage(post('numer'), post('tresc'), null, null, post('inReplyTo'));
+                appendJsonl($dataDir, 'wyslane.jsonl', [
+                    'id' => $r['id'], 'typ' => 'odpowiedź', 'czas' => date('c'), 'do' => post('numer'), 'status' => $r['status'],
+                ]);
+                redirectWith('ok', "Odpowiedź przyjęta: {$r['id']} (na " . post('inReplyTo') . ').');
+            case 'dociagnij':
+                // Pull jako odzyskiwanie po awarii odbiornika webhooków: dopisujemy tylko to, czego nie ma.
+                $known = array_column(readJsonl($dataDir, 'odebrane.jsonl', 1000), 'id');
+                $added = 0;
+                foreach (array_reverse($gate->listInbound(['limit' => 20])['data'] ?? []) as $msg) {
+                    if (!in_array($msg['id'] ?? '', $known, true)) {
+                        appendJsonl($dataDir, 'odebrane.jsonl', inboundEntry($msg));
+                        $added++;
+                    }
+                }
+                redirectWith('ok', "Dociągnięto z bramki: $added nowych wiadomości.");
             default:
                 redirectWith('fail', 'Nieznana akcja.');
         }
@@ -114,6 +134,7 @@ $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 $csrf = $_SESSION['csrf'];
 $wyslane = readJsonl($dataDir, 'wyslane.jsonl', 20);
+$odebrane = readJsonl($dataDir, 'odebrane.jsonl', 20);
 $webhooki = readJsonl($dataDir, 'webhooki.jsonl', 20);
 ?>
 <!doctype html>
@@ -207,6 +228,36 @@ $webhooki = readJsonl($dataDir, 'webhooki.jsonl', 20);
     </tr>
   <?php endforeach; ?>
   <?php if ($wyslane === []): ?><tr><td colspan="7">Jeszcze nic nie wysłano</td></tr><?php endif; ?>
+</table>
+
+<h2>Odebrane SMS-y</h2>
+<form method="post" class="inline">
+  <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+  <input type="hidden" name="akcja" value="dociagnij">
+  <button type="submit">Dociągnij z bramki</button>
+</form>
+<table>
+  <tr><th>Odebrana</th><th>Od</th><th>Usługa</th><th>Treść</th><th>Odpowiedź na</th><th>Odpowiedz</th></tr>
+  <?php foreach ($odebrane as $o): ?>
+    <tr>
+      <td><?= e(substr((string) ($o['odebrana'] ?? ''), 0, 19)) ?></td>
+      <td><?= e($o['od'] ?? '') ?></td>
+      <td><?= e($o['usluga'] ?? '') ?></td>
+      <td><?= e($o['tresc'] ?? '') ?><br><code><?= e($o['id'] ?? '') ?></code></td>
+      <td><code><?= e($o['odpowiedz_na'] ?? '-') ?></code></td>
+      <td>
+        <form method="post" class="inline">
+          <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+          <input type="hidden" name="akcja" value="odpowiedz">
+          <input type="hidden" name="inReplyTo" value="<?= e($o['id'] ?? '') ?>">
+          <input type="hidden" name="numer" value="<?= e($o['od'] ?? '') ?>">
+          <input name="tresc" placeholder="treść odpowiedzi" required style="width: 220px;">
+          <button type="submit">Odpowiedz</button>
+        </form>
+      </td>
+    </tr>
+  <?php endforeach; ?>
+  <?php if ($odebrane === []): ?><tr><td colspan="6">Brak odebranych - zaznacz „Odbiera wiadomości przychodzące” przy kluczu w panelu bramki albo dociągnij z bramki</td></tr><?php endif; ?>
 </table>
 
 <h2>Odebrane webhooki</h2>
