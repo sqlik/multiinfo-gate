@@ -378,6 +378,18 @@ describe('MultiinfoClient - odbiór', () => {
     fake.respond(null);
   });
 
+  it('odpowiedź urwana przed końcem treści to błąd, nie wieczne oczekiwanie', async () => {
+    // Serwer (albo proxy po drodze) wysyła nagłówki i część treści, po czym zamyka gniazdo.
+    // Bez odbiorcy błędu na odpowiedzi Node nic nie zgłasza, a pętla odbioru stanęłaby na zawsze.
+    fake.respond(() => (res) => {
+      res.writeHead(200, { 'content-type': 'text/plain', 'content-length': '64' });
+      res.write('0\n22\n');
+      setTimeout(() => res.destroy(), 20);
+    });
+    await expect(client.getSms('24138', 60_000)).rejects.toMatchObject({ code: -71 });
+    fake.respond(null);
+  });
+
   it('sygnał już przerwany odrzuca od razu, bez żądania', async () => {
     const before = fake.requests.length;
     const controller = new AbortController();
