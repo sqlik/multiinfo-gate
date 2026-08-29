@@ -2,7 +2,7 @@ import type { InboundRow } from '../../store/inbound-messages.ts';
 import type { DeliveryRow } from '../../store/webhook-deliveries.ts';
 import type { MessageRow } from '../../store/messages.ts';
 import { warsawStamp, warsawTime } from '../../time/warsaw.ts';
-import { esc } from './layout.ts';
+import { esc, preview } from './layout.ts';
 import { statusLabel, statusTone } from './status-labels.ts';
 
 export interface InboundFilters { konto: number | null; usluga: string | null; od: string | null; dzienOd: string | null; dzienDo: string | null }
@@ -10,14 +10,6 @@ export interface InboundFilters { konto: number | null; usluga: string | null; o
 export interface InboundListData {
   rows: InboundRow[]; filters: InboundFilters; hasMore: boolean; offset: number; limit: number;
   accounts: Array<{ id: number; name: string }>;
-}
-
-const PREVIEW_CHARS = 90;
-
-function preview(r: InboundRow): string {
-  if (r.body === null) return '<span class="dim">treść nieprzechowywana</span>';
-  const text = r.kind === 'binary' ? `[binarna] ${r.body}` : r.body;
-  return text.length <= PREVIEW_CHARS ? esc(text) : `${esc(text.slice(0, PREVIEW_CHARS))}…`;
 }
 
 function link(f: InboundFilters, offset: number): string {
@@ -43,7 +35,7 @@ export function inboundPage(d: InboundListData): string {
         <td class="m"><a href="/odebrane/${esc(r.id)}">${esc(r.id)}</a></td>
         <td class="m">${esc(r.sender)}</td>
         <td class="m nw">${esc(names.get(r.accountId) ?? `konto ${r.accountId}`)} · ${esc(r.serviceId)}</td>
-        <td class="txt">${preview(r)}</td>
+        <td class="txt">${preview(r.body === null ? null : r.kind === 'binary' ? `[binarna] ${r.body}` : r.body)}</td>
         <td class="m">${r.relatedMessageId === null ? '<span class="dim">-</span>' : `<a href="/wiadomosci/${esc(r.relatedMessageId)}">${esc(r.relatedMessageId)}</a>`}</td>
       </tr>`).join('');
   const from = d.rows.length === 0 ? 0 : d.offset + 1;

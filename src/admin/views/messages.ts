@@ -5,7 +5,7 @@ import type { MessageRow } from '../../store/messages.ts';
 import { measureText } from '../../text/measure.ts';
 import { segmentText } from '../../text/segment.ts';
 import { warsawStamp, warsawTime, warsawTimeMs } from '../../time/warsaw.ts';
-import { esc } from './layout.ts';
+import { esc, preview } from './layout.ts';
 import { segmentPanel } from './segments.ts';
 import { statusLabel, statusTone } from './status-labels.ts';
 
@@ -36,13 +36,6 @@ const FILTRY: Array<{ key: string | null; label: string }> = [
 const stamp = (iso: string | null) => (iso === null ? '-' : warsawStamp(iso));
 
 /** Treść na liście skracamy do jednego wiersza; pełną widać w szczególe. */
-const PREVIEW_CHARS = 90;
-
-function preview(body: string | null): string {
-  if (body === null) return '<span class="dim">treść nieprzechowywana</span>';
-  return body.length <= PREVIEW_CHARS ? esc(body) : `${esc(body.slice(0, PREVIEW_CHARS))}…`;
-}
-
 const state = (m: MessageRow) =>
   `<span class="st"><span class="dot dot-${statusTone(m.status)}"></span>${esc(statusLabel(m.status))}</span>`;
 
