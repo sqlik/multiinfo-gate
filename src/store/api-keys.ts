@@ -37,6 +37,14 @@ export interface ApiKeyPatch {
   inboundSubscribed: 0 | 1;
 }
 
+/**
+ * Klucz `k`, który odbiera wiadomości: subskrybuje, ma adres webhooka, jest czynny w chwili `?`.
+ * Jeden warunek dla odbiornika (co odpytywać) i dla dostaw (kto dostaje) - inaczej bramka
+ * mogłaby pytać Plusa o usługę, której nikt nie odbiera, albo odwrotnie.
+ */
+export const INBOUND_SUBSCRIBER_SQL = `k.inbound_subscribed = 1 AND k.webhook_url IS NOT NULL
+            AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at > ?)`;
+
 /** Kolumna `webhook_secret_enc` nie jest tu wymieniona - sekret nie opuszcza bazy. */
 const PUBLIC_COLUMNS = `
   id, account_id, name, key_hash, key_prefix, default_service_id, default_orig,
@@ -218,8 +226,7 @@ export class ApiKeysRepo {
     const rows = this.db
       .prepare(
         `SELECT ${PUBLIC_COLUMNS} FROM api_keys k
-          WHERE k.account_id = ? AND k.inbound_subscribed = 1 AND k.webhook_url IS NOT NULL
-            AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at > ?)
+          WHERE k.account_id = ? AND ${INBOUND_SUBSCRIBER_SQL}
             AND EXISTS (SELECT 1 FROM api_key_services s WHERE s.api_key_id = k.id AND s.service_id = ?)
           ORDER BY k.id`,
       )

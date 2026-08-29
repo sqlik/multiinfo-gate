@@ -1,4 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { shortId } from '../ids.ts';
+import { sha256Hex } from '../text/hash.ts';
 import { silentLogger, type Logger } from '../log.ts';
 import { ProviderError, type InboundSms } from '../multiinfo/response.ts';
 import type { AccountsRepo } from '../store/accounts.ts';
@@ -86,8 +87,6 @@ const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve));
 /** Kody, po których nie ma sensu pytać dalej bez zmiany konfiguracji: usługa nie istnieje albo jest nieaktywna. */
 const STOPPING_CODES = new Set([-23, -24]);
 
-const shortId = () => `in_${randomUUID().replace(/-/g, '').slice(0, 20)}`;
-const sha256 = (s: string) => createHash('sha256').update(s, 'utf8').digest('hex');
 
 /** Numer nadawcy w postaci bramki; numer krótki albo nietypowy zostaje taki, jak podał Plus. */
 export function normalizeSender(raw: string, countryCode: string): string {
@@ -295,7 +294,7 @@ export class Receiver {
     const account = this.deps.accounts.get(target.accountId);
     if (!account) throw new Error(`Konto ${target.accountId} nie istnieje`);
 
-    const id = shortId();
+    const id = shortId('in');
     const sender = normalizeSender(sms.sender, account.defaultCountryCode);
     const receivedAt = receivedAtOf(sms, now, log);
     const related = this.deps.messages.lastTo(
@@ -306,7 +305,7 @@ export class Receiver {
     return this.deps.inbound.transaction(() => {
       const inserted = this.deps.inbound.insertIfNew({
         id, accountId: target.accountId, serviceId: target.serviceId, miId: sms.miId, sender, dest: sms.dest,
-        kind: sms.kind, body: keepContent ? sms.content : null, bodyHash: sha256(sms.content),
+        kind: sms.kind, body: keepContent ? sms.content : null, bodyHash: sha256Hex(sms.content),
         protocolId: sms.protocolId, codingScheme: sms.codingScheme, connectorId: sms.connectorId || null,
         relatedMessageId: related?.id ?? null, receivedAt, createdAt: now.toISOString(),
       });

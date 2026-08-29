@@ -1,4 +1,5 @@
 import type { Database } from 'better-sqlite3';
+import { INBOUND_SUBSCRIBER_SQL } from './api-keys.ts';
 
 export interface InboundTarget { accountId: number; serviceId: string }
 
@@ -25,9 +26,7 @@ export class InboundServicesRepo {
            JOIN accounts a ON a.id = s.account_id
            JOIN api_keys k ON k.account_id = s.account_id
            JOIN api_key_services ks ON ks.api_key_id = k.id AND ks.service_id = s.service_id
-          WHERE a.active = 1 AND a.paused_reason IS NULL
-            AND k.inbound_subscribed = 1 AND k.webhook_url IS NOT NULL AND k.revoked_at IS NULL
-            AND (k.expires_at IS NULL OR k.expires_at > ?)
+          WHERE a.active = 1 AND a.paused_reason IS NULL AND ${INBOUND_SUBSCRIBER_SQL}
           ORDER BY s.account_id, s.service_id`,
       )
       .all(now.toISOString()) as Array<{ account_id: number; service_id: string }>;

@@ -1,4 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { shortId } from '../ids.ts';
+import { sha256Hex } from '../text/hash.ts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { measureText } from '../text/measure.ts';
@@ -26,8 +27,6 @@ const bodySchema = z.object({
   inReplyTo: z.string().regex(/^in_[A-Za-z0-9_]{1,40}$/).optional(),
 });
 
-const shortId = () => `msg_${randomUUID().replace(/-/g, '').slice(0, 20)}`;
-const bodyHash = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
 
 export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void {
   const now = deps.now ?? (() => new Date());
@@ -99,7 +98,7 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
 
     const idempotencyKey = request.headers['idempotency-key'];
     const idem = typeof idempotencyKey === 'string' ? idempotencyKey : undefined;
-    const hash = bodyHash(input.text);
+    const hash = sha256Hex(input.text);
 
     const recipients = Array.isArray(input.to) ? input.to : [input.to];
 
@@ -135,7 +134,7 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
         };
       }
 
-      const id = shortId();
+      const id = shortId('msg');
       deps.messages.insert({
         id, apiKeyId: auth.apiKeyId, accountId: auth.accountId, serviceId, dest,
         body: account.storeContent ? input.text : null, bodyHash: hash,
