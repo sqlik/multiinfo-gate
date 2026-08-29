@@ -425,7 +425,7 @@ describe('klucz - subskrypcja wiadomości przychodzących', () => {
     expect(res.statusCode).toBe(200);
     const key = h.apiKeys.list()[0]!;
     expect(key.inboundSubscribed).toBe(1);
-    expect(h.refreshed).toEqual([{ retryStopped: true }]);
+    expect(h.refreshed).toEqual([{ retryAccount: accountId }]);
     expect(h.audit.list(10, 0)[0]!.meta).toMatchObject({ odbior: true });
   });
 

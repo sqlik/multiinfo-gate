@@ -31,7 +31,7 @@ export interface AdminHarness {
   inbound: InboundMessagesRepo;
   inboundServices: InboundServicesRepo;
   /** Wywołania `receiver.refresh()` z tras panelu - atrapa odbiornika. */
-  refreshed: Array<{ retryStopped?: boolean }>;
+  refreshed: Array<{ retryAccount?: number }>;
   sessions: SessionStore;
   userId: number;
   masterKey: Buffer;
@@ -88,8 +88,8 @@ export async function startAdminHarness(
   const packages = new PackagesRepo(db);
   const inbound = new InboundMessagesRepo(db);
   const inboundServices = new InboundServicesRepo(db);
-  const refreshed: Array<{ retryStopped?: boolean }> = [];
-  const receiver = { refresh: (o: { retryStopped?: boolean } = {}) => { refreshed.push(o); } };
+  const refreshed: Array<{ retryAccount?: number }> = [];
+  const receiver = { refresh: (o: { retryAccount?: number } = {}) => { refreshed.push(o); } };
 
   const userId = users.insert('janek', await hashPassword('tajne-haslo'));
   const totpSecret = authenticator.generateSecret();

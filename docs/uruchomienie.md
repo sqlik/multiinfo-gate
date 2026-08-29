@@ -465,8 +465,9 @@ zaczyna pytać Multiinfo o wiadomości z usług klucza i przekazuje każdą powi
 samej usługi może odbierać naraz. Gdy ostatni odbierający klucz zostanie odwołany, wygaśnie albo
 straci zaznaczenie, bramka przestaje pytać o tę usługę. Stan odbioru widać na karcie konta
 w sekcji „Odbiór wiadomości”: czy jest aktywny, kiedy bramka ostatnio pytała i kiedy ostatnio
-coś przyszło; usługa zatrzymana błędem Multiinfo (np. nieaktywna) pokazuje przyczynę i wraca do
-pracy po zapisie dowolnej zmiany klucza albo konta.
+coś przyszło; usługa zatrzymana błędem Multiinfo (np. nieaktywna) pokazuje przyczynę, a bramka
+sama ponawia pytanie co kwadrans - gdy administrator Polkomtel aktywuje usługę, odbiór rusza
+bez ingerencji; zapis klucza albo tego konta w panelu ponawia od razu.
 
 ![Karta konta, sekcja Odbiór wiadomości: usługa z odbierającym kluczem, stan aktywny z czasem ostatniego pytania i ostatniej odebranej](obrazki/konto-odbior.png)
 
@@ -837,7 +838,7 @@ zawiera treści wiadomości, haseł ani pełnych kluczy. Zdarzenia warte uwagi:
 | `odbior.start`, `odbior.stop` | bramka zaczęła albo przestała pytać Multiinfo o wiadomości z usługi (zmiana subskrypcji przy kluczach) |
 | `odbior.wiadomosc`, `odbior.duplikat` | odebrano wiadomość od abonenta; duplikat to ta sama wiadomość wydana przez Multiinfo ponownie, pominięta |
 | `odbior.blad` | błąd sieci albo Multiinfo przy pytaniu o wiadomości; bramka ponowi z rosnącym odstępem |
-| `odbior.zatrzymany` | Multiinfo odrzuciło pytanie kodem `-23` albo `-24` (usługa nieznana albo nieaktywna); odbiór tej usługi stoi do zapisu zmiany klucza albo konta w panelu |
+| `odbior.zatrzymany`, `odbior.nadal_zatrzymany` | Multiinfo odrzuciło pytanie kodem `-23` albo `-24` (usługa nieznana albo nieaktywna); bramka ponawia co kwadrans (kolejne odmowy jako `nadal_zatrzymany` na poziomie `info`) i od razu po zapisie klucza albo tego konta w panelu |
 | `odbior.potwierdzenie_nieudane`, `odbior.wyjatek` | wiadomość zapisana, ale nie potwierdzona w Multiinfo (wróci i zostanie pominięta jako duplikat) albo błąd wewnętrzny przy odbiorze (wiadomość wróci z Multiinfo po kilku minutach; bramka pyta dalej z rosnącym odstępem) |
 | `odbior.data_nieczytelna` | Multiinfo podało datę odbioru w nieoczekiwanej postaci; wiadomość jest zapisana z czasem zapisu w bramce zamiast czasu odbioru |
 | `kopia.zapisana`, `kopia.blad` | wynik nocnej kopii; brak `kopia.zapisana` przez dwie doby oznacza, że proces nie działa albo nie ma prawa zapisu do wolumenu |

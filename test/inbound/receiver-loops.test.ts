@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ProviderError } from '../../src/multiinfo/response.ts';
-import { INBOUND_BACKOFF_MS, MIN_EMPTY_INTERVAL_MS, Receiver } from '../../src/inbound/receiver.ts';
-import { SMS, buildReceiverDeps, keyInput } from './helpers.ts';
+import { INBOUND_BACKOFF_MS, MIN_EMPTY_INTERVAL_MS, STOPPED_RETRY_MS, Receiver } from '../../src/inbound/receiver.ts';
+import { NOW, SMS, buildReceiverDeps, keyInput } from './helpers.ts';
 
 /** Czeka, aż warunek się spełni albo minie limit - pętle działają w tle. */
 async function until(check: () => boolean, ms = 2000): Promise<void> {
@@ -93,12 +93,46 @@ describe('Receiver - pętle', () => {
     await until(() => receiver.listening().length === 0);
     expect(getSms).toHaveBeenCalledTimes(1);
     expect(receiver.health()).toEqual({ services: 1, listening: 0, errors: [{ account: 'Firma', serviceId: '24138', error: '-24: nieaktywna' }] });
-    // Zwykły tik odświeżania nie wznawia pętli zatrzymanej błędem konfiguracji.
+    // Zwykły tik odświeżania nie wznawia pętli zatrzymanej błędem konfiguracji,
+    // zapis w panelu na innym koncie też nie.
+    receiver.refresh();
+    receiver.refresh({ retryAccount: accountId + 1 });
+    expect(receiver.listening()).toEqual([]);
+    // Zmiana konfiguracji tego konta w panelu wznawia od razu.
+    receiver.refresh({ retryAccount: accountId });
+    await until(() => getSms.mock.calls.length >= 2);
+    expect(receiver.health().errors).toEqual([]);
+    await receiver.stop();
+  });
+
+  it('zatrzymany cel wraca sam po STOPPED_RETRY_MS; kolejna odmowa to wpis info, nie error', async () => {
+    // Naprawa dzieje się poza bramką (administrator Polkomtel aktywuje usługę) - bez własnego
+    // ponawiania odbiór ruszyłby dopiero po „pustym” zapisie w panelu.
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    let clock = NOW;
+    const log = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
+    getSms
+      .mockRejectedValueOnce(new ProviderError(-24, 'nieaktywna', 'permanent'))
+      .mockRejectedValueOnce(new ProviderError(-24, 'nieaktywna', 'permanent'))
+      .mockResolvedValue(null);
+    const receiver = new Receiver({ ...deps, now: () => clock, log, idleMs: 20, sleep: undefined });
+    receiver.refresh();
+    await until(() => receiver.listening().length === 0);
+    expect(log.error.mock.calls.map((c) => c[0])).toEqual(['odbior.zatrzymany']);
+    clock = new Date(NOW.getTime() + STOPPED_RETRY_MS - 1000);
     receiver.refresh();
     expect(receiver.listening()).toEqual([]);
-    // Zmiana konfiguracji w panelu wznawia jawnie.
-    receiver.refresh({ retryStopped: true });
+    clock = new Date(NOW.getTime() + STOPPED_RETRY_MS);
+    receiver.refresh();
     await until(() => getSms.mock.calls.length >= 2);
+    await until(() => receiver.listening().length === 0);
+    expect(log.error).toHaveBeenCalledTimes(1);
+    expect(log.info.mock.calls.map((c) => c[0])).toContain('odbior.nadal_zatrzymany');
+    expect(receiver.health().errors).toHaveLength(1);
+    clock = new Date(NOW.getTime() + 2 * STOPPED_RETRY_MS);
+    receiver.refresh();
+    await until(() => getSms.mock.calls.length >= 3);
     expect(receiver.health().errors).toEqual([]);
     await receiver.stop();
   });
@@ -156,7 +190,7 @@ describe('Receiver - pętle', () => {
     receiver.refresh();
     await receiver.stop();
     const calls = getSms.mock.calls.length;
-    receiver.refresh({ retryStopped: true });
+    receiver.refresh({ retryAccount: accountId });
     expect(receiver.listening()).toEqual([]);
     await new Promise((r) => setTimeout(r, 30));
     expect(getSms.mock.calls.length).toBe(calls);

@@ -214,7 +214,7 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
       defaultCountryCode: values.defaultCountryCode, storeContent: values.storeContent === '1' ? 1 : 0, serviceIds,
     });
     // Zmiana listy usług zapala albo gasi odbiór; usługa zatrzymana błędem Multiinfo dostaje nową szansę.
-    deps.receiver?.refresh({ retryStopped: true });
+    deps.receiver?.refresh({ retryAccount: view.row.id });
     const after = accountValuesOf(viewOf(view.row.id)!);
     const changed: string[] = (Object.keys(after) as Array<keyof AccountFormValues>).filter((k) => after[k] !== before[k]);
     if (password !== '') changed.push('password');
@@ -350,7 +350,7 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
   function resumeIfPaused(row: AccountView['row'], userId: number | null, ip: string, cause: string): boolean {
     if (row.pausedReason === null) return false;
     deps.accounts.resume(row.id);
-    deps.receiver?.refresh({ retryStopped: true });
+    deps.receiver?.refresh({ retryAccount: row.id });
     deps.audit.record({
       actor: actorOf(userId),
       action: 'konto.wznowienie',
