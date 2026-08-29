@@ -7,7 +7,7 @@ _CS_DEFAULT_URL="https://raw.githubusercontent.com/sqlik/multiinfo-gate/main/pro
 _cs_boot="${COMMUNITY_SCRIPTS_CORE_DIR:-$(dirname "${BASH_SOURCE[0]}")/../../core}/core/build.func"
 # shellcheck disable=SC1090
 source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/core/build.func")
-# Copyright (c) 2026 sqlik
+# Copyright (c) 2026 Tomasz Sawko
 # Author: sqlik
 # License: MIT | https://github.com/sqlik/multiinfo-gate/raw/main/LICENSE
 # Source: https://github.com/sqlik/multiinfo-gate

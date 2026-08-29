@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2026 sqlik
+# Copyright (c) 2026 Tomasz Sawko
 # Author: sqlik
 # License: MIT | https://github.com/sqlik/multiinfo-gate/raw/main/LICENSE
 # Source: https://github.com/sqlik/multiinfo-gate
