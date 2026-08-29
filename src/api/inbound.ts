@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { InboundRow } from '../store/inbound-messages.ts';
 import { authenticate } from './auth.ts';
+import { normalizeSender } from '../text/phone.ts';
 import { ApiError } from './errors.ts';
 import type { ApiDeps } from './server.ts';
 
@@ -47,10 +48,12 @@ export function registerInboundRoutes(app: FastifyInstance, deps: ApiDeps): void
       serviceIds = [request.query.serviceId];
     }
 
+    // Numer w dowolnym zapisie („+48 601…”, dziewięć cyfr) - do postaci, w jakiej zapisujemy nadawcę.
+    const countryCode = deps.accounts.get(auth.accountId)?.defaultCountryCode ?? '';
     const rows = deps.inbound.list({
       accountId: auth.accountId,
       serviceIds,
-      ...(request.query.from ? { sender: request.query.from } : {}),
+      ...(request.query.from ? { sender: normalizeSender(request.query.from, countryCode) } : {}),
       ...(request.query.since ? { since: isoOrThrow('since', request.query.since) } : {}),
       ...(request.query.until ? { until: isoOrThrow('until', request.query.until) } : {}),
       limit: limit + 1,

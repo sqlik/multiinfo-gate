@@ -432,7 +432,7 @@ Parametry zapytania (wszystkie opcjonalne):
 | Parametr | Opis |
 |---|---|
 | `serviceId` | jedna z usług klucza; inna daje `403 service_not_allowed` |
-| `from` | numer nadawcy po normalizacji, np. `48601000001` |
+| `from` | numer nadawcy w dowolnym zapisie (`+48 601 000 001`, `601000001`); bramka sprowadza go do postaci, w jakiej zapisała nadawcę |
 | `since`, `until` | zakres czasu odbioru przez Multiinfo, ISO 8601; zła data daje `400 invalid_query` |
 | `limit` | liczba wyników, domyślnie 25, najwyżej 200 |
 | `offset` | liczba pominiętych wyników od początku listy |

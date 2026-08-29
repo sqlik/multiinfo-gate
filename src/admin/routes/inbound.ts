@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { normalizeSender, stripPhone } from '../../text/phone.ts';
 import { endOfWarsawDay } from '../../time/warsaw.ts';
 import type { InboundRow } from '../../store/inbound-messages.ts';
 import type { Renderer } from '../render.ts';
@@ -27,6 +28,12 @@ function startOfWarsawDay(validDay: string): string {
 }
 
 export function registerInboundViewRoutes(app: FastifyInstance, deps: AdminDeps, render: Renderer): void {
+  /** Numer z pola filtru jak nadawca przy zapisie; kod kraju do dziewięciu cyfr znamy tylko przy wybranym koncie. */
+  const senderFilter = (raw: string, accountId: number | null): string => {
+    const account = accountId === null ? undefined : deps.accounts.get(accountId);
+    return account ? normalizeSender(raw, account.defaultCountryCode) : stripPhone(raw);
+  };
+
   app.get<{ Querystring: Record<string, string | undefined> }>('/odebrane', async (request, reply) => {
     reply.type('text/html; charset=utf-8');
     const q = request.query as Record<string, string | string[] | undefined>;
@@ -37,7 +44,7 @@ export function registerInboundViewRoutes(app: FastifyInstance, deps: AdminDeps,
     const rows: InboundRow[] = deps.inbound.list({
       ...(filters.konto === null ? {} : { accountId: filters.konto }),
       ...(filters.usluga === null ? {} : { serviceIds: [filters.usluga] }),
-      ...(filters.od === null ? {} : { sender: filters.od }),
+      ...(filters.od === null ? {} : { sender: senderFilter(filters.od, filters.konto) }),
       ...(filters.dzienOd === null ? {} : { since: startOfWarsawDay(filters.dzienOd) }),
       ...(filters.dzienDo === null ? {} : { until: endOfWarsawDay(filters.dzienDo) }),
       limit: PAGE_SIZE + 1, offset,

@@ -54,6 +54,16 @@ describe('GET /odebrane', () => {
     expect((await page('/odebrane?usluga=24138&usluga=24902&od=1&od=2')).body).toContain('href="/odebrane/in_1"');
   });
 
+  it('filtr nadawcy przyjmuje numer w dowolnym zapisie', async () => {
+    seed('in_1', { sender: '48601000001' });
+    seed('in_2', { sender: '48605000001' });
+    const spaced = encodeURIComponent('+48 601 000 001');
+    expect((await page(`/odebrane?od=${spaced}`)).body).toContain('href="/odebrane/in_1"');
+    expect((await page(`/odebrane?od=${spaced}`)).body).not.toContain('href="/odebrane/in_2"');
+    // Dziewięć cyfr dostaje kod kraju wybranego konta.
+    expect((await page(`/odebrane?konto=${accountId}&od=601000001`)).body).toContain('href="/odebrane/in_1"');
+  });
+
   it('treść nieprzechowywana ma podpis zamiast treści', async () => {
     seed('in_1', { body: null });
     expect((await page('/odebrane')).body).toContain('treść nieprzechowywana');

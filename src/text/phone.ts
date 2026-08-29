@@ -26,8 +26,11 @@ export class InvalidOrigError extends Error {
  * Sprowadza numer do postaci oczekiwanej przez Multiinfo: same cyfry z kodem kraju.
  * Numer dziewięciocyfrowy jest uzupełniany domyślnym kodem kraju konta.
  */
+/** Sam zapis numeru bez ozdobników: spacje, myślniki, nawiasy, kropki i wiodący plus. */
+export const stripPhone = (raw: string): string => raw.trim().replace(/[\s\-().]/g, '').replace(/^\+/, '');
+
 export function normalizePhone(raw: string, defaultCountryCode: string): string {
-  const stripped = raw.replace(/[\s\-().]/g, '').replace(/^\+/, '');
+  const stripped = stripPhone(raw);
   if (!/^\d+$/.test(stripped)) throw new InvalidPhoneError(raw);
 
   const withCode = stripped.length === 9 ? `${defaultCountryCode}${stripped}` : stripped;
@@ -43,6 +46,18 @@ export function normalizePhone(raw: string, defaultCountryCode: string): string 
     throw new InvalidPhoneError(raw, `numer z kodem ${code} ma ${code.length + nationalLength} cyfr`);
   }
   return withCode;
+}
+
+/**
+ * Numer nadawcy wiadomości przychodzącej w postaci bramki; numer krótki albo nietypowy zostaje
+ * taki, jak podał Plus. Tej samej postaci używa filtr nadawcy w API i w panelu.
+ */
+export function normalizeSender(raw: string, countryCode: string): string {
+  try {
+    return normalizePhone(raw, countryCode);
+  } catch {
+    return stripPhone(raw);
+  }
 }
 
 /**
