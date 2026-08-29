@@ -47,6 +47,21 @@ export function endOfWarsawDay(day: string): string {
   return exact.toISOString();
 }
 
+const COMPACT = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/;
+
+/**
+ * Chwila UTC dla daty `yyyyMMddhhmmss` podanej w czasie polskim - tak Multiinfo
+ * datuje wiadomości przychodzące. Dwa przebiegi, jak w `endOfWarsawDay`.
+ */
+export function warsawCompactToIso(compact: string): string {
+  const m = COMPACT.exec(compact.trim());
+  if (!m) throw new Error(`Data musi mieć postać yyyyMMddhhmmss, jest: ${compact}`);
+  const [y, mo, d, h, mi, s] = m.slice(1).map(Number) as [number, number, number, number, number, number];
+  const wall = Date.UTC(y, mo - 1, d, h, mi, s);
+  const guess = new Date(wall - offsetMs(new Date(wall)));
+  return new Date(wall - offsetMs(guess)).toISOString();
+}
+
 const two = (n: number) => String(n).padStart(2, '0');
 
 /** Chwila z bazy (UTC) jako czas ścienny w Polsce: `RRRR-MM-DD GG:MM:SS`. */
