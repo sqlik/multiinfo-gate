@@ -48,7 +48,10 @@ describe('GET /odebrane', () => {
     expect((await page('/odebrane?dzienDo=2026-08-24')).body).not.toContain('href="/odebrane/in_2"');
     expect((await page(`/odebrane?konto=${accountId}`)).body).toContain('href="/odebrane/in_1"');
     expect((await page('/odebrane?konto=999')).body).not.toContain('href="/odebrane/in_1"');
+    // Dzień spoza kalendarza i parametr powtórzony w adresie: filtr pominięty, strona bez błędu.
     expect((await page('/odebrane?dzienOd=2026-02-31')).statusCode).toBe(200);
+    expect((await page('/odebrane?dzienDo=2026-02-31')).body).toContain('href="/odebrane/in_1"');
+    expect((await page('/odebrane?usluga=24138&usluga=24902&od=1&od=2')).body).toContain('href="/odebrane/in_1"');
   });
 
   it('treść nieprzechowywana ma podpis zamiast treści', async () => {
