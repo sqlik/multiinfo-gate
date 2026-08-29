@@ -251,3 +251,16 @@ describe('GET /wiadomosci/:id', () => {
     expect((await page('/wiadomosci/m_nieistnieje')).statusCode).toBe(404);
   });
 });
+
+describe('GET /wiadomosci/:id - odpowiedź w wątku', () => {
+  it('pokazuje odnośnik do wiadomości przychodzącej', async () => {
+    h.inbound.insertIfNew({ id: 'in_1', accountId, serviceId: '24138', miId: '22', sender: '48601135134', dest: '7968', kind: 'text', body: 'Pytanie', bodyHash: 'h',
+      protocolId: 0, codingScheme: 0, connectorId: null, relatedMessageId: null, receivedAt: NOW.toISOString(), createdAt: NOW.toISOString() });
+    h.messages.insert({ id: 'msg_r', apiKeyId, accountId, serviceId: '24138', dest: '48601135134', body: 'Odp', bodyHash: 'h', encoding: 'gsm', parts: 1, slots: 3,
+      orig: null, costCenter: null, validTo: null, idempotencyKey: null, inReplyTo: 'in_1', createdAt: NOW.toISOString() });
+    const res = await page('/wiadomosci/msg_r');
+    expect(res.body).toContain('Odpowiedź na');
+    expect(res.body).toContain('href="/odebrane/in_1"');
+    expect((await page('/wiadomosci/' + seed('msg_z'))).body).not.toContain('Odpowiedź na');
+  });
+});
