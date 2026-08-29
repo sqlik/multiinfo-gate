@@ -55,6 +55,14 @@ const get = (url: string, key = keyA) => app.inject({ method: 'GET', url, header
 const ids = (res: { json: () => { data: Array<{ id: string }> } }) => res.json().data.map((r) => r.id);
 
 describe('GET /v1/inbound', () => {
+  it('filtr from przyjmuje numer w dowolnym zapisie - normalizuje jak nadawcę przy zapisie', async () => {
+    seed('in_1', { sender: '48601000001' });
+    seed('in_2', { sender: '7968' });
+    expect(ids(await get('/v1/inbound?from=' + encodeURIComponent('+48 601-000-001')))).toEqual(['in_1']);
+    expect(ids(await get('/v1/inbound?from=601000001'))).toEqual(['in_1']);
+    expect(ids(await get('/v1/inbound?from=7968'))).toEqual(['in_2']);
+  });
+
   it('parametr podany więcej niż raz to 400, nie błąd wewnętrzny', async () => {
     seed('in_1');
     const res = await get('/v1/inbound?from=48601000001&from=48601000002');

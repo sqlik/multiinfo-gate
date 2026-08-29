@@ -9,7 +9,7 @@ import type { InboundServicesRepo, InboundTarget } from '../store/inbound-servic
 import type { JobsRepo } from '../store/jobs.ts';
 import type { MessagesRepo } from '../store/messages.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
-import { normalizePhone } from '../text/phone.ts';
+import { normalizeSender } from '../text/phone.ts';
 import { warsawCompactToIso } from '../time/warsaw.ts';
 import type { ClientPool } from '../worker/clients.ts';
 import { pauseForCertificate } from '../worker/certificate.ts';
@@ -87,15 +87,6 @@ const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve));
 /** Kody, po których nie ma sensu pytać dalej bez zmiany konfiguracji: usługa nie istnieje albo jest nieaktywna. */
 const STOPPING_CODES = new Set([-23, -24]);
 
-
-/** Numer nadawcy w postaci bramki; numer krótki albo nietypowy zostaje taki, jak podał Plus. */
-export function normalizeSender(raw: string, countryCode: string): string {
-  try {
-    return normalizePhone(raw, countryCode);
-  } catch {
-    return raw.trim();
-  }
-}
 
 /**
  * Chwila odbioru wg Plusa; gdy data nie ma spodziewanej postaci, chwila zapisu w bramce.
