@@ -838,7 +838,8 @@ zawiera treści wiadomości, haseł ani pełnych kluczy. Zdarzenia warte uwagi:
 | `odbior.wiadomosc`, `odbior.duplikat` | odebrano wiadomość od abonenta; duplikat to ta sama wiadomość wydana przez Multiinfo ponownie, pominięta |
 | `odbior.blad` | błąd sieci albo Multiinfo przy pytaniu o wiadomości; bramka ponowi z rosnącym odstępem |
 | `odbior.zatrzymany` | Multiinfo odrzuciło pytanie kodem `-23` albo `-24` (usługa nieznana albo nieaktywna); odbiór tej usługi stoi do zapisu zmiany klucza albo konta w panelu |
-| `odbior.potwierdzenie_nieudane`, `odbior.wyjatek` | wiadomość zapisana, ale nie potwierdzona w Multiinfo (wróci i zostanie pominięta jako duplikat) albo błąd zapisu (wiadomość wróci z Multiinfo po kilku minutach) |
+| `odbior.potwierdzenie_nieudane`, `odbior.wyjatek` | wiadomość zapisana, ale nie potwierdzona w Multiinfo (wróci i zostanie pominięta jako duplikat) albo błąd wewnętrzny przy odbiorze (wiadomość wróci z Multiinfo po kilku minutach; bramka pyta dalej z rosnącym odstępem) |
+| `odbior.data_nieczytelna` | Multiinfo podało datę odbioru w nieoczekiwanej postaci; wiadomość jest zapisana z czasem zapisu w bramce zamiast czasu odbioru |
 | `kopia.zapisana`, `kopia.blad` | wynik nocnej kopii; brak `kopia.zapisana` przez dwie doby oznacza, że proces nie działa albo nie ma prawa zapisu do wolumenu |
 | `worker.wyjatek`, `api.wyjatek` | błąd wewnętrzny; treść wpisu jest materiałem do zgłoszenia. Zadanie workera wraca z rosnącym odstępem (od minuty do pół godziny) |
 | `worker.zadanie_porzucone` | ósmy z rzędu błąd wewnętrzny tego samego zadania; wysyłka kończy wiadomość stanem `failed`, odpytywanie zostawia w przebiegu wpis o przerwaniu |

@@ -141,10 +141,21 @@ describe('Receiver.pollOnce', () => {
     expect(deps.inbound.list({ limit: 10, offset: 0 })).toHaveLength(1);
   });
 
-  it('wyjątek przy zapisie: brak potwierdzenia, błąd przejściowy', async () => {
+  it('data odbioru nieczytelna: wiadomość zapisana z czasem bramki, nie zgubiona', async () => {
     deps.apiKeys.insert(keyInput(accountId));
     getSms.mockResolvedValue({ ...SMS, receivedAt: 'zla-data' });
-    expect(await receiver.pollOnce(target())).toMatchObject({ kind: 'error' });
+    const out = await receiver.pollOnce(target()) as { id: string };
+    expect(out).toMatchObject({ kind: 'message', duplicate: false });
+    expect(deps.inbound.get(out.id)!.receivedAt).toBe(NOW.toISOString());
+    expect(confirmSms).toHaveBeenCalledWith('22');
+  });
+
+  it('wyjątek przy zapisie: brak potwierdzenia, błąd przejściowy', async () => {
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockResolvedValue(SMS);
+    deps.inbound.insertIfNew = () => { throw new Error('database or disk is full'); };
+    expect(await receiver.pollOnce(target())).toMatchObject({ kind: 'error', error: 'database or disk is full' });
+    expect(deps.services.states(accountId)[0]!.error).toBe('zapis nieudany: database or disk is full');
     expect(confirmSms).not.toHaveBeenCalled();
     expect(deps.inbound.list({ limit: 10, offset: 0 })).toHaveLength(0);
   });

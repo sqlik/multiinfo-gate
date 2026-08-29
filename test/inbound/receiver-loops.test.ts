@@ -86,6 +86,39 @@ describe('Receiver - pętle', () => {
     await receiver.stop();
   });
 
+  it('wyjątek poza zapisem (np. brak sekretów konta) nie zabija pętli', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockResolvedValue(null);
+    const client = deps.clients.for(accountId);
+    const forSpy = vi.spyOn(deps.clients, 'for')
+      .mockImplementationOnce(() => { throw new Error('Nie udało się odszyfrować sekretów'); })
+      .mockImplementation(() => client);
+    const receiver = new Receiver({ ...deps, idleMs: 20, sleep: async () => {} });
+    receiver.refresh();
+    await until(() => getSms.mock.calls.length >= 2);
+    expect(forSpy).toHaveBeenCalled();
+    expect(receiver.listening()).toHaveLength(1);
+    await receiver.stop();
+    expect(deps.services.states(accountId)[0]!.error).toBeNull();
+  });
+
+  it('cel zgaszony (brak subskrybentów) nie zostawia błędu przy usłudze ani w /healthz', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    const keyId = deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockRejectedValue(new ProviderError(-24, 'nieaktywna', 'permanent'));
+    const receiver = new Receiver({ ...deps, idleMs: 20, sleep: undefined });
+    receiver.refresh();
+    await until(() => receiver.listening().length === 0);
+    expect(receiver.health().errors).toHaveLength(1);
+    // Administrator odpowiada na błąd wyłączeniem odbioru: stan „zatrzymany” nie ma już czego dotyczyć.
+    deps.apiKeys.revoke(keyId);
+    receiver.refresh();
+    expect(deps.services.states(accountId)[0]!.error).toBeNull();
+    expect(receiver.health()).toEqual({ services: 0, listening: 0, errors: [] });
+    await receiver.stop();
+  });
+
   it('stop() przerywa oczekujące pytanie', async () => {
     const { deps, accountId, getSms } = buildReceiverDeps();
     deps.apiKeys.insert(keyInput(accountId));
