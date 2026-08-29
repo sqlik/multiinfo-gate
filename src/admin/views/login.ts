@@ -50,5 +50,5 @@ export function totpPage(error: string | null = null): string {
       </div>
       <button class="btn btn-p" type="submit">Zaloguj</button>
     </form>
-    <p class="sub">Kod zapasowy wpisz w to samo pole.</p>`);
+    <p class="sub">Kod zapasowy wpisz w to samo pole</p>`);
 }
