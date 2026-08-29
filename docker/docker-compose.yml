@@ -17,6 +17,10 @@ services:
       # Webhooki tylko pod adresy publiczne. Aplikacja na tym samym serwerze (np. przykład PHP
       # pod adresem hosta widzianym z kontenera) wymaga MIG_WEBHOOK_ALLOW_PRIVATE=1 w docker/.env.
       MIG_WEBHOOK_ALLOW_PRIVATE: ${MIG_WEBHOOK_ALLOW_PRIVATE:-0}
+      # Odbiór wiadomości przychodzących: długie oczekiwanie (do 60 s) i przerwa po pustej
+      # odpowiedzi; zmiana tylko przy odpytywaniu okresowym (docs/uruchomienie.md, rozdział 7.7).
+      MIG_INBOUND_TIMEOUT_MS: ${MIG_INBOUND_TIMEOUT_MS:-60000}
+      MIG_INBOUND_IDLE_MS: ${MIG_INBOUND_IDLE_MS:-0}
     ports:
       # API i panel tylko na pętli zwrotnej hosta. Na świat API wystawia odwrotne proxy
       # (docker-compose.caddy.yml, nginx na hoście albo docker-compose.traefik.yml) - docs/uruchomienie.md, rozdział 6.
