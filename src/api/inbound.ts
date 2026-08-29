@@ -6,7 +6,8 @@ import type { ApiDeps } from './server.ts';
 
 /** Kształt wiadomości przychodzącej na zewnątrz - te same pola, co w webhooku, plus protokół. */
 export function presentInbound(r: InboundRow) {
-  const content = r.body === null ? {} : r.kind === 'text' ? { text: r.body } : { hex: r.body };
+  // Bez treści zostaje skrót - ten sam, który zostaje w dostawie po wyczyszczeniu payloadu.
+  const content = r.body === null ? { bodyHash: r.bodyHash } : r.kind === 'text' ? { text: r.body } : { hex: r.body };
   return {
     id: r.id, serviceId: r.serviceId, from: r.sender, to: r.dest, kind: r.kind, ...content,
     receivedAt: r.receivedAt, relatedMessageId: r.relatedMessageId,
