@@ -131,7 +131,7 @@ opiekun techniczny. Adres wpisuje się w bramce jako adres bazowy konta (rozdzia
 
 Każde konto Multiinfo ma numer (krótki albo długi), na który abonenci mogą odpisywać. Domyślnie
 odebrane SMS-y są widoczne wyłącznie w panelu WWW Multiinfo. Jeżeli aplikacja ma je dostawać
-przez bramkę, administrator Multiinfo musi ustawić na koncie kierowanie odebranych wiadomości do
+przez bramkę, administrator Polkomtel musi ustawić na koncie kierowanie odebranych wiadomości do
 API - wszystkich albo tylko zaczynających się od określonego prefiksu. Bez tego ustawienia bramka
 pyta Multiinfo i zawsze dostaje pustą odpowiedź. Jak bramka odbiera i przekazuje wiadomości,
 opisuje punkt 4.5 (włączenie przy kluczu) i 5.5 (pierwsza próba).
@@ -380,6 +380,11 @@ Gdy nie działa:
 - `bind [127.0.0.1]:8081: Address already in use` - port 8081 na własnym komputerze zajmuje
   inny program; należy użyć innego portu lokalnego, np. `-L 18081:127.0.0.1:8081` i adresu
   `http://127.0.0.1:18081`
+- po wpisaniu kodu z aplikacji panel wraca do ekranu hasła z komunikatem „Logowanie trwało zbyt
+  długo” - przeglądarka nie zapisała ciasteczka logowania; ciasteczka panelu mają znacznik
+  `Secure`, który przez tunel (`http://127.0.0.1`) honorują Chrome i Firefox, ale nie Safari.
+  Panel przez tunel należy otwierać w Chrome albo Firefoksie; pod własną domeną z HTTPS
+  (rozdział 6) działa każda przeglądarka
 
 ### 4.2. Konto Multiinfo
 
@@ -462,6 +467,8 @@ straci zaznaczenie, bramka przestaje pytać o tę usługę. Stan odbioru widać 
 w sekcji „Odbiór wiadomości”: czy jest aktywny, kiedy bramka ostatnio pytała i kiedy ostatnio
 coś przyszło; usługa zatrzymana błędem Multiinfo (np. nieaktywna) pokazuje przyczynę i wraca do
 pracy po zapisie dowolnej zmiany klucza albo konta.
+
+![Karta konta, sekcja Odbiór wiadomości: usługa z odbierającym kluczem, stan aktywny z czasem ostatniego pytania i ostatniej odebranej](obrazki/konto-odbior.png)
 
 Po zapisaniu panel wyświetla jeden raz dwie wartości: **klucz** (`mig_live_...`) oraz - gdy
 podano adres webhooka - **sekret webhooka**. W bazie bramki pozostaje tylko skrót klucza; panel
@@ -572,11 +579,19 @@ skutkiem. Jeżeli lista pozostaje pusta, sprawdź na karcie konta sekcję „Odb
 a „aktywny” z bieżącym czasem pytania oznacza, że bramka pyta, ale Multiinfo nic nie wydaje -
 wtedy wiadomości najpewniej trafiają do panelu WWW Multiinfo zamiast do API.
 
-![Zakładka Odebrane z jedną wiadomością od abonenta](obrazki/odebrane.png)
+![Zakładka Odebrane z trzema wiadomościami od abonentów, jedna powiązana z wysłaną wiadomością](obrazki/odebrane.png)
+
+Szczegół odebranej wiadomości (odnośnik w kolumnie identyfikatora) pokazuje dane z Multiinfo
+(numer nadawcy, numer usługi, identyfikator w Multiinfo, protokół), wiadomość wysłaną, na którą
+abonent najpewniej odpowiada, odpowiedzi wysłane w wątku oraz ślad dostaw do aplikacji: który
+klucz dostał powiadomienie, ile było prób i jaka była odpowiedź aplikacji.
+
+![Szczegół odebranej wiadomości: treść, dane, powiązana wysłana wiadomość i dostawa do aplikacji ze stanem doręczony](obrazki/odebrana.png)
 
 Odpowiedź na odebraną wiadomość wysyła się zwykłym `POST /v1/messages` z polem `inReplyTo`
 (`docs/api.md`, rozdział 5a.3); przykładowa aplikacja ma do tego formularz w sekcji „Odebrane
-SMS-y”.
+SMS-y”, a wysłana w ten sposób wiadomość ma w panelu wiersz „Odpowiedź na” z odnośnikiem do
+odebranej.
 
 ## 6. Wystawienie API pod własną domeną
 
