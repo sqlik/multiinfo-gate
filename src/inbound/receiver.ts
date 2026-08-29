@@ -50,6 +50,13 @@ export const REFRESH_INTERVAL_MS = 10_000;
  */
 export const MIN_EMPTY_INTERVAL_MS = 1_000;
 
+/**
+ * Co ile odbiornik sam ponawia usługę zatrzymaną kodem -23/-24. Naprawa dzieje się poza
+ * bramką (administrator Polkomtel aktywuje usługę), więc bez ponawiania odbiór ruszyłby
+ * dopiero po „pustym” zapisie w panelu; jedno pytanie na kwadrans nikomu nie ciąży.
+ */
+export const STOPPED_RETRY_MS = 15 * 60_000;
+
 export type PollOutcome =
   | { kind: 'message'; id: string; duplicate: boolean }
   | { kind: 'empty' }
@@ -104,8 +111,11 @@ function receivedAtOf(sms: InboundSms, now: Date, log: Logger): string {
 
 export class Receiver {
   private readonly loops = new Map<string, Loop>();
-  /** Cele zatrzymane kodem -23/-24 albo certyfikatem; wracają tylko po refresh({ retryStopped: true }). */
-  private readonly stopped = new Set<string>();
+  /**
+   * Cele zatrzymane kodem -23/-24 z chwilą zatrzymania; wracają po STOPPED_RETRY_MS albo
+   * od razu po zapisie tego konta w panelu (refresh({ retryAccount })). Wpis znika po udanym pytaniu.
+   */
+  private readonly stopped = new Map<string, number>();
   private timer: NodeJS.Timeout | null = null;
   /** Po stop() odbiornik jest skończony: refresh() z trasy panelu w trakcie zamykania nic nie zapala. */
   private stopping = false;
@@ -133,10 +143,9 @@ export class Receiver {
    * subskrybentów (konto wstrzymane, klucz odwołany albo wyłączony). Cel zatrzymany błędem
    * konfiguracji Multiinfo wraca tylko na jawne życzenie - po zmianie w panelu.
    */
-  refresh(opts: { retryStopped?: boolean } = {}): void {
+  refresh(opts: { retryAccount?: number } = {}): void {
     if (this.stopping) return;
     const now = (this.deps.now ?? (() => new Date()))();
-    if (opts.retryStopped) this.stopped.clear();
     const wanted = new Map(this.deps.services.activeTargets(now).map((t) => [keyOf(t), t]));
     for (const [key, loop] of this.loops) {
       if (!wanted.has(key)) {
@@ -153,7 +162,9 @@ export class Receiver {
       this.stopped.delete(key);
     }
     for (const [key, target] of wanted) {
-      if (this.loops.has(key) || this.stopped.has(key)) continue;
+      if (this.loops.has(key)) continue;
+      const stoppedAt = this.stopped.get(key);
+      if (stoppedAt !== undefined && target.accountId !== opts.retryAccount && now.getTime() - stoppedAt < STOPPED_RETRY_MS) continue;
       const controller = new AbortController();
       const loop: Loop = { target, controller, done: Promise.resolve() };
       loop.done = this.run(target, controller.signal).finally(() => {
@@ -204,7 +215,7 @@ export class Receiver {
       await nextTurn();
       if (signal.aborted) break;
       if (outcome.kind === 'stopped') {
-        this.stopped.add(keyOf(target));
+        this.stopped.set(keyOf(target), (this.deps.now ?? (() => new Date()))().getTime());
         break;
       }
       if (outcome.kind === 'error') {
@@ -247,7 +258,9 @@ export class Receiver {
       const reason = `${code}: ${error instanceof Error ? error.message : String(error)}`;
       this.deps.services.setError(target, reason);
       if (STOPPING_CODES.has(code)) {
-        log.error('odbior.zatrzymany', { ...target, code, reason });
+        // Pierwsza odmowa to alarm; kolejne przy ponawianiu co kwadrans tylko odnotowujemy.
+        if (this.stopped.has(keyOf(target))) log.info('odbior.nadal_zatrzymany', { ...target, code, reason });
+        else log.error('odbior.zatrzymany', { ...target, code, reason });
         return { kind: 'stopped', error: reason };
       }
       log.warn('odbior.blad', { ...target, code, reason });
@@ -256,6 +269,7 @@ export class Receiver {
 
     // Chwila odpowiedzi, nie początku pytania - Plus mógł trzymać połączenie przez minutę.
     const now = clock();
+    this.stopped.delete(keyOf(target));
     this.deps.services.markPolled(target, now);
     if (sms === null) return { kind: 'empty' };
 

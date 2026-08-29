@@ -194,7 +194,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       inboundSubscribed: v.inboundSubscribed ? 1 : 0,
     });
     // Nowy subskrybent może zapalić odbiór usługi - odbiornik uzgadnia pętle od razu, nie za 10 s.
-    deps.receiver?.refresh({ retryStopped: true });
+    deps.receiver?.refresh({ retryAccount: choice.row.id });
 
     // W dzienniku zostaje prefiks i adres, nigdy klucz ani sekret - wpisów nie da się później usunąć.
     deps.audit.record({
@@ -261,7 +261,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       expiresAt: checked.expiresAt, serviceIds: v.serviceIds, origs: v.origs,
       inboundSubscribed: v.inboundSubscribed ? 1 : 0,
     });
-    deps.receiver?.refresh({ retryStopped: true });
+    deps.receiver?.refresh({ retryAccount: key.accountId });
     const after = valuesOf(deps.apiKeys.get(key.id)!);
     const changed: string[] = (Object.keys(after) as Array<keyof KeyFormValues>)
       .filter((k) => JSON.stringify(after[k]) !== JSON.stringify(before[k]))
@@ -289,7 +289,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
 
     deps.apiKeys.revoke(id);
     // Odwołany subskrybent może gasić odbiór usługi.
-    deps.receiver?.refresh({ retryStopped: true });
+    deps.receiver?.refresh({ retryAccount: key.accountId });
     deps.audit.record({
       actor: actorOf(request.adminUserId),
       action: 'klucz.odwolanie',

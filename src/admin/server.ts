@@ -52,7 +52,7 @@ export interface AdminDeps {
   inbound: InboundMessagesRepo;
   inboundServices: InboundServicesRepo;
   /** Odbiornik: panel każe mu uzgodnić pętle po zmianie klucza albo konta. */
-  receiver?: { refresh(opts?: { retryStopped?: boolean }): void };
+  receiver?: { refresh(opts?: { retryAccount?: number }): void };
   /** Stan odbiornika do /healthz; bez niego pole nie występuje. */
   inboundHealth?: () => InboundHealth;
   clients: ClientPool;
