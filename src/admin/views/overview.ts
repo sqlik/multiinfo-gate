@@ -12,6 +12,8 @@ export interface OverviewData {
   failures: MessageRow[];
   keyNames: Map<number, string>;
   webhooks: { pending: number; failed: number };
+  /** Odebrane od abonentów w oknie przeglądu. */
+  inboundToday: number;
 }
 
 /** „1 webhook nie dotarł”, „3 webhooki nie dotarły”, „5 webhooków nie dotarło”. */
@@ -137,7 +139,7 @@ export function overviewPage(data: OverviewData, now: Date): string {
   </div>
   <div class="scroll">
     ${alerts(data, now)}
-    <div class="tiles tiles-5">
+    <div class="tiles tiles-6">
       <a class="tile" href="/wiadomosci">
         <div class="lab">Przyjęte</div>
         <div class="n">${esc(data.counts.total)}</div>
@@ -162,6 +164,11 @@ export function overviewPage(data: OverviewData, now: Date): string {
         <div class="lab">W drodze</div>
         <div class="n">${esc(data.counts.transit)}</div>
         <div class="d">${esc(share(data.counts.transit, data.counts.total))}<br>${esc(data.queueDepth)} zadań czeka w kolejce workera</div>
+      </a>
+      <a class="tile" href="/odebrane">
+        <div class="lab">Odebrane</div>
+        <div class="n">${esc(data.inboundToday)}</div>
+        <div class="d">SMS-ów od abonentów</div>
       </a>
     </div>
 

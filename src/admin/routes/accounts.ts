@@ -48,6 +48,12 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
       serviceIds: deps.accounts.serviceIds(id),
       origs: deps.accounts.origs(id),
       keyCount: deps.apiKeys.list().filter((k) => k.accountId === id && k.revokedAt === null).length,
+      inbound: deps.accounts.serviceIds(id).map((serviceId) => ({
+        serviceId,
+        subscribers: deps.apiKeys.inboundSubscribers(id, serviceId, now()).map((k) => k.name),
+        state: deps.inboundServices.states(id).find((s) => s.serviceId === serviceId)
+          ?? { serviceId, lastPollAt: null, lastReceivedAt: null, error: null },
+      })),
     };
   };
 

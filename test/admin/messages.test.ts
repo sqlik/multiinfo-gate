@@ -83,6 +83,19 @@ describe('GET /przeglad', () => {
   });
 });
 
+describe('GET /przeglad - odebrane', () => {
+  it('pokazuje kafelek odebranych z ostatniej doby', async () => {
+    const base = { accountId, serviceId: '24138', sender: '48601000001', dest: '7968', kind: 'text' as const, body: 'x', bodyHash: 'h',
+      protocolId: 0, codingScheme: 0, connectorId: null, relatedMessageId: null, receivedAt: NOW.toISOString() };
+    h.inbound.insertIfNew({ ...base, id: 'in_1', miId: '1', createdAt: NOW.toISOString() });
+    h.inbound.insertIfNew({ ...base, id: 'in_2', miId: '2', createdAt: new Date(NOW.getTime() - 25 * 3600_000).toISOString() });
+    const res = await page('/przeglad');
+    expect(res.body).toMatch(/Odebrane<\/div>\s*<div class="n">1<\/div>/);
+    expect(res.body).toContain('href="/odebrane"');
+    expect(res.body).toContain('tiles-6');
+  });
+});
+
 describe('GET /przeglad - webhooki', () => {
   it('ostrzega o niedostarczonych webhookach', async () => {
     const id = h.deliveries.insert({
