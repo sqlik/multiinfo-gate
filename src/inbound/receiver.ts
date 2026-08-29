@@ -11,6 +11,7 @@ import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 import { normalizePhone } from '../text/phone.ts';
 import { warsawCompactToIso } from '../time/warsaw.ts';
 import type { ClientPool } from '../worker/clients.ts';
+import { pauseForCertificate } from '../worker/certificate.ts';
 import { emitWebhook } from '../worker/webhook.ts';
 
 export interface ReceiverDeps {
@@ -106,9 +107,10 @@ function receivedAtOf(sms: InboundSms, now: Date, log: Logger): string {
 
 export class Receiver {
   private readonly loops = new Map<string, Loop>();
-  /** Cele zatrzymane kodem -23/-24; wracają tylko po refresh({ retryStopped: true }). */
+  /** Cele zatrzymane kodem -23/-24 albo certyfikatem; wracają tylko po refresh({ retryStopped: true }). */
   private readonly stopped = new Set<string>();
   private timer: NodeJS.Timeout | null = null;
+  /** Po stop() odbiornik jest skończony: refresh() z trasy panelu w trakcie zamykania nic nie zapala. */
   private stopping = false;
 
   constructor(private readonly deps: ReceiverDeps) {}
@@ -127,7 +129,6 @@ export class Receiver {
     for (const loop of this.loops.values()) loop.controller.abort();
     await Promise.all([...this.loops.values()].map((l) => l.done));
     this.loops.clear();
-    this.stopping = false;
   }
 
   /**
@@ -169,12 +170,18 @@ export class Receiver {
     return [...this.loops.values()].map((l) => l.target);
   }
 
+  /**
+   * Do /healthz trafiają tylko zatrzymania (usługa nieznana albo nieaktywna) - to wymaga
+   * człowieka. Błąd przejściowy, po którym pętla sama ponawia, zostaje na karcie konta.
+   */
   health(): InboundHealth {
     const now = (this.deps.now ?? (() => new Date()))();
     return {
       services: this.deps.services.activeTargets(now).length,
       listening: this.loops.size,
-      errors: this.deps.services.errors().map((e) => ({ account: e.accountName, serviceId: e.serviceId, error: e.error })),
+      errors: this.deps.services.errors()
+        .filter((e) => this.stopped.has(`${e.accountId}:${e.serviceId}`))
+        .map((e) => ({ account: e.accountName, serviceId: e.serviceId, error: e.error })),
     };
   }
 
@@ -190,8 +197,9 @@ export class Receiver {
         // odrzucić obietnicę, którą nikt nie łapie - to zamknęłoby cały proces bramki.
         const reason = error instanceof Error ? error.message : String(error);
         if (!signal.aborted) {
-          this.deps.services.setError(target, reason);
           log.error('odbior.wyjatek', { ...target, error });
+          // Zapis przyczyny to też baza - przy pełnym dysku padłby tak samo jak to, co łapiemy.
+          try { this.deps.services.setError(target, reason); } catch { /* przyczyna jest w dzienniku */ }
         }
         return { kind: 'error', error: reason };
       });
@@ -220,7 +228,7 @@ export class Receiver {
    */
   async pollOnce(target: InboundTarget, signal?: AbortSignal): Promise<PollOutcome> {
     const log = this.deps.log ?? silentLogger;
-    const now = (this.deps.now ?? (() => new Date()))();
+    const clock = this.deps.now ?? (() => new Date());
     const client = this.deps.clients.for(target.accountId);
 
     let sms: InboundSms | null;
@@ -229,6 +237,11 @@ export class Receiver {
     } catch (error) {
       // Przerwanie przy zatrzymaniu bramki to nie awaria usługi - bez śladu przy usłudze.
       if (signal?.aborted) return { kind: 'error', error: 'przerwane' };
+      if (error instanceof ProviderError && error.kind === 'certificate') {
+        // Jak przy wysyłce: konto staje w całości, a odbiornik gasi cel przy najbliższym uzgodnieniu.
+        const reason = pauseForCertificate(this.deps, target.accountId, error, log);
+        return { kind: 'stopped', error: reason };
+      }
       const code = error instanceof ProviderError ? error.code : -71;
       const reason = `${code}: ${error instanceof Error ? error.message : String(error)}`;
       this.deps.services.setError(target, reason);
@@ -240,6 +253,8 @@ export class Receiver {
       return { kind: 'error', error: reason };
     }
 
+    // Chwila odpowiedzi, nie początku pytania - Plus mógł trzymać połączenie przez minutę.
+    const now = clock();
     this.deps.services.markPolled(target, now);
     this.deps.services.setError(target, null);
     if (sms === null) return { kind: 'empty' };

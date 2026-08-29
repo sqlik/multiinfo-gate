@@ -10,6 +10,7 @@ import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
 import type { Resolver } from '../net/private-address.ts';
 import type { ClientPool } from './clients.ts';
+import { pauseForCertificate } from './certificate.ts';
 import { emitWebhook, type HttpPost, type WebhookEvent } from './webhook.ts';
 
 export interface WorkerDeps {
@@ -149,10 +150,7 @@ export async function handleSend(job: Job, deps: WorkerDeps, now: Date): Promise
     }
 
     if (error.kind === 'certificate') {
-      const reason = `Certyfikat odrzucony przez Multiinfo, kod ${error.code}: ${error.message}`;
-      deps.accounts.pause(message.accountId, reason);
-      deps.clients.invalidate(message.accountId);
-      log.error('konto.wstrzymane', { accountId: account.id, code: error.code, reason: error.message });
+      const reason = pauseForCertificate(deps, message.accountId, error, log);
       // Wiadomość zostaje w kolejce: po wymianie certyfikatu pójdzie bez zmian
       // i z nienaruszonym harmonogramem ponowień.
       deps.events.record(messageId, now, 'paused', reason);

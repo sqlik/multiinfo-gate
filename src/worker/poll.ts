@@ -1,4 +1,5 @@
 import { ProviderError } from '../multiinfo/response.ts';
+import { pauseForCertificate } from './certificate.ts';
 import { silentLogger } from '../log.ts';
 import { combineStatuses, describeSubstatus, isFinal, mapStatus, type GatewayStatus } from '../multiinfo/status.ts';
 import type { Job } from '../store/jobs.ts';
@@ -59,10 +60,7 @@ export async function handlePoll(job: Job, deps: WorkerDeps, now: Date): Promise
       });
     } catch (error) {
       if (error instanceof ProviderError && error.kind === 'certificate') {
-        const reason = `Certyfikat odrzucony przez Multiinfo, kod ${error.code}: ${error.message}`;
-        deps.accounts.pause(message.accountId, reason);
-        deps.clients.invalidate(message.accountId);
-        log.error('konto.wstrzymane', { accountId: message.accountId, code: error.code, reason: error.message });
+        pauseForCertificate(deps, message.accountId, error, log);
       } else {
         log.warn('status.blad_odczytu', { messageId, miId, error });
       }
