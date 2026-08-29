@@ -7,6 +7,7 @@ import { SessionStore } from './admin/session.ts';
 import { RateLimiter } from './api/rate-limit.ts';
 import { buildApiServer } from './api/server.ts';
 import { loadEnv, type AppConfig } from './config/env.ts';
+import { Receiver } from './inbound/receiver.ts';
 import { createLogger } from './log.ts';
 import { AccountsRepo } from './store/accounts.ts';
 import { AdminUsersRepo } from './store/admin-users.ts';
@@ -14,6 +15,8 @@ import { ApiKeysRepo } from './store/api-keys.ts';
 import { AuditRepo } from './store/audit.ts';
 import { BackupScheduler } from './store/backup.ts';
 import { openDatabase } from './store/db.ts';
+import { InboundMessagesRepo } from './store/inbound-messages.ts';
+import { InboundServicesRepo } from './store/inbound-services.ts';
 import { JobsRepo } from './store/jobs.ts';
 import { MessageEventsRepo } from './store/message-events.ts';
 import { MessagesRepo } from './store/messages.ts';
@@ -41,6 +44,8 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const deliveries = new WebhookDeliveriesRepo(db);
   const packages = new PackagesRepo(db);
   const jobs = new JobsRepo(db);
+  const inbound = new InboundMessagesRepo(db);
+  const inboundServices = new InboundServicesRepo(db);
   const users = new AdminUsersRepo(db, config.masterKey);
   const audit = new AuditRepo(db);
   const sessions = new SessionStore();
@@ -52,16 +57,24 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   backups.start();
 
   const worker = new Worker({
-    accounts, apiKeys, messages, events, deliveries, packages, jobs, clients,
+    accounts, apiKeys, messages, events, deliveries, packages, jobs, clients, inbound,
     reportsDir: join(config.dataDir, 'reports'), log, allowPrivateWebhooks: config.webhookAllowPrivate,
   });
   worker.start();
 
+  const receiver = new Receiver({
+    accounts, apiKeys, inbound, services: inboundServices, messages, deliveries, jobs, clients,
+    timeoutMs: config.inboundTimeoutMs, idleMs: config.inboundIdleMs, log,
+  });
+  receiver.start();
+
   const api = buildApiServer({
-    accounts, apiKeys, messages, events, packages, jobs, clients, rateLimiter: new RateLimiter(), log,
+    accounts, apiKeys, messages, events, packages, jobs, clients, inbound, rateLimiter: new RateLimiter(), log,
+    inboundHealth: () => receiver.health(),
   });
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
+    inbound, inboundServices, receiver, inboundHealth: () => receiver.health(),
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate,
   });
 
@@ -79,6 +92,8 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
     apiHost: config.apiHost,
     adminHost: config.adminHost,
     stop: async () => {
+      // Odbiornik pierwszy: przerywa long polling, zanim zamkniemy pulę klientów i bazę.
+      await receiver.stop();
       backups.stop();
       worker.stop();
       await api.close();
@@ -95,6 +110,8 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
     panel: `${running.adminHost}:${running.adminPort}`,
     queueDepth: jobs.depth(),
     webhookAllowPrivate: config.webhookAllowPrivate,
+    inboundTimeoutMs: config.inboundTimeoutMs,
+    inboundIdleMs: config.inboundIdleMs,
   });
   return running;
 }
