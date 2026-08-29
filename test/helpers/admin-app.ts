@@ -13,6 +13,8 @@ import { AdminUsersRepo } from '../../src/store/admin-users.ts';
 import { AuditRepo } from '../../src/store/audit.ts';
 import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
+import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
+import { InboundServicesRepo } from '../../src/store/inbound-services.ts';
 
 export interface AdminHarness {
   app: ReturnType<typeof buildAdminServer>;
@@ -26,6 +28,10 @@ export interface AdminHarness {
   audit: AuditRepo;
   deliveries: WebhookDeliveriesRepo;
   packages: PackagesRepo;
+  inbound: InboundMessagesRepo;
+  inboundServices: InboundServicesRepo;
+  /** Wywołania `receiver.refresh()` z tras panelu - atrapa odbiornika. */
+  refreshed: Array<{ retryAccount?: number }>;
   sessions: SessionStore;
   userId: number;
   masterKey: Buffer;
@@ -80,6 +86,10 @@ export async function startAdminHarness(
   const audit = new AuditRepo(db);
   const deliveries = new WebhookDeliveriesRepo(db);
   const packages = new PackagesRepo(db);
+  const inbound = new InboundMessagesRepo(db);
+  const inboundServices = new InboundServicesRepo(db);
+  const refreshed: Array<{ retryAccount?: number }> = [];
+  const receiver = { refresh: (o: { retryAccount?: number } = {}) => { refreshed.push(o); } };
 
   const userId = users.insert('janek', await hashPassword('tajne-haslo'));
   const totpSecret = authenticator.generateSecret();
@@ -103,7 +113,7 @@ export async function startAdminHarness(
 
   const resolve = { value: async (_hostname: string) => ['93.184.216.34'] };
   const app = buildAdminServer({
-    accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages,
+    accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, receiver,
     clients: clients as never, sessions, masterKey, now: () => now,
     resolve: (hostname) => resolve.value(hostname),
     ...(opts.allowPrivateWebhooks ? { allowPrivateWebhooks: true } : {}),
@@ -111,7 +121,8 @@ export async function startAdminHarness(
   await app.ready();
 
   return {
-    app, db, accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, userId, masterKey,
+    app, db, accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, refreshed,
+    sessions, userId, masterKey,
     cookie: `mig_session=${token}`, totpSecret, probe, invalidated, resolve,
   };
 }

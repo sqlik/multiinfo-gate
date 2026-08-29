@@ -1,3 +1,4 @@
+import type { ServerResponse } from 'node:http';
 import { createServer, type Server } from 'node:https';
 import forge from 'node-forge';
 
@@ -12,11 +13,19 @@ export interface FakeRequest {
   clientIssuerCn: string | undefined;
 }
 
+/** Odpowiedź atrapy: treść albo funkcja z surowym dostępem do odpowiedzi HTTP (np. urwanie połączenia). */
+export type FakeReply = string | Buffer | ((res: ServerResponse) => void);
+
 export interface FakeMultiinfo {
   baseUrl: string;
   requests: FakeRequest[];
   /** Odpowiedź zwracana na kolejne żądanie; ustawiana przed każdym wywołaniem. */
   reply: (body: string | Buffer, statusCode?: number, contentType?: string) => void;
+  /**
+   * Odpowiedź liczona z żądania, także z opóźnieniem - do long pollingu. `null` wraca do `reply`.
+   * Handler dostaje żądanie już zapisane w `requests`.
+   */
+  respond: (handler: ((req: FakeRequest) => FakeReply | Promise<FakeReply>) | null) => void;
   clientCertPem: string;
   clientKeyPem: string;
   /** Łańcuch certyfikatu klienta (CA pośrednie), jak z pliku .pfx. */
@@ -71,6 +80,7 @@ export async function startFakeMultiinfo(): Promise<FakeMultiinfo> {
   let body: string | Buffer = '0\n1';
   let statusCode = 200;
   let contentType = 'text/plain; charset=utf-8';
+  let handler: ((req: FakeRequest) => FakeReply | Promise<FakeReply>) | null = null;
 
   const httpsServer: Server = createServer(
     { key: server.keyPem, cert: server.pem, ca: [clientRoot.pem], requestCert: true, rejectUnauthorized: true },
@@ -88,16 +98,23 @@ export async function startFakeMultiinfo(): Promise<FakeMultiinfo> {
             issuerCertificate?: { subject?: { CN?: string } };
           };
         }).getPeerCertificate?.(true);
-        requests.push({
+        const entry: FakeRequest = {
           path: url.pathname,
           method: req.method ?? 'GET',
           params: Object.fromEntries(source.entries()),
           multi: Object.fromEntries([...new Set(source.keys())].map((k) => [k, source.getAll(k)])),
           clientCn: peer?.subject?.CN,
           clientIssuerCn: peer?.issuerCertificate?.subject?.CN,
-        });
-        res.writeHead(statusCode, { 'content-type': contentType });
-        res.end(body);
+        };
+        requests.push(entry);
+        const send = (b: FakeReply) => {
+          if (res.destroyed) return;
+          if (typeof b === 'function') { b(res); return; }
+          res.writeHead(statusCode, { 'content-type': contentType });
+          res.end(b);
+        };
+        if (handler === null) { send(body); return; }
+        void Promise.resolve(handler(entry)).then(send);
       });
     },
   );
@@ -109,7 +126,8 @@ export async function startFakeMultiinfo(): Promise<FakeMultiinfo> {
   return {
     baseUrl: `https://localhost:${port}/Api61/`,
     requests,
-    reply: (b, s = 200, c = 'text/plain; charset=utf-8') => { body = b; statusCode = s; contentType = c; },
+    reply: (b, s = 200, c = 'text/plain; charset=utf-8') => { body = b; statusCode = s; contentType = c; handler = null; },
+    respond: (h) => { handler = h; },
     clientCertPem: client.pem,
     clientKeyPem: client.keyPem,
     caPem: clientIssuing.pem,

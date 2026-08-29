@@ -79,6 +79,10 @@ a { color: var(--signal); text-decoration: none; } a:hover { color: var(--signal
        border: 1px solid transparent; font-family: 'IBM Plex Sans', sans-serif; }
 .btn-p { background: var(--signal); color: var(--surface); }
 .btn-s { background: var(--surface); color: var(--ink); border-color: var(--edge); }
+/* Najechanie: pełny przycisk ciemnieje tłem, obrysowany - ramką. Napis nie zmienia barwy,
+   bo ogólne a:hover (odnośniki) barwiłoby go na tle w tym samym odcieniu. */
+.btn-p:hover { background: var(--signal-dark); color: var(--surface); }
+.btn-s:hover { color: var(--ink); border-color: var(--ink); }
 .scroll { flex: 1; overflow: auto; padding: 18px 24px 24px; display: flex;
           flex-direction: column; gap: 16px; }
 .lab { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.11em;
@@ -220,6 +224,7 @@ tr:last-child td { border-bottom: none; }
 /* Przegląd: kafelki liczb i pasek ostrzeżenia. */
 .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .tiles-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.tiles-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 a.tile { color: inherit; display: block; }
 a.tile:hover { border-color: var(--edge); }
 .btn.disabled { opacity: 0.45; cursor: default; pointer-events: none; }
@@ -245,6 +250,8 @@ a.tile:hover { border-color: var(--edge); }
 .inp { background: var(--surface); border: 1px solid var(--edge); border-radius: var(--radius); padding: 6px 10px;
        font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink); }
 .txt { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Komórki, które nie mogą się łamać: pełna data z godziną, para konto · usługa. */
+.nw { white-space: nowrap; }
 .enc { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.04em;
        border: 1px solid var(--rule); border-radius: var(--radius); padding: 2px 6px; color: var(--muted); }
 .foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;

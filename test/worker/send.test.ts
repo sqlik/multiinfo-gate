@@ -10,6 +10,7 @@ import { MessageEventsRepo } from '../../src/store/message-events.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
+import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 
 const masterKey = randomBytes(32);
 const NOW = new Date('2026-08-25T10:00:00Z');
@@ -48,7 +49,7 @@ beforeEach(() => {
   sendLong = vi.fn();
   cancel = vi.fn();
   deps = {
-    accounts, apiKeys, messages, jobs, events: new MessageEventsRepo(db), deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), reportsDir: '',
+    accounts, apiKeys, messages, jobs, events: new MessageEventsRepo(db), deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '',
     clients: { for: () => ({ sendLong, cancel }), invalidate: vi.fn(), closeAll: vi.fn() } as never,
   };
 });
@@ -237,7 +238,7 @@ describe('handleSend', () => {
     const { id, job } = seedMessage();
     sendLong.mockResolvedValue({ miIds: ['8841207', '8841208'], trace: TRACE });
     await handleSend(job, deps, NOW);
-    expect(deps.deliveries.counts()).toEqual({ pending: 1, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 1, failed: 0 });
     const delivery = deps.deliveries.listRecent(1)[0]!;
     expect(delivery.event).toBe('message.sent');
     expect(JSON.parse(delivery.payload)).toMatchObject({ id, status: 'sent', to: '48601135134', parts: 2 });
@@ -258,7 +259,7 @@ describe('handleSend', () => {
     const { id, job } = seedMessage();
     sendLong.mockResolvedValue({ miIds: ['8841207'], trace: TRACE });
     await handleSend(job, deps, NOW);
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
     expect(deps.events.list(id).map((e) => e.kind)).toEqual(['sent']);
   });
 
@@ -317,5 +318,46 @@ describe('handleSend', () => {
     const job = { id: 1, type: 'send' as const, payload: { messageId: 'msg_nieistnieje', text: 'x', deliveryReport: true }, attempts: 0, lastError: null };
     deps.jobs.enqueue('send', job.payload, NOW);
     await expect(handleSend(job, deps, NOW)).resolves.toBeUndefined();
+  });
+});
+
+describe('handleSend - odpowiedź na wiadomość przychodzącą', () => {
+  const seedInbound = () => db.prepare(`INSERT INTO inbound_messages (id, account_id, service_id, mi_id, sender, dest, kind, body_hash, protocol_id, coding_scheme, received_at, created_at)
+    VALUES ('in_1', ?, '24138', '22', '48601135134', '7968', 'text', 'h', 0, 0, '2026-08-25T09:00:00.000Z', '2026-08-25T09:00:01.000Z')`).run(accountId);
+  const reply = () => deps.messages.insert({ id: 'msg_r', apiKeyId, accountId, serviceId: '24138', dest: '48601135134', body: 'Odp', bodyHash: 'h',
+    encoding: 'gsm', parts: 1, slots: 3, orig: null, costCenter: null, validTo: null, idempotencyKey: null, inReplyTo: 'in_1' });
+  const job = () => {
+    const id = deps.jobs.enqueue('send', { messageId: 'msg_r', text: 'Odp', deliveryReport: true }, NOW);
+    return { id, type: 'send' as const, payload: { messageId: 'msg_r', text: 'Odp', deliveryReport: true }, attempts: 0, lastError: null };
+  };
+
+  it('przekazuje smsInId z wiadomości przychodzącej', async () => {
+    seedInbound();
+    deps.inbound = new InboundMessagesRepo(db);
+    reply();
+    sendLong.mockResolvedValue({ miIds: ['1'], trace: TRACE });
+    await handleSend(job(), deps, NOW);
+    expect(sendLong.mock.calls[0][0].smsInId).toBe('22');
+  });
+
+  it('webhook message.sent niesie inReplyTo', async () => {
+    seedInbound();
+    deps.inbound = new InboundMessagesRepo(db);
+    deps.apiKeys.setWebhook(apiKeyId, 'https://crm.example/hook', 'sekret');
+    reply();
+    sendLong.mockResolvedValue({ miIds: ['1'], trace: TRACE });
+    await handleSend(job(), deps, NOW);
+    const delivery = deps.deliveries.listRecent(1)[0]!;
+    expect(JSON.parse(delivery.payload)).toMatchObject({ event: 'message.sent', id: 'msg_r', inReplyTo: 'in_1' });
+  });
+
+  it('zwykła wiadomość nie dostaje pola inReplyTo w powiadomieniu', async () => {
+    deps.apiKeys.setWebhook(apiKeyId, 'https://crm.example/hook', 'sekret');
+    seedMessage();
+    const id = deps.jobs.enqueue('send', { messageId: 'msg_1', text: 'Ala ma kota', deliveryReport: true }, NOW);
+    sendLong.mockResolvedValue({ miIds: ['1'], trace: TRACE });
+    await handleSend({ id, type: 'send', payload: { messageId: 'msg_1', text: 'Ala ma kota', deliveryReport: true }, attempts: 0, lastError: null }, deps, NOW);
+    expect(JSON.parse(deps.deliveries.listRecent(1)[0]!.payload)).not.toHaveProperty('inReplyTo');
+    expect(sendLong.mock.calls[0][0]).not.toHaveProperty('smsInId');
   });
 });

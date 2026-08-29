@@ -6,6 +6,7 @@ import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
 import { MessagesRepo } from '../../src/store/messages.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
+import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
@@ -37,7 +38,7 @@ beforeEach(() => {
   info = vi.fn();
   deps = {
     accounts, apiKeys, messages: new MessagesRepo(db), jobs: new JobsRepo(db), events: new MessageEventsRepo(db),
-    deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), reportsDir: '',
+    deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '',
     clients: { for: () => ({ info }), invalidate: vi.fn(), closeAll: vi.fn() } as never,
   };
 });
@@ -206,7 +207,7 @@ describe('handlePoll', () => {
     await handlePoll(job, deps, NOW);
     info.mockResolvedValue(reply(21, 0));
     await handlePoll(job, deps, NOW);
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
   });
 
   it('przedawnienie kolejkuje webhook message.failed ze statusem expired', async () => {

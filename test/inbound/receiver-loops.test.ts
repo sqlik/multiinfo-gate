@@ -1,0 +1,249 @@
+import { describe, expect, it, vi } from 'vitest';
+import { ProviderError } from '../../src/multiinfo/response.ts';
+import { INBOUND_BACKOFF_MS, MIN_EMPTY_INTERVAL_MS, STOPPED_RETRY_MS, Receiver } from '../../src/inbound/receiver.ts';
+import { NOW, SMS, buildReceiverDeps, keyInput } from './helpers.ts';
+
+/** Czeka, aż warunek się spełni albo minie limit - pętle działają w tle. */
+async function until(check: () => boolean, ms = 2000): Promise<void> {
+  const end = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > end) throw new Error('warunek nie spełnił się w czasie');
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
+
+describe('Receiver - pętle', () => {
+  it('bez subskrybentów nie pyta; subskrypcja zapala pętlę, jej brak gasi', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    getSms.mockResolvedValue(null);
+    const receiver = new Receiver({ ...deps, idleMs: 20, sleep: undefined });
+    receiver.refresh();
+    expect(receiver.listening()).toEqual([]);
+    expect(getSms).not.toHaveBeenCalled();
+
+    const keyId = deps.apiKeys.insert(keyInput(accountId));
+    receiver.refresh();
+    expect(receiver.listening()).toEqual([{ accountId, serviceId: '24138' }]);
+    await until(() => getSms.mock.calls.length >= 2);
+
+    deps.apiKeys.revoke(keyId);
+    receiver.refresh();
+    await until(() => receiver.listening().length === 0);
+    const calls = getSms.mock.calls.length;
+    await new Promise((r) => setTimeout(r, 60));
+    expect(getSms.mock.calls.length).toBe(calls);
+    await receiver.stop();
+  });
+
+  it('pusta odpowiedź, która wraca od razu, nie zamienia pętli w młyn: co najmniej sekunda między pytaniami', async () => {
+    // Gdyby Plus nie honorował `timeout` albo proxy zamykało bezczynne POST-y, MIG_INBOUND_IDLE_MS=0
+    // oznaczałoby dziesiątki żądań na sekundę przez cały czas życia procesu.
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockResolvedValue(null);
+    const sleeps: number[] = [];
+    const receiver = new Receiver({ ...deps, idleMs: 0, sleep: async (ms) => { sleeps.push(ms); } });
+    receiver.refresh();
+    await until(() => sleeps.length >= 2);
+    await receiver.stop();
+    expect(sleeps[0]).toBeGreaterThan(MIN_EMPTY_INTERVAL_MS - 200);
+    expect(sleeps[0]).toBeLessThanOrEqual(MIN_EMPTY_INTERVAL_MS);
+  });
+
+  it('po wiadomości pyta od razu, po pustej odpowiedzi czeka idleMs', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    const sleeps: number[] = [];
+    getSms.mockResolvedValueOnce(SMS).mockResolvedValueOnce({ ...SMS, miId: '23' }).mockResolvedValue(null);
+    const receiver = new Receiver({ ...deps, idleMs: 30_000, sleep: async (ms) => { sleeps.push(ms); await new Promise((r) => setTimeout(r, 1)); } });
+    receiver.refresh();
+    await until(() => sleeps.length >= 2);
+    await receiver.stop();
+    // Dwie wiadomości bez czekania, potem każda pusta odpowiedź z przerwą.
+    expect(getSms.mock.calls.length).toBeGreaterThanOrEqual(4);
+    expect(sleeps.slice(0, 2)).toEqual([30_000, 30_000]);
+    expect(deps.inbound.list({ limit: 10, offset: 0 })).toHaveLength(2);
+  });
+
+  it('błąd przejściowy: wycofywanie rosnące, zerowane po sukcesie', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    const sleeps: number[] = [];
+    getSms
+      .mockRejectedValueOnce(new ProviderError(-71, 'sieć', 'transient'))
+      .mockRejectedValueOnce(new ProviderError(-71, 'sieć', 'transient'))
+      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce(new ProviderError(-71, 'sieć', 'transient'))
+      .mockResolvedValue(null);
+    const receiver = new Receiver({ ...deps, idleMs: 0, sleep: async (ms) => { sleeps.push(ms); } });
+    receiver.refresh();
+    await until(() => getSms.mock.calls.length >= 5);
+    await receiver.stop();
+    // Pusta odpowiedź dokłada własną przerwę (próg sekundy) - liczą się tylko przerwy wycofywania.
+    const backoffs = sleeps.filter((ms) => ms > MIN_EMPTY_INTERVAL_MS);
+    expect(backoffs.slice(0, 3)).toEqual([INBOUND_BACKOFF_MS[0], INBOUND_BACKOFF_MS[1], INBOUND_BACKOFF_MS[0]]);
+  });
+
+  it('-24 zatrzymuje pętlę do czasu refresh() po zmianie konfiguracji', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockRejectedValueOnce(new ProviderError(-24, 'nieaktywna', 'permanent')).mockResolvedValue(null);
+    const receiver = new Receiver({ ...deps, idleMs: 20, sleep: undefined });
+    receiver.refresh();
+    await until(() => receiver.listening().length === 0);
+    expect(getSms).toHaveBeenCalledTimes(1);
+    expect(receiver.health()).toEqual({ services: 1, listening: 0, errors: [{ account: 'Firma', serviceId: '24138', error: '-24: nieaktywna' }] });
+    // Zwykły tik odświeżania nie wznawia pętli zatrzymanej błędem konfiguracji,
+    // zapis w panelu na innym koncie też nie.
+    receiver.refresh();
+    receiver.refresh({ retryAccount: accountId + 1 });
+    expect(receiver.listening()).toEqual([]);
+    // Zmiana konfiguracji tego konta w panelu wznawia od razu.
+    receiver.refresh({ retryAccount: accountId });
+    await until(() => getSms.mock.calls.length >= 2);
+    expect(receiver.health().errors).toEqual([]);
+    await receiver.stop();
+  });
+
+  it('zatrzymany cel wraca sam po STOPPED_RETRY_MS; kolejna odmowa to wpis info, nie error', async () => {
+    // Naprawa dzieje się poza bramką (administrator Polkomtel aktywuje usługę) - bez własnego
+    // ponawiania odbiór ruszyłby dopiero po „pustym” zapisie w panelu.
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    let clock = NOW;
+    const log = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
+    getSms
+      .mockRejectedValueOnce(new ProviderError(-24, 'nieaktywna', 'permanent'))
+      .mockRejectedValueOnce(new ProviderError(-24, 'nieaktywna', 'permanent'))
+      .mockResolvedValue(null);
+    const receiver = new Receiver({ ...deps, now: () => clock, log, idleMs: 20, sleep: undefined });
+    receiver.refresh();
+    await until(() => receiver.listening().length === 0);
+    expect(log.error.mock.calls.map((c) => c[0])).toEqual(['odbior.zatrzymany']);
+    clock = new Date(NOW.getTime() + STOPPED_RETRY_MS - 1000);
+    receiver.refresh();
+    expect(receiver.listening()).toEqual([]);
+    clock = new Date(NOW.getTime() + STOPPED_RETRY_MS);
+    receiver.refresh();
+    await until(() => getSms.mock.calls.length >= 2);
+    await until(() => receiver.listening().length === 0);
+    expect(log.error).toHaveBeenCalledTimes(1);
+    expect(log.info.mock.calls.map((c) => c[0])).toContain('odbior.nadal_zatrzymany');
+    expect(receiver.health().errors).toHaveLength(1);
+    clock = new Date(NOW.getTime() + 2 * STOPPED_RETRY_MS);
+    receiver.refresh();
+    await until(() => getSms.mock.calls.length >= 3);
+    expect(receiver.health().errors).toEqual([]);
+    await receiver.stop();
+  });
+
+  it('wyjątek poza zapisem (np. brak sekretów konta) nie zabija pętli', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockResolvedValue(null);
+    const client = deps.clients.for(accountId);
+    const forSpy = vi.spyOn(deps.clients, 'for')
+      .mockImplementationOnce(() => { throw new Error('Nie udało się odszyfrować sekretów'); })
+      .mockImplementation(() => client);
+    const receiver = new Receiver({ ...deps, idleMs: 20, sleep: async () => {} });
+    receiver.refresh();
+    await until(() => getSms.mock.calls.length >= 2);
+    expect(forSpy).toHaveBeenCalled();
+    expect(receiver.listening()).toHaveLength(1);
+    await receiver.stop();
+    expect(deps.services.states(accountId)[0]!.error).toBeNull();
+  });
+
+  it('cel zgaszony (brak subskrybentów) nie zostawia błędu przy usłudze ani w /healthz', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    const keyId = deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockRejectedValue(new ProviderError(-24, 'nieaktywna', 'permanent'));
+    const receiver = new Receiver({ ...deps, idleMs: 20, sleep: undefined });
+    receiver.refresh();
+    await until(() => receiver.listening().length === 0);
+    expect(receiver.health().errors).toHaveLength(1);
+    // Administrator odpowiada na błąd wyłączeniem odbioru: stan „zatrzymany” nie ma już czego dotyczyć.
+    deps.apiKeys.revoke(keyId);
+    receiver.refresh();
+    expect(deps.services.states(accountId)[0]!.error).toBeNull();
+    expect(receiver.health()).toEqual({ services: 0, listening: 0, errors: [] });
+    await receiver.stop();
+  });
+
+  it('błąd przejściowy nie pogarsza /healthz - tylko zatrzymanie', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockRejectedValue(new ProviderError(-71, 'sieć', 'transient'));
+    const receiver = new Receiver({ ...deps, sleep: async () => {} });
+    receiver.refresh();
+    await until(() => getSms.mock.calls.length >= 1);
+    await receiver.stop();
+    expect(deps.services.states(accountId)[0]!.error).toContain('sieć');
+    expect(receiver.health().errors).toEqual([]);
+  });
+
+  it('po stop() refresh() niczego już nie zapala', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockResolvedValue(null);
+    const receiver = new Receiver({ ...deps, idleMs: 20, sleep: undefined });
+    receiver.refresh();
+    await receiver.stop();
+    const calls = getSms.mock.calls.length;
+    receiver.refresh({ retryAccount: accountId });
+    expect(receiver.listening()).toEqual([]);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(getSms.mock.calls.length).toBe(calls);
+  });
+
+  it('wyjątek przy zapisie błędu (np. pełny dysk) też nie zabija pętli', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockResolvedValue(null);
+    const client = deps.clients.for(accountId);
+    vi.spyOn(deps.clients, 'for')
+      .mockImplementationOnce(() => { throw new Error('SQLITE_IOERR'); })
+      .mockImplementation(() => client);
+    vi.spyOn(deps.services, 'setError').mockImplementationOnce(() => { throw new Error('SQLITE_FULL'); });
+    const receiver = new Receiver({ ...deps, idleMs: 20, sleep: async () => {} });
+    receiver.refresh();
+    await until(() => getSms.mock.calls.length >= 2);
+    expect(receiver.listening()).toHaveLength(1);
+    await receiver.stop();
+  });
+
+  it('stop() przerywa oczekujące pytanie', async () => {
+    const { deps, accountId, getSms } = buildReceiverDeps();
+    deps.apiKeys.insert(keyInput(accountId));
+    getSms.mockImplementation((_s: string, _t: number, signal: AbortSignal) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new ProviderError(-71, 'Żądanie przerwane', 'transient')));
+    }));
+    const receiver = new Receiver(deps);
+    receiver.refresh();
+    await until(() => getSms.mock.calls.length === 1);
+    const started = Date.now();
+    await receiver.stop();
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(receiver.listening()).toEqual([]);
+    expect(deps.services.states(accountId)[0]!.error).toBeNull();
+  });
+
+  it('start() odświeża od razu i potem co REFRESH_INTERVAL_MS', async () => {
+    // setImmediate zostaje prawdziwy: pętla oddaje nim turę, a udawany kręciłby się bez końca.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+      const { deps, accountId, getSms } = buildReceiverDeps();
+      getSms.mockResolvedValue(null);
+      const receiver = new Receiver({ ...deps, idleMs: 1000, sleep: undefined });
+      receiver.start();
+      expect(receiver.listening()).toEqual([]);
+      deps.apiKeys.insert(keyInput(accountId));
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(receiver.listening()).toHaveLength(1);
+      vi.useRealTimers();
+      await receiver.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

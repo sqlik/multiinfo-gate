@@ -9,12 +9,14 @@ import type { AccountsRepo } from '../store/accounts.ts';
 import type { AdminUsersRepo } from '../store/admin-users.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { AuditRepo } from '../store/audit.ts';
-import { registerHealthRoute } from '../api/health.ts';
+import { registerHealthRoute, type InboundHealth } from '../api/health.ts';
 import { secureContext } from './secure-context.ts';
 import type { JobsRepo } from '../store/jobs.ts';
 import type { MessageEventsRepo } from '../store/message-events.ts';
 import type { MessagesRepo } from '../store/messages.ts';
 import type { PackagesRepo } from '../store/packages.ts';
+import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
+import type { InboundServicesRepo } from '../store/inbound-services.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 import type { Resolver } from '../net/private-address.ts';
 import type { ClientPool } from '../worker/clients.ts';
@@ -23,6 +25,8 @@ import { registerAccountRoutes } from './routes/accounts.ts';
 import { registerAuditRoutes } from './routes/audit.ts';
 import { registerKeyRoutes } from './routes/keys.ts';
 import { registerUserRoutes } from './routes/users.ts';
+import { registerDeliveryRoutes } from './routes/deliveries.ts';
+import { registerInboundViewRoutes } from './routes/inbound.ts';
 import { registerMessageViewRoutes } from './routes/messages.ts';
 import { registerOverviewRoutes } from './routes/overview.ts';
 import { registerPackageViewRoutes } from './routes/packages.ts';
@@ -46,6 +50,12 @@ export interface AdminDeps {
   audit: AuditRepo;
   deliveries: WebhookDeliveriesRepo;
   packages: PackagesRepo;
+  inbound: InboundMessagesRepo;
+  inboundServices: InboundServicesRepo;
+  /** Odbiornik: panel każe mu uzgodnić pętle po zmianie klucza albo konta. */
+  receiver?: { refresh(opts?: { retryAccount?: number }): void };
+  /** Stan odbiornika do /healthz; bez niego pole nie występuje. */
+  inboundHealth?: () => InboundHealth;
   clients: ClientPool;
   sessions: SessionStore;
   masterKey: Buffer;
@@ -161,7 +171,12 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   // tunel SSH, HTTPS za proxy) - tam, gdzie da się też zalogować. Z sieci bez TLS zostaje sam status,
   // bo nazwy kont i daty certyfikatów nie są dla każdego, kto widzi port panelu (np. LXC na eth0).
   registerHealthRoute(
-    app, { accounts: deps.accounts, queueDepth: () => deps.jobs.depth(), now, detailsAllowed: secureContext }, 'admin',
+    app,
+    {
+      accounts: deps.accounts, queueDepth: () => deps.jobs.depth(), now, detailsAllowed: secureContext,
+      ...(deps.inboundHealth ? { inbound: deps.inboundHealth } : {}),
+    },
+    'admin',
   );
 
   app.addHook('onRequest', async (request, reply) => {
@@ -325,6 +340,8 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   registerOverviewRoutes(app, deps, render);
   registerPackageViewRoutes(app, deps, render);
   registerMessageViewRoutes(app, deps, render);
+  registerInboundViewRoutes(app, deps, render);
+  registerDeliveryRoutes(app, deps, render);
   registerAuditRoutes(app, deps, render);
 
   /**

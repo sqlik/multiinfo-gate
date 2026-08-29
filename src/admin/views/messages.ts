@@ -1,11 +1,12 @@
 import type { ProtocolTrace } from '../../multiinfo/client.ts';
 import { describeSubstatus, mapStatus } from '../../multiinfo/status.ts';
 import type { MessageEvent } from '../../store/message-events.ts';
+import { deliveriesTable, type DeliveryView } from './deliveries.ts';
 import type { MessageRow } from '../../store/messages.ts';
 import { measureText } from '../../text/measure.ts';
 import { segmentText } from '../../text/segment.ts';
 import { warsawStamp, warsawTime, warsawTimeMs } from '../../time/warsaw.ts';
-import { esc } from './layout.ts';
+import { esc, preview } from './layout.ts';
 import { segmentPanel } from './segments.ts';
 import { statusLabel, statusTone } from './status-labels.ts';
 
@@ -36,13 +37,6 @@ const FILTRY: Array<{ key: string | null; label: string }> = [
 const stamp = (iso: string | null) => (iso === null ? '-' : warsawStamp(iso));
 
 /** Treść na liście skracamy do jednego wiersza; pełną widać w szczególe. */
-const PREVIEW_CHARS = 90;
-
-function preview(body: string | null): string {
-  if (body === null) return '<span class="dim">treść nieprzechowywana</span>';
-  return body.length <= PREVIEW_CHARS ? esc(body) : `${esc(body.slice(0, PREVIEW_CHARS))}…`;
-}
-
 const state = (m: MessageRow) =>
   `<span class="st"><span class="dot dot-${statusTone(m.status)}"></span>${esc(statusLabel(m.status))}</span>`;
 
@@ -132,6 +126,8 @@ export interface MessageDetail {
   /** Host Multiinfo konta - ślad protokołu nie zapisuje adresu. */
   host: string;
   events: MessageEvent[];
+  /** Dostawy webhooków o tej wiadomości; pusta lista, gdy klucz nie ma adresu webhooka. */
+  deliveries: DeliveryView[];
 }
 
 type Tone = 'ok' | 'wait' | 'fail' | 'dim';
@@ -271,6 +267,7 @@ export function messagePage(d: MessageDetail): string {
           <div>Odbiorca</div><div class="m">${esc(m.dest)}</div>
           <div>Nadpis</div><div class="m">${esc(m.orig ?? '-')}</div>
           <div>ID usługi</div><div class="m">${esc(m.serviceId)}</div>
+          ${m.inReplyTo === null ? '' : `<div>Odpowiedź na</div><div class="m"><a href="/odebrane/${esc(m.inReplyTo)}">${esc(m.inReplyTo)}</a></div>`}
           <div>Części w Multiinfo</div><div>${parts}</div>
           <div>Status Multiinfo</div><div class="m">${substatus === null
             ? '<span class="dim">brak</span>'
@@ -285,6 +282,11 @@ export function messagePage(d: MessageDetail): string {
         <div class="panel-h"><div class="lab">Przebieg</div></div>
         <div class="tl">${timeline}</div>
       </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h"><div class="lab">Dostawy do aplikacji</div></div>
+      ${deliveriesTable(d.deliveries, 'Klucz nie ma adresu webhooka - aplikacja odczytuje stan przez GET /v1/messages/{id}.', true)}
     </div>
 
     ${tracePanel(m.trace, d.host)}

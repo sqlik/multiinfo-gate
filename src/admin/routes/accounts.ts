@@ -43,11 +43,19 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
   const viewOf = (id: number): AccountView | null => {
     const row = deps.accounts.get(id);
     if (!row) return null;
+    const serviceIds = deps.accounts.serviceIds(id);
+    const states = new Map(deps.inboundServices.states(id).map((s) => [s.serviceId, s]));
+    const at = now();
     return {
       row,
-      serviceIds: deps.accounts.serviceIds(id),
+      serviceIds,
       origs: deps.accounts.origs(id),
       keyCount: deps.apiKeys.list().filter((k) => k.accountId === id && k.revokedAt === null).length,
+      inbound: serviceIds.map((serviceId) => ({
+        serviceId,
+        subscribers: deps.apiKeys.inboundSubscribers(id, serviceId, at).map((k) => k.name),
+        state: states.get(serviceId) ?? { serviceId, lastPollAt: null, lastReceivedAt: null, error: null },
+      })),
     };
   };
 
@@ -205,6 +213,8 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
       name: values.name, baseUrl: values.baseUrl, ...(password === '' ? {} : { password }),
       defaultCountryCode: values.defaultCountryCode, storeContent: values.storeContent === '1' ? 1 : 0, serviceIds,
     });
+    // Zmiana listy usług zapala albo gasi odbiór; usługa zatrzymana błędem Multiinfo dostaje nową szansę.
+    deps.receiver?.refresh({ retryAccount: view.row.id });
     const after = accountValuesOf(viewOf(view.row.id)!);
     const changed: string[] = (Object.keys(after) as Array<keyof AccountFormValues>).filter((k) => after[k] !== before[k]);
     if (password !== '') changed.push('password');
@@ -340,6 +350,7 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
   function resumeIfPaused(row: AccountView['row'], userId: number | null, ip: string, cause: string): boolean {
     if (row.pausedReason === null) return false;
     deps.accounts.resume(row.id);
+    deps.receiver?.refresh({ retryAccount: row.id });
     deps.audit.record({
       actor: actorOf(userId),
       action: 'konto.wznowienie',

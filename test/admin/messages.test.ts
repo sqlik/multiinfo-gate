@@ -51,9 +51,11 @@ describe('GET /przeglad', () => {
     seed('m5');
     const res = await page('/przeglad');
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Przyjęte');
+    expect(res.body).toContain('Wychodzące');
     expect(res.body).not.toContain('>Wysłane<');
-    expect(res.body).toMatch(/Przyjęte<\/div>\s*<div class="n">5</);
+    expect(res.body).not.toContain('>Przyjęte<');
+    expect(res.body).toMatch(/Wychodzące<\/div>\s*<div class="n">5</);
+    expect(res.body).toContain('% wychodzących');
     expect(res.body).toMatch(/Anulowane<\/div>\s*<div class="n">1</);
     expect(res.body).toMatch(/W drodze<\/div>\s*<div class="n">1</);
     expect(res.body).toContain('href="/wiadomosci?status=cancelled"');
@@ -83,6 +85,19 @@ describe('GET /przeglad', () => {
   });
 });
 
+describe('GET /przeglad - odebrane', () => {
+  it('pokazuje kafelek odebranych z ostatniej doby', async () => {
+    const base = { accountId, serviceId: '24138', sender: '48601000001', dest: '7968', kind: 'text' as const, body: 'x', bodyHash: 'h',
+      protocolId: 0, codingScheme: 0, connectorId: null, relatedMessageId: null, receivedAt: NOW.toISOString() };
+    h.inbound.insertIfNew({ ...base, id: 'in_1', miId: '1', createdAt: NOW.toISOString() });
+    h.inbound.insertIfNew({ ...base, id: 'in_2', miId: '2', createdAt: new Date(NOW.getTime() - 25 * 3600_000).toISOString() });
+    const res = await page('/przeglad');
+    expect(res.body).toMatch(/Odebrane<\/div>\s*<div class="n">1<\/div>/);
+    expect(res.body).toContain('href="/odebrane"');
+    expect(res.body).toContain('tiles-6');
+  });
+});
+
 describe('GET /przeglad - webhooki', () => {
   it('ostrzega o niedostarczonych webhookach', async () => {
     const id = h.deliveries.insert({
@@ -100,6 +115,12 @@ describe('GET /przeglad - webhooki', () => {
       h.deliveries.markFailed(id, '503');
     }
     expect((await page('/przeglad')).body).toContain('3 webhooki nie dotarły');
+  });
+
+  it('nie ostrzega o niedostarczonym sprzed doby - alarm ma się sam wygaszać', async () => {
+    const id = h.deliveries.insert({ apiKeyId, event: 'message.sent', payload: '{}', url: 'u', createdAt: new Date(NOW.getTime() - 2 * 86_400_000) });
+    h.deliveries.markFailed(id, '503');
+    expect((await page('/przeglad')).body).not.toContain('nie dotar');
   });
 
   it('nie ostrzega, gdy webhooki tylko czekają na ponowienie', async () => {
@@ -249,5 +270,40 @@ describe('GET /wiadomosci/:id', () => {
 
   it('zwraca 404 dla nieznanego identyfikatora', async () => {
     expect((await page('/wiadomosci/m_nieistnieje')).statusCode).toBe(404);
+  });
+});
+
+describe('GET /wiadomosci/:id - dostawy do aplikacji', () => {
+  it('pokazuje dostawy o tej wiadomości z przyciskiem ponowienia przy nieudanej, a ponowienie wraca do wiadomości', async () => {
+    // Klucz z adresem webhooka - ten z beforeEach go nie ma, a bez adresu nie ma dokąd ponawiać.
+    const hookKeyId = h.apiKeys.insert({
+      accountId, name: 'CRM z webhookiem', keyHash: 'argon2:bbb', keyPrefix: 'b1b2c3d4', defaultServiceId: '24138', defaultOrig: null,
+      maxParts: 5, ratePerMin: 60, webhookUrl: 'https://crm.example/hook', webhookSecret: 's', serviceIds: ['24138'],
+    });
+    seed('msg_1');
+    const id = h.deliveries.insert({ apiKeyId: hookKeyId, event: 'message.sent', payload: '{"event":"message.sent","id":"msg_1"}', url: 'https://crm.example/hook', createdAt: NOW });
+    h.deliveries.markFailed(id, '503 Service Unavailable');
+    h.deliveries.insert({ apiKeyId: hookKeyId, event: 'message.sent', payload: '{"event":"message.sent","id":"msg_2"}', url: 'https://crm.example/hook', createdAt: NOW });
+    const body = (await page('/wiadomosci/msg_1')).body;
+    expect(body).toContain('Dostawy do aplikacji');
+    expect(body).toContain('message.sent');
+    expect(body).toContain('503 Service Unavailable');
+    expect(body).toContain(`action="/dostawy/${id}/ponow"`);
+    const res = await h.app.inject({ method: 'POST', url: `/dostawy/${id}/ponow`, headers: { cookie: h.cookie, 'content-type': 'application/x-www-form-urlencoded' }, payload: '' });
+    expect(res.headers.location).toBe('/wiadomosci/msg_1');
+    expect(h.deliveries.get(id)!.status).toBe('pending');
+  });
+});
+
+describe('GET /wiadomosci/:id - odpowiedź w wątku', () => {
+  it('pokazuje odnośnik do wiadomości przychodzącej', async () => {
+    h.inbound.insertIfNew({ id: 'in_1', accountId, serviceId: '24138', miId: '22', sender: '48601135134', dest: '7968', kind: 'text', body: 'Pytanie', bodyHash: 'h',
+      protocolId: 0, codingScheme: 0, connectorId: null, relatedMessageId: null, receivedAt: NOW.toISOString(), createdAt: NOW.toISOString() });
+    h.messages.insert({ id: 'msg_r', apiKeyId, accountId, serviceId: '24138', dest: '48601135134', body: 'Odp', bodyHash: 'h', encoding: 'gsm', parts: 1, slots: 3,
+      orig: null, costCenter: null, validTo: null, idempotencyKey: null, inReplyTo: 'in_1', createdAt: NOW.toISOString() });
+    const res = await page('/wiadomosci/msg_r');
+    expect(res.body).toContain('Odpowiedź na');
+    expect(res.body).toContain('href="/odebrane/in_1"');
+    expect((await page('/wiadomosci/' + seed('msg_z'))).body).not.toContain('Odpowiedź na');
   });
 });

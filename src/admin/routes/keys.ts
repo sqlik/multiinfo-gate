@@ -43,6 +43,7 @@ function formValues(body: Body): KeyFormValues {
     name: s('name'), serviceIds: values(body.serviceIds), defaultServiceId: s('defaultServiceId'),
     origs: values(body.origs), defaultOrig: s('defaultOrig'), maxParts: s('maxParts'), ratePerMin: s('ratePerMin'),
     webhookUrl: s('webhookUrl'), expiresOn: s('expiresOn'), noExpiry: s('noExpiry') === '1',
+    inboundSubscribed: s('inboundSubscribed') === '1',
   };
 }
 
@@ -69,6 +70,9 @@ function check(choice: AccountChoice, v: KeyFormValues, today: Date): Checked {
   }
   const webhook = parseWebhookUrl(v.webhookUrl);
   if (!webhook.ok) return { ok: false, error: WEBHOOK_URL_ERROR };
+  if (v.inboundSubscribed && webhook.url === null) {
+    return { ok: false, error: 'Odbiór wiadomości przychodzących wymaga adresu webhooka.' };
+  }
   let expiresAt: string | null;
   if (v.noExpiry) expiresAt = null;
   else if (v.expiresOn === '') return { ok: false, error: 'Podaj datę ważności albo zaznacz „Nie wygasa”.' };
@@ -187,7 +191,10 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       serviceIds: v.serviceIds,
       origs: v.origs,
       expiresAt: checked.expiresAt,
+      inboundSubscribed: v.inboundSubscribed ? 1 : 0,
     });
+    // Nowy subskrybent może zapalić odbiór usługi - odbiornik uzgadnia pętle od razu, nie za 10 s.
+    deps.receiver?.refresh({ retryAccount: choice.row.id });
 
     // W dzienniku zostaje prefiks i adres, nigdy klucz ani sekret - wpisów nie da się później usunąć.
     deps.audit.record({
@@ -196,7 +203,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       target: `klucz:${id}`,
       meta: {
         nazwa: v.name, konto: choice.row.name, prefiks: generated.prefix, uslugi: v.serviceIds, nadpisy: v.origs,
-        webhook: checked.webhookUrl, wazny_do: checked.expiresAt,
+        webhook: checked.webhookUrl, wazny_do: checked.expiresAt, odbior: v.inboundSubscribed,
       },
       ip: request.ip,
     });
@@ -252,7 +259,9 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       maxParts: checked.maxParts, ratePerMin: checked.ratePerMin, webhookUrl: checked.webhookUrl,
       ...(webhookSecret === undefined ? {} : { webhookSecret }),
       expiresAt: checked.expiresAt, serviceIds: v.serviceIds, origs: v.origs,
+      inboundSubscribed: v.inboundSubscribed ? 1 : 0,
     });
+    deps.receiver?.refresh({ retryAccount: key.accountId });
     const after = valuesOf(deps.apiKeys.get(key.id)!);
     const changed: string[] = (Object.keys(after) as Array<keyof KeyFormValues>)
       .filter((k) => JSON.stringify(after[k]) !== JSON.stringify(before[k]))
@@ -279,6 +288,8 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
     if (!key) return reply.callNotFound();
 
     deps.apiKeys.revoke(id);
+    // Odwołany subskrybent może gasić odbiór usługi.
+    deps.receiver?.refresh({ retryAccount: key.accountId });
     deps.audit.record({
       actor: actorOf(request.adminUserId),
       action: 'klucz.odwolanie',

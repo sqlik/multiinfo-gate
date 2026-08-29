@@ -14,6 +14,7 @@ import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
 import { MessagesRepo } from '../../src/store/messages.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
+import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
@@ -56,7 +57,7 @@ beforeEach(() => {
   invalidate = vi.fn();
   deps = {
     accounts, apiKeys, messages: new MessagesRepo(db), events: new MessageEventsRepo(db), jobs: new JobsRepo(db),
-    deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), reportsDir,
+    deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir,
     clients: { for: () => ({ createPackage, packageInfo, packageFullInfo, getReport }), invalidate, closeAll: vi.fn() } as never,
   };
 });
@@ -124,7 +125,7 @@ describe('handlePackageCreate', () => {
     expect(pkg.providerCode).toBe(-63);
     expect(pkg.error).toBe('Zbyt wielu odbiorców');
     expect(pkg.completedAt).toBe(NOW.toISOString());
-    expect(deps.deliveries.counts()).toEqual({ pending: 1, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 1, failed: 0 });
     expect(lastWebhook()).toMatchObject({ event: 'package.completed', id: 'pkg_1', status: 'failed', providerCode: -63, recipients: 2 });
     expect(deps.jobs.claim(new Date(NOW.getTime() + 86_400_000), 10).map((j) => j.type)).toEqual(['webhook']);
   });
@@ -200,7 +201,7 @@ describe('handlePackagePoll', () => {
     expect(pkg.remainingCount).toBe(0);
     const jobs = deps.jobs.claim(NOW, 10);
     expect(jobs.map((j) => j.type)).toEqual(['package.report']);
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
   });
 
   it('przy -62 po rozpoczęciu wysyłki traktuje rozsyłkę jako zakończoną', async () => {
@@ -275,7 +276,7 @@ describe('handlePackageReport', () => {
     expect(pkg.reportId).toBe('123');
     expect(deps.jobs.claim(new Date(NOW.getTime() + REPORT_RETRY_MS - 1), 10)).toHaveLength(0);
     expect(deps.jobs.claim(new Date(NOW.getTime() + REPORT_RETRY_MS + 1), 10)).toHaveLength(1);
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
   });
 
   it('przy błędzie generowania oznacza raport jako nieudany i kolejkuje webhook', async () => {

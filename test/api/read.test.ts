@@ -10,12 +10,14 @@ import { MessagesRepo } from '../../src/store/messages.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
+import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 
 const masterKey = randomBytes(32);
 const NOW = new Date('2026-08-25T10:00:00Z');
 
 let app: ReturnType<typeof buildApiServer>;
 let adminApp: ReturnType<typeof buildApiServer>;
+let baseDeps: Omit<Parameters<typeof buildApiServer>[0], 'healthMode'>;
 let keyA: string;
 let keyB: string;
 let accounts: AccountsRepo;
@@ -76,9 +78,10 @@ beforeEach(async () => {
 
   const deps = {
     accounts, apiKeys, messages, events: new MessageEventsRepo(db), jobs, packages: new PackagesRepo(db),
-    clients: {} as never,
+    clients: {} as never, inbound: new InboundMessagesRepo(db),
     rateLimiter: new RateLimiter(), now: () => NOW,
   };
+  baseDeps = deps;
   app = buildApiServer({ ...deps, healthMode: 'public' });
   adminApp = buildApiServer({ ...deps, healthMode: 'admin' });
   await app.ready();
@@ -101,7 +104,22 @@ describe('GET /v1/messages/:id', () => {
     expect(body.parts).toBe(1);
     expect(body.slots).toBe(11);
     expect(body.serviceId).toBe('24138');
+    expect(body.inReplyTo).toBeNull();
     expect(body.createdAt).toBeTruthy();
+  });
+
+  it('podaje inReplyTo dla odpowiedzi w wątku', async () => {
+    baseDeps.inbound.insertIfNew({
+      id: 'in_1', accountId, serviceId: '24138', miId: '22', sender: '48601135134', dest: '7968', kind: 'text', body: 'Pytanie',
+      bodyHash: 'h', protocolId: 0, codingScheme: 0, connectorId: null, relatedMessageId: null,
+      receivedAt: NOW.toISOString(), createdAt: NOW.toISOString(),
+    });
+    messages.insert({
+      id: 'msg_r', apiKeyId: apiKeyAId, accountId, serviceId: '24138', dest: '48601135134', body: null, bodyHash: 'h',
+      encoding: 'gsm', parts: 1, slots: 11, orig: null, costCenter: null, validTo: null, idempotencyKey: null, inReplyTo: 'in_1',
+    });
+    expect((await get('/v1/messages/msg_r')).json().inReplyTo).toBe('in_1');
+    expect((await get('/v1/messages')).json().data[0].inReplyTo).toBe('in_1');
   });
 
   it('podaje treść, gdy konto ją przechowuje', async () => {
@@ -220,5 +238,26 @@ describe('GET /healthz', () => {
 
   it('nie wymaga klucza API', async () => {
     expect((await app.inject({ method: 'GET', url: '/healthz' })).statusCode).toBe(200);
+  });
+
+  it('podaje stan odbiornika i pogarsza status przy błędzie usługi', async () => {
+    const inbound = { services: 2, listening: 1, errors: [{ account: 'Firma', serviceId: '24138', error: '-24: nieaktywna' }] };
+    const withInbound = buildApiServer({ ...baseDeps, healthMode: 'admin', inboundHealth: () => inbound });
+    const res = await withInbound.inject({ method: 'GET', url: '/healthz' });
+    expect(res.json().status).toBe('degraded');
+    expect(res.json().inbound).toEqual(inbound);
+  });
+
+  it('bez błędów odbiornika status zostaje ok', async () => {
+    const withInbound = buildApiServer({ ...baseDeps, healthMode: 'admin', inboundHealth: () => ({ services: 1, listening: 1, errors: [] }) });
+    const res = await withInbound.inject({ method: 'GET', url: '/healthz' });
+    expect(res.json().status).toBe('ok');
+    expect(res.json().inbound.listening).toBe(1);
+  });
+
+  it('tryb publiczny nie zdradza stanu odbiornika', async () => {
+    const withInbound = buildApiServer({ ...baseDeps, inboundHealth: () => ({ services: 1, listening: 0, errors: [{ account: 'Firma', serviceId: '24138', error: 'x' }] }) });
+    const res = await withInbound.inject({ method: 'GET', url: '/healthz' });
+    expect(res.json()).toEqual({ status: 'degraded' });
   });
 });

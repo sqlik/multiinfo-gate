@@ -324,3 +324,91 @@ describe('MultiinfoClient - błędy transportu', () => {
     })).rejects.toBeInstanceOf(ProviderError);
   });
 });
+
+describe('MultiinfoClient - odbiór', () => {
+  it('getsms.aspx idzie z serviceId, timeout i manualConfirm', async () => {
+    fake.reply('0\n22\n48601357368\n7968\n1\nDziekuje%2C+jasne\n0\n0\n24138\n60199\n20260829091400');
+    const sms = await client.getSms('24138', 5000);
+    expect(fake.requests.at(-1)!.path).toBe('/Api61/getsms.aspx');
+    expect(fake.requests.at(-1)!.params).toMatchObject({ serviceId: '24138', timeout: '5000', manualConfirm: 'true' });
+    expect(sms).toMatchObject({ miId: '22', content: 'Dziekuje, jasne', receivedAt: '20260829091400' });
+  });
+
+  it('pusta kolejka to null', async () => {
+    fake.reply('0\n-1');
+    expect(await client.getSms('24138', 5000)).toBeNull();
+  });
+
+  it('-24 to błąd trwały', async () => {
+    fake.reply('-24\nUsluga nie jest aktywna');
+    await expect(client.getSms('24138', 5000)).rejects.toMatchObject({ code: -24, kind: 'permanent' });
+  });
+
+  it('czeka dłużej niż timeout podany Plusowi', async () => {
+    fake.respond(async () => { await new Promise((r) => setTimeout(r, 200)); return '0\n-1'; });
+    // Limit HTTP to timeoutMs plus margines, nie stała 30 s - 200 ms opóźnienia przy 100 ms przechodzi.
+    expect(await client.getSms('24138', 100)).toBeNull();
+    fake.respond(null);
+  });
+
+  it('przerywa oczekiwanie sygnałem', async () => {
+    fake.respond(() => new Promise((r) => setTimeout(() => r('0\n-1'), 5000)));
+    const controller = new AbortController();
+    const pending = client.getSms('24138', 60_000, controller.signal);
+    setTimeout(() => controller.abort(), 50);
+    await expect(pending).rejects.toMatchObject({ code: -71, message: 'Żądanie przerwane' });
+    fake.respond(null);
+  });
+
+  it('long polling nie zajmuje gniazd zwykłym poleceniom', async () => {
+    // Cztery usługi w oczekiwaniu wyczerpałyby wspólną pulę (maxSockets 4) i anulowanie
+    // z API czekałoby do końca long pollingu - dlatego getsms ma osobną pulę.
+    fake.respond(async (req) => {
+      if (req.path.endsWith('getsms.aspx')) { await new Promise((r) => setTimeout(r, 400)); return '0\n-1'; }
+      return '0';
+    });
+    const controller = new AbortController();
+    const polls = Array.from({ length: 4 }, () => client.getSms('24138', 60_000, controller.signal));
+    await new Promise((r) => setTimeout(r, 50));
+    const started = Date.now();
+    await client.cancel('1');
+    expect(Date.now() - started).toBeLessThan(200);
+    controller.abort();
+    await Promise.allSettled(polls);
+    fake.respond(null);
+  });
+
+  it('odpowiedź urwana przed końcem treści to błąd, nie wieczne oczekiwanie', async () => {
+    // Serwer (albo proxy po drodze) wysyła nagłówki i część treści, po czym zamyka gniazdo.
+    // Bez odbiorcy błędu na odpowiedzi Node nic nie zgłasza, a pętla odbioru stanęłaby na zawsze.
+    fake.respond(() => (res) => {
+      res.writeHead(200, { 'content-type': 'text/plain', 'content-length': '64' });
+      res.write('0\n22\n');
+      setTimeout(() => res.destroy(), 20);
+    });
+    await expect(client.getSms('24138', 60_000)).rejects.toMatchObject({ code: -71 });
+    fake.respond(null);
+  });
+
+  it('sygnał już przerwany odrzuca od razu, bez żądania', async () => {
+    const before = fake.requests.length;
+    const controller = new AbortController();
+    controller.abort();
+    await expect(client.getSms('24138', 60_000, controller.signal)).rejects.toMatchObject({ code: -71 });
+    expect(fake.requests.length).toBe(before);
+  });
+
+  it('confirmsms.aspx potwierdza identyfikator', async () => {
+    fake.reply('0\nOK');
+    await client.confirmSms('22');
+    expect(fake.requests.at(-1)!.path).toBe('/Api61/confirmsms.aspx');
+    expect(fake.requests.at(-1)!.params.smsId).toBe('22');
+  });
+
+  it('sendsmslong.aspx przekazuje smsInId', async () => {
+    fake.reply('0\n8841207');
+    await client.sendLong({ serviceId: '24138', dest: '48601135134', text: 'Odp', smsInId: '22',
+      deliveryReport: true, advancedEncoding: false, deleteContent: false });
+    expect(fake.requests.at(-1)!.params.smsInId).toBe('22');
+  });
+});

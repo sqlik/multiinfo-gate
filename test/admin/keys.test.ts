@@ -5,6 +5,7 @@ import { RateLimiter } from '../../src/api/rate-limit.ts';
 import { hashApiKey } from '../../src/api/keys.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
+import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 
 let h: AdminHarness;
 let accountId: number;
@@ -362,7 +363,7 @@ describe('POST /klucze/:id/odwolaj', () => {
     const api = buildApiServer({
       accounts: h.accounts, apiKeys: h.apiKeys, messages: h.messages, jobs: h.jobs,
       events: new MessageEventsRepo(h.db), packages: new PackagesRepo(h.db), clients: {} as never,
-      rateLimiter: new RateLimiter(),
+      inbound: new InboundMessagesRepo(h.db), rateLimiter: new RateLimiter(),
     });
     await api.ready();
 
@@ -409,5 +410,62 @@ describe('GET /klucze/nowy - teksty', () => {
     expect(res.body).toContain('Dłuższa treść zostanie odrzucona, nie przycięta.');
     expect(res.body).toContain('Gdy w żądaniu nie pojawi się żadna ze zdefiniowanych pozycji');
     expect(res.body).not.toContain('Najwięcej części');
+  });
+});
+
+describe('klucz - subskrypcja wiadomości przychodzących', () => {
+  it('pole jest w formularzu i domyślnie odznaczone', async () => {
+    const res = await h.app.inject({ method: 'GET', url: `/klucze/nowy?accountId=${accountId}`, headers: { cookie: h.cookie } });
+    expect(res.body).toContain('name="inboundSubscribed"');
+    expect(res.body).not.toMatch(/name="inboundSubscribed"[^>]*checked/);
+  });
+
+  it('zapisuje subskrypcję przy kluczu z webhookiem i odświeża odbiornik', async () => {
+    const res = await create({ webhookUrl: 'https://crm.example/hook', inboundSubscribed: '1' });
+    expect(res.statusCode).toBe(200);
+    const key = h.apiKeys.list()[0]!;
+    expect(key.inboundSubscribed).toBe(1);
+    expect(h.refreshed).toEqual([{ retryAccount: accountId }]);
+    expect(h.audit.list(10, 0)[0]!.meta).toMatchObject({ odbior: true });
+  });
+
+  it('odrzuca subskrypcję bez adresu webhooka', async () => {
+    const res = await create({ inboundSubscribed: '1' });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('wymaga adresu webhooka');
+    expect(h.apiKeys.list()).toHaveLength(0);
+  });
+
+  it('edycja zmienia subskrypcję i odnotowuje pole w dzienniku', async () => {
+    await create({ webhookUrl: 'https://crm.example/hook' });
+    const key = h.apiKeys.list()[0]!;
+    const res = await h.app.inject({ url: `/klucze/${key.id}/edytuj`, ...form({
+      name: key.name, serviceIds: '24138', defaultServiceId: '24138', origs: 'Firma Info', maxParts: '5', ratePerMin: '60',
+      webhookUrl: 'https://crm.example/hook', noExpiry: '1', inboundSubscribed: '1',
+    }) });
+    expect(res.statusCode).toBe(302);
+    expect(h.apiKeys.get(key.id)!.inboundSubscribed).toBe(1);
+    expect(h.audit.list(10, 0)[0]!.meta).toMatchObject({ pola: expect.arrayContaining(['inboundSubscribed']) });
+    expect(h.refreshed.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('formularz edycji pokazuje zaznaczone pole dla subskrybującego klucza', async () => {
+    await create({ webhookUrl: 'https://crm.example/hook', inboundSubscribed: '1' });
+    const key = h.apiKeys.list()[0]!;
+    const res = await h.app.inject({ method: 'GET', url: `/klucze/${key.id}/edytuj`, headers: { cookie: h.cookie } });
+    expect(res.body).toMatch(/name="inboundSubscribed"[^>]*checked/);
+  });
+
+  it('odwołanie klucza odświeża odbiornik', async () => {
+    await create({ webhookUrl: 'https://crm.example/hook', inboundSubscribed: '1' });
+    const key = h.apiKeys.list()[0]!;
+    await h.app.inject({ url: `/klucze/${key.id}/odwolaj`, ...form({}) });
+    expect(h.refreshed.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('lista pokazuje, który klucz odbiera', async () => {
+    await create({ webhookUrl: 'https://crm.example/hook', inboundSubscribed: '1' });
+    const res = await h.app.inject({ method: 'GET', url: '/klucze', headers: { cookie: h.cookie } });
+    expect(res.body).toContain('<span class="tag">odbiera</span>');
   });
 });
