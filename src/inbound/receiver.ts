@@ -90,6 +90,20 @@ export function normalizeSender(raw: string, countryCode: string): string {
   }
 }
 
+/**
+ * Chwila odbioru wg Plusa; gdy data nie ma spodziewanej postaci, chwila zapisu w bramce.
+ * Wiadomość z nieczytelną datą nie może przepaść - niezapisana wracałaby co 9 minut i za
+ * każdym razem znów by przepadła.
+ */
+function receivedAtOf(sms: InboundSms, now: Date, log: Logger): string {
+  try {
+    return warsawCompactToIso(sms.receivedAt);
+  } catch {
+    log.warn('odbior.data_nieczytelna', { miId: sms.miId, receivedAt: sms.receivedAt });
+    return now.toISOString();
+  }
+}
+
 export class Receiver {
   private readonly loops = new Map<string, Loop>();
   /** Cele zatrzymane kodem -23/-24; wracają tylko po refresh({ retryStopped: true }). */
@@ -132,6 +146,14 @@ export class Receiver {
         this.loops.delete(key);
       }
     }
+    // Błąd przy usłudze opisuje odbiór, który trwa albo stanął. Cel bez subskrybentów nie ma
+    // czego opisywać - zostawiony ślad trzymałby /healthz w stanie pogorszonym bez końca.
+    for (const e of this.deps.services.errors()) {
+      const key = `${e.accountId}:${e.serviceId}`;
+      if (wanted.has(key)) continue;
+      this.deps.services.setError({ accountId: e.accountId, serviceId: e.serviceId }, null);
+      this.stopped.delete(key);
+    }
     for (const [key, target] of wanted) {
       if (this.loops.has(key) || this.stopped.has(key)) continue;
       const controller = new AbortController();
@@ -163,7 +185,16 @@ export class Receiver {
     log.info('odbior.start', { ...target });
     let failures = 0;
     while (!signal.aborted) {
-      const outcome = await this.pollOnce(target, signal);
+      const outcome = await this.pollOnce(target, signal).catch((error: unknown): PollOutcome => {
+        // Wyjątek spoza obsługi wiadomości (np. sekrety konta, baza): pętla ma przeżyć, a nie
+        // odrzucić obietnicę, którą nikt nie łapie - to zamknęłoby cały proces bramki.
+        const reason = error instanceof Error ? error.message : String(error);
+        if (!signal.aborted) {
+          this.deps.services.setError(target, reason);
+          log.error('odbior.wyjatek', { ...target, error });
+        }
+        return { kind: 'error', error: reason };
+      });
       await nextTurn();
       if (signal.aborted) break;
       if (outcome.kind === 'stopped') {
@@ -241,7 +272,7 @@ export class Receiver {
 
     const id = shortId();
     const sender = normalizeSender(sms.sender, account.defaultCountryCode);
-    const receivedAt = warsawCompactToIso(sms.receivedAt);
+    const receivedAt = receivedAtOf(sms, now, log);
     const related = this.deps.messages.lastTo(
       target.accountId, target.serviceId, sender, new Date(now.getTime() - RELATED_WINDOW_MS),
     );
