@@ -542,3 +542,46 @@ describe('teksty ekranów kont', () => {
     expect(res.body).toContain('<th style="width: 150px;">ID usług</th>');
   });
 });
+
+describe('karta konta - odbiór wiadomości', () => {
+  const NOW = new Date('2026-08-25T10:00:00Z');
+  const card = () => h.app.inject({ method: 'GET', url: `/konta/${accountId}`, headers: { cookie: h.cookie } });
+
+  it('usługa bez subskrybentów: odbiór nieaktywny', async () => {
+    const res = await card();
+    expect(res.body).toContain('Odbiór wiadomości');
+    expect(res.body).toContain('nieaktywny (brak subskrybujących kluczy)');
+  });
+
+  it('usługa z subskrybentem: aktywny, z czasem ostatniego pytania i ostatniej odebranej', async () => {
+    h.apiKeys.insert({ accountId, name: 'CRM', keyHash: 'h', keyPrefix: 'p', defaultServiceId: '24138', defaultOrig: null,
+      maxParts: 5, ratePerMin: 60, webhookUrl: 'https://crm.example/hook', webhookSecret: 's', serviceIds: ['24138'], inboundSubscribed: 1 });
+    h.inboundServices.markPolled({ accountId, serviceId: '24138' }, new Date(NOW.getTime() - 12_000));
+    h.inboundServices.markReceived({ accountId, serviceId: '24138' }, new Date(NOW.getTime() - 3600_000));
+    const res = await card();
+    expect(res.body).toContain('aktywny');
+    expect(res.body).toContain('CRM');
+    expect(res.body).toContain('ostatnio pytano 12 s temu');
+    expect(res.body).toContain('ostatnia odebrana 2026-08-25 11:00:00');
+  });
+
+  it('subskrybent, ale jeszcze bez pytania: mówi to wprost', async () => {
+    h.apiKeys.insert({ accountId, name: 'CRM', keyHash: 'h', keyPrefix: 'p', defaultServiceId: '24138', defaultOrig: null,
+      maxParts: 5, ratePerMin: 60, webhookUrl: 'https://crm.example/hook', webhookSecret: 's', serviceIds: ['24138'], inboundSubscribed: 1 });
+    const res = await card();
+    expect(res.body).toContain('jeszcze nie pytano');
+    expect(res.body).toContain('nic jeszcze nie odebrano');
+  });
+
+  it('błąd usługi: zatrzymany z przyczyną', async () => {
+    h.inboundServices.setError({ accountId, serviceId: '24138' }, '-24: Usluga nie jest aktywna');
+    const res = await card();
+    expect(res.body).toContain('zatrzymany: -24: Usluga nie jest aktywna');
+  });
+
+  it('konto wstrzymane: odbiór wstrzymany razem z kontem', async () => {
+    h.accounts.pause(accountId, 'certyfikat');
+    const res = await card();
+    expect(res.body).toContain('wstrzymany razem z kontem');
+  });
+});
