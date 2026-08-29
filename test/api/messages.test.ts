@@ -245,6 +245,15 @@ describe('POST /v1/messages - inReplyTo', () => {
     }
   });
 
+  it('odpowiedź musi iść do nadawcy tej wiadomości', async () => {
+    seedInbound();
+    const res = await post({ to: '48601135135', text: 'Odpowiedź', inReplyTo: 'in_1' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('in_reply_to_recipient');
+    // Ten sam numer w innym zapisie przechodzi po normalizacji.
+    expect((await post({ to: '+48 601 135 134', text: 'Odpowiedź', inReplyTo: 'in_1' })).statusCode).toBe(202);
+  });
+
   it('inReplyTo z listą odbiorców jest odrzucane', async () => {
     seedInbound();
     const res = await post({ to: ['48601135134', '48601135135'], text: 'Odpowiedź', inReplyTo: 'in_1' });

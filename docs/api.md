@@ -85,7 +85,7 @@ Pola body żądania:
 | `deliveryReport` | nie | domyślnie `true`; `false` oznacza rezygnację z raportu doręczenia - stan wiadomości kończy się na `sent` |
 | `validTo` | nie | ISO 8601, najwyżej 72 godziny od przyjęcia; wiadomość niedoręczona do tego czasu otrzymuje stan `expired` |
 | `costCenter` | nie | dowolny znacznik na potrzeby rozliczeń aplikacji; zwracany w odczycie wiadomości |
-| `inReplyTo` | nie | identyfikator wiadomości przychodzącej (`in_...`), na którą to odpowiedź (rozdział 5a.3); bramka przekazuje go Multiinfo jako `smsInId`; dopuszczalny tylko przy jednym odbiorcy i w tej samej usłudze, z której wiadomość przyszła |
+| `inReplyTo` | nie | identyfikator wiadomości przychodzącej (`in_...`), na którą to odpowiedź (rozdział 5a.3); bramka przekazuje go Multiinfo jako `smsInId`; dopuszczalny tylko przy jednym odbiorcy, którym jest nadawca tej wiadomości, i w tej samej usłudze, z której przyszła |
 
 **Odpowiedź `202 Accepted`** (dla tablicy `to` - tablica takich obiektów, w kolejności numerów):
 
@@ -483,7 +483,8 @@ curl -s https://<TWOJA-DOMENA>/v1/inbound/in_5c1d9e2b7a3f4d8e6b0a \
 `POST /v1/messages` z polem `inReplyTo` wysyła odpowiedź powiązaną z wiadomością przychodzącą:
 bramka przekazuje Multiinfo identyfikator tej wiadomości (`smsInId`), a `GET /v1/messages/{id}`
 i powiadomienia o tej wysyłce zwracają `inReplyTo`. Wiadomość przychodząca musi pochodzić
-z tej samej usługi, z której idzie odpowiedź, a odpowiedź ma jednego odbiorcę.
+z tej samej usługi, z której idzie odpowiedź, a odpowiedź ma jednego odbiorcę - nadawcę tej
+wiadomości (pole `from` z `message.received`).
 
 ```bash
 curl -s -X POST https://<TWOJA-DOMENA>/v1/messages \
@@ -696,7 +697,8 @@ zredagowane po polsku z myślą o dzienniku aplikacji, nie o wyświetlaniu użyt
 | 400 | `start_at_in_past` | `startAt` rozsyłki w przeszłości | poprawić `startAt` albo pominąć |
 | 400 | `in_reply_to_unknown` | `inReplyTo` wskazuje wiadomość, której nie ma w tej usłudze | użyć identyfikatora z `message.received` tej samej usługi |
 | 400 | `in_reply_to_single` | `inReplyTo` razem z listą odbiorców | jeden odbiorca |
-| 400 | `invalid_query` | `since` albo `until` nie są datami ISO 8601 | poprawić parametry zapytania |
+| 400 | `in_reply_to_recipient` | odbiorca odpowiedzi to nie nadawca wskazanej wiadomości | w `to` podać `from` z `message.received` |
+| 400 | `invalid_query` | `since` albo `until` nie są datami ISO 8601, albo parametr zapytania podano więcej niż raz | poprawić parametry zapytania |
 | 401 | `missing_api_key`, `invalid_api_key`, `revoked_api_key`, `expired_api_key` | brak, nieprawidłowy, odwołany albo wygasły klucz | rozdział 2 |
 | 403 | `service_not_allowed` | usługa spoza uprawnień klucza | użyć usługi przypisanej do klucza |
 | 403 | `orig_not_allowed` | nadpis spoza uprawnień klucza; `message` wymienia dozwolone | użyć jednego z wymienionych |

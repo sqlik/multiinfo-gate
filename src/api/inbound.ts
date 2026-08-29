@@ -21,9 +21,17 @@ function isoOrThrow(name: string, value: string): string {
   return new Date(time).toISOString();
 }
 
+/** Parametr powtórzony w adresie przychodzi jako tablica - do SQL poszłaby tablica, a klient dostałby 500. */
+function rejectRepeated(query: Record<string, unknown>): void {
+  for (const [name, value] of Object.entries(query)) {
+    if (Array.isArray(value)) throw new ApiError(400, 'invalid_query', `Parametr ${name} podano więcej niż raz.`);
+  }
+}
+
 export function registerInboundRoutes(app: FastifyInstance, deps: ApiDeps): void {
   app.get<{ Querystring: Record<string, string> }>('/v1/inbound', async (request) => {
     const auth = authenticate(request.headers.authorization, deps.apiKeys);
+    rejectRepeated(request.query);
     // Ujemny LIMIT znaczy w SQLite „bez ograniczenia”: wartość spoza zakresu wraca do domyślnej.
     const requested = Number.parseInt(request.query.limit ?? '', 10);
     const limit = Number.isInteger(requested) && requested >= 1 ? Math.min(requested, 200) : 25;
