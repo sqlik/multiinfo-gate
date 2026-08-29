@@ -115,7 +115,7 @@ describe('emitWebhook', () => {
   it('nic nie robi dla klucza bez adresu', () => {
     expect(emitWebhook(deps, mutedKeyId, 'message.sent', { id: 'msg_1' }, NOW)).toBeNull();
     expect(deps.jobs.depth()).toBe(0);
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
   });
 });
 
@@ -135,7 +135,7 @@ describe('handleWebhook', () => {
     expect(headers['X-MIG-Signature']).toBe(signWebhook('sekret', TIMESTAMP, body));
     expect(headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(body)).toMatchObject({ event: 'message.delivered', id: 'msg_1' });
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
     expect(deps.deliveries.listRecent(1)[0]!.deliveredAt).toBe(NOW.toISOString());
     expect(deps.deliveries.listRecent(1)[0]!.lastResponse).toBe('200 ok');
     expect(deps.jobs.depth()).toBe(0);
@@ -160,14 +160,14 @@ describe('handleWebhook', () => {
     post.mockResolvedValue({ status: 500, body: 'x' });
     const j = job();
     await handleWebhook({ ...j, attempts: WEBHOOK_BACKOFF_MS.length }, deps, NOW);
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 1 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 1 });
     expect(deps.jobs.depth()).toBe(0);
   });
 
   it('nie ponawia po odpowiedzi 4xx - to błąd odbiorcy, nie sieci', async () => {
     post.mockResolvedValue({ status: 410, body: 'gone' });
     await handleWebhook(job(), deps, NOW);
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 1 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 1 });
     expect(deps.jobs.depth()).toBe(0);
   });
 
@@ -184,7 +184,7 @@ describe('handleWebhook', () => {
     deps.apiKeys.setWebhook(apiKeyId, null, null);
     await handleWebhook(j, deps, NOW);
     expect(post).not.toHaveBeenCalled();
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 1 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 1 });
   });
 });
 

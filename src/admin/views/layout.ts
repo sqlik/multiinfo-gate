@@ -6,7 +6,7 @@ export type NavKey = 'przeglad' | 'wiadomosci' | 'rozsylki' | 'odebrane' | 'kont
 
 export interface NavCounts {
   wiadomosci: number;
-  /** Odebrane, których aplikacja jeszcze nie dostała albo nie przyjęła - nie liczba odebranych. */
+  /** Odebrane, których aplikacja jeszcze nie dostała albo nie przyjęła (w ostatniej dobie) - nie liczba odebranych. */
   odebrane: number;
   konta: number;
   klucze: number;

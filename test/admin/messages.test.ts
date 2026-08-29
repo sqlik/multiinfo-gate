@@ -117,6 +117,12 @@ describe('GET /przeglad - webhooki', () => {
     expect((await page('/przeglad')).body).toContain('3 webhooki nie dotarły');
   });
 
+  it('nie ostrzega o niedostarczonym sprzed doby - alarm ma się sam wygaszać', async () => {
+    const id = h.deliveries.insert({ apiKeyId, event: 'message.sent', payload: '{}', url: 'u', createdAt: new Date(NOW.getTime() - 2 * 86_400_000) });
+    h.deliveries.markFailed(id, '503');
+    expect((await page('/przeglad')).body).not.toContain('nie dotar');
+  });
+
   it('nie ostrzega, gdy webhooki tylko czekają na ponowienie', async () => {
     h.deliveries.insert({ apiKeyId, event: 'message.sent', payload: '{}', url: 'u', createdAt: NOW });
     expect((await page('/przeglad')).body).not.toContain('nie dotar');

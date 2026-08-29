@@ -114,21 +114,28 @@ export class WebhookDeliveriesRepo {
     return rows.map(toRow);
   }
 
-  /** Odebrane, których choć jedna dostawa czeka albo się nie udała - plakietka przy „Odebrane”. */
-  troubledInboundCount(): number {
+  /**
+   * Odebrane, których choć jedna dostawa czeka albo nie udała się od chwili `failedSince` -
+   * plakietka przy „Odebrane”. Oczekujące zawsze; nieudane tylko z okna, żeby liczba gasła sama.
+   */
+  troubledInboundCount(failedSince: Date): number {
     const row = this.db
-      .prepare(`SELECT COUNT(DISTINCT inbound_id) AS n FROM webhook_deliveries WHERE inbound_id IS NOT NULL AND status IN ('pending', 'failed')`)
-      .get() as { n: number };
+      .prepare(
+        `SELECT COUNT(DISTINCT inbound_id) AS n FROM webhook_deliveries
+          WHERE inbound_id IS NOT NULL AND (status = 'pending' OR (status = 'failed' AND created_at >= ?))`,
+      )
+      .get(failedSince.toISOString()) as { n: number };
     return row.n;
   }
 
-  counts(): { pending: number; failed: number } {
+  /** Oczekujące zawsze, nieudane od chwili `failedSince` - jak w `troubledInboundCount`. */
+  counts(failedSince: Date): { pending: number; failed: number } {
     const row = this.db
       .prepare(
         `SELECT SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed FROM webhook_deliveries`,
+                SUM(CASE WHEN status = 'failed' AND created_at >= ? THEN 1 ELSE 0 END) AS failed FROM webhook_deliveries`,
       )
-      .get() as { pending: number | null; failed: number | null };
+      .get(failedSince.toISOString()) as { pending: number | null; failed: number | null };
     return { pending: row.pending ?? 0, failed: row.failed ?? 0 };
   }
 

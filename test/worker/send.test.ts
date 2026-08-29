@@ -238,7 +238,7 @@ describe('handleSend', () => {
     const { id, job } = seedMessage();
     sendLong.mockResolvedValue({ miIds: ['8841207', '8841208'], trace: TRACE });
     await handleSend(job, deps, NOW);
-    expect(deps.deliveries.counts()).toEqual({ pending: 1, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 1, failed: 0 });
     const delivery = deps.deliveries.listRecent(1)[0]!;
     expect(delivery.event).toBe('message.sent');
     expect(JSON.parse(delivery.payload)).toMatchObject({ id, status: 'sent', to: '48601135134', parts: 2 });
@@ -259,7 +259,7 @@ describe('handleSend', () => {
     const { id, job } = seedMessage();
     sendLong.mockResolvedValue({ miIds: ['8841207'], trace: TRACE });
     await handleSend(job, deps, NOW);
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
     expect(deps.events.list(id).map((e) => e.kind)).toEqual(['sent']);
   });
 

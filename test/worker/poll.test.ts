@@ -207,7 +207,7 @@ describe('handlePoll', () => {
     await handlePoll(job, deps, NOW);
     info.mockResolvedValue(reply(21, 0));
     await handlePoll(job, deps, NOW);
-    expect(deps.deliveries.counts()).toEqual({ pending: 0, failed: 0 });
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
   });
 
   it('przedawnienie kolejkuje webhook message.failed ze statusem expired', async () => {

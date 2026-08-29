@@ -51,7 +51,7 @@ function alerts(data: OverviewData, now: Date): string {
     items.push(`<div class="alert stop">
       <div style="display: flex; align-items: center; gap: 10px;">
         <div class="sq"></div>
-        <div>${esc(undeliveredWebhooks(data.webhooks.failed))} do odbiorcy mimo ponowień.
+        <div>${esc(undeliveredWebhooks(data.webhooks.failed))} do odbiorcy mimo ponowień w ostatniej dobie.
           Aplikacja kliencka nie wie o tych zdarzeniach - sprawdź adres webhooka przy kluczu.</div>
       </div>
       <a href="/klucze">Zobacz klucze</a>
