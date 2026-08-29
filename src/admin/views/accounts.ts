@@ -505,7 +505,7 @@ function inboundPanel(v: AccountView, now: Date): string {
       <tr><th style="width: 70px;">ID usługi</th><th style="width: 140px;">Odbierają klucze</th><th>Stan odbiornika</th></tr>
       ${rows}
     </table>
-    <div class="hint" style="padding: 10px 16px;">Odebrane SMS-y trafiają do API Multiinfo tylko wtedy, gdy administrator Multiinfo ustawi
+    <div class="hint" style="padding: 10px 16px;">Odebrane SMS-y trafiają do API Multiinfo tylko wtedy, gdy administrator Polkomtel ustawi
       na koncie kierowanie do API - domyślnie lądują w panelu WWW Multiinfo.</div>
   </div>`;
 }
