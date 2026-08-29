@@ -91,15 +91,15 @@ export function messagesPage(data: MessagesData): string {
     </div>
 
     <div class="panel">
-      <table>
+      <table style="table-layout: fixed;">
         <tr>
-          <th style="width: 150px;">Czas</th>
-          <th style="width: 132px;">Identyfikator</th>
-          <th style="width: 124px;">Numer</th>
+          <th class="nw" style="width: 134px;">Czas</th>
+          <th style="width: 168px;">Identyfikator</th>
+          <th style="width: 82px;">Numer</th>
           <th>Treść</th>
-          <th style="width: 78px;">Kodowanie</th>
-          <th style="width: 62px;">Części</th>
-          <th style="width: 148px;">Status</th>
+          <th style="width: 62px;">Kodowanie</th>
+          <th style="width: 44px;">Części</th>
+          <th class="nw" style="width: 96px;">Status</th>
         </tr>
         ${rows}
       </table>
