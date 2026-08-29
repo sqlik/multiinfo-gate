@@ -100,3 +100,9 @@ export function warsawTimeMs(iso: string): string {
   const ms = new Date(iso).getUTCMilliseconds();
   return `${warsawTime(iso)}.${String(ms).padStart(3, '0')}`;
 }
+
+/** Data i godzina w Polsce z milisekundami: `RRRR-MM-DD GG:MM:SS.mmm` - do przebiegu, który może trwać dni. */
+export function warsawStampMs(iso: string): string {
+  const ms = new Date(iso).getUTCMilliseconds();
+  return `${warsawStamp(iso)}.${String(ms).padStart(3, '0')}`;
+}

@@ -1,7 +1,7 @@
 import type { InboundRow } from '../../store/inbound-messages.ts';
 import type { MessageRow } from '../../store/messages.ts';
 import { deliveriesTable, type DeliveryView } from './deliveries.ts';
-import { warsawStamp, warsawTime } from '../../time/warsaw.ts';
+import { warsawStamp } from '../../time/warsaw.ts';
 import { esc, preview } from './layout.ts';
 import { statusLabel, statusTone } from './status-labels.ts';
 
@@ -115,7 +115,7 @@ export function inboundDetailPage(d: InboundDetail): string {
           <div>Protokół / kodowanie</div><div class="m">${esc(r.protocolId)} / ${esc(r.codingScheme)}</div>
           <div>Konektor</div><div class="m">${esc(r.connectorId ?? '-')}</div>
           <div>Zapisana</div><div class="m">${esc(warsawStamp(r.createdAt))}</div>
-          <div>Ostatnia wysłana do nadawcy</div><div class="m">${d.related === null ? '<span class="dim">brak w ciągu 48 godzin</span>' : `<a href="/wiadomosci/${esc(d.related.id)}">${esc(d.related.id)}</a> · ${esc(warsawTime(d.related.createdAt))}`}</div>
+          <div>Ostatnia wysłana do nadawcy</div><div class="m">${d.related === null ? '<span class="dim">brak w ciągu 48 godzin</span>' : `<a href="/wiadomosci/${esc(d.related.id)}">${esc(d.related.id)}</a> · ${esc(warsawStamp(d.related.createdAt))}`}</div>
           <div style="border-bottom: none;">Odpowiedzi wysłane</div><div style="border-bottom: none;">${replies}</div>
         </div>
       </div>

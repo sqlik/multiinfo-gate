@@ -1,7 +1,7 @@
 import type { AccountRow } from '../../store/accounts.ts';
 import type { MessageRow } from '../../store/messages.ts';
 import { describeSubstatus } from '../../multiinfo/status.ts';
-import { warsawDay, warsawTime } from '../../time/warsaw.ts';
+import { warsawDay, warsawStamp } from '../../time/warsaw.ts';
 import { daysUntil } from './accounts.ts';
 import { esc } from './layout.ts';
 
@@ -28,7 +28,8 @@ export function undeliveredWebhooks(n: number): string {
 /** Od tylu dni do wygaśnięcia certyfikat trafia na pasek ostrzeżeń. */
 const CERT_WARNING_DAYS = 30;
 
-const time = (iso: string | null) => (iso === null ? '' : warsawTime(iso));
+/** Lista niepowodzeń nie jest ograniczona do doby - sama godzina bez daty myliłaby. */
+const time = (iso: string | null) => (iso === null ? '' : warsawStamp(iso));
 
 function host(baseUrl: string): string {
   try {
@@ -197,7 +198,7 @@ export function overviewPage(data: OverviewData, now: Date): string {
       </div>
       <table>
         <tr>
-          <th style="width: 120px;">Czas</th>
+          <th class="nw" style="width: 150px;">Czas</th>
           <th style="width: 150px;">Numer</th>
           <th style="width: 90px;">Kod</th>
           <th>Odpowiedź Multiinfo</th>

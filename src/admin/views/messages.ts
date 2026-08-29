@@ -5,7 +5,7 @@ import { deliveriesTable, type DeliveryView } from './deliveries.ts';
 import type { MessageRow } from '../../store/messages.ts';
 import { measureText } from '../../text/measure.ts';
 import { segmentText } from '../../text/segment.ts';
-import { warsawStamp, warsawTime, warsawTimeMs } from '../../time/warsaw.ts';
+import { warsawStamp, warsawStampMs } from '../../time/warsaw.ts';
 import { esc, preview } from './layout.ts';
 import { segmentPanel } from './segments.ts';
 import { statusLabel, statusTone } from './status-labels.ts';
@@ -61,7 +61,7 @@ export function messagesPage(data: MessagesData): string {
   const rows = data.rows.length === 0
     ? '<tr><td class="dim" colspan="7">Brak wiadomości pasujących do filtrów.</td></tr>'
     : data.rows.map((m) => `<tr>
-        <td class="m dim">${esc(warsawTime(m.createdAt))}</td>
+        <td class="m dim nw">${esc(warsawStamp(m.createdAt))}</td>
         <td class="m"><a href="/wiadomosci/${esc(m.id)}">${esc(m.id)}</a></td>
         <td class="m">${esc(m.dest)}</td>
         <td class="txt">${preview(m.body)}</td>
@@ -93,7 +93,7 @@ export function messagesPage(data: MessagesData): string {
     <div class="panel">
       <table>
         <tr>
-          <th style="width: 92px;">Czas</th>
+          <th style="width: 150px;">Czas</th>
           <th style="width: 132px;">Identyfikator</th>
           <th style="width: 124px;">Numer</th>
           <th>Treść</th>
@@ -242,7 +242,7 @@ export function messagePage(d: MessageDetail): string {
 
   const steps = d.events.length > 0 ? d.events.map(stepOf) : legacySteps(m, substatus);
   const timeline = steps.map((step, index, all) => `<div class="tl-i">
-      <div class="t">${esc(warsawTimeMs(step.at))}</div>
+      <div class="t">${esc(warsawStampMs(step.at))}</div>
       <div class="r"><span class="dot-${step.tone}"></span>${index === all.length - 1 ? '' : '<i></i>'}</div>
       <div class="c">${step.text}</div>
     </div>`).join('');
