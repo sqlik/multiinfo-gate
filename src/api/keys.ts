@@ -1,11 +1,12 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { sha256Hex } from '../text/hash.ts';
 
 const PREFIX = 'mig_live_';
 const PREFIX_LENGTH = 8;
 
 /** Skrót klucza; w bazie nigdy nie leży wartość jawna. */
 export function hashApiKey(key: string): string {
-  return createHash('sha256').update(key, 'utf8').digest('hex');
+  return sha256Hex(key);
 }
 
 export function generateApiKey(): { key: string; hash: string; prefix: string } {

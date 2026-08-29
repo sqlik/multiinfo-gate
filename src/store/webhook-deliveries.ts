@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { sha256Hex } from '../text/hash.ts';
 import type { Database } from 'better-sqlite3';
 
 export type DeliveryStatus = 'pending' | 'delivered' | 'failed';
@@ -105,7 +105,7 @@ export class WebhookDeliveriesRepo {
     if (content === null) return;
     delete payload.text;
     delete payload.hex;
-    payload.bodyHash = createHash('sha256').update(content, 'utf8').digest('hex');
+    payload.bodyHash = sha256Hex(content);
     this.db.prepare('UPDATE webhook_deliveries SET payload = ?, scrub_after = 0 WHERE id = ?').run(JSON.stringify(payload), id);
   }
 
