@@ -74,6 +74,16 @@ describe('GET /odebrane', () => {
     expect((await page('/odebrane')).body).toContain('Odebrane<span class="ct">1</span>');
   });
 
+  it('powiązanie nazywa się uczciwie: ostatnia wysłana do nadawcy, nie odpowiedź', async () => {
+    // Multiinfo nie mówi, na co abonent odpowiada - to tylko ostatnia wiadomość na ten numer.
+    seed('in_1');
+    for (const url of ['/odebrane', '/odebrane/in_1']) {
+      const body = (await page(url)).body;
+      expect(body).toContain('Ostatnia wysłana do nadawcy');
+      expect(body).not.toContain('Odpowiedź na');
+    }
+  });
+
   it('treść nieprzechowywana ma podpis zamiast treści', async () => {
     seed('in_1', { body: null });
     expect((await page('/odebrane')).body).toContain('treść nieprzechowywana');
@@ -114,7 +124,7 @@ describe('GET /odebrane/:id', () => {
     seed('in_1');
     const res = await page('/odebrane/in_1');
     expect(res.body).toContain('Żaden klucz nie subskrybował');
-    expect(res.body).toContain('nie powiązano');
+    expect(res.body).toContain('brak w ciągu 48 godzin');
   });
 
   it('binarna pokazuje hex i typ', async () => {

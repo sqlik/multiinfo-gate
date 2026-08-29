@@ -583,8 +583,9 @@ wtedy wiadomości najpewniej trafiają do panelu WWW Multiinfo zamiast do API.
 ![Zakładka Odebrane z trzema wiadomościami od abonentów, jedna powiązana z wysłaną wiadomością](obrazki/odebrane.png)
 
 Szczegół odebranej wiadomości (odnośnik w kolumnie identyfikatora) pokazuje dane z Multiinfo
-(numer nadawcy, numer usługi, identyfikator w Multiinfo, protokół), wiadomość wysłaną, na którą
-abonent najpewniej odpowiada, odpowiedzi wysłane w wątku oraz ślad dostaw do aplikacji: który
+(numer nadawcy, numer usługi, identyfikator w Multiinfo, protokół), ostatnią wiadomość wysłaną
+do nadawcy w ciągu 48 godzin (podpowiedź kontekstu - Multiinfo nie mówi, na co abonent
+odpowiada), odpowiedzi wysłane w wątku oraz ślad dostaw do aplikacji: który
 klucz dostał powiadomienie, ile było prób i jaka była odpowiedź aplikacji. Dostawę nieudaną
 (aplikacja odpowiedziała `4xx` albo wyczerpała ponowienia) można ponowić przyciskiem „Ponów”
 w tym samym wierszu - wraca do kolejki jak nowa, z podpisem bieżącym sekretem klucza; ten sam
