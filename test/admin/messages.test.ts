@@ -141,10 +141,17 @@ describe('GET /wiadomosci', () => {
     expect(res.body).not.toContain('10:00:00');
   });
 
-  it('w szczególe wiadomości przebieg ma czas polski z milisekundami', async () => {
+  it('w szczególe wiadomości przebieg ma datę i czas polski z milisekundami', async () => {
+    // Odpytywanie statusu trwa do 7 dni - sama godzina bez daty myli.
     const res = await page('/wiadomosci/m1');
-    expect(res.body).toContain('12:00:00.000');
+    expect(res.body).toContain('2026-08-25 12:00:00.000');
     expect(res.body).not.toContain('10:00:00.000');
+  });
+
+  it('listy pokazują datę razem z godziną - wiersze mogą być z różnych dni', async () => {
+    seed('f1', { status: 'failed' });
+    expect((await page('/wiadomosci')).body).toContain('2026-08-25 12:00:00');
+    expect((await page('/przeglad')).body).toContain('2026-08-25 12:00:00');
   });
 
   it('filtruje po statusie', async () => {

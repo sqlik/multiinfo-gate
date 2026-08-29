@@ -115,7 +115,8 @@ describe('GET /odebrane/:id', () => {
     h.deliveries.markDelivered(d, NOW, '204 ');
     const res = await page('/odebrane/in_1');
     expect(res.statusCode).toBe(200);
-    for (const s of ['48601000001', '7968', '24138', 'Dziekuje, jasne', 'href="/wiadomosci/msg_pod"', 'href="/wiadomosci/msg_odp"', 'Powiadomienia CRM', 'doręczony', '2026-08-25 11:14:00', '60199']) {
+    // Ostatnia wysłana do nadawcy z datą - z oknem 48 h może być z wczoraj.
+    for (const s of ['48601000001', '7968', '24138', 'Dziekuje, jasne', 'href="/wiadomosci/msg_pod"', '2026-08-25 11:00:00', 'href="/wiadomosci/msg_odp"', 'Powiadomienia CRM', 'doręczony', '2026-08-25 11:14:00', '60199']) {
       expect(res.body).toContain(s);
     }
   });
