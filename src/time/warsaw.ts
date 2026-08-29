@@ -48,15 +48,23 @@ export function endOfWarsawDay(day: string): string {
 }
 
 const COMPACT = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/;
+const COMPACT_PLUS = /^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/;
 
 /**
- * Chwila UTC dla daty `yyyyMMddhhmmss` podanej w czasie polskim - tak Multiinfo
- * datuje wiadomości przychodzące. Dwa przebiegi, jak w `endOfWarsawDay`.
+ * Chwila UTC dla daty odbioru podanej w czasie polskim. Dokumentacja Multiinfo obiecuje
+ * `yyyyMMddhhmmss`, a prawdziwe getsms.aspx wysyła `ddMMyyHHmmss` (sprawdzone 2026-08-29:
+ * `290826191802` = 29.08.2026 19:18:02) - obsługujemy obie postaci. Dwa przebiegi, jak w `endOfWarsawDay`.
  */
 export function warsawCompactToIso(compact: string): string {
-  const m = COMPACT.exec(compact.trim());
-  if (!m) throw new Error(`Data musi mieć postać yyyyMMddhhmmss, jest: ${compact}`);
-  const [y, mo, d, h, mi, s] = m.slice(1).map(Number) as [number, number, number, number, number, number];
+  const value = compact.trim();
+  let y: number; let mo: number; let d: number; let h: number; let mi: number; let s: number;
+  const long = COMPACT.exec(value);
+  const short = long ? null : COMPACT_PLUS.exec(value);
+  if (long) [y, mo, d, h, mi, s] = long.slice(1).map(Number) as [number, number, number, number, number, number];
+  else if (short) {
+    const [dd, mm, yy, hh, min, ss] = short.slice(1).map(Number) as [number, number, number, number, number, number];
+    [y, mo, d, h, mi, s] = [2000 + yy, mm, dd, hh, min, ss];
+  } else throw new Error(`Data musi mieć postać yyyyMMddhhmmss albo ddMMyyHHmmss, jest: ${compact}`);
   const wall = Date.UTC(y, mo - 1, d, h, mi, s);
   const guess = new Date(wall - offsetMs(new Date(wall)));
   return new Date(wall - offsetMs(guess)).toISOString();

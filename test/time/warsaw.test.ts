@@ -66,6 +66,12 @@ describe('warsawCompactToIso', () => {
   it('lato: czas polski to UTC+2', () => {
     expect(warsawCompactToIso('20260829091400')).toBe('2026-08-29T07:14:00.000Z');
   });
+
+  it('rozumie postać ddMMyyHHmmss, którą naprawdę wysyła Plus (sprawdzone 2026-08-29)', () => {
+    // PDF obiecuje yyyyMMddhhmmss; prawdziwe getsms.aspx dało 290826191802 = 29.08.2026 19:18:02 czasu polskiego.
+    expect(warsawCompactToIso('290826191802')).toBe('2026-08-29T17:18:02.000Z');
+    expect(warsawCompactToIso('311226235959')).toBe('2026-12-31T22:59:59.000Z');
+  });
   it('zima: czas polski to UTC+1', () => {
     expect(warsawCompactToIso('20260115120000')).toBe('2026-01-15T11:00:00.000Z');
   });
