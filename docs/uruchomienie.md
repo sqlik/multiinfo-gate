@@ -136,8 +136,12 @@ API - wszystkich albo tylko zaczynających się od określonego prefiksu. Bez te
 pyta Multiinfo i zawsze dostaje pustą odpowiedź. Jak bramka odbiera i przekazuje wiadomości,
 opisuje punkt 4.5 (włączenie przy kluczu) i 5.5 (pierwsza próba).
 
-Multiinfo zamienia polskie znaki w odebranych wiadomościach na łacińskie odpowiedniki i skleja
-wiadomości wieloczęściowe w jedną.
+Polskie znaki w odebranych wiadomościach zależą od tego, jak telefon nadawcy zakodował SMS-a:
+współczesne telefony przy znakach spoza alfabetu GSM same przełączają się na Unicode (UCS-2) i
+wtedy treść dociera bez zmian („Zażółć” zostaje „Zażółć”; w panelu bramki taka wiadomość ma
+schemat kodowania `8`). Tylko przy wymuszonym w telefonie alfabecie GSM (schemat `0`) polskie
+znaki są zastępowane łacińskimi odpowiednikami. Wiadomości wieloczęściowe Multiinfo skleja w
+jedną.
 
 ### 1.7. Co powinno być gotowe przed rozdziałem 2
 
