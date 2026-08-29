@@ -11,6 +11,8 @@ export interface ApiKeyRow {
   createdAt: string; allowedServiceIds: string[];
   /** Nadpisy, których klucz może użyć jawnie, poza swoją wartością domyślną. */
   allowedOrigs: string[];
+  /** Klucz odbiera wiadomości przychodzące: dostaje message.received ze swoich usług. */
+  inboundSubscribed: 0 | 1;
 }
 
 export interface ApiKeyInput {
@@ -22,6 +24,8 @@ export interface ApiKeyInput {
   origs?: string[];
   /** Pominięcie albo `null` oznacza klucz bezterminowy. */
   expiresAt?: string | null;
+  /** Pominięcie oznacza brak odbioru. */
+  inboundSubscribed?: 0 | 1;
 }
 
 export interface ApiKeyPatch {
@@ -30,19 +34,21 @@ export interface ApiKeyPatch {
   /** Pominięty = bez zmiany; `null` = kasuje; tekst = nowy sekret. */
   webhookSecret?: string | null;
   expiresAt: string | null; serviceIds: string[]; origs: string[];
+  inboundSubscribed: 0 | 1;
 }
 
 /** Kolumna `webhook_secret_enc` nie jest tu wymieniona - sekret nie opuszcza bazy. */
 const PUBLIC_COLUMNS = `
   id, account_id, name, key_hash, key_prefix, default_service_id, default_orig,
-  max_parts, rate_per_min, webhook_url, last_used_at, revoked_at, expires_at, created_at`;
+  max_parts, rate_per_min, webhook_url, last_used_at, revoked_at, expires_at, created_at,
+  inbound_subscribed`;
 
 interface RawApiKey {
   id: number; account_id: number; name: string; key_hash: string; key_prefix: string;
   default_service_id: string | null; default_orig: string | null;
   max_parts: number; rate_per_min: number;
   webhook_url: string | null; last_used_at: string | null; revoked_at: string | null;
-  expires_at: string | null; created_at: string;
+  expires_at: string | null; created_at: string; inbound_subscribed: 0 | 1;
 }
 
 export class ApiKeysRepo {
@@ -69,6 +75,7 @@ export class ApiKeysRepo {
       createdAt: r.created_at,
       allowedServiceIds: this.serviceIds(r.id),
       allowedOrigs: this.origs(r.id),
+      inboundSubscribed: r.inbound_subscribed,
     };
   }
 
@@ -116,8 +123,8 @@ export class ApiKeysRepo {
         .prepare(
           `INSERT INTO api_keys (
              account_id, name, key_hash, key_prefix, default_service_id, default_orig,
-             max_parts, rate_per_min, webhook_url, webhook_secret_enc, expires_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             max_parts, rate_per_min, webhook_url, webhook_secret_enc, expires_at, inbound_subscribed
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           input.accountId,
@@ -131,6 +138,7 @@ export class ApiKeysRepo {
           input.webhookUrl,
           input.webhookSecret === null ? null : encryptSecret(input.webhookSecret, this.masterKey),
           input.expiresAt ?? null,
+          input.inboundSubscribed ?? 0,
         );
       const id = Number(info.lastInsertRowid);
 
@@ -155,7 +163,7 @@ export class ApiKeysRepo {
       this.db
         .prepare(
           `UPDATE api_keys SET name = ?, default_service_id = ?, default_orig = ?, max_parts = ?,
-             rate_per_min = ?, webhook_url = ?, expires_at = ? WHERE id = ?`,
+             rate_per_min = ?, webhook_url = ?, expires_at = ?, inbound_subscribed = ? WHERE id = ?`,
         )
         .run(
           patch.name,
@@ -165,6 +173,7 @@ export class ApiKeysRepo {
           patch.ratePerMin,
           patch.webhookUrl,
           patch.expiresAt,
+          patch.inboundSubscribed,
           id,
         );
       if (patch.webhookSecret !== undefined) {
@@ -199,6 +208,23 @@ export class ApiKeysRepo {
       for (const serviceId of key.allowedServiceIds) note(serviceId, key.name);
     }
     return new Map([...used].map(([serviceId, names]) => [serviceId, [...names].sort()]));
+  }
+
+  /**
+   * Klucze, które mają dostać message.received z danej usługi: subskrybujące, z adresem
+   * webhooka, czynne w tej chwili i z dostępem do usługi. Pusta lista gasi odbiór usługi.
+   */
+  inboundSubscribers(accountId: number, serviceId: string, now: Date): ApiKeyRow[] {
+    const rows = this.db
+      .prepare(
+        `SELECT ${PUBLIC_COLUMNS} FROM api_keys k
+          WHERE k.account_id = ? AND k.inbound_subscribed = 1 AND k.webhook_url IS NOT NULL
+            AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at > ?)
+            AND EXISTS (SELECT 1 FROM api_key_services s WHERE s.api_key_id = k.id AND s.service_id = ?)
+          ORDER BY k.id`,
+      )
+      .all(accountId, now.toISOString(), serviceId) as RawApiKey[];
+    return rows.map((r) => this.toRow(r));
   }
 
   revoke(id: number): void {

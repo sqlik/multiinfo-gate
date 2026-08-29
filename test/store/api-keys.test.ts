@@ -126,7 +126,7 @@ describe('ApiKeysRepo', () => {
     keys.update(id, {
       name: 'Nowa nazwa', defaultServiceId: '99001', defaultOrig: 'Firma',
       maxParts: 3, ratePerMin: 10, webhookUrl: 'https://a.example/h',
-      expiresAt: '2026-12-31T23:00:00.000Z', serviceIds: ['99001'], origs: ['Firma'],
+      expiresAt: '2026-12-31T23:00:00.000Z', serviceIds: ['99001'], origs: ['Firma'], inboundSubscribed: 0,
     });
     const row = keys.get(id)!;
     expect(row.name).toBe('Nowa nazwa');
@@ -137,7 +137,7 @@ describe('ApiKeysRepo', () => {
     expect(row.expiresAt).toBe('2026-12-31T23:00:00.000Z');
     expect(keys.webhookSecret(id)).toBe('stary');
     keys.update(id, { name: 'Nowa nazwa', defaultServiceId: '99001', defaultOrig: null, maxParts: 3, ratePerMin: 10,
-      webhookUrl: null, webhookSecret: null, expiresAt: null, serviceIds: ['99001'], origs: [] });
+      webhookUrl: null, webhookSecret: null, expiresAt: null, serviceIds: ['99001'], origs: [], inboundSubscribed: 0 });
     expect(keys.webhookSecret(id)).toBeNull();
     expect(keys.get(id)!.expiresAt).toBeNull();
     expect(keys.get(id)!.allowedOrigs).toEqual([]);
@@ -153,5 +153,42 @@ describe('ApiKeysRepo', () => {
     const used = keys.serviceIdsInUse(accountId);
     expect(used.get('24138')).toEqual(['Agencja', 'Sklep']);
     expect(used.get('99001')).toEqual(['Agencja']);
+  });
+});
+
+describe('ApiKeysRepo.inboundSubscribers', () => {
+  const NOW = new Date('2026-08-29T10:00:00Z');
+  const base = (accountId: number, over: Partial<ApiKeyInput> = {}): ApiKeyInput => ({
+    // Skrót jest unikalny w bazie, więc pochodzi od prefiksu.
+    accountId, name: 'crm', keyHash: `argon2:${over.keyPrefix ?? 'p'}`, keyPrefix: 'p', defaultServiceId: '24138', defaultOrig: null,
+    maxParts: 9, ratePerMin: 60, webhookUrl: 'https://crm.example/hook', webhookSecret: 's',
+    serviceIds: ['24138'], inboundSubscribed: 1, ...over,
+  });
+
+  it('domyślnie klucz nie subskrybuje', () => {
+    const { keys, accountId } = setup();
+    const id = keys.insert(base(accountId, { inboundSubscribed: undefined }));
+    expect(keys.get(id)!.inboundSubscribed).toBe(0);
+  });
+
+  it('zwraca tylko czynne, subskrybujące klucze z webhookiem i dostępem do usługi', () => {
+    const { keys, accountId } = setup();
+    const ok = keys.insert(base(accountId));
+    keys.insert(base(accountId, { name: 'bez subskrypcji', keyPrefix: 'p2', inboundSubscribed: 0 }));
+    keys.insert(base(accountId, { name: 'bez webhooka', keyPrefix: 'p3', webhookUrl: null, webhookSecret: null }));
+    keys.insert(base(accountId, { name: 'inna usługa', keyPrefix: 'p4', serviceIds: ['24902'], defaultServiceId: '24902' }));
+    keys.insert(base(accountId, { name: 'wygasły', keyPrefix: 'p5', expiresAt: '2026-08-29T09:00:00.000Z' }));
+    const revoked = keys.insert(base(accountId, { name: 'odwołany', keyPrefix: 'p6' }));
+    keys.revoke(revoked);
+    expect(keys.inboundSubscribers(accountId, '24138', NOW).map((k) => k.id)).toEqual([ok]);
+    expect(keys.inboundSubscribers(accountId, '24902', NOW).map((k) => k.name)).toEqual(['inna usługa']);
+  });
+
+  it('edycja zmienia subskrypcję', () => {
+    const { keys, accountId } = setup();
+    const id = keys.insert(base(accountId, { inboundSubscribed: 0 }));
+    keys.update(id, { name: 'crm', defaultServiceId: '24138', defaultOrig: null, maxParts: 9, ratePerMin: 60,
+      webhookUrl: 'https://crm.example/hook', expiresAt: null, serviceIds: ['24138'], origs: [], inboundSubscribed: 1 });
+    expect(keys.get(id)!.inboundSubscribed).toBe(1);
   });
 });
