@@ -64,7 +64,11 @@ describe('Receiver.pollOnce', () => {
     expect(confirmSms).toHaveBeenCalledTimes(2);
   });
 
-  it('wiąże z ostatnią wysłaną na ten numer z tej usługi w oknie 7 dni', async () => {
+  it('okno powiązania to 48 godzin - na numerach testowych 7 dni dawało fałszywe „odpowiedzi” (2026-08-29)', () => {
+    expect(RELATED_WINDOW_MS).toBe(48 * 3600_000);
+  });
+
+  it('wiąże z ostatnią wysłaną na ten numer z tej usługi w oknie 48 godzin', async () => {
     deps.apiKeys.insert(keyInput(accountId));
     const keyId = deps.apiKeys.list()[0]!.id;
     const msg = (id: string, createdAt: string, serviceId = '24138') => deps.messages.insert({
@@ -72,6 +76,7 @@ describe('Receiver.pollOnce', () => {
       parts: 1, slots: 1, orig: null, costCenter: null, validTo: null, idempotencyKey: null, createdAt,
     });
     msg('msg_stara', new Date(NOW.getTime() - RELATED_WINDOW_MS - 1000).toISOString());
+    msg('msg_sprzed_3_dni', new Date(NOW.getTime() - 3 * 86_400_000).toISOString());
     msg('msg_a', new Date(NOW.getTime() - 3600_000).toISOString());
     msg('msg_b', new Date(NOW.getTime() - 60_000).toISOString());
     msg('msg_inna', new Date(NOW.getTime() - 1000).toISOString(), '24902');

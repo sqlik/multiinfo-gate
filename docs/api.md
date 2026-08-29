@@ -472,7 +472,7 @@ curl -s https://<TWOJA-DOMENA>/v1/inbound/in_5c1d9e2b7a3f4d8e6b0a \
 | `text` / `hex` | treść; brak obu pól, gdy konto Multiinfo ma wyłączone przechowywanie treści - wtedy treść jest tylko w powiadomieniu `message.received`, a tu zamiast niej `bodyHash` |
 | `bodyHash` | SHA-256 treści (szesnastkowo), tylko gdy `text`/`hex` nie występują; pozwala dopasować odczyt do treści dostarczonej powiadomieniem |
 | `receivedAt` | chwila odbioru przez Multiinfo (czas polski przeliczony na UTC) |
-| `relatedMessageId` | identyfikator ostatniej wiadomości wysłanej z tej samej usługi na numer nadawcy w ciągu 7 dni; podpowiedź, na co abonent odpowiada; `null`, gdy brak |
+| `relatedMessageId` | identyfikator ostatniej wiadomości wysłanej z tej samej usługi na numer nadawcy w ciągu 48 godzin; podpowiedź kontekstu, nie stwierdzenie - Multiinfo nie przekazuje, na co abonent odpowiada, więc na numerze, na który aplikacja wysyła regularnie, pole będzie wypełnione także wtedy, gdy SMS nie jest odpowiedzią; `null`, gdy brak |
 | `protocolId`, `codingScheme` | parametry protokołu SMS przepisane z Multiinfo; dla zwykłego tekstu `0` i `0` |
 
 | HTTP | `error.code` | Przyczyna | Postępowanie |

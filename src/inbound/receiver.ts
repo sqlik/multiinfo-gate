@@ -34,8 +34,12 @@ export interface ReceiverDeps {
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
 }
 
-/** Okno, w którym szukamy wysłanej wiadomości, na którą abonent odpowiada. */
-export const RELATED_WINDOW_MS = 7 * 86_400_000;
+/**
+ * Okno, w którym szukamy ostatniej wiadomości wysłanej do nadawcy. To podpowiedź kontekstu,
+ * nie stwierdzenie - Multiinfo nie mówi, na co abonent odpowiada. Było 7 dni; na numerach,
+ * na które wysyła się regularnie, każdy SMS dostawał „powiązanie” (2026-08-29), stąd 48 h.
+ */
+export const RELATED_WINDOW_MS = 48 * 3600_000;
 
 /** Wycofywanie po błędach przejściowych; ostatni próg powtarzany do skutku. */
 export const INBOUND_BACKOFF_MS = [5_000, 30_000, 120_000, 600_000] as const;

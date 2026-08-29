@@ -63,7 +63,7 @@ export function inboundPage(d: InboundListData): string {
           <th style="width: 82px;">Nadawca</th>
           <th class="nw" style="width: 98px;">Konto · usługa</th>
           <th>Treść</th>
-          <th class="nw" style="width: 172px;">Odpowiedź na</th>
+          <th class="nw" style="width: 200px;">Ostatnia wysłana do nadawcy</th>
         </tr>
         ${rows}
       </table>
@@ -115,7 +115,7 @@ export function inboundDetailPage(d: InboundDetail): string {
           <div>Protokół / kodowanie</div><div class="m">${esc(r.protocolId)} / ${esc(r.codingScheme)}</div>
           <div>Konektor</div><div class="m">${esc(r.connectorId ?? '-')}</div>
           <div>Zapisana</div><div class="m">${esc(warsawStamp(r.createdAt))}</div>
-          <div>Odpowiedź na</div><div class="m">${d.related === null ? '<span class="dim">nie powiązano</span>' : `<a href="/wiadomosci/${esc(d.related.id)}">${esc(d.related.id)}</a> · ${esc(warsawTime(d.related.createdAt))}`}</div>
+          <div>Ostatnia wysłana do nadawcy</div><div class="m">${d.related === null ? '<span class="dim">brak w ciągu 48 godzin</span>' : `<a href="/wiadomosci/${esc(d.related.id)}">${esc(d.related.id)}</a> · ${esc(warsawTime(d.related.createdAt))}`}</div>
           <div style="border-bottom: none;">Odpowiedzi wysłane</div><div style="border-bottom: none;">${replies}</div>
         </div>
       </div>
