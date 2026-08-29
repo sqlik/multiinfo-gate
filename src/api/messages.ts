@@ -22,6 +22,8 @@ const bodySchema = z.object({
   deliveryReport: z.boolean().default(true),
   validTo: z.string().datetime().optional(),
   costCenter: z.string().optional(),
+  /** Wiadomość przychodząca, na którą to odpowiedź; identyfikator ma stały kształt, reszta to sprawdzenie w bazie. */
+  inReplyTo: z.string().regex(/^in_[A-Za-z0-9_]{1,40}$/).optional(),
 });
 
 const shortId = () => `msg_${randomUUID().replace(/-/g, '').slice(0, 20)}`;
@@ -54,6 +56,17 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
     if (!serviceId) throw new ApiError(400, 'service_required', 'Klucz nie ma domyślnej usługi - podaj serviceId.');
     if (!auth.allowedServiceIds.includes(serviceId)) {
       throw new ApiError(403, 'service_not_allowed', `Klucz nie ma dostępu do usługi ${serviceId}.`);
+    }
+
+    let inReplyTo: string | null = null;
+    if (input.inReplyTo !== undefined) {
+      // Odpowiedź dotyczy jednej rozmowy: jeden odbiorca, wiadomość z tej samej usługi konta.
+      if (Array.isArray(input.to)) throw new ApiError(400, 'in_reply_to_single', 'inReplyTo dopuszcza jednego odbiorcę.');
+      const original = deps.inbound.get(input.inReplyTo);
+      if (!original || original.accountId !== auth.accountId || original.serviceId !== serviceId) {
+        throw new ApiError(400, 'in_reply_to_unknown', 'Nie ma takiej wiadomości przychodzącej w tej usłudze.');
+      }
+      inReplyTo = original.id;
     }
 
     const orig = resolveOrig(input.orig, auth, account, deps.accounts);
@@ -124,6 +137,7 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
         orig: orig ?? null, costCenter: input.costCenter ?? null,
         validTo: validTo?.toISOString() ?? null,
         idempotencyKey: perRecipientIdem ?? null,
+        inReplyTo,
         createdAt: now().toISOString(),
       });
       deps.jobs.enqueue('send', { messageId: id, text: input.text, deliveryReport: input.deliveryReport }, now());
@@ -183,6 +197,7 @@ function present(m: MessageRow) {
     slots: m.slots,
     orig: m.orig,
     serviceId: m.serviceId,
+    inReplyTo: m.inReplyTo,
     createdAt: m.createdAt,
     sentAt: m.sentAt,
     finalAt: m.finalAt,
