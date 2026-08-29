@@ -490,7 +490,8 @@ function inboundPanel(v: AccountView, now: Date): string {
     else {
       const polled = state.lastPollAt === null ? 'jeszcze nie pytano' : `ostatnio pytano ${ago(state.lastPollAt, now)}`;
       const received = state.lastReceivedAt === null ? 'nic jeszcze nie odebrano' : `ostatnia odebrana ${warsawStamp(state.lastReceivedAt)}`;
-      status = `<span class="st"><span class="dot dot-ok"></span>aktywny</span> <span class="dim">· ${esc(polled)} · ${esc(received)}</span>`;
+      status = `<span class="st"><span class="dot dot-ok"></span>aktywny</span>
+        <div class="dim" style="font-size: 11.5px; margin-top: 2px;">${esc(polled)} · ${esc(received)}</div>`;
     }
     return `<tr>
       <td class="m">${esc(serviceId)}</td>
@@ -501,7 +502,7 @@ function inboundPanel(v: AccountView, now: Date): string {
   return `<div class="panel">
     <div class="panel-h"><div class="lab">Odbiór wiadomości</div><a href="/klucze">Subskrypcje przy kluczach</a></div>
     <table>
-      <tr><th style="width: 110px;">ID usługi</th><th style="width: 220px;">Odbierają klucze</th><th>Stan odbiornika</th></tr>
+      <tr><th style="width: 70px;">ID usługi</th><th style="width: 140px;">Odbierają klucze</th><th>Stan odbiornika</th></tr>
       ${rows}
     </table>
     <div class="hint" style="padding: 10px 16px;">Odebrane SMS-y trafiają do API Multiinfo tylko wtedy, gdy administrator Multiinfo ustawi

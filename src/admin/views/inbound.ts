@@ -39,10 +39,10 @@ export function inboundPage(d: InboundListData): string {
   const rows = d.rows.length === 0
     ? '<tr><td class="dim" colspan="6">Brak wiadomości pasujących do filtrów.</td></tr>'
     : d.rows.map((r) => `<tr>
-        <td class="m dim">${esc(warsawStamp(r.receivedAt))}</td>
+        <td class="m dim nw">${esc(warsawStamp(r.receivedAt))}</td>
         <td class="m"><a href="/odebrane/${esc(r.id)}">${esc(r.id)}</a></td>
         <td class="m">${esc(r.sender)}</td>
-        <td class="m">${esc(names.get(r.accountId) ?? `konto ${r.accountId}`)} · ${esc(r.serviceId)}</td>
+        <td class="m nw">${esc(names.get(r.accountId) ?? `konto ${r.accountId}`)} · ${esc(r.serviceId)}</td>
         <td class="txt">${preview(r)}</td>
         <td class="m">${r.relatedMessageId === null ? '<span class="dim">-</span>' : `<a href="/wiadomosci/${esc(r.relatedMessageId)}">${esc(r.relatedMessageId)}</a>`}</td>
       </tr>`).join('');
@@ -64,14 +64,14 @@ export function inboundPage(d: InboundListData): string {
       <button class="btn btn-s" type="submit">Filtruj</button>
     </form>
     <div class="panel">
-      <table>
+      <table style="table-layout: fixed;">
         <tr>
-          <th style="width: 150px;">Odebrana</th>
-          <th style="width: 132px;">Identyfikator</th>
-          <th style="width: 124px;">Nadawca</th>
-          <th style="width: 170px;">Konto · usługa</th>
+          <th class="nw" style="width: 134px;">Odebrana</th>
+          <th style="width: 168px;">Identyfikator</th>
+          <th style="width: 82px;">Nadawca</th>
+          <th class="nw" style="width: 98px;">Konto · usługa</th>
           <th>Treść</th>
-          <th style="width: 150px;">Odpowiedź na</th>
+          <th class="nw" style="width: 172px;">Odpowiedź na</th>
         </tr>
         ${rows}
       </table>
@@ -103,13 +103,15 @@ export function inboundDetailPage(d: InboundDetail): string {
     ? `<div class="ruler dim" style="font-size: 13px; line-height: 1.7;">Treść nieprzechowywana - konto ${esc(d.accountName)} ma wyłączone przechowywanie treści.</div>`
     : `<div class="ruler"${r.kind === 'binary' ? ' style="font-family: monospace;"' : ''}>${esc(r.body)}</div>`;
   const deliveries = d.deliveries.length === 0
-    ? '<tr><td class="dim" colspan="5">Żaden klucz nie subskrybował tej usługi w chwili odbioru.</td></tr>'
+    ? '<tr><td class="dim" colspan="4">Żaden klucz nie subskrybował tej usługi w chwili odbioru.</td></tr>'
     : d.deliveries.map(({ delivery, keyName }) => `<tr>
-        <td>${esc(keyName)}</td>
-        <td class="m">${esc(delivery.url)}</td>
+        <td class="txt">
+          <strong>${esc(keyName)}</strong>
+          <div class="m dim txt" style="font-size: 11px; margin-top: 2px;" title="${esc(delivery.url)}">${esc(delivery.url)}</div>
+        </td>
         <td class="m">${esc(delivery.attempts)}</td>
-        <td>${deliveryState(delivery)}</td>
-        <td class="m dim">${esc(delivery.lastResponse ?? '')}</td>
+        <td class="nw">${deliveryState(delivery)}</td>
+        <td class="m dim txt" title="${esc(delivery.lastResponse ?? '')}">${esc(delivery.lastResponse ?? '')}</td>
       </tr>`).join('');
   const replies = d.replies.length === 0
     ? '<span class="dim">brak</span>'
@@ -143,8 +145,8 @@ export function inboundDetailPage(d: InboundDetail): string {
       </div>
       <div class="panel">
         <div class="panel-h"><div class="lab">Dostawy do aplikacji</div></div>
-        <table>
-          <tr><th>Klucz</th><th>Adres</th><th style="width: 60px;">Próby</th><th style="width: 120px;">Stan</th><th>Odpowiedź</th></tr>
+        <table style="table-layout: fixed;">
+          <tr><th>Klucz · adres</th><th style="width: 36px;">Próby</th><th style="width: 80px;">Stan</th><th style="width: 72px;">Odpowiedź</th></tr>
           ${deliveries}
         </table>
       </div>
