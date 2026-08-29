@@ -14,6 +14,10 @@ Dla firmy z kontem Multiinfo, która chce dać własnym systemom albo agencji ze
 jedno API zamiast certyfikatów, oraz panel do zarządzania kontami, kluczami i podglądu
 doręczeń.
 
+Od wersji 1.3 bramka odbiera też SMS-y od abonentów: przekazuje je aplikacji powiadomieniem
+`message.received`, udostępnia do odczytu przez `GET /v1/inbound` i pozwala odpowiedzieć
+w wątku (`inReplyTo`).
+
 ## Co trzeba mieć
 
 - Konto Multiinfo z użytkownikiem API i certyfikatem (`.pfx` z hasłem)
