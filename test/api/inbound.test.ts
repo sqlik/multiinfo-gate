@@ -84,6 +84,9 @@ describe('GET /v1/inbound', () => {
     });
     expect(rows[0]).not.toHaveProperty('text');
     expect(rows[0]).not.toHaveProperty('hex');
+    // Bez treści zostaje skrót - ten sam, który dostaje aplikacja w dostawie po wyczyszczeniu payloadu.
+    expect(rows[0].bodyHash).toBe('h');
+    expect(rows[1]).not.toHaveProperty('bodyHash');
   });
 
   it('binarna z treścią ma hex zamiast text', async () => {

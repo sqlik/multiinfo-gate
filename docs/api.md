@@ -469,7 +469,8 @@ curl -s https://<TWOJA-DOMENA>/v1/inbound/in_5c1d9e2b7a3f4d8e6b0a \
 | `from` | numer nadawcy; numer krótki albo nietypowy przepisany bez zmian |
 | `to` | numer usługi, na który wiadomość przyszła |
 | `kind` | `text` albo `binary`; przy `binary` zamiast `text` jest `hex` (dane szesnastkowe od Multiinfo, bez interpretacji) |
-| `text` / `hex` | treść; brak obu pól, gdy konto Multiinfo ma wyłączone przechowywanie treści - wtedy treść jest tylko w powiadomieniu `message.received` |
+| `text` / `hex` | treść; brak obu pól, gdy konto Multiinfo ma wyłączone przechowywanie treści - wtedy treść jest tylko w powiadomieniu `message.received`, a tu zamiast niej `bodyHash` |
+| `bodyHash` | SHA-256 treści (szesnastkowo), tylko gdy `text`/`hex` nie występują; pozwala dopasować odczyt do treści dostarczonej powiadomieniem |
 | `receivedAt` | chwila odbioru przez Multiinfo (czas polski przeliczony na UTC) |
 | `relatedMessageId` | identyfikator ostatniej wiadomości wysłanej z tej samej usługi na numer nadawcy w ciągu 7 dni; podpowiedź, na co abonent odpowiada; `null`, gdy brak |
 | `protocolId`, `codingScheme` | parametry protokołu SMS przepisane z Multiinfo; dla zwykłego tekstu `0` i `0` |
