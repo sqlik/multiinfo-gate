@@ -71,3 +71,48 @@ export function parsePackageFullInfo(body: string): PackageFullInfoResponse {
     minutesLeft: Number.parseInt(fields[3] ?? '0', 10) || 0,
   };
 }
+
+export interface InboundSms {
+  miId: string; sender: string; dest: string; kind: 'text' | 'binary'; content: string;
+  protocolId: number; codingScheme: number; serviceId: string; connectorId: string;
+  /** yyyyMMddhhmmss w czasie polskim, tak jak podał Plus. */
+  receivedAt: string;
+}
+
+/** Numery wierszy odpowiedzi getsms.aspx po zdjęciu linii statusu (§3.1). */
+const INBOUND_LINE = { miId: 0, sender: 1, dest: 2, kind: 3, content: 4, protocolId: 5, codingScheme: 6, serviceId: 7, connectorId: 8, receivedAt: 9 } as const;
+
+/** Treść tekstowa jest zakodowana jak w formularzu; zły bajt nie może zgubić wiadomości. */
+function decodeForm(raw: string): string {
+  const spaced = raw.replace(/\+/g, ' ');
+  try {
+    return decodeURIComponent(spaced);
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * Wiersze getsms.aspx po zdjęciu linii statusu; `null` dla identyfikatora -1 (brak wiadomości).
+ * Treść tekstowa przychodzi zakodowana jak w formularzu (spacja jako plus). Binarna to hex
+ * „nagłówek[spacja]dane” i zostaje bez zmian - bramka jej nie interpretuje.
+ */
+export function parseInboundSms(lines: string[]): InboundSms | null {
+  const miId = (lines[INBOUND_LINE.miId] ?? '').trim();
+  if (miId === '-1' || miId === '') return null;
+  const kind = (lines[INBOUND_LINE.kind] ?? '1').trim() === '2' ? 'binary' : 'text';
+  const raw = lines[INBOUND_LINE.content] ?? '';
+  const content = kind === 'text' ? decodeForm(raw) : raw.trim();
+  return {
+    miId,
+    sender: (lines[INBOUND_LINE.sender] ?? '').trim(),
+    dest: (lines[INBOUND_LINE.dest] ?? '').trim(),
+    kind,
+    content,
+    protocolId: Number.parseInt(lines[INBOUND_LINE.protocolId] ?? '0', 10) || 0,
+    codingScheme: Number.parseInt(lines[INBOUND_LINE.codingScheme] ?? '0', 10) || 0,
+    serviceId: (lines[INBOUND_LINE.serviceId] ?? '').trim(),
+    connectorId: (lines[INBOUND_LINE.connectorId] ?? '').trim(),
+    receivedAt: (lines[INBOUND_LINE.receivedAt] ?? '').trim(),
+  };
+}

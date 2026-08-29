@@ -1,6 +1,6 @@
 import { Agent, request as httpsRequest } from 'node:https';
 import { rootCertificates } from 'node:tls';
-import { ProviderError, classifyCode, parsePackageFullInfo, parseResponse } from './response.ts';
+import { ProviderError, classifyCode, parseInboundSms, parsePackageFullInfo, parseResponse, type InboundSms } from './response.ts';
 
 export interface ClientCredentials {
   baseUrl: string;
@@ -31,6 +31,8 @@ export interface SendLongParams {
   orig?: string;
   validTo?: Date;
   costCenter?: string;
+  /** Identyfikator wiadomości przychodzącej w Multiinfo, na którą to odpowiedź. */
+  smsInId?: string;
   deliveryReport: boolean;
   advancedEncoding: boolean;
   deleteContent: boolean;
@@ -130,6 +132,9 @@ const REQUEST_TIMEOUT_MS = 30_000;
 
 interface RawReply { body: Buffer; status: number; durationMs: number }
 
+/** Odstępstwa od zwykłego żądania: dłuższy limit i przerwanie z zewnątrz - dla long pollingu. */
+interface TransportOptions { timeoutMs?: number; signal?: AbortSignal }
+
 export class MultiinfoClient {
   private readonly agent: Agent;
 
@@ -155,11 +160,11 @@ export class MultiinfoClient {
    * uzgadniania TLS. Cała komunikacja z Multiinfo to POST formularza. Parametry
    * idą jako `URLSearchParams`, bo `package.aspx` powtarza `dest` dla każdego odbiorcy.
    */
-  private call(script: string, params: URLSearchParams): Promise<RawReply> {
+  private call(script: string, params: URLSearchParams, opts: TransportOptions = {}): Promise<RawReply> {
     const url = new URL(script, this.creds.baseUrl);
     const form = new URLSearchParams({ login: this.creds.login, password: this.creds.password });
     for (const [k, v] of params) form.append(k, v);
-    return this.transport(url, 'POST', form.toString());
+    return this.transport(url, 'POST', form.toString(), opts);
   }
 
   /** Żądanie GET bez poświadczeń - tylko dla strony test.aspx, która ich nie czyta. */
@@ -167,11 +172,13 @@ export class MultiinfoClient {
     return this.transport(url, 'GET', null);
   }
 
-  private transport(url: URL, method: 'GET' | 'POST', body: string | null): Promise<RawReply> {
+  private transport(url: URL, method: 'GET' | 'POST', body: string | null, opts: TransportOptions = {}): Promise<RawReply> {
     const started = process.hrtime.bigint();
     const elapsedMs = () => Number((process.hrtime.bigint() - started) / 1_000_000n);
+    const aborted = () => new ProviderError(-71, 'Żądanie przerwane', 'transient');
 
     return new Promise<RawReply>((resolve, reject) => {
+      if (opts.signal?.aborted) { reject(aborted()); return; }
       const req = httpsRequest(
         {
           protocol: url.protocol,
@@ -189,6 +196,7 @@ export class MultiinfoClient {
           const chunks: Buffer[] = [];
           res.on('data', (c: Buffer) => chunks.push(c));
           res.on('end', () => {
+            opts.signal?.removeEventListener('abort', onAbort);
             const status = res.statusCode ?? 0;
             if (status < 200 || status >= 300) {
               reject(new ProviderError(-71, `Multiinfo odpowiedziało kodem HTTP ${status}`, 'transient'));
@@ -199,20 +207,24 @@ export class MultiinfoClient {
         },
       );
 
-      req.setTimeout(REQUEST_TIMEOUT_MS, () => {
+      req.setTimeout(opts.timeoutMs ?? REQUEST_TIMEOUT_MS, () => {
         req.destroy(new ProviderError(-71, 'Multiinfo nie odpowiedziało w wyznaczonym czasie', 'transient'));
       });
+      // Przerwanie z zewnątrz (zatrzymanie bramki) zamyka gniazdo - Plus i tak nic nie wydał.
+      const onAbort = () => req.destroy(aborted());
+      opts.signal?.addEventListener('abort', onAbort, { once: true });
       // Komunikat błędu sieci nie zawiera poświadczeń - w żądaniu idą one w treści, nie w adresie.
       req.on('error', (e) => {
+        opts.signal?.removeEventListener('abort', onAbort);
         reject(e instanceof ProviderError ? e : new ProviderError(-71, `Nie udało się połączyć: ${e.message}`, 'transient'));
       });
       req.end(body ?? undefined);
     });
   }
 
-  private async text(script: string, params: Record<string, string> | URLSearchParams): Promise<string> {
+  private async text(script: string, params: Record<string, string> | URLSearchParams, opts: TransportOptions = {}): Promise<string> {
     const p = params instanceof URLSearchParams ? params : new URLSearchParams(params);
-    return (await this.call(script, p)).body.toString('utf8');
+    return (await this.call(script, p, opts)).body.toString('utf8');
   }
 
   private static unwrap(body: string): string[] {
@@ -235,6 +247,7 @@ export class MultiinfoClient {
     if (p.orig !== undefined) params.orig = p.orig;
     if (p.validTo !== undefined) params.validTo = formatOperatorTime(p.validTo);
     if (p.costCenter !== undefined) params.costCenter = p.costCenter;
+    if (p.smsInId !== undefined) params.smsInId = p.smsInId;
 
     const at = new Date().toISOString();
     const res = await this.call('sendsmslong.aspx', new URLSearchParams(params));
@@ -250,6 +263,28 @@ export class MultiinfoClient {
         lines,
       },
     };
+  }
+
+  /** Margines ponad `timeout` podany Plusowi - odpowiedź musi zdążyć wrócić po jego upływie. */
+  static readonly INBOUND_GRACE_MS = 15_000;
+
+  /**
+   * Jedna wiadomość przychodząca albo null. Plus trzyma połączenie do `timeoutMs`, dlatego
+   * limit HTTP tego żądania jest dłuższy niż stały limit pozostałych poleceń. Zawsze z ręcznym
+   * potwierdzaniem - bez niego wiadomość znika z kolejki Plusa, zanim ją zapiszemy.
+   */
+  async getSms(serviceId: string, timeoutMs: number, signal?: AbortSignal): Promise<InboundSms | null> {
+    const body = await this.text(
+      'getsms.aspx',
+      { serviceId, timeout: String(timeoutMs), manualConfirm: 'true' },
+      { timeoutMs: timeoutMs + MultiinfoClient.INBOUND_GRACE_MS, ...(signal ? { signal } : {}) },
+    );
+    return parseInboundSms(MultiinfoClient.unwrap(body));
+  }
+
+  /** Zdejmuje wiadomość z kolejki Plusa - dopiero po jej zapisaniu w bazie. */
+  async confirmSms(miId: string): Promise<void> {
+    MultiinfoClient.unwrap(await this.text('confirmsms.aspx', { smsId: miId }));
   }
 
   /** Anuluje jedną część wiadomości; -41 znaczy, że część poszła już do abonenta. */

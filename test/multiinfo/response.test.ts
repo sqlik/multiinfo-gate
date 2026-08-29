@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyCode, parsePackageFullInfo, parseResponse } from '../../src/multiinfo/response.ts';
+import { classifyCode, parseInboundSms, parsePackageFullInfo, parseResponse } from '../../src/multiinfo/response.ts';
 
 describe('parseResponse', () => {
   it('czyta odpowiedź powodzenia z jednym identyfikatorem', () => {
@@ -86,5 +86,34 @@ describe('parsePackageFullInfo', () => {
 
   it('odrzuca odpowiedź bez liczby w pierwszej linii', () => {
     expect(() => parsePackageFullInfo('<html>')).toThrow(/nieoczekiwany kształt/);
+  });
+});
+
+describe('parseInboundSms', () => {
+  const lines = ['22', '48601357368', '7968', '1', 'tt+odbierana+testowa+wiadomosc', '0', '0', '1', '60199', '110407093406'];
+  it('czyta wiersze z przykładu dokumentacji i dekoduje treść URL', () => {
+    expect(parseInboundSms(lines)).toEqual({
+      miId: '22', sender: '48601357368', dest: '7968', kind: 'text', content: 'tt odbierana testowa wiadomosc',
+      protocolId: 0, codingScheme: 0, serviceId: '1', connectorId: '60199', receivedAt: '110407093406',
+    });
+  });
+  it('identyfikator -1 to brak wiadomości', () => {
+    expect(parseInboundSms(['-1'])).toBeNull();
+  });
+  it('typ 2 to wiadomość binarna z treścią bez dekodowania', () => {
+    const bin = [...lines];
+    bin[3] = '2';
+    bin[4] = '0605040B8423F0 48656C6C6F';
+    expect(parseInboundSms(bin)).toMatchObject({ kind: 'binary', content: '0605040B8423F0 48656C6C6F' });
+  });
+  it('dekoduje procenty i plus w treści tekstowej', () => {
+    const t = [...lines];
+    t[4] = 'Zazolc+gesla+jazn+100%25';
+    expect(parseInboundSms(t)?.content).toBe('Zazolc gesla jazn 100%');
+  });
+  it('zepsuty procent nie gubi wiadomości - treść zostaje surowa', () => {
+    const t = [...lines];
+    t[4] = 'rabat+100%+dzis';
+    expect(parseInboundSms(t)?.content).toBe('rabat+100%+dzis');
   });
 });
