@@ -360,6 +360,24 @@ describe('MultiinfoClient - odbiór', () => {
     fake.respond(null);
   });
 
+  it('long polling nie zajmuje gniazd zwykłym poleceniom', async () => {
+    // Cztery usługi w oczekiwaniu wyczerpałyby wspólną pulę (maxSockets 4) i anulowanie
+    // z API czekałoby do końca long pollingu - dlatego getsms ma osobną pulę.
+    fake.respond(async (req) => {
+      if (req.path.endsWith('getsms.aspx')) { await new Promise((r) => setTimeout(r, 400)); return '0\n-1'; }
+      return '0';
+    });
+    const controller = new AbortController();
+    const polls = Array.from({ length: 4 }, () => client.getSms('24138', 60_000, controller.signal));
+    await new Promise((r) => setTimeout(r, 50));
+    const started = Date.now();
+    await client.cancel('1');
+    expect(Date.now() - started).toBeLessThan(200);
+    controller.abort();
+    await Promise.allSettled(polls);
+    fake.respond(null);
+  });
+
   it('sygnał już przerwany odrzuca od razu, bez żądania', async () => {
     const before = fake.requests.length;
     const controller = new AbortController();

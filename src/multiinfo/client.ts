@@ -132,26 +132,34 @@ const REQUEST_TIMEOUT_MS = 30_000;
 
 interface RawReply { body: Buffer; status: number; durationMs: number }
 
-/** Odstępstwa od zwykłego żądania: dłuższy limit i przerwanie z zewnątrz - dla long pollingu. */
-interface TransportOptions { timeoutMs?: number; signal?: AbortSignal }
+/** Odstępstwa od zwykłego żądania: dłuższy limit, przerwanie z zewnątrz i osobna pula - dla long pollingu. */
+interface TransportOptions { timeoutMs?: number; signal?: AbortSignal; longPoll?: boolean }
 
 export class MultiinfoClient {
   private readonly agent: Agent;
+  /**
+   * Osobna pula dla long pollingu. Każda usługa z odbiorem trzyma gniazdo do 60 s; w jednej
+   * puli cztery takie usługi wyczerpałyby `maxSockets` i wysyłka albo anulowanie z API
+   * czekałyby na koniec oczekiwania Plusa.
+   */
+  private readonly pollAgent: Agent;
 
   constructor(private readonly creds: ClientCredentials, options: ClientOptions = {}) {
-    this.agent = new Agent({
+    const tls = {
       // Opcja `ca` zastępuje wbudowany magazyn zaufanych CA, więc łańcuch z .pfx nie może
       // tam trafić - bramka przestałaby ufać certyfikatowi serwera Multiinfo.
       cert: creds.caPem ? creds.certPem + creds.caPem : creds.certPem,
       key: creds.keyPem,
       ...(options.extraServerCa ? { ca: [...rootCertificates, options.extraServerCa] } : {}),
       keepAlive: true,
-      maxSockets: 4,
-    });
+    };
+    this.agent = new Agent({ ...tls, maxSockets: 4 });
+    this.pollAgent = new Agent(tls);
   }
 
   close(): void {
     this.agent.destroy();
+    this.pollAgent.destroy();
   }
 
   /**
@@ -186,7 +194,7 @@ export class MultiinfoClient {
           port: url.port,
           path: `${url.pathname}${url.search}`,
           method,
-          agent: this.agent,
+          agent: opts.longPoll ? this.pollAgent : this.agent,
           headers: body === null ? {} : {
             'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
             'content-length': Buffer.byteLength(body),
@@ -277,7 +285,7 @@ export class MultiinfoClient {
     const body = await this.text(
       'getsms.aspx',
       { serviceId, timeout: String(timeoutMs), manualConfirm: 'true' },
-      { timeoutMs: timeoutMs + MultiinfoClient.INBOUND_GRACE_MS, ...(signal ? { signal } : {}) },
+      { timeoutMs: timeoutMs + MultiinfoClient.INBOUND_GRACE_MS, longPoll: true, ...(signal ? { signal } : {}) },
     );
     return parseInboundSms(MultiinfoClient.unwrap(body));
   }
