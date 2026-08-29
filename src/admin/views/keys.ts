@@ -25,11 +25,13 @@ export interface AccountChoice {
 export interface KeyFormValues {
   name: string; serviceIds: string[]; defaultServiceId: string; origs: string[]; defaultOrig: string;
   maxParts: string; ratePerMin: string; webhookUrl: string; expiresOn: string; noExpiry: boolean;
+  inboundSubscribed: boolean;
 }
 
 export const NEW_KEY_VALUES = (choice: AccountChoice): KeyFormValues => ({
   name: '', serviceIds: choice.serviceIds, defaultServiceId: choice.serviceIds[0] ?? '', origs: [],
   defaultOrig: '', maxParts: '5', ratePerMin: '60', webhookUrl: '', expiresOn: '', noExpiry: false,
+  inboundSubscribed: false,
 });
 
 export function valuesOf(row: ApiKeyRow): KeyFormValues {
@@ -38,6 +40,7 @@ export function valuesOf(row: ApiKeyRow): KeyFormValues {
     origs: row.allowedOrigs, defaultOrig: row.defaultOrig ?? '', maxParts: String(row.maxParts),
     ratePerMin: String(row.ratePerMin), webhookUrl: row.webhookUrl ?? '',
     expiresOn: row.expiresAt === null ? '' : lastValidDay(row.expiresAt), noExpiry: row.expiresAt === null,
+    inboundSubscribed: row.inboundSubscribed === 1,
   };
 }
 
@@ -124,7 +127,7 @@ export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne
         : esc(v.row.allowedOrigs.join(', '))}</td>
       <td class="m">${esc(v.row.ratePerMin)} / min</td>
       ${expiryCell(v.row, now)}
-      <td>${host === null ? '<span class="dim">-</span>' : `<span class="m">${esc(host)}</span>`}</td>
+      <td>${host === null ? '<span class="dim">-</span>' : `<span class="m">${esc(host)}</span>`}${v.row.inboundSubscribed === 1 ? ' <span class="tag">odbiera</span>' : ''}</td>
       <td class="m">${v.row.lastUsedAt === null
         ? '<span class="dim" style="font-size: 12px;">jeszcze nieużywany</span>'
         : esc(stamp(v.row.lastUsedAt, ''))}</td>
@@ -264,6 +267,11 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
       <label for="webhookUrl">Adres webhooka</label>
       <input id="webhookUrl" name="webhookUrl" type="url" value="${esc(v.webhookUrl)}" placeholder="https://…">
       <div class="hint">${esc(webhookHint)}</div>
+    </div>
+    <div class="field">
+      <label class="choice"><input type="checkbox" name="inboundSubscribed" value="1"${v.inboundSubscribed ? ' checked' : ''}> Odbiera wiadomości przychodzące</label>
+      <div class="hint">Bramka będzie pytać Multiinfo o SMS-y wysłane na numery usług tego klucza i przekazywać je
+        zdarzeniem message.received na adres webhooka. Wymaga adresu webhooka.</div>
     </div>
     ${mode === 'edit' ? `<div class="field">
       <label for="webhookSecret">Sekret webhooka</label>
