@@ -33,12 +33,22 @@ export interface AppConfig {
    * posłużyć do stukania w usługi, które z internetu nie są widoczne.
    */
   webhookAllowPrivate: boolean;
+  /** Ile ms Multiinfo może trzymać getsms.aspx bez odpowiedzi (1..60000). 60000 to long polling. */
+  inboundTimeoutMs: number;
+  /** Przerwa po pustej odpowiedzi getsms.aspx; 0 to pytanie od razu. */
+  inboundIdleMs: number;
 }
 
 function intOr(value: string | undefined, fallback: number): number {
   if (value === undefined || value === '') return fallback;
   const n = Number.parseInt(value, 10);
   if (!Number.isInteger(n)) throw new Error(`Wartość nie jest liczbą całkowitą: ${value}`);
+  return n;
+}
+
+function boundedInt(variable: string, value: string | undefined, fallback: number, min: number, max: number): number {
+  const n = intOr(value, fallback);
+  if (n < min || n > max) throw new Error(`${variable} musi być w zakresie ${min}..${max}; podano ${n}`);
   return n;
 }
 
@@ -92,5 +102,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env, interfaces: Int
     logLevel: logLevelOr(source.MIG_LOG_LEVEL, 'info'),
     backupRetentionDays: intOr(source.MIG_BACKUP_RETENTION_DAYS, 14),
     webhookAllowPrivate: flag(source.MIG_WEBHOOK_ALLOW_PRIVATE),
+    inboundTimeoutMs: boundedInt('MIG_INBOUND_TIMEOUT_MS', source.MIG_INBOUND_TIMEOUT_MS, 60_000, 1, 60_000),
+    inboundIdleMs: boundedInt('MIG_INBOUND_IDLE_MS', source.MIG_INBOUND_IDLE_MS, 0, 0, 3_600_000),
   };
 }
