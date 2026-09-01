@@ -9,7 +9,8 @@ na adres webhooka klucza, a ponadto udostępnia je do odczytu (`GET /v1/inbound`
 odpowiedzieć w wątku (`inReplyTo`) - rozdział 5a. Odbiór wymaga dwóch ustawień: kierowania
 odebranych wiadomości do API na koncie Multiinfo (ustawia administrator Polkomtel) oraz
 zaznaczenia odbioru przy kluczu API w panelu bramki. Dokument opisuje każde wywołanie w tym samym
-układzie: przeznaczenie, pełne żądanie `curl`, odpowiedź oraz błędy tego wywołania wraz
+układzie: przeznaczenie, pełne żądanie w siedmiu wariantach do wyboru zakładką (curl, surowy
+HTTP, PHP, Python, Node.js, PowerShell, C#), odpowiedź oraz błędy tego wywołania wraz
 z zalecanym postępowaniem.
 
 ## 1. Informacje ogólne
@@ -30,6 +31,16 @@ rozsyłki, przepisywane z Multiinfo w czasie polskim.
 
 **Wartości przykładowe.** Numery (`48601000001`, `48605000001`), nadpis `Firma Info`,
 identyfikator usługi `24138` oraz identyfikatory `msg_...` i `pkg_...` w przykładach są fikcyjne.
+
+**Przykłady.** Wybór języka w dowolnym przykładzie przełącza wszystkie przykłady na stronie
+i jest zapamiętywany w przeglądarce. Warianty nie wymagają bibliotek spoza języka: PHP używa
+rozszerzenia curl, Python modułu `urllib` (z biblioteką `requests` kod jest krótszy, ale to
+zależność do zainstalowania), Node.js wbudowanego `fetch` (Node 18 wzwyż, pliki `.mjs` albo
+projekt z `"type": "module"`), PowerShell polecenia `Invoke-RestMethod` (PowerShell 7; w Windows
+PowerShell 5.1 treść z polskimi znakami wymaga przekazania bajtów:
+`-Body ([Text.Encoding]::UTF8.GetBytes($body))`), C# klasy `HttpClient` (.NET 8 wzwyż).
+Przykłady pokazują samo wywołanie, bez obsługi błędów; błędy i zalecane postępowanie opisuje
+rozdział 9, a przy każdym wywołaniu jego tabela błędów.
 
 **Model przetwarzania.** Przyjęcie wiadomości i rozsyłki jest asynchroniczne: bramka odpowiada
 kodem `202` natychmiast po zapisaniu żądania w kolejce, a wysyłka do Multiinfo, raport doręczenia
@@ -66,12 +77,97 @@ kodem `400 invalid_phone` i żadna wiadomość nie trafia do kolejki.
 
 **Żądanie:**
 
-```bash
-curl -s https://<TWOJA-DOMENA>/v1/messages \
-  -H "Authorization: Bearer <TWOJ-KLUCZ>" \
-  -H "Content-Type: application/json" \
-  -d '{"to":"48601000001","text":"Przypominamy o wizycie 26.08 o 10:00.","orig":"Firma Info"}'
-```
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/messages \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>" \
+      -H "Content-Type: application/json" \
+      -d '{"to":"48601000001","text":"Przypominamy o wizycie 26.08 o 10:00.","orig":"Firma Info"}'
+    ```
+
+=== "HTTP"
+
+    ```http
+    POST /v1/messages HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    Content-Type: application/json
+
+    {"to": "48601000001", "text": "Przypominamy o wizycie 26.08 o 10:00.", "orig": "Firma Info"}
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode([
+            'to' => '48601000001',
+            'text' => 'Przypominamy o wizycie 26.08 o 10:00.',
+            'orig' => 'Firma Info',
+        ]),
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>', 'Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['id'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/messages",
+        data=json.dumps({"to": "48601000001", "text": "Przypominamy o wizycie 26.08 o 10:00.", "orig": "Firma Info"}).encode(),
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["id"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/messages", {
+      method: "POST",
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json" },
+      body: JSON.stringify({"to": "48601000001", "text": "Przypominamy o wizycie 26.08 o 10:00.", "orig": "Firma Info"}),
+    });
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.id);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $body = @{ to = "48601000001"; text = "Przypominamy o wizycie 26.08 o 10:00."; orig = "Firma Info" } | ConvertTo-Json
+    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/messages" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
+    $odpowiedz.id
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Text;
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var tresc = new StringContent("""{"to": "48601000001", "text": "Przypominamy o wizycie 26.08 o 10:00.", "orig": "Firma Info"}""", Encoding.UTF8, "application/json");
+    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/messages", tresc);
+    var odpowiedz = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("id"));
+    ```
 
 Pola body żądania:
 
@@ -114,13 +210,99 @@ czas oczekiwania), nie wie, czy wiadomość została przyjęta. Ponowienie żąd
 może wysłać wiadomość dwukrotnie. Zabezpieczeniem jest nagłówek `Idempotency-Key` z wartością
 jednoznacznie identyfikującą operację po stronie aplikacji (np. identyfikator zamówienia):
 
-```bash
-curl -s https://<TWOJA-DOMENA>/v1/messages \
-  -H "Authorization: Bearer <TWOJ-KLUCZ>" \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: zamowienie-10422" \
-  -d '{"to":"48601000001","text":"Zamowienie 10422 jest gotowe do odbioru."}'
-```
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/messages \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>" \
+      -H "Content-Type: application/json" \
+      -H "Idempotency-Key: zamowienie-10422" \
+      -d '{"to":"48601000001","text":"Zamowienie 10422 jest gotowe do odbioru."}'
+    ```
+
+=== "HTTP"
+
+    ```http
+    POST /v1/messages HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    Idempotency-Key: zamowienie-10422
+    Content-Type: application/json
+
+    {"to": "48601000001", "text": "Zamowienie 10422 jest gotowe do odbioru."}
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode([
+            'to' => '48601000001',
+            'text' => 'Zamowienie 10422 jest gotowe do odbioru.',
+        ]),
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>', 'Idempotency-Key: zamowienie-10422', 'Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['id'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/messages",
+        data=json.dumps({"to": "48601000001", "text": "Zamowienie 10422 jest gotowe do odbioru."}).encode(),
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>", "Idempotency-Key": "zamowienie-10422", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["id"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/messages", {
+      method: "POST",
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>", "Idempotency-Key": "zamowienie-10422", "Content-Type": "application/json" },
+      body: JSON.stringify({"to": "48601000001", "text": "Zamowienie 10422 jest gotowe do odbioru."}),
+    });
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.id);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>"; "Idempotency-Key" = "zamowienie-10422" }
+    $body = @{ to = "48601000001"; text = "Zamowienie 10422 jest gotowe do odbioru." } | ConvertTo-Json
+    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/messages" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
+    $odpowiedz.id
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Text;
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+    http.DefaultRequestHeaders.Add("Idempotency-Key", "zamowienie-10422");
+
+    var tresc = new StringContent("""{"to": "48601000001", "text": "Zamowienie 10422 jest gotowe do odbioru."}""", Encoding.UTF8, "application/json");
+    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/messages", tresc);
+    var odpowiedz = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("id"));
+    ```
 
 Ponowione żądanie z tym samym kluczem idempotencji, numerem i treścią wiadomości zwraca dane wiadomości
 przyjętej za pierwszym razem, bez tworzenia nowej. Żądanie z tym samym kluczem, ale inną treścią wiadomości
@@ -153,10 +335,78 @@ z polami `providerCode` i `error` oraz w powiadomieniu `message.failed`.
 **Przeznaczenie.** Odczyt bieżącego stanu wiadomości: czy została wysłana, doręczona, a jeżeli
 nie - z jakiego powodu.
 
-```bash
-curl -s https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f \
-  -H "Authorization: Bearer <TWOJ-KLUCZ>"
-```
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    GET /v1/messages/msg_3f9c2a7b1e4d8c6a5b2f HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['status'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["status"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f", {
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.status);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f" -Headers $naglowki
+    $odpowiedz.status
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f"));
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("status"));
+    ```
 
 **Odpowiedź `200`:**
 
@@ -194,10 +444,82 @@ w wątku (rozdział 5a.3), w pozostałych przypadkach `null`. Wartości `status`
 **Przeznaczenie.** Przegląd wiadomości wysłanych danym kluczem, z filtrowaniem - np. wszystkie
 niedoręczone z bieżącego dnia.
 
-```bash
-curl -s "https://<TWOJA-DOMENA>/v1/messages?status=failed&from=2026-08-26T00:00:00Z&limit=50" \
-  -H "Authorization: Bearer <TWOJ-KLUCZ>"
-```
+=== "curl"
+
+    ```bash
+    curl -s "https://<TWOJA-DOMENA>/v1/messages?status=failed&from=2026-08-26T00:00:00Z&limit=50" \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    GET /v1/messages?status=failed&from=2026-08-26T00:00:00Z&limit=50 HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/messages?status=failed&from=2026-08-26T00:00:00Z&limit=50');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    foreach ($odpowiedz['data'] as $w) {
+        echo $w['id'], ' ', $w['status'], PHP_EOL;
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/messages?status=failed&from=2026-08-26T00:00:00Z&limit=50",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    for w in odpowiedz["data"]:
+        print(w["id"], w["status"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/messages?status=failed&from=2026-08-26T00:00:00Z&limit=50", {
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    for (const w of odpowiedz.data) console.log(w.id, w.status);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/v1/messages?status=failed&from=2026-08-26T00:00:00Z&limit=50" -Headers $naglowki
+    $odpowiedz.data | ForEach-Object { "$($_.id) $($_.status)" }
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/v1/messages?status=failed&from=2026-08-26T00:00:00Z&limit=50"));
+    foreach (var w in odpowiedz.RootElement.GetProperty("data").EnumerateArray())
+        Console.WriteLine(w.GetProperty("id") + " " + w.GetProperty("status"));
+    ```
 
 Parametry zapytania (wszystkie opcjonalne):
 
@@ -219,10 +541,83 @@ od najnowszej. `hasMore: true` oznacza, że lista ma dalsze pozycje; pobiera si�
 w kolejce bramki jest anulowana natychmiast; wiadomość przekazana już do Multiinfo jest
 anulowana po stronie operatora, o ile nie została jeszcze doręczona.
 
-```bash
-curl -s -X POST https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f/cancel \
-  -H "Authorization: Bearer <TWOJ-KLUCZ>"
-```
+=== "curl"
+
+    ```bash
+    curl -s -X POST https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f/cancel \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    POST /v1/messages/msg_3f9c2a7b1e4d8c6a5b2f/cancel HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f/cancel');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => '',
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['status'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f/cancel",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["status"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f/cancel", {
+      method: "POST",
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.status);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f/cancel" -Headers $naglowki
+    $odpowiedz.status
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/messages/msg_3f9c2a7b1e4d8c6a5b2f/cancel", null);
+    var odpowiedz = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("status"));
+    ```
 
 **Odpowiedź `200`:** `{ "id": "msg_3f9c2a7b1e4d8c6a5b2f", "status": "cancelled" }`
 
@@ -252,19 +647,116 @@ bramka odpowiada natychmiast, a stan i raport odczytuje się kolejnymi wywołani
 
 ### 5.1. Utworzenie rozsyłki: `POST /v1/packages`
 
-```bash
-curl -s https://<TWOJA-DOMENA>/v1/packages \
-  -H "Authorization: Bearer <TWOJ-KLUCZ>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "defaultText": "Przypominamy o wizycie.",
-    "recipients": [
-      { "to": "48601000001" },
-      { "to": "48605000001", "text": "Faktura 114 oczekuje na oplacenie.", "clientId": "faktura-114" }
-    ],
-    "orig": "Firma Info"
-  }'
-```
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/packages \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "defaultText": "Przypominamy o wizycie.",
+        "recipients": [
+          { "to": "48601000001" },
+          { "to": "48605000001", "text": "Faktura 114 oczekuje na oplacenie.", "clientId": "faktura-114" }
+        ],
+        "orig": "Firma Info"
+      }'
+    ```
+
+=== "HTTP"
+
+    ```http
+    POST /v1/packages HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    Content-Type: application/json
+
+    {"defaultText": "Przypominamy o wizycie.", "recipients": [{"to": "48601000001"}, {"to": "48605000001", "text": "Faktura 114 oczekuje na oplacenie.", "clientId": "faktura-114"}], "orig": "Firma Info"}
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/packages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode([
+            'defaultText' => 'Przypominamy o wizycie.',
+            'recipients' => [
+                [
+                    'to' => '48601000001',
+                ],
+                [
+                    'to' => '48605000001',
+                    'text' => 'Faktura 114 oczekuje na oplacenie.',
+                    'clientId' => 'faktura-114',
+                ],
+            ],
+            'orig' => 'Firma Info',
+        ]),
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>', 'Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['id'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/packages",
+        data=json.dumps({"defaultText": "Przypominamy o wizycie.", "recipients": [{"to": "48601000001"}, {"to": "48605000001", "text": "Faktura 114 oczekuje na oplacenie.", "clientId": "faktura-114"}], "orig": "Firma Info"}).encode(),
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["id"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/packages", {
+      method: "POST",
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json" },
+      body: JSON.stringify({"defaultText": "Przypominamy o wizycie.", "recipients": [{"to": "48601000001"}, {"to": "48605000001", "text": "Faktura 114 oczekuje na oplacenie.", "clientId": "faktura-114"}], "orig": "Firma Info"}),
+    });
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.id);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $body = @{ defaultText = "Przypominamy o wizycie."; recipients = @(
+        @{ to = "48601000001" },
+        @{ to = "48605000001"; text = "Faktura 114 oczekuje na oplacenie."; clientId = "faktura-114" }
+    ); orig = "Firma Info" } | ConvertTo-Json
+    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/packages" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
+    $odpowiedz.id
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Text;
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var tresc = new StringContent("""{"defaultText": "Przypominamy o wizycie.", "recipients": [{"to": "48601000001"}, {"to": "48605000001", "text": "Faktura 114 oczekuje na oplacenie.", "clientId": "faktura-114"}], "orig": "Firma Info"}""", Encoding.UTF8, "application/json");
+    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/packages", tresc);
+    var odpowiedz = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("id"));
+    ```
 
 | Pole | Wymagane | Opis |
 |---|---|---|
@@ -297,10 +789,78 @@ w limicie części klucza.
 
 ### 5.2. Stan rozsyłki: `GET /v1/packages/{id}`
 
-```bash
-curl -s https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d \
-  -H "Authorization: Bearer <TWOJ-KLUCZ>"
-```
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    GET /v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['status'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["status"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d", {
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.status);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d" -Headers $naglowki
+    $odpowiedz.status
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d"));
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("status"));
+    ```
 
 **Odpowiedź `200`:**
 
@@ -351,10 +911,83 @@ Pole `summary` występuje tylko przy `report.status` równym `ready`.
 **Przeznaczenie.** Bramka zamawia raport samoczynnie po zakończeniu rozsyłki. Wywołanie służy do
 ponowienia zamówienia, gdy poprzedni raport ma stan `failed`.
 
-```bash
-curl -s -X POST https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report \
-  -H "Authorization: Bearer <TWOJ-KLUCZ>"
-```
+=== "curl"
+
+    ```bash
+    curl -s -X POST https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    POST /v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => '',
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['report']['status'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["report"]["status"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report", {
+      method: "POST",
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.report.status);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report" -Headers $naglowki
+    $odpowiedz.report.status
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report", null);
+    var odpowiedz = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("report").GetProperty("status"));
+    ```
 
 **Odpowiedź `202`:** `{ "id": "pkg_7c1e9a2b3d4f5a6b7c8d", "report": { "status": "pending" } }`
 
@@ -367,10 +1000,82 @@ curl -s -X POST https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/repo
 
 **Przeznaczenie.** Wynik doręczenia dla każdego odbiorcy, z jego `clientId`.
 
-```bash
-curl -s https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report \
-  -H "Authorization: Bearer <TWOJ-KLUCZ>"
-```
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    GET /v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    foreach ($odpowiedz['rows'] as $w) {
+        echo $w['to'], ' ', $w['status'], PHP_EOL;
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    for w in odpowiedz["rows"]:
+        print(w["to"], w["status"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report", {
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    for (const w of odpowiedz.rows) console.log(w.to, w.status);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report" -Headers $naglowki
+    $odpowiedz.rows | ForEach-Object { "$($_.to) $($_.status)" }
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report"));
+    foreach (var w in odpowiedz.RootElement.GetProperty("rows").EnumerateArray())
+        Console.WriteLine(w.GetProperty("to") + " " + w.GetProperty("status"));
+    ```
 
 **Odpowiedź `200`** (JSON):
 
@@ -388,10 +1093,74 @@ curl -s https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report \
 Ten sam raport w formacie CSV (separator: średnik; wiersz nagłówka
 `numer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas`):
 
-```bash
-curl -s "https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report?format=csv" \
-  -H "Authorization: Bearer <TWOJ-KLUCZ>" -o raport.csv
-```
+=== "curl"
+
+    ```bash
+    curl -s "https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report?format=csv" \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>" -o raport.csv
+    ```
+
+=== "HTTP"
+
+    ```http
+    GET /v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report?format=csv HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report?format=csv');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    file_put_contents('raport.csv', curl_exec($ch));
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report?format=csv",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+    )
+    with urllib.request.urlopen(req) as res, open("raport.csv", "wb") as plik:
+        plik.write(res.read())
+    ```
+
+=== "Node.js"
+
+    ```js
+    import { writeFile } from "node:fs/promises";
+
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report?format=csv", {
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    await writeFile("raport.csv", await res.text());
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    Invoke-WebRequest -Uri "https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report?format=csv" -Headers $naglowki -OutFile raport.csv
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    File.WriteAllBytes("raport.csv", await http.GetByteArrayAsync("https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/report?format=csv"));
+    ```
 
 `changedAt` jest przepisywane z Multiinfo bez przeliczania (czas polski). `status` odbiorcy używa
 słownika z rozdziału 7; wartość `null` oznacza, że raport nie objął tego odbiorcy.
@@ -426,10 +1195,82 @@ wieloczęściowe docierają sklejone.
 aplikacji, do dociągnięcia zaległości po awarii odbiornika webhooków i do sprawdzenia, czy
 webhook niczego nie pominął.
 
-```bash
-curl -s "https://<TWOJA-DOMENA>/v1/inbound?since=2026-08-29T00:00:00Z&limit=50" \
-  -H "Authorization: Bearer <TWOJ-KLUCZ>"
-```
+=== "curl"
+
+    ```bash
+    curl -s "https://<TWOJA-DOMENA>/v1/inbound?since=2026-08-29T00:00:00Z&limit=50" \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    GET /v1/inbound?since=2026-08-29T00:00:00Z&limit=50 HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/inbound?since=2026-08-29T00:00:00Z&limit=50');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    foreach ($odpowiedz['data'] as $w) {
+        echo $w['id'], ' ', $w['from'], PHP_EOL;
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/inbound?since=2026-08-29T00:00:00Z&limit=50",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    for w in odpowiedz["data"]:
+        print(w["id"], w["from"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/inbound?since=2026-08-29T00:00:00Z&limit=50", {
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    for (const w of odpowiedz.data) console.log(w.id, w.from);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/v1/inbound?since=2026-08-29T00:00:00Z&limit=50" -Headers $naglowki
+    $odpowiedz.data | ForEach-Object { "$($_.id) $($_.from)" }
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/v1/inbound?since=2026-08-29T00:00:00Z&limit=50"));
+    foreach (var w in odpowiedz.RootElement.GetProperty("data").EnumerateArray())
+        Console.WriteLine(w.GetProperty("id") + " " + w.GetProperty("from"));
+    ```
 
 Parametry zapytania (wszystkie opcjonalne):
 
@@ -445,10 +1286,78 @@ Parametry zapytania (wszystkie opcjonalne):
 
 ### 5a.2. Jedna wiadomość: `GET /v1/inbound/{id}`
 
-```bash
-curl -s https://<TWOJA-DOMENA>/v1/inbound/in_5c1d9e2b7a3f4d8e6b0a \
-  -H "Authorization: Bearer <TWOJ-KLUCZ>"
-```
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/inbound/in_5c1d9e2b7a3f4d8e6b0a \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    GET /v1/inbound/in_5c1d9e2b7a3f4d8e6b0a HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/inbound/in_5c1d9e2b7a3f4d8e6b0a');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['from'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/inbound/in_5c1d9e2b7a3f4d8e6b0a",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["from"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/inbound/in_5c1d9e2b7a3f4d8e6b0a", {
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.from);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/v1/inbound/in_5c1d9e2b7a3f4d8e6b0a" -Headers $naglowki
+    $odpowiedz.from
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/v1/inbound/in_5c1d9e2b7a3f4d8e6b0a"));
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("from"));
+    ```
 
 **Odpowiedź `200`:**
 
@@ -491,11 +1400,96 @@ i powiadomienia o tej wysyłce zwracają `inReplyTo`. Wiadomość przychodząca 
 z tej samej usługi, z której idzie odpowiedź, a odpowiedź ma jednego odbiorcę - nadawcę tej
 wiadomości (pole `from` z `message.received`).
 
-```bash
-curl -s -X POST https://<TWOJA-DOMENA>/v1/messages \
-  -H "Authorization: Bearer <TWOJ-KLUCZ>" -H "Content-Type: application/json" \
-  -d '{ "to": "48601000001", "text": "Dziekujemy za potwierdzenie.", "inReplyTo": "in_5c1d9e2b7a3f4d8e6b0a" }'
-```
+=== "curl"
+
+    ```bash
+    curl -s -X POST https://<TWOJA-DOMENA>/v1/messages \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>" -H "Content-Type: application/json" \
+      -d '{ "to": "48601000001", "text": "Dziekujemy za potwierdzenie.", "inReplyTo": "in_5c1d9e2b7a3f4d8e6b0a" }'
+    ```
+
+=== "HTTP"
+
+    ```http
+    POST /v1/messages HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    Content-Type: application/json
+
+    {"to": "48601000001", "text": "Dziekujemy za potwierdzenie.", "inReplyTo": "in_5c1d9e2b7a3f4d8e6b0a"}
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode([
+            'to' => '48601000001',
+            'text' => 'Dziekujemy za potwierdzenie.',
+            'inReplyTo' => 'in_5c1d9e2b7a3f4d8e6b0a',
+        ]),
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>', 'Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['id'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/messages",
+        data=json.dumps({"to": "48601000001", "text": "Dziekujemy za potwierdzenie.", "inReplyTo": "in_5c1d9e2b7a3f4d8e6b0a"}).encode(),
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["id"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/messages", {
+      method: "POST",
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json" },
+      body: JSON.stringify({"to": "48601000001", "text": "Dziekujemy za potwierdzenie.", "inReplyTo": "in_5c1d9e2b7a3f4d8e6b0a"}),
+    });
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.id);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $body = @{ to = "48601000001"; text = "Dziekujemy za potwierdzenie."; inReplyTo = "in_5c1d9e2b7a3f4d8e6b0a" } | ConvertTo-Json
+    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/messages" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
+    $odpowiedz.id
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Text;
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var tresc = new StringContent("""{"to": "48601000001", "text": "Dziekujemy za potwierdzenie.", "inReplyTo": "in_5c1d9e2b7a3f4d8e6b0a"}""", Encoding.UTF8, "application/json");
+    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/messages", tresc);
+    var odpowiedz = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("id"));
+    ```
 
 ## 6. Powiadomienia webhook
 
@@ -731,6 +1725,66 @@ widzi przyczynę w panelu (na karcie konta). Wywołanie nadaje
 się do monitoringu zewnętrznego (np. sprawdzenie co minutę z alarmem po dwóch kolejnych
 niepowodzeniach).
 
-```bash
-curl -s https://<TWOJA-DOMENA>/healthz
-```
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/healthz
+    ```
+
+=== "HTTP"
+
+    ```http
+    GET /healthz HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/healthz');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['status'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/healthz",
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["status"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/healthz");
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.status);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/healthz"
+    $odpowiedz.status
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+
+    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/healthz"));
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("status"));
+    ```
