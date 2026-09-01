@@ -15,8 +15,9 @@ z zalecanym postępowaniem.
 ## 1. Informacje ogólne
 
 **Adres bazowy.** Po wystawieniu API pod domeną (`uruchomienie.md`, rozdział 6):
-`https://<TWOJA-DOMENA>`. W trakcie testów przez tunel SSH: `http://127.0.0.1:8080`. Przykłady
-w tym dokumencie używają domeny.
+`https://<TWOJA-DOMENA>`. W trakcie testów przez tunel SSH (`uruchomienie.md`, punkt 5.1, a dla
+kontenera LXC na Proxmoksie punkt 9.3): `http://127.0.0.1:8080`. Przykłady w tym dokumencie
+używają domeny.
 
 **Nagłówki.** Każde żądanie poza `GET /healthz` wymaga nagłówka
 `Authorization: Bearer <TWOJ-KLUCZ>`. Żądania z body wymagają

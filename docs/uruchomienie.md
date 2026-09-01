@@ -517,6 +517,13 @@ drugą opcję `-L` do istniejącego tunelu):
 ssh -N -L 8080:127.0.0.1:8080 <TWOJ-UZYTKOWNIK>@<ADRES-SERWERA>
 ```
 
+Polecenie po zestawieniu tunelu nic nie wypisuje; okno zostaje otwarte na czas testów.
+Sprawdzenie: `curl http://127.0.0.1:8080/healthz` na własnym komputerze odpowiada
+`{"status":"ok"}`.
+
+W kontenerze LXC z rozdziału 9 to polecenie nie zadziała, bo w kontenerze nie ma serwera SSH:
+tam API jest dostępne wprost z sieci albo tunelem przez hosta Proxmox - polecenia w punkcie 9.3.
+
 ### 5.2. Wysłanie wiadomości
 
 Polecenie (na własnym komputerze; `<TWOJ-KLUCZ>` to klucz z rozdziału 4.5, numer należy
@@ -952,12 +959,13 @@ Do sprawdzenia na docelowym serwerze, na koncie produkcyjnym i numerze testowym:
 
 Jeżeli posiadasz własny serwer z Proxmox VE, możesz uruchomić bramkę w kontenerze LXC zamiast na
 maszynie wirtualnej z Dockerem. Poniższy rozdział zastępuje rozdziały 2 i 3 oraz punkty 7.1 do 7.4; rozdział 1
-(przygotowania po stronie Multiinfo), 4 (panel), 5 (pierwsza wysyłka) i 8 (lista kontrolna)
-obowiązują bez zmian, a rozdział 6 dotyczy serwera, który wystawia API bramki na świat - w sieci
+(przygotowania po stronie Multiinfo), 4 (panel) i 8 (lista kontrolna) obowiązują bez zmian,
+w rozdziale 5 (pierwsza wysyłka) zamiast punktu 5.1 obowiązuje punkt 9.3 (w kontenerze nie ma
+SSH, więc droga do API jest inna), a rozdział 6 dotyczy serwera, który wystawia API bramki na świat - w sieci
 firmowej jest to zwykle istniejące odwrotne proxy albo osobny kontener z nginx według punktu 6.6.
 
 Do wyboru są dwa warianty: kontener bez Dockera, tworzony jednym skryptem (punkt 9.1), i kontener
-z Dockerem, w którym bramka działa dokładnie tak jak na serwerze z rozdziału 3 (punkt 9.4).
+z Dockerem, w którym bramka działa dokładnie tak jak na serwerze z rozdziału 3 (punkt 9.5).
 
 ### 9.1. Kontener LXC skryptem
 
@@ -1058,7 +1066,67 @@ po włączeniu w nim serwera SSH (`systemctl enable --now ssh` i hasło `root` u
 
 Dalej obowiązuje rozdział 4 od punktu 4.2: konto Multiinfo, sprawdzenie połączenia, klucz API.
 
-### 9.3. Utrzymanie w kontenerze
+### 9.3. Tunel do API i pierwsza wysyłka
+
+Punkt 5.1 zakłada serwer z SSH, na którym port 8080 słucha tylko na pętli zwrotnej. W kontenerze
+z punktu 9.1 jest inaczej: serwera SSH nie ma, a API słucha na adresie kontenera
+(`MIG_API_HOST=0.0.0.0` w `/etc/multiinfo-gate/env`), tak samo jak panel. Do API prowadzą więc
+dwie drogi, zależnie od tego, gdzie stoi komputer, z którego wykonuje się test:
+
+- **Komputer w tej samej sieci co kontener** (np. Proxmox w biurze, test z biurowego laptopa) -
+  API jest dostępne bez tunelu, wprost pod adresem kontenera. Sprawdzenie:
+
+  ```bash
+  curl http://<ADRES-KONTENERA>:8080/healthz
+  ```
+
+  Oczekiwany wynik: `{"status":"ok"}`. W poleceniach z punktów 5.2 i 5.3 należy wtedy zamiast
+  `http://127.0.0.1:8080` wpisywać `http://<ADRES-KONTENERA>:8080`
+- **Komputer poza siecią kontenera** (Proxmox w innej lokalizacji, dostęp tylko przez SSH do
+  hosta) - tunel przez hosta Proxmox, jak dla panelu w punkcie 9.2, tylko dla portu 8080.
+  Polecenie na własnym komputerze, w osobnym oknie terminala, które zostaje otwarte na czas
+  testów:
+
+  ```bash
+  ssh -N -L 8080:<ADRES-KONTENERA>:8080 root@<ADRES-HOSTA-PROXMOX>
+  ```
+
+  Opcja `-N` oznacza sesję bez powłoki, służącą tylko do tunelu; `-L 8080:<ADRES-KONTENERA>:8080`
+  opisuje tunel: port 8080 na własnym komputerze → adres kontenera, port 8080, przez hosta, do
+  którego prowadzi SSH. Po zestawieniu tunelu polecenie nic nie wypisuje - to stan prawidłowy.
+  Sprawdzenie w drugim oknie terminala: `curl http://127.0.0.1:8080/healthz` odpowiada
+  `{"status":"ok"}`. Polecenia z punktów 5.2 i 5.3 działają wtedy bez zmian, z adresem
+  `http://127.0.0.1:8080`. Tunel kończy się skrótem Ctrl+C w jego oknie
+
+Panel i API można prowadzić jednym tunelem, dwiema opcjami `-L` w jednym poleceniu:
+
+```bash
+ssh -N -L 8081:<ADRES-KONTENERA>:8081 -L 8080:<ADRES-KONTENERA>:8080 root@<ADRES-HOSTA-PROXMOX>
+```
+
+Dalej obowiązują punkty 5.2 do 5.5: wysłanie wiadomości, odczyt stanu, przykładowa aplikacja,
+pierwsza wiadomość przychodząca.
+
+Gdy nie działa:
+
+- `curl` na własnym komputerze zgłasza `Connection refused` pod `127.0.0.1:8080` - okno z tunelem
+  zostało zamknięte albo tunel nie został zestawiony; sprawdzeniem jest ponowne wykonanie
+  polecenia `ssh` i przyjrzenie się jego komunikatom
+- `ssh` wypisuje `bind: Address already in use` - port 8080 na własnym komputerze zajmuje inny
+  program (często inna instancja bramki albo poprzedni tunel); wyjściem jest inny port lokalny,
+  np. `-L 18080:<ADRES-KONTENERA>:8080`, i wtedy `http://127.0.0.1:18080` w poleceniach
+- `curl` zgłasza `Connection refused` pod adresem kontenera (wprost albo przez tunel, w którym
+  polecenie `ssh` nie zgłasza błędu) - usługa w kontenerze nie działa; przyczynę pokazuje
+  `pct exec <NUMER-KONTENERA> -- journalctl -u multiinfo-gate -n 20` w powłoce hosta
+- odpowiedź `401` z `error.code` `missing_api_key` albo `invalid_api_key` - tunel i API działają,
+  a problem jest w nagłówku `Authorization` (klucz z punktu 4.5, skopiowany w całości)
+
+API pod adresem kontenera jest dostępne w sieci bez HTTPS: klucz API wędruje w niej jawnym
+tekstem. Do testów w zaufanej sieci firmowej to wystarcza; aplikacjom, zwłaszcza spoza tej
+sieci, API udostępnia się przez odwrotne proxy z HTTPS według rozdziału 6, kierowane na
+`http://<ADRES-KONTENERA>:8080`.
+
+### 9.4. Utrzymanie w kontenerze
 
 Polecenia wykonuje się w kontenerze: `pct enter <NUMER-KONTENERA>` w powłoce hosta otwiera
 w nim sesję `root` (wyjście: `exit`).
@@ -1118,7 +1186,7 @@ systemctl start multiinfo-gate
 `<WERSJA>` to numer sprzed aktualizacji, np. `1.1.2`. Usunięcie pliku `~/.multiinfo-gate`
 sprawia, że kolejne `update` znów zaproponuje najnowsze wydanie.
 
-### 9.4. Kontener z Dockerem
+### 9.5. Kontener z Dockerem
 
 Jeżeli wolisz mieć w kontenerze dokładnie ten układ, który opisują rozdziały 3 i 7 (obraz z GHCR,
 `docker compose`, warianty Caddy i Traefik), utwórz kontener LXC z Dockerem skryptem z katalogu
