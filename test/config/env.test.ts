@@ -7,7 +7,7 @@ const base = { MIG_MASTER_KEY: randomBytes(32).toString('base64') };
 describe('loadEnv - odbiornik', () => {
   it('domyślnie long polling 60 s bez przerwy po pustej odpowiedzi', () => {
     const cfg = loadEnv(base, {});
-    expect(cfg.inboundTimeoutMs).toBe(60_000);
+    expect(cfg.inboundTimeoutMs).toBe(10_000);
     expect(cfg.inboundIdleMs).toBe(0);
   });
   it('przyjmuje odpytywanie okresowe', () => {

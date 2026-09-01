@@ -72,9 +72,9 @@ MIG_LOG_LEVEL=info
 MIG_BACKUP_RETENTION_DAYS=14
 # 1 pozwala na webhooki pod adresy w sieci wewnętrznej.
 MIG_WEBHOOK_ALLOW_PRIVATE=0
-# Odbiór wiadomości przychodzących: oczekiwanie na odpowiedź Multiinfo (zalecane 10000, patrz docs 7.7;
-# domyślne 60 s opóźnia odbiór nawet o minutę) i przerwa po pustej odpowiedzi.
-MIG_INBOUND_TIMEOUT_MS=60000
+# Odbiór wiadomości przychodzących: oczekiwanie na odpowiedź Multiinfo (60000 to maksimum,
+# ale opóźnia odbiór nawet o minutę - patrz docs 7.7) i przerwa po pustej odpowiedzi.
+MIG_INBOUND_TIMEOUT_MS=10000
 MIG_INBOUND_IDLE_MS=0
 ENV
 chmod 640 /etc/multiinfo-gate/env
