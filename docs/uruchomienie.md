@@ -414,6 +414,10 @@ Multiinfo, w edycji użytkownika API, w zakładce Uwierzytelnianie (punkt 1.2, k
 różni się od loginu konta, karta pokazuje ostrzeżenie - w takim przypadku certyfikat został
 wygenerowany z innym CN i trzeba go wystawić ponownie.
 
+Konto nie pobiera z Multiinfo listy nadpisów nadawcy, bo Multiinfo takiej listy przez API nie
+udostępnia; nadpisy wpisuje się ręcznie, na liście kont, według punktu 4.4. Komunikat po
+zapisaniu konta o tym przypomina.
+
 ### 4.3. Sprawdzenie połączenia
 
 Przycisk **Sprawdź połączenie** na karcie konta wysyła do Multiinfo zapytanie testowe
@@ -441,16 +445,29 @@ zamaskowanym).
 
 ![Karta konta po sprawdzeniu połączenia: odczytane dane certyfikatu i ślad zapytania z kodem -31](obrazki/polaczenie.png)
 
-### 4.4. Słownik nadpisów
+### 4.4. Nadpisy dozwolone dla konta
 
-Na liście kont, przy każdym koncie, znajduje się formularz **Słownik nadpisów, jeden w wierszu**
-oraz pole wartości domyślnej. Do słownika wpisuje się wyłącznie nadpisy uruchomione przez
-Polkomtel (punkt 1.4). Bramka odrzuca żądanie z nadpisem spoza słownika kodem `403`, zanim
-trafi ono do Multiinfo; nadpis wpisany do słownika, ale nieuruchomiony przez Polkomtel, przejdzie
-przez bramkę i zostanie odrzucony przez Multiinfo kodem `-14` - wiadomość dostanie wtedy stan
-`failed` z tym kodem.
+Lista nadpisów, z których wolno korzystać przy wysyłce z danego konta, jest prowadzona w bramce
+ręcznie. Powód: Multiinfo nie udostępnia przez API listy nadpisów uruchomionych dla użytkownika
+API, więc bramka nie ma skąd jej pobrać ani sprawdzić, czy podany w żądaniu nadpis jest
+uruchomiony - dowiedziałaby się o tym dopiero z odmowy `-14` przy wysyłce, a wiadomość byłaby
+już stracona. Zamiast tego administrator bramki przepisuje do niej nadpisy widoczne w panelu
+Multiinfo w edycji użytkownika API, w zakładce Nadpisy (punkt 1.4), a bramka odrzuca żądanie
+z nadpisem spoza tej listy kodem `403 orig_not_allowed`, zanim trafi ono do Multiinfo - z jasnym
+komunikatem dla aplikacji.
 
-![Lista kont ze słownikiem nadpisów konta Firma i wartością domyślną Firma Info](obrazki/nadpisy.png)
+Na liście kont, pod tabelą kont, przy każdym koncie znajduje się formularz **Nadpisy dozwolone dla
+konta, jeden w wierszu** oraz pole wartości domyślnej konta. Wpisuje się wyłącznie nadpisy
+uruchomione przez Polkomtel i przypisane do tego użytkownika API. Nadpis wpisany na listę, ale
+nieuruchomiony przez Polkomtel, przejdzie przez bramkę i zostanie odrzucony przez Multiinfo kodem
+`-14` - wiadomość dostanie wtedy stan `failed` z tym kodem. Po uruchomieniu kolejnego nadpisu
+przez Polkomtel należy dopisać go tutaj, inaczej bramka będzie go odrzucać.
+
+Wartość domyślna konta jest używana, gdy żądanie nie podaje pola `orig`, a klucz API nie ma
+własnego nadpisu domyślnego (punkt 4.5); bez wartości domyślnej wiadomość wychodzi z numerem
+przydzielonym kontu w Multiinfo jako nadawcą.
+
+![Lista kont z nadpisami dozwolonymi dla konta Firma i wartością domyślną Firma Info](obrazki/nadpisy.png)
 
 ### 4.5. Klucz API
 
@@ -516,6 +533,13 @@ drugą opcję `-L` do istniejącego tunelu):
 ```bash
 ssh -N -L 8080:127.0.0.1:8080 <TWOJ-UZYTKOWNIK>@<ADRES-SERWERA>
 ```
+
+Polecenie po zestawieniu tunelu nic nie wypisuje; okno zostaje otwarte na czas testów.
+Sprawdzenie: `curl http://127.0.0.1:8080/healthz` na własnym komputerze odpowiada
+`{"status":"ok"}`.
+
+W kontenerze LXC z rozdziału 9 to polecenie nie zadziała, bo w kontenerze nie ma serwera SSH:
+tam API jest dostępne wprost z sieci albo tunelem przez hosta Proxmox - polecenia w punkcie 9.3.
 
 ### 5.2. Wysłanie wiadomości
 
@@ -922,7 +946,7 @@ Ustawiane w `docker/.env` (klucz główny, domena) albo w sekcji `environment` p
 | `MIG_LOG_LEVEL` | `info` | Jeden z `silent`, `error`, `warn`, `info`, `debug` |
 | `MIG_BACKUP_RETENTION_DAYS` | `14` | Ile dni trzymać kopie bazy |
 | `MIG_WEBHOOK_ALLOW_PRIVATE` | `0` | `1` pozwala na adresy webhooków w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów); domyślnie bramka woła wyłącznie adresy publiczne i takie tylko przyjmuje w panelu. Potrzebne, gdy aplikacja odbierająca webhooki stoi na tym samym serwerze, np. przykład PHP z rozdziału 5 |
-| `MIG_INBOUND_TIMEOUT_MS` | `60000` | Ile milisekund Multiinfo może trzymać pytanie o wiadomości przychodzące bez odpowiedzi (1-60000). Wartość domyślna to maksimum z dokumentacji Multiinfo, ale w praktyce wiadomość, która nadejdzie między dwoma pytaniami, czeka do końca następnego - przy 60 s opóźnienie odbioru sięga minuty. Zalecane `10000`: odbiór zwykle poniżej sekundy, najwyżej ok. 10 s, kosztem sześciu pytań na minutę na usługę. Mała wartość razem z `MIG_INBOUND_IDLE_MS` daje odpytywanie okresowe |
+| `MIG_INBOUND_TIMEOUT_MS` | `10000` | Ile milisekund Multiinfo może trzymać pytanie o wiadomości przychodzące bez odpowiedzi (1-60000). Przy wartości domyślnej odbiór trwa zwykle poniżej sekundy, najwyżej ok. 10 s, kosztem sześciu pytań na minutę na usługę. Maksimum `60000` (long polling z dokumentacji Multiinfo) zmniejsza liczbę pytań, ale wiadomość, która nadejdzie między dwoma pytaniami, czeka do końca następnego - opóźnienie odbioru sięga wtedy minuty. Mała wartość razem z `MIG_INBOUND_IDLE_MS` daje odpytywanie okresowe |
 | `MIG_INBOUND_IDLE_MS` | `0` | Przerwa po pustej odpowiedzi, zanim bramka zapyta ponownie; `0` to pytanie od razu |
 | `MIG_WERSJA` | `1` | Tag obrazu do pobrania: `1`, `1.1` albo `1.1.0` (rozdział 7.4) |
 | `MIG_DOMENA` | - | Domena bramki dla wariantu Caddy i Traefik |
@@ -952,12 +976,13 @@ Do sprawdzenia na docelowym serwerze, na koncie produkcyjnym i numerze testowym:
 
 Jeżeli posiadasz własny serwer z Proxmox VE, możesz uruchomić bramkę w kontenerze LXC zamiast na
 maszynie wirtualnej z Dockerem. Poniższy rozdział zastępuje rozdziały 2 i 3 oraz punkty 7.1 do 7.4; rozdział 1
-(przygotowania po stronie Multiinfo), 4 (panel), 5 (pierwsza wysyłka) i 8 (lista kontrolna)
-obowiązują bez zmian, a rozdział 6 dotyczy serwera, który wystawia API bramki na świat - w sieci
+(przygotowania po stronie Multiinfo), 4 (panel) i 8 (lista kontrolna) obowiązują bez zmian,
+w rozdziale 5 (pierwsza wysyłka) zamiast punktu 5.1 obowiązuje punkt 9.3 (w kontenerze nie ma
+SSH, więc droga do API jest inna), a rozdział 6 dotyczy serwera, który wystawia API bramki na świat - w sieci
 firmowej jest to zwykle istniejące odwrotne proxy albo osobny kontener z nginx według punktu 6.6.
 
 Do wyboru są dwa warianty: kontener bez Dockera, tworzony jednym skryptem (punkt 9.1), i kontener
-z Dockerem, w którym bramka działa dokładnie tak jak na serwerze z rozdziału 3 (punkt 9.4).
+z Dockerem, w którym bramka działa dokładnie tak jak na serwerze z rozdziału 3 (punkt 9.5).
 
 ### 9.1. Kontener LXC skryptem
 
@@ -1058,7 +1083,67 @@ po włączeniu w nim serwera SSH (`systemctl enable --now ssh` i hasło `root` u
 
 Dalej obowiązuje rozdział 4 od punktu 4.2: konto Multiinfo, sprawdzenie połączenia, klucz API.
 
-### 9.3. Utrzymanie w kontenerze
+### 9.3. Tunel do API i pierwsza wysyłka
+
+Punkt 5.1 zakłada serwer z SSH, na którym port 8080 słucha tylko na pętli zwrotnej. W kontenerze
+z punktu 9.1 jest inaczej: serwera SSH nie ma, a API słucha na adresie kontenera
+(`MIG_API_HOST=0.0.0.0` w `/etc/multiinfo-gate/env`), tak samo jak panel. Do API prowadzą więc
+dwie drogi, zależnie od tego, gdzie stoi komputer, z którego wykonuje się test:
+
+- **Komputer w tej samej sieci co kontener** (np. Proxmox w biurze, test z biurowego laptopa) -
+  API jest dostępne bez tunelu, wprost pod adresem kontenera. Sprawdzenie:
+
+  ```bash
+  curl http://<ADRES-KONTENERA>:8080/healthz
+  ```
+
+  Oczekiwany wynik: `{"status":"ok"}`. W poleceniach z punktów 5.2 i 5.3 należy wtedy zamiast
+  `http://127.0.0.1:8080` wpisywać `http://<ADRES-KONTENERA>:8080`
+- **Komputer poza siecią kontenera** (Proxmox w innej lokalizacji, dostęp tylko przez SSH do
+  hosta) - tunel przez hosta Proxmox, jak dla panelu w punkcie 9.2, tylko dla portu 8080.
+  Polecenie na własnym komputerze, w osobnym oknie terminala, które zostaje otwarte na czas
+  testów:
+
+  ```bash
+  ssh -N -L 8080:<ADRES-KONTENERA>:8080 root@<ADRES-HOSTA-PROXMOX>
+  ```
+
+  Opcja `-N` oznacza sesję bez powłoki, służącą tylko do tunelu; `-L 8080:<ADRES-KONTENERA>:8080`
+  opisuje tunel: port 8080 na własnym komputerze → adres kontenera, port 8080, przez hosta, do
+  którego prowadzi SSH. Po zestawieniu tunelu polecenie nic nie wypisuje - to stan prawidłowy.
+  Sprawdzenie w drugim oknie terminala: `curl http://127.0.0.1:8080/healthz` odpowiada
+  `{"status":"ok"}`. Polecenia z punktów 5.2 i 5.3 działają wtedy bez zmian, z adresem
+  `http://127.0.0.1:8080`. Tunel kończy się skrótem Ctrl+C w jego oknie
+
+Panel i API można prowadzić jednym tunelem, dwiema opcjami `-L` w jednym poleceniu:
+
+```bash
+ssh -N -L 8081:<ADRES-KONTENERA>:8081 -L 8080:<ADRES-KONTENERA>:8080 root@<ADRES-HOSTA-PROXMOX>
+```
+
+Dalej obowiązują punkty 5.2 do 5.5: wysłanie wiadomości, odczyt stanu, przykładowa aplikacja,
+pierwsza wiadomość przychodząca.
+
+Gdy nie działa:
+
+- `curl` na własnym komputerze zgłasza `Connection refused` pod `127.0.0.1:8080` - okno z tunelem
+  zostało zamknięte albo tunel nie został zestawiony; sprawdzeniem jest ponowne wykonanie
+  polecenia `ssh` i przyjrzenie się jego komunikatom
+- `ssh` wypisuje `bind: Address already in use` - port 8080 na własnym komputerze zajmuje inny
+  program (często inna instancja bramki albo poprzedni tunel); wyjściem jest inny port lokalny,
+  np. `-L 18080:<ADRES-KONTENERA>:8080`, i wtedy `http://127.0.0.1:18080` w poleceniach
+- `curl` zgłasza `Connection refused` pod adresem kontenera (wprost albo przez tunel, w którym
+  polecenie `ssh` nie zgłasza błędu) - usługa w kontenerze nie działa; przyczynę pokazuje
+  `pct exec <NUMER-KONTENERA> -- journalctl -u multiinfo-gate -n 20` w powłoce hosta
+- odpowiedź `401` z `error.code` `missing_api_key` albo `invalid_api_key` - tunel i API działają,
+  a problem jest w nagłówku `Authorization` (klucz z punktu 4.5, skopiowany w całości)
+
+API pod adresem kontenera jest dostępne w sieci bez HTTPS: klucz API wędruje w niej jawnym
+tekstem. Do testów w zaufanej sieci firmowej to wystarcza; aplikacjom, zwłaszcza spoza tej
+sieci, API udostępnia się przez odwrotne proxy z HTTPS według rozdziału 6, kierowane na
+`http://<ADRES-KONTENERA>:8080`.
+
+### 9.4. Utrzymanie w kontenerze
 
 Polecenia wykonuje się w kontenerze: `pct enter <NUMER-KONTENERA>` w powłoce hosta otwiera
 w nim sesję `root` (wyjście: `exit`).
@@ -1118,7 +1203,7 @@ systemctl start multiinfo-gate
 `<WERSJA>` to numer sprzed aktualizacji, np. `1.1.2`. Usunięcie pliku `~/.multiinfo-gate`
 sprawia, że kolejne `update` znów zaproponuje najnowsze wydanie.
 
-### 9.4. Kontener z Dockerem
+### 9.5. Kontener z Dockerem
 
 Jeżeli wolisz mieć w kontenerze dokładnie ten układ, który opisują rozdziały 3 i 7 (obraz z GHCR,
 `docker compose`, warianty Caddy i Traefik), utwórz kontener LXC z Dockerem skryptem z katalogu

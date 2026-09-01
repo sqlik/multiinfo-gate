@@ -405,6 +405,13 @@ describe('zakładanie konta', () => {
     await create();
     expect(h.audit.list(10, 0).some((e) => e.action === 'konto.utworzenie')).toBe(true);
   });
+
+  it.runIf(havePfx)('po utworzeniu konta przypomina, że nadpisy wpisuje się ręcznie na liście kont', async () => {
+    const res = await create();
+    expect(res.statusCode).toBe(302);
+    const detail = await h.app.inject({ method: 'GET', url: res.headers.location as string, headers: { cookie: h.cookie } });
+    expect(detail.body).toContain('Nadpisy nadawcy wpisuje się na liście kont - bramka nie pobiera ich z Multiinfo.');
+  });
 });
 
 describe('edycja konta', () => {
@@ -492,10 +499,10 @@ describe('GET /konta', () => {
     expect(res.body).toContain('Firma Info');
   });
 
-  it('przypomina, skąd biorą się nadpisy, gdy słownik jest pusty', async () => {
+  it('przypomina, skąd biorą się nadpisy, gdy lista jest pusta', async () => {
     seedAccount(h, { name: 'Nowe', login: 'nowe', origs: [] });
     const res = await h.app.inject({ method: 'GET', url: '/konta', headers: { cookie: h.cookie } });
-    expect(res.body).toContain('na wniosek złożony w panelu Multiinfo');
+    expect(res.body).toContain('Wpisz nadpisy uruchomione przez Polkomtel dla tego użytkownika API');
   });
 
   it('nie ujawnia hasła ani klucza prywatnego w treści strony', async () => {
@@ -536,9 +543,12 @@ describe('teksty ekranów kont', () => {
     expect(res.body).toContain('ID usług, jedno w wierszu');
   });
 
-  it('lista kont mówi o autoryzacji nadpisów po stronie Polkomtel', async () => {
+  it('lista kont tłumaczy, dlaczego nadpisy wpisuje się ręcznie', async () => {
     const res = await h.app.inject({ method: 'GET', url: '/konta', headers: { cookie: h.cookie } });
-    expect(res.body).toContain('Nadpis uruchamia Polkomtel na wniosek złożony w panelu Multiinfo.');
+    expect(res.body).toContain('Nadpisy dozwolone dla konta, jeden w wierszu');
+    expect(res.body).toContain('Multiinfo nie udostępnia listy nadpisów przez API, więc bramka nie może jej pobrać.');
+    expect(res.body).toContain('zakładka Nadpisy');
+    expect(res.body).not.toContain('Słownik nadpisów');
     expect(res.body).toContain('<th style="width: 150px;">ID usług</th>');
   });
 });

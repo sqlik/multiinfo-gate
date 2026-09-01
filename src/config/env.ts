@@ -33,7 +33,8 @@ export interface AppConfig {
    * posłużyć do stukania w usługi, które z internetu nie są widoczne.
    */
   webhookAllowPrivate: boolean;
-  /** Ile ms Multiinfo może trzymać getsms.aspx bez odpowiedzi (1..60000). 60000 to long polling. */
+  /** Ile ms Multiinfo może trzymać getsms.aspx bez odpowiedzi (1..60000). Domyślnie 10000:
+   *  pełne 60000 opóźnia wiadomość nadeszłą między pytaniami nawet o minutę. */
   inboundTimeoutMs: number;
   /** Przerwa po pustej odpowiedzi getsms.aspx; 0 to pytanie od razu. */
   inboundIdleMs: number;
@@ -102,7 +103,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env, interfaces: Int
     logLevel: logLevelOr(source.MIG_LOG_LEVEL, 'info'),
     backupRetentionDays: intOr(source.MIG_BACKUP_RETENTION_DAYS, 14),
     webhookAllowPrivate: flag(source.MIG_WEBHOOK_ALLOW_PRIVATE),
-    inboundTimeoutMs: boundedInt('MIG_INBOUND_TIMEOUT_MS', source.MIG_INBOUND_TIMEOUT_MS, 60_000, 1, 60_000),
+    inboundTimeoutMs: boundedInt('MIG_INBOUND_TIMEOUT_MS', source.MIG_INBOUND_TIMEOUT_MS, 10_000, 1, 60_000),
     inboundIdleMs: boundedInt('MIG_INBOUND_IDLE_MS', source.MIG_INBOUND_IDLE_MS, 0, 0, 3_600_000),
   };
 }
