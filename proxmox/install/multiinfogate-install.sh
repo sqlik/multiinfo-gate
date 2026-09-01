@@ -36,6 +36,8 @@ fetch_and_deploy_gh_release "multiinfo-gate" "sqlik/multiinfo-gate" "tarball"
 # więc kompilator nie jest potrzebny. Narzędzia deweloperskie są tylko na czas budowy.
 msg_info "Budowanie bramki"
 cd /opt/multiinfo-gate
+# better-sqlite3 buduje się skryptem instalacyjnym; od npm 12 skrypty zależności są
+# domyślnie blokowane - zgodę wyraża pole allowScripts w package.json bramki.
 $STD npm ci --no-audit --no-fund
 $STD npm run build
 $STD npm prune --omit=dev
