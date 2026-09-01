@@ -1,0 +1,27 @@
+/* Kolory z panelu bramki: tło, atrament i bursztynowy akcent - ta sama paleta, którą
+   administrator widzi w panelu, żeby strona i panel czytały się jak jedna rzecz. */
+:root {
+  --md-primary-fg-color: #1A1D1B;
+  --md-primary-fg-color--light: #3A3E3B;
+  --md-primary-fg-color--dark: #0E100F;
+  --md-accent-fg-color: #B4531A;
+  --md-accent-fg-color--transparent: rgba(180, 83, 26, 0.1);
+}
+
+[data-md-color-scheme="default"] {
+  --md-default-bg-color: #F4F5F2;
+  --md-default-fg-color: #1A1D1B;
+  --md-typeset-a-color: #B4531A;
+  --md-code-bg-color: #EAECE7;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-typeset-a-color: #E08A4E;
+  --md-accent-fg-color: #E08A4E;
+}
+
+/* Zrzuty ekranu panelu: obwódka, żeby jasny zrzut nie zlewał się z tłem strony */
+.md-typeset img {
+  border: 1px solid rgba(26, 29, 27, 0.15);
+  border-radius: 4px;
+}

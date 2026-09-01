@@ -1,6 +1,7 @@
 # zależności i wynik budowania
 node_modules/
 dist/
+site/
 
 # dane środowiska uruchomieniowego (tylko katalog główny)
 /data/
