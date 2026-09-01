@@ -35,9 +35,14 @@ instrukcja poniżej.
 
 ## Dokumentacja
 
-- [Uruchomienie krok po kroku](docs/uruchomienie.md) - od konta Multiinfo do pierwszego SMS-a i wystawienia API na świat
-- [API dla aplikacji](docs/api.md) - wywołania, webhooki, błędy, limity
+Strona dokumentacji: [sqlik.github.io/multiinfo-gate](https://sqlik.github.io/multiinfo-gate/)
+
+- [Uruchomienie krok po kroku](https://sqlik.github.io/multiinfo-gate/uruchomienie/) - od konta Multiinfo do pierwszego SMS-a i wystawienia API na świat
+- [API dla aplikacji](https://sqlik.github.io/multiinfo-gate/api/) - każde wywołanie z przykładem w siedmiu wariantach (curl, HTTP, PHP, Python, Node.js, PowerShell, C#), webhooki, błędy, limity
 - [Przykład w PHP](examples/php/) - strona testowa i kod do skopiowania
+
+Źródłem strony są pliki w katalogu [`docs/`](docs/); przykłady z zakładkami czytają się w nich
+gorzej niż na stronie, bo GitHub nie wyświetla zakładek.
 
 ## Licencja
 

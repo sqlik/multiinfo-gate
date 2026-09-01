@@ -1,0 +1,70 @@
+# Strona dokumentacji: https://sqlik.github.io/multiinfo-gate/ - budowana z docs/ przez
+# .github/workflows/docs.yml. Podgląd lokalny: `pip install -r docs/requirements.txt`
+# i `mkdocs serve` w katalogu repozytorium.
+site_name: Multiinfo Gate
+site_description: Bramka SMS między aplikacjami a API Multiinfo (Plus, Polkomtel)
+site_url: https://sqlik.github.io/multiinfo-gate/
+repo_url: https://github.com/sqlik/multiinfo-gate
+repo_name: sqlik/multiinfo-gate
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; 2026 Tomasz Sawko, licencja MIT
+
+docs_dir: docs
+exclude_docs: |
+  requirements.txt
+
+nav:
+  - Start: index.md
+  - Uruchomienie krok po kroku: uruchomienie.md
+  - API dla aplikacji: api.md
+
+theme:
+  name: material
+  language: pl
+  logo: obrazki/logo.svg
+  favicon: obrazki/favicon.svg
+  font:
+    text: IBM Plex Sans
+    code: IBM Plex Mono
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Tryb ciemny
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Tryb jasny
+  features:
+    - content.tabs.link
+    - content.code.copy
+    - content.action.edit
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+plugins:
+  - search
