@@ -2,7 +2,7 @@
   "name": "multiinfo-gate",
   "license": "MIT",
   "author": "Tomasz Sawko",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -17,6 +17,9 @@
     "test:watch": "vitest",
     "check:tekst": "sh scripts/check-tekst.sh",
     "check:dane": "sh scripts/check-dane.sh"
+  },
+  "allowScripts": {
+    "better-sqlite3": true
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",
