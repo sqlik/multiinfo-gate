@@ -1188,6 +1188,19 @@ w kontenerze nasłuchuje na adresie kontenera, nie na `127.0.0.1`, więc `curl` 
 zadziała). Gdy nowszego wydania nie ma, polecenie kończy się
 komunikatem o braku aktualizacji.
 
+Gdy po aktualizacji usługa nie startuje, a `journalctl -u multiinfo-gate -n 30` pokazuje błąd
+`Could not locate the bindings file` z listą ścieżek `better_sqlite3.node`: npm w wersji 12 albo
+nowszej zablokował skrypt instalacyjny biblioteki `better-sqlite3` i jej część natywna nie
+została zbudowana. Wydania od 1.4.1 wyrażają zgodę na ten skrypt polem `allowScripts`
+w `package.json`; przy aktualizacji na starsze wydanie naprawa to zbudowanie biblioteki wprost
+z jej katalogu (polecenie `npm run` nie podlega blokadzie) i ponowny start usługi:
+
+```bash
+cd /opt/multiinfo-gate/node_modules/better-sqlite3
+npm run install
+systemctl restart multiinfo-gate
+```
+
 Powrót do poprzedniego wydania po nieudanej aktualizacji: przywrócenie kopii
 `przed-aktualizacja-<WERSJA>.sqlite` według przepisu wyżej i ręczne pobranie tamtego wydania:
 
@@ -1195,12 +1208,16 @@ Powrót do poprzedniego wydania po nieudanej aktualizacji: przywrócenie kopii
 systemctl stop multiinfo-gate
 rm -rf /opt/multiinfo-gate && mkdir /opt/multiinfo-gate
 curl -fsSL https://github.com/sqlik/multiinfo-gate/archive/refs/tags/v<WERSJA>.tar.gz | tar -xz --strip-components=1 -C /opt/multiinfo-gate
-cd /opt/multiinfo-gate && npm ci --no-audit --no-fund && npm run build && npm prune --omit=dev
+cd /opt/multiinfo-gate && echo "allow-scripts=better-sqlite3" > .npmrc
+npm ci --no-audit --no-fund && npm run build && npm prune --omit=dev
 rm -f ~/.multiinfo-gate
 systemctl start multiinfo-gate
 ```
 
-`<WERSJA>` to numer sprzed aktualizacji, np. `1.1.2`. Usunięcie pliku `~/.multiinfo-gate`
+`<WERSJA>` to numer sprzed aktualizacji, np. `1.1.2`. Wpis w `.npmrc` wyraża zgodę na skrypt
+instalacyjny `better-sqlite3` w wydaniach sprzed 1.4.1, które nie mają pola `allowScripts`
+(nowszemu npm bez tej zgody powstałaby instalacja bez części natywnej); w nowszych wydaniach
+wpis niczemu nie szkodzi. Usunięcie pliku `~/.multiinfo-gate`
 sprawia, że kolejne `update` znów zaproponuje najnowsze wydanie.
 
 ### 9.5. Kontener z Dockerem

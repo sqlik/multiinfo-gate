@@ -76,6 +76,8 @@ function update_script() {
 
     msg_info "Budowanie bramki"
     cd /opt/multiinfo-gate
+    # better-sqlite3 buduje się skryptem instalacyjnym; od npm 12 skrypty zależności są
+    # domyślnie blokowane - zgodę wyraża pole allowScripts w package.json bramki.
     $STD npm ci --no-audit --no-fund
     $STD npm run build
     $STD npm prune --omit=dev
