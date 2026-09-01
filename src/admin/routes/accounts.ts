@@ -156,7 +156,8 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
       meta: { nazwa: name, login, cn: bundle.cn, fingerprint: bundle.fingerprintSha1 },
       ip: request.ip,
     });
-    render.flash(request, 'ok', `Konto ${name} zapisane.`);
+    render.flash(request, 'ok',
+      `Konto ${name} zapisane. Nadpisy nadawcy wpisuje się na liście kont - bramka nie pobiera ich z Multiinfo.`);
     return reply.redirect(`/konta/${id}`, 302);
   });
 

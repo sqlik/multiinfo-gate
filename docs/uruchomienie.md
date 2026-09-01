@@ -414,6 +414,10 @@ Multiinfo, w edycji użytkownika API, w zakładce Uwierzytelnianie (punkt 1.2, k
 różni się od loginu konta, karta pokazuje ostrzeżenie - w takim przypadku certyfikat został
 wygenerowany z innym CN i trzeba go wystawić ponownie.
 
+Konto nie pobiera z Multiinfo listy nadpisów nadawcy, bo Multiinfo takiej listy przez API nie
+udostępnia; nadpisy wpisuje się ręcznie, na liście kont, według punktu 4.4. Komunikat po
+zapisaniu konta o tym przypomina.
+
 ### 4.3. Sprawdzenie połączenia
 
 Przycisk **Sprawdź połączenie** na karcie konta wysyła do Multiinfo zapytanie testowe
@@ -441,16 +445,29 @@ zamaskowanym).
 
 ![Karta konta po sprawdzeniu połączenia: odczytane dane certyfikatu i ślad zapytania z kodem -31](obrazki/polaczenie.png)
 
-### 4.4. Słownik nadpisów
+### 4.4. Nadpisy dozwolone dla konta
 
-Na liście kont, przy każdym koncie, znajduje się formularz **Słownik nadpisów, jeden w wierszu**
-oraz pole wartości domyślnej. Do słownika wpisuje się wyłącznie nadpisy uruchomione przez
-Polkomtel (punkt 1.4). Bramka odrzuca żądanie z nadpisem spoza słownika kodem `403`, zanim
-trafi ono do Multiinfo; nadpis wpisany do słownika, ale nieuruchomiony przez Polkomtel, przejdzie
-przez bramkę i zostanie odrzucony przez Multiinfo kodem `-14` - wiadomość dostanie wtedy stan
-`failed` z tym kodem.
+Lista nadpisów, z których wolno korzystać przy wysyłce z danego konta, jest prowadzona w bramce
+ręcznie. Powód: Multiinfo nie udostępnia przez API listy nadpisów uruchomionych dla użytkownika
+API, więc bramka nie ma skąd jej pobrać ani sprawdzić, czy podany w żądaniu nadpis jest
+uruchomiony - dowiedziałaby się o tym dopiero z odmowy `-14` przy wysyłce, a wiadomość byłaby
+już stracona. Zamiast tego administrator bramki przepisuje do niej nadpisy widoczne w panelu
+Multiinfo w edycji użytkownika API, w zakładce Nadpisy (punkt 1.4), a bramka odrzuca żądanie
+z nadpisem spoza tej listy kodem `403 orig_not_allowed`, zanim trafi ono do Multiinfo - z jasnym
+komunikatem dla aplikacji.
 
-![Lista kont ze słownikiem nadpisów konta Firma i wartością domyślną Firma Info](obrazki/nadpisy.png)
+Na liście kont, pod tabelą kont, przy każdym koncie znajduje się formularz **Nadpisy dozwolone dla
+konta, jeden w wierszu** oraz pole wartości domyślnej konta. Wpisuje się wyłącznie nadpisy
+uruchomione przez Polkomtel i przypisane do tego użytkownika API. Nadpis wpisany na listę, ale
+nieuruchomiony przez Polkomtel, przejdzie przez bramkę i zostanie odrzucony przez Multiinfo kodem
+`-14` - wiadomość dostanie wtedy stan `failed` z tym kodem. Po uruchomieniu kolejnego nadpisu
+przez Polkomtel należy dopisać go tutaj, inaczej bramka będzie go odrzucać.
+
+Wartość domyślna konta jest używana, gdy żądanie nie podaje pola `orig`, a klucz API nie ma
+własnego nadpisu domyślnego (punkt 4.5); bez wartości domyślnej wiadomość wychodzi z numerem
+przydzielonym kontu w Multiinfo jako nadawcą.
+
+![Lista kont z nadpisami dozwolonymi dla konta Firma i wartością domyślną Firma Info](obrazki/nadpisy.png)
 
 ### 4.5. Klucz API
 
