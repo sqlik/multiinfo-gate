@@ -20,7 +20,7 @@ services:
       # Odbiór wiadomości przychodzących: oczekiwanie na odpowiedź Multiinfo (zalecane 10000 -
       # docs/uruchomienie.md, rozdział 7.7; domyślne 60 s opóźnia odbiór nawet o minutę) i przerwa po pustej
       # odpowiedzi; zmiana tylko przy odpytywaniu okresowym (docs/uruchomienie.md, rozdział 7.7).
-      MIG_INBOUND_TIMEOUT_MS: ${MIG_INBOUND_TIMEOUT_MS:-60000}
+      MIG_INBOUND_TIMEOUT_MS: ${MIG_INBOUND_TIMEOUT_MS:-10000}
       MIG_INBOUND_IDLE_MS: ${MIG_INBOUND_IDLE_MS:-0}
     ports:
       # API i panel tylko na pętli zwrotnej hosta. Na świat API wystawia odwrotne proxy

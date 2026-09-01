@@ -103,7 +103,7 @@ function mig_description() {
 Bramka SMS między Twoimi aplikacjami a API Multiinfo (Plus, Polkomtel).
 
 - Panel: http://${IP}:8081 (tunel SSH przez hosta albo HTTPS przez odwrotne proxy - instrukcja, punkt 9.2)
-- API dla aplikacji: http://${IP}:8080
+- API dla aplikacji: http://${IP}:8080 (z sieci wprost albo tunelem SSH przez hosta - instrukcja, punkt 9.3)
 - Dane pierwszego konta panelu: \`/root/multiinfo-gate.creds\` w kontenerze
 - Konfiguracja: \`/etc/multiinfo-gate/env\`, dane i kopie: \`/var/lib/multiinfo-gate\`
 - Aktualizacja do najnowszego wydania: polecenie \`update\` w kontenerze

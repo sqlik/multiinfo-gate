@@ -39,9 +39,13 @@ export function daysUntil(iso: string, now: Date): number {
   return Math.ceil((Date.parse(iso) - now.getTime()) / 86_400_000);
 }
 
+/** Podpowiedź pod listą nadpisów: pierwsi użytkownicy oczekiwali, że konto pobierze nadpisy
+ *  z Multiinfo - stąd na początku przyczyna, dopiero potem co wpisać. */
 const ZDANIE_O_NADPISACH =
-  'Nadpis uruchamia Polkomtel na wniosek złożony w panelu Multiinfo. ' +
-  'Wpisz tu wyłącznie nadpisy już uruchomione - inne Multiinfo odrzuci błędem -14.';
+  'Multiinfo nie udostępnia listy nadpisów przez API, więc bramka nie może jej pobrać. ' +
+  'Wpisz nadpisy uruchomione przez Polkomtel dla tego użytkownika API (panel Multiinfo, edycja użytkownika API, ' +
+  'zakładka Nadpisy). Żądanie z nadpisem spoza listy bramka odrzuci kodem 403, zanim trafi do Multiinfo; ' +
+  'nadpis wpisany, lecz nieuruchomiony, Multiinfo odrzuci kodem -14';
 
 /** Instrukcja Polkomtela do wygenerowania certyfikatu użytkownika API. Adres stały, nie z danych. */
 const CERT_INSTRUCTION_URL = 'https://plk-assets.s3.pl-waw.scw.cloud/certyfikaty-multiinfo.zip';
@@ -182,7 +186,7 @@ function origsForm(v: AccountView): string {
 
   return `<form method="post" action="/konta/${esc(v.row.id)}/nadpisy">
       <div class="field">
-        <label for="origs-${esc(v.row.id)}">Słownik nadpisów, jeden w wierszu</label>
+        <label for="origs-${esc(v.row.id)}">Nadpisy dozwolone dla konta, jeden w wierszu</label>
         <textarea id="origs-${esc(v.row.id)}" name="origs" rows="4">${esc(v.origs.join('\n'))}</textarea>
         <div class="hint">${esc(ZDANIE_O_NADPISACH)}</div>
       </div>
