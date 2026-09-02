@@ -36,7 +36,7 @@ export const freescoutZgloszenie: Preset = {
     maxParts: 1, overflow: 'truncate',
   },
   expect: { text: 'Nowe zgloszenie #10143 od Anna Nowak: [Zgloszenie] Nie dziala logowanie' },
-  sampleSource: 'FreeScout 1.8, prawdziwy webhook convo.created z żywej instancji, 2026-09-02',
+  sampleSource: 'FreeScout 1.8, żywa instancja, 2026-09-02: webhooki convo.created (threadsCount 0) i convo.customer.reply.created (threadsCount 3)',
   guide: [
     'We FreeScoucie **Zarządzaj → API & Webhooks → Webhooks → Dodaj**: URL to adres wejściowy integracji, zdarzenia `convo.created` (nowa rozmowa) i `convo.customer.reply.created` (odpowiedź klienta), skrzynki wszystkie albo wybrane. Numery agentów wpisz w bramce w liście zapasowej - FreeScout nie wie, kogo budzić. Szablon rozróżnia oba zdarzenia po liczbie wątków.',
     '',

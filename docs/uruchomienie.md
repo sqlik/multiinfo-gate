@@ -527,8 +527,8 @@ poleceniem z rozdziału 3.4, kolejne - z tego ekranu.
 ### 4.7. Integracje i powiadomienia
 
 Ekran **Integracje** służy aplikacjom, których formatu nie da się zmienić: monitoring (Uptime
-Kuma, Grafana, Zabbix), helpdesk (FreeScout, Freshdesk), Home Assistant, automatyzacje (n8n,
-Make, Zapier) oraz kanały powiadomień (Slack, Microsoft Teams, ntfy). Integracja „do SMS” daje
+Kuma, Grafana, Zabbix), helpdesk (FreeScout, Freshdesk), automatyzacje (n8n, Make, Zapier)
+oraz powiadomienia push przez ntfy. Integracja „do SMS” daje
 aplikacji adres wejściowy `POST /hooks/<identyfikator>` na porcie API i tłumaczy jej ładunek na
 SMS według szablonu; integracja „z SMS-a” wysyła odebrane SMS-y i statusy na adres aplikacji
 w jej formacie. Integracja działa w imieniu klucza API z rozdziału 4.5 - załóż go najpierw.
@@ -538,7 +538,7 @@ w jej formacie. Integracja działa w imieniu klucza API z rozdziału 4.5 - zał�
 Dodanie integracji to wybór kierunku, gotowego ustawienia (kafelek z nazwą aplikacji) i formularz
 wypełniony szablonem oraz instrukcją, co ustawić po stronie aplikacji. Przycisk **Sprawdź
 szablon** pokazuje wynik na przykładowym ładunku bez zapisu i bez wysyłki. Aplikacja w sieci
-lokalnej (typowo Home Assistant) jako cel integracji „z SMS-a” wymaga `MIG_WEBHOOK_ALLOW_PRIVATE=1`
+lokalnej jako cel integracji „z SMS-a” wymaga `MIG_WEBHOOK_ALLOW_PRIVATE=1`
 w środowisku bramki (rozdział 7.7), tak samo jak adres webhooka klucza.
 
 ![Formularz integracji z ustawienia Uptime Kuma](obrazki/integracja-formularz.png)

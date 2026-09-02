@@ -21,8 +21,8 @@ describe('gotowe ustawienia', () => {
     expect(ids.at(-1)).toBe('custom');
     expect(presetById('uptime-kuma')?.name).toBe('Uptime Kuma');
     expect(presetById('brak')).toBeUndefined();
-    expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'uptime-kuma', 'grafana', 'zabbix', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
-    expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'home-assistant', 'freescout', 'freshdesk', 'slack', 'teams', 'ntfy', 'custom']);
+    expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'uptime-kuma', 'grafana', 'zabbix', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
+    expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'freescout', 'freshdesk', 'ntfy', 'custom']);
   });
   it('każde ustawienie ma konfigurację dla każdego swojego rodzaju, instrukcję i sekrety ze wskazówką', () => {
     for (const p of PRESETS) {
@@ -95,5 +95,13 @@ describe('gotowe ustawienia', () => {
     const fdConfig = { ...defaultInboundConfig(), ...fd.inbound } as InboundConfig;
     const fdReply = previewInbound(engine, fdConfig, { ...(fd.sample as object), event: 'odpowiedz', subject: 'Nie działa' }, '48', NOW);
     expect(fdReply.text).toMatch(/^Odpowiedz klienta w #6541: Nie dziala - /);
+  });
+
+  it('Freshdesk: odpowiedź klienta z e-maila bez cytowanej korespondencji', () => {
+    const fd = presetById('freshdesk-zgloszenie')!;
+    const config = { ...defaultInboundConfig(), ...fd.inbound } as InboundConfig;
+    const text = "Jan Nowak : <div>To jest odpowiedź klienta</div><div><br></div><div>----- Original message -----</div><div></div><div class='freshdesk_quote'><blockquote class='freshdesk_quote'><div>From: Support</div><div>Subject: Re: [#6541] Nie działa</div></blockquote></div>";
+    const out = previewInbound(engine, config, { event: 'odpowiedz', ticket_id: '6541', text }, '48', NOW);
+    expect(out.text).toBe('Odpowiedz klienta w #6541 - Jan Nowak : To jest odpowiedz klienta');
   });
 });

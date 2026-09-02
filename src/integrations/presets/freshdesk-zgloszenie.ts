@@ -17,11 +17,12 @@ export const freshdeskZgloszenie: Preset = {
   ],
   inbound: {
     to: { fallback: [] },
-    text: { mode: 'liquid', template: '{% capture t %}{% if p.event == "odpowiedz" %}Odpowiedź klienta w #{{ p.ticket_id }}{% else %}Nowe zgłoszenie #{{ p.ticket_id }}{% endif %}{% if p.subject %}: {{ p.subject }}{% endif %} - {{ p.text | html_text | sms_truncate: 100 }}{% endcapture %}{{ t | gsm }}' },
+    // Odpowiedź klienta z e-maila niesie cytowaną korespondencję (blockquote po „----- Original message -----”) - ucinamy przed nią.
+    text: { mode: 'liquid', template: '{% assign tresc = p.text | split: "<blockquote" | first | split: "----- Original message -----" | first %}{% capture t %}{% if p.event == "odpowiedz" %}Odpowiedź klienta w #{{ p.ticket_id }}{% else %}Nowe zgłoszenie #{{ p.ticket_id }}{% endif %}{% if p.subject %}: {{ p.subject }}{% endif %} - {{ tresc | html_text | sms_truncate: 100 }}{% endcapture %}{{ t | gsm }}' },
     maxParts: 1, overflow: 'truncate',
   },
   expect: { text: 'Nowe zgloszenie #6541 - Dzien dobry, od rana nie moge sie zalogowac do panelu klienta.' },
-  sampleSource: 'Freshdesk, prawdziwy ładunek z reguły „Tworzenie zgłoszeń” z żywej instancji, 2026-09-02',
+  sampleSource: 'Freshdesk, żywa instancja, 2026-09-02: ładunki reguł „Tworzenie zgłoszeń” i „Wysłano odpowiedź” przez Zgłaszającego (z cytowaną korespondencją)',
   guide: [
     'We Freshdesku **Admin → Workflows → Automations**. Dwie reguły, obie z akcją **Uruchom element webhook**: POST, adres wejściowy integracji, Szyfrowanie JSON, Treść „Zaawansowane”.',
     '',
