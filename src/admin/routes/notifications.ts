@@ -3,7 +3,7 @@ import { NOTIFICATION_EVENTS, type NotificationEvent } from '../../notifications
 import type { RulePatch, SmtpSecurity } from '../../store/notifications.ts';
 import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
-import { EMPTY_SMTP, notificationsPage, smtpValuesOf, type NotificationsPageData, type SmtpFormValues } from '../views/notifications.ts';
+import { EMPTY_SMTP, notificationsPage, smtpValuesOf, type NotificationsPageData, type SmtpFormValues, type NotificationsTab } from '../views/notifications.ts';
 
 type Body = Record<string, string | string[] | undefined>;
 
@@ -68,17 +68,17 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps
     return deps.users.findById(userId)?.login ?? String(userId);
   };
 
-  const pageBody = (request: FastifyRequest, over: Partial<NotificationsPageData> = {}) => {
+  const pageBody = (request: FastifyRequest, tab: NotificationsTab, over: Partial<NotificationsPageData> = {}) => {
     const smtp = deps.notifications.smtp();
     return render.page(request, {
       title: 'Powiadomienia', active: 'powiadomienia',
-      body: notificationsPage({ smtp, smtpValues: smtp ? smtpValuesOf(smtp) : EMPTY_SMTP, rules: deps.notifications.rules(), ...over }),
+      body: notificationsPage({ tab, smtp, smtpValues: smtp ? smtpValuesOf(smtp) : EMPTY_SMTP, rules: deps.notifications.rules(), ...over }),
     });
   };
 
-  app.get('/powiadomienia', async (request, reply) => {
+  app.get<{ Querystring: { zakladka?: string } }>('/powiadomienia', async (request, reply) => {
     reply.type('text/html; charset=utf-8');
-    return pageBody(request);
+    return pageBody(request, request.query.zakladka === 'reguly' ? 'reguly' : 'konfiguracja');
   });
 
   app.post<{ Body: Body }>('/powiadomienia/smtp', async (request, reply) => {
@@ -88,7 +88,7 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps
     const checked = checkSmtp(v);
     if (!checked.ok) {
       reply.code(400);
-      return pageBody(request, { smtpValues: v, error: { which: 'smtp', text: checked.error } });
+      return pageBody(request, 'konfiguracja', { smtpValues: v, error: { which: 'smtp', text: checked.error } });
     }
     const password = String(body.password ?? '');
     const had = deps.notifications.smtp() !== null;
@@ -140,7 +140,7 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps
     const raw: Record<string, string> = Object.fromEntries(Object.entries(body).map(([k, v]) => [k, String(Array.isArray(v) ? v[0] ?? '' : v ?? '')]));
     const fail = (text: string) => {
       reply.code(400);
-      return pageBody(request, { error: { which: 'rules', text }, ruleValues: raw });
+      return pageBody(request, 'reguly', { error: { which: 'rules', text }, ruleValues: raw });
     };
     if (deps.notifications.smtp() === null) return fail('Najpierw skonfiguruj SMTP.');
 
@@ -179,6 +179,6 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps
       actor: actorOf(request.adminUserId), action: 'powiadomienia.reguly', target: 'reguly', meta: { zmienione: changed }, ip: request.ip,
     });
     render.flash(request, 'ok', changed.length === 0 ? 'Reguły bez zmian.' : `Reguły zapisane (${changed.length} zmienione).`);
-    return reply.redirect('/powiadomienia', 302);
+    return reply.redirect('/powiadomienia?zakladka=reguly', 302);
   });
 }

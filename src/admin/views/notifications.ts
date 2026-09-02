@@ -21,7 +21,11 @@ export function smtpValuesOf(s: SmtpSettings): SmtpFormValues {
   };
 }
 
+export type NotificationsTab = 'konfiguracja' | 'reguly';
+
 export interface NotificationsPageData {
+  /** Zakładka: konfiguracja SMTP albo reguły; formularz i tabela nie mieszczą się obok siebie. */
+  tab: NotificationsTab;
   smtp: SmtpSettings | null;
   smtpValues: SmtpFormValues;
   rules: RuleRow[];
@@ -98,7 +102,14 @@ export function notificationsPage(d: NotificationsPageData): string {
     </div>
   </div>
   <div class="scroll">
-      <div class="panel" style="max-width: 560px;">
+    <div class="bar" style="gap: 10px; margin-bottom: 12px; align-items: center;">
+      <div class="seg">
+        <a href="/powiadomienia"${d.tab === 'konfiguracja' ? ' class="on"' : ''}>Konfiguracja</a>
+        <a href="/powiadomienia?zakladka=reguly"${d.tab === 'reguly' ? ' class="on"' : ''}>Reguły</a>
+      </div>
+      <span class="dim" style="font-size: 12px;">${d.tab === 'konfiguracja' ? 'Serwer SMTP, nadawca i odbiorcy maili' : 'Które zdarzenia mają iść mailem, jak często i z jakimi progami'}</span>
+    </div>
+${d.tab === 'konfiguracja' ? `      <div class="panel" style="max-width: 760px;">
         <div class="panel-h"><div class="lab">Serwer SMTP</div>
           ${configured ? `<span class="m dim">zapisano ${esc(d.smtp!.updatedAt.slice(0, 10))}</span>` : '<span class="dim">nieskonfigurowany</span>'}</div>
         ${smtpError}
@@ -116,18 +127,18 @@ export function notificationsPage(d: NotificationsPageData): string {
             <select id="security" name="security">
               ${SECURITY.map((s) => `<option value="${s.value}"${v.security === s.value ? ' selected' : ''}>${esc(s.label)}</option>`).join('')}
             </select>
-            <label class="choice"><input type="checkbox" name="plainOk" value="1"${v.plainOk ? ' checked' : ''}> rozumiem, że bez szyfrowania hasło pójdzie jawnie</label>
-            <div class="hint">Bez szyfrowania tylko do serwera w tej samej sieci wewnętrznej.</div>
+            <label class="choice"><input type="checkbox" name="plainOk" value="1"${v.plainOk ? ' checked' : ''}> Rozumiem, że bez szyfrowania hasło pójdzie jawnie</label>
+            <div class="hint">Bez szyfrowania tylko do serwera w tej samej sieci wewnętrznej</div>
           </div>
           <div class="field">
             <label for="user">Login</label>
             <input id="user" name="user" value="${esc(v.user)}" autocomplete="off">
-            <div class="hint">Pusty login oznacza serwer bez uwierzytelniania.</div>
+            <div class="hint">Pusty login oznacza serwer bez uwierzytelniania</div>
           </div>
           <div class="field">
             <label for="password">Hasło</label>
             <input id="password" name="password" type="password" autocomplete="off">
-            <div class="hint">${configured ? 'Puste pole zostawia dotychczasowe hasło.' : 'Zapisywane zaszyfrowane kluczem głównym.'}</div>
+            <div class="hint">${configured ? 'Puste pole zostawia dotychczasowe hasło' : 'Zapisywane zaszyfrowane kluczem głównym'}</div>
           </div>
           <div class="field">
             <label for="fromAddress">Adres nadawcy</label>
@@ -140,17 +151,17 @@ export function notificationsPage(d: NotificationsPageData): string {
           <div class="field">
             <label for="recipients">Odbiorcy</label>
             <textarea id="recipients" name="recipients" rows="3">${esc(v.recipients)}</textarea>
-            <div class="hint">Jeden adres na linię, do 20.</div>
+            <div class="hint">Jeden adres na linię, do 20</div>
           </div>
           <div class="field">
             <label for="instanceName">Nazwa instancji</label>
             <input id="instanceName" name="instanceName" value="${esc(v.instanceName)}" placeholder="np. Firma - produkcja">
-            <div class="hint">W temacie każdego maila, żeby odróżnić bramki.</div>
+            <div class="hint">W temacie każdego maila, żeby odróżnić bramki</div>
           </div>
           <div class="field">
             <label for="panelUrl">Adres panelu</label>
             <input id="panelUrl" name="panelUrl" value="${esc(v.panelUrl)}" placeholder="https://sms.firma.example:8081">
-            <div class="hint">Opcjonalny. Z nim maile mają odnośniki do integracji i kont.</div>
+            <div class="hint">Opcjonalny; z nim maile mają odnośniki do integracji i kont</div>
           </div>
           <div class="bar">
             <button class="btn btn-p" type="submit">Zapisz SMTP</button>
@@ -159,8 +170,7 @@ export function notificationsPage(d: NotificationsPageData): string {
         <form method="post" action="/powiadomienia/smtp/test" style="padding: 0 16px 16px;">
           <button class="btn btn-s" type="submit"${configured ? '' : ' disabled'}>Wyślij mail testowy</button>
         </form>
-      </div>
-      <div class="panel${configured ? '' : ' dim'}" style="max-width: 980px;">
+      </div>` : `      <div class="panel${configured ? '' : ' dim'}" style="max-width: 980px;">
         <div class="panel-h"><div class="lab">Reguły</div></div>
         ${configured ? '' : '<div class="warn">Najpierw skonfiguruj SMTP - bez niego reguły nie mają dokąd wysyłać.</div>'}
         ${rulesError}
@@ -171,6 +181,6 @@ export function notificationsPage(d: NotificationsPageData): string {
             <span class="hint dim" style="font-size: 11.5px;">Grupowanie 0 = każde zdarzenie osobno, do limitu na godzinę; nadmiar trafia do następnego maila jako liczba.</span>
           </div>
         </form>
-      </div>
+      </div>`}
   </div>`;
 }

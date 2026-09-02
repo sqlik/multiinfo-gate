@@ -33,7 +33,7 @@ export const freshdesk: Preset = {
   },
   sampleSource: 'Freshdesk, żywa instancja, 2026-09-02: POST /api/v2/tickets (201, id na wierzchu, kontakt z phone)',
   guide: [
-    'Adres `https://<firma>.freshdesk.com/api/v2/tickets`. Freshdesk uwierzytelnia basic auth z kluczem API jako loginem i `X` jako hasłem - w sekrecie wpisz gotowy nagłówek `Basic <base64(klucz:X)>` (klucz API: awatar → Ustawienia profilu). Body zakłada zgłoszenie ze źródłem „Telefon”, telefonem i nazwą „SMS <numer>”. Freshdesk dopasowuje kontakt po dokładnym zapisie numeru - kontakty z numerem `48601000001` zostaną rozpoznane, z `601000001` nie, i powstanie nowy kontakt bez e-maila.',
+    'Adres `https://<firma>.freshdesk.com/api/v2/tickets`. Freshdesk uwierzytelnia basic auth z kluczem API jako loginem i `X` jako hasłem - w sekrecie wpisz gotowy nagłówek `Basic <base64(klucz:X)>` (klucz API: awatar → Ustawienia profilu). Body zakłada zgłoszenie ze źródłem „Telefon”, telefonem i nazwą „SMS <numer>”. Freshdesk dopasowuje kontakt po dokładnym zapisie numeru - kontakty z numerem `48601000001` zostaną rozpoznane, z `601000001` nie i powstanie nowy kontakt bez e-maila.',
     '',
     'Agent widzi zgłoszenie i oddzwania albo odpisuje własnym kanałem; bramka nie wysyła odpowiedzi z Freshdeska SMS-em. Żeby agenci dostawali SMS o nowych zgłoszeniach, dodaj osobno ustawienie „Freshdesk: nowe zgłoszenie”.',
   ].join('\n'),

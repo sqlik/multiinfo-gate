@@ -42,7 +42,7 @@ Plakietka przy pozycji w menu liczy integracje z błędem w ostatniej dobie.
 Zanim dodasz pierwszą integrację, podaj raz **adres, pod którym aplikacje widzą bramkę** - panel
 prosi o niego na ekranie **Klucze API** (i na liście integracji, dopóki go nie ma). To ten sam
 adres, który aplikacje wpisują przed `/v1/messages`: przy bramce pod domeną `https://sms.firma.pl`,
-przy kontenerze na Proxmoksie dostępnym w sieci firmowej `http://10.10.10.159:8080` (adres
+przy kontenerze na Proxmoxie dostępnym w sieci firmowej `http://10.10.10.159:8080` (adres
 kontenera i port API). Bez ścieżki na końcu. Od tej chwili panel pokazuje przy każdym kluczu gotowe
 wywołanie do wklejenia w terminalu, a przy każdej integracji pełny adres wejściowy zamiast samej
 ścieżki `/hooks/…`. Rozdział 3.1 opisuje, jaki adres wpisać zależnie od tego, jak bramka stoi.
@@ -84,7 +84,7 @@ skrzynki we FreeScoucie) i dostęp do aplikacji (klucz API; przy Freshdesku bram
 klucz na wymagany nagłówek).
 
 Po zapisaniu panel pokazuje raz ramkę z **pełnym adresem do wklejenia**, zdaniem, gdzie go wkleić
-(np. „w Uptime Kumie w polu Post URL powiadomienia typu Webhook”), i instrukcją krok po kroku dla
+(np. „w Uptime Kumie w polu Post URL powiadomienia typu Webhook”) i instrukcją krok po kroku dla
 tej aplikacji.
 
 ![Ramka po zapisaniu: pełny adres wejściowy, gdzie go wkleić i instrukcja krok po kroku](obrazki/integracja-adres.png)
@@ -140,13 +140,13 @@ Ten adres zależy od tego, jak bramka stoi i skąd woła ją aplikacja:
 |---|---|---|
 | Docker z odwrotnym proxy pod domeną (Caddy, nginx albo Traefik z rozdziału 6 Uruchomienia) | z internetu i skądkolwiek indziej | `https://<TWOJA-DOMENA>/hooks/<identyfikator>` |
 | Docker bez proxy (porty przypięte do `127.0.0.1`, jak w `docker-compose.yml`) | tylko z tego samego serwera | `http://127.0.0.1:8080/hooks/<identyfikator>`; aplikacja z innego komputera bramki nie dosięgnie, dopóki API nie zostanie wystawione według rozdziału 6 |
-| Kontener LXC na Proxmoksie (rozdział 9 Uruchomienia) | z tej samej sieci co kontener (biuro, serwerownia) | `http://<ADRES-KONTENERA>:8080/hooks/<identyfikator>`, np. `http://10.10.10.159:8080/hooks/k9x…`; bez HTTPS, więc token wędruje siecią jawnym tekstem - do zaufanej sieci firmowej |
-| Kontener LXC na Proxmoksie | z internetu (Grafana Cloud, Freshdesk, FreeScout u hostingodawcy, Zapier) | kontener nie ma publicznego adresu; potrzebne odwrotne proxy z HTTPS pod publiczną domeną, kierowane na `http://<ADRES-KONTENERA>:8080` (punkt 9.6 Uruchomienia) |
+| Kontener LXC na Proxmoxie (rozdział 9 Uruchomienia) | z tej samej sieci co kontener (biuro, serwerownia) | `http://<ADRES-KONTENERA>:8080/hooks/<identyfikator>`, np. `http://10.10.10.159:8080/hooks/k9x…`; bez HTTPS, więc token wędruje siecią jawnym tekstem - do zaufanej sieci firmowej |
+| Kontener LXC na Proxmoxie | z internetu (Grafana Cloud, Freshdesk, FreeScout u hostingodawcy, Zapier) | kontener nie ma publicznego adresu; potrzebne odwrotne proxy z HTTPS pod publiczną domeną, kierowane na `http://<ADRES-KONTENERA>:8080` (punkt 9.6 Uruchomienia) |
 
 Sprawdzenie drogi jest proste: z komputera albo serwera, na którym stoi aplikacja, wywołanie
 `curl <ADRES-BEZ-ŚCIEŻKI>/healthz` (np. `curl https://sms.firma.example/healthz`) ma odpowiedzieć
 `{"status":"ok"}`. Odpowiedź `Connection refused` albo przekroczony czas oznaczają, że sieć nie
-prowadzi do bramki, i żadne ustawienie integracji tego nie naprawi. W drugą stronę - gdy to
+prowadzi do bramki i żadne ustawienie integracji tego nie naprawi. W drugą stronę - gdy to
 bramka woła aplikację (rozdział 4) - obowiązuje reguła z punktu 4.3 o adresach w sieci
 wewnętrznej.
 
@@ -297,7 +297,7 @@ godzinach. Po wyczerpaniu ponowień wpis `niedostarczone`, mail do administrator
 „Ponów” w dzienniku integracji. Adresy w sieci wewnętrznej bramka odrzuca, chyba że w środowisku
 jest `MIG_WEBHOOK_ALLOW_PRIVATE=1` - dotyczy to aplikacji na tym samym serwerze albo w sieci
 firmowej, np. własnego skryptu albo automatyzacji domowej. W Dockerze zmienną wpisuje się
-w `docker/.env` i wykonuje `docker compose up -d`; w kontenerze LXC z Proxmoksa w pliku
+w `docker/.env` i wykonuje `docker compose up -d`; w kontenerze LXC z Proxmoxa w pliku
 `/etc/multiinfo-gate/env`, po czym `systemctl restart multiinfo-gate`. Bez niej panel odrzuca
 taki adres już przy zapisie integracji, z komunikatem, że adres jest w sieci wewnętrznej.
 
@@ -605,7 +605,7 @@ Z żywej instancji przy tworzeniu przyszło:
 
 Odpowiedź klienta z e-maila niesie w `latest_public_comment` cytowaną korespondencję po
 znaczniku „----- Original message -----” w bloku `blockquote`. Domyślny szablon ucina ją,
-zdejmuje HTML filtrem `html_text`, dokłada temat, gdy reguła go przesyła, i polskie znaki
+zdejmuje HTML filtrem `html_text`, dokłada temat, gdy reguła go przesyła i polskie znaki
 zamienia filtrem `gsm`:
 
 ```liquid
@@ -625,7 +625,7 @@ awatarem → Ustawienia profilu. Domyślne body zakłada zgłoszenie ze źródł
 zgłoszenia z polem `id`, które widać przy odebranej wiadomości w panelu.
 
 Freshdesk dopasowuje kontakt po dokładnym zapisie numeru: kontakt z telefonem `48601000001`
-zostanie rozpoznany, z `601000001` nie, i powstanie nowy kontakt bez e-maila. Agent widzi
+zostanie rozpoznany, `601000001` nie, więc powstanie nowy kontakt bez e-maila. Agent widzi
 zgłoszenie i oddzwania albo odpisuje własnym kanałem; bramka nie wysyła odpowiedzi z Freshdeska
 SMS-em.
 
@@ -677,10 +677,10 @@ kafelek „Integracje z błędami” z ostrzeżeniem, a edycja klucza listę jeg
 ## 8. Powiadomienia administratora
 
 Bramka wysyła mailem powiadomienia o błędach integracji, niedostarczonych webhookach,
-certyfikatach, kontach i odbiorze. Ekran **Powiadomienia** w grupie „Konfiguracja” ma formularz
-SMTP i tabelę reguł.
+certyfikatach, kontach i odbiorze. Ekran **Powiadomienia** w grupie „Konfiguracja” ma dwie
+zakładki: **Konfiguracja** z formularzem SMTP i **Reguły** z tabelą zdarzeń.
 
-![Ekran Powiadomienia: formularz SMTP z przyciskiem maila testowego i tabela reguł z limitami](obrazki/powiadomienia.png)
+![Ekran Powiadomienia, zakładka Konfiguracja: formularz SMTP z przyciskiem maila testowego](obrazki/powiadomienia.png)
 
 ### 8.1. SMTP
 
@@ -713,10 +713,12 @@ Każdą regułę można wyłączyć, zmienić limit na godzinę i grupowanie. Li
 na okno na integrację (rozdział 3.6), a certyfikat, konto i odbiór raz na przyczynę: ten sam
 próg dni albo ta sama trwająca awaria nie dają drugiego maila.
 
+![Ekran Powiadomienia, zakładka Reguły: tabela zdarzeń z włączeniem, limitem na godzinę, grupowaniem i parametrami](obrazki/powiadomienia-reguly.png)
+
 ### 8.3. Grupowanie i limity
 
 Reguła z grupowaniem zbiera zdarzenia w kolejce; co minutę worker sprawdza, czy od ostatniego
-maila tej reguły minęło zadane X godzin, i wysyła jeden mail z listą (do 100 pozycji, reszta jako
+maila tej reguły minęło zadane X godzin i wysyła jeden mail z listą (do 100 pozycji, reszta jako
 liczba). Reguła bez grupowania wysyła mail od razu, nie więcej niż N na godzinę; nadmiar jest
 liczony i wspomniany w następnym mailu („pominięto 37 podobnych”). Liczniki są w bazie, więc
 restart bramki ich nie gubi.
