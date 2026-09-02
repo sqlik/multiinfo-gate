@@ -47,7 +47,8 @@ export interface RenderedOutbound { headers: Record<string, string>; body: strin
  * obca aplikacja odrzuciłaby dostawę dopiero po pięciu ponowieniach.
  */
 export function renderOutbound(engine: TemplateEngine, config: OutboundConfig, secrets: Record<string, string>, context: Record<string, unknown>): RenderedOutbound {
-  const contentType = config.body.mode === 'json' ? 'application/json' : 'application/x-www-form-urlencoded';
+  const contentType = config.body.mode === 'json' ? 'application/json'
+    : config.body.mode === 'form' ? 'application/x-www-form-urlencoded' : 'text/plain; charset=utf-8';
   const headers: Record<string, string> = { 'Content-Type': contentType };
   for (const h of config.headers) {
     headers[h.name] = h.valueRef !== undefined ? (secrets[h.valueRef] ?? '') : engine.render(h.value ?? '', context);
@@ -60,10 +61,12 @@ export function renderOutbound(engine: TemplateEngine, config: OutboundConfig, s
     } catch {
       throw new TemplateError('Body po podstawieniu nie jest poprawnym JSON-em - użyj filtru json przy polach tekstowych.');
     }
-  } else {
+  } else if (config.body.mode === 'form') {
     const params = new URLSearchParams();
     for (const f of config.body.fields) params.set(f.name, engine.render(f.template, context));
     body = params.toString();
+  } else {
+    body = engine.render(config.body.template, context);
   }
   return { headers, body, contentType };
 }
