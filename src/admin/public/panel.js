@@ -1,6 +1,7 @@
-// Jedyny JavaScript panelu: zamykanie paska komunikatu (x, Esc) i okno potwierdzenia
-// dla formularzy z data-confirm. Bez tego pliku pasek zostaje do następnego przejścia,
-// a formularz wysyła się bez pytania - panel działa, tylko mniej wygodnie.
+// Jedyny JavaScript panelu: zamykanie paska komunikatu (x, Esc), okno potwierdzenia
+// dla formularzy z data-confirm i przycisk kopiowania (data-copy). Bez tego pliku pasek
+// zostaje do następnego przejścia, formularz wysyła się bez pytania, a adres trzeba
+// zaznaczyć ręcznie - panel działa, tylko mniej wygodnie.
 (function () {
   var flash = document.querySelector('.flash');
   var closeFlash = function () { if (flash) { flash.remove(); flash = null; } };
@@ -57,4 +58,19 @@
     if (event.key !== 'Escape') return;
     if (backdrop) closeModal(); else closeFlash();
   });
+
+  // Kopiowanie treści wskazanego elementu; etykieta potwierdza na dwie sekundy.
+  var copies = document.querySelectorAll('[data-copy]');
+  for (var c = 0; c < copies.length; c += 1) {
+    copies[c].addEventListener('click', function (event) {
+      var button = event.currentTarget;
+      var source = document.querySelector(button.getAttribute('data-copy'));
+      if (!source || !navigator.clipboard) return;
+      var label = button.textContent;
+      navigator.clipboard.writeText(source.textContent.trim()).then(function () {
+        button.textContent = 'Skopiowano';
+        setTimeout(function () { button.textContent = label; }, 2000);
+      });
+    });
+  }
 })();
