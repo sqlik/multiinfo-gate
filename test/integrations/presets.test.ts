@@ -70,6 +70,35 @@ describe('gotowe ustawienia', () => {
     expect(out.headers['Title']).toBe('SMS od 48601000001');
   });
 
+  it('Grafana: powrót daje OK, cztery alerty w grupie dają trzy nazwy i licznik', () => {
+    const preset = presetById('grafana')!;
+    const config = { ...defaultInboundConfig(), ...preset.inbound } as InboundConfig;
+    const alert = (alertname: string, status = 'firing') => ({ status, labels: { alertname, grafana_folder: 'Alerty' }, annotations: {}, values: null });
+    // Kształt „resolved” z Grafany 13.2.0: values null, title [RESOLVED], state ok.
+    const resolved = previewInbound(engine, config, {
+      receiver: 'sms', status: 'resolved', alerts: [alert('CPU high', 'resolved')],
+      groupKey: '{}:{alertname="CPU high", grafana_folder="Alerty"}', title: '[RESOLVED] CPU high Alerty (web-1 critical)', state: 'ok',
+    }, '48', NOW);
+    expect(resolved.error).toBeNull();
+    expect(resolved.text).toBe('OK: CPU high');
+    const many = previewInbound(engine, config, { receiver: 'sms', status: 'firing', alerts: [alert('CPU high'), alert('Disk full'), alert('Swap'), alert('Load')] }, '48', NOW);
+    expect(many.text).toBe('ALARM: CPU high, Disk full, Swap (+1)');
+  });
+
+  it('Zabbix: ładunek RESOLVED ma inny identyfikator niż PROBLEM i daje temat rozwiązania', () => {
+    const preset = presetById('zabbix')!;
+    const config = { ...defaultInboundConfig(), ...preset.inbound } as InboundConfig;
+    const out = previewInbound(engine, config, {
+      to: '48601000001', subject: 'Resolved in 1m 1s: High CPU utilization on web-1',
+      message: 'Problem has been resolved at 18:57:38 on 2026.09.02\r\nProblem name: High CPU utilization on web-1\r\nProblem duration: 1m 1s\r\nHost: web-1\r\nSeverity: High\r\nOriginal problem ID: 26\r\n',
+      eventId: '26:RESOLVED', status: 'RESOLVED',
+    }, '48', NOW);
+    expect(out.error).toBeNull();
+    expect(out.recipients).toEqual(['48601000001']);
+    expect(out.text).toBe('Resolved in 1m 1s: High CPU utilization on web-1');
+    expect((preset.sample as { eventId: string }).eventId).not.toBe('26:RESOLVED');
+  });
+
   it('Uptime Kuma: ładunek z przycisku „Test” (bez heartbeat) daje sam komunikat, UP daje OK', () => {
     const preset = presetById('uptime-kuma')!;
     const config = { ...defaultInboundConfig(), ...preset.inbound } as InboundConfig;

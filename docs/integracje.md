@@ -145,7 +145,8 @@ przy awarii łącza wysyła alert o każdym z 40 hostów, kosztuje wtedy 10 SMS-
 
 Ścieżka „identyfikator zdarzenia” (sekcja „Odbiorca”) chroni przed podwójnym SMS-em, gdy
 aplikacja ponawia żądanie po przekroczeniu czasu: ten sam identyfikator w ciągu doby dostaje wpis
-`duplikat` i odpowiedź 200. Zabbix ma `{EVENT.ID}`, Prosty JSON pole `eventId`. Klucz grupy
+`duplikat` i odpowiedź 200. Zabbix ma `{EVENT.ID}` (skrypt z rozdziału 6.4 dokleja status, bo
+rozwiązanie dostaje ten sam identyfikator co problem), Prosty JSON pole `eventId`. Klucz grupy
 Grafany nie nadaje się na identyfikator, bo jest stały dla grupy alertów.
 
 ### 3.8. Odpowiedź w wątku
@@ -385,27 +386,40 @@ przyjdzie też SMS o powrocie i SMS z przycisku „Test”.
 
 ### 6.3. Grafana
 
-SMS z alertów Grafany 11. W Grafanie **Alerting → Contact points → Add contact point**,
+SMS z alertów Grafany. W Grafanie **Alerting → Contact points → Add contact point**,
 integracja **Webhook**: **URL** to adres wejściowy integracji, **HTTP Method** `POST`, **Basic
 Authentication** z loginem `grafana` i hasłem wpisanym w bramce w polu „Basic auth”. Numer
 odbiorcy wpisz w bramce w liście zapasowej.
 
-Grafana wysyła jedno żądanie na grupę alertów:
+Grafana wysyła jedno żądanie na grupę alertów. Ładunek z Grafany 13.2 przy jednym alercie
+(przycięty o adresy wyciszania i `valueString`):
 
 ```json
 {
   "receiver": "sms", "status": "firing",
   "alerts": [
-    { "status": "firing", "labels": { "alertname": "CPU high", "instance": "web-1" }, "annotations": { "summary": "CPU ponad 90% od 5 minut" } },
-    { "status": "firing", "labels": { "alertname": "Disk full", "instance": "db-1" }, "annotations": { "summary": "Dysk / ponad 95%" } }
+    {
+      "status": "firing",
+      "labels": { "alertname": "CPU high", "grafana_folder": "Alerty", "instance": "web-1", "severity": "critical" },
+      "annotations": { "description": "Serwer web-1 jest przeciążony", "summary": "CPU ponad 90% od 5 minut" },
+      "startsAt": "2026-09-02T18:56:50Z", "endsAt": "0001-01-01T00:00:00Z",
+      "fingerprint": "41980c48991e89ca", "ruleUID": "efx2f25h4uf40b", "values": { "B": 100, "C": 1 }
+    }
   ],
-  "groupKey": "{}:{alertname=\"CPU high\"}", "title": "[FIRING:2]", "message": "**Firing**…"
+  "groupLabels": { "alertname": "CPU high", "grafana_folder": "Alerty" },
+  "commonAnnotations": { "description": "Serwer web-1 jest przeciążony", "summary": "CPU ponad 90% od 5 minut" },
+  "groupKey": "{}:{alertname=\"CPU high\", grafana_folder=\"Alerty\"}", "appVersion": "13.2.0",
+  "title": "[FIRING:1] CPU high Alerty (web-1 critical)", "state": "alerting",
+  "message": "**Firing**\n\nValue: B=100, C=1\nLabels:\n - alertname = CPU high\n…"
 }
 ```
 
-Domyślny szablon wypisuje do trzech nazw alertów i liczbę pozostałych (rozdział 5.4). Klucz
-grupy `groupKey` jest stały dla grupy, więc nie nadaje się na identyfikator zdarzenia. Żeby
-dostawać SMS tylko o alarmie, dodaj warunek `status równe firing`.
+Powrót przychodzi tym samym kształtem ze `status` `resolved`, `title` `[RESOLVED] …`,
+wypełnionym `endsAt` i `values` równym `null`. Domyślny szablon wypisuje do trzech nazw alertów
+i liczbę pozostałych (rozdział 5.4). Klucz grupy `groupKey` jest stały dla grupy, więc nie nadaje
+się na identyfikator zdarzenia. SMS o alarmie przychodzi po czasie **Group wait** polityki
+powiadomień (domyślnie 30 s), o powrocie po **Group interval** (domyślnie 5 min). Żeby dostawać
+SMS tylko o alarmie, dodaj warunek `status równe firing`.
 
 ### 6.4. Zabbix
 
@@ -413,28 +427,39 @@ SMS z akcji Zabbiksa przez typ mediów Webhook. W Zabbiksie **Alerts → Media t
 type**, typ **Webhook**, parametry: `url` (adres wejściowy integracji), `token` (ten sam, co
 w bramce w polu „Nagłówek z tokenem”, z przedrostkiem `Bearer`), `to` = `{ALERT.SENDTO}`,
 `subject` = `{ALERT.SUBJECT}`, `message` = `{ALERT.MESSAGE}`, `eventId` = `{EVENT.ID}`,
-`status` = `{EVENT.STATUS}`. Skrypt typu mediów:
+`status` = `{EVENT.STATUS}`. W zakładce **Message templates** dodaj szablony dla problemu
+i rozwiązania (przycisk **Add** podpowiada domyślne). Skrypt typu mediów:
 
 ```js
 var p = JSON.parse(value), req = new HttpRequest();
 req.addHeader('Content-Type: application/json');
 req.addHeader('Authorization: ' + p.token);
-var body = { to: p.to, subject: p.subject, message: p.message, eventId: p.eventId, status: p.status };
+var body = { to: p.to, subject: p.subject, message: p.message, eventId: p.eventId + ':' + p.status, status: p.status };
 var res = req.post(p.url, JSON.stringify(body));
 if (req.getStatus() >= 400) throw 'Bramka odpowiedziała ' + req.getStatus() + ': ' + res;
 return 'OK';
 ```
 
-Przy użytkowniku ustaw medium tego typu z numerem w polu **Send to**. Ładunek, który skrypt
-wysyła:
+Przy użytkowniku ustaw medium tego typu z numerem w polu **Send to**, a w akcji (**Alerts →
+Actions → Trigger actions**) operację i operację przywracania z tym typem mediów. Ładunek, który
+skrypt wysyła (Zabbix 7.4, domyślne szablony wiadomości):
 
 ```json
-{ "to": "48601000001", "subject": "Problem: High CPU utilization on web-1", "message": "Trigger: …", "eventId": "1587", "status": "PROBLEM" }
+{
+  "to": "48601000001",
+  "subject": "Problem: High CPU utilization on web-1",
+  "message": "Problem started at 18:56:37 on 2026.09.02\r\nProblem name: High CPU utilization on web-1\r\nHost: web-1\r\nSeverity: High\r\nOperational data: 97 %\r\nOriginal problem ID: 26\r\n",
+  "eventId": "26:PROBLEM",
+  "status": "PROBLEM"
+}
 ```
 
-Domyślny szablon to `{{ p.subject }}`, numer ze ścieżki `to`, identyfikator zdarzenia ze
-ścieżki `eventId` (Zabbix ponawia nieudane wysyłki). Żeby nie dostawać SMS-a o rozwiązaniu,
-dodaj warunek `status równe PROBLEM`.
+Rozwiązanie przychodzi z tematem `Resolved in 1m 1s: High CPU utilization on web-1`,
+`eventId` `26:RESOLVED` i `status` `RESOLVED`. Domyślny szablon to `{{ p.subject }}`, numer ze
+ścieżki `to`, identyfikator zdarzenia ze ścieżki `eventId`. Skrypt skleja `{EVENT.ID}` ze
+statusem, bo Zabbix nadaje rozwiązaniu ten sam identyfikator co problemowi: ponowienie tej samej
+wysyłki bramka odrzuca jako powtórkę, a SMS o rozwiązaniu przechodzi. Żeby nie dostawać SMS-a
+o rozwiązaniu, dodaj warunek `status równe PROBLEM`.
 
 ### 6.5. FreeScout: nowe zgłoszenie
 
