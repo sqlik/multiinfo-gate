@@ -12,6 +12,6 @@ describe('migracja 006', () => {
     expect(cols('messages')).toContain('integration_id');
     expect(cols('inbound_messages')).toEqual(expect.arrayContaining(['external_ref', 'external_integration_id']));
     expect(cols('webhook_deliveries')).toEqual(expect.arrayContaining(['integration_id', 'method', 'headers_enc', 'response_ref']));
-    expect(db.pragma('user_version', { simple: true })).toBe(6);
+    expect(db.pragma('user_version', { simple: true })).toBe(7);
   });
 });

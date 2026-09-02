@@ -3,6 +3,7 @@ import type { ApiKeyRow } from '../../store/api-keys.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
 import { lastValidDay, warsawStamp } from '../../time/warsaw.ts';
 import { esc } from './layout.ts';
+import { apiAddressPanel, fullUrl } from './settings.ts';
 
 export interface KeyView {
   row: ApiKeyRow;
@@ -53,6 +54,24 @@ const OSTRZEZENIE_SEKRET =
   'Sekret podpisuje każde wywołanie webhooka nagłówkiem X-MIG-Signature. Pokazujemy go tylko teraz - ' +
   'zmiana adresu wydaje nowy sekret.';
 
+/** Gotowe wywołanie do wklejenia w terminalu - aplikacja dostaje adres i klucz w jednym miejscu. */
+function keyExample(apiUrl: string | null, key: string): string {
+  const base = fullUrl(apiUrl, '');
+  const example = `curl -s ${base}/v1/messages \\
+  -H "Authorization: Bearer ${key}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"to":"48601000001","text":"Test z bramki"}'`;
+  const address = apiUrl === null
+    ? '<span class="dim">Adres bramki nie jest jeszcze znany - podaj go w panelu niżej, a przykład dostanie pełny adres.</span>'
+    : `Adres API dla aplikacji: <span class="m">${esc(apiUrl)}</span>. Ten sam adres z <span class="m">/hooks/…</span> dostają integracje.`;
+  return `<div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">
+        <div style="margin-bottom: 6px;">${address}</div>
+        <div class="dim" style="margin-bottom: 4px;">Sprawdzenie z terminala (wysyła prawdziwy SMS na podany numer):</div>
+        <pre class="m" id="key-example" style="white-space: pre-wrap; margin: 0; font-size: 11.5px;">${esc(example)}</pre>
+        <button class="btn btn-s" type="button" data-copy="#key-example" style="margin-top: 6px;">Kopiuj polecenie</button>
+      </div>`;
+}
+
 /** Ile dni przed wygaśnięciem data na liście zmienia kolor na ostrzegawczy. */
 const EXPIRY_WARNING_DAYS = 7;
 
@@ -100,7 +119,7 @@ export type KeysFilter = 'czynne' | 'odwolane';
  * a API odróżnia klucz odwołany od nieznanego. Na liście schodzą jednak do osobnej zakładki.
  */
 export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne',
-                         created: CreatedKey | null = null, notice: string | null = null): string {
+                         created: CreatedKey | null = null, notice: string | null = null, apiUrl: string | null = null): string {
   const active = all.filter((v) => v.row.revokedAt === null);
   const revoked = all.filter((v) => v.row.revokedAt !== null);
   const views = filter === 'czynne' ? active : revoked;
@@ -143,9 +162,11 @@ export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne
           : `Nowy klucz - „${esc(created.name)}”`}</div>
       </div>
       ${created.key === null ? '' : `<div class="keyline">
-        <div class="keybox">${esc(created.key)}</div>
+        <div class="keybox" id="new-key">${esc(created.key)}</div>
+        <button class="btn btn-s" type="button" data-copy="#new-key">Kopiuj</button>
       </div>
-      <div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">${esc(OSTRZEZENIE)}</div>`}
+      <div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">${esc(OSTRZEZENIE)}</div>
+      ${keyExample(apiUrl, created.key)}`}
       ${created.webhookSecret === null ? '' : `<div class="keyline">
         <div class="lab" style="width: 140px;">Sekret webhooka</div>
         <div class="keybox">${esc(created.webhookSecret)}</div>
@@ -163,6 +184,7 @@ export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne
   <div class="scroll">
     ${notice === null ? '' : `<div class="warn">${esc(notice)}</div>`}
     ${reveal}
+    ${apiAddressPanel(apiUrl, filter === 'czynne' ? '/klucze' : '/klucze?status=odwolane')}
     <div class="bar" style="margin-bottom: 12px;">${tabs}</div>
     <div class="panel">
       <div class="panel-h">

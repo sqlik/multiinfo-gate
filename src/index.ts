@@ -30,6 +30,7 @@ import { JobsRepo } from './store/jobs.ts';
 import { MessageEventsRepo } from './store/message-events.ts';
 import { MessagesRepo } from './store/messages.ts';
 import { NotificationsRepo } from './store/notifications.ts';
+import { SettingsRepo } from './store/settings.ts';
 import { PackagesRepo } from './store/packages.ts';
 import { WebhookDeliveriesRepo } from './store/webhook-deliveries.ts';
 import { ClientPool } from './worker/clients.ts';
@@ -65,6 +66,7 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const guards = new IntegrationGuardsRepo(db);
   const engine = new TemplateEngine();
   const notifications = new NotificationsRepo(db, config.masterKey);
+  const settings = new SettingsRepo(db);
   const notifier = new Notifier({ notifications, jobs, log });
   const scanner = new NotificationScanner({ accounts, inboundServices, messages, inbound, integrations, deliveries, notifications, notifier, jobs, log });
   const integrationEmit = { integrations, integrationEvents, guards, deliveries, jobs, engine, notifier, log };
@@ -97,7 +99,7 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
-    integrationEvents, guards, engine, notifications, notifier, mailer: nodemailerMailer,
+    integrationEvents, guards, engine, notifications, settings, notifier, mailer: nodemailerMailer,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate,
   });
 

@@ -8,7 +8,7 @@ export type { Database } from 'better-sqlite3';
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 /** Kolejne migracje w kolejności stosowania. Indeks + 1 to docelowy `user_version`. */
-const MIGRATIONS = ['001-initial.sql', '002-etap-2.sql', '003-etap-3.sql', '004-etap-3b.sql', '005-odbior.sql', '006-integracje.sql'];
+const MIGRATIONS = ['001-initial.sql', '002-etap-2.sql', '003-etap-3.sql', '004-etap-3b.sql', '005-odbior.sql', '006-integracje.sql', '007-adres-bramki.sql'];
 
 export interface OpenOptions {
   /** Katalog z plikami migracji; domyślnie ten obok modułu. Do testów. */

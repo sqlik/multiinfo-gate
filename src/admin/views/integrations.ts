@@ -5,6 +5,7 @@ import type { EventResult, IntegrationEventRow } from '../../store/integration-e
 import type { IntegrationRow } from '../../store/integrations.ts';
 import { warsawStamp } from '../../time/warsaw.ts';
 import { esc } from './layout.ts';
+import { apiAddressPanel, fullUrl } from './settings.ts';
 
 export interface IntegrationView {
   row: IntegrationRow;
@@ -64,21 +65,24 @@ function filterLink(f: IntegrationsFilter, patch: Partial<IntegrationsFilter>): 
 /** Ramka z adresem wejściowym pokazywana po utworzeniu albo wymianie adresu. */
 export interface CreatedHook { name: string; hookId: string }
 
-export function hookReveal(created: CreatedHook): string {
+export function hookReveal(created: CreatedHook, apiUrl: string | null, appField?: string): string {
+  const where = appField ? `Wklej go ${esc(appField)}.` : 'Wklej go w aplikacji jako adres, na który ma wysyłać żądania POST.';
+  const note = apiUrl === null
+    ? `To sama ścieżka: panel nie zna jeszcze adresu bramki. Podaj go w panelu „Adres bramki dla aplikacji” (ekran Klucze API), a tu pojawi się pełny adres.
+        Do tego czasu doklej ścieżkę do adresu, pod którym aplikacja widzi API bramki, np. https://sms.firma.pl${esc(hookPath(created.hookId))}.`
+    : where;
   return `<div class="reveal">
       <div class="reveal-h"><div class="lab" style="color: var(--signal);">Adres wejściowy - „${esc(created.name)}”</div></div>
       <div class="keyline">
-        <div class="keybox" id="hook-path">${esc(hookPath(created.hookId))}</div>
+        <div class="keybox" id="hook-path">${esc(fullUrl(apiUrl, hookPath(created.hookId)))}</div>
         <button class="btn btn-s" type="button" data-copy="#hook-path">Kopiuj</button>
       </div>
-      <div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">Doklej ścieżkę do adresu, pod którym aplikacja widzi API bramki (port API, nie panelu):
-        z internetu https://twoja-domena${esc(hookPath(created.hookId))} przez odwrotne proxy, z sieci lokalnej http://adres-serwera-albo-kontenera:8080${esc(hookPath(created.hookId))}.
-        Aplikacja ma wysyłać tam żądania POST z JSON-em albo formularzem. Wygenerowanie nowego adresu unieważnia ten natychmiast.</div>
+      <div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">${note} Wygenerowanie nowego adresu unieważnia ten natychmiast.</div>
     </div>`;
 }
 
 export function integrationsPage(views: IntegrationView[], filter: IntegrationsFilter, keys: Array<{ id: number; name: string }>,
-                                 created: CreatedHook | null = null): string {
+                                 created: CreatedHook | null = null, apiUrl: string | null = null): string {
   const kinds: Array<{ key: IntegrationsFilter['kind']; label: string }> = [
     { key: null, label: 'Wszystkie' }, { key: 'in', label: 'Do SMS' }, { key: 'out', label: 'Z SMS-a' },
   ];
@@ -110,7 +114,8 @@ export function integrationsPage(views: IntegrationView[], filter: IntegrationsF
     <a class="btn btn-p" href="/integracje/nowa">Dodaj integrację</a>
   </div>
   <div class="scroll">
-    ${created === null ? '' : hookReveal(created)}
+    ${created === null ? '' : hookReveal(created, apiUrl)}
+    ${apiUrl === null && views.length > 0 ? apiAddressPanel(null, filterLink(filter, {})) : ''}
     <form method="get" action="/integracje" class="bar" style="gap: 8px; margin-bottom: 12px;">
       <div class="seg">${tabs}</div>
       ${filter.kind === null ? '' : `<input type="hidden" name="rodzaj" value="${esc(filter.kind)}">`}
@@ -272,6 +277,8 @@ export interface FormContext {
   secretNames: string[];
   /** Edycja: istniejący wiersz (adres wejściowy, klucz na stałe). */
   row?: IntegrationRow;
+  /** Adres bramki widziany przez aplikacje; bez niego adresy wejściowe to same ścieżki. */
+  apiUrl: string | null;
 }
 
 const MAX_RULE_ROWS = 20;
@@ -604,7 +611,7 @@ export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, 
         </form>
       </div>
       <div class="keyline">
-        <div class="keybox" id="hook-path">${esc(hookPath(ctx.row!.hookId))}</div>
+        <div class="keybox" id="hook-path">${esc(fullUrl(ctx.apiUrl, hookPath(ctx.row!.hookId)))}</div>
         <button class="btn btn-s" type="button" data-copy="#hook-path">Kopiuj</button>
       </div>
     </div>` : '';
@@ -624,7 +631,7 @@ export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, 
   </div>
   <div class="scroll">
     ${opts.error ? `<div class="warn">${esc(opts.error)}</div>` : ''}
-    ${opts.created ? hookReveal(opts.created) : ''}
+    ${opts.created ? hookReveal(opts.created, ctx.apiUrl) : ''}
     ${address}
     ${guide}
     ${opts.preview ? previewPanel(ctx.kind, opts.preview) : ''}
@@ -656,7 +663,7 @@ export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, 
 
 export interface DetailEvent { row: IntegrationEventRow; /** Dostawa nieudana, którą da się ponowić. */ retryable: boolean }
 
-export interface IntegrationDetail { view: IntegrationView; events: DetailEvent[] }
+export interface IntegrationDetail { view: IntegrationView; events: DetailEvent[]; apiUrl: string | null }
 
 /** Warunek w słowach: „heartbeat.status równe 0; monitor.name zawiera prod” albo wyrażenie Liquid. */
 export function conditionWords(condition: IntegrationConfig['condition']): string {
@@ -671,12 +678,12 @@ export function conditionWords(condition: IntegrationConfig['condition']): strin
 const kvRow = (label: string, value: string, mono = false) => `<div>${esc(label)}</div><div${mono ? ' class="m"' : ''}>${value}</div>`;
 const dimOr = (value: string | undefined | null, fallback = 'brak') => (value ? esc(value) : `<span class="dim">${esc(fallback)}</span>`);
 
-function configRows(row: IntegrationRow): string {
+function configRows(row: IntegrationRow, apiUrl: string | null): string {
   const rows: string[] = [];
   const c = row.config;
   if (row.kind === 'webhook_in') {
     const cfg = c as InboundConfig;
-    rows.push(kvRow('Adres wejściowy', row.hookId === null ? '<span class="dim">brak</span>' : `<div class="inline"><span class="m" id="hook-path">${esc(hookPath(row.hookId))}</span>
+    rows.push(kvRow('Adres wejściowy', row.hookId === null ? '<span class="dim">brak</span>' : `<div class="inline"><span class="m" id="hook-path">${esc(fullUrl(apiUrl, hookPath(row.hookId)))}</span>
       <button class="btn btn-s" type="button" data-copy="#hook-path" style="padding: 3px 9px; font-size: 12px;">Kopiuj</button></div>`));
     const auth: string[] = [];
     if (cfg.auth.header) auth.push(`nagłówek ${cfg.auth.header.name} (sekret)`);
@@ -759,7 +766,7 @@ export function integrationDetailPage(d: IntegrationDetail): string {
   <div class="scroll">
     <div class="panel">
       <div class="panel-h"><div class="lab">Konfiguracja</div><div class="m dim">24 h: ${esc(d.view.counts.sent)} wysłane · ${esc(d.view.counts.errors)} błędy</div></div>
-      <div class="kv">${configRows(row)}</div>
+      <div class="kv">${configRows(row, d.apiUrl)}</div>
     </div>
     <div class="panel">
       <div class="panel-h"><div class="lab">Dziennik</div>

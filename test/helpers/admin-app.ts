@@ -19,6 +19,7 @@ import { IntegrationsRepo } from '../../src/store/integrations.ts';
 import { IntegrationEventsRepo } from '../../src/store/integration-events.ts';
 import { IntegrationGuardsRepo } from '../../src/store/integration-guards.ts';
 import { NotificationsRepo } from '../../src/store/notifications.ts';
+import { SettingsRepo } from '../../src/store/settings.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
 import type { NotificationEvent } from '../../src/notifications/rules.ts';
 import type { MailContent } from '../../src/worker/mail.ts';
@@ -41,6 +42,7 @@ export interface AdminHarness {
   integrationEvents: IntegrationEventsRepo;
   guards: IntegrationGuardsRepo;
   notifications: NotificationsRepo;
+  settings: SettingsRepo;
   /** Powiadomienia zgłoszone przez trasy panelu - atrapa notifiera. */
   notified: Array<{ event: NotificationEvent; subjectKey: string | null; summary: string }>;
   /** Maile wysłane przez panel (mail testowy) i wynik, jaki atrapa ma zwrócić. */
@@ -108,6 +110,7 @@ export async function startAdminHarness(
   const integrationEvents = new IntegrationEventsRepo(db, masterKey);
   const guards = new IntegrationGuardsRepo(db);
   const notifications = new NotificationsRepo(db, masterKey);
+  const settings = new SettingsRepo(db);
   const notified: AdminHarness['notified'] = [];
   const notifier = { notify: (event: NotificationEvent, subjectKey: string | null, summary: string) => { notified.push({ event, subjectKey, summary }); } };
   const mails: MailContent[] = [];
@@ -138,7 +141,7 @@ export async function startAdminHarness(
   const resolve = { value: async (_hostname: string) => ['93.184.216.34'] };
   const app = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, receiver,
-    integrationEvents, guards, engine: new TemplateEngine(), notifications, notifier,
+    integrationEvents, guards, engine: new TemplateEngine(), notifications, settings, notifier,
     mailer: async (_settings, mail) => { if (harness.mailError) throw harness.mailError; mails.push(mail); },
     clients: clients as never, sessions, masterKey, now: () => now,
     resolve: (hostname) => resolve.value(hostname),
@@ -148,7 +151,7 @@ export async function startAdminHarness(
 
   return {
     app, db, accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, refreshed,
-    integrationEvents, guards, notifications, notified, mails,
+    integrationEvents, guards, notifications, settings, notified, mails,
     get mailError() { return harness.mailError; },
     set mailError(e: Error | null) { harness.mailError = e; },
     sessions, userId, masterKey,
