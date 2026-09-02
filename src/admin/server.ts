@@ -42,6 +42,7 @@ import { registerPackageViewRoutes } from './routes/packages.ts';
 import { qrSvg } from './qr.ts';
 import { createRenderer } from './render.ts';
 import { LoginThrottle } from './throttle.ts';
+import { WINDOW_MS } from './window.ts';
 import { loginPage, totpPage } from './views/login.ts';
 import { recoveryCodesPage, totpSetupPage } from './views/totp-setup.ts';
 import {
@@ -194,6 +195,9 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
     {
       accounts: deps.accounts, queueDepth: () => deps.jobs.depth(), now, detailsAllowed: secureContext,
       ...(deps.inboundHealth ? { inbound: deps.inboundHealth } : {}),
+      integrations: () => ({
+        enabled: deps.integrations.countEnabled(), troubled24h: deps.integrations.countTroubled(new Date(now().getTime() - WINDOW_MS)),
+      }),
     },
     'admin',
   );

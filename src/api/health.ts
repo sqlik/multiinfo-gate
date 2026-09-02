@@ -5,6 +5,8 @@ import { GATE_VERSION } from '../version.ts';
 
 export type { InboundHealth };
 
+export interface IntegrationsHealth { enabled: number; troubled24h: number }
+
 /** Poniżej tylu dni do wygaśnięcia certyfikatu bramka zgłasza stan pogorszony. */
 const CERT_WARNING_DAYS = 7;
 
@@ -13,6 +15,8 @@ export interface HealthDeps {
   queueDepth: () => number;
   /** Stan odbiornika wiadomości przychodzących; bez niego pole nie występuje. */
   inbound?: () => InboundHealth;
+  /** Integracje: włączone i z błędem w ostatniej dobie; bez funkcji pole nie występuje. */
+  integrations?: () => IntegrationsHealth;
   now?: () => Date;
   /** Wariant panelu: czy to żądanie może dostać szczegóły; bez predykatu dostaje zawsze. */
   detailsAllowed?: (request: FastifyRequest) => boolean;
@@ -48,6 +52,7 @@ export function registerHealthRoute(app: FastifyInstance, deps: HealthDeps, mode
         certificateDaysLeft: daysLeft(a.certNotAfter, now),
       })),
       ...(inbound ? { inbound } : {}),
+      ...(deps.integrations ? { integrations: deps.integrations() } : {}),
     };
   });
 }

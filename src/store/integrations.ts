@@ -147,6 +147,10 @@ export class IntegrationsRepo {
     this.db.prepare('UPDATE integrations SET last_event_at = ? WHERE id = ?').run(at.toISOString(), id);
   }
 
+  countEnabled(): number {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM integrations WHERE enabled = 1').get() as { n: number }).n;
+  }
+
   /** Integracje z choć jednym wpisem error/rejected/undelivered/throttled od chwili `since` - kafelek przeglądu. */
   countTroubled(since: Date): number {
     const row = this.db.prepare(
