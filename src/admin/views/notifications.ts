@@ -79,11 +79,11 @@ function rulesTable(rules: RuleRow[], enabled: boolean, raw: Record<string, stri
   }).join('');
   return `<table>
       <tr>
-        <th style="width: 260px;">Zdarzenie</th>
+        <th style="width: 250px;">Zdarzenie</th>
         <th style="width: 90px;">Włączone</th>
-        <th style="width: 150px;">Maks. na godzinę</th>
-        <th style="width: 150px;">Grupuj co (h)</th>
-        <th>Parametry</th>
+        <th style="width: 140px;">Maks. na godzinę</th>
+        <th style="width: 140px;">Grupuj co (h)</th>
+        <th style="min-width: 340px;">Parametry</th>
       </tr>
       ${rows}
     </table>`;
@@ -169,7 +169,7 @@ ${d.tab === 'konfiguracja' ? `      <div class="panel" style="max-width: 760px;"
         <form method="post" action="/powiadomienia/smtp/test" style="padding: 0 16px 16px;">
           <button class="btn btn-s" type="submit"${configured ? '' : ' disabled'}>Wyślij mail testowy</button>
         </form>
-      </div>` : `      <div class="panel${configured ? '' : ' dim'}" style="max-width: 1100px;">
+      </div>` : `      <div class="panel${configured ? '' : ' dim'}" style="max-width: 1180px;">
         ${configured ? '' : '<div class="warn">Najpierw skonfiguruj SMTP - bez niego reguły nie mają dokąd wysyłać.</div>'}
         ${rulesError}
         <form method="post" action="/powiadomienia/reguly">
