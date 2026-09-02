@@ -647,3 +647,130 @@ export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, 
     </div>
   </div>`;
 }
+
+// --- szczegół ---------------------------------------------------------------------------
+
+export interface DetailEvent { row: IntegrationEventRow; /** Dostawa nieudana, którą da się ponowić. */ retryable: boolean }
+
+export interface IntegrationDetail { view: IntegrationView; events: DetailEvent[] }
+
+/** Warunek w słowach: „heartbeat.status równe 0; monitor.name zawiera prod” albo wyrażenie Liquid. */
+export function conditionWords(condition: IntegrationConfig['condition']): string {
+  if (condition.mode === 'liquid') return `Liquid: ${condition.expr}`;
+  if (condition.rules.length === 0) return 'brak - każde zdarzenie idzie dalej';
+  return condition.rules.map((r) => {
+    const op = ruleOpLabel(r.op as RuleOp);
+    return r.op === 'exists' || r.op === 'missing' ? `${r.path} ${op}` : `${r.path} ${op} ${r.value}`;
+  }).join('; ');
+}
+
+const kvRow = (label: string, value: string, mono = false) => `<div>${esc(label)}</div><div${mono ? ' class="m"' : ''}>${value}</div>`;
+const dimOr = (value: string | undefined | null, fallback = 'brak') => (value ? esc(value) : `<span class="dim">${esc(fallback)}</span>`);
+
+function configRows(row: IntegrationRow): string {
+  const rows: string[] = [];
+  const c = row.config;
+  if (row.kind === 'webhook_in') {
+    const cfg = c as InboundConfig;
+    rows.push(kvRow('Adres wejściowy', row.hookId === null ? '<span class="dim">brak</span>' : `<div class="inline"><span class="m" id="hook-path">${esc(hookPath(row.hookId))}</span>
+      <button class="btn btn-s" type="button" data-copy="#hook-path" style="padding: 3px 9px; font-size: 12px;">Kopiuj</button></div>`));
+    const auth: string[] = [];
+    if (cfg.auth.header) auth.push(`nagłówek ${cfg.auth.header.name} (sekret)`);
+    if (cfg.auth.basic) auth.push(`basic auth, login ${cfg.auth.basic.user}`);
+    if (cfg.auth.sources.length > 0) auth.push(`źródła: ${cfg.auth.sources.join(', ')}`);
+    rows.push(kvRow('Uwierzytelnianie', auth.length === 0 ? '<span class="dim">tylko sekret w adresie</span>' : esc(auth.join(' · '))));
+    const to = cfg.to.path ? `ścieżka ${cfg.to.path}` : '';
+    const fallback = cfg.to.fallback.length > 0 ? `lista zapasowa: ${cfg.to.fallback.join(', ')}` : '';
+    rows.push(kvRow('Odbiorcy', dimOr([to, fallback].filter((x) => x !== '').join(' · '))));
+    rows.push(kvRow('Treść', cfg.text.mode === 'path' ? `pole ${esc(cfg.text.path)}` : `szablon Liquid · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
+    if (cfg.ticketRefPath) rows.push(kvRow('Identyfikator zgłoszenia', esc(cfg.ticketRefPath), true));
+    if (cfg.eventIdPath) rows.push(kvRow('Identyfikator zdarzenia', esc(cfg.eventIdPath), true));
+  } else {
+    const cfg = c as OutboundConfig;
+    rows.push(kvRow('Adres docelowy', `${esc(cfg.method)} ${esc(cfg.url)}`, true));
+    rows.push(kvRow('Zdarzenia', esc(cfg.events.join(', ')), true));
+    const headers = cfg.headers.map((h) => (h.valueRef !== undefined ? `${h.name}: (sekret)` : `${h.name}: ${h.value ?? ''}`));
+    rows.push(kvRow('Nagłówki', headers.length === 0 ? '<span class="dim">brak</span>' : headers.map(esc).join('<br>'), true));
+    rows.push(kvRow('Body', cfg.body.mode === 'json' ? 'JSON z szablonu' : cfg.body.mode === 'form' ? `formularz (${cfg.body.fields.map((f) => f.name).join(', ')})` : 'surowy tekst'));
+    if (cfg.responseRefPath) rows.push(kvRow('Identyfikator z odpowiedzi', esc(cfg.responseRefPath), true));
+    rows.push(kvRow('Podpis X-MIG-Signature', cfg.sign ? 'tak' : 'nie'));
+  }
+  rows.push(kvRow('Warunek', esc(conditionWords(c.condition))));
+  rows.push(kvRow('Limit burzy', `${esc(c.throttle.limit)} zdarzeń na ${esc(c.throttle.windowMinutes)} minut`));
+  rows.push(kvRow('Ładunki', row.storePayloads === 1 ? 'przechowywane 7 dni, zaszyfrowane' : 'nieprzechowywane'));
+  rows.push(kvRow('Dziennik', `do ${esc(c.eventLogLimit)} wpisów`));
+  return rows.join('');
+}
+
+function relatedCell(e: IntegrationEventRow): string {
+  const links: string[] = [];
+  if (e.messageId !== null) links.push(`<a href="/wiadomosci/${esc(e.messageId)}">${esc(e.messageId)}</a>`);
+  if (e.inboundId !== null) links.push(`<a href="/odebrane/${esc(e.inboundId)}">${esc(e.inboundId)}</a>`);
+  return links.length === 0 ? '<span class="dim">-</span>' : links.join('<br>');
+}
+
+function eventRow(integrationId: number, d: DetailEvent): string {
+  const e = d.row;
+  const payload = e.payload === null ? '' : `<details style="margin-top: 4px;">
+        <summary class="dim" style="cursor: pointer; font-size: 11.5px;">ładunek${e.response === null ? '' : ' i odpowiedź'}</summary>
+        <pre class="m" style="white-space: pre-wrap; margin: 6px 0; font-size: 11.5px;">${esc(e.payload)}</pre>
+        ${e.response === null ? '' : `<pre class="m dim" style="white-space: pre-wrap; margin: 0 0 6px; font-size: 11.5px;">${esc(e.response)}</pre>`}
+        <a href="/integracje/${esc(integrationId)}/edytuj?probka=${esc(e.id)}">Użyj jako próbki</a>
+      </details>`;
+  const retry = d.retryable && e.deliveryId !== null
+    ? `<form method="post" action="/dostawy/${esc(e.deliveryId)}/ponow"><button class="btn btn-s" type="submit" style="padding: 4px 9px; font-size: 12px;">Ponów</button></form>` : '';
+  return `<tr>
+      <td class="m dim nw">${esc(warsawStamp(e.at))}</td>
+      <td class="nw">${resultBadge(e.result)}</td>
+      <td class="txt">${dimOr(e.reason, '')}${payload}</td>
+      <td class="m">${relatedCell(e)}</td>
+      <td class="m dim">${esc(e.sourceIp ?? '')}</td>
+      <td>${retry}</td>
+    </tr>`;
+}
+
+export function integrationDetailPage(d: IntegrationDetail): string {
+  const { row } = d.view;
+  const toggle = row.enabled === 1
+    ? `<form method="post" action="/integracje/${esc(row.id)}/wylacz" style="display: inline;"><button class="btn btn-s" type="submit">Wyłącz</button></form>`
+    : `<form method="post" action="/integracje/${esc(row.id)}/wlacz" style="display: inline;"><button class="btn btn-s" type="submit">Włącz</button></form>`;
+  const remove = `<form method="post" action="/integracje/${esc(row.id)}/usun" style="display: inline;"
+      data-confirm="Usunąć integrację „${esc(row.name)}”? Dziennik zniknie razem z nią; aplikacja przestanie mieć dokąd wysyłać." data-confirm-ok="Usuń">
+      <button class="btn btn-s" type="submit">Usuń</button></form>`;
+  const events = d.events.length === 0
+    ? '<tr><td class="dim" colspan="6">Dziennik jest pusty - integracja nie dostała jeszcze żadnego zdarzenia.</td></tr>'
+    : d.events.map((e) => eventRow(row.id, e)).join('');
+  return `<div class="head">
+    <div>
+      <div class="crumb"><a href="/integracje">Integracje</a> / szczegół</div>
+      <h1 class="h1">${esc(row.name)}</h1>
+      <p class="sub"><span class="tag">${esc(kindLabel(row.kind))}</span> ${esc(d.view.presetName)} · klucz ${esc(d.view.keyName)} · ${stateCell(d.view)}</p>
+    </div>
+    <div class="bar">
+      <a class="btn btn-s" href="/integracje/${esc(row.id)}/edytuj">Edytuj</a>
+      ${toggle}
+      ${remove}
+    </div>
+  </div>
+  <div class="scroll">
+    <div class="panel">
+      <div class="panel-h"><div class="lab">Konfiguracja</div><div class="m dim">24 h: ${esc(d.view.counts.sent)} wysłane · ${esc(d.view.counts.errors)} błędy</div></div>
+      <div class="kv">${configRows(row)}</div>
+    </div>
+    <div class="panel">
+      <div class="panel-h"><div class="lab">Dziennik</div>
+        <div class="m dim">${row.storePayloads === 1 ? 'ładunki przechowywane 7 dni' : 'Ładunki nieprzechowywane - włącz w edycji na czas strojenia'}</div></div>
+      <table style="table-layout: fixed;">
+        <tr>
+          <th class="nw" style="width: 134px;">Czas</th>
+          <th style="width: 120px;">Wynik</th>
+          <th>Powód</th>
+          <th style="width: 180px;">Powiązanie</th>
+          <th style="width: 130px;">Adres źródłowy</th>
+          <th style="width: 76px;"></th>
+        </tr>
+        ${events}
+      </table>
+    </div>
+  </div>`;
+}

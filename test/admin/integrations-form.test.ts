@@ -109,6 +109,14 @@ describe('POST /integracje', () => {
     expect(h.integrations.list()).toHaveLength(0);
   });
 
+  it('druga integracja o tej samej nazwie przy tym kluczu to błąd formularza', async () => {
+    await post('/integracje', inboundFields());
+    const res = await post('/integracje', inboundFields());
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('o tej nazwie już istnieje');
+    expect(h.integrations.list()).toHaveLength(1);
+  });
+
   it('usługa spoza klucza i pusty token to błędy', async () => {
     expect((await post('/integracje', inboundFields({ serviceId: '99999' }))).body).toContain('99999');
     const res = await post('/integracje', inboundFields({ authHeaderValue: '' }));
