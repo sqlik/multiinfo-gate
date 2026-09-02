@@ -30,7 +30,7 @@ const post = (url: string, fields: Record<string, string | string[]>) => {
   });
 };
 
-const KUMA_TEMPLATE = '{% if p.heartbeat.status == 0 %}AWARIA{% else %}OK{% endif %}: {{ p.monitor.name }} - {{ p.heartbeat.msg | sms_truncate: 100 }}';
+const KUMA_TEMPLATE = presetById('uptime-kuma')!.inbound!.text!.mode === 'liquid' ? (presetById('uptime-kuma')!.inbound!.text as { template: string }).template : '';
 
 const inboundFields = (over: Record<string, string | string[]> = {}): Record<string, string | string[]> => ({
   kind: 'webhook_in', preset: 'uptime-kuma', name: 'Kuma produkcja', apiKeyId: String(apiKeyId), serviceId: '', orig: '', enabled: '1',
@@ -130,7 +130,7 @@ describe('POST /integracje', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('Podgląd z próbki');
     expect(res.body).toContain('48601000001, 48602000002');
-    expect(res.body).toContain('AWARIA: Strona firmowa - timeout of 48000ms exceeded');
+    expect(res.body).toContain('AWARIA: Strona firmowa - Request failed with status code 403');
     expect(res.body).toContain('spełniony');
     expect(h.integrations.list()).toHaveLength(0);
 

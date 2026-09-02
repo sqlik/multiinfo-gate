@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultInboundConfig, defaultOutboundConfig, parseConfig } from '../../src/integrations/config.ts';
+import { defaultInboundConfig, defaultOutboundConfig, parseConfig, type InboundConfig } from '../../src/integrations/config.ts';
 import { PRESETS, presetById, presetsFor } from '../../src/integrations/presets/index.ts';
 import { previewInbound } from '../../src/integrations/pipeline.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
@@ -68,5 +68,20 @@ describe('gotowe ustawienia', () => {
   it('ntfy: nagłówki z szablonu dostają numer nadawcy', () => {
     const out = renderOutbound(engine, outboundOf(presetById('ntfy')!), {}, buildOutboundContext('message.received', received, { name: 'Test' }, NOW));
     expect(out.headers['Title']).toBe('SMS od 48601000001');
+  });
+
+  it('Uptime Kuma: ładunek z przycisku „Test” (bez heartbeat) daje sam komunikat, UP daje OK', () => {
+    const preset = presetById('uptime-kuma')!;
+    const config = { ...defaultInboundConfig(), ...preset.inbound } as InboundConfig;
+    const test = previewInbound(engine, config, { heartbeat: null, monitor: null, msg: 'webhook Testing' }, '48', NOW);
+    expect(test.text).toBe('webhook Testing');
+    const up = previewInbound(engine, config, {
+      heartbeat: { monitorID: 54, status: 1, time: '2026-09-02 17:06:33.919', msg: '200 - OK', ping: 473, important: true, retries: 0 },
+      monitor: { id: 54, name: 'Strona firmowa', url: 'https://firma.example' }, msg: '[Strona firmowa] [✅ Up] 200 - OK',
+    }, '48', NOW);
+    expect(up.text).toBe('OK: Strona firmowa - 200 - OK');
+    // Z warunkiem z instrukcji ani UP, ani „Test” nie wysyła SMS-a.
+    const withRule = { ...config, condition: { mode: 'builder' as const, rules: [{ path: 'heartbeat.status', op: 'eq' as const, value: '0' }] } };
+    expect(previewInbound(engine, withRule, { heartbeat: null, monitor: null, msg: 'webhook Testing' }, '48', NOW).matches).toBe(false);
   });
 });
