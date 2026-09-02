@@ -11,7 +11,7 @@ import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
 import { WINDOW_MS } from '../window.ts';
 import {
-  chooseKindPage, choosePresetPage, integrationFormPage, integrationsPage, valuesFromPreset, valuesOf,
+  chooseKindPage, choosePresetPage, integrationDetailPage, integrationFormPage, integrationsPage, valuesFromPreset, valuesOf,
   type CreatedHook, type FormContext, type FormPreview, type IntegrationFormValues, type IntegrationsFilter, type IntegrationView,
   type KeyOption,
 } from '../views/integrations.ts';
@@ -174,7 +174,13 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const secrets: Record<string, string> = { ...built.secrets };
     for (const [ref, oldRef] of Object.entries(built.carried)) if (old[oldRef] !== undefined) secrets[ref] = old[oldRef];
     const secretsChanged = Object.keys(built.secrets).length > 0 || existing.names.some((n) => !Object.values(built.carried).includes(n));
-    return save({ config: built.config, secrets, secretsChanged, keyId: key.keyId, accountId: key.accountId, v });
+    try {
+      return await save({ config: built.config, secrets, secretsChanged, keyId: key.keyId, accountId: key.accountId, v });
+    } catch (e) {
+      // Nazwa jest unikalna w obrębie klucza - to jedyny błąd bazy, który jest błędem użytkownika.
+      if ((e as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') return fail(`Integracja o tej nazwie już istnieje przy tym kluczu: ${v.name}.`);
+      throw e;
+    }
   };
 
   /** Pola konfiguracji, które zmieniły się między dwiema wersjami - do dziennika audytu, bez wartości. */
@@ -251,6 +257,22 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       render.flash(request, 'ok', `Integracja ${v.name} utworzona.`);
       reply.redirect('/integracje', 302);
       return '';
+    });
+  });
+
+  app.get<{ Params: { id: string } }>('/integracje/:id', async (request, reply) => {
+    const row = rowOr404(request.params.id, reply);
+    if (!row) return;
+    reply.type('text/html; charset=utf-8');
+    const since = new Date(now().getTime() - WINDOW_MS);
+    const events = deps.integrationEvents.list(row.id, row.config.eventLogLimit).map((e) => ({
+      row: e,
+      // „Ponów” tylko przy dostawie, która wciąż jest nieudana - ponowiona już czeka w kolejce.
+      retryable: e.deliveryId !== null && deps.deliveries.get(e.deliveryId)?.status === 'failed',
+    }));
+    return render.page(request, {
+      title: row.name, active: 'integracje',
+      body: integrationDetailPage({ view: viewOf(row, since), events }),
     });
   });
 
