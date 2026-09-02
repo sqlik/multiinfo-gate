@@ -15,6 +15,13 @@ export const ntfy: Preset = {
     body: { mode: 'text', template: '{{ text }}' },
   },
   secrets: [{ ref: 'authorization', label: 'Nagłówek Authorization (opcjonalny)', hint: 'Bearer tk_… dla tematów chronionych; dodaj nagłówek Authorization z tym sekretem' }],
+  simple: {
+    outbound: {
+      address: { label: 'Adres tematu ntfy', hint: 'Serwer i nazwa tematu, którą subskrybujesz w aplikacji ntfy na telefonie', placeholder: 'https://ntfy.sh/firma-sms' },
+      secrets: [], params: [],
+      note: 'Każdy odebrany SMS przychodzi na telefon jako powiadomienie z tytułem „SMS od <numer>” i treścią SMS-a. Temat chroniony tokenem ustawisz w trybie zaawansowanym.',
+    },
+  },
   expect: { outboundText: 'Pomocy, nie działa' },
   sampleSource: 'ntfy.sh, 2026-09-02: wysyłka z nagłówkami Title i Priority przyjęta (200), wiadomość widoczna w temacie',
   guide: [

@@ -1,4 +1,8 @@
+import type { InboundConfig } from '../config.ts';
 import type { Preset } from './types.ts';
+
+/** Domyślna treść SMS-a - pierwszy wariant w trybie prostym i szablon w zaawansowanym. */
+const TEKST: InboundConfig['text'] = { mode: 'liquid', template: '{% if p.status == "firing" %}ALARM{% else %}OK{% endif %}: {% for a in p.alerts limit: 3 %}{{ a.labels.alertname }}{% unless forloop.last %}, {% endunless %}{% endfor %}{% if p.alerts.size > 3 %} (+{{ p.alerts.size | minus: 3 }}){% endif %}' };
 
 export const grafana: Preset = {
   id: 'grafana',
@@ -38,12 +42,27 @@ export const grafana: Preset = {
   inbound: {
     auth: { basic: { user: 'grafana', passRef: 'basic' }, sources: [] },
     to: { fallback: [] },
-    text: { mode: 'liquid', template: '{% if p.status == "firing" %}ALARM{% else %}OK{% endif %}: {% for a in p.alerts limit: 3 %}{{ a.labels.alertname }}{% unless forloop.last %}, {% endunless %}{% endfor %}{% if p.alerts.size > 3 %} (+{{ p.alerts.size | minus: 3 }}){% endif %}' },
+    text: TEKST,
     maxParts: 1, overflow: 'truncate',
   },
   secrets: [{ ref: 'basic', label: 'Hasło basic auth', hint: 'Login grafana i to hasło wpisz w punkcie kontaktu Grafany' }],
   expect: { text: 'ALARM: CPU high' },
   sampleSource: 'Grafana 13.2.0, żywa instancja, 2026-09-02: ładunki firing i resolved z punktu kontaktu Webhook z basic auth',
+  simple: {
+    inbound: {
+      addressField: 'w Grafanie w polu URL punktu kontaktu typu Webhook',
+      recipients: { source: 'list', note: 'Grafana nie przesyła numerów telefonów, więc SMS idzie zawsze na numery wpisane tutaj.' },
+      when: [
+        { id: 'alarm', label: 'tylko gdy alert się zapali', condition: { mode: 'builder', rules: [{ path: 'status', op: 'eq', value: 'firing' }] } },
+        { id: 'alarm-i-powrot', label: 'gdy się zapali i gdy zgaśnie', condition: { mode: 'builder', rules: [] } },
+      ],
+      text: [
+        { id: 'nazwy', label: 'stan i nazwy alertów (do trzech)', text: TEKST },
+        { id: 'z-opisem', label: 'stan, pierwszy alert z opisem z reguły', text: { mode: 'liquid', template: '{% if p.status == "firing" %}ALARM{% else %}OK{% endif %}: {{ p.alerts[0].labels.alertname }}{% if p.alerts[0].labels.instance %} ({{ p.alerts[0].labels.instance }}){% endif %}{% if p.alerts[0].annotations.summary %} - {{ p.alerts[0].annotations.summary | sms_truncate: 100 }}{% endif %}{% if p.alerts.size > 1 %} (+{{ p.alerts.size | minus: 1 }}){% endif %}' } },
+      ],
+      auth: { kind: 'basic', user: 'grafana', label: 'Hasło, które wpiszesz też w Grafanie', where: 'w Grafanie w punkcie kontaktu: Basic Authentication, login grafana i to hasło' },
+    },
+  },
   guide: [
     'W Grafanie **Alerting → Contact points → Add contact point**, integracja **Webhook**. **URL** to adres wejściowy integracji, **HTTP Method** `POST`, **Basic Authentication** z loginem `grafana` i hasłem z bramki. Numer odbiorcy wpisz w bramce w liście zapasowej.',
     '',

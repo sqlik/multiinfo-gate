@@ -65,6 +65,39 @@ describe('gotowe ustawienia', () => {
       });
     }
   }
+  for (const preset of PRESETS.filter((p) => p.simple?.inbound)) {
+    it(`${preset.id}: tryb prosty - każdy wariant „kiedy” i „co w SMS-ie” działa na próbce, pierwszy wariant „kiedy” przepuszcza próbkę`, () => {
+      const simple = preset.simple!.inbound!;
+      expect(simple.when.length).toBeGreaterThan(0);
+      expect(simple.text.length).toBeGreaterThan(0);
+      expect(new Set(simple.when.map((w) => w.id)).size).toBe(simple.when.length);
+      expect(new Set(simple.text.map((w) => w.id)).size).toBe(simple.text.length);
+      for (const w of simple.when) {
+        for (const t of simple.text) {
+          const config = parseConfig('webhook_in', { ...defaultInboundConfig(), ...preset.inbound, condition: w.condition, text: t.text });
+          const out = previewInbound(engine, config, preset.sample, '48', NOW);
+          expect(out.error, `${preset.id} ${w.id} ${t.id}`).toBeNull();
+          if (out.matches) expect(out.text, `${preset.id} ${t.id}`).not.toBe('');
+        }
+      }
+      const first = parseConfig('webhook_in', { ...defaultInboundConfig(), ...preset.inbound, condition: simple.when[0]!.condition });
+      expect(previewInbound(engine, first, preset.sample, '48', NOW).matches, `${preset.id} ${simple.when[0]!.id}`).toBe(true);
+      // Wariant domyślny treści to ten sam szablon, co w trybie zaawansowanym.
+      expect(simple.text[0]!.text).toEqual(preset.inbound!.text);
+    });
+  }
+  for (const preset of PRESETS.filter((p) => p.simple?.outbound)) {
+    it(`${preset.id}: tryb prosty wychodzącej - parametry występują w szablonie body, sekrety w nagłówkach`, () => {
+      const simple = preset.simple!.outbound!;
+      const body = preset.outbound!.body!;
+      for (const param of simple.params) {
+        expect(body.mode).toBe('json');
+        expect((body as { template: string }).template).toMatch(new RegExp(`"${param.key}":\\s*("[^"]*"|\\d+)`));
+      }
+      for (const s of simple.secrets) expect(preset.outbound!.headers!.some((h) => h.valueRef === s.ref), `${preset.id} ${s.ref}`).toBe(true);
+    });
+  }
+
   it('ntfy: nagłówki z szablonu dostają numer nadawcy', () => {
     const out = renderOutbound(engine, outboundOf(presetById('ntfy')!), {}, buildOutboundContext('message.received', received, { name: 'Test' }, NOW));
     expect(out.headers['Title']).toBe('SMS od 48601000001');

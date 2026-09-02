@@ -1,4 +1,9 @@
+import type { InboundConfig } from '../config.ts';
 import type { Preset } from './types.ts';
+
+/** Domyślna treść SMS-a - pierwszy wariant w trybie prostym i szablon w zaawansowanym. */
+// Bez polskich znaków (filtr gsm) SMS mieści 160 znaków zamiast 70 - temat i nazwisko zwykle je mają.
+const TEKST: InboundConfig['text'] = { mode: 'liquid', template: '{% capture t %}{% if p.threadsCount > 1 %}Odpowiedź klienta w #{{ p.number }}{% else %}Nowe zgłoszenie #{{ p.number }}{% endif %} od {{ p.customer.firstName }} {{ p.customer.lastName }}: {{ p.subject | sms_truncate: 90 }}{% endcapture %}{{ t | gsm }}' };
 
 export const freescoutZgloszenie: Preset = {
   id: 'freescout-zgloszenie',
@@ -31,12 +36,26 @@ export const freescoutZgloszenie: Preset = {
   ],
   inbound: {
     to: { fallback: [] },
-    // Bez polskich znaków (filtr gsm) SMS mieści 160 znaków zamiast 70 - temat i nazwisko zwykle je mają.
-    text: { mode: 'liquid', template: '{% capture t %}{% if p.threadsCount > 1 %}Odpowiedź klienta w #{{ p.number }}{% else %}Nowe zgłoszenie #{{ p.number }}{% endif %} od {{ p.customer.firstName }} {{ p.customer.lastName }}: {{ p.subject | sms_truncate: 90 }}{% endcapture %}{{ t | gsm }}' },
+    text: TEKST,
     maxParts: 1, overflow: 'truncate',
   },
   expect: { text: 'Nowe zgloszenie #10143 od Anna Nowak: [Zgloszenie] Nie dziala logowanie' },
   sampleSource: 'FreeScout 1.8, żywa instancja, 2026-09-02: webhooki convo.created (threadsCount 0) i convo.customer.reply.created (threadsCount 3)',
+  simple: {
+    inbound: {
+      addressField: 'we FreeScoucie w polu URL webhooka',
+      recipients: { source: 'list', note: 'FreeScout nie przesyła numerów agentów, więc SMS idzie zawsze na numery wpisane tutaj.' },
+      when: [
+        { id: 'nowe-i-odpowiedzi', label: 'przy nowej rozmowie i przy odpowiedzi klienta', condition: { mode: 'builder', rules: [] } },
+        { id: 'tylko-nowe', label: 'tylko przy nowej rozmowie', condition: { mode: 'builder', rules: [{ path: 'threadsCount', op: 'lt', value: '2' }] } },
+      ],
+      text: [
+        { id: 'z-tematem', label: 'numer rozmowy, klient i temat', text: TEKST },
+        { id: 'krotko', label: 'numer rozmowy i klient', text: { mode: 'liquid', template: '{% capture t %}{% if p.threadsCount > 1 %}Odpowiedź klienta w #{{ p.number }}{% else %}Nowe zgłoszenie #{{ p.number }}{% endif %} od {{ p.customer.firstName }} {{ p.customer.lastName }}{% endcapture %}{{ t | gsm }}' } },
+      ],
+      auth: { kind: 'none', note: 'FreeScout nie ma pola na hasło ani nagłówki. Zabezpieczeniem jest sekret w adresie wejściowym; w trybie zaawansowanym można dopisać adres serwera FreeScouta do listy dozwolonych źródeł.' },
+    },
+  },
   guide: [
     'We FreeScoucie **Zarządzaj → API & Webhooks → Webhooks → Dodaj**: URL to adres wejściowy integracji, zdarzenia `convo.created` (nowa rozmowa) i `convo.customer.reply.created` (odpowiedź klienta), skrzynki wszystkie albo wybrane. Numery agentów wpisz w bramce w liście zapasowej - FreeScout nie wie, kogo budzić. Szablon rozróżnia oba zdarzenia po liczbie wątków.',
     '',

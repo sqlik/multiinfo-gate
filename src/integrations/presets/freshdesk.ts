@@ -20,6 +20,14 @@ export const freshdesk: Preset = {
     responseRefPath: 'id',
   },
   secrets: [{ ref: 'authorization', label: 'Nagłówek Authorization', hint: 'Basic i base64 z „klucz API:X”, np. Basic Zm9vOlg=' }],
+  simple: {
+    outbound: {
+      address: { label: 'Adres Freshdeska', hint: 'Adres Twojego Freshdeska z końcówką /api/v2/tickets', placeholder: 'https://firma.freshdesk.com/api/v2/tickets' },
+      secrets: [{ ref: 'authorization', label: 'Klucz API Freshdeska', hint: 'We Freshdesku: awatar → Ustawienia profilu → Twój klucz API; bramka sama zamieni go na nagłówek', transform: 'basic-x' }],
+      params: [],
+      note: 'Każdy odebrany SMS zakłada zgłoszenie z numerem nadawcy jako telefonem kontaktu; agent widzi numer i treść.',
+    },
+  },
   expect: {
     outboundJson: { subject: 'SMS od 48601000001', description: 'Pomocy, nie działa', phone: '48601000001', name: 'SMS 48601000001', status: 2, priority: 1, source: 3 },
   },

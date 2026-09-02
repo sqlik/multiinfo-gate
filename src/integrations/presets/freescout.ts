@@ -21,6 +21,14 @@ export const freescout: Preset = {
     responseRefPath: 'id',
   },
   secrets: [{ ref: 'apiKey', label: 'Klucz API FreeScouta', hint: 'Moduł API & Webhooks, zakładka API Keys' }],
+  simple: {
+    outbound: {
+      address: { label: 'Adres FreeScouta', hint: 'Adres Twojego FreeScouta z końcówką /api/conversations', placeholder: 'https://pomoc.firma.pl/api/conversations' },
+      secrets: [{ ref: 'apiKey', label: 'Klucz API FreeScouta', hint: 'We FreeScoucie: Zarządzaj → API & Webhooks → API Keys', transform: 'raw' }],
+      params: [{ key: 'mailboxId', label: 'Numer skrzynki', hint: 'Numer widoczny w adresie ustawień skrzynki we FreeScoucie, np. 1', digits: true }],
+      note: 'Każdy odebrany SMS zakłada rozmowę typu „phone” w tej skrzynce; agent widzi numer i treść.',
+    },
+  },
   expect: {
     outboundJson: { type: 'phone', mailboxId: 1, subject: 'SMS od 48601000001', customer: { firstName: 'SMS', lastName: '48601000001', phone: '48601000001' }, threads: [{ type: 'customer', text: 'Pomocy, nie działa' }] },
   },

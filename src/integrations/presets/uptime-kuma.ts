@@ -1,4 +1,9 @@
+import type { InboundConfig } from '../config.ts';
 import type { Preset } from './types.ts';
+
+/** Domyślna treść SMS-a - pierwszy wariant w trybie prostym i szablon w zaawansowanym. */
+// Bez heartbeat (przycisk „Test” w Uptime Kumie) zostaje sam komunikat, żeby nie wyszło „OK:  - ”.
+const TEKST: InboundConfig['text'] = { mode: 'liquid', template: '{% if p.heartbeat %}{% if p.heartbeat.status == 0 %}AWARIA{% else %}OK{% endif %}: {{ p.monitor.name }} - {{ p.heartbeat.msg | sms_truncate: 100 }}{% else %}{{ p.msg | sms_truncate: 140 }}{% endif %}' };
 
 export const uptimeKuma: Preset = {
   id: 'uptime-kuma',
@@ -27,14 +32,29 @@ export const uptimeKuma: Preset = {
   inbound: {
     auth: { header: { name: 'Authorization', valueRef: 'token' }, sources: [] },
     to: { fallback: [] },
-    // Bez heartbeat (przycisk „Test” w Uptime Kumie) zostaje sam komunikat, żeby nie wyszło „OK:  - ”.
-    text: { mode: 'liquid', template: '{% if p.heartbeat %}{% if p.heartbeat.status == 0 %}AWARIA{% else %}OK{% endif %}: {{ p.monitor.name }} - {{ p.heartbeat.msg | sms_truncate: 100 }}{% else %}{{ p.msg | sms_truncate: 140 }}{% endif %}' },
+    text: TEKST,
     condition: { mode: 'builder', rules: [] },
     maxParts: 1, overflow: 'truncate',
   },
   secrets: [{ ref: 'token', label: 'Token w nagłówku Authorization', hint: 'Wpisz z przedrostkiem, np. Bearer 7f3a…; to samo wklej w Uptime Kumie w polu nagłówków' }],
   expect: { text: 'AWARIA: Strona firmowa - Request failed with status code 403' },
   sampleSource: 'Uptime Kuma 2.5.3, prawdziwe ładunki DOWN, UP i „Test” z żywej instancji, 2026-09-02',
+  simple: {
+    inbound: {
+      addressField: 'w Uptime Kumie w polu Post URL powiadomienia typu Webhook',
+      recipients: { source: 'list', note: 'Uptime Kuma nie przesyła numerów telefonów, więc SMS idzie zawsze na numery wpisane tutaj.' },
+      when: [
+        { id: 'awaria', label: 'tylko gdy monitor przestanie działać', condition: { mode: 'builder', rules: [{ path: 'heartbeat.status', op: 'eq', value: '0' }] } },
+        { id: 'awaria-i-powrot', label: 'gdy przestanie działać i gdy wróci', condition: { mode: 'builder', rules: [{ path: 'heartbeat', op: 'exists', value: '' }] } },
+        { id: 'zawsze', label: 'zawsze, także przy przycisku „Test” w Uptime Kumie', condition: { mode: 'builder', rules: [] } },
+      ],
+      text: [
+        { id: 'z-komunikatem', label: 'stan, nazwa monitora i komunikat błędu', text: TEKST },
+        { id: 'krotko', label: 'tylko stan i nazwa monitora', text: { mode: 'liquid', template: '{% if p.heartbeat %}{% if p.heartbeat.status == 0 %}AWARIA{% else %}OK{% endif %}: {{ p.monitor.name }}{% else %}{{ p.msg | sms_truncate: 140 }}{% endif %}' } },
+      ],
+      auth: { kind: 'header', name: 'Authorization', prefix: 'Bearer ', label: 'Hasło, które wpiszesz też w Uptime Kumie', where: 'w Uptime Kumie w polu Additional Headers jako { "Authorization": "Bearer <hasło>" }' },
+    },
+  },
   guide: [
     'W Uptime Kumie: **Ustawienia → Powiadomienia → Dodaj powiadomienie**, typ **Webhook**.',
     '',
