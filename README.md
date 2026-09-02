@@ -16,7 +16,10 @@ doręczeń.
 
 Od wersji 1.3 bramka odbiera też SMS-y od abonentów: przekazuje je aplikacji powiadomieniem
 `message.received`, udostępnia do odczytu przez `GET /v1/inbound` i pozwala odpowiedzieć
-w wątku (`inReplyTo`).
+w wątku (`inReplyTo`). Od wersji 1.5 integruje się z aplikacjami o narzuconym formacie
+(Uptime Kuma, Grafana, Zabbix, Home Assistant, FreeScout, Freshdesk, Slack, Teams, ntfy) przez
+adres wejściowy `/hooks/` i szablony Liquid, a administratora powiadamia mailem o błędach
+i certyfikatach.
 
 ## Co trzeba mieć
 
@@ -39,6 +42,7 @@ Strona dokumentacji: [sqlik.github.io/multiinfo-gate](https://sqlik.github.io/mu
 
 - [Uruchomienie krok po kroku](https://sqlik.github.io/multiinfo-gate/uruchomienie/) - od konta Multiinfo do pierwszego SMS-a i wystawienia API na świat
 - [API dla aplikacji](https://sqlik.github.io/multiinfo-gate/api/) - każde wywołanie z przykładem w siedmiu wariantach (curl, HTTP, PHP, Python, Node.js, PowerShell, C#), webhooki, błędy, limity
+- [Integracje z aplikacjami](https://sqlik.github.io/multiinfo-gate/integracje/) - adres wejściowy dla aplikacji z własnym formatem, szablony Liquid, gotowe ustawienia, powiadomienia administratora mailem
 - [Przykład w PHP](examples/php/) - strona testowa i kod do skopiowania
 
 Źródłem strony są pliki w katalogu [`docs/`](docs/); przykłady z zakładkami czytają się w nich
