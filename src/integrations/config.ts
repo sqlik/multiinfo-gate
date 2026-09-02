@@ -52,6 +52,8 @@ export const outboundConfigSchema = z.object({
   body: z.discriminatedUnion('mode', [
     z.object({ mode: z.literal('json'), template: z.string().max(8000) }),
     z.object({ mode: z.literal('form'), fields: z.array(z.object({ name: z.string().min(1).max(100), template: z.string().max(2000) })).max(30) }),
+    /** Surowy tekst (ntfy i podobne). */
+    z.object({ mode: z.literal('text'), template: z.string().max(8000) }),
   ]),
   responseRefPath: path.optional(),
   sign: z.boolean(),
