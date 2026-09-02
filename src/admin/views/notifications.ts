@@ -160,7 +160,7 @@ ${d.tab === 'konfiguracja' ? `      <div class="panel" style="max-width: 760px;"
           <div class="field">
             <label for="panelUrl">Adres panelu</label>
             <input id="panelUrl" name="panelUrl" value="${esc(v.panelUrl)}" placeholder="https://sms.firma.example:8081">
-            <div class="hint">Opcjonalny; z nim maile mają odnośniki do integracji i kont</div>
+            <div class="hint">Opcjonalny: ten adres będzie zaszyty w powiadomieniach jako odnośnik do panelu</div>
           </div>
           <div class="bar">
             <button class="btn btn-p" type="submit">Zapisz SMTP</button>

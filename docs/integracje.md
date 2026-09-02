@@ -687,8 +687,9 @@ zakładki: **Konfiguracja** z formularzem SMTP i **Reguły** z tabelą zdarzeń.
 Pola: host, port, szyfrowanie (TLS, zwykle port 465; STARTTLS, zwykle 587; bez szyfrowania,
 wymaga potwierdzenia, że hasło pójdzie jawnie), login i hasło (puste hasło przy kolejnym zapisie
 zostawia dotychczasowe), adres i nazwa wyświetlana nadawcy, odbiorcy (jeden adres na linię, do
-20), nazwa instancji (w temacie każdego maila, żeby odróżnić bramki) i opcjonalny adres panelu (z
-nim maile mają odnośniki do integracji i kont). Hasło jest zaszyfrowane kluczem głównym.
+20), nazwa instancji (w temacie każdego maila, żeby odróżnić bramki) i opcjonalny adres panelu,
+zaszyty w powiadomieniach jako odnośnik do właściwego ekranu. Hasło jest zaszyfrowane kluczem
+głównym.
 
 Po zapisaniu użyj **Wyślij mail testowy**: wynik pojawia się na pasku u góry, a przy błędzie
 pełny komunikat serwera SMTP - z niego wynika, czy zawiniło hasło, port czy certyfikat. Bez
