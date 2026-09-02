@@ -504,29 +504,32 @@ zakładka **API Keys**) jako sekret nagłówka `X-FreeScout-API-Key`, w body num
 (rozdział 5.4). FreeScout odpowiada kodem 201 i obiektem rozmowy z polem `id` na wierzchu, które
 trafia do bramki jako identyfikator zgłoszenia.
 
-**Do SMS.** W module webhooków (Zarządzaj → Webhooks) dodaj webhook z adresem wejściowym
-integracji i jednym zdarzeniem `convo.agent.reply.created`. FreeScout 1.8 wysyła całą rozmowę
-z wątkami od najnowszego (ładunek przycięty; obiekt `customer` ma tylko dane podstawowe, bez
-telefonów):
+**Do SMS.** Klient „SMS <numer>” nie ma e-maila, więc FreeScout nie pokazuje w takiej rozmowie
+formularza odpowiedzi; agent odpowiada **notatką**. W module webhooków (Zarządzaj → API &
+Webhooks → Webhooks) dodaj webhook z adresem wejściowym integracji i zdarzeniami
+`convo.note.created` oraz `convo.agent.reply.created`, najlepiej ograniczony do skrzynki
+z rozmowami SMS. FreeScout 1.8 wysyła całą rozmowę z wątkami od najnowszego (ładunek przycięty;
+obiekt `customer` ma tylko dane podstawowe, bez telefonów, także gdy kontakt ma numer):
 
 ```json
 {
-  "id": 4821, "number": 10143, "type": "phone", "status": "active", "subject": "SMS od 48601000001", "mailboxId": 1,
-  "customer": { "id": 8, "type": "customer", "firstName": "Anna", "lastName": "Nowak", "email": "anna@example" },
+  "id": 4821, "number": 10144, "type": "phone", "status": "active", "subject": "SMS od 48601000001", "mailboxId": 1,
+  "customer": { "id": 46, "type": "customer", "firstName": "SMS", "lastName": "48601000001", "email": "" },
   "_embedded": { "threads": [
-    { "id": 101, "type": "message", "body": "<div>Odpowiadamy: sprawdzamy sprawę.</div>", "createdAt": "2026-09-02T17:17:08Z" },
-    { "id": 100, "type": "customer", "body": "Pomocy, nie działa", "createdAt": "2026-09-02T17:16:09Z" }
+    { "id": 104, "type": "note", "body": "Odpowiadamy: sprawdzamy sprawę.", "createdAt": "2026-09-02T17:43:15Z" },
+    { "id": 103, "type": "customer", "body": "Pomocy, nie działa", "createdAt": "2026-09-02T17:30:50Z" }
   ] }
 }
 ```
 
 Bramka bierze identyfikator zgłoszenia z `id`, numer odbiorcy z odebranego SMS-a, z którego
 rozmowa powstała (rozdział 3.3), a treść z szablonu
-`{{ p._embedded.threads[0].body | strip_html | strip }}` (do trzech części). Odpowiedź agenta
-idzie jako SMS w wątku. Domyślny warunek `_embedded.threads[0].type równe message` pomija
-zdarzenia, w których najnowszy wątek jest wiadomością klienta. FreeScout podpisuje webhooki
-nagłówkiem `X-FreeScout-Signature`, którego bramka nie sprawdza - zamiast tego wpisz listę źródeł
-z adresem serwera FreeScouta.
+`{{ p._embedded.threads[0].body | strip_html | strip }}` (do trzech części; notatka przychodzi
+jako tekst, odpowiedź jako HTML). SMS idzie w wątku. Domyślny warunek w trybie Liquid
+przepuszcza tylko rozmowy typu `phone` z notatką albo odpowiedzią agenta, więc notatki
+w rozmowach e-mailowych zostają wewnętrzne, a wiadomość klienta nie wraca do niego SMS-em.
+FreeScout podpisuje webhooki nagłówkiem `X-FreeScout-Signature`, którego bramka nie sprawdza -
+zamiast tego wpisz listę źródeł z adresem serwera FreeScouta.
 
 ### 6.8. Freshdesk
 
