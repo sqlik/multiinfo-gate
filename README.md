@@ -17,7 +17,7 @@ doręczeń.
 Od wersji 1.3 bramka odbiera też SMS-y od abonentów: przekazuje je aplikacji powiadomieniem
 `message.received`, udostępnia do odczytu przez `GET /v1/inbound` i pozwala odpowiedzieć
 w wątku (`inReplyTo`). Od wersji 1.5 integruje się z aplikacjami o narzuconym formacie
-(Uptime Kuma, Grafana, Zabbix, Home Assistant, FreeScout, Freshdesk, Slack, Teams, ntfy) przez
+(Uptime Kuma, Grafana, Zabbix, FreeScout, Freshdesk, ntfy) przez
 adres wejściowy `/hooks/` i szablony Liquid, a administratora powiadamia mailem o błędach
 i certyfikatach.
 

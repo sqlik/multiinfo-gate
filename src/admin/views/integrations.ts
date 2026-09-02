@@ -152,12 +152,12 @@ export function chooseKindPage(): string {
       <a class="tile" href="/integracje/nowa?rodzaj=webhook_in">
         <div class="lab">Do SMS</div>
         <div style="font-size: 15px; font-weight: 600; margin-top: 6px;">Aplikacja wysyła SMS</div>
-        <div class="d">Aplikacja woła adres wejściowy bramki własnym formatem, np. Uptime Kuma, Grafana, Zabbix, helpdesk</div>
+        <div class="d">Aplikacja woła adres wejściowy bramki własnym formatem, np. Uptime Kuma, Grafana, Zabbix, helpdesk, automat</div>
       </a>
       <a class="tile" href="/integracje/nowa?rodzaj=webhook_out">
         <div class="lab">Z SMS-a</div>
         <div style="font-size: 15px; font-weight: 600; margin-top: 6px;">SMS albo status trafia do aplikacji</div>
-        <div class="d">Odebrany SMS albo status wysyłki idzie do aplikacji w jej formacie, np. Slack, Teams, ntfy, helpdesk</div>
+        <div class="d">Odebrany SMS albo status wysyłki idzie do aplikacji w jej formacie, np. helpdesk, ntfy, własny skrypt</div>
       </a>
     </div>
   </div>`;

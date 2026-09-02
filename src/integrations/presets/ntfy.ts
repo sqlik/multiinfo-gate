@@ -16,7 +16,7 @@ export const ntfy: Preset = {
   },
   secrets: [{ ref: 'authorization', label: 'Nagłówek Authorization (opcjonalny)', hint: 'Bearer tk_… dla tematów chronionych; dodaj nagłówek Authorization z tym sekretem' }],
   expect: { outboundText: 'Pomocy, nie działa' },
-  sampleSource: 'dokumentacja ntfy (publish)',
+  sampleSource: 'ntfy.sh, 2026-09-02: wysyłka z nagłówkami Title i Priority przyjęta (200), wiadomość widoczna w temacie',
   guide: [
     'Adres to serwer i nazwa tematu, np. `https://ntfy.sh/firma-sms`. Body jest surowym tekstem, tytuł i priorytet idą nagłówkami `Title` i `Priority`. Dla tematu chronionego dodaj nagłówek `Authorization` z tokenem jako sekretem. W aplikacji ntfy zasubskrybuj temat.',
   ].join('\n'),

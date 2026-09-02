@@ -83,7 +83,7 @@ Cztery warstwy; pierwsza działa zawsze, pozostałe włącza się w sekcji „We
 | Warstwa | Jak działa | Kiedy używać |
 |---|---|---|
 | sekret w adresie | identyfikator z adresu wejściowego | zawsze |
-| nagłówek z tokenem | nazwa nagłówka i wartość z konfiguracji, np. `Authorization: Bearer …`, porównanie w stałym czasie | aplikacje z polem na nagłówki: Uptime Kuma, Zabbix, Home Assistant, automaty |
+| nagłówek z tokenem | nazwa nagłówka i wartość z konfiguracji, np. `Authorization: Bearer …`, porównanie w stałym czasie | aplikacje z polem na nagłówki: Uptime Kuma, Zabbix, automaty |
 | basic auth | login i hasło z konfiguracji | Grafana i inne z gotowym polem „Basic Authentication” |
 | lista źródeł | adresy IP, zakresy CIDR (IPv4 i IPv6) albo nazwy hostów rozwiązywane przy żądaniu z buforem 60 s | aplikacje ze stałym adresem albo NAS z DDNS |
 
@@ -192,7 +192,7 @@ odbiór z usług klucza - nie trzeba zaznaczać odbioru przy kluczu ani podawać
 
 Warunek działa jak w rozdziale 3.5 na polach zdarzenia: `from zaczyna się od 48601`,
 `text zaczyna się od POMOC`, `serviceId równe 24138`, `status równe failed`. Dwie integracje
-z różnymi warunkami rozdzielają ruch: prefiks `POMOC` do helpdesku, reszta do Home Assistanta.
+z różnymi warunkami rozdzielają ruch: prefiks `POMOC` do helpdesku, reszta na telefon przez ntfy.
 
 ### 4.2. Żądanie
 
@@ -220,7 +220,8 @@ Dostawa idzie tym samym mechanizmem, co webhook klucza: 10 s na odpowiedź, `2xx
 `4xx` koniec bez ponowień, `5xx` i błędy sieci z ponowieniami po 1, 5 i 15 minutach oraz 1 i 6
 godzinach. Po wyczerpaniu ponowień wpis `niedostarczone`, mail do administratora i przycisk
 „Ponów” w dzienniku integracji. Adresy w sieci wewnętrznej bramka odrzuca, chyba że w środowisku
-jest `MIG_WEBHOOK_ALLOW_PRIVATE=1` - dotyczy to zwykle Home Assistanta.
+jest `MIG_WEBHOOK_ALLOW_PRIVATE=1` - dotyczy to aplikacji na tym samym serwerze albo w sieci
+firmowej, np. własnego skryptu albo automatyzacji domowej.
 
 ### 4.4. Odczyt odpowiedzi
 
@@ -295,8 +296,8 @@ Lista alertów z Grafany, do trzech nazw i liczba pozostałych:
 {% if p.status == "firing" %}ALARM{% else %}OK{% endif %}: {% for a in p.alerts limit: 3 %}{{ a.labels.alertname }}{% unless forloop.last %}, {% endunless %}{% endfor %}{% if p.alerts.size > 3 %} (+{{ p.alerts.size | minus: 3 }}){% endif %}
 ```
 
-Body JSON dla Slacka z odebranym SMS-em; `capture` składa tekst, `json` robi z niego poprawny
-ciąg JSON:
+Body JSON dla aplikacji przyjmującej `{"text": "…"}` (np. webhook przychodzący Slacka)
+z odebranym SMS-em; `capture` składa tekst, `json` robi z niego poprawny ciąg JSON:
 
 ```liquid
 {% capture msg %}SMS od {{ from }}: {{ text }}{% endcapture %}{"text": {{ msg | json }}}
@@ -321,13 +322,10 @@ identyfikatory) są fikcyjne.
 | Uptime Kuma | tak | nie | nagłówek `Authorization` |
 | Grafana | tak | nie | basic auth |
 | Zabbix | tak | nie | nagłówek `Authorization` |
-| Home Assistant | tak | tak | opcjonalny nagłówek |
 | FreeScout: nowe zgłoszenie | tak | nie | lista źródeł |
 | FreeScout: zgłoszenie z SMS-a | nie | tak | nie dotyczy |
 | Freshdesk: nowe zgłoszenie | tak | nie | sekret w adresie |
 | Freshdesk: zgłoszenie z SMS-a | nie | tak | nie dotyczy |
-| Slack | nie | tak | nie dotyczy |
-| Microsoft Teams | nie | tak | nie dotyczy |
 | ntfy | nie | tak | nie dotyczy |
 | Własne | tak | tak | dowolne |
 
@@ -438,37 +436,7 @@ Domyślny szablon to `{{ p.subject }}`, numer ze ścieżki `to`, identyfikator z
 ścieżki `eventId` (Zabbix ponawia nieudane wysyłki). Żeby nie dostawać SMS-a o rozwiązaniu,
 dodaj warunek `status równe PROBLEM`.
 
-### 6.5. Home Assistant
-
-**Do SMS.** W `configuration.yaml`:
-
-```yaml
-rest_command:
-  sms:
-    url: "https://sms.firma.example/hooks/<identyfikator>"
-    method: post
-    content_type: "application/json"
-    payload: '{"to": "{{ to }}", "text": "{{ text }}"}'
-```
-
-W automatyzacji akcja `rest_command.sms` z danymi `to` i `text`. Ustawienie bierze numer ze
-ścieżki `to` i treść z pola `text`, do dwóch części. Jeśli chcesz uwierzytelniać nagłówkiem,
-dodaj w `rest_command` `headers: { Authorization: "Bearer <token>" }` i ten sam token w bramce.
-
-**Z SMS-a.** W automatyzacji wyzwalacz **Webhook** z własnym identyfikatorem; adres integracji
-to `https://<home-assistant>/api/webhook/<identyfikator>`. Bramka wysyła:
-
-```json
-{ "from": "48601000001", "text": "Pomocy, nie działa", "receivedAt": "2026-09-02T10:00:00.000Z" }
-```
-
-W akcjach automatyzacji użyj `{{ trigger.json.text }}` i `{{ trigger.json.from }}`.
-
-Home Assistant zwykle stoi w sieci lokalnej, a bramka domyślnie nie woła takich adresów: ustaw
-`MIG_WEBHOOK_ALLOW_PRIVATE=1` w środowisku bramki ([Uruchomienie](uruchomienie.md), rozdział 7.7)
-albo wystaw Home Assistanta pod adresem publicznym.
-
-### 6.6. FreeScout: nowe zgłoszenie
+### 6.5. FreeScout: nowe zgłoszenie
 
 SMS do agentów, gdy we FreeScoucie pojawia się nowa rozmowa albo klient odpowiada. Wymaga modułu
 **API & Webhooks**. Zarządzaj → API & Webhooks → Webhooks → Dodaj: URL to adres wejściowy
@@ -496,7 +464,7 @@ Warunek `mailboxId równe 3` ogranicza SMS-y do jednej skrzynki. FreeScout nie m
 nagłówki, więc zamiast tokenu wpisz listę źródeł z adresem serwera FreeScouta. Obiekt
 `customer` w webhooku nie zawiera telefonów, także gdy kontakt ma numer.
 
-### 6.7. FreeScout: zgłoszenie z SMS-a
+### 6.6. FreeScout: zgłoszenie z SMS-a
 
 Odebrany SMS zakłada rozmowę w skrzynce. Adres `https://<freescout>/api/conversations`, klucz
 API (moduł API & Webhooks, zakładka **API Keys**) jako sekret nagłówka `X-FreeScout-API-Key`,
@@ -506,7 +474,7 @@ kodem 400) i treścią SMS-a (rozdział 5.4). FreeScout odpowiada kodem 201 i ob
 z polem `id`, które widać przy odebranej wiadomości w panelu. Agent widzi rozmowę i oddzwania
 albo odpisuje własnym kanałem; bramka nie wysyła odpowiedzi z FreeScouta SMS-em.
 
-### 6.8. Freshdesk: nowe zgłoszenie
+### 6.7. Freshdesk: nowe zgłoszenie
 
 SMS do agentów o nowym zgłoszeniu albo odpowiedzi klienta. We Freshdesku Admin → Workflows →
 Automations, dwie reguły, obie z akcją Uruchom element webhook: POST, adres wejściowy
@@ -533,17 +501,19 @@ Z żywej instancji przy tworzeniu przyszło:
 { "event": "nowe", "ticket_id": "6541", "phone": "", "mobile": "601000001", "text": "<div>Dzień dobry, od rana nie mogę się zalogować do panelu klienta.</div>\n\n" }
 ```
 
-Domyślny szablon zdejmuje HTML filtrem `html_text`, dokłada temat, gdy reguła go przesyła,
-i polskie znaki zamienia filtrem `gsm`:
+Odpowiedź klienta z e-maila niesie w `latest_public_comment` cytowaną korespondencję po
+znaczniku „----- Original message -----” w bloku `blockquote`. Domyślny szablon ucina ją,
+zdejmuje HTML filtrem `html_text`, dokłada temat, gdy reguła go przesyła, i polskie znaki
+zamienia filtrem `gsm`:
 
 ```liquid
-{% capture t %}{% if p.event == "odpowiedz" %}Odpowiedź klienta w #{{ p.ticket_id }}{% else %}Nowe zgłoszenie #{{ p.ticket_id }}{% endif %}{% if p.subject %}: {{ p.subject }}{% endif %} - {{ p.text | html_text | sms_truncate: 100 }}{% endcapture %}{{ t | gsm }}
+{% assign tresc = p.text | split: "<blockquote" | first | split: "----- Original message -----" | first %}{% capture t %}{% if p.event == "odpowiedz" %}Odpowiedź klienta w #{{ p.ticket_id }}{% else %}Nowe zgłoszenie #{{ p.ticket_id }}{% endif %}{% if p.subject %}: {{ p.subject }}{% endif %} - {{ tresc | html_text | sms_truncate: 100 }}{% endcapture %}{{ t | gsm }}
 ```
 
 Numery agentów wpisz w liście zapasowej. Freshdesk nie ma pola na nagłówki, a żądania przychodzą
 z różnych adresów chmury AWS, więc uwierzytelnieniem zostaje sekret w adresie i limit burzy.
 
-### 6.9. Freshdesk: zgłoszenie z SMS-a
+### 6.8. Freshdesk: zgłoszenie z SMS-a
 
 Odebrany SMS zakłada zgłoszenie. Adres `https://<firma>.freshdesk.com/api/v2/tickets`.
 Freshdesk uwierzytelnia basic auth z kluczem API jako loginem i `X` jako hasłem: w sekrecie
@@ -557,33 +527,14 @@ zostanie rozpoznany, z `601000001` nie, i powstanie nowy kontakt bez e-maila. Ag
 zgłoszenie i oddzwania albo odpisuje własnym kanałem; bramka nie wysyła odpowiedzi z Freshdeska
 SMS-em.
 
-### 6.10. Slack
-
-Odebrany SMS jako wiadomość na kanale. W Slacku utwórz aplikację (`api.slack.com/apps`), włącz
-**Incoming Webhooks** i dodaj webhook do kanału. Adres `https://hooks.slack.com/services/…`
-wklej jako adres integracji. Domyślne body (rozdział 5.4) daje:
-
-```json
-{ "text": "SMS od 48601000001: Pomocy, nie działa" }
-```
-
-Slack przyjmuje też bloki (`blocks`), jeśli zmienisz szablon.
-
-### 6.11. Microsoft Teams
-
-Odebrany SMS jako karta na kanale. W Teams na kanale wybierz **Workflows → Post to a channel
-when a webhook request is received**; skopiowany adres przepływu wklej jako adres integracji.
-Domyślne body to koperta z kartą Adaptive Card w wersji 1.4 z dwoma blokami tekstu (nagłówek
-„SMS od <numer>” i treść); przepływ przekazuje ją na kanał bez zmian.
-
-### 6.12. ntfy
+### 6.9. ntfy
 
 Odebrany SMS jako powiadomienie push na telefon. Adres to serwer i nazwa tematu, np.
 `https://ntfy.sh/firma-sms`. Body jest surowym tekstem `{{ text }}`, tytuł i priorytet idą
 nagłówkami `Title: SMS od {{ from }}` i `Priority: default`. Dla tematu chronionego dodaj nagłówek
 `Authorization` z tokenem `Bearer tk_…` jako sekretem. W aplikacji ntfy zasubskrybuj temat.
 
-### 6.13. Własne
+### 6.10. Własne
 
 Pusty formularz dla aplikacji spoza listy. Do SMS: wskaż ścieżką pole z numerem albo wpisz
 numery w liście zapasowej, treść jako ścieżka albo szablon z ładunkiem pod `p`, wklej przykładowy
