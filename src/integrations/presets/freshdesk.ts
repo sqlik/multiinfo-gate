@@ -35,7 +35,7 @@ export const freshdesk: Preset = {
     recipients: ['48601000001'], text: 'Anna Kowalska : Dziękujemy, sprawa rozwiązana. Pozdrawiam Anna Kowalska',
     outboundJson: { subject: 'SMS od 48601000001', description: 'Pomocy, nie działa', phone: '48601000001', name: 'SMS 48601000001', status: 2, priority: 1, source: 3 },
   },
-  sampleSource: 'Freshdesk, prawdziwy ładunek z reguły „Wysłano odpowiedź” z żywej instancji, 2026-09-02; POST /api/v2/tickets do potwierdzenia',
+  sampleSource: 'Freshdesk, żywa instancja, 2026-09-02: POST /api/v2/tickets (201, id na wierzchu, kontakt z phone) i ładunki reguł automatyzacji',
   guide: [
     '**Z SMS-a.** Adres `https://<firma>.freshdesk.com/api/v2/tickets`. Freshdesk uwierzytelnia basic auth z kluczem API jako loginem i `X` jako hasłem - w sekrecie wpisz gotowy nagłówek `Basic <base64(klucz:X)>`. Body zakłada zgłoszenie ze źródłem „Telefon” (`source: 3`), telefonem i nazwą „SMS <numer>”. Identyfikator z odpowiedzi (`id`) trafia do bramki jako identyfikator zgłoszenia.',
     '',
