@@ -1,5 +1,6 @@
 import type { AccountRow } from '../../store/accounts.ts';
 import type { ApiKeyRow } from '../../store/api-keys.ts';
+import type { IntegrationRow } from '../../store/integrations.ts';
 import { lastValidDay, warsawStamp } from '../../time/warsaw.ts';
 import { esc } from './layout.ts';
 
@@ -306,8 +307,23 @@ export function newKeyPage(choice: AccountChoice, error: string | null = null,
   </div>`;
 }
 
+/** Integracje klucza obok formularza: przed odwołaniem klucza trzeba wiedzieć, co na nim wisi. */
+function integrationsPanel(integrations: IntegrationRow[]): string {
+  const rows = integrations.length === 0
+    ? '<tr><td class="dim" colspan="3">Żadna integracja nie korzysta z tego klucza.</td></tr>'
+    : integrations.map((i) => `<tr>
+        <td><a href="/integracje/${esc(i.id)}">${esc(i.name)}</a></td>
+        <td><span class="tag">${i.kind === 'webhook_in' ? 'do SMS' : 'z SMS-a'}</span></td>
+        <td>${i.enabled === 1 ? '<span class="st"><span class="dot dot-ok"></span>włączona</span>' : '<span class="st"><span class="dot dot-dim"></span>wyłączona</span>'}</td>
+      </tr>`).join('');
+  return `<div class="panel" style="max-width: 560px;">
+      <div class="panel-h"><div class="lab">Integracje na tym kluczu</div><a href="/integracje/nowa">Dodaj</a></div>
+      <table><tr><th>Nazwa</th><th style="width: 90px;">Kierunek</th><th style="width: 110px;">Stan</th></tr>${rows}</table>
+    </div>`;
+}
+
 export function editKeyPage(choice: AccountChoice, row: ApiKeyRow, error: string | null = null,
-                            values: KeyFormValues = valuesOf(row)): string {
+                            values: KeyFormValues = valuesOf(row), integrations: IntegrationRow[] = []): string {
   return `<div class="head">
     <div>
       <div class="crumb"><a href="/klucze">Klucze API</a> / edycja</div>
@@ -323,5 +339,6 @@ export function editKeyPage(choice: AccountChoice, row: ApiKeyRow, error: string
         <div><button class="btn btn-p" type="submit">Zapisz klucz</button></div>
       </form>
     </div>
+    ${integrationsPanel(integrations)}
   </div>`;
 }

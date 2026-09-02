@@ -230,3 +230,25 @@ describe('POST /dostawy/:id/ponow', () => {
     expect((await post(9999)).statusCode).toBe(404);
   });
 });
+
+describe('ślady integracji na odebranej', () => {
+  it('pokazuje zgłoszenie z nazwą integracji i dostawę integracji pod jej nazwą', async () => {
+    const integrationId = h.integrations.insert({
+      name: 'FS', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'freescout', enabled: 1,
+      config: { ...defaultOutboundConfig(), url: 'https://freescout.example/api/conversations' }, secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    seed('in_1');
+    h.inbound.setExternalRef('in_1', integrationId, '4821');
+    const d = h.deliveries.insert({
+      apiKeyId, event: 'message.received', payload: '{}', url: 'https://freescout.example/api/conversations', createdAt: NOW, inboundId: 'in_1',
+      integrationId, method: 'POST', headers: {},
+    });
+    h.deliveries.markDelivered(d, NOW, '201 {"id":4821}');
+    const res = await page('/odebrane/in_1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Zgłoszenie');
+    expect(res.body).toContain(`4821 (<a href="/integracje/${integrationId}">FS</a>)`);
+    expect(res.body).toContain('<strong>FS</strong>');
+    expect(res.body).toContain('integracja');
+  });
+});

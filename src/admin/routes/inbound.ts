@@ -4,6 +4,7 @@ import { endOfWarsawDay } from '../../time/warsaw.ts';
 import type { InboundRow } from '../../store/inbound-messages.ts';
 import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
+import { deliveryView, integrationLink } from '../views/deliveries.ts';
 import { inboundDetailPage, inboundPage } from '../views/inbound.ts';
 
 const PAGE_SIZE = 25;
@@ -63,15 +64,14 @@ export function registerInboundViewRoutes(app: FastifyInstance, deps: AdminDeps,
     if (!row) return reply.callNotFound();
     reply.type('text/html; charset=utf-8');
     const account = deps.accounts.get(row.accountId);
-    const keyNames = new Map(deps.apiKeys.list().map((k) => [k.id, k.name]));
     return render.page(request, {
       title: row.id, active: 'odebrane',
       body: inboundDetailPage({
         row,
         accountName: account?.name ?? `konto ${row.accountId}`,
-        deliveries: deps.deliveries.listForInbound(row.id).map((delivery) => ({
-          delivery, keyName: keyNames.get(delivery.apiKeyId) ?? `klucz ${delivery.apiKeyId}`,
-        })),
+        deliveries: deps.deliveries.listForInbound(row.id).map((delivery) => deliveryView(deps, delivery)),
+        ticket: row.externalRef === null || row.externalIntegrationId === null ? null
+          : { ref: row.externalRef, integration: integrationLink(deps, row.externalIntegrationId) },
         related: row.relatedMessageId === null ? null : deps.messages.get(row.relatedMessageId) ?? null,
         replies: deps.messages.repliesTo(row.id),
       }),

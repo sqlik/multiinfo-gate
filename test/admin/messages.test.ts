@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
+import { defaultInboundConfig } from '../../src/integrations/config.ts';
 
 const NOW = new Date('2026-08-25T10:00:00Z');
 
@@ -94,7 +95,7 @@ describe('GET /przeglad - odebrane', () => {
     const res = await page('/przeglad');
     expect(res.body).toMatch(/Odebrane<\/div>\s*<div class="n">1<\/div>/);
     expect(res.body).toContain('href="/odebrane"');
-    expect(res.body).toContain('tiles-6');
+    expect(res.body).toContain('tiles-7');
   });
 });
 
@@ -312,5 +313,24 @@ describe('GET /wiadomosci/:id - odpowiedź w wątku', () => {
     expect(res.body).toContain('Odpowiedź na');
     expect(res.body).toContain('href="/odebrane/in_1"');
     expect((await page('/wiadomosci/' + seed('msg_z'))).body).not.toContain('Odpowiedź na');
+  });
+});
+
+describe('ślady integracji', () => {
+  it('szczegół wiadomości z integrationId pokazuje wiersz „Integracja” z odnośnikiem', async () => {
+    const integrationId = h.integrations.insert({
+      name: 'Kuma', kind: 'webhook_in', apiKeyId, serviceId: null, orig: null, preset: 'uptime-kuma', enabled: 1,
+      config: defaultInboundConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    h.messages.insert({
+      id: 'm_int', apiKeyId, accountId, serviceId: '24138', dest: '48601135134', body: 'AWARIA', bodyHash: 'h', encoding: 'gsm', parts: 1, slots: 22,
+      orig: null, costCenter: null, validTo: null, idempotencyKey: null, createdAt: NOW.toISOString(), integrationId,
+    });
+    const res = await page('/wiadomosci/m_int');
+    expect(res.body).toContain('Integracja');
+    expect(res.body).toContain(`href="/integracje/${integrationId}">Kuma</a>`);
+    // Wiadomość bez integracji nie ma tego wiersza.
+    seed('m_plain');
+    expect((await page('/wiadomosci/m_plain')).body).not.toContain('>Integracja<');
   });
 });
