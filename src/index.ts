@@ -47,7 +47,7 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const apiKeys = new ApiKeysRepo(db, config.masterKey);
   const messages = new MessagesRepo(db);
   const events = new MessageEventsRepo(db);
-  const deliveries = new WebhookDeliveriesRepo(db);
+  const deliveries = new WebhookDeliveriesRepo(db, config.masterKey);
   const packages = new PackagesRepo(db);
   const jobs = new JobsRepo(db);
   const inbound = new InboundMessagesRepo(db);

@@ -38,7 +38,7 @@ beforeEach(() => {
   info = vi.fn();
   deps = {
     accounts, apiKeys, messages: new MessagesRepo(db), jobs: new JobsRepo(db), events: new MessageEventsRepo(db),
-    deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '',
+    deliveries: new WebhookDeliveriesRepo(db, masterKey), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '',
     clients: { for: () => ({ info }), invalidate: vi.fn(), closeAll: vi.fn() } as never,
   };
 });

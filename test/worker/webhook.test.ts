@@ -42,7 +42,7 @@ beforeEach(() => {
   post = vi.fn();
   deps = {
     accounts, apiKeys, messages: new MessagesRepo(db), jobs: new JobsRepo(db), events: new MessageEventsRepo(db),
-    deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '', clients: {} as never, post,
+    deliveries: new WebhookDeliveriesRepo(db, masterKey), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '', clients: {} as never, post,
     resolve: async () => ['93.184.216.34'],
   };
 });

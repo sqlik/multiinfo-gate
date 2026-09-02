@@ -11,6 +11,7 @@ import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
 import type { Resolver } from '../net/private-address.ts';
 import type { ClientPool } from './clients.ts';
 import { pauseForCertificate } from './certificate.ts';
+import { emitIntegrations, isOutboundEvent, type IntegrationEmitDeps } from './integrations.ts';
 import { emitWebhook, type HttpPost, type WebhookEvent } from './webhook.ts';
 
 export interface WorkerDeps {
@@ -32,17 +33,26 @@ export interface WorkerDeps {
   resolve?: Resolver;
   /** MIG_WEBHOOK_ALLOW_PRIVATE: zgoda na webhooki do sieci wewnętrznej (host bramki, sieć kontenerów). */
   allowPrivateWebhooks?: boolean;
+  /** Integracje wychodzące: bez tego zestawu zdarzenia idą tylko webhookiem klucza. */
+  integrationEmit?: IntegrationEmitDeps;
   log?: Logger;
 }
 
-/** Kolejkuje webhook i odnotowuje to w przebiegu wiadomości, jeśli klucz ma adres. */
+/**
+ * Kolejkuje webhook klucza i odnotowuje to w przebiegu wiadomości, jeśli klucz ma adres; do tego
+ * dostawy do integracji wychodzących klucza. Oba tory niezależne - klucz może mieć jedno i drugie.
+ */
 export function notify(
   deps: WorkerDeps, message: { id: string; apiKeyId: number; inReplyTo?: string | null }, event: WebhookEvent,
   payload: Record<string, unknown>, now: Date,
 ): void {
   const thread = message.inReplyTo ? { inReplyTo: message.inReplyTo } : {};
-  if (emitWebhook(deps, message.apiKeyId, event, { id: message.id, ...thread, ...payload }, now) !== null) {
+  const body = { id: message.id, ...thread, ...payload };
+  if (emitWebhook(deps, message.apiKeyId, event, body, now) !== null) {
     deps.events.record(message.id, now, 'webhook', event);
+  }
+  if (deps.integrationEmit && isOutboundEvent(event)) {
+    emitIntegrations(deps.integrationEmit, message.apiKeyId, event, body, now, { messageId: message.id });
   }
 }
 
