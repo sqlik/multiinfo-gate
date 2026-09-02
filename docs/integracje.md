@@ -274,11 +274,11 @@ i inne z dokumentacji LiquidJS) bramka dodaje cztery:
 
 ### 5.4. Przykłady
 
-SMS o awarii z Uptime Kumy tylko przy zmianie na „down”, z nazwą monitora i skróconym
-komunikatem:
+SMS o awarii z Uptime Kumy z nazwą monitora i skróconym komunikatem, a dla ładunku bez
+`heartbeat` (przycisk „Test”) sam komunikat:
 
 ```liquid
-{% if p.heartbeat.status == 0 %}AWARIA{% else %}OK{% endif %}: {{ p.monitor.name }} - {{ p.heartbeat.msg | sms_truncate: 100 }}
+{% if p.heartbeat %}{% if p.heartbeat.status == 0 %}AWARIA{% else %}OK{% endif %}: {{ p.monitor.name }} - {{ p.heartbeat.msg | sms_truncate: 100 }}{% else %}{{ p.msg | sms_truncate: 140 }}{% endif %}
 ```
 
 Lista alertów z Grafany, do trzech nazw i liczba pozostałych:
@@ -353,24 +353,27 @@ typ **Webhook**:
 - **Additional Headers**: `{ "Authorization": "Bearer <token>" }` z tokenem, który wpisałeś
   w bramce w polu „Nagłówek z tokenem”
 
-Uptime Kuma nie przesyła numerów - wpisz je w bramce w liście zapasowej. Przykładowy ładunek:
+Uptime Kuma nie przesyła numerów - wpisz je w bramce w liście zapasowej. Ładunek (Uptime Kuma
+2.5.3, przycięty do pól, które coś znaczą; pełny ma około 90 pól monitora):
 
 ```json
 {
-  "heartbeat": { "status": 0, "msg": "timeout of 48000ms exceeded", "time": "2026-09-02 12:00:00" },
-  "monitor": { "name": "Strona firmowa", "url": "https://firma.example" },
-  "msg": "[Strona firmowa] [🔴 Down] timeout of 48000ms exceeded"
+  "heartbeat": { "monitorID": 54, "status": 0, "time": "2026-09-02 17:05:33.920", "msg": "Request failed with status code 403",
+                 "important": true, "retries": 2, "timezone": "Europe/Warsaw", "localDateTime": "2026-09-02 19:05:33" },
+  "monitor": { "id": 54, "name": "Strona firmowa", "pathName": "Strona firmowa", "url": "https://firma.example", "type": "http", "interval": 60 },
+  "msg": "[Strona firmowa] [🔴 Down] Request failed with status code 403"
 }
 ```
 
-Domyślny szablon (`heartbeat.status` 0 to awaria, 1 to powrót):
+Domyślny szablon (`heartbeat.status` 0 to awaria, 1 to powrót; przycisk „Test” w Uptime Kumie
+wysyła ładunek bez `heartbeat`, wtedy idzie samo `msg`):
 
 ```liquid
-{% if p.heartbeat.status == 0 %}AWARIA{% else %}OK{% endif %}: {{ p.monitor.name }} - {{ p.heartbeat.msg | sms_truncate: 100 }}
+{% if p.heartbeat %}{% if p.heartbeat.status == 0 %}AWARIA{% else %}OK{% endif %}: {{ p.monitor.name }} - {{ p.heartbeat.msg | sms_truncate: 100 }}{% else %}{{ p.msg | sms_truncate: 140 }}{% endif %}
 ```
 
 Żeby SMS szedł tylko przy awarii, dodaj warunek `heartbeat.status równe 0`; bez warunku
-przyjdzie też SMS o powrocie.
+przyjdzie też SMS o powrocie i SMS z przycisku „Test”.
 
 ### 6.3. Grafana
 
