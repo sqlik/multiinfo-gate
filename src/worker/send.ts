@@ -9,6 +9,9 @@ import type { PackagesRepo } from '../store/packages.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
 import type { Resolver } from '../net/private-address.ts';
+import type { AdminNotifier } from '../notifications/rules.ts';
+import type { IntegrationEventsRepo } from '../store/integration-events.ts';
+import type { IntegrationsRepo } from '../store/integrations.ts';
 import type { ClientPool } from './clients.ts';
 import { pauseForCertificate } from './certificate.ts';
 import { emitIntegrations, isOutboundEvent, type IntegrationEmitDeps } from './integrations.ts';
@@ -35,6 +38,10 @@ export interface WorkerDeps {
   allowPrivateWebhooks?: boolean;
   /** Integracje wychodzące: bez tego zestawu zdarzenia idą tylko webhookiem klucza. */
   integrationEmit?: IntegrationEmitDeps;
+  /** Dostawa integracji: skąd wziąć adres i konfigurację oraz gdzie zapisać wynik. */
+  integrations?: IntegrationsRepo;
+  integrationEvents?: IntegrationEventsRepo;
+  notifier?: AdminNotifier;
   log?: Logger;
 }
 

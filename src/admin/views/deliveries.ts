@@ -14,6 +14,8 @@ const state = (d: DeliveryRow) =>
  */
 export function scrubbed(d: DeliveryRow): boolean {
   if (d.event !== 'message.received') return false;
+  // Body dostawy integracji ma kształt obcej aplikacji; po wyczyszczeniu zostaje sam znacznik.
+  if (d.integrationId !== null) return d.payload === '{"scrubbed":true}';
   try {
     const payload = JSON.parse(d.payload) as Record<string, unknown>;
     return typeof payload.text !== 'string' && typeof payload.hex !== 'string';

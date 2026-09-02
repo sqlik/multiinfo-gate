@@ -15,6 +15,7 @@ import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { InboundServicesRepo } from '../../src/store/inbound-services.ts';
+import { IntegrationsRepo } from '../../src/store/integrations.ts';
 
 export interface AdminHarness {
   app: ReturnType<typeof buildAdminServer>;
@@ -30,6 +31,7 @@ export interface AdminHarness {
   packages: PackagesRepo;
   inbound: InboundMessagesRepo;
   inboundServices: InboundServicesRepo;
+  integrations: IntegrationsRepo;
   /** Wywołania `receiver.refresh()` z tras panelu - atrapa odbiornika. */
   refreshed: Array<{ retryAccount?: number }>;
   sessions: SessionStore;
@@ -88,6 +90,7 @@ export async function startAdminHarness(
   const packages = new PackagesRepo(db);
   const inbound = new InboundMessagesRepo(db);
   const inboundServices = new InboundServicesRepo(db);
+  const integrations = new IntegrationsRepo(db, masterKey);
   const refreshed: Array<{ retryAccount?: number }> = [];
   const receiver = { refresh: (o: { retryAccount?: number } = {}) => { refreshed.push(o); } };
 
@@ -113,7 +116,7 @@ export async function startAdminHarness(
 
   const resolve = { value: async (_hostname: string) => ['93.184.216.34'] };
   const app = buildAdminServer({
-    accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, receiver,
+    accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, receiver,
     clients: clients as never, sessions, masterKey, now: () => now,
     resolve: (hostname) => resolve.value(hostname),
     ...(opts.allowPrivateWebhooks ? { allowPrivateWebhooks: true } : {}),
@@ -121,7 +124,7 @@ export async function startAdminHarness(
   await app.ready();
 
   return {
-    app, db, accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, refreshed,
+    app, db, accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, refreshed,
     sessions, userId, masterKey,
     cookie: `mig_session=${token}`, totpSecret, probe, invalidated, resolve,
   };

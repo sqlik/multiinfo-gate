@@ -17,6 +17,7 @@ import type { MessagesRepo } from '../store/messages.ts';
 import type { PackagesRepo } from '../store/packages.ts';
 import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
 import type { InboundServicesRepo } from '../store/inbound-services.ts';
+import type { IntegrationsRepo } from '../store/integrations.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 import type { Resolver } from '../net/private-address.ts';
 import type { ClientPool } from '../worker/clients.ts';
@@ -52,6 +53,8 @@ export interface AdminDeps {
   packages: PackagesRepo;
   inbound: InboundMessagesRepo;
   inboundServices: InboundServicesRepo;
+  /** Integracje; ponowienie dostawy integracji pyta o jej stan zamiast o adres klucza. */
+  integrations?: IntegrationsRepo;
   /** Odbiornik: panel każe mu uzgodnić pętle po zmianie klucza albo konta. */
   receiver?: { refresh(opts?: { retryAccount?: number }): void };
   /** Stan odbiornika do /healthz; bez niego pole nie występuje. */
