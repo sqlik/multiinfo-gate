@@ -46,7 +46,7 @@ beforeEach(() => {
   clientsFor = vi.fn(() => ({ sendLong }));
   deps = {
     accounts, apiKeys, messages, jobs: new JobsRepo(db), events: new MessageEventsRepo(db),
-    deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '',
+    deliveries: new WebhookDeliveriesRepo(db, masterKey), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '',
     clients: { for: clientsFor, invalidate: vi.fn(), closeAll: vi.fn() } as never,
   };
 });

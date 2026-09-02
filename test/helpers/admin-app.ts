@@ -84,7 +84,7 @@ export async function startAdminHarness(
   const jobs = new JobsRepo(db);
   const users = new AdminUsersRepo(db, masterKey);
   const audit = new AuditRepo(db);
-  const deliveries = new WebhookDeliveriesRepo(db);
+  const deliveries = new WebhookDeliveriesRepo(db, masterKey);
   const packages = new PackagesRepo(db);
   const inbound = new InboundMessagesRepo(db);
   const inboundServices = new InboundServicesRepo(db);

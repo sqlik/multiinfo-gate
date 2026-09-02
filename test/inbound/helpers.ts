@@ -41,7 +41,7 @@ export function buildReceiverDeps() {
   const deps: ReceiverDeps = {
     accounts, apiKeys: new ApiKeysRepo(db, masterKey), inbound: new InboundMessagesRepo(db),
     services: new InboundServicesRepo(db), messages: new MessagesRepo(db),
-    deliveries: new WebhookDeliveriesRepo(db), jobs: new JobsRepo(db),
+    deliveries: new WebhookDeliveriesRepo(db, masterKey), jobs: new JobsRepo(db),
     clients: { for: () => ({ getSms, confirmSms }), invalidate: vi.fn(), closeAll: vi.fn() } as never,
     timeoutMs: 60_000, idleMs: 0, now: () => NOW, sleep: async () => {},
   };

@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ProviderError } from '../../src/multiinfo/response.ts';
 import { Receiver, RELATED_WINDOW_MS, type ReceiverDeps } from '../../src/inbound/receiver.ts';
+import { randomBytes } from 'node:crypto';
 import { NOW, SMS, buildReceiverDeps, keyInput } from './helpers.ts';
+import { defaultOutboundConfig } from '../../src/integrations/config.ts';
+import { TemplateEngine } from '../../src/integrations/templates.ts';
+import { IntegrationEventsRepo } from '../../src/store/integration-events.ts';
+import { IntegrationGuardsRepo } from '../../src/store/integration-guards.ts';
+import { IntegrationsRepo } from '../../src/store/integrations.ts';
 
 let db: ReturnType<typeof buildReceiverDeps>['db'];
 let deps: ReceiverDeps;
@@ -42,6 +48,29 @@ describe('Receiver.pollOnce', () => {
     expect(deps.jobs.depth()).toBe(2);
     expect(confirmSms).toHaveBeenCalledWith('22');
     expect(deps.services.states(accountId)[0]!.lastReceivedAt).toBe(NOW.toISOString());
+  });
+
+  it('integracja wychodząca klucza bez subskrypcji dostaje dostawę obok webhooka subskrybenta', async () => {
+    deps.apiKeys.insert(keyInput(accountId));
+    const quiet = deps.apiKeys.insert(keyInput(accountId, { keyPrefix: 'p2', name: 'tylko integracja', inboundSubscribed: 0, webhookUrl: null, webhookSecret: null }));
+    const mk = randomBytes(32);
+    const integrations = new IntegrationsRepo(db, mk);
+    const integrationId = integrations.insert({
+      name: 'HA', kind: 'webhook_out', apiKeyId: quiet, serviceId: null, orig: null, preset: 'custom', enabled: 1,
+      config: { ...defaultOutboundConfig(), url: 'https://ha.example/api/webhook/x', body: { mode: 'json', template: '{"from": {{ from | json }}, "text": {{ text | json }}}' } },
+      secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    deps.integrations = integrations;
+    deps.integrationEmit = { integrations, integrationEvents: new IntegrationEventsRepo(db, mk), guards: new IntegrationGuardsRepo(db), deliveries: deps.deliveries, jobs: deps.jobs, engine: new TemplateEngine() };
+    getSms.mockResolvedValue(SMS);
+    const out = await receiver.pollOnce(target());
+    const id = (out as { id: string }).id;
+    const deliveries = deps.deliveries.listForInbound(id);
+    expect(deliveries).toHaveLength(2);
+    const own = deliveries.find((d) => d.integrationId === integrationId)!;
+    expect(own.apiKeyId).toBe(quiet);
+    expect(JSON.parse(own.payload)).toEqual({ from: '48601000001', text: 'Dziekuje, jasne' });
+    expect(deps.jobs.depth()).toBe(2);
   });
 
   it('kolejność: potwierdzenie dopiero po zapisie', async () => {
