@@ -36,7 +36,7 @@ export const prostyJson: Preset = {
     outboundJson: { event: 'message.received', at: '2026-09-02T10:00:00.000Z', id: 'in_1', serviceId: '24138', from: '48601000001', to: '7968', kind: 'text', text: 'Pomocy, nie działa', receivedAt: '2026-09-02T10:00:00.000Z', relatedMessageId: null },
   },
   guide: [
-    '**Do SMS.** Aplikacja wysyła `POST` na adres wejściowy z nagłówkiem `Content-Type: application/json` i ładunkiem:',
+    '**Do SMS.** Aplikacja wysyła `POST` na adres wejściowy z nagłówkami `Content-Type: application/json` i `Authorization: Bearer <hasło z bramki>` oraz ładunkiem:',
     '',
     '```json',
     '{ "to": "48601000001", "text": "Treść wiadomości" }',

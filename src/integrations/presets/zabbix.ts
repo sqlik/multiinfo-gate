@@ -60,6 +60,6 @@ export const zabbix: Preset = {
     'return \'OK\';',
     '```',
     '',
-    'Przy użytkowniku ustaw medium tego typu z numerem w polu **Send to**, a w akcji (**Alerts → Actions → Trigger actions**) operację i operację przywracania z tym typem mediów. Skrypt skleja identyfikator zdarzenia ze statusem, bo Zabbix nadaje rozwiązaniu ten sam `{EVENT.ID}` co problemowi: ponowienie tej samej wysyłki bramka odrzuca jako powtórkę, a SMS o rozwiązaniu przechodzi. Żeby nie dostawać SMS-a o rozwiązaniu, dodaj warunek `status równe PROBLEM`.',
+    'Przy użytkowniku ustaw medium tego typu z numerem w polu **Send to**, a w akcji (**Alerts → Actions → Trigger actions**) operację i operację przywracania z tym typem mediów. Skrypt skleja identyfikator zdarzenia ze statusem, bo Zabbix nadaje rozwiązaniu ten sam `{EVENT.ID}` co problemowi: ponowienie tej samej wysyłki bramka odrzuca jako powtórkę, a SMS o rozwiązaniu przechodzi.',
   ].join('\n'),
 };

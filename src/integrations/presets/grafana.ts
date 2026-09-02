@@ -64,8 +64,8 @@ export const grafana: Preset = {
     },
   },
   guide: [
-    'W Grafanie **Alerting → Contact points → Add contact point**, integracja **Webhook**. **URL** to adres wejściowy integracji, **HTTP Method** `POST`, **Basic Authentication** z loginem `grafana` i hasłem z bramki. Numer odbiorcy wpisz w bramce w liście zapasowej.',
+    'W Grafanie **Alerting → Contact points → Add contact point**, integracja **Webhook**. **URL** to adres wejściowy integracji, **HTTP Method** `POST`, **Basic Authentication** z loginem `grafana` i hasłem z bramki. Potem przypisz punkt kontaktu w **Notification policies** (polityka domyślna albo osobna dla wybranych alertów).',
     '',
-    'Grafana wysyła jedno żądanie na grupę alertów; szablon wypisuje do trzech nazw i liczbę pozostałych. Klucz grupy (`groupKey`) jest stały dla grupy, więc nie nadaje się na identyfikator zdarzenia - bramka nie odrzucałaby powtórek, tylko każdy kolejny alert tej grupy. SMS o alarmie przychodzi po czasie **Group wait** polityki powiadomień (domyślnie 30 s), o powrocie po **Group interval** (domyślnie 5 min). Żeby dostawać SMS tylko o alarmie, dodaj warunek `status równe firing`.',
+    'Grafana wysyła jedno żądanie na grupę alertów; SMS wymienia do trzech nazw i liczbę pozostałych. SMS o alarmie przychodzi po czasie **Group wait** polityki powiadomień (domyślnie 30 s), o powrocie po **Group interval** (domyślnie 5 min) - oba czasy można skrócić w polityce.',
   ].join('\n'),
 };

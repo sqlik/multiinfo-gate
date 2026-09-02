@@ -13,9 +13,9 @@ export interface SimplePageOptions {
   textPreviews: Record<string, string>;
 }
 
-const radio = (name: string, value: string, current: string, label: string, hint = '') =>
+const radio = (name: string, value: string, current: string, label: string, hint = '', mono = false) =>
   `<label class="choice" style="align-items: flex-start;"><input type="radio" name="${esc(name)}" value="${esc(value)}"${current === value ? ' checked' : ''} style="margin-top: 3px;">
-    <span>${esc(label)}${hint === '' ? '' : `<span class="dim" style="display: block; font-size: 11.5px;">${esc(hint)}</span>`}</span></label>`;
+    <span>${mono ? `<span class="m">${esc(label)}</span>` : esc(label)}${hint === '' ? '' : `<span class="dim" style="display: block; font-size: 11.5px; margin-top: 2px;">${esc(hint)}</span>`}</span></label>`;
 
 /** Przełącznik trybu: odnośniki GET, bo zmiana trybu rysuje inny formularz z tych samych zapisanych danych. */
 export function modeSwitch(ctx: FormContext, mode: 'prosty' | 'zaawansowany'): string {
@@ -66,7 +66,7 @@ function inboundSections(ctx: FormContext, sv: SimpleValues, opts: SimplePageOpt
       <div class="hint">${esc(simple.recipients.note)} Jeden numer na linię; dziewięć cyfr dostaje kod kraju konta.</div>
     </div>`;
   const when = simple.when.map((w) => radio('whenId', w.id, sv.whenId, w.label)).join('');
-  const texts = simple.text.map((t) => radio('textId', t.id, sv.textId, opts.textPreviews[t.id] ?? '', t.label)).join('');
+  const texts = simple.text.map((t) => radio('textId', t.id, sv.textId, opts.textPreviews[t.id] ?? '', t.label, true)).join('');
   const auth = simple.auth.kind === 'none'
     ? `<div class="field"><label>Zabezpieczenie</label><div class="hint" style="margin-top: 0;">${esc(simple.auth.note)}</div></div>`
     : secretField(ctx, simple.auth.label, simple.auth.where);

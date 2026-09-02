@@ -57,10 +57,8 @@ export const freescoutZgloszenie: Preset = {
     },
   },
   guide: [
-    'We FreeScoucie **Zarządzaj → API & Webhooks → Webhooks → Dodaj**: URL to adres wejściowy integracji, zdarzenia `convo.created` (nowa rozmowa) i `convo.customer.reply.created` (odpowiedź klienta), skrzynki wszystkie albo wybrane. Numery agentów wpisz w bramce w liście zapasowej - FreeScout nie wie, kogo budzić. Szablon rozróżnia oba zdarzenia po liczbie wątków.',
+    'We FreeScoucie **Zarządzaj → API & Webhooks → Webhooks → Dodaj**: URL to adres wejściowy integracji, zdarzenia `convo.created` (nowa rozmowa) i `convo.customer.reply.created` (odpowiedź klienta). Żeby SMS szedł tylko z jednej skrzynki, zaznacz ją w polu skrzynek webhooka.',
     '',
-    'Żeby SMS szedł tylko z jednej skrzynki, dodaj warunek `mailboxId równe <numer>` (numer skrzynki widać w adresie jej ustawień). Rozmowy zakładane przez bramkę z SMS-ów (ustawienie „FreeScout: zgłoszenie z SMS-a”) też wywołują `convo.created`, więc agent dostaje SMS o SMS-ie.',
-    '',
-    'FreeScout nie ma pola na nagłówki - zamiast tokenu wpisz w bramce listę źródeł z adresem serwera FreeScouta.',
+    'Rozmowy zakładane przez bramkę z SMS-ów (ustawienie „FreeScout: zgłoszenie z SMS-a”) też wywołują `convo.created`, więc agent dostaje SMS o SMS-ie. FreeScout nie ma pola na hasło ani nagłówki - chroni sekret w adresie wejściowym.',
   ].join('\n'),
 };

@@ -29,9 +29,10 @@ export function simpleValuesFromBody(body: Body, preset: Preset): SimpleValues {
 }
 
 /** Wartości początkowe trybu prostego: pierwszy wariant każdej listy, numery i sekrety puste. */
-export function simpleDefaults(preset: Preset, base: IntegrationFormValues): SimpleValues {
+export function simpleDefaults(preset: Preset, base: IntegrationFormValues, fresh = false): SimpleValues {
   const inbound = preset.simple?.inbound;
-  const detected = detectSimple(preset, 'webhook_in', base);
+  // Nowa integracja zaczyna od pierwszych wariantów; edycja od tych, które siedzą w zapisanej konfiguracji.
+  const detected = fresh ? null : detectSimple(preset, 'webhook_in', base);
   return {
     name: base.name, apiKeyId: base.apiKeyId, enabled: base.enabled,
     numbers: base.toFallback, whenId: detected?.whenId ?? inbound?.when[0]?.id ?? '', textId: detected?.textId ?? inbound?.text[0]?.id ?? '', secret: '',
