@@ -18,6 +18,12 @@ describe('TemplateEngine.render', () => {
     expect(engine.render('{{ "abcdefghij" | sms_truncate: 6 }}', {})).toBe('abcde…');
     expect(engine.render('{{ p.at | date_pl }}', { p })).toBe('02.09.2026 12:00');
   });
+  it('html_text robi z HTML-u helpdesku tekst ze spacjami między blokami', () => {
+    const html = "Anna : <div style='x'>Dziękujemy, sprawa&nbsp;rozwiązana.<div><br></div><div><strong>Anna</strong></div></div>\n\n";
+    expect(engine.render('{{ p.t | html_text }}', { p: { t: html } })).toBe('Anna : Dziękujemy, sprawa rozwiązana. Anna');
+    expect(engine.render('{{ p.t | html_text }}', { p: { t: '<p>a &amp; b</p><p>c</p>' } })).toBe('a & b c');
+  });
+
   it('phone na numerze niepoprawnym zostawia tekst bez zmian', () => {
     expect(engine.render('{{ "brak" | phone }}', {})).toBe('brak');
   });

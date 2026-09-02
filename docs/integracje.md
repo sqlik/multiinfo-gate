@@ -270,7 +270,7 @@ przekroczenie daje wpis `błąd`.
 ### 5.3. Filtry bramki
 
 Ponad standardowe filtry Liquida (`upcase`, `strip`, `strip_html`, `truncate`, `append`, `json`
-i inne z dokumentacji LiquidJS) bramka dodaje cztery:
+i inne z dokumentacji LiquidJS) bramka dodaje pięć:
 
 | Filtr | Działanie | Przykład |
 |---|---|---|
@@ -278,6 +278,7 @@ i inne z dokumentacji LiquidJS) bramka dodaje cztery:
 | `gsm` | zamień polskie znaki na łacińskie, żeby część SMS-a mieściła 160 zamiast 70 znaków | `{{ p.text \| gsm }}` |
 | `phone` | znormalizuj numer jak w rozdziale 3.3 | `{{ p.contact.phone \| phone }}` |
 | `date_pl` | czas w strefie polskiej jako `DD.MM.RRRR GG:MM` | `{{ receivedAt \| date_pl }}` |
+| `html_text` | HTML helpdesku na tekst: koniec akapitu i `<br>` jako spacja, bez znaczników, encje odkodowane, białe znaki zbite; samo `strip_html` skleja słowa z sąsiednich bloków | `{{ p.text \| html_text }}` |
 
 ### 5.4. Przykłady
 
@@ -323,7 +324,8 @@ identyfikatory) są fikcyjne.
 | Home Assistant | tak | tak | opcjonalny nagłówek |
 | FreeScout: nowe zgłoszenie | tak | nie | lista źródeł |
 | FreeScout: rozmowa SMS | tak | tak | lista źródeł |
-| Freshdesk | tak | tak | lista źródeł albo nagłówek |
+| Freshdesk: nowe zgłoszenie | tak | nie | sekret w adresie |
+| Freshdesk: rozmowa SMS | tak | tak | sekret w adresie |
 | Slack | nie | tak | nie dotyczy |
 | Microsoft Teams | nie | tak | nie dotyczy |
 | ntfy | nie | tak | nie dotyczy |
@@ -524,33 +526,70 @@ obiekt `customer` ma tylko dane podstawowe, bez telefonów, także gdy kontakt m
 
 Bramka bierze identyfikator zgłoszenia z `id`, numer odbiorcy z odebranego SMS-a, z którego
 rozmowa powstała (rozdział 3.3), a treść z szablonu
-`{{ p._embedded.threads[0].body | strip_html | strip }}` (do trzech części; notatka przychodzi
+`{{ p._embedded.threads[0].body | html_text }}` (do trzech części; notatka przychodzi
 jako tekst, odpowiedź jako HTML). SMS idzie w wątku. Domyślny warunek w trybie Liquid
 przepuszcza tylko rozmowy typu `phone` z notatką albo odpowiedzią agenta, więc notatki
 w rozmowach e-mailowych zostają wewnętrzne, a wiadomość klienta nie wraca do niego SMS-em.
 FreeScout podpisuje webhooki nagłówkiem `X-FreeScout-Signature`, którego bramka nie sprawdza -
 zamiast tego wpisz listę źródeł z adresem serwera FreeScouta.
 
-### 6.8. Freshdesk
+### 6.8. Freshdesk: nowe zgłoszenie
+
+SMS do agentów o każdym nowym zgłoszeniu. We Freshdesku Admin → Workflows → Automations →
+Tworzenie zgłoszeń → Nowa reguła. Warunek „Źródło jest” ze wszystkimi źródłami (Freshdesk nie
+zapisuje reguły bez warunku). Akcja Uruchom element webhook: POST, adres wejściowy integracji,
+Szyfrowanie JSON, Treść „Zaawansowane”:
+
+```json
+{ "ticket_id": "{{ticket.id}}", "subject": "{{ticket.subject}}", "phone": "{{ticket.contact.phone}}", "mobile": "{{ticket.contact.mobile}}", "text": "{{ticket.description}}" }
+```
+
+Ładunek definiuje ta treść; z żywej instancji przyszło:
+
+```json
+{ "ticket_id": "6541", "phone": "", "mobile": "601000001", "text": "<div>Dzień dobry, od rana nie mogę się zalogować do panelu klienta.</div>\n\n" }
+```
+
+Domyślny szablon zdejmuje HTML z opisu, dokłada temat, gdy reguła go przesyła, i polskie znaki
+zamienia filtrem `gsm`:
+
+```liquid
+{% capture t %}Nowe zgłoszenie #{{ p.ticket_id }}{% if p.subject %}: {{ p.subject }}{% endif %} - {{ p.text | html_text | sms_truncate: 100 }}{% endcapture %}{{ t | gsm }}
+```
+
+Numery agentów wpisz w liście zapasowej. Freshdesk nie ma pola na nagłówki, a żądania przychodzą
+z różnych adresów chmury AWS, więc uwierzytelnieniem zostaje sekret w adresie i limit burzy.
+
+### 6.9. Freshdesk: rozmowa SMS
 
 **Z SMS-a.** Adres `https://<firma>.freshdesk.com/api/v2/tickets`. Freshdesk uwierzytelnia
 basic auth z kluczem API jako loginem i `X` jako hasłem: w sekrecie nagłówka `Authorization`
-wpisz gotową wartość `Basic <base64 z „klucz:X”>`. Domyślne body zakłada zgłoszenie z tematem
-„SMS od <numer>”, treścią SMS-a i telefonem kontaktu; identyfikator zgłoszenia z odpowiedzi
-(`id`) trafia do bramki.
+wpisz gotową wartość `Basic <base64 z „klucz:X”>`. Domyślne body zakłada zgłoszenie ze źródłem
+„Telefon”, tematem „SMS od <numer>”, treścią SMS-a i telefonem kontaktu; identyfikator
+zgłoszenia z odpowiedzi (`id`) trafia do bramki.
 
-**Do SMS.** W Freshdesku **Admin → Automations → Ticket updates**: przy odpowiedzi agenta akcja
-**Trigger webhook**, `POST`, `application/json`, adres wejściowy integracji, treść:
+**Do SMS.** Admin → Workflows → Automations → Aktualizacja zgłoszeń → Nowa reguła: zdarzenie
+„Wysłano odpowiedź” wykonane przez Konsultanta, warunek „Źródło jest Telefon” (żeby odpowiedzi
+w zwykłych zgłoszeniach nie szły SMS-em), akcja Uruchom element webhook, POST, adres wejściowy
+integracji, JSON, Treść „Zaawansowane”:
 
 ```json
-{ "ticket_id": "{{ticket.id}}", "phone": "{{ticket.contact.phone}}", "text": "{{ticket.latest_public_comment}}" }
+{ "ticket_id": "{{ticket.id}}", "phone": "{{ticket.contact.phone}}", "mobile": "{{ticket.contact.mobile}}", "text": "{{ticket.latest_public_comment}}" }
 ```
 
-Bramka bierze numer ze ścieżki `phone`, identyfikator zgłoszenia z `ticket_id`, treść z szablonu
-`{{ p.text | strip_html | strip }}`; gdy `ticket_id` pasuje do zgłoszenia założonego z SMS-a,
-SMS idzie w wątku.
+Z żywej instancji przyszło (odpowiedź ma przedrostek z nazwiskiem agenta i jego stopkę HTML):
 
-### 6.9. Slack
+```json
+{ "ticket_id": "6541", "phone": "", "mobile": "601000001",
+  "text": "Anna Kowalska : <div style='font-family:Helvetica Neue'>Dziękujemy, sprawa rozwiązana.<div><br></div><div><strong>Anna Kowalska</strong></div></div>" }
+```
+
+Bramka bierze identyfikator zgłoszenia z `ticket_id`, numer ze ścieżki `phone` (zgłoszenia
+zakładane przez bramkę mają go wypełniony), a bez niego z odebranego SMS-a dopasowanego po
+zgłoszeniu; treść z szablonu `{{ p.text | html_text }}` do trzech części. Stopka agenta
+wchodzi do SMS-a, więc agentom obsługującym SMS-y warto ją wyłączyć.
+
+### 6.10. Slack
 
 Odebrany SMS jako wiadomość na kanale. W Slacku utwórz aplikację (`api.slack.com/apps`), włącz
 **Incoming Webhooks** i dodaj webhook do kanału. Adres `https://hooks.slack.com/services/…`
@@ -562,21 +601,21 @@ wklej jako adres integracji. Domyślne body (rozdział 5.4) daje:
 
 Slack przyjmuje też bloki (`blocks`), jeśli zmienisz szablon.
 
-### 6.10. Microsoft Teams
+### 6.11. Microsoft Teams
 
 Odebrany SMS jako karta na kanale. W Teams na kanale wybierz **Workflows → Post to a channel
 when a webhook request is received**; skopiowany adres przepływu wklej jako adres integracji.
 Domyślne body to koperta z kartą Adaptive Card w wersji 1.4 z dwoma blokami tekstu (nagłówek
 „SMS od <numer>” i treść); przepływ przekazuje ją na kanał bez zmian.
 
-### 6.11. ntfy
+### 6.12. ntfy
 
 Odebrany SMS jako powiadomienie push na telefon. Adres to serwer i nazwa tematu, np.
 `https://ntfy.sh/firma-sms`. Body jest surowym tekstem `{{ text }}`, tytuł i priorytet idą
 nagłówkami `Title: SMS od {{ from }}` i `Priority: default`. Dla tematu chronionego dodaj nagłówek
 `Authorization` z tokenem `Bearer tk_…` jako sekretem. W aplikacji ntfy zasubskrybuj temat.
 
-### 6.12. Własne
+### 6.13. Własne
 
 Pusty formularz dla aplikacji spoza listy. Do SMS: wskaż ścieżką pole z numerem albo wpisz
 numery w liście zapasowej, treść jako ścieżka albo szablon z ładunkiem pod `p`, wklej przykładowy

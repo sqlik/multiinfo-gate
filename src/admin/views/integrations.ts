@@ -490,7 +490,7 @@ function sectionTextInbound(ctx: FormContext, v: IntegrationFormValues): string 
       <label for="textTemplate">Szablon</label>
       ${textarea('textTemplate', v.textTemplate, 4)}
       ${fieldsHint(ctx.preset)}
-      <div class="hint">Filtry bramki: <code>gsm</code> (bez polskich znaków), <code>sms_truncate: 100</code>, <code>phone</code>, <code>date_pl</code>, <code>strip_html</code>.</div>
+      <div class="hint">Filtry bramki: <code>gsm</code> (bez polskich znaków), <code>sms_truncate: 100</code>, <code>phone</code>, <code>date_pl</code>, <code>html_text</code> (HTML na tekst).</div>
     </div>
     <div class="field">
       <label for="textPath">Ścieżka pola z treścią</label>

@@ -31,7 +31,7 @@ export const freescout: Preset = {
     ticketRefPath: 'id',
     // Liquid liczy „and” i „or” od prawej: phone and (note or message). Rozmowy e-mailowe i wiadomości klienta odpadają.
     condition: { mode: 'liquid', expr: '{% if p.type == "phone" and p._embedded.threads[0].type == "note" or p._embedded.threads[0].type == "message" %}tak{% endif %}' },
-    text: { mode: 'liquid', template: '{{ p._embedded.threads[0].body | strip_html | strip }}' },
+    text: { mode: 'liquid', template: '{{ p._embedded.threads[0].body | html_text }}' },
     maxParts: 3, overflow: 'truncate',
   },
   outbound: {
