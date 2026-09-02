@@ -58,12 +58,13 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       .filter((r) => filter.keyId === null || r.apiKeyId === filter.keyId);
     return render.page(request, {
       title: 'Integracje', active: 'integracje',
-      body: integrationsPage(rows.map((r) => viewOf(r, since)), filter, keyOptions(), created),
+      body: integrationsPage(rows.map((r) => viewOf(r, since)), filter, keyOptions(), created, deps.settings.apiUrl()),
     });
   };
 
   const formContext = (kind: IntegrationKind, preset: Preset, row?: IntegrationRow): FormContext => ({
     kind, preset, keys: keyOptions(), secretNames: row ? deps.integrations.secretNames(row.id) : [], ...(row ? { row } : {}),
+    apiUrl: deps.settings.apiUrl(),
   });
 
   const actorOf = (userId: number | null): string => {
@@ -272,7 +273,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }));
     return render.page(request, {
       title: row.name, active: 'integracje',
-      body: integrationDetailPage({ view: viewOf(row, since), events }),
+      body: integrationDetailPage({ view: viewOf(row, since), events, apiUrl: deps.settings.apiUrl() }),
     });
   });
 

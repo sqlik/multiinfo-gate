@@ -21,6 +21,7 @@ import type { IntegrationEventsRepo } from '../store/integration-events.ts';
 import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
 import type { IntegrationsRepo } from '../store/integrations.ts';
 import type { NotificationsRepo } from '../store/notifications.ts';
+import type { SettingsRepo } from '../store/settings.ts';
 import type { TemplateEngine } from '../integrations/templates.ts';
 import type { AdminNotifier } from '../notifications/rules.ts';
 import type { Mailer } from '../worker/mail.ts';
@@ -37,6 +38,7 @@ import { registerInboundViewRoutes } from './routes/inbound.ts';
 import { registerIntegrationRoutes } from './routes/integrations.ts';
 import { registerMessageViewRoutes } from './routes/messages.ts';
 import { registerNotificationRoutes } from './routes/notifications.ts';
+import { registerSettingsRoutes } from './routes/settings.ts';
 import { registerOverviewRoutes } from './routes/overview.ts';
 import { registerPackageViewRoutes } from './routes/packages.ts';
 import { qrSvg } from './qr.ts';
@@ -68,6 +70,8 @@ export interface AdminDeps {
   /** Silnik szablonów do „Sprawdź szablon” i walidacji przy zapisie. */
   engine: TemplateEngine;
   notifications: NotificationsRepo;
+  /** Ustawienia instancji: adres bramki widziany przez aplikacje. */
+  settings: SettingsRepo;
   /** Powiadomienia administratora; bez niego panel ich nie zgłasza. */
   notifier?: AdminNotifier;
   /** Wysyłka maila testowego z ekranu „Powiadomienia”; testy podstawiają atrapę. */
@@ -361,6 +365,7 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   registerKeyRoutes(app, deps, render);
   registerIntegrationRoutes(app, deps, render);
   registerNotificationRoutes(app, deps, render);
+  registerSettingsRoutes(app, deps, render);
   registerUserRoutes(app, deps, render);
   registerOverviewRoutes(app, deps, render);
   registerPackageViewRoutes(app, deps, render);

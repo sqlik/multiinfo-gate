@@ -129,7 +129,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       accountName: names.get(row.accountId) ?? `konto ${row.accountId}`,
     }));
     return render.page(request, {
-      title: 'Klucze API', active: 'klucze', body: keysPage(views, now(), filter, created, notice),
+      title: 'Klucze API', active: 'klucze', body: keysPage(views, now(), filter, created, notice, deps.settings.apiUrl()),
     });
   };
 
