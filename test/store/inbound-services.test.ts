@@ -3,12 +3,15 @@ import { openDatabase } from '../../src/store/db.ts';
 import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo, type ApiKeyInput } from '../../src/store/api-keys.ts';
 import { InboundServicesRepo } from '../../src/store/inbound-services.ts';
+import { IntegrationsRepo } from '../../src/store/integrations.ts';
+import { defaultOutboundConfig } from '../../src/integrations/config.ts';
 import { accountInput, testKey } from './helpers.ts';
 
 const NOW = new Date('2026-08-29T10:00:00Z');
 let accounts: AccountsRepo;
 let keys: ApiKeysRepo;
 let repo: InboundServicesRepo;
+let integrations: IntegrationsRepo;
 let accountId: number;
 
 const key = (over: Partial<ApiKeyInput> = {}): ApiKeyInput => ({
@@ -23,6 +26,7 @@ beforeEach(() => {
   accounts = new AccountsRepo(db, mk);
   keys = new ApiKeysRepo(db, mk);
   repo = new InboundServicesRepo(db);
+  integrations = new IntegrationsRepo(db, mk);
   accountId = accounts.insert(accountInput({ serviceIds: ['24138', '24902'] }));
 });
 
@@ -49,6 +53,25 @@ describe('InboundServicesRepo.activeTargets', () => {
     keys.insert(key({ keyPrefix: 'p2', expiresAt: '2026-08-29T09:00:00.000Z' }));
     keys.insert(key({ keyPrefix: 'p3', webhookUrl: null, webhookSecret: null }));
     expect(repo.activeTargets(NOW)).toEqual([]);
+  });
+  it('cel odbioru powstaje też z włączonej integracji wychodzącej na message.received', () => {
+    // Klucz bez adresu webhooka i bez subskrypcji, ale z integracją wychodzącą.
+    const apiKeyId = keys.insert(key({ webhookUrl: null, webhookSecret: null, inboundSubscribed: 0 }));
+    expect(repo.activeTargets(NOW)).toEqual([]);
+    const id = integrations.insert({
+      name: 'HA', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1,
+      config: { ...defaultOutboundConfig(), url: 'https://ha.example/x' }, secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    expect(repo.activeTargets(NOW)).toEqual([{ accountId, serviceId: '24138' }]);
+    integrations.setEnabled(id, false, NOW);
+    expect(repo.activeTargets(NOW)).toEqual([]);
+    // Integracja tylko na statusy wysyłki nie zapala odbioru; subskrybent i integracja razem dają jeden cel.
+    integrations.setEnabled(id, true, NOW);
+    integrations.update(id, { name: 'HA', serviceId: null, orig: null, preset: 'custom', enabled: 1, storePayloads: 0, config: { ...defaultOutboundConfig(), url: 'https://ha.example/x', events: ['message.delivered'] } }, NOW);
+    expect(repo.activeTargets(NOW)).toEqual([]);
+    integrations.update(id, { name: 'HA', serviceId: null, orig: null, preset: 'custom', enabled: 1, storePayloads: 0, config: { ...defaultOutboundConfig(), url: 'https://ha.example/x' } }, NOW);
+    keys.insert(key({ keyPrefix: 'p2' }));
+    expect(repo.activeTargets(NOW)).toEqual([{ accountId, serviceId: '24138' }]);
   });
 });
 

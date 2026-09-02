@@ -16,20 +16,34 @@ export class InboundServicesRepo {
   /**
    * Odbiór zapala subskrypcja: para konto+usługa jest celem, gdy konto jest czynne
    * i niewstrzymane, usługa nadal należy do konta, a choć jeden czynny klucz z webhookiem
-   * subskrybuje ją. Bez subskrybentów nie ma po co pytać Multiinfo.
+   * subskrybuje ją. Drugi powód pytania Multiinfo: integracja wychodząca na message.received
+   * przy czynnym kluczu z dostępem do usługi - klucz nie musi mieć adresu webhooka ani subskrypcji.
+   * Bez jednego i drugiego nie ma po co pytać.
    */
   activeTargets(now: Date): InboundTarget[] {
+    const at = now.toISOString();
     const rows = this.db
       .prepare(
-        `SELECT DISTINCT s.account_id AS account_id, s.service_id AS service_id
-           FROM account_services s
-           JOIN accounts a ON a.id = s.account_id
-           JOIN api_keys k ON k.account_id = s.account_id
-           JOIN api_key_services ks ON ks.api_key_id = k.id AND ks.service_id = s.service_id
-          WHERE a.active = 1 AND a.paused_reason IS NULL AND ${INBOUND_SUBSCRIBER_SQL}
-          ORDER BY s.account_id, s.service_id`,
+        `SELECT account_id, service_id FROM (
+           SELECT DISTINCT s.account_id AS account_id, s.service_id AS service_id
+             FROM account_services s
+             JOIN accounts a ON a.id = s.account_id
+             JOIN api_keys k ON k.account_id = s.account_id
+             JOIN api_key_services ks ON ks.api_key_id = k.id AND ks.service_id = s.service_id
+            WHERE a.active = 1 AND a.paused_reason IS NULL AND ${INBOUND_SUBSCRIBER_SQL}
+           UNION
+           SELECT DISTINCT s.account_id, s.service_id
+             FROM account_services s
+             JOIN accounts a ON a.id = s.account_id
+             JOIN api_keys k ON k.account_id = s.account_id
+             JOIN api_key_services ks ON ks.api_key_id = k.id AND ks.service_id = s.service_id
+             JOIN integrations i ON i.api_key_id = k.id AND i.kind = 'webhook_out' AND i.enabled = 1
+            WHERE a.active = 1 AND a.paused_reason IS NULL
+              AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at > ?)
+              AND EXISTS (SELECT 1 FROM json_each(json_extract(i.config, '$.events')) e WHERE e.value = 'message.received')
+         ) ORDER BY account_id, service_id`,
       )
-      .all(now.toISOString()) as Array<{ account_id: number; service_id: string }>;
+      .all(at, at) as Array<{ account_id: number; service_id: string }>;
     return rows.map((r) => ({ accountId: r.account_id, serviceId: r.service_id }));
   }
 
