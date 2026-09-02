@@ -114,7 +114,7 @@ export function integrationsPage(views: IntegrationView[], filter: IntegrationsF
   return `<div class="head">
     <div>
       <h1 class="h1">Integracje</h1>
-      <p class="sub">Aplikacje, które wysyłają SMS-y własnym formatem, i aplikacje, do których trafiają odebrane SMS-y i statusy</p>
+      <p class="sub">Aplikacje, które wysyłają SMS-y własnym formatem i aplikacje, do których trafiają odebrane SMS-y i statusy</p>
     </div>
     <a class="btn btn-p" href="/integracje/nowa">Dodaj integrację</a>
   </div>
@@ -326,14 +326,14 @@ function sectionBasics(ctx: FormContext, v: IntegrationFormValues): string {
     ? `<div class="field">
       <label>Klucz API</label>
       <div class="box">${esc(ctx.keys.find((k) => k.id === ctx.row!.apiKeyId)?.name ?? `klucz ${ctx.row.apiKeyId}`)}</div>
-      <div class="hint">Klucz jest przypisany na stałe - integracja pod innym kluczem to nowa integracja.</div>
+      <div class="hint">Klucz jest przypisany na stałe - integracja pod innym kluczem to nowa integracja</div>
     </div>`
     : `<div class="field">
       <label for="apiKeyId">Klucz API</label>
       <select id="apiKeyId" name="apiKeyId">
         ${ctx.keys.map((k) => `<option value="${esc(k.id)}"${v.apiKeyId === String(k.id) ? ' selected' : ''}>${esc(k.name)} · ${esc(k.accountName)}</option>`).join('')}
       </select>
-      <div class="hint">Integracja działa w imieniu klucza: konto, usługi, nadpisy i limity klucza obowiązują tak samo jak w API.</div>
+      <div class="hint">Integracja działa w imieniu klucza: konto, usługi, nadpisy i limity klucza obowiązują tak samo jak w API</div>
     </div>`;
   return `<details open>
     <summary>Podstawy</summary>
@@ -348,7 +348,7 @@ function sectionBasics(ctx: FormContext, v: IntegrationFormValues): string {
         <option value="">domyślne klucza</option>
         ${services.map((s) => `<option value="${esc(s)}"${v.serviceId === s ? ' selected' : ''}>${esc(s)}</option>`).join('')}
       </select>
-      <div class="hint">Musi być jedną z usług wybranego klucza.</div>
+      <div class="hint">Musi być jedną z usług wybranego klucza</div>
     </div>
     <div class="field">
       <label for="orig">Nadpis nadawcy</label>
@@ -409,7 +409,7 @@ function sectionOutput(ctx: FormContext, v: IntegrationFormValues): string {
     <div class="field">
       <label for="url">Adres</label>
       <input id="url" name="url" type="url" value="${esc(v.url)}" placeholder="https://…" required>
-      <div class="hint">Adresy w sieci wewnętrznej wymagają MIG_WEBHOOK_ALLOW_PRIVATE=1 w środowisku bramki.</div>
+      <div class="hint">Adresy w sieci wewnętrznej wymagają MIG_WEBHOOK_ALLOW_PRIVATE=1 w środowisku bramki</div>
     </div>
     <div class="field">
       <label for="method">Metoda</label>
@@ -428,7 +428,7 @@ function sectionOutput(ctx: FormContext, v: IntegrationFormValues): string {
     </div>
     <div class="field">
       ${checkbox('sign', v.sign, 'Podpisuj żądania nagłówkiem X-MIG-Signature (sekret webhooka klucza)')}
-      <div class="hint">Włącz, gdy odbiorcą jest własna aplikacja sprawdzająca podpis; gotowe aplikacje go nie znają.</div>
+      <div class="hint">Włącz, gdy odbiorcą jest własna aplikacja sprawdzająca podpis; gotowe aplikacje go nie znają</div>
     </div>
   </details>`;
 }
@@ -455,7 +455,7 @@ function sectionCondition(v: IntegrationFormValues): string {
     <div class="field">
       <label for="conditionExpr">Wyrażenie</label>
       ${textarea('conditionExpr', v.conditionExpr, 2, ' placeholder="{% if p.heartbeat.status == 0 %}tak{% endif %}"')}
-      <div class="hint">Pusty wynik, false albo 0 oznacza „nie wysyłaj”.</div>
+      <div class="hint">Pusty wynik, false albo 0 oznacza „nie wysyłaj”</div>
     </div>
   </details>`;
 }
@@ -476,12 +476,12 @@ function sectionRecipient(v: IntegrationFormValues): string {
     <div class="field">
       <label for="ticketRefPath">Ścieżka identyfikatora zgłoszenia</label>
       <input id="ticketRefPath" name="ticketRefPath" value="${esc(v.ticketRefPath)}" placeholder="np. id">
-      <div class="hint">Gdy identyfikator pasuje do odebranego SMS-a, odpowiedź idzie w jego wątku.</div>
+      <div class="hint">Gdy identyfikator pasuje do odebranego SMS-a, odpowiedź idzie w jego wątku</div>
     </div>
     <div class="field">
       <label for="eventIdPath">Ścieżka identyfikatora zdarzenia</label>
       <input id="eventIdPath" name="eventIdPath" value="${esc(v.eventIdPath)}" placeholder="np. alert.id">
-      <div class="hint">To samo zdarzenie w ciągu doby przychodzi raz - powtórka dostaje odpowiedź „duplikat” bez SMS-a.</div>
+      <div class="hint">To samo zdarzenie w ciągu doby przychodzi raz - powtórka dostaje odpowiedź „duplikat” bez SMS-a</div>
     </div>
   </details>`;
 }
@@ -551,7 +551,7 @@ function sectionBodyOutbound(v: IntegrationFormValues): string {
     <div class="field">
       <label for="responseRefPath">Ścieżka identyfikatora w odpowiedzi</label>
       <input id="responseRefPath" name="responseRefPath" value="${esc(v.responseRefPath)}" placeholder="np. id">
-      <div class="hint">Identyfikator zgłoszenia z odpowiedzi aplikacji trafia do odebranego SMS-a - odpowiedź agenta wróci wtedy w wątku.</div>
+      <div class="hint">Identyfikator zgłoszenia z odpowiedzi aplikacji trafia do odebranego SMS-a - odpowiedź agenta wróci wtedy w wątku</div>
     </div>
   </details>`;
 }
@@ -565,7 +565,7 @@ function sectionGuard(v: IntegrationFormValues): string {
         <input name="throttleLimit" type="number" min="1" max="1000" value="${esc(v.throttleLimit)}" style="width: 110px;"> <span class="dim">zdarzeń na</span>
         <input name="throttleWindow" type="number" min="1" max="1440" value="${esc(v.throttleWindow)}" style="width: 110px;"> <span class="dim">minut</span>
       </div>
-      <div class="hint">Nadmiar w oknie dostaje wpis „limit” bez SMS-a; pierwszy raz w oknie idzie mail do administratora.</div>
+      <div class="hint">Nadmiar w oknie dostaje wpis „limit” bez SMS-a; pierwszy raz w oknie idzie mail do administratora</div>
     </div>
     <div class="field">
       <label for="eventLogLimit">Wpisów w dzienniku</label>

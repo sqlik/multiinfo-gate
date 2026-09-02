@@ -409,7 +409,7 @@ describe('GET /klucze/nowy - teksty', () => {
     const res = await h.app.inject({ method: 'GET', url: `/klucze/nowy?accountId=${accountId}`, headers: { cookie: h.cookie } });
     expect(res.body).toContain('ID usług');
     expect(res.body).toContain('Limit części jednej wiadomości (1-9)');
-    expect(res.body).toContain('Dłuższa treść zostanie odrzucona, nie przycięta.');
+    expect(res.body).toContain('Dłuższa treść zostanie odrzucona, nie przycięta');
     expect(res.body).toContain('Gdy w żądaniu nie pojawi się żadna ze zdefiniowanych pozycji');
     expect(res.body).not.toContain('Najwięcej części');
   });

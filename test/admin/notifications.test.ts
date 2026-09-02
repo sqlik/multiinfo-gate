@@ -7,7 +7,7 @@ beforeEach(async () => {
   h = await startAdminHarness();
 });
 
-const page = () => h.app.inject({ method: 'GET', url: '/powiadomienia', headers: { cookie: h.cookie } });
+const page = (tab: 'konfiguracja' | 'reguly' = 'konfiguracja') => h.app.inject({ method: 'GET', url: tab === 'reguly' ? '/powiadomienia?zakladka=reguly' : '/powiadomienia', headers: { cookie: h.cookie } });
 const post = (url: string, fields: Record<string, string>) => h.app.inject({
   method: 'POST', url, headers: { cookie: h.cookie, 'content-type': 'application/x-www-form-urlencoded' },
   payload: new URLSearchParams(fields).toString(),
@@ -20,14 +20,17 @@ const smtpFields = (over: Record<string, string> = {}): Record<string, string> =
 });
 
 describe('GET /powiadomienia', () => {
-  it('bez SMTP pokazuje pusty formularz i wyłączoną tabelę reguł', async () => {
+  it('bez SMTP: zakładka Konfiguracja z pustym formularzem, zakładka Reguły wyłączona z podpowiedzią', async () => {
     const res = await page();
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Najpierw skonfiguruj SMTP');
     expect(res.body).toContain('name="host"');
-    expect(res.body).toMatch(/name="enabled_integration_error"[^>]*disabled/);
-    expect(res.body).toContain('Błąd integracji');
-    expect(res.body).toContain('Podsumowanie dzienne');
+    expect(res.body).toContain('href="/powiadomienia?zakladka=reguly"');
+    expect(res.body).not.toContain('Błąd integracji');
+    const rules = await page('reguly');
+    expect(rules.body).toContain('Najpierw skonfiguruj SMTP');
+    expect(rules.body).toMatch(/name="enabled_integration_error"[^>]*disabled/);
+    expect(rules.body).toContain('Błąd integracji');
+    expect(rules.body).toContain('Podsumowanie dzienne');
   });
 });
 
@@ -52,8 +55,9 @@ describe('POST /powiadomienia/smtp', () => {
     const shown = await page();
     expect(shown.body).toContain('value="smtp2.example"');
     expect(shown.body).not.toContain('tajne-smtp');
-    expect(shown.body).not.toContain('Najpierw skonfiguruj SMTP');
-    expect(shown.body).not.toMatch(/name="enabled_integration_error"[^>]*disabled/);
+    const rules = await page('reguly');
+    expect(rules.body).not.toContain('Najpierw skonfiguruj SMTP');
+    expect(rules.body).not.toMatch(/name="enabled_integration_error"[^>]*disabled/);
   });
 
   it('tryb bez szyfrowania wymaga potwierdzenia', async () => {
@@ -130,7 +134,7 @@ describe('POST /powiadomienia/reguly', () => {
     expect(rules.get('certificate_expiring')!.params).toEqual({ days: [60, 30, 7] });
     expect(rules.get('inbound_failure')!.params).toEqual({ afterMinutes: 30 });
     expect(rules.get('daily_summary')).toMatchObject({ enabled: 1, params: { hour: 7 } });
-    const shown = await page();
+    const shown = await page('reguly');
     expect(shown.body).toContain('value="60, 30, 7"');
     expect(shown.body).toMatch(/name="maxPerHour_integration_error"[^>]*value="3"/);
     const entry = h.audit.list(10, 0).find((e) => e.action === 'powiadomienia.reguly');

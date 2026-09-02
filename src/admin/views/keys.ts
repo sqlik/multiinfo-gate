@@ -253,7 +253,7 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
   return `<div class="field">
       <label for="name">Nazwa klucza</label>
       <input id="name" name="name" value="${esc(v.name)}" required>
-      <div class="hint">Widoczna tylko w panelu - po niej rozpoznasz, która aplikacja go używa.</div>
+      <div class="hint">Widoczna tylko w panelu - po niej rozpoznasz, która aplikacja go używa</div>
     </div>
     <div class="field">
       <label>ID usług</label>
@@ -262,13 +262,13 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
     <div class="field">
       <label for="defaultServiceId">Domyślne ID usługi</label>
       <select id="defaultServiceId" name="defaultServiceId">${serviceOptions}</select>
-      <div class="hint">Używane, gdy żądanie nie podaje serviceId.</div>
+      <div class="hint">Używane, gdy żądanie nie podaje serviceId</div>
     </div>
     <div class="field">
       <label>Nadpisy nadawcy</label>
       <div class="choices">${origs}</div>
       <div class="hint">Zaznacz nadpisy, których ta aplikacja może używać.
-        Gdy w żądaniu nie pojawi się żadna ze zdefiniowanych pozycji, bramka użyje domyślnego nadpisu konta.</div>
+        Gdy w żądaniu nie pojawi się żadna ze zdefiniowanych pozycji, bramka użyje domyślnego nadpisu konta</div>
     </div>
     <div class="field">
       <label for="defaultOrig">Domyślny nadpis klucza</label>
@@ -280,7 +280,7 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
     <div class="field">
       <label for="maxParts">Limit części jednej wiadomości (1-9)</label>
       <input id="maxParts" name="maxParts" type="number" min="1" max="9" value="${esc(v.maxParts)}" required>
-      <div class="hint">Dłuższa treść zostanie odrzucona, nie przycięta.</div>
+      <div class="hint">Dłuższa treść zostanie odrzucona, nie przycięta</div>
     </div>
     <div class="field">
       <label for="ratePerMin">Limit żądań na minutę</label>
@@ -299,7 +299,7 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
     ${mode === 'edit' ? `<div class="field">
       <label for="webhookSecret">Sekret webhooka</label>
       <input id="webhookSecret" name="webhookSecret" type="password" autocomplete="off">
-      <div class="hint">Puste pole zostawia dotychczasowy sekret.</div>
+      <div class="hint">Puste pole zostawia dotychczasowy sekret</div>
     </div>` : ''}
     <div class="field">
       <label for="expiresOn">Ważny do</label>

@@ -495,7 +495,7 @@ bez ingerencji; zapis klucza albo tego konta w panelu ponawia od razu.
 ![Karta konta, sekcja Odbiór wiadomości: usługa z odbierającym kluczem, stan aktywny z czasem ostatniego pytania i ostatniej odebranej](obrazki/konto-odbior.png)
 
 Nad listą kluczy panel prosi raz o **adres, pod którym aplikacje widzą bramkę**: przy bramce pod
-domeną (rozdział 6) `https://<TWOJA-DOMENA>`, przy kontenerze na Proxmoksie w sieci firmowej
+domeną (rozdział 6) `https://<TWOJA-DOMENA>`, przy kontenerze na Proxmoxie w sieci firmowej
 `http://<ADRES-KONTENERA>:8080`, bez ścieżki na końcu. Z tym adresem panel pokazuje przy nowym
 kluczu gotowe polecenie `curl` do wklejenia w terminalu, a przy integracjach (punkt 4.7) pełne
 adresy wejściowe zamiast samych ścieżek.
@@ -544,7 +544,7 @@ w jej formacie. Integracja działa w imieniu klucza API z rozdziału 4.5 - zał�
 Dodanie integracji to wybór kierunku, gotowego ustawienia (kafelek z nazwą aplikacji)
 i formularz w **trybie prostym**: numery telefonów, kiedy wysyłać SMS i co ma w nim być z list
 przygotowanych dla tej aplikacji, hasło z przyciskiem **Wygeneruj**. Po zapisaniu panel pokazuje
-pełny adres do wklejenia w aplikacji, zdanie, w którym polu, i instrukcję krok po kroku. Przełącznik
+pełny adres do wklejenia w aplikacji, zdanie, w którym polu i instrukcję krok po kroku. Przełącznik
 **Zaawansowany** nad formularzem odsłania pola silnika (ścieżki w ładunku, szablony, reguły) dla
 tych, którzy chcą więcej; „Własne” otwiera je od razu. Aplikacja w sieci lokalnej jako cel
 integracji „z SMS-a” wymaga `MIG_WEBHOOK_ALLOW_PRIVATE=1` w środowisku bramki (rozdział 7.7),
@@ -558,7 +558,7 @@ wysyłkę, awaria odbioru i podsumowanie dzienne. Bez SMTP reguły są wyszarzon
 ekranów, gotowe ustawienia aplikacja po aplikacji i język szablonów opisuje rozdział
 [Integracje z aplikacjami](integracje.md).
 
-![Ekran Powiadomienia: SMTP i reguły](obrazki/powiadomienia.png)
+![Ekran Powiadomienia, zakładka Konfiguracja: serwer SMTP, nadawca i odbiorcy](obrazki/powiadomienia.png)
 
 ## 5. Pierwsza wysyłka
 
@@ -877,7 +877,7 @@ z aplikacjami](integracje.md)).
 ### 7.1. Kopie bazy
 
 Bramka wykonuje kopię bazy raz na dobę, po godzinie 02:00 UTC, do katalogu `backups/` na
-wolumenie z danymi, i usuwa kopie starsze niż `MIG_BACKUP_RETENTION_DAYS` dni (domyślnie 14).
+wolumenie z danymi i usuwa kopie starsze niż `MIG_BACKUP_RETENTION_DAYS` dni (domyślnie 14).
 Kopia jest zaszyfrowana kluczem głównym i bez niego bezużyteczna.
 
 ```bash
@@ -1038,7 +1038,7 @@ w rozdziale 5 (pierwsza wysyłka) zamiast punktu 5.1 obowiązuje punkt 9.3 (w ko
 SSH, więc droga do API jest inna), a rozdział 6 dotyczy serwera, który wystawia API bramki na świat - w sieci
 firmowej jest to zwykle istniejące odwrotne proxy albo osobny kontener z nginx według punktu 6.6.
 
-Do wyboru są dwa warianty: kontener bez Dockera, tworzony jednym skryptem (punkt 9.1), i kontener
+Do wyboru są dwa warianty: kontener bez Dockera, tworzony jednym skryptem (punkt 9.1) i kontener
 z Dockerem, w którym bramka działa dokładnie tak jak na serwerze z rozdziału 3 (punkt 9.5).
 
 ### 9.1. Kontener LXC skryptem
@@ -1124,7 +1124,7 @@ informacją, a próbę zalogowania odrzuca. Do panelu prowadzą dwie drogi:
   `<ADRES-KONTENERA>` to adres wypisany przez kreator (np. `10.10.10.159`), `<ADRES-HOSTA-PROXMOX>`
   to adres, pod którym host jest dostępny przez SSH. Następnie w przeglądarce `http://127.0.0.1:8081`
   i dalej jak w punkcie 4.1: logowanie danymi z pliku wyżej, kod QR, kody zapasowe. Tunel prowadzi
-  do adresu kontenera, ale przeglądarka widzi adres lokalny, i to wystarcza panelowi
+  do adresu kontenera, ale przeglądarka widzi adres lokalny i to wystarcza panelowi
 - **Odwrotne proxy z HTTPS w sieci firmowej** - jeżeli w sieci działa już nginx, Caddy albo Traefik
   z certyfikatem, może kierować `https://panel.<TWOJA-DOMENA>` na `http://<ADRES-KONTENERA>:8081`
   z nagłówkiem `X-Forwarded-Proto: https`, tak jak przykładowe konfiguracje z rozdziału 6 robią to
@@ -1188,7 +1188,7 @@ Gdy nie działa:
   polecenia `ssh` i przyjrzenie się jego komunikatom
 - `ssh` wypisuje `bind: Address already in use` - port 8080 na własnym komputerze zajmuje inny
   program (często inna instancja bramki albo poprzedni tunel); wyjściem jest inny port lokalny,
-  np. `-L 18080:<ADRES-KONTENERA>:8080`, i wtedy `http://127.0.0.1:18080` w poleceniach
+  np. `-L 18080:<ADRES-KONTENERA>:8080` i wtedy `http://127.0.0.1:18080` w poleceniach
 - `curl` zgłasza `Connection refused` pod adresem kontenera (wprost albo przez tunel, w którym
   polecenie `ssh` nie zgłasza błędu) - usługa w kontenerze nie działa; przyczynę pokazuje
   `pct exec <NUMER-KONTENERA> -- journalctl -u multiinfo-gate -n 20` w powłoce hosta
@@ -1237,7 +1237,7 @@ Aktualizacja do najnowszego wydania to jedno polecenie w kontenerze:
 update
 ```
 
-Polecenie sprawdza na GitHubie, czy jest nowsze wydanie, i jeżeli tak: zatrzymuje usługę,
+Polecenie sprawdza na GitHubie, czy jest nowsze wydanie i jeżeli tak: zatrzymuje usługę,
 zapisuje kopię bazy jako `backups/przed-aktualizacja-<WERSJA>.sqlite`, pobiera i buduje nowe
 wydanie, uruchamia usługę. Migracje bazy wykonują się same przy starcie. Oczekiwany wynik:
 `Zaktualizowano do wydania <WERSJA>`, a po zalogowaniu maszt panelu pokazuje nowy numer (panel

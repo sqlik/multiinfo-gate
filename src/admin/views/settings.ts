@@ -12,7 +12,7 @@ export function apiAddressPanel(current: string | null, back: string, opts: { er
         <label for="apiUrl">Adres, pod którym aplikacje widzą bramkę</label>
         <input id="apiUrl" name="apiUrl" value="${esc(current ?? '')}" placeholder="https://sms.firma.pl">
         <div class="hint">Bez ścieżki na końcu. Bramka pod domeną (Docker z Caddy, nginx albo Traefikiem): <code>https://sms.firma.pl</code>.
-          Kontener na Proxmoksie dostępny w sieci firmowej: <code>http://10.10.10.159:8080</code> (adres kontenera i port API).
+          Kontener na Proxmoxie dostępny w sieci firmowej: <code>http://10.10.10.159:8080</code> (adres kontenera i port API).
           Ten sam adres aplikacje wpisują przed <code>/v1/messages</code> i przed adresami wejściowymi integracji.</div>
       </div>
       <div class="bar">

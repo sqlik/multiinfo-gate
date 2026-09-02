@@ -13,9 +13,9 @@ export interface SimplePageOptions {
   textPreviews: Record<string, string>;
 }
 
-const radio = (name: string, value: string, current: string, label: string, hint = '', mono = false) =>
+const radio = (name: string, value: string, current: string, label: string, example = '') =>
   `<label class="choice" style="align-items: flex-start;"><input type="radio" name="${esc(name)}" value="${esc(value)}"${current === value ? ' checked' : ''} style="margin-top: 3px;">
-    <span>${mono ? `<span class="m">${esc(label)}</span>` : esc(label)}${hint === '' ? '' : `<span class="dim" style="display: block; font-size: 11.5px; margin-top: 2px;">${esc(hint)}</span>`}</span></label>`;
+    <span>${esc(label)}${example === '' ? '' : `<span class="dim" style="display: block; font-size: 11.5px; margin-top: 2px;">Przykład: <span class="m" style="color: var(--ink);">${esc(example)}</span></span>`}</span></label>`;
 
 /** Przełącznik trybu: odnośniki GET, bo zmiana trybu rysuje inny formularz z tych samych zapisanych danych. */
 export function modeSwitch(ctx: FormContext, mode: 'prosty' | 'zaawansowany'): string {
@@ -42,7 +42,7 @@ function keyField(ctx: FormContext, sv: SimpleValues): string {
       <select id="apiKeyId" name="apiKeyId">
         ${ctx.keys.map((k) => `<option value="${esc(k.id)}"${sv.apiKeyId === String(k.id) ? ' selected' : ''}>${esc(k.name)} · ${esc(k.accountName)}</option>`).join('')}
       </select>
-      <div class="hint">SMS-y pójdą z konta Multiinfo tego klucza, z jego domyślnej usługi i nadpisu nadawcy.</div>
+      <div class="hint">SMS-y pójdą z konta Multiinfo tego klucza, z jego domyślnej usługi i nadpisu nadawcy</div>
     </div>`;
 }
 
@@ -63,10 +63,10 @@ function inboundSections(ctx: FormContext, sv: SimpleValues, opts: SimplePageOpt
   const numbers = `<div class="field">
       <label for="numbers">${simple.recipients.source === 'list' ? 'Numery telefonów' : 'Numery zapasowe'}</label>
       <textarea id="numbers" name="numbers" rows="3" placeholder="601 000 001&#10;+48 602 000 002">${esc(sv.numbers)}</textarea>
-      <div class="hint">${esc(simple.recipients.note)} Jeden numer na linię; dziewięć cyfr dostaje kod kraju konta.</div>
+      <div class="hint">${esc(simple.recipients.note)} Jeden numer na linię; dziewięć cyfr dostaje kod kraju konta</div>
     </div>`;
   const when = simple.when.map((w) => radio('whenId', w.id, sv.whenId, w.label)).join('');
-  const texts = simple.text.map((t) => radio('textId', t.id, sv.textId, opts.textPreviews[t.id] ?? '', t.label, true)).join('');
+  const texts = simple.text.map((t) => radio('textId', t.id, sv.textId, t.label, opts.textPreviews[t.id] ?? '')).join('');
   const auth = simple.auth.kind === 'none'
     ? `<div class="field"><label>Zabezpieczenie</label><div class="hint" style="margin-top: 0;">${esc(simple.auth.note)}</div></div>`
     : secretField(ctx, simple.auth.label, simple.auth.where);
@@ -81,7 +81,7 @@ function inboundSections(ctx: FormContext, sv: SimpleValues, opts: SimplePageOpt
     </details>
     <details open><summary>4. Co ma być w SMS-ie</summary>
       <div class="field"><div class="choices" style="flex-direction: column; gap: 10px;">${texts}</div>
-      <div class="hint">Tak wyglądałby SMS dla prawdziwego zdarzenia z ${esc(ctx.preset.name)}. Inną treść ustawisz w trybie zaawansowanym.</div></div>
+      <div class="hint">Przykłady policzone z prawdziwego zdarzenia z ${esc(ctx.preset.name)}; inną treść ustawisz w trybie zaawansowanym</div></div>
     </details>
     <details open><summary>5. Zabezpieczenie</summary>${auth}</details>`;
 }
@@ -135,7 +135,7 @@ export function simpleFormPage(ctx: FormContext, sv: SimpleValues, opts: SimpleP
       </div>
       ${ctx.apiUrl === null ? '<div class="hint" style="padding: 0 16px 12px;">To sama ścieżka - panel nie zna jeszcze adresu bramki. Podaj go na ekranie Klucze API, a tu pojawi się pełny adres.</div>' : ''}
     </div>` : '';
-  const guide = ctx.preset.guide === '' ? '' : `<details class="panel"${edit ? '' : ' open'} style="max-width: 760px; padding: 0;">
+  const guide = ctx.preset.guide === '' ? '' : `<details class="panel" style="max-width: 760px; padding: 0;">
       <summary style="padding: 12px 16px;">Co ustawić po stronie ${esc(ctx.preset.name)}</summary>
       <div class="guide" style="padding: 0 16px 12px; font-size: 12.5px; line-height: 1.55;">${guideHtml(ctx.preset.guide)}</div>
     </details>`;
@@ -152,7 +152,8 @@ export function simpleFormPage(ctx: FormContext, sv: SimpleValues, opts: SimpleP
     ${opts.error ? `<div class="warn">${esc(opts.error)}</div>` : ''}
     ${opts.created ? hookReveal(opts.created, ctx.apiUrl, addressField) : ''}
     ${address}
-    ${inbound && !edit ? `<div class="dim" style="max-width: 760px; margin-bottom: 12px; font-size: 12.5px;">Po zapisaniu dostaniesz adres do wklejenia ${esc(addressField ?? 'w aplikacji')} i instrukcję krok po kroku.</div>` : ''}
+    ${guide}
+    ${inbound && !edit ? `<div class="dim" style="max-width: 760px; margin-bottom: 12px; font-size: 12.5px;">Po zapisaniu dostaniesz adres do wklejenia ${esc(addressField ?? 'w aplikacji')} i instrukcję krok po kroku</div>` : ''}
     <div class="panel" style="max-width: 760px;">
       <form class="form" method="post" action="${action}">
         <input type="hidden" name="kind" value="${esc(ctx.kind)}">
@@ -164,6 +165,5 @@ export function simpleFormPage(ctx: FormContext, sv: SimpleValues, opts: SimpleP
         </div>
       </form>
     </div>
-    ${guide}
   </div>`;
 }

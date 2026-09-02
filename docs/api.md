@@ -4,7 +4,7 @@ Bramka udostępnia aplikacjom interfejs HTTP z danymi w formacie JSON i obsługu
 strony. W stronę abonenta: aplikacja przekazuje numer odbiorcy i treść, a bramka odpowiada za
 dobór kodowania, podział na części, uwierzytelnienie certyfikatem w Multiinfo, ponowienia,
 raporty doręczeń i powiadomienia (rozdziały 3-6). Od abonenta: SMS-y wysłane na numer usługi
-bramka odbiera z Multiinfo sama, w tle, i przekazuje aplikacji powiadomieniem `message.received`
+bramka odbiera z Multiinfo sama, w tle i przekazuje aplikacji powiadomieniem `message.received`
 na adres webhooka klucza, a ponadto udostępnia je do odczytu (`GET /v1/inbound`) i pozwala na nie
 odpowiedzieć w wątku (`inReplyTo`) - rozdział 5a. Odbiór wymaga dwóch ustawień: kierowania
 odebranych wiadomości do API na koncie Multiinfo (ustawia administrator Polkomtel) oraz
@@ -21,7 +21,7 @@ z zalecanym postępowaniem.
 
 **Adres bazowy.** Po wystawieniu API pod domeną (`uruchomienie.md`, rozdział 6):
 `https://<TWOJA-DOMENA>`. W trakcie testów przez tunel SSH (`uruchomienie.md`, punkt 5.1, a dla
-kontenera LXC na Proxmoksie punkt 9.3): `http://127.0.0.1:8080`. Przykłady w tym dokumencie
+kontenera LXC na Proxmoxie punkt 9.3): `http://127.0.0.1:8080`. Przykłady w tym dokumencie
 używają domeny.
 
 **Nagłówki.** Każde żądanie poza `GET /healthz` wymaga nagłówka
@@ -186,7 +186,7 @@ Pola body żądania:
 | `deliveryReport` | nie | domyślnie `true`; `false` oznacza rezygnację z raportu doręczenia - stan wiadomości kończy się na `sent` |
 | `validTo` | nie | ISO 8601, najwyżej 72 godziny od przyjęcia; wiadomość niedoręczona do tego czasu otrzymuje stan `expired` |
 | `costCenter` | nie | dowolny znacznik na potrzeby rozliczeń aplikacji; zwracany w odczycie wiadomości |
-| `inReplyTo` | nie | identyfikator wiadomości przychodzącej (`in_...`), na którą to odpowiedź (rozdział 5a.3); bramka przekazuje go Multiinfo jako `smsInId`; dopuszczalny tylko przy jednym odbiorcy, którym jest nadawca tej wiadomości, i w tej samej usłudze, z której przyszła |
+| `inReplyTo` | nie | identyfikator wiadomości przychodzącej (`in_...`), na którą to odpowiedź (rozdział 5a.3); bramka przekazuje go Multiinfo jako `smsInId`; dopuszczalny tylko przy jednym odbiorcy, którym jest nadawca tej wiadomości i w tej samej usłudze, z której przyszła |
 
 **Odpowiedź `202 Accepted`** (dla tablicy `to` - tablica takich obiektów, w kolejności numerów):
 
@@ -1179,7 +1179,7 @@ słownika z rozdziału 7; wartość `null` oznacza, że raport nie objął tego 
 Abonent może odpowiedzieć na SMS-a albo napisać na numer usługi z własnej inicjatywy. Multiinfo
 domyślnie kieruje takie wiadomości do swojego panelu WWW; administrator Polkomtel może przełączyć
 kierowanie na API (wszystkie wiadomości albo tylko z określonym prefiksem treści). Bramka odbiera
-je wtedy sama, bez udziału aplikacji, i przekazuje dwoma kanałami: powiadomieniem
+je wtedy sama, bez udziału aplikacji i przekazuje dwoma kanałami: powiadomieniem
 `message.received` (rozdział 6) do każdego klucza, który ma włączony odbiór, oraz do odczytu
 opisanego niżej. Odczyt nie wymaga włączonego odbioru - wystarczy, że klucz ma dostęp do usługi.
 
