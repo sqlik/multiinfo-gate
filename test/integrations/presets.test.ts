@@ -84,4 +84,17 @@ describe('gotowe ustawienia', () => {
     const withRule = { ...config, condition: { mode: 'builder' as const, rules: [{ path: 'heartbeat.status', op: 'eq' as const, value: '0' }] } };
     expect(previewInbound(engine, withRule, { heartbeat: null, monitor: null, msg: 'webhook Testing' }, '48', NOW).matches).toBe(false);
   });
+
+  it('FreeScout: rozmowa SMS reaguje na notatkę i odpowiedź w rozmowie phone, nie na wiadomość klienta ani rozmowę e-mailową', () => {
+    const preset = presetById('freescout')!;
+    const config = { ...defaultInboundConfig(), ...preset.inbound } as InboundConfig;
+    const convo = (type: string, thread: string) => ({ id: 46, type, _embedded: { threads: [{ type: thread, body: 'x' }] } });
+    const matches = (payload: unknown) => previewInbound(engine, config, payload, '48', NOW).matches;
+    expect(matches(convo('phone', 'note'))).toBe(true);
+    expect(matches(convo('phone', 'message'))).toBe(true);
+    expect(matches(convo('phone', 'customer'))).toBe(false);
+    expect(matches(convo('email', 'note'))).toBe(false);
+    expect(matches(convo('email', 'message'))).toBe(false);
+    expect(previewInbound(engine, config, preset.sample, '48', NOW).threadRecipient).toBe(true);
+  });
 });
