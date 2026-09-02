@@ -1,6 +1,7 @@
 import type { IntegrationKind } from '../config.ts';
 import { custom } from './custom.ts';
 import { freescout } from './freescout.ts';
+import { freescoutZgloszenie } from './freescout-zgloszenie.ts';
 import { freshdesk } from './freshdesk.ts';
 import { grafana } from './grafana.ts';
 import { homeAssistant } from './home-assistant.ts';
@@ -15,7 +16,7 @@ import { zabbix } from './zabbix.ts';
 export type { Preset, PresetField, PresetSecret } from './types.ts';
 
 /** Kolejność z tabeli specu; „Własne” zawsze na końcu kafelków. */
-export const PRESETS: Preset[] = [prostyJson, uptimeKuma, grafana, zabbix, homeAssistant, freescout, freshdesk, slack, teams, ntfy, custom];
+export const PRESETS: Preset[] = [prostyJson, uptimeKuma, grafana, zabbix, homeAssistant, freescoutZgloszenie, freescout, freshdesk, slack, teams, ntfy, custom];
 
 export const presetById = (id: string): Preset | undefined => PRESETS.find((p) => p.id === id);
 

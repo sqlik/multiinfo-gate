@@ -304,7 +304,7 @@ ciąg JSON:
 Zgłoszenie we FreeScoucie z numerem klienta i treścią:
 
 ```liquid
-{"type": "phone", "mailboxId": 1, "subject": {{ "SMS od " | append: from | json }}, "customer": {"phone": {{ from | json }}}, "threads": [{"type": "customer", "text": {{ text | json }}}]}
+{"type": "phone", "mailboxId": 1, "subject": {{ "SMS od " | append: from | json }}, "customer": {"firstName": "SMS", "lastName": {{ from | json }}, "phone": {{ from | json }}}, "threads": [{"type": "customer", "text": {{ text | json }}}]}
 ```
 
 ## 6. Gotowe ustawienia
@@ -321,7 +321,8 @@ identyfikatory) są fikcyjne.
 | Grafana | tak | nie | basic auth |
 | Zabbix | tak | nie | nagłówek `Authorization` |
 | Home Assistant | tak | tak | opcjonalny nagłówek |
-| FreeScout | tak | tak | lista źródeł albo nagłówek |
+| FreeScout: nowe zgłoszenie | tak | nie | lista źródeł |
+| FreeScout: rozmowa SMS | tak | tak | lista źródeł |
 | Freshdesk | tak | tak | lista źródeł albo nagłówek |
 | Slack | nie | tak | nie dotyczy |
 | Microsoft Teams | nie | tak | nie dotyczy |
@@ -465,15 +466,43 @@ Home Assistant zwykle stoi w sieci lokalnej, a bramka domyślnie nie woła takic
 `MIG_WEBHOOK_ALLOW_PRIVATE=1` w środowisku bramki ([Uruchomienie](uruchomienie.md), rozdział 7.7)
 albo wystaw Home Assistanta pod adresem publicznym.
 
-### 6.6. FreeScout
+### 6.6. FreeScout: nowe zgłoszenie
+
+SMS do agentów, gdy we FreeScoucie pojawia się nowa rozmowa. Wymaga modułu **API & Webhooks**.
+Zarządzaj → API & Webhooks → Webhooks → Dodaj: URL to adres wejściowy integracji, zdarzenie
+`convo.created`. Numery agentów wpisz w bramce w liście zapasowej. FreeScout 1.8 wysyła całą
+rozmowę (ładunek przycięty):
+
+```json
+{
+  "id": 45, "number": 10143, "type": "email", "status": "active", "subject": "[Zgłoszenie] Nie działa logowanie",
+  "preview": "Dzień dobry, od rana nie mogę się zalogować do panelu klienta.", "mailboxId": 3,
+  "customer": { "id": 8, "type": "customer", "firstName": "Anna", "lastName": "Nowak", "email": "anna@example" },
+  "source": { "type": "email", "via": "customer" },
+  "_embedded": { "threads": [{ "id": 100, "type": "customer", "body": "<p>Dzień dobry, …</p>" }] }
+}
+```
+
+Domyślny szablon; filtr `gsm` na całości zdejmuje polskie znaki, żeby SMS mieścił 160 znaków:
+
+```liquid
+{% capture t %}Nowe zgłoszenie #{{ p.number }} od {{ p.customer.firstName }} {{ p.customer.lastName }}: {{ p.subject | sms_truncate: 90 }}{% endcapture %}{{ t | gsm }}
+```
+
+Warunek `mailboxId równe 3` ogranicza SMS-y do jednej skrzynki; `source.via równe customer`
+odsiewa rozmowy zakładane ręcznie przez agentów. FreeScout nie ma pola na nagłówki, więc zamiast
+tokenu wpisz listę źródeł z adresem serwera FreeScouta.
+
+### 6.7. FreeScout: rozmowa SMS
 
 Wymaga modułu **API & Webhooks**.
 
 **Z SMS-a.** Adres `https://<freescout>/api/conversations`, klucz API (moduł API & Webhooks,
 zakładka **API Keys**) jako sekret nagłówka `X-FreeScout-API-Key`, w body numer skrzynki
-`mailboxId` zamiast `1`. Domyślne body zakłada rozmowę typu „phone” z numerem klienta i treścią
-SMS-a (rozdział 5.4). Identyfikator rozmowy z odpowiedzi (`id`) trafia do bramki jako
-identyfikator zgłoszenia.
+`mailboxId` zamiast `1`. Domyślne body zakłada rozmowę typu „phone” z klientem „SMS <numer>”
+(FreeScout wymaga imienia albo e-maila klienta, sam numer odrzuca kodem 400) i treścią SMS-a
+(rozdział 5.4). FreeScout odpowiada kodem 201 i obiektem rozmowy z polem `id` na wierzchu, które
+trafia do bramki jako identyfikator zgłoszenia.
 
 **Do SMS.** W module webhooków (Zarządzaj → Webhooks) dodaj webhook z adresem wejściowym
 integracji i jednym zdarzeniem `convo.agent.reply.created`. FreeScout 1.8 wysyła całą rozmowę
@@ -499,7 +528,7 @@ zdarzenia, w których najnowszy wątek jest wiadomością klienta. FreeScout pod
 nagłówkiem `X-FreeScout-Signature`, którego bramka nie sprawdza - zamiast tego wpisz listę źródeł
 z adresem serwera FreeScouta.
 
-### 6.7. Freshdesk
+### 6.8. Freshdesk
 
 **Z SMS-a.** Adres `https://<firma>.freshdesk.com/api/v2/tickets`. Freshdesk uwierzytelnia
 basic auth z kluczem API jako loginem i `X` jako hasłem: w sekrecie nagłówka `Authorization`
@@ -518,7 +547,7 @@ Bramka bierze numer ze ścieżki `phone`, identyfikator zgłoszenia z `ticket_id
 `{{ p.text | strip_html | strip }}`; gdy `ticket_id` pasuje do zgłoszenia założonego z SMS-a,
 SMS idzie w wątku.
 
-### 6.8. Slack
+### 6.9. Slack
 
 Odebrany SMS jako wiadomość na kanale. W Slacku utwórz aplikację (`api.slack.com/apps`), włącz
 **Incoming Webhooks** i dodaj webhook do kanału. Adres `https://hooks.slack.com/services/…`
@@ -530,21 +559,21 @@ wklej jako adres integracji. Domyślne body (rozdział 5.4) daje:
 
 Slack przyjmuje też bloki (`blocks`), jeśli zmienisz szablon.
 
-### 6.9. Microsoft Teams
+### 6.10. Microsoft Teams
 
 Odebrany SMS jako karta na kanale. W Teams na kanale wybierz **Workflows → Post to a channel
 when a webhook request is received**; skopiowany adres przepływu wklej jako adres integracji.
 Domyślne body to koperta z kartą Adaptive Card w wersji 1.4 z dwoma blokami tekstu (nagłówek
 „SMS od <numer>” i treść); przepływ przekazuje ją na kanał bez zmian.
 
-### 6.10. ntfy
+### 6.11. ntfy
 
 Odebrany SMS jako powiadomienie push na telefon. Adres to serwer i nazwa tematu, np.
 `https://ntfy.sh/firma-sms`. Body jest surowym tekstem `{{ text }}`, tytuł i priorytet idą
 nagłówkami `Title: SMS od {{ from }}` i `Priority: default`. Dla tematu chronionego dodaj nagłówek
 `Authorization` z tokenem `Bearer tk_…` jako sekretem. W aplikacji ntfy zasubskrybuj temat.
 
-### 6.11. Własne
+### 6.12. Własne
 
 Pusty formularz dla aplikacji spoza listy. Do SMS: wskaż ścieżką pole z numerem albo wpisz
 numery w liście zapasowej, treść jako ścieżka albo szablon z ładunkiem pod `p`, wklej przykładowy
