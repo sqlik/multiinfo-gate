@@ -112,7 +112,7 @@ ${d.tab === 'konfiguracja' ? `      <div class="panel" style="max-width: 760px;"
         <div class="panel-h"><div class="lab">Serwer SMTP</div>
           ${configured ? `<span class="m dim">zapisano ${esc(d.smtp!.updatedAt.slice(0, 10))}</span>` : '<span class="dim">nieskonfigurowany</span>'}</div>
         ${smtpError}
-        <form class="form" method="post" action="/powiadomienia/smtp">
+        <form class="form" id="smtp-form" method="post" action="/powiadomienia/smtp">
           <div class="field">
             <label for="host">Host</label>
             <input id="host" name="host" value="${esc(v.host)}" placeholder="smtp.firma.example" required>
@@ -164,11 +164,10 @@ ${d.tab === 'konfiguracja' ? `      <div class="panel" style="max-width: 760px;"
           </div>
           <div class="bar">
             <button class="btn btn-p" type="submit">Zapisz SMTP</button>
+            <button class="btn btn-s" type="submit" form="smtp-test"${configured ? '' : ' disabled'}>Wyślij mail testowy</button>
           </div>
         </form>
-        <form method="post" action="/powiadomienia/smtp/test" style="padding: 0 16px 16px;">
-          <button class="btn btn-s" type="submit"${configured ? '' : ' disabled'}>Wyślij mail testowy</button>
-        </form>
+        <form id="smtp-test" method="post" action="/powiadomienia/smtp/test"></form>
       </div>` : `      <div class="panel${configured ? '' : ' dim'}" style="max-width: 1180px;">
         ${configured ? '' : '<div class="warn">Najpierw skonfiguruj SMTP - bez niego reguły nie mają dokąd wysyłać.</div>'}
         ${rulesError}
