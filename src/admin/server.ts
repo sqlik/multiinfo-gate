@@ -36,6 +36,7 @@ import { registerDeliveryRoutes } from './routes/deliveries.ts';
 import { registerInboundViewRoutes } from './routes/inbound.ts';
 import { registerIntegrationRoutes } from './routes/integrations.ts';
 import { registerMessageViewRoutes } from './routes/messages.ts';
+import { registerNotificationRoutes } from './routes/notifications.ts';
 import { registerOverviewRoutes } from './routes/overview.ts';
 import { registerPackageViewRoutes } from './routes/packages.ts';
 import { qrSvg } from './qr.ts';
@@ -355,6 +356,7 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   registerAccountRoutes(app, deps, render);
   registerKeyRoutes(app, deps, render);
   registerIntegrationRoutes(app, deps, render);
+  registerNotificationRoutes(app, deps, render);
   registerUserRoutes(app, deps, render);
   registerOverviewRoutes(app, deps, render);
   registerPackageViewRoutes(app, deps, render);
