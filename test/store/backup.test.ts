@@ -35,6 +35,11 @@ describe('backupDatabase', () => {
     const copy = new Database(path, { readonly: true });
     expect(copy.pragma('user_version', { simple: true })).toBe(6);
     expect(copy.prepare('SELECT COUNT(*) AS n FROM admin_users').get()).toEqual({ n: 1 });
+    // Kopia to cały plik, więc tabele integracji i powiadomień z migracji 006 są w niej razem ze schematem.
+    const tables = (copy.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>).map((t) => t.name);
+    for (const t of ['integrations', 'integration_events', 'integration_dedup', 'integration_throttle', 'smtp_settings', 'notification_rules', 'notification_queue']) {
+      expect(tables).toContain(t);
+    }
     copy.close();
     expect(readdirSync(dir).some((f) => f.endsWith('.part'))).toBe(false);
   });
