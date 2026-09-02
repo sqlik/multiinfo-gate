@@ -103,8 +103,8 @@ Numer bramka bierze z trzech źródeł, w tej kolejności:
 1. Ścieżka w ładunku (sekcja „Odbiorca”), np. `phone` albo `to`. Wartość może być tekstem
    z numerami po przecinku albo tablicą.
 2. Nadawca odebranego SMS-a, do którego pasuje identyfikator zgłoszenia z ładunku (rozdział 3.8).
-   Tak działają helpdeski: FreeScout nie przesyła w webhooku telefonu klienta, ale przesyła
-   identyfikator rozmowy, a bramka pamięta, z jakiego numeru rozmowa powstała.
+   Dla własnych integracji, w których aplikacja przesyła identyfikator zgłoszenia założonego
+   z SMS-a, ale nie numer.
 3. Lista zapasowa z konfiguracji (jeden numer na linię) - tak działają Uptime Kuma i Grafana,
    które nie przesyłają numerów.
 
@@ -150,10 +150,10 @@ Grafany nie nadaje się na identyfikator, bo jest stały dla grupy alertów.
 
 ### 3.8. Odpowiedź w wątku
 
-Ścieżka „identyfikator zgłoszenia” łączy oba kierunki: gdy integracja z SMS-a założyła
-w helpdesku zgłoszenie z odebranego SMS-a i odczytała jego identyfikator (rozdział 4.4), a
-potem helpdesk woła adres wejściowy z tym identyfikatorem, bramka wysyła SMS do nadawcy tamtej
-wiadomości jako odpowiedź w wątku (jak `inReplyTo` w [API](api.md), rozdział 5a.3). Gdy ładunek
+Ścieżka „identyfikator zgłoszenia” łączy oba kierunki w integracjach własnych: gdy integracja
+z SMS-a założyła w aplikacji zgłoszenie z odebranego SMS-a i odczytała jego identyfikator
+(rozdział 4.4), a potem aplikacja woła adres wejściowy z tym identyfikatorem, bramka wysyła SMS
+do nadawcy tamtej wiadomości jako odpowiedź w wątku (jak `inReplyTo` w [API](api.md), rozdział 5a.3). Gdy ładunek
 podaje też numer, wątek powstaje tylko, jeśli to numer nadawcy. Odpowiedź widać przy odebranej
 wiadomości. Bez dopasowania idzie zwykły SMS na numer z ładunku albo z listy zapasowej, a bez
 nich wpis `błąd` z numerem zgłoszenia w powodzie.
@@ -227,7 +227,7 @@ jest `MIG_WEBHOOK_ALLOW_PRIVATE=1` - dotyczy to zwykle Home Assistanta.
 Pole „ścieżka identyfikatora w odpowiedzi” (np. `id` we FreeScoucie i Freshdesku) każe bramce
 odczytać z odpowiedzi JSON aplikacji identyfikator założonego zgłoszenia. Dla `message.received`
 identyfikator zapisuje się przy odebranej wiadomości (wiersz „Zgłoszenie: 4821 (FreeScout)”
-w szczególe) i służy do odpowiedzi w wątku z rozdziału 3.8. Gdy ścieżka jest wskazana, a
+w szczególe), a integracje własne mogą go użyć do odpowiedzi w wątku z rozdziału 3.8. Gdy ścieżka jest wskazana, a
 wartości w odpowiedzi brak, dostawa jest udana, wpis dostaje ostrzeżenie.
 
 ### 4.5. Wiele integracji i webhook klucza
@@ -323,9 +323,9 @@ identyfikatory) są fikcyjne.
 | Zabbix | tak | nie | nagłówek `Authorization` |
 | Home Assistant | tak | tak | opcjonalny nagłówek |
 | FreeScout: nowe zgłoszenie | tak | nie | lista źródeł |
-| FreeScout: rozmowa SMS | tak | tak | lista źródeł |
+| FreeScout: zgłoszenie z SMS-a | nie | tak | nie dotyczy |
 | Freshdesk: nowe zgłoszenie | tak | nie | sekret w adresie |
-| Freshdesk: rozmowa SMS | tak | tak | sekret w adresie |
+| Freshdesk: zgłoszenie z SMS-a | nie | tak | nie dotyczy |
 | Slack | nie | tak | nie dotyczy |
 | Microsoft Teams | nie | tak | nie dotyczy |
 | ntfy | nie | tak | nie dotyczy |
@@ -470,14 +470,14 @@ albo wystaw Home Assistanta pod adresem publicznym.
 
 ### 6.6. FreeScout: nowe zgłoszenie
 
-SMS do agentów, gdy we FreeScoucie pojawia się nowa rozmowa. Wymaga modułu **API & Webhooks**.
-Zarządzaj → API & Webhooks → Webhooks → Dodaj: URL to adres wejściowy integracji, zdarzenie
-`convo.created`. Numery agentów wpisz w bramce w liście zapasowej. FreeScout 1.8 wysyła całą
-rozmowę (ładunek przycięty):
+SMS do agentów, gdy we FreeScoucie pojawia się nowa rozmowa albo klient odpowiada. Wymaga modułu
+**API & Webhooks**. Zarządzaj → API & Webhooks → Webhooks → Dodaj: URL to adres wejściowy
+integracji, zdarzenia `convo.created` i `convo.customer.reply.created`. Numery agentów wpisz
+w bramce w liście zapasowej. FreeScout 1.8 wysyła całą rozmowę (ładunek przycięty):
 
 ```json
 {
-  "id": 45, "number": 10143, "type": "email", "status": "active", "subject": "[Zgłoszenie] Nie działa logowanie",
+  "id": 45, "number": 10143, "threadsCount": 0, "type": "email", "status": "active", "subject": "[Zgłoszenie] Nie działa logowanie",
   "preview": "Dzień dobry, od rana nie mogę się zalogować do panelu klienta.", "mailboxId": 3,
   "customer": { "id": 8, "type": "customer", "firstName": "Anna", "lastName": "Nowak", "email": "anna@example" },
   "source": { "type": "email", "via": "customer" },
@@ -485,109 +485,77 @@ rozmowę (ładunek przycięty):
 }
 ```
 
-Domyślny szablon; filtr `gsm` na całości zdejmuje polskie znaki, żeby SMS mieścił 160 znaków:
+Domyślny szablon rozróżnia nową rozmowę od odpowiedzi po liczbie wątków, a filtr `gsm` na
+całości zdejmuje polskie znaki, żeby SMS mieścił 160 znaków:
 
 ```liquid
-{% capture t %}Nowe zgłoszenie #{{ p.number }} od {{ p.customer.firstName }} {{ p.customer.lastName }}: {{ p.subject | sms_truncate: 90 }}{% endcapture %}{{ t | gsm }}
+{% capture t %}{% if p.threadsCount > 1 %}Odpowiedź klienta w #{{ p.number }}{% else %}Nowe zgłoszenie #{{ p.number }}{% endif %} od {{ p.customer.firstName }} {{ p.customer.lastName }}: {{ p.subject | sms_truncate: 90 }}{% endcapture %}{{ t | gsm }}
 ```
 
-Warunek `mailboxId równe 3` ogranicza SMS-y do jednej skrzynki; `source.via równe customer`
-odsiewa rozmowy zakładane ręcznie przez agentów. FreeScout nie ma pola na nagłówki, więc zamiast
-tokenu wpisz listę źródeł z adresem serwera FreeScouta.
+Warunek `mailboxId równe 3` ogranicza SMS-y do jednej skrzynki. FreeScout nie ma pola na
+nagłówki, więc zamiast tokenu wpisz listę źródeł z adresem serwera FreeScouta. Obiekt
+`customer` w webhooku nie zawiera telefonów, także gdy kontakt ma numer.
 
-### 6.7. FreeScout: rozmowa SMS
+### 6.7. FreeScout: zgłoszenie z SMS-a
 
-Wymaga modułu **API & Webhooks**.
-
-**Z SMS-a.** Adres `https://<freescout>/api/conversations`, klucz API (moduł API & Webhooks,
-zakładka **API Keys**) jako sekret nagłówka `X-FreeScout-API-Key`, w body numer skrzynki
-`mailboxId` zamiast `1`. Domyślne body zakłada rozmowę typu „phone” z klientem „SMS <numer>”
-(FreeScout wymaga imienia albo e-maila klienta, sam numer odrzuca kodem 400) i treścią SMS-a
-(rozdział 5.4). FreeScout odpowiada kodem 201 i obiektem rozmowy z polem `id` na wierzchu, które
-trafia do bramki jako identyfikator zgłoszenia.
-
-**Do SMS.** Klient „SMS <numer>” nie ma e-maila, więc FreeScout nie pokazuje w takiej rozmowie
-formularza odpowiedzi; agent odpowiada **notatką**. W module webhooków (Zarządzaj → API &
-Webhooks → Webhooks) dodaj webhook z adresem wejściowym integracji i zdarzeniami
-`convo.note.created` oraz `convo.agent.reply.created`, najlepiej ograniczony do skrzynki
-z rozmowami SMS. FreeScout 1.8 wysyła całą rozmowę z wątkami od najnowszego (ładunek przycięty;
-obiekt `customer` ma tylko dane podstawowe, bez telefonów, także gdy kontakt ma numer):
-
-```json
-{
-  "id": 4821, "number": 10144, "type": "phone", "status": "active", "subject": "SMS od 48601000001", "mailboxId": 1,
-  "customer": { "id": 46, "type": "customer", "firstName": "SMS", "lastName": "48601000001", "email": "" },
-  "_embedded": { "threads": [
-    { "id": 104, "type": "note", "body": "Odpowiadamy: sprawdzamy sprawę.", "createdAt": "2026-09-02T17:43:15Z" },
-    { "id": 103, "type": "customer", "body": "Pomocy, nie działa", "createdAt": "2026-09-02T17:30:50Z" }
-  ] }
-}
-```
-
-Bramka bierze identyfikator zgłoszenia z `id`, numer odbiorcy z odebranego SMS-a, z którego
-rozmowa powstała (rozdział 3.3), a treść z szablonu
-`{{ p._embedded.threads[0].body | html_text }}` (do trzech części; notatka przychodzi
-jako tekst, odpowiedź jako HTML). SMS idzie w wątku. Domyślny warunek w trybie Liquid
-przepuszcza tylko rozmowy typu `phone` z notatką albo odpowiedzią agenta, więc notatki
-w rozmowach e-mailowych zostają wewnętrzne, a wiadomość klienta nie wraca do niego SMS-em.
-FreeScout podpisuje webhooki nagłówkiem `X-FreeScout-Signature`, którego bramka nie sprawdza -
-zamiast tego wpisz listę źródeł z adresem serwera FreeScouta.
+Odebrany SMS zakłada rozmowę w skrzynce. Adres `https://<freescout>/api/conversations`, klucz
+API (moduł API & Webhooks, zakładka **API Keys**) jako sekret nagłówka `X-FreeScout-API-Key`,
+w body numer skrzynki `mailboxId` zamiast `1`. Domyślne body zakłada rozmowę typu „phone”
+z klientem „SMS <numer>” (FreeScout wymaga imienia albo e-maila klienta, sam numer odrzuca
+kodem 400) i treścią SMS-a (rozdział 5.4). FreeScout odpowiada kodem 201 i obiektem rozmowy
+z polem `id`, które widać przy odebranej wiadomości w panelu. Agent widzi rozmowę i oddzwania
+albo odpisuje własnym kanałem; bramka nie wysyła odpowiedzi z FreeScouta SMS-em.
 
 ### 6.8. Freshdesk: nowe zgłoszenie
 
-SMS do agentów o każdym nowym zgłoszeniu. We Freshdesku Admin → Workflows → Automations →
-Tworzenie zgłoszeń → Nowa reguła. Warunek „Źródło jest” ze wszystkimi źródłami (Freshdesk nie
-zapisuje reguły bez warunku). Akcja Uruchom element webhook: POST, adres wejściowy integracji,
-Szyfrowanie JSON, Treść „Zaawansowane”:
+SMS do agentów o nowym zgłoszeniu albo odpowiedzi klienta. We Freshdesku Admin → Workflows →
+Automations, dwie reguły, obie z akcją Uruchom element webhook: POST, adres wejściowy
+integracji, Szyfrowanie JSON, Treść „Zaawansowane”. Ładunek definiuje treść reguły; pole
+`event` wpisuje się na stałe, żeby szablon odróżnił oba zdarzenia.
+
+Tworzenie zgłoszeń → Nowa reguła, warunek „Źródło jest” ze wszystkimi źródłami (Freshdesk nie
+zapisuje reguły bez warunku):
 
 ```json
-{ "ticket_id": "{{ticket.id}}", "subject": "{{ticket.subject}}", "phone": "{{ticket.contact.phone}}", "mobile": "{{ticket.contact.mobile}}", "text": "{{ticket.description}}" }
+{ "event": "nowe", "ticket_id": "{{ticket.id}}", "subject": "{{ticket.subject}}", "phone": "{{ticket.contact.phone}}", "mobile": "{{ticket.contact.mobile}}", "text": "{{ticket.description}}" }
 ```
 
-Ładunek definiuje ta treść; z żywej instancji przyszło:
+Aktualizacja zgłoszeń → Nowa reguła, zdarzenie „Wysłano odpowiedź” wykonane przez
+Zgłaszającego:
 
 ```json
-{ "ticket_id": "6541", "phone": "", "mobile": "601000001", "text": "<div>Dzień dobry, od rana nie mogę się zalogować do panelu klienta.</div>\n\n" }
+{ "event": "odpowiedz", "ticket_id": "{{ticket.id}}", "subject": "{{ticket.subject}}", "phone": "{{ticket.contact.phone}}", "mobile": "{{ticket.contact.mobile}}", "text": "{{ticket.latest_public_comment}}" }
 ```
 
-Domyślny szablon zdejmuje HTML z opisu, dokłada temat, gdy reguła go przesyła, i polskie znaki
-zamienia filtrem `gsm`:
+Z żywej instancji przy tworzeniu przyszło:
+
+```json
+{ "event": "nowe", "ticket_id": "6541", "phone": "", "mobile": "601000001", "text": "<div>Dzień dobry, od rana nie mogę się zalogować do panelu klienta.</div>\n\n" }
+```
+
+Domyślny szablon zdejmuje HTML filtrem `html_text`, dokłada temat, gdy reguła go przesyła,
+i polskie znaki zamienia filtrem `gsm`:
 
 ```liquid
-{% capture t %}Nowe zgłoszenie #{{ p.ticket_id }}{% if p.subject %}: {{ p.subject }}{% endif %} - {{ p.text | html_text | sms_truncate: 100 }}{% endcapture %}{{ t | gsm }}
+{% capture t %}{% if p.event == "odpowiedz" %}Odpowiedź klienta w #{{ p.ticket_id }}{% else %}Nowe zgłoszenie #{{ p.ticket_id }}{% endif %}{% if p.subject %}: {{ p.subject }}{% endif %} - {{ p.text | html_text | sms_truncate: 100 }}{% endcapture %}{{ t | gsm }}
 ```
 
 Numery agentów wpisz w liście zapasowej. Freshdesk nie ma pola na nagłówki, a żądania przychodzą
 z różnych adresów chmury AWS, więc uwierzytelnieniem zostaje sekret w adresie i limit burzy.
 
-### 6.9. Freshdesk: rozmowa SMS
+### 6.9. Freshdesk: zgłoszenie z SMS-a
 
-**Z SMS-a.** Adres `https://<firma>.freshdesk.com/api/v2/tickets`. Freshdesk uwierzytelnia
-basic auth z kluczem API jako loginem i `X` jako hasłem: w sekrecie nagłówka `Authorization`
-wpisz gotową wartość `Basic <base64 z „klucz:X”>`. Domyślne body zakłada zgłoszenie ze źródłem
-„Telefon”, tematem „SMS od <numer>”, treścią SMS-a i telefonem kontaktu; identyfikator
-zgłoszenia z odpowiedzi (`id`) trafia do bramki.
+Odebrany SMS zakłada zgłoszenie. Adres `https://<firma>.freshdesk.com/api/v2/tickets`.
+Freshdesk uwierzytelnia basic auth z kluczem API jako loginem i `X` jako hasłem: w sekrecie
+nagłówka `Authorization` wpisz gotową wartość `Basic <base64 z „klucz:X”>`; klucz API jest pod
+awatarem → Ustawienia profilu. Domyślne body zakłada zgłoszenie ze źródłem „Telefon”, tematem
+„SMS od <numer>”, treścią SMS-a i telefonem kontaktu; Freshdesk odpowiada kodem 201 i obiektem
+zgłoszenia z polem `id`, które widać przy odebranej wiadomości w panelu.
 
-**Do SMS.** Admin → Workflows → Automations → Aktualizacja zgłoszeń → Nowa reguła: zdarzenie
-„Wysłano odpowiedź” wykonane przez Konsultanta, warunek „Źródło jest Telefon” (żeby odpowiedzi
-w zwykłych zgłoszeniach nie szły SMS-em), akcja Uruchom element webhook, POST, adres wejściowy
-integracji, JSON, Treść „Zaawansowane”:
-
-```json
-{ "ticket_id": "{{ticket.id}}", "phone": "{{ticket.contact.phone}}", "mobile": "{{ticket.contact.mobile}}", "text": "{{ticket.latest_public_comment}}" }
-```
-
-Z żywej instancji przyszło (odpowiedź ma przedrostek z nazwiskiem agenta i jego stopkę HTML):
-
-```json
-{ "ticket_id": "6541", "phone": "", "mobile": "601000001",
-  "text": "Anna Kowalska : <div style='font-family:Helvetica Neue'>Dziękujemy, sprawa rozwiązana.<div><br></div><div><strong>Anna Kowalska</strong></div></div>" }
-```
-
-Bramka bierze identyfikator zgłoszenia z `ticket_id`, numer ze ścieżki `phone` (zgłoszenia
-zakładane przez bramkę mają go wypełniony), a bez niego z odebranego SMS-a dopasowanego po
-zgłoszeniu; treść z szablonu `{{ p.text | html_text }}` do trzech części. Stopka agenta
-wchodzi do SMS-a, więc agentom obsługującym SMS-y warto ją wyłączyć.
+Freshdesk dopasowuje kontakt po dokładnym zapisie numeru: kontakt z telefonem `48601000001`
+zostanie rozpoznany, z `601000001` nie, i powstanie nowy kontakt bez e-maila. Agent widzi
+zgłoszenie i oddzwania albo odpisuje własnym kanałem; bramka nie wysyła odpowiedzi z Freshdeska
+SMS-em.
 
 ### 6.10. Slack
 

@@ -21,7 +21,7 @@ describe('gotowe ustawienia', () => {
     expect(ids.at(-1)).toBe('custom');
     expect(presetById('uptime-kuma')?.name).toBe('Uptime Kuma');
     expect(presetById('brak')).toBeUndefined();
-    expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'uptime-kuma', 'grafana', 'zabbix', 'home-assistant', 'freescout-zgloszenie', 'freescout', 'freshdesk-zgloszenie', 'freshdesk', 'custom']);
+    expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'uptime-kuma', 'grafana', 'zabbix', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
     expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'home-assistant', 'freescout', 'freshdesk', 'slack', 'teams', 'ntfy', 'custom']);
   });
   it('każde ustawienie ma konfigurację dla każdego swojego rodzaju, instrukcję i sekrety ze wskazówką', () => {
@@ -85,16 +85,15 @@ describe('gotowe ustawienia', () => {
     expect(previewInbound(engine, withRule, { heartbeat: null, monitor: null, msg: 'webhook Testing' }, '48', NOW).matches).toBe(false);
   });
 
-  it('FreeScout: rozmowa SMS reaguje na notatkę i odpowiedź w rozmowie phone, nie na wiadomość klienta ani rozmowę e-mailową', () => {
-    const preset = presetById('freescout')!;
-    const config = { ...defaultInboundConfig(), ...preset.inbound } as InboundConfig;
-    const convo = (type: string, thread: string) => ({ id: 46, type, _embedded: { threads: [{ type: thread, body: 'x' }] } });
-    const matches = (payload: unknown) => previewInbound(engine, config, payload, '48', NOW).matches;
-    expect(matches(convo('phone', 'note'))).toBe(true);
-    expect(matches(convo('phone', 'message'))).toBe(true);
-    expect(matches(convo('phone', 'customer'))).toBe(false);
-    expect(matches(convo('email', 'note'))).toBe(false);
-    expect(matches(convo('email', 'message'))).toBe(false);
-    expect(previewInbound(engine, config, preset.sample, '48', NOW).threadRecipient).toBe(true);
+
+  it('helpdeski: odpowiedź klienta ma inny nagłówek SMS-a niż nowe zgłoszenie', () => {
+    const fs = presetById('freescout-zgloszenie')!;
+    const fsConfig = { ...defaultInboundConfig(), ...fs.inbound } as InboundConfig;
+    const reply = previewInbound(engine, fsConfig, { ...(fs.sample as object), threadsCount: 3 }, '48', NOW);
+    expect(reply.text).toMatch(/^Odpowiedz klienta w #10143/);
+    const fd = presetById('freshdesk-zgloszenie')!;
+    const fdConfig = { ...defaultInboundConfig(), ...fd.inbound } as InboundConfig;
+    const fdReply = previewInbound(engine, fdConfig, { ...(fd.sample as object), event: 'odpowiedz', subject: 'Nie działa' }, '48', NOW);
+    expect(fdReply.text).toMatch(/^Odpowiedz klienta w #6541: Nie dziala - /);
   });
 });

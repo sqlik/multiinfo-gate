@@ -3,7 +3,7 @@ import type { Preset } from './types.ts';
 export const freescoutZgloszenie: Preset = {
   id: 'freescout-zgloszenie',
   name: 'FreeScout: nowe zgłoszenie',
-  blurb: 'SMS do agentów, gdy we FreeScoucie pojawia się nowa rozmowa',
+  blurb: 'SMS do agentów o nowej rozmowie albo odpowiedzi klienta we FreeScoucie',
   kinds: ['webhook_in'],
   // Webhook convo.created z FreeScouta 1.8 (przycięty): rozmowa z e-maila klienta.
   sample: {
@@ -19,6 +19,7 @@ export const freescoutZgloszenie: Preset = {
   },
   fields: [
     { path: 'number', label: 'numer rozmowy widoczny we FreeScoucie' },
+    { path: 'threadsCount', label: 'liczba wątków; 0 przy nowej rozmowie, więcej przy odpowiedzi klienta' },
     { path: 'subject', label: 'temat' },
     { path: 'preview', label: 'początek treści jako czysty tekst' },
     { path: 'customer.firstName', label: 'imię klienta' },
@@ -31,15 +32,15 @@ export const freescoutZgloszenie: Preset = {
   inbound: {
     to: { fallback: [] },
     // Bez polskich znaków (filtr gsm) SMS mieści 160 znaków zamiast 70 - temat i nazwisko zwykle je mają.
-    text: { mode: 'liquid', template: '{% capture t %}Nowe zgłoszenie #{{ p.number }} od {{ p.customer.firstName }} {{ p.customer.lastName }}: {{ p.subject | sms_truncate: 90 }}{% endcapture %}{{ t | gsm }}' },
+    text: { mode: 'liquid', template: '{% capture t %}{% if p.threadsCount > 1 %}Odpowiedź klienta w #{{ p.number }}{% else %}Nowe zgłoszenie #{{ p.number }}{% endif %} od {{ p.customer.firstName }} {{ p.customer.lastName }}: {{ p.subject | sms_truncate: 90 }}{% endcapture %}{{ t | gsm }}' },
     maxParts: 1, overflow: 'truncate',
   },
   expect: { text: 'Nowe zgloszenie #10143 od Anna Nowak: [Zgloszenie] Nie dziala logowanie' },
   sampleSource: 'FreeScout 1.8, prawdziwy webhook convo.created z żywej instancji, 2026-09-02',
   guide: [
-    'We FreeScoucie **Zarządzaj → API & Webhooks → Webhooks → Dodaj**: URL to adres wejściowy integracji, zdarzenie `convo.created`, skrzynki wszystkie albo wybrane. Numery agentów wpisz w bramce w liście zapasowej - FreeScout nie wie, kogo budzić.',
+    'We FreeScoucie **Zarządzaj → API & Webhooks → Webhooks → Dodaj**: URL to adres wejściowy integracji, zdarzenia `convo.created` (nowa rozmowa) i `convo.customer.reply.created` (odpowiedź klienta), skrzynki wszystkie albo wybrane. Numery agentów wpisz w bramce w liście zapasowej - FreeScout nie wie, kogo budzić. Szablon rozróżnia oba zdarzenia po liczbie wątków.',
     '',
-    'Żeby SMS szedł tylko z jednej skrzynki, dodaj warunek `mailboxId równe <numer>` (numer skrzynki widać w adresie jej ustawień). Rozmowy zakładane przez bramkę z SMS-ów też wywołują `convo.created` - agent dostaje wtedy SMS o SMS-ie, co zwykle jest pożądane; warunek `source.via równe customer` odsiewa rozmowy zakładane ręcznie przez agentów.',
+    'Żeby SMS szedł tylko z jednej skrzynki, dodaj warunek `mailboxId równe <numer>` (numer skrzynki widać w adresie jej ustawień). Rozmowy zakładane przez bramkę z SMS-ów (ustawienie „FreeScout: zgłoszenie z SMS-a”) też wywołują `convo.created`, więc agent dostaje SMS o SMS-ie.',
     '',
     'FreeScout nie ma pola na nagłówki - zamiast tokenu wpisz w bramce listę źródeł z adresem serwera FreeScouta.',
   ].join('\n'),
