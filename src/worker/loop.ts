@@ -1,6 +1,7 @@
 import { silentLogger } from '../log.ts';
 import type { Job } from '../store/jobs.ts';
 import { handleSend, notify, type WorkerDeps } from './send.ts';
+import { handleMail } from './mail.ts';
 import { handlePoll } from './poll.ts';
 import { handleWebhook } from './webhook.ts';
 import { handlePackageCreate, handlePackagePoll, handlePackageReport } from './packages.ts';
@@ -17,13 +18,18 @@ export const UNEXPECTED_BACKOFF_CAP_MS = 30 * 60_000;
 /** Ile zadań jednej partii wykonuje się jednocześnie. Zadania różnych wiadomości są niezależne. */
 const DEFAULT_CONCURRENCY = 10;
 
+/** Odstęp tury utrzymaniowej: powiadomienia, skaner stanu, sprzątanie. */
+const DEFAULT_MAINTENANCE_MS = 60_000;
+const DAY_MS = 86_400_000;
+
 export class Worker {
   private timer: NodeJS.Timeout | null = null;
   private running = false;
+  private lastMaintenanceAt = 0;
 
   constructor(
     private readonly deps: WorkerDeps,
-    private readonly opts: { intervalMs?: number; batch?: number; concurrency?: number; now?: () => Date } = {},
+    private readonly opts: { intervalMs?: number; batch?: number; concurrency?: number; maintenanceMs?: number; now?: () => Date } = {},
   ) {}
 
   start(): void {
@@ -55,8 +61,35 @@ export class Worker {
         for (let job = queue.shift(); job !== undefined; job = queue.shift()) await this.run(job, now);
       };
       await Promise.all(Array.from({ length: Math.min(width, queue.length) }, lane));
+      if (now.getTime() - this.lastMaintenanceAt >= (this.opts.maintenanceMs ?? DEFAULT_MAINTENANCE_MS)) {
+        this.lastMaintenanceAt = now.getTime();
+        this.maintenance(now);
+      }
     } finally {
       this.running = false;
+    }
+  }
+
+  /**
+   * Tura utrzymaniowa raz na minutę: maile z kolejki powiadomień, skaner stanu, sprzątanie
+   * idempotencji, ładunków i starych powiadomień. Każdy krok w osobnym try/catch - błąd
+   * sprzątania nie może zatrzymać wysyłki.
+   */
+  private maintenance(now: Date): void {
+    const log = this.deps.log ?? silentLogger;
+    const steps: Array<[string, () => unknown]> = [
+      ['powiadomienia', () => this.deps.notifier?.flush?.(now)],
+      ['skaner', () => this.deps.scanner?.scan(now)],
+      ['idempotencja', () => this.deps.guards?.pruneDedupBefore(new Date(now.getTime() - DAY_MS))],
+      ['ladunki', () => this.deps.integrationEvents?.scrubPayloadsBefore(new Date(now.getTime() - 7 * DAY_MS))],
+      ['kolejka_powiadomien', () => this.deps.notifications?.pruneBefore(new Date(now.getTime() - 30 * DAY_MS))],
+    ];
+    for (const [name, step] of steps) {
+      try {
+        step();
+      } catch (error) {
+        log.error('worker.utrzymanie_blad', { step: name, error });
+      }
     }
   }
 
@@ -68,6 +101,7 @@ export class Worker {
       else if (job.type === 'package.create') await handlePackageCreate(job, this.deps, now);
       else if (job.type === 'package.poll') await handlePackagePoll(job, this.deps, now);
       else if (job.type === 'package.report') await handlePackageReport(job, this.deps, now);
+      else if (job.type === 'mail') await handleMail(job, this.deps, now);
       else this.deps.jobs.fail(job.id, `Nieznany typ zadania: ${job.type}`);
     } catch (error) {
       // Wyjątek poza obsługą zadania nie może zatrzymać całej pętli.

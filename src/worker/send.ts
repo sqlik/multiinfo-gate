@@ -11,7 +11,10 @@ import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
 import type { Resolver } from '../net/private-address.ts';
 import type { AdminNotifier } from '../notifications/rules.ts';
 import type { IntegrationEventsRepo } from '../store/integration-events.ts';
+import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
 import type { IntegrationsRepo } from '../store/integrations.ts';
+import type { NotificationsRepo } from '../store/notifications.ts';
+import type { Mailer } from './mail.ts';
 import type { ClientPool } from './clients.ts';
 import { pauseForCertificate } from './certificate.ts';
 import { emitIntegrations, isOutboundEvent, type IntegrationEmitDeps } from './integrations.ts';
@@ -41,7 +44,16 @@ export interface WorkerDeps {
   /** Dostawa integracji: skąd wziąć adres i konfigurację oraz gdzie zapisać wynik. */
   integrations?: IntegrationsRepo;
   integrationEvents?: IntegrationEventsRepo;
-  notifier?: AdminNotifier;
+  /** Powiadomienia administratora; `flush` woła tura utrzymaniowa. */
+  notifier?: AdminNotifier & { flush?(now: Date): void };
+  /** Ustawienie SMTP i kolejka powiadomień - zadanie `mail` i sprzątanie. */
+  notifications?: NotificationsRepo;
+  /** Wysyłka maila; testy podstawiają atrapę. */
+  mailer?: Mailer;
+  /** Skaner stanu (certyfikaty, konta, odbiór, podsumowanie) - tura utrzymaniowa. */
+  scanner?: { scan(now: Date): void };
+  /** Strażnicy integracji - sprzątanie idempotencji w turze utrzymaniowej. */
+  guards?: IntegrationGuardsRepo;
   log?: Logger;
 }
 
