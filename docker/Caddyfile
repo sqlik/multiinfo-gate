@@ -1,5 +1,6 @@
 # Domena z MIG_DOMENA w docker/.env. Caddy sam pobiera i odnawia certyfikat Let's Encrypt.
-# Bramka nie czyta X-Forwarded-For - limity liczy na klucz, nie na adres, więc proxy niczego nie psuje.
+# Limity klucza bramka liczy na klucz, nie na adres, więc proxy ich nie psuje. Adresowi klienta
+# z X-Forwarded-For bramka wierzy tylko przy MIG_TRUSTED_PROXIES=172.16.0.0/12 w docker/.env (rozdział 6.5).
 {$MIG_DOMENA} {
 	reverse_proxy multiinfo-gate:8080
 }

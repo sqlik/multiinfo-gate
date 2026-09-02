@@ -76,6 +76,24 @@ klucza i ochrony z rozdziału 3.6. Bramka przyjmuje `Content-Type: application/j
 się tablicą). Ładunek do 256 KB; większy dostaje kod 413, niepoprawny JSON kod 400. Inne metody
 niż `POST` dostają 405, nieznany identyfikator i integracja wyłączona 404 bez wpisu w dzienniku.
 
+Panel pokazuje samą ścieżkę `/hooks/<identyfikator>`, bo nie wie, pod jakim adresem aplikacja
+widzi API bramki. Ścieżkę dokleja się do tego adresu, a on zależy od tego, jak bramka stoi
+i skąd woła ją aplikacja:
+
+| Jak bramka stoi | Skąd woła aplikacja | Pełny adres do wpisania w aplikacji |
+|---|---|---|
+| Docker z odwrotnym proxy pod domeną (Caddy, nginx albo Traefik z rozdziału 6 Uruchomienia) | z internetu i skądkolwiek indziej | `https://<TWOJA-DOMENA>/hooks/<identyfikator>` |
+| Docker bez proxy (porty przypięte do `127.0.0.1`, jak w `docker-compose.yml`) | tylko z tego samego serwera | `http://127.0.0.1:8080/hooks/<identyfikator>`; aplikacja z innego komputera bramki nie dosięgnie, dopóki API nie zostanie wystawione według rozdziału 6 |
+| Kontener LXC na Proxmoksie (rozdział 9 Uruchomienia) | z tej samej sieci co kontener (biuro, serwerownia) | `http://<ADRES-KONTENERA>:8080/hooks/<identyfikator>`, np. `http://10.10.10.159:8080/hooks/k9x…`; bez HTTPS, więc token wędruje siecią jawnym tekstem - do zaufanej sieci firmowej |
+| Kontener LXC na Proxmoksie | z internetu (Grafana Cloud, Freshdesk, FreeScout u hostingodawcy, Zapier) | kontener nie ma publicznego adresu; potrzebne odwrotne proxy z HTTPS pod publiczną domeną, kierowane na `http://<ADRES-KONTENERA>:8080` (punkt 9.6 Uruchomienia) |
+
+Sprawdzenie drogi jest proste: z komputera albo serwera, na którym stoi aplikacja, wywołanie
+`curl <ADRES-BEZ-ŚCIEŻKI>/healthz` (np. `curl https://sms.firma.example/healthz`) ma odpowiedzieć
+`{"status":"ok"}`. Odpowiedź `Connection refused` albo przekroczony czas oznaczają, że sieć nie
+prowadzi do bramki, i żadne ustawienie integracji tego nie naprawi. W drugą stronę - gdy to
+bramka woła aplikację (rozdział 4) - obowiązuje reguła z punktu 4.3 o adresach w sieci
+wewnętrznej.
+
 ### 3.2. Uwierzytelnianie
 
 Cztery warstwy; pierwsza działa zawsze, pozostałe włącza się w sekcji „Wejście”:
@@ -222,7 +240,10 @@ Dostawa idzie tym samym mechanizmem, co webhook klucza: 10 s na odpowiedź, `2xx
 godzinach. Po wyczerpaniu ponowień wpis `niedostarczone`, mail do administratora i przycisk
 „Ponów” w dzienniku integracji. Adresy w sieci wewnętrznej bramka odrzuca, chyba że w środowisku
 jest `MIG_WEBHOOK_ALLOW_PRIVATE=1` - dotyczy to aplikacji na tym samym serwerze albo w sieci
-firmowej, np. własnego skryptu albo automatyzacji domowej.
+firmowej, np. własnego skryptu albo automatyzacji domowej. W Dockerze zmienną wpisuje się
+w `docker/.env` i wykonuje `docker compose up -d`; w kontenerze LXC z Proxmoksa w pliku
+`/etc/multiinfo-gate/env`, po czym `systemctl restart multiinfo-gate`. Bez niej panel odrzuca
+taki adres już przy zapisie integracji, z komunikatem, że adres jest w sieci wewnętrznej.
 
 ### 4.4. Odczyt odpowiedzi
 

@@ -71,9 +71,9 @@ export function hookReveal(created: CreatedHook): string {
         <div class="keybox" id="hook-path">${esc(hookPath(created.hookId))}</div>
         <button class="btn btn-s" type="button" data-copy="#hook-path">Kopiuj</button>
       </div>
-      <div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">Doklej ścieżkę do adresu API bramki (port API, nie panelu),
-        np. https://sms.firma.example${esc(hookPath(created.hookId))}. Aplikacja ma wysyłać tam żądania POST z JSON-em albo formularzem.
-        Wygenerowanie nowego adresu unieważnia ten natychmiast.</div>
+      <div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">Doklej ścieżkę do adresu, pod którym aplikacja widzi API bramki (port API, nie panelu):
+        z internetu https://twoja-domena${esc(hookPath(created.hookId))} przez odwrotne proxy, z sieci lokalnej http://adres-serwera-albo-kontenera:8080${esc(hookPath(created.hookId))}.
+        Aplikacja ma wysyłać tam żądania POST z JSON-em albo formularzem. Wygenerowanie nowego adresu unieważnia ten natychmiast.</div>
     </div>`;
 }
 
