@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InvalidOrigError, InvalidPhoneError, normalizePhone, validateOrig } from '../../src/text/phone.ts';
+import { InvalidOrigError, InvalidPhoneError, MAX_RECIPIENTS_PER_HOOK, normalizePhone, normalizeRecipient, splitRecipients, TooManyRecipientsError, validateOrig } from '../../src/text/phone.ts';
 
 describe('normalizePhone', () => {
   it('przepuszcza numer z kodem kraju', () => {
@@ -68,5 +68,39 @@ describe('validateOrig', () => {
 
   it('odrzuca nadpis pusty', () => {
     expect(() => validateOrig('')).toThrow(InvalidOrigError);
+  });
+});
+
+describe('normalizeRecipient', () => {
+  it.each([
+    ['+48 601 000 001', '48601000001'],
+    ['601-000-001', '48601000001'],
+    ['(48) 601.000.001', '48601000001'],
+    ['0048601000001', '48601000001'],
+    ['00 48 601 000 001', '48601000001'],
+    ['48601000001', '48601000001'],
+  ])('%s -> %s', (raw, expected) => {
+    expect(normalizeRecipient(raw, '48')).toBe(expected);
+  });
+  it('odrzuca litery i za krótkie', () => {
+    expect(() => normalizeRecipient('jan@firma.pl', '48')).toThrow(InvalidPhoneError);
+    expect(() => normalizeRecipient('12345', '48')).toThrow(InvalidPhoneError);
+  });
+});
+
+describe('splitRecipients', () => {
+  it('przyjmuje tekst z przecinkami i średnikami oraz tablice', () => {
+    expect(splitRecipients('48601000001, 48601000002;48601000003')).toEqual(['48601000001', '48601000002', '48601000003']);
+    expect(splitRecipients(['48601000001', '', ' 48601000002 '])).toEqual(['48601000001', '48601000002']);
+    expect(splitRecipients(48601000001)).toEqual(['48601000001']);
+  });
+  it('pomija puste i nietekstowe', () => {
+    expect(splitRecipients(undefined)).toEqual([]);
+    expect(splitRecipients(null)).toEqual([]);
+    expect(splitRecipients({ a: 1 })).toEqual([]);
+  });
+  it('odrzuca ponad limit', () => {
+    const many = Array.from({ length: MAX_RECIPIENTS_PER_HOOK + 1 }, (_, i) => `4860100${String(i).padStart(4, '0')}`);
+    expect(() => splitRecipients(many)).toThrow(TooManyRecipientsError);
   });
 });
