@@ -125,7 +125,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const at = now();
     if (kind === 'webhook_in') {
       const p = previewInbound(deps.engine, config as InboundConfig, sample, countryCode, at);
-      return { ok: true, preview: { matches: p.matches, recipients: p.recipients, text: p.text, parts: p.parts, error: p.error } };
+      return { ok: true, preview: { matches: p.matches, recipients: p.recipients, text: p.text, parts: p.parts, error: p.error, threadRecipient: p.threadRecipient } };
     }
     const out = config as OutboundConfig;
     const event = typeof sample === 'object' && sample !== null ? sample as Record<string, unknown> : {};

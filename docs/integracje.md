@@ -98,10 +98,15 @@ podaj adresy proxy w zmiennej `MIG_TRUSTED_PROXIES` ([Uruchomienie](uruchomienie
 
 ### 3.3. Odbiorcy i normalizacja
 
-Numer bramka bierze ze ścieżki w ładunku (sekcja „Odbiorca”), np. `customer.phones[0].value`
-albo `to`. Wartość może być tekstem z numerami po przecinku albo tablicą. Gdy ścieżka jest pusta
-albo wartości brak, wchodzi lista zapasowa z konfiguracji (jeden numer na linię) - tak działają
-Uptime Kuma i Grafana, które nie przesyłają numerów.
+Numer bramka bierze z trzech źródeł, w tej kolejności:
+
+1. Ścieżka w ładunku (sekcja „Odbiorca”), np. `phone` albo `to`. Wartość może być tekstem
+   z numerami po przecinku albo tablicą.
+2. Nadawca odebranego SMS-a, do którego pasuje identyfikator zgłoszenia z ładunku (rozdział 3.8).
+   Tak działają helpdeski: FreeScout nie przesyła w webhooku telefonu klienta, ale przesyła
+   identyfikator rozmowy, a bramka pamięta, z jakiego numeru rozmowa powstała.
+3. Lista zapasowa z konfiguracji (jeden numer na linię) - tak działają Uptime Kuma i Grafana,
+   które nie przesyłają numerów.
 
 Normalizacja przyjmuje zapisy ludzkie: usuwa spacje, myślniki, nawiasy i kropki, zdejmuje
 wiodący `+` albo `00`, a numer dziewięciocyfrowy uzupełnia kodem kraju konta. `+48 601 000 001`,
@@ -147,9 +152,11 @@ Grafany nie nadaje się na identyfikator, bo jest stały dla grupy alertów.
 
 Ścieżka „identyfikator zgłoszenia” łączy oba kierunki: gdy integracja z SMS-a założyła
 w helpdesku zgłoszenie z odebranego SMS-a i odczytała jego identyfikator (rozdział 4.4), a
-potem helpdesk woła adres wejściowy z tym identyfikatorem i numerem tego samego nadawcy, bramka
-wysyła SMS jako odpowiedź w wątku (jak `inReplyTo` w [API](api.md), rozdział 5a.3).
-Odpowiedź widać przy odebranej wiadomości. Bez dopasowania idzie zwykły SMS.
+potem helpdesk woła adres wejściowy z tym identyfikatorem, bramka wysyła SMS do nadawcy tamtej
+wiadomości jako odpowiedź w wątku (jak `inReplyTo` w [API](api.md), rozdział 5a.3). Gdy ładunek
+podaje też numer, wątek powstaje tylko, jeśli to numer nadawcy. Odpowiedź widać przy odebranej
+wiadomości. Bez dopasowania idzie zwykły SMS na numer z ładunku albo z listy zapasowej, a bez
+nich wpis `błąd` z numerem zgłoszenia w powodzie.
 
 ### 3.9. Kody odpowiedzi
 
@@ -468,21 +475,29 @@ zakładka **API Keys**) jako sekret nagłówka `X-FreeScout-API-Key`, w body num
 SMS-a (rozdział 5.4). Identyfikator rozmowy z odpowiedzi (`id`) trafia do bramki jako
 identyfikator zgłoszenia.
 
-**Do SMS.** W module webhooków dodaj zdarzenie `convo.agent.reply` z adresem wejściowym
-integracji. FreeScout wysyła rozmowę z ostatnim wątkiem:
+**Do SMS.** W module webhooków (Zarządzaj → Webhooks) dodaj webhook z adresem wejściowym
+integracji i jednym zdarzeniem `convo.agent.reply.created`. FreeScout 1.8 wysyła całą rozmowę
+z wątkami od najnowszego (ładunek przycięty; obiekt `customer` ma tylko dane podstawowe, bez
+telefonów):
 
 ```json
 {
-  "id": 4821,
-  "customer": { "phones": [{ "value": "+48 601 000 001", "type": 1 }] },
-  "_embedded": { "threads": [{ "type": "message", "body": "<p>Odpowiadamy: sprawdzamy sprawę.</p>" }] }
+  "id": 4821, "number": 10143, "type": "phone", "status": "active", "subject": "SMS od 48601000001", "mailboxId": 1,
+  "customer": { "id": 8, "type": "customer", "firstName": "Anna", "lastName": "Nowak", "email": "anna@example" },
+  "_embedded": { "threads": [
+    { "id": 101, "type": "message", "body": "<div>Odpowiadamy: sprawdzamy sprawę.</div>", "createdAt": "2026-09-02T17:17:08Z" },
+    { "id": 100, "type": "customer", "body": "Pomocy, nie działa", "createdAt": "2026-09-02T17:16:09Z" }
+  ] }
 }
 ```
 
-Bramka bierze numer ze ścieżki `customer.phones[0].value`, identyfikator zgłoszenia z `id`, a
-treść z szablonu `{{ p._embedded.threads[0].body | strip_html | strip }}` (do trzech części).
-Gdy `id` pasuje do rozmowy założonej wcześniej z SMS-a, odpowiedź agenta idzie jako SMS w wątku.
-FreeScout nie ma pola na nagłówki - wpisz w bramce listę źródeł z adresem serwera FreeScouta.
+Bramka bierze identyfikator zgłoszenia z `id`, numer odbiorcy z odebranego SMS-a, z którego
+rozmowa powstała (rozdział 3.3), a treść z szablonu
+`{{ p._embedded.threads[0].body | strip_html | strip }}` (do trzech części). Odpowiedź agenta
+idzie jako SMS w wątku. Domyślny warunek `_embedded.threads[0].type równe message` pomija
+zdarzenia, w których najnowszy wątek jest wiadomością klienta. FreeScout podpisuje webhooki
+nagłówkiem `X-FreeScout-Signature`, którego bramka nie sprawdza - zamiast tego wpisz listę źródeł
+z adresem serwera FreeScouta.
 
 ### 6.7. Freshdesk
 

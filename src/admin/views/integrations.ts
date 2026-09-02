@@ -259,6 +259,8 @@ export function valuesOf(row: IntegrationRow, sample: string | null): Integratio
 export interface FormPreview {
   matches: boolean; error: string | null;
   recipients?: string[]; text?: string; parts?: number;
+  /** Odbiorca wyjdzie z wątku: nadawca odebranego SMS-a dopasowanego po identyfikatorze zgłoszenia. */
+  threadRecipient?: boolean;
   headers?: Record<string, string>; body?: string;
 }
 
@@ -452,7 +454,7 @@ function sectionRecipient(v: IntegrationFormValues): string {
     <div class="field">
       <label for="toPath">Ścieżka numeru w ładunku</label>
       <input id="toPath" name="toPath" value="${esc(v.toPath)}" placeholder="np. customer.phones[0].value">
-      <div class="hint">Pole z numerem albo listą numerów; pusta ścieżka albo brak wartości w ładunku bierze listę zapasową.</div>
+      <div class="hint">Pole z numerem albo listą numerów. Bez numeru w ładunku bramka bierze nadawcę odebranego SMS-a dopasowanego po identyfikatorze zgłoszenia, a na końcu listę zapasową.</div>
     </div>
     <div class="field">
       <label for="toFallback">Lista zapasowa</label>
@@ -568,7 +570,9 @@ function previewPanel(kind: IntegrationKind, p: FormPreview): string {
   const rows: string[] = [];
   rows.push(`<div>Warunek</div><div>${p.matches ? '<span class="st"><span class="dot dot-ok"></span>spełniony</span>' : '<span class="st"><span class="dot dot-wait"></span>niespełniony - zdarzenie zostałoby pominięte</span>'}</div>`);
   if (kind === 'webhook_in') {
-    rows.push(`<div>Odbiorcy</div><div class="m">${(p.recipients ?? []).length === 0 ? '<span class="fail">brak</span>' : esc((p.recipients ?? []).join(', '))}</div>`);
+    const recipients = p.recipients ?? [];
+    rows.push(`<div>Odbiorcy</div><div class="m">${recipients.length > 0 ? esc(recipients.join(', '))
+      : p.threadRecipient ? '<span class="dim">nadawca odebranego SMS-a, do którego pasuje identyfikator zgłoszenia</span>' : '<span class="fail">brak</span>'}</div>`);
     rows.push(`<div>Treść</div><div>${p.text ? `<div class="ruler" style="padding: 0 0 4px;">${esc(p.text)}</div>` : '<span class="dim">pusta</span>'}</div>`);
     rows.push(`<div>Części</div><div class="m">${esc(p.parts ?? 0)}</div>`);
   } else {

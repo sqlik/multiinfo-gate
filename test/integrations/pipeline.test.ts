@@ -134,6 +134,26 @@ describe('runInbound', () => {
     const other = runInbound(deps, integ, { ticket: { id: '4821' }, to: '48601000002', msg: 'Inny' }, ip, NOW) as { messageIds: string[] };
     expect(deps.messages.get(other.messageIds[0]!)!.inReplyTo).toBeNull();
   });
+  it('bez numeru w ładunku odbiorcą jest nadawca odebranej dopasowanej po zgłoszeniu; bez dopasowania - lista zapasowa', () => {
+    deps.inbound.insertIfNew({ id: 'in_1', accountId, serviceId: '24138', miId: '1', sender: '48601000001', dest: '7968', kind: 'text', body: 'Pomocy', bodyHash: 'h', protocolId: 0, codingScheme: 0, connectorId: null, relatedMessageId: null, receivedAt: NOW.toISOString(), createdAt: NOW.toISOString() });
+    const outbound = integrations.insert({ name: 'FS', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1, config: { condition: { mode: 'builder', rules: [] }, throttle: { limit: 10, windowMinutes: 10 }, eventLogLimit: 200, events: ['message.received'], url: 'https://fs.example/x', method: 'POST', headers: [], body: { mode: 'json', template: '{}' }, sign: false }, secrets: {}, storePayloads: 0, createdAt: NOW });
+    deps.inbound.setExternalRef('in_1', outbound, '45');
+    const integ = make({ ticketRefPath: 'id', to: { fallback: ['48601000009'] } });
+    const out = runInbound(deps, integ, { id: 45, msg: 'Odpowiadamy' }, ip, NOW) as { messageIds: string[] };
+    const m = deps.messages.get(out.messageIds[0]!)!;
+    expect(m.dest).toBe('48601000001');
+    expect(m.inReplyTo).toBe('in_1');
+    // Zgłoszenie nieznane: lista zapasowa, bez wątku.
+    const other = runInbound(deps, integ, { id: 99, msg: 'Inne' }, ip, NOW) as { messageIds: string[] };
+    expect(deps.messages.get(other.messageIds[0]!)!.dest).toBe('48601000009');
+    expect(deps.messages.get(other.messageIds[0]!)!.inReplyTo).toBeNull();
+    // Bez listy zapasowej: błąd z numerem zgłoszenia w powodzie.
+    const bare = make({ ticketRefPath: 'id', to: { fallback: [] } }, { name: 'FS2' });
+    const fail = runInbound(deps, bare, { id: 99, msg: 'Inne' }, ip, NOW);
+    expect(fail.kind).toBe('error');
+    expect((fail as { detail: string }).detail).toContain('99');
+  });
+
   it('klucz odwołany i konto wstrzymane to unavailable', () => {
     const integ = make({});
     accounts.pause(accountId, 'brak środków');
@@ -159,10 +179,16 @@ describe('runInbound', () => {
 });
 
 describe('previewInbound', () => {
+  it('bez numeru, ale z identyfikatorem zgłoszenia zaznacza odbiorcę z wątku', () => {
+    const config: InboundConfig = { ...defaultInboundConfig(), ticketRefPath: 'id', text: { mode: 'liquid', template: '{{ p.msg }}' } };
+    expect(previewInbound(new TemplateEngine(), config, { id: 45, msg: 'x' }, '48', NOW).threadRecipient).toBe(true);
+    expect(previewInbound(new TemplateEngine(), config, { msg: 'x' }, '48', NOW).threadRecipient).toBe(false);
+  });
+
   it('pokazuje numery, treść i części bez zapisu', () => {
     const integ = make({});
     const p = previewInbound(deps.engine, integ.config, { to: '+48 601 000 001', msg: 'Zażółć' }, '48', NOW);
-    expect(p).toEqual({ matches: true, recipients: ['48601000001'], text: 'Zażółć', parts: 1, error: null });
+    expect(p).toEqual({ matches: true, recipients: ['48601000001'], text: 'Zażółć', parts: 1, error: null, threadRecipient: false });
     expect(deps.jobs.depth()).toBe(0);
     expect(deps.integrationEvents.list(integ.id, 10)).toHaveLength(0);
   });
