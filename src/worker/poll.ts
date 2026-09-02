@@ -60,7 +60,7 @@ export async function handlePoll(job: Job, deps: WorkerDeps, now: Date): Promise
       });
     } catch (error) {
       if (error instanceof ProviderError && error.kind === 'certificate') {
-        pauseForCertificate(deps, message.accountId, error, log);
+        pauseForCertificate(deps, message.accountId, error, log, now);
       } else {
         log.warn('status.blad_odczytu', { messageId, miId, error });
       }

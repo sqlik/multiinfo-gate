@@ -178,7 +178,7 @@ export async function handleSend(job: Job, deps: WorkerDeps, now: Date): Promise
     }
 
     if (error.kind === 'certificate') {
-      const reason = pauseForCertificate(deps, message.accountId, error, log);
+      const reason = pauseForCertificate(deps, message.accountId, error, log, now);
       // Wiadomość zostaje w kolejce: po wymianie certyfikatu pójdzie bez zmian
       // i z nienaruszonym harmonogramem ponowień.
       deps.events.record(messageId, now, 'paused', reason);
