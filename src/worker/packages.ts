@@ -53,7 +53,7 @@ function handleProviderFailure(
   const message = error instanceof Error ? error.message : String(error);
 
   if (provider?.kind === 'certificate') {
-    const reason = pauseForCertificate(deps, pkg.accountId, provider, log);
+    const reason = pauseForCertificate(deps, pkg.accountId, provider, log, now);
     deps.jobs.defer(job.id, new Date(now.getTime() + PAUSED_RECHECK_MS), reason);
     return;
   }

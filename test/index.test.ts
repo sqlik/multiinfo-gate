@@ -53,6 +53,22 @@ describe('startGate', () => {
     expect(running.apiHost).toBe('0.0.0.0');
   });
 
+  it('odpowiada na /hooks/ na porcie API i zatrzymuje się bez wiszących zegarów', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'mig-start-'));
+    const config = loadEnv({
+      MIG_MASTER_KEY: randomBytes(32).toString('base64'),
+      MIG_DATA_DIR: dir, MIG_API_PORT: '0', MIG_ADMIN_PORT: '0', MIG_LOG_LEVEL: 'silent', MIG_TRUSTED_PROXIES: '10.0.0.1',
+    });
+    running = await startGate(config);
+    const res = await fetch(`http://127.0.0.1:${running.apiPort}/hooks/abc`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ accepted: false, reason: 'unknown' });
+    const started = Date.now();
+    await running.stop();
+    running = null;
+    expect(Date.now() - started).toBeLessThan(5000);
+  });
+
   it('nie startuje bez klucza głównego', () => {
     expect(() => loadEnv({})).toThrow(/MIG_MASTER_KEY/);
   });

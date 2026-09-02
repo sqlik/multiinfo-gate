@@ -2,6 +2,7 @@ import { shortId } from '../ids.ts';
 import { sha256Hex } from '../text/hash.ts';
 import { silentLogger, type Logger } from '../log.ts';
 import { ProviderError, type InboundSms } from '../multiinfo/response.ts';
+import type { AdminNotifier } from '../notifications/rules.ts';
 import type { AccountsRepo } from '../store/accounts.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
@@ -37,6 +38,8 @@ export interface ReceiverDeps {
   /** Integracje wychodzące na message.received; bez obu pól odebrane idą tylko do subskrybentów. */
   integrations?: IntegrationsRepo;
   integrationEmit?: IntegrationEmitDeps;
+  /** Powiadomienia administratora (konto wstrzymane za certyfikat). */
+  notifier?: AdminNotifier;
 }
 
 /**
@@ -260,7 +263,7 @@ export class Receiver {
       if (signal?.aborted) return { kind: 'error', error: 'przerwane' };
       if (error instanceof ProviderError && error.kind === 'certificate') {
         // Jak przy wysyłce: konto staje w całości, a odbiornik gasi cel przy najbliższym uzgodnieniu.
-        const reason = pauseForCertificate(this.deps, target.accountId, error, log);
+        const reason = pauseForCertificate(this.deps, target.accountId, error, log, clock());
         return { kind: 'stopped', error: reason };
       }
       const code = error instanceof ProviderError ? error.code : -71;

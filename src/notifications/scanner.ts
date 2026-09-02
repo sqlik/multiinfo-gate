@@ -30,6 +30,10 @@ export interface ScannerDeps {
 const numbers = (value: unknown): number[] => (Array.isArray(value) ? value.map(Number).filter((n) => Number.isFinite(n) && n > 0) : []);
 const numberOr = (value: unknown, fallback: number): number => (typeof value === 'number' && Number.isFinite(value) ? value : fallback);
 
+/** Jeden klucz na parę konto i powód - ten sam przy wstrzymaniu w workerze i w skanerze. */
+export const pausedDedupKey = (accountId: number, reason: string): string =>
+  `account:${accountId}:paused:${createHash('sha256').update(reason).digest('hex').slice(0, 16)}`;
+
 /** Dni do końca ważności; 0 w dniu wygaśnięcia, ujemne po nim. */
 export const daysLeft = (notAfter: string, now: Date): number => Math.ceil((Date.parse(notAfter) - now.getTime()) / DAY_MS);
 
@@ -68,9 +72,8 @@ export class NotificationScanner {
   private pausedAccounts(now: Date): void {
     for (const account of this.deps.accounts.list()) {
       if (account.pausedReason === null) continue;
-      const digest = createHash('sha256').update(account.pausedReason).digest('hex').slice(0, 16);
       this.deps.notifier.notify('account_rejecting', `account:${account.id}`,
-        `Konto ${account.name} wstrzymane: ${account.pausedReason}`, now, `account:${account.id}:paused:${digest}`);
+        `Konto ${account.name} wstrzymane: ${account.pausedReason}`, now, pausedDedupKey(account.id, account.pausedReason));
     }
   }
 

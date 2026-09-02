@@ -12,6 +12,8 @@ import { SourceMatcher } from './integrations/sources.ts';
 import { TemplateEngine } from './integrations/templates.ts';
 import { createLogger } from './log.ts';
 import { systemResolver } from './net/private-address.ts';
+import { Notifier } from './notifications/notifier.ts';
+import { NotificationScanner } from './notifications/scanner.ts';
 import { AccountsRepo } from './store/accounts.ts';
 import { AdminUsersRepo } from './store/admin-users.ts';
 import { ApiKeysRepo } from './store/api-keys.ts';
@@ -26,6 +28,7 @@ import { IntegrationsRepo } from './store/integrations.ts';
 import { JobsRepo } from './store/jobs.ts';
 import { MessageEventsRepo } from './store/message-events.ts';
 import { MessagesRepo } from './store/messages.ts';
+import { NotificationsRepo } from './store/notifications.ts';
 import { PackagesRepo } from './store/packages.ts';
 import { WebhookDeliveriesRepo } from './store/webhook-deliveries.ts';
 import { ClientPool } from './worker/clients.ts';
@@ -60,6 +63,10 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const integrationEvents = new IntegrationEventsRepo(db, config.masterKey);
   const guards = new IntegrationGuardsRepo(db);
   const engine = new TemplateEngine();
+  const notifications = new NotificationsRepo(db, config.masterKey);
+  const notifier = new Notifier({ notifications, jobs, log });
+  const scanner = new NotificationScanner({ accounts, inboundServices, messages, inbound, integrations, deliveries, notifications, notifier, jobs, log });
+  const integrationEmit = { integrations, integrationEvents, guards, deliveries, jobs, engine, notifier, log };
 
   const backups = new BackupScheduler({
     db, dir: join(config.dataDir, 'backups'), retentionDays: config.backupRetentionDays, log,
@@ -69,12 +76,14 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const worker = new Worker({
     accounts, apiKeys, messages, events, deliveries, packages, jobs, clients, inbound,
     reportsDir: join(config.dataDir, 'reports'), log, allowPrivateWebhooks: config.webhookAllowPrivate,
+    integrationEmit, integrations, integrationEvents, guards, notifier, notifications, scanner,
   });
   worker.start();
 
   const receiver = new Receiver({
     accounts, apiKeys, inbound, services: inboundServices, messages, deliveries, jobs, clients,
     timeoutMs: config.inboundTimeoutMs, idleMs: config.inboundIdleMs, log,
+    integrations, integrationEmit, notifier,
   });
   receiver.start();
 
@@ -82,11 +91,11 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
     accounts, apiKeys, messages, events, packages, jobs, clients, inbound, rateLimiter: new RateLimiter(), log,
     inboundHealth: () => receiver.health(),
     integrations, integrationEvents, guards, engine, sources: new SourceMatcher(systemResolver),
-    hookLimiter: new RateLimiter(), trustedProxies: config.trustedProxies,
+    hookLimiter: new RateLimiter(), trustedProxies: config.trustedProxies, notifier,
   });
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
-    inbound, inboundServices, receiver, inboundHealth: () => receiver.health(),
+    inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate,
   });
 

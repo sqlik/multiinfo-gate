@@ -153,6 +153,18 @@ describe('handleSend', () => {
     expect(deps.jobs.claim(new Date(NOW.getTime() + 86_400_000), 10)).toHaveLength(0);
   });
 
+  it('wstrzymanie konta za certyfikat powiadamia administratora raz na powód', async () => {
+    const notify = vi.fn();
+    deps.notifier = { notify };
+    const { job } = seedMessage();
+    sendLong.mockRejectedValue(new ProviderError(-80, 'Brak certyfikatu', 'certificate'));
+    await handleSend(job, deps, NOW);
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify.mock.calls[0]![0]).toBe('account_rejecting');
+    expect(notify.mock.calls[0]![2]).toContain('Konto Firma Info wstrzymane');
+    expect(notify.mock.calls[0]![4]).toMatch(new RegExp(`^account:${accountId}:paused:[0-9a-f]{16}$`));
+  });
+
   it('wstrzymuje konto po błędzie certyfikatu i nie oznacza wiadomości jako nieudanej', async () => {
     const { id, job } = seedMessage();
     sendLong.mockRejectedValue(new ProviderError(-85, 'Pole CN nie zgadza się z loginem', 'certificate'));
