@@ -94,7 +94,12 @@ describe('GET /integracje/nowa', () => {
     expect(presets.body.indexOf('>Własne<')).toBeGreaterThan(presets.body.indexOf('>Uptime Kuma<'));
     expect(presets.body).not.toContain('>Slack<');
 
-    const form = await page('/integracje/nowa?rodzaj=webhook_in&ustawienie=uptime-kuma');
+    // Gotowe ustawienie otwiera się w trybie prostym; pola silnika dopiero po przełączeniu.
+    const simple = await page('/integracje/nowa?rodzaj=webhook_in&ustawienie=uptime-kuma');
+    expect(simple.statusCode).toBe(200);
+    expect(simple.body).toContain('Kiedy wysyłać SMS');
+    expect(simple.body).not.toContain('name="textTemplate"');
+    const form = await page('/integracje/nowa?rodzaj=webhook_in&ustawienie=uptime-kuma&tryb=zaawansowany');
     expect(form.statusCode).toBe(200);
     expect(form.body).toContain('name="textTemplate"');
     expect(form.body).toContain('{{ p.monitor.name }}');
@@ -106,7 +111,7 @@ describe('GET /integracje/nowa', () => {
   });
 
   it('formularz wychodzącej ma adres, zdarzenia i body', async () => {
-    const form = await page('/integracje/nowa?rodzaj=webhook_out&ustawienie=freescout');
+    const form = await page('/integracje/nowa?rodzaj=webhook_out&ustawienie=freescout&tryb=zaawansowany');
     expect(form.statusCode).toBe(200);
     expect(form.body).toContain('name="url"');
     expect(form.body).toContain('freescout.example');

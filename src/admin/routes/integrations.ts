@@ -1,12 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { matches } from '../../integrations/conditions.ts';
-import { INTEGRATION_KINDS, type InboundConfig, type IntegrationKind, type OutboundConfig } from '../../integrations/config.ts';
+import { INTEGRATION_KINDS, defaultInboundConfig, type InboundConfig, type IntegrationKind, type OutboundConfig } from '../../integrations/config.ts';
 import { previewInbound } from '../../integrations/pipeline.ts';
 import { presetById, presetsFor, type Preset } from '../../integrations/presets/index.ts';
 import { PRIVATE_TARGET_MESSAGE, systemResolver, webhookTarget } from '../../net/private-address.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
 import { buildOutboundContext, previewOutbound } from '../../worker/integrations.ts';
 import { formToConfig, formValues, type ExistingSecrets } from '../integration-form.ts';
+import { detectSimple, hasSimple, simpleDefaults, simpleLabels, simpleToValues, simpleValuesFromBody, type SimpleValues } from '../simple-form.ts';
+import { modeSwitch, simpleFormPage } from '../views/integration-simple.ts';
 import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
 import { WINDOW_MS } from '../window.ts';
@@ -51,7 +53,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     };
   };
 
-  const listBody = (request: FastifyRequest, filter: IntegrationsFilter, created: { name: string; hookId: string } | null = null) => {
+  const listBody = (request: FastifyRequest, filter: IntegrationsFilter, created: CreatedHook | null = null) => {
     const since = new Date(now().getTime() - WINDOW_MS);
     const rows = deps.integrations.list()
       .filter((r) => filter.kind === null || r.kind === (filter.kind === 'in' ? 'webhook_in' : 'webhook_out'))
@@ -114,6 +116,41 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
 
   const countryCodeOf = (accountId: number): string => deps.accounts.get(accountId)?.defaultCountryCode ?? '48';
 
+  /** Wynik każdego wariantu „co w SMS-ie” na próbce ustawienia - tryb prosty pokazuje wynik, nie szablon. */
+  const textPreviews = (preset: Preset): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const t of preset.simple?.inbound?.text ?? []) {
+      const config: InboundConfig = { ...defaultInboundConfig(), ...preset.inbound, condition: { mode: 'builder', rules: [] }, text: t.text };
+      const p = previewInbound(deps.engine, config, preset.sample ?? {}, '48', now());
+      out[t.id] = p.error === null ? p.text ?? '' : `(błąd szablonu: ${p.error})`;
+    }
+    return out;
+  };
+
+  type Mode = { mode: 'prosty' } | { mode: 'zaawansowany'; note?: string };
+  /**
+   * Tryb formularza: prosty, gdy ustawienie go ma i konfiguracja mieści się w jego listach; ?tryb= przełącza.
+   * Prośba o prosty przy konfiguracji spoza list daje zaawansowany z wyjaśnieniem, nie cichą podmianę.
+   */
+  const modeOf = (tryb: string | undefined, preset: Preset, kind: IntegrationKind, values: IntegrationFormValues | null): Mode => {
+    if (!hasSimple(preset, kind)) return { mode: 'zaawansowany' };
+    if (tryb === 'zaawansowany') return { mode: 'zaawansowany' };
+    if (values === null || detectSimple(preset, kind, values) !== null) return { mode: 'prosty' };
+    return { mode: 'zaawansowany', note: 'Ta integracja ma ustawienia spoza list trybu prostego (np. własny szablon albo warunek), dlatego otwiera się w trybie zaawansowanym.' };
+  };
+
+  const simplePage = (request: FastifyRequest, ctx: FormContext, sv: SimpleValues, opts: { error?: string; created?: CreatedHook } = {}) =>
+    render.page(request, {
+      title: ctx.row ? ctx.row.name : 'Nowa integracja', active: 'integracje',
+      body: simpleFormPage(ctx, sv, { ...opts, textPreviews: textPreviews(ctx.preset) }),
+    });
+
+  const advancedPage = (request: FastifyRequest, ctx: FormContext, v: IntegrationFormValues, opts: { error?: string; preview?: FormPreview; created?: CreatedHook; note?: string } = {}) =>
+    render.page(request, {
+      title: ctx.row ? ctx.row.name : 'Nowa integracja', active: 'integracje',
+      body: integrationFormPage(ctx, v, { ...opts, ...(hasSimple(ctx.preset, ctx.kind) ? { modeSwitch: modeSwitch(ctx, 'zaawansowany') } : {}) }),
+    });
+
   /** Podgląd „Sprawdź szablon” z próbki; błąd JSON-a próbki to błąd formularza, nie podglądu. */
   const preview = (kind: IntegrationKind, config: IntegrationRow['config'], v: IntegrationFormValues, secretNames: string[], countryCode: string):
     { ok: true; preview: FormPreview } | { ok: false; error: string } => {
@@ -147,12 +184,25 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
   ) => {
     reply.type('text/html; charset=utf-8');
     const body = (request.body ?? {}) as Body;
-    const v = formValues(body);
     const ctx = formContext(kind, preset, row);
+    // Tryb prosty: wybory z list na pełne wartości formularza, dalej ta sama walidacja i zapis.
+    const simple = String(body.tryb ?? '') === 'prosty' && hasSimple(preset, kind) ? simpleValuesFromBody(body, preset) : null;
+    let v: IntegrationFormValues;
+    if (simple !== null) {
+      const base = row ? valuesOf(row, null) : valuesFromPreset(kind, preset);
+      const mapped = simpleToValues(kind, preset, simple, base);
+      if (!mapped.ok) {
+        reply.code(400);
+        return simplePage(request, ctx, simple, { error: mapped.error });
+      }
+      v = mapped.values;
+    } else {
+      v = formValues(body);
+    }
     const title = row ? row.name : 'Nowa integracja';
     const fail = (error: string, code = 400) => {
       reply.code(code);
-      return render.page(request, { title, active: 'integracje', body: integrationFormPage(ctx, v, { error }) });
+      return simple !== null ? simplePage(request, ctx, simple, { error }) : advancedPage(request, ctx, v, { error });
     };
 
     const key = keyCheck(v, row?.apiKeyId);
@@ -167,7 +217,8 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       const secretNames = [...new Set([...existing.names, ...Object.keys(built.secrets), ...Object.keys(built.carried)])];
       const result = preview(kind, built.config, v, secretNames, countryCodeOf(key.accountId));
       if (!result.ok) return fail(result.error);
-      return render.page(request, { title, active: 'integracje', body: integrationFormPage(ctx, v, { preview: result.preview }) });
+      void title;
+      return advancedPage(request, ctx, v, { preview: result.preview });
     }
 
     // Sekrety przenoszone: wartości z bazy pod nowymi odniesieniami; stare, nieużyte, znikają.
@@ -211,8 +262,8 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     return listBody(request, { kind, keyId });
   });
 
-  app.get<{ Querystring: { rodzaj?: string; ustawienie?: string } }>('/integracje/nowa', async (request, reply) => {
-    const { rodzaj, ustawienie } = request.query;
+  app.get<{ Querystring: { rodzaj?: string; ustawienie?: string; tryb?: string } }>('/integracje/nowa', async (request, reply) => {
+    const { rodzaj, ustawienie, tryb } = request.query;
     // Typ odpowiedzi dopiero po sprawdzeniu - domyślna odpowiedź 404 jest JSON-em, nie stroną.
     if (rodzaj === undefined) {
       reply.type('text/html; charset=utf-8');
@@ -226,10 +277,10 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const preset = presetById(ustawienie);
     if (!preset || !preset.kinds.includes(rodzaj)) return reply.callNotFound();
     reply.type('text/html; charset=utf-8');
-    return render.page(request, {
-      title: 'Nowa integracja', active: 'integracje',
-      body: integrationFormPage(formContext(rodzaj, preset), valuesFromPreset(rodzaj, preset)),
-    });
+    const ctx = formContext(rodzaj, preset);
+    const values = valuesFromPreset(rodzaj, preset);
+    const mode = modeOf(tryb, preset, rodzaj, null);
+    return mode.mode === 'prosty' ? simplePage(request, ctx, simpleDefaults(preset, values)) : advancedPage(request, ctx, values);
   });
 
   app.post<{ Body: Body }>('/integracje', async (request, reply) => {
@@ -252,8 +303,11 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       });
       const row = deps.integrations.get(id)!;
       if (row.hookId !== null) {
-        // Adres wejściowy pokazany raz, stroną - nie w adresie przekierowania.
-        return listBody(request, { kind: null, keyId: null }, { name: row.name, hookId: row.hookId });
+        // Adres wejściowy pokazany raz, stroną - nie w adresie przekierowania - razem z instrukcją dla aplikacji.
+        return listBody(request, { kind: null, keyId: null }, {
+          name: row.name, hookId: row.hookId, guide: preset.guide, presetName: preset.name,
+          ...(preset.simple?.inbound ? { appField: preset.simple.inbound.addressField } : {}),
+        });
       }
       render.flash(request, 'ok', `Integracja ${v.name} utworzona.`);
       reply.redirect('/integracje', 302);
@@ -273,22 +327,26 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }));
     return render.page(request, {
       title: row.name, active: 'integracje',
-      body: integrationDetailPage({ view: viewOf(row, since), events, apiUrl: deps.settings.apiUrl() }),
+      body: integrationDetailPage({
+        view: viewOf(row, since), events, apiUrl: deps.settings.apiUrl(),
+        simple: simpleLabels(presetOf(row), row.kind, valuesOf(row, null)),
+      }),
     });
   });
 
-  app.get<{ Params: { id: string }; Querystring: { probka?: string } }>('/integracje/:id/edytuj', async (request, reply) => {
+  app.get<{ Params: { id: string }; Querystring: { probka?: string; tryb?: string } }>('/integracje/:id/edytuj', async (request, reply) => {
     const row = rowOr404(request.params.id, reply);
     if (!row) return;
     reply.type('text/html; charset=utf-8');
+    const preset = presetOf(row);
+    const values = valuesOf(row, null);
+    const mode = modeOf(request.query.probka === undefined ? request.query.tryb : 'zaawansowany', preset, row.kind, values);
+    if (mode.mode === 'prosty') return simplePage(request, formContext(row.kind, preset, row), simpleDefaults(preset, values));
     // Próbka: wskazany wpis dziennika, a bez niego ostatni przechowany ładunek.
     const fromEvent = request.query.probka === undefined ? undefined : deps.integrationEvents.get(Number(request.query.probka));
     const sample = fromEvent && fromEvent.integrationId === row.id && fromEvent.payload !== null
       ? fromEvent.payload : deps.integrationEvents.latestPayload(row.id);
-    return render.page(request, {
-      title: row.name, active: 'integracje',
-      body: integrationFormPage(formContext(row.kind, presetOf(row), row), valuesOf(row, prettySample(sample))),
-    });
+    return advancedPage(request, formContext(row.kind, preset, row), valuesOf(row, prettySample(sample)), mode.note ? { note: mode.note } : {});
   });
 
   app.post<{ Params: { id: string }; Body: Body }>('/integracje/:id/edytuj', async (request, reply) => {
@@ -328,11 +386,13 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     reply.type('text/html; charset=utf-8');
     // Nowy adres widać raz, na stronie edycji - stary już nie działa.
     const fresh = deps.integrations.get(row.id)!;
-    return render.page(request, {
-      title: row.name, active: 'integracje',
-      body: integrationFormPage(formContext(fresh.kind, presetOf(fresh), fresh), valuesOf(fresh, prettySample(deps.integrationEvents.latestPayload(fresh.id))),
-        { created: { name: fresh.name, hookId } satisfies CreatedHook }),
-    });
+    const preset = presetOf(fresh);
+    const values = valuesOf(fresh, prettySample(deps.integrationEvents.latestPayload(fresh.id)));
+    const created: CreatedHook = { name: fresh.name, hookId, ...(preset.simple?.inbound ? { appField: preset.simple.inbound.addressField } : {}) };
+    if (modeOf(undefined, preset, fresh.kind, values).mode === 'prosty') {
+      return simplePage(request, formContext(fresh.kind, preset, fresh), simpleDefaults(preset, values), { created });
+    }
+    return advancedPage(request, formContext(fresh.kind, preset, fresh), values, { created });
   });
 
   const setEnabled = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply, enabled: boolean) => {
