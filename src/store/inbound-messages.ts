@@ -7,9 +7,12 @@ export interface InboundRow {
   kind: InboundKind; body: string | null; bodyHash: string;
   protocolId: number; codingScheme: number; connectorId: string | null;
   relatedMessageId: string | null; receivedAt: string; createdAt: string;
+  /** Identyfikator zgłoszenia zwrócony przez obcą aplikację i integracja wychodząca, która go pozyskała. */
+  externalRef: string | null; externalIntegrationId: number | null;
 }
 
-export type InboundInput = InboundRow;
+/** Odebrana wiadomość przy zapisie: identyfikator zgłoszenia dochodzi później, po dostawie. */
+export type InboundInput = Omit<InboundRow, 'externalRef' | 'externalIntegrationId'>;
 
 export interface InboundFilter {
   accountId?: number;
@@ -24,12 +27,14 @@ interface Raw {
   kind: InboundKind; body: string | null; body_hash: string;
   protocol_id: number; coding_scheme: number; connector_id: string | null;
   related_message_id: string | null; received_at: string; created_at: string;
+  external_ref: string | null; external_integration_id: number | null;
 }
 
 const toRow = (r: Raw): InboundRow => ({
   id: r.id, accountId: r.account_id, serviceId: r.service_id, miId: r.mi_id, sender: r.sender, dest: r.dest,
   kind: r.kind, body: r.body, bodyHash: r.body_hash, protocolId: r.protocol_id, codingScheme: r.coding_scheme,
   connectorId: r.connector_id, relatedMessageId: r.related_message_id, receivedAt: r.received_at, createdAt: r.created_at,
+  externalRef: r.external_ref, externalIntegrationId: r.external_integration_id,
 });
 
 /** Wiadomości przychodzące od abonentów, odebrane z Multiinfo. */
@@ -81,6 +86,21 @@ export class InboundMessagesRepo {
       .prepare(`SELECT * FROM inbound_messages${clause} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`)
       .all(...params, f.limit, f.offset) as Raw[];
     return rows.map(toRow);
+  }
+
+  /** Identyfikator zgłoszenia z odpowiedzi obcej aplikacji - pozwala potem wysłać odpowiedź agenta w wątku. */
+  setExternalRef(id: string, integrationId: number, ref: string): void {
+    this.db.prepare('UPDATE inbound_messages SET external_ref = ?, external_integration_id = ? WHERE id = ?')
+      .run(ref.slice(0, 200), integrationId, id);
+  }
+
+  /** Najnowsza odebrana z tym identyfikatorem zgłoszenia, pozyskanym przez integrację tego klucza. */
+  findByExternalRefForKey(apiKeyId: number, ref: string): InboundRow | undefined {
+    const row = this.db.prepare(
+      `SELECT im.* FROM inbound_messages im JOIN integrations i ON i.id = im.external_integration_id
+        WHERE i.api_key_id = ? AND im.external_ref = ? ORDER BY im.created_at DESC, im.id DESC LIMIT 1`,
+    ).get(apiKeyId, ref) as Raw | undefined;
+    return row ? toRow(row) : undefined;
   }
 
   countSince(since: Date): number {
