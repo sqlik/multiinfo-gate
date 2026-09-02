@@ -44,18 +44,17 @@ const SECURITY: Array<{ value: SmtpSecurity; label: string }> = [
 const numbersText = (value: unknown): string => (Array.isArray(value) ? value.map((x) => String(x)).join(', ') : '');
 
 /** Kolumna parametrów: tylko reguły, które je mają; reszta pusta. */
+/** Parametr reguły: pole stałej szerokości w jednej linii z innymi, opis po prawej. */
 function paramsCell(rule: RuleRow, raw: Record<string, string> | null | undefined, disabled: string): string {
   const val = (key: string, fallback: string) => esc(raw?.[key] ?? fallback);
+  const cell = (input: string, label: string) => `${input} <span class="dim" style="font-size: 12px;">${esc(label)}</span>`;
   switch (rule.event) {
     case 'certificate_expiring':
-      return `<label class="dim" style="font-size: 11.5px;">dni przed wygaśnięciem</label>
-        <input name="days_certificate_expiring" value="${val('days_certificate_expiring', numbersText(rule.params.days))}" style="width: 130px;"${disabled}>`;
+      return cell(`<input class="cell" name="days_certificate_expiring" value="${val('days_certificate_expiring', numbersText(rule.params.days))}"${disabled}>`, 'dni przed wygaśnięciem, mail raz na każdy próg');
     case 'inbound_failure':
-      return `<label class="dim" style="font-size: 11.5px;">po minutach</label>
-        <input name="afterMinutes_inbound_failure" type="number" min="1" max="1440" value="${val('afterMinutes_inbound_failure', String(rule.params.afterMinutes ?? 15))}" style="width: 70px;"${disabled}>`;
+      return cell(`<input class="cell" name="afterMinutes_inbound_failure" type="number" min="1" max="1440" value="${val('afterMinutes_inbound_failure', String(rule.params.afterMinutes ?? 15))}"${disabled}>`, 'po ilu minutach');
     case 'daily_summary':
-      return `<label class="dim" style="font-size: 11.5px;">godzina</label>
-        <input name="hour_daily_summary" type="number" min="0" max="23" value="${val('hour_daily_summary', String(rule.params.hour ?? 8))}" style="width: 70px;"${disabled}>`;
+      return cell(`<input class="cell" name="hour_daily_summary" type="number" min="0" max="23" value="${val('hour_daily_summary', String(rule.params.hour ?? 8))}"${disabled}>`, 'o której godzinie');
     default:
       return '<span class="dim">-</span>';
   }
@@ -73,18 +72,18 @@ function rulesTable(rules: RuleRow[], enabled: boolean, raw: Record<string, stri
         <div class="dim" style="font-size: 11.5px; margin-top: 2px;">${esc(eventDescription(r.event as NotificationEvent))}</div>
       </td>
       <td><input type="checkbox" name="enabled_${esc(r.event)}" value="1"${on ? ' checked' : ''}${disabled}></td>
-      <td><input name="maxPerHour_${esc(r.event)}" type="number" min="1" max="100" value="${esc(per)}" style="width: 70px;"${disabled}></td>
-      <td><input name="groupHours_${esc(r.event)}" type="number" min="0" max="24" value="${esc(group)}" style="width: 70px;"${disabled}></td>
-      <td><div class="inline">${paramsCell(r, raw, disabled)}</div></td>
+      <td><input class="cell" name="maxPerHour_${esc(r.event)}" type="number" min="1" max="100" value="${esc(per)}"${disabled}></td>
+      <td><input class="cell" name="groupHours_${esc(r.event)}" type="number" min="0" max="24" value="${esc(group)}"${disabled}></td>
+      <td><div class="inline" style="align-items: center; gap: 10px;">${paramsCell(r, raw, disabled)}</div></td>
     </tr>`;
   }).join('');
   return `<table>
       <tr>
-        <th>Zdarzenie</th>
+        <th style="width: 260px;">Zdarzenie</th>
         <th style="width: 90px;">Włączone</th>
-        <th style="width: 140px;">Maks. na godzinę</th>
-        <th style="width: 130px;">Grupuj co (h)</th>
-        <th style="width: 300px;">Parametry</th>
+        <th style="width: 150px;">Maks. na godzinę</th>
+        <th style="width: 150px;">Grupuj co (h)</th>
+        <th>Parametry</th>
       </tr>
       ${rows}
     </table>`;
@@ -170,15 +169,14 @@ ${d.tab === 'konfiguracja' ? `      <div class="panel" style="max-width: 760px;"
         <form method="post" action="/powiadomienia/smtp/test" style="padding: 0 16px 16px;">
           <button class="btn btn-s" type="submit"${configured ? '' : ' disabled'}>Wyślij mail testowy</button>
         </form>
-      </div>` : `      <div class="panel${configured ? '' : ' dim'}" style="max-width: 980px;">
-        <div class="panel-h"><div class="lab">Reguły</div></div>
+      </div>` : `      <div class="panel${configured ? '' : ' dim'}" style="max-width: 1100px;">
         ${configured ? '' : '<div class="warn">Najpierw skonfiguruj SMTP - bez niego reguły nie mają dokąd wysyłać.</div>'}
         ${rulesError}
         <form method="post" action="/powiadomienia/reguly">
           ${rulesTable(d.rules, configured, d.ruleValues)}
           <div class="bar" style="padding: 12px 16px;">
             <button class="btn btn-p" type="submit"${configured ? '' : ' disabled'}>Zapisz reguły</button>
-            <span class="hint dim" style="font-size: 11.5px;">Grupowanie 0 = każde zdarzenie osobno, do limitu na godzinę; nadmiar trafia do następnego maila jako liczba.</span>
+            <span class="hint dim" style="font-size: 11.5px;">Grupowanie 0 = każde zdarzenie osobno, do limitu na godzinę; nadmiar trafia do następnego maila jako liczba</span>
           </div>
         </form>
       </div>`}
