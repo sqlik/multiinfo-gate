@@ -1,17 +1,10 @@
-import { shortId } from '../ids.ts';
-import { sha256Hex } from '../text/hash.ts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { measureText } from '../text/measure.ts';
-import { InvalidPhoneError, normalizePhone } from '../text/phone.ts';
-import { TooManyPartsError, segmentText } from '../text/segment.ts';
 import type { MessageRow } from '../store/messages.ts';
 import { authenticate } from './auth.ts';
 import { ApiError } from './errors.ts';
-import { resolveOrig } from './orig.ts';
 import type { ApiDeps } from './server.ts';
-
-const MAX_VALIDITY_MS = 72 * 3600_000;
+import { submitMessages } from './submit.ts';
 
 const bodySchema = z.object({
   to: z.union([z.string(), z.array(z.string()).min(1).max(500)]),
@@ -48,112 +41,20 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
     }
     const input = parsed.data;
 
-    const account = deps.accounts.get(auth.accountId);
-    if (!account) throw new ApiError(500, 'account_missing', 'Konto przypisane do klucza nie istnieje.');
-
-    const serviceId = String(input.serviceId ?? auth.defaultServiceId ?? '');
-    if (!serviceId) throw new ApiError(400, 'service_required', 'Klucz nie ma domyślnej usługi - podaj serviceId.');
-    if (!auth.allowedServiceIds.includes(serviceId)) {
-      throw new ApiError(403, 'service_not_allowed', `Klucz nie ma dostępu do usługi ${serviceId}.`);
-    }
-
-    let inReplyTo: string | null = null;
-    if (input.inReplyTo !== undefined) {
-      // Odpowiedź dotyczy jednej rozmowy: jeden odbiorca, wiadomość z tej samej usługi konta.
-      if (Array.isArray(input.to)) throw new ApiError(400, 'in_reply_to_single', 'inReplyTo dopuszcza jednego odbiorcę.');
-      const original = deps.inbound.get(input.inReplyTo);
-      if (!original || original.accountId !== auth.accountId || original.serviceId !== serviceId) {
-        throw new ApiError(400, 'in_reply_to_unknown', 'Nie ma takiej wiadomości przychodzącej w tej usłudze.');
-      }
-      // Odpowiedź idzie do tego, kto pisał: Multiinfo dostaje smsInId, a panel łączy wątek po numerze.
-      let recipient: string;
-      try { recipient = normalizePhone(input.to, account.defaultCountryCode); } catch { recipient = input.to.trim(); }
-      if (recipient !== original.sender) {
-        throw new ApiError(400, 'in_reply_to_recipient', `Odpowiedź na ${original.id} musi iść do jej nadawcy (${original.sender}).`);
-      }
-      inReplyTo = original.id;
-    }
-
-    const orig = resolveOrig(input.orig, auth, account, deps.accounts);
-
-    let validTo: Date | undefined;
-    if (input.validTo !== undefined) {
-      validTo = new Date(input.validTo);
-      const ahead = validTo.getTime() - now().getTime();
-      if (ahead <= 0) throw new ApiError(400, 'valid_to_in_past', 'Data ważności już minęła.');
-      if (ahead > MAX_VALIDITY_MS) {
-        throw new ApiError(400, 'valid_to_too_far', 'Multiinfo dopuszcza ważność najwyżej 72 godziny.');
-      }
-    }
-
-    const maxParts = Math.min(input.maxParts ?? auth.maxParts, auth.maxParts);
-    const measurement = measureText(input.text, input.encoding);
-    let segmentation;
-    try {
-      segmentation = segmentText(input.text, measurement, maxParts);
-    } catch (e) {
-      if (e instanceof TooManyPartsError) throw new ApiError(400, 'too_many_parts', e.message);
-      throw e;
-    }
-
     const idempotencyKey = request.headers['idempotency-key'];
-    const idem = typeof idempotencyKey === 'string' ? idempotencyKey : undefined;
-    const hash = sha256Hex(input.text);
-
-    const recipients = Array.isArray(input.to) ? input.to : [input.to];
-
-    // Najpierw sprawdzamy wszystkich odbiorców, dopiero potem cokolwiek zapisujemy:
-    // lista ma wejść w całości albo wcale. Inaczej błędny numer na trzeciej pozycji
-    // zostawiłby dwie wiadomości w kolejce, a klient dostałby 400 i wysłał je ponownie.
-    const checked = recipients.map((raw, index) => {
-      let dest: string;
-      try {
-        dest = normalizePhone(raw, account.defaultCountryCode);
-      } catch (e) {
-        if (e instanceof InvalidPhoneError) throw new ApiError(400, 'invalid_phone', e.message);
-        throw e;
-      }
-
-      const perRecipientIdem = idem === undefined ? undefined : recipients.length === 1 ? idem : `${idem}#${index}`;
-      const existing = perRecipientIdem === undefined
-        ? undefined
-        : deps.messages.findByIdempotencyKey(auth.apiKeyId, perRecipientIdem);
-      if (existing && (existing.bodyHash !== hash || existing.dest !== dest)) {
-        throw new ApiError(409, 'idempotency_conflict',
-          'Ten klucz idempotencji został już użyty z inną treścią lub innym odbiorcą.');
-      }
-      return { dest, perRecipientIdem, existing };
-    });
-
-    const results = deps.messages.transaction(() => checked.map(({ dest, perRecipientIdem, existing }) => {
-      if (existing) {
-        return {
-          id: existing.id, status: existing.status, encoding: existing.encoding,
-          parts: existing.parts, characters: measurement.characters,
-          slots: existing.slots, slotsRemaining: segmentation.slotsRemaining,
-        };
-      }
-
-      const id = shortId('msg');
-      deps.messages.insert({
-        id, apiKeyId: auth.apiKeyId, accountId: auth.accountId, serviceId, dest,
-        body: account.storeContent ? input.text : null, bodyHash: hash,
-        encoding: measurement.encoding, parts: segmentation.parts, slots: measurement.slots,
-        orig: orig ?? null, costCenter: input.costCenter ?? null,
-        validTo: validTo?.toISOString() ?? null,
-        idempotencyKey: perRecipientIdem ?? null,
-        inReplyTo,
-        createdAt: now().toISOString(),
-      });
-      deps.jobs.enqueue('send', { messageId: id, text: input.text, deliveryReport: input.deliveryReport }, now());
-      deps.events.record(id, now(), 'queued', null);
-
-      return {
-        id, status: 'queued', encoding: measurement.encoding, parts: segmentation.parts,
-        characters: measurement.characters, slots: measurement.slots,
-        slotsRemaining: segmentation.slotsRemaining,
-      };
-    }));
+    const results = submitMessages(deps, auth, {
+      to: Array.isArray(input.to) ? input.to : [input.to],
+      text: input.text,
+      encoding: input.encoding,
+      deliveryReport: input.deliveryReport,
+      ...(input.orig !== undefined ? { orig: input.orig } : {}),
+      ...(input.serviceId !== undefined ? { serviceId: String(input.serviceId) } : {}),
+      ...(input.maxParts !== undefined ? { maxParts: input.maxParts } : {}),
+      ...(input.validTo !== undefined ? { validTo: input.validTo } : {}),
+      ...(input.costCenter !== undefined ? { costCenter: input.costCenter } : {}),
+      ...(input.inReplyTo !== undefined ? { inReplyTo: input.inReplyTo } : {}),
+      ...(typeof idempotencyKey === 'string' ? { idempotencyKey } : {}),
+    }, now());
 
     reply.code(202);
     return Array.isArray(input.to) ? results : results[0];
