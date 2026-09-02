@@ -53,6 +53,30 @@ beforeEach(() => {
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
+describe('Worker.tick - tura utrzymaniowa', () => {
+  it('raz na odstęp woła flush, skaner i sprzątanie; błąd jednego kroku nie zatrzymuje reszty ani zadań', async () => {
+    const flushN = vi.fn();
+    const scan = vi.fn(() => { throw new Error('skaner padł'); });
+    const prune = vi.fn(() => 0);
+    const error = vi.fn();
+    deps.notifier = { notify: vi.fn(), flush: flushN };
+    deps.scanner = { scan };
+    deps.guards = { pruneDedupBefore: prune } as never;
+    deps.log = { error, warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
+    const worker = new Worker(deps, { now: () => clock, maintenanceMs: 60_000 });
+    await worker.tick();
+    expect(flushN).toHaveBeenCalledWith(clock);
+    expect(prune).toHaveBeenCalledWith(new Date(clock.getTime() - 86_400_000));
+    expect(error).toHaveBeenCalledWith('worker.utrzymanie_blad', expect.objectContaining({ step: 'skaner' }));
+    clock = new Date(clock.getTime() + 30_000);
+    await worker.tick();
+    expect(flushN).toHaveBeenCalledTimes(1);
+    clock = new Date(clock.getTime() + 30_000);
+    await worker.tick();
+    expect(flushN).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('Worker.tick', () => {
   it('wykonuje zadania z jednej partii równolegle, nie po kolei', async () => {
     let release!: () => void;
