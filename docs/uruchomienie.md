@@ -749,6 +749,12 @@ Typowe przyczyny: domena nie wskazuje jeszcze na serwer (sprawdzić `dig` z rozd
 port 80 zamknięty w zaporze (Let's Encrypt nie może potwierdzić domeny), literówka
 w `MIG_DOMENA`.
 
+Adres klienta w dzienniku integracji: Caddy dopisuje nagłówek `X-Forwarded-For`, ale bramka
+wierzy mu tylko od adresów z `MIG_TRUSTED_PROXIES`. Kontener Caddy ma adres z sieci Dockera, więc
+w `docker/.env` należy dopisać `MIG_TRUSTED_PROXIES=172.16.0.0/12` (zakres, z którego Docker
+przydziela adresy swoim sieciom) i wykonać `docker compose up -d`. Bez tego dziennik integracji
+pokazuje adres Caddy zamiast adresu aplikacji, a lista dozwolonych źródeł nie przepuści nikogo.
+
 ### 6.6. Wariant B: nginx na serwerze
 
 W tym wariancie nginx zainstalowany bezpośrednio w systemie przekazuje ruch do bramki, a certyfikat
@@ -778,6 +784,10 @@ komunikatem `Successfully deployed certificate` (lub równoważnym). Sprawdzenie
 Gdy nie działa: `nginx -t` wskazuje wiersz z błędem składni; odpowiedź `502 Bad Gateway`
 oznacza, że bramka nie działa (`docker compose ps` w katalogu `docker/`); komunikat certbota
 `Challenge failed` - domena nie wskazuje na serwer albo port 80 jest zamknięty.
+
+Adres klienta w dzienniku integracji: konfiguracja przekazuje `X-Forwarded-For`, a nginx łączy
+się z bramką z adresu `127.0.0.1`, więc w `docker/.env` należy dopisać
+`MIG_TRUSTED_PROXIES=127.0.0.1` i wykonać `docker compose up -d`.
 
 ### 6.7. Wariant C: Traefik już działający na serwerze
 
@@ -830,6 +840,11 @@ odmawia połączeń. Dostęp do panelu przez tunel SSH (rozdział 4.1) działa b
 `docker exec <kontener-traefika> wget -qO- http://multiinfo-gate:8081/healthz` ma zakończyć się
 błędem `Connection refused`, a to samo z portem `8080` - odpowiedzią `{"status":"ok"}`.
 
+Adres klienta w dzienniku integracji: Traefik dopisuje `X-Forwarded-For` i łączy się z bramką
+z adresu w swojej sieci Dockera, więc w `docker/.env` należy dopisać
+`MIG_TRUSTED_PROXIES=172.16.0.0/12` (albo dokładny zakres sieci Traefika z `docker network
+inspect <NAZWA-SIECI>`) i wykonać `docker compose up -d`.
+
 ### 6.8. Przekazanie dostępu aplikacji zewnętrznej
 
 Aplikacja (albo obsługująca ją agencja) potrzebuje:
@@ -842,8 +857,11 @@ Czego nie należy udostępniać: dostępu do panelu (port 8081), portu 8080, kon
 
 Limit żądań na minutę ustawiony przy kluczu zabezpiecza przed błędem w cudzej aplikacji
 (np. wysyłką w pętli); odwołanie klucza w panelu odcina aplikację natychmiast, bez restartu
-bramki. Bramka nie odczytuje nagłówka `X-Forwarded-For` - limity liczy na klucz, nie na adres
-nadawcy, więc proxy nie wpływa na ich działanie.
+bramki. Limity klucza bramka liczy na klucz, nie na adres nadawcy, więc proxy nie wpływa
+na ich działanie. Adres klienta z nagłówka `X-Forwarded-For` bramka bierze wyłącznie od proxy
+wymienionych w `MIG_TRUSTED_PROXIES` (uwagi przy wariantach wyżej i rozdział 7.7) - ma to
+znaczenie dla listy dozwolonych źródeł i dziennika integracji (rozdział 3.2 w [Integracjach
+z aplikacjami](integracje.md)).
 
 ## 7. Utrzymanie
 
@@ -977,7 +995,7 @@ Ustawiane w `docker/.env` (klucz główny, domena) albo w sekcji `environment` p
 | `MIG_WEBHOOK_ALLOW_PRIVATE` | `0` | `1` pozwala na adresy webhooków w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów); domyślnie bramka woła wyłącznie adresy publiczne i takie tylko przyjmuje w panelu. Potrzebne, gdy aplikacja odbierająca webhooki stoi na tym samym serwerze, np. przykład PHP z rozdziału 5 |
 | `MIG_INBOUND_TIMEOUT_MS` | `10000` | Ile milisekund Multiinfo może trzymać pytanie o wiadomości przychodzące bez odpowiedzi (1-60000). Przy wartości domyślnej odbiór trwa zwykle poniżej sekundy, najwyżej ok. 10 s, kosztem sześciu pytań na minutę na usługę. Maksimum `60000` (long polling z dokumentacji Multiinfo) zmniejsza liczbę pytań, ale wiadomość, która nadejdzie między dwoma pytaniami, czeka do końca następnego - opóźnienie odbioru sięga wtedy minuty. Mała wartość razem z `MIG_INBOUND_IDLE_MS` daje odpytywanie okresowe |
 | `MIG_INBOUND_IDLE_MS` | `0` | Przerwa po pustej odpowiedzi, zanim bramka zapyta ponownie; `0` to pytanie od razu |
-| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku, np. `172.18.0.0/16`), od których API wierzy nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Potrzebne, gdy integracje mają listę dozwolonych źródeł albo dziennik ma pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)) |
+| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku), od których API wierzy nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Ustawiana w `docker/.env`: `172.16.0.0/12` dla Caddy i Traefika w Dockerze, `127.0.0.1` dla nginx na serwerze (rozdział 6). Potrzebne, gdy integracje mają listę dozwolonych źródeł albo dziennik ma pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)) |
 | `MIG_WERSJA` | `1` | Tag obrazu do pobrania: `1`, `1.1` albo `1.1.0` (rozdział 7.4) |
 | `MIG_DOMENA` | - | Domena bramki dla wariantu Caddy i Traefik |
 | `COMPOSE_FILE` | - | Dodatkowe pliki Compose oddzielone dwukropkiem: `docker-compose.caddy.yml` włącza Caddy, `docker-compose.traefik.yml` - Traefik, `docker-compose.build.yml` - budowanie ze źródeł; zawsze po `docker-compose.yml` |
@@ -1264,3 +1282,33 @@ Skrypt tworzy kontener Debiana z zainstalowanym Dockerem (w kreatorze warto podn
 8 GB). Dalej, już w kontenerze (`pct enter <NUMER-KONTENERA>`), obowiązuje rozdział 3 od punktu
 3.1, z pominięciem `sudo` (sesja jest sesją `root`) i punktu 2.2 (Docker już jest). Panel jest
 wtedy dostępny wyłącznie przez tunel SSH do kontenera, jak w punkcie 4.1.
+
+### 9.6. Integracje: skąd aplikacja woła kontener
+
+Integracje z rozdziału [Integracje z aplikacjami](integracje.md) dają aplikacjom adres
+`POST /hooks/<identyfikator>` na porcie API, a panel pokazuje samą ścieżkę. W kontenerze z tego
+rozdziału API słucha na adresie kontenera, więc pełny adres zależy od tego, gdzie stoi
+aplikacja:
+
+- **Aplikacja w tej samej sieci co kontener** (Uptime Kuma, Zabbix, Grafana, FreeScout
+  w firmie) - `http://<ADRES-KONTENERA>:8080/hooks/<identyfikator>`, bez tunelu i bez proxy, jak
+  w punkcie 9.3. Warunek: kontener ma adres z sieci firmowej, czyli mostek `vmbr0` hosta jest
+  spięty z kartą sieciową, a nie z prywatną siecią NAT. Sprawdzenie z komputera, na którym
+  stoi aplikacja: `curl http://<ADRES-KONTENERA>:8080/healthz` odpowiada `{"status":"ok"}`
+- **Aplikacja w internecie** (Grafana Cloud, Freshdesk, FreeScout u hostingodawcy, Zapier,
+  Make) - kontener nie ma publicznego adresu, więc aplikacja go nie dosięgnie. Potrzebne jest
+  odwrotne proxy z HTTPS pod publiczną domeną, tak jak w rozdziale 6, tylko kierowane na
+  `http://<ADRES-KONTENERA>:8080`: nginx z wariantu B na hoście Proxmox albo na innym serwerze
+  w sieci, z otwartymi portami 80 i 443 i rekordem `A` domeny wskazującym na ten serwer.
+  W konfiguracji nginx zamiast `proxy_pass http://127.0.0.1:8080` wpisuje się adres kontenera,
+  a w `/etc/multiinfo-gate/env` kontenera `MIG_TRUSTED_PROXIES=<ADRES-SERWERA-Z-NGINX>`
+  i `systemctl restart multiinfo-gate`, żeby dziennik integracji pokazywał adres aplikacji
+- **Host Proxmox w chmurze z siecią NAT** (kontener z adresem w rodzaju `10.10.10.x`, widoczny
+  tylko z hosta) - to szczególny przypadek poprzedniego: proxy musi stać na samym hoście, bo
+  tylko on widzi kontener, a porty 80 i 443 otwiera się w regułach sieciowych maszyny
+  (w Azure „Network security group”). Do testów bez domeny wystarcza tunel SSH z punktu 9.3
+  i wywołanie adresu wejściowego z własnego komputera przez `http://127.0.0.1:8080`
+
+W drugą stronę, gdy to bramka woła aplikację (integracja „z SMS-a” albo webhook klucza), adres
+aplikacji w sieci firmowej wymaga `MIG_WEBHOOK_ALLOW_PRIVATE=1` w `/etc/multiinfo-gate/env`
+i `systemctl restart multiinfo-gate`; bez tego panel odrzuca taki adres przy zapisie.
