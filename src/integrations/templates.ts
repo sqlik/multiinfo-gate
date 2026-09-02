@@ -19,6 +19,21 @@ const GSM_MAP: Record<string, string> = {
 };
 export const toGsm = (text: string): string => text.replace(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g, (c) => GSM_MAP[c] ?? c);
 
+const ENTITIES: Record<string, string> = { '&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'" };
+
+/**
+ * HTML z helpdesku na tekst do SMS-a: koniec bloku i `<br>` to spacja (samo `strip_html` skleja
+ * „rozwiązana.Pozdrawiam”), znaczniki znikają, podstawowe encje wracają do znaków, białe znaki zbite.
+ */
+export function htmlText(html: string): string {
+  return html
+    .replace(/<\/(p|div|li|tr|h[1-6]|blockquote|pre|td|th)>|<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(nbsp|amp|lt|gt|quot|#39|apos);/g, (m) => ENTITIES[m] ?? m)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Czas w Polsce po ludzku: `DD.MM.RRRR GG:MM`. */
 function datePl(iso: string): string {
   const s = warsawStamp(iso);
@@ -71,6 +86,7 @@ export class TemplateEngine {
       const chars = [...text];
       return chars.length <= limit ? text : `${chars.slice(0, limit - 1).join('')}…`;
     });
+    this.liquid.registerFilter('html_text', (v: unknown) => htmlText(String(v ?? '')));
     this.liquid.registerFilter('date_pl', (v: unknown) => {
       const time = Date.parse(String(v ?? ''));
       return Number.isNaN(time) ? String(v ?? '') : datePl(new Date(time).toISOString());
