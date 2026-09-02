@@ -2,8 +2,8 @@ import type { Preset } from './types.ts';
 
 export const freescout: Preset = {
   id: 'freescout',
-  name: 'FreeScout',
-  blurb: 'SMS zakłada rozmowę w skrzynce; odpowiedź agenta wraca SMS-em w wątku',
+  name: 'FreeScout: rozmowa SMS',
+  blurb: 'SMS klienta zakłada rozmowę w skrzynce; odpowiedź agenta wraca SMS-em w wątku',
   kinds: ['webhook_in', 'webhook_out'],
   // Webhook convo.agent.reply.created z FreeScouta 1.8 (przycięty): customer bez telefonów, threads[0] to odpowiedź agenta.
   sample: {
@@ -37,18 +37,19 @@ export const freescout: Preset = {
     headers: [{ name: 'X-FreeScout-API-Key', valueRef: 'apiKey' }],
     body: {
       mode: 'json',
-      template: '{"type": "phone", "mailboxId": 1, "subject": {{ "SMS od " | append: from | json }}, "customer": {"phone": {{ from | json }}}, "threads": [{"type": "customer", "text": {{ text | json }}}]}',
+      // FreeScout wymaga imienia albo e-maila klienta - sam numer odrzuca kodem 400.
+      template: '{"type": "phone", "mailboxId": 1, "subject": {{ "SMS od " | append: from | json }}, "customer": {"firstName": "SMS", "lastName": {{ from | json }}, "phone": {{ from | json }}}, "threads": [{"type": "customer", "text": {{ text | json }}}]}',
     },
     responseRefPath: 'id',
   },
   secrets: [{ ref: 'apiKey', label: 'Klucz API FreeScouta', hint: 'Moduł API & Webhooks, zakładka API Keys' }],
   expect: {
     text: 'Odpowiadamy: sprawdzamy sprawę.',
-    outboundJson: { type: 'phone', mailboxId: 1, subject: 'SMS od 48601000001', customer: { phone: '48601000001' }, threads: [{ type: 'customer', text: 'Pomocy, nie działa' }] },
+    outboundJson: { type: 'phone', mailboxId: 1, subject: 'SMS od 48601000001', customer: { firstName: 'SMS', lastName: '48601000001', phone: '48601000001' }, threads: [{ type: 'customer', text: 'Pomocy, nie działa' }] },
   },
-  sampleSource: 'FreeScout 1.8, prawdziwy webhook convo.agent.reply.created z żywej instancji, 2026-09-02 (kierunek z SMS-a do potwierdzenia)',
+  sampleSource: 'FreeScout 1.8, żywa instancja, 2026-09-02: webhook convo.agent.reply.created i POST /api/conversations (201, id na wierzchu)',
   guide: [
-    '**Z SMS-a.** Wymaga modułu **API & Webhooks**. W bramce podaj adres `https://<freescout>/api/conversations`, klucz API jako sekret i w body numer skrzynki (`mailboxId`) zamiast `1`. Identyfikator rozmowy z odpowiedzi (`id`) trafia do bramki jako identyfikator zgłoszenia i łączy rozmowę z numerem nadawcy.',
+    '**Z SMS-a.** Wymaga modułu **API & Webhooks**. W bramce podaj adres `https://<freescout>/api/conversations`, klucz API (zakładka API Keys) jako sekret i w body numer skrzynki (`mailboxId`) zamiast `1`. Bramka zakłada rozmowę typu „phone” z klientem „SMS <numer>” (FreeScout wymaga imienia albo e-maila). Identyfikator rozmowy z odpowiedzi (`id`) trafia do bramki jako identyfikator zgłoszenia i łączy rozmowę z numerem nadawcy.',
     '',
     '**Do SMS.** W module webhooków dodaj webhook z adresem wejściowym integracji i jednym zdarzeniem: `convo.agent.reply.created`. FreeScout wysyła całą rozmowę z wątkami od najnowszego; bramka zdejmuje HTML z treści najnowszego wątku i wysyła SMS do nadawcy odebranego SMS-a, z którego rozmowa powstała (webhook nie przesyła telefonu klienta, więc numer bierze się z wątku po `id`). Warunek `_embedded.threads[0].type równe message` pilnuje, żeby SMS-a nie wywołała wiadomość klienta, gdyby webhook dostał też inne zdarzenia.',
   ].join('\n'),
