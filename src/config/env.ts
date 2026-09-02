@@ -1,4 +1,5 @@
 import { networkInterfaces } from 'node:os';
+import { parseSourceEntry } from '../integrations/sources.ts';
 import { LOG_LEVELS, type LogLevel } from '../log.ts';
 
 export class MissingMasterKeyError extends Error {
@@ -38,6 +39,11 @@ export interface AppConfig {
   inboundTimeoutMs: number;
   /** Przerwa po pustej odpowiedzi getsms.aspx; 0 to pytanie od razu. */
   inboundIdleMs: number;
+  /**
+   * MIG_TRUSTED_PROXIES: adresy odwrotnych proxy (IP albo CIDR, po przecinku), którym wolno podać
+   * adres klienta w X-Forwarded-For. Bez listy adresem źródłowym jest adres gniazda.
+   */
+  trustedProxies: string[];
 }
 
 function intOr(value: string | undefined, fallback: number): number {
@@ -55,6 +61,16 @@ function boundedInt(variable: string, value: string | undefined, fallback: numbe
 
 function flag(value: string | undefined): boolean {
   return value === '1' || value === 'true' || value === 'tak';
+}
+
+function proxyList(value: string | undefined): string[] {
+  if (value === undefined || value.trim() === '') return [];
+  const entries = value.split(',').map((s) => s.trim()).filter((s) => s !== '');
+  for (const e of entries) {
+    const parsed = parseSourceEntry(e);
+    if (!parsed || parsed.kind === 'host') throw new Error(`MIG_TRUSTED_PROXIES: „${e}” nie jest adresem IP ani zakresem CIDR`);
+  }
+  return entries;
 }
 
 function logLevelOr(value: string | undefined, fallback: LogLevel): LogLevel {
@@ -105,5 +121,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env, interfaces: Int
     webhookAllowPrivate: flag(source.MIG_WEBHOOK_ALLOW_PRIVATE),
     inboundTimeoutMs: boundedInt('MIG_INBOUND_TIMEOUT_MS', source.MIG_INBOUND_TIMEOUT_MS, 10_000, 1, 60_000),
     inboundIdleMs: boundedInt('MIG_INBOUND_IDLE_MS', source.MIG_INBOUND_IDLE_MS, 0, 0, 3_600_000),
+    trustedProxies: proxyList(source.MIG_TRUSTED_PROXIES),
   };
 }

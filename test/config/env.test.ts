@@ -21,3 +21,16 @@ describe('loadEnv - odbiornik', () => {
     expect(() => loadEnv({ ...base, MIG_INBOUND_IDLE_MS: '-1' }, {})).toThrow(/MIG_INBOUND_IDLE_MS/);
   });
 });
+
+describe('loadEnv - zaufane proxy', () => {
+  it('pusta zmienna daje pustą listę', () => {
+    expect(loadEnv(base, {}).trustedProxies).toEqual([]);
+    expect(loadEnv({ ...base, MIG_TRUSTED_PROXIES: ' ' }, {}).trustedProxies).toEqual([]);
+  });
+  it('przyjmuje adresy i zakresy po przecinku', () => {
+    expect(loadEnv({ ...base, MIG_TRUSTED_PROXIES: '10.0.0.1, 172.16.0.0/12' }, {}).trustedProxies).toEqual(['10.0.0.1', '172.16.0.0/12']);
+  });
+  it('odrzuca nazwę hosta', () => {
+    expect(() => loadEnv({ ...base, MIG_TRUSTED_PROXIES: 'proxy.example' }, {})).toThrow(/MIG_TRUSTED_PROXIES/);
+  });
+});

@@ -6,6 +6,7 @@ import { hashApiKey } from '../../src/api/keys.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
+import { integrationDeps } from '../helpers/api-deps.ts';
 
 let h: AdminHarness;
 let accountId: number;
@@ -363,7 +364,7 @@ describe('POST /klucze/:id/odwolaj', () => {
     const api = buildApiServer({
       accounts: h.accounts, apiKeys: h.apiKeys, messages: h.messages, jobs: h.jobs,
       events: new MessageEventsRepo(h.db), packages: new PackagesRepo(h.db), clients: {} as never,
-      inbound: new InboundMessagesRepo(h.db), rateLimiter: new RateLimiter(),
+      inbound: new InboundMessagesRepo(h.db), rateLimiter: new RateLimiter(), ...integrationDeps(h.db, h.masterKey),
     });
     await api.ready();
 

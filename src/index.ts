@@ -8,7 +8,10 @@ import { RateLimiter } from './api/rate-limit.ts';
 import { buildApiServer } from './api/server.ts';
 import { loadEnv, type AppConfig } from './config/env.ts';
 import { Receiver } from './inbound/receiver.ts';
+import { SourceMatcher } from './integrations/sources.ts';
+import { TemplateEngine } from './integrations/templates.ts';
 import { createLogger } from './log.ts';
+import { systemResolver } from './net/private-address.ts';
 import { AccountsRepo } from './store/accounts.ts';
 import { AdminUsersRepo } from './store/admin-users.ts';
 import { ApiKeysRepo } from './store/api-keys.ts';
@@ -17,6 +20,9 @@ import { BackupScheduler } from './store/backup.ts';
 import { openDatabase } from './store/db.ts';
 import { InboundMessagesRepo } from './store/inbound-messages.ts';
 import { InboundServicesRepo } from './store/inbound-services.ts';
+import { IntegrationEventsRepo } from './store/integration-events.ts';
+import { IntegrationGuardsRepo } from './store/integration-guards.ts';
+import { IntegrationsRepo } from './store/integrations.ts';
 import { JobsRepo } from './store/jobs.ts';
 import { MessageEventsRepo } from './store/message-events.ts';
 import { MessagesRepo } from './store/messages.ts';
@@ -50,6 +56,10 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const audit = new AuditRepo(db);
   const sessions = new SessionStore();
   const clients = new ClientPool(accounts, config.masterKey);
+  const integrations = new IntegrationsRepo(db, config.masterKey);
+  const integrationEvents = new IntegrationEventsRepo(db, config.masterKey);
+  const guards = new IntegrationGuardsRepo(db);
+  const engine = new TemplateEngine();
 
   const backups = new BackupScheduler({
     db, dir: join(config.dataDir, 'backups'), retentionDays: config.backupRetentionDays, log,
@@ -71,6 +81,8 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const api = buildApiServer({
     accounts, apiKeys, messages, events, packages, jobs, clients, inbound, rateLimiter: new RateLimiter(), log,
     inboundHealth: () => receiver.health(),
+    integrations, integrationEvents, guards, engine, sources: new SourceMatcher(systemResolver),
+    hookLimiter: new RateLimiter(), trustedProxies: config.trustedProxies,
   });
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
@@ -112,6 +124,7 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
     webhookAllowPrivate: config.webhookAllowPrivate,
     inboundTimeoutMs: config.inboundTimeoutMs,
     inboundIdleMs: config.inboundIdleMs,
+    trustedProxies: config.trustedProxies.length,
   });
   return running;
 }
