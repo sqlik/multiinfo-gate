@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { argv } from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { buildAdminServer } from './admin/server.ts';
+import { nodemailerMailer } from './worker/mail.ts';
 import { SessionStore } from './admin/session.ts';
 import { RateLimiter } from './api/rate-limit.ts';
 import { buildApiServer } from './api/server.ts';
@@ -96,6 +97,7 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
+    integrationEvents, guards, engine, notifications, notifier, mailer: nodemailerMailer,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate,
   });
 

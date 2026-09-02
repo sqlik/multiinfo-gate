@@ -2,7 +2,8 @@ import type { Flash } from '../flash.ts';
 import { GATE_VERSION } from '../../version.ts';
 import { FAVICON_LINK } from './favicon.ts';
 
-export type NavKey = 'przeglad' | 'wiadomosci' | 'rozsylki' | 'odebrane' | 'konta' | 'klucze' | 'uzytkownicy' | 'dziennik';
+export type NavKey = 'przeglad' | 'wiadomosci' | 'rozsylki' | 'odebrane' | 'konta' | 'klucze' | 'integracje' | 'uzytkownicy'
+  | 'powiadomienia' | 'dziennik';
 
 export interface NavCounts {
   wiadomosci: number;
@@ -10,6 +11,8 @@ export interface NavCounts {
   odebrane: number;
   konta: number;
   klucze: number;
+  /** Integracje z choć jednym błędem w ostatniej dobie - nie liczba integracji. */
+  integracje: number;
   uzytkownicy: number;
 }
 
@@ -38,7 +41,9 @@ const NAV: Array<{ key: NavKey; label: string; group: string }> = [
   { key: 'odebrane', label: 'Odebrane', group: 'Ruch' },
   { key: 'konta', label: 'Konta Multiinfo', group: 'Konfiguracja' },
   { key: 'klucze', label: 'Klucze API', group: 'Konfiguracja' },
+  { key: 'integracje', label: 'Integracje', group: 'Konfiguracja' },
   { key: 'uzytkownicy', label: 'Użytkownicy', group: 'Konfiguracja' },
+  { key: 'powiadomienia', label: 'Powiadomienia', group: 'Konfiguracja' },
   { key: 'dziennik', label: 'Dziennik zdarzeń', group: 'Audyt' },
 ];
 
@@ -49,6 +54,7 @@ function countOf(counts: NavCounts, key: NavKey): number | undefined {
     case 'odebrane': return counts.odebrane;
     case 'konta': return counts.konta;
     case 'klucze': return counts.klucze;
+    case 'integracje': return counts.integracje;
     case 'uzytkownicy': return counts.uzytkownicy;
     default: return undefined;
   }
