@@ -71,16 +71,16 @@ function rulesTable(rules: RuleRow[], enabled: boolean, raw: Record<string, stri
       <td><input type="checkbox" name="enabled_${esc(r.event)}" value="1"${on ? ' checked' : ''}${disabled}></td>
       <td><input name="maxPerHour_${esc(r.event)}" type="number" min="1" max="100" value="${esc(per)}" style="width: 70px;"${disabled}></td>
       <td><input name="groupHours_${esc(r.event)}" type="number" min="0" max="24" value="${esc(group)}" style="width: 70px;"${disabled}></td>
-      <td class="inline">${paramsCell(r, raw, disabled)}</td>
+      <td><div class="inline">${paramsCell(r, raw, disabled)}</div></td>
     </tr>`;
   }).join('');
-  return `<table style="table-layout: fixed;">
+  return `<table>
       <tr>
         <th>Zdarzenie</th>
-        <th style="width: 80px;">Włączone</th>
-        <th style="width: 120px;">Maks. na godzinę</th>
-        <th style="width: 120px;">Grupuj co (h)</th>
-        <th style="width: 260px;">Parametry</th>
+        <th style="width: 90px;">Włączone</th>
+        <th style="width: 140px;">Maks. na godzinę</th>
+        <th style="width: 130px;">Grupuj co (h)</th>
+        <th style="width: 300px;">Parametry</th>
       </tr>
       ${rows}
     </table>`;
@@ -98,8 +98,7 @@ export function notificationsPage(d: NotificationsPageData): string {
     </div>
   </div>
   <div class="scroll">
-    <div class="cols">
-      <div class="panel">
+      <div class="panel" style="max-width: 560px;">
         <div class="panel-h"><div class="lab">Serwer SMTP</div>
           ${configured ? `<span class="m dim">zapisano ${esc(d.smtp!.updatedAt.slice(0, 10))}</span>` : '<span class="dim">nieskonfigurowany</span>'}</div>
         ${smtpError}
@@ -161,7 +160,7 @@ export function notificationsPage(d: NotificationsPageData): string {
           <button class="btn btn-s" type="submit"${configured ? '' : ' disabled'}>Wyślij mail testowy</button>
         </form>
       </div>
-      <div class="panel${configured ? '' : ' dim'}">
+      <div class="panel${configured ? '' : ' dim'}" style="max-width: 980px;">
         <div class="panel-h"><div class="lab">Reguły</div></div>
         ${configured ? '' : '<div class="warn">Najpierw skonfiguruj SMTP - bez niego reguły nie mają dokąd wysyłać.</div>'}
         ${rulesError}
@@ -173,6 +172,5 @@ export function notificationsPage(d: NotificationsPageData): string {
           </div>
         </form>
       </div>
-    </div>
   </div>`;
 }
