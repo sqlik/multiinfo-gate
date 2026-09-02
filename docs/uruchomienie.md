@@ -1,7 +1,9 @@
 # Uruchomienie bramki krok po kroku
 
 Instrukcja prowadzi od przygotowań po stronie Multiinfo, przez instalację bramki na serwerze
-i pierwszą wysyłkę, do wystawienia API pod własną domeną. Zakłada, że czytelnik potrafi
+i pierwszą wysyłkę, do wystawienia API pod własną domeną; rozdział 4.7 wprowadza integracje
+z aplikacjami (monitoring, helpdesk, automatyzacje) i powiadomienia administratora mailem,
+opisane osobno w rozdziale [Integracje z aplikacjami](integracje.md). Zakłada, że czytelnik potrafi
 zalogować się na serwer przez SSH i wkleić polecenie do terminala; wszystkie pozostałe pojęcia
 (Docker, tunel SSH, odwrotne proxy, certyfikat HTTPS) są objaśnione w miejscu, w którym się
 pojawiają.
@@ -522,6 +524,33 @@ Na liście użytkowników dostępne są akcje:
 Panel nie ma ról: każdy użytkownik ma pełne uprawnienia. Pierwsze konto zakłada się zawsze
 poleceniem z rozdziału 3.4, kolejne - z tego ekranu.
 
+### 4.7. Integracje i powiadomienia
+
+Ekran **Integracje** służy aplikacjom, których formatu nie da się zmienić: monitoring (Uptime
+Kuma, Grafana, Zabbix), helpdesk (FreeScout, Freshdesk), Home Assistant, automatyzacje (n8n,
+Make, Zapier) oraz kanały powiadomień (Slack, Microsoft Teams, ntfy). Integracja „do SMS” daje
+aplikacji adres wejściowy `POST /hooks/<identyfikator>` na porcie API i tłumaczy jej ładunek na
+SMS według szablonu; integracja „z SMS-a” wysyła odebrane SMS-y i statusy na adres aplikacji
+w jej formacie. Integracja działa w imieniu klucza API z rozdziału 4.5 - załóż go najpierw.
+
+![Lista integracji z kierunkiem, ustawieniem, kluczem, stanem i licznikami z ostatniej doby](obrazki/integracje.png)
+
+Dodanie integracji to wybór kierunku, gotowego ustawienia (kafelek z nazwą aplikacji) i formularz
+wypełniony szablonem oraz instrukcją, co ustawić po stronie aplikacji. Przycisk **Sprawdź
+szablon** pokazuje wynik na przykładowym ładunku bez zapisu i bez wysyłki. Aplikacja w sieci
+lokalnej (typowo Home Assistant) jako cel integracji „z SMS-a” wymaga `MIG_WEBHOOK_ALLOW_PRIVATE=1`
+w środowisku bramki (rozdział 7.7), tak samo jak adres webhooka klucza.
+
+![Formularz integracji z ustawienia Uptime Kuma](obrazki/integracja-formularz.png)
+
+Ekran **Powiadomienia** ma ustawienia serwera SMTP z mailem testowym i tabelę reguł: błędy
+integracji, niedostarczone webhooki, certyfikat konta na progach dni, konto odrzucające
+wysyłkę, awaria odbioru i podsumowanie dzienne. Bez SMTP reguły są wyszarzone. Szczegóły obu
+ekranów, gotowe ustawienia aplikacja po aplikacji i język szablonów opisuje rozdział
+[Integracje z aplikacjami](integracje.md).
+
+![Ekran Powiadomienia: SMTP i reguły](obrazki/powiadomienia.png)
+
 ## 5. Pierwsza wysyłka
 
 ### 5.1. Tunel do API
@@ -948,6 +977,7 @@ Ustawiane w `docker/.env` (klucz główny, domena) albo w sekcji `environment` p
 | `MIG_WEBHOOK_ALLOW_PRIVATE` | `0` | `1` pozwala na adresy webhooków w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów); domyślnie bramka woła wyłącznie adresy publiczne i takie tylko przyjmuje w panelu. Potrzebne, gdy aplikacja odbierająca webhooki stoi na tym samym serwerze, np. przykład PHP z rozdziału 5 |
 | `MIG_INBOUND_TIMEOUT_MS` | `10000` | Ile milisekund Multiinfo może trzymać pytanie o wiadomości przychodzące bez odpowiedzi (1-60000). Przy wartości domyślnej odbiór trwa zwykle poniżej sekundy, najwyżej ok. 10 s, kosztem sześciu pytań na minutę na usługę. Maksimum `60000` (long polling z dokumentacji Multiinfo) zmniejsza liczbę pytań, ale wiadomość, która nadejdzie między dwoma pytaniami, czeka do końca następnego - opóźnienie odbioru sięga wtedy minuty. Mała wartość razem z `MIG_INBOUND_IDLE_MS` daje odpytywanie okresowe |
 | `MIG_INBOUND_IDLE_MS` | `0` | Przerwa po pustej odpowiedzi, zanim bramka zapyta ponownie; `0` to pytanie od razu |
+| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku, np. `172.18.0.0/16`), od których API wierzy nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Potrzebne, gdy integracje mają listę dozwolonych źródeł albo dziennik ma pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)) |
 | `MIG_WERSJA` | `1` | Tag obrazu do pobrania: `1`, `1.1` albo `1.1.0` (rozdział 7.4) |
 | `MIG_DOMENA` | - | Domena bramki dla wariantu Caddy i Traefik |
 | `COMPOSE_FILE` | - | Dodatkowe pliki Compose oddzielone dwukropkiem: `docker-compose.caddy.yml` włącza Caddy, `docker-compose.traefik.yml` - Traefik, `docker-compose.build.yml` - budowanie ze źródeł; zawsze po `docker-compose.yml` |

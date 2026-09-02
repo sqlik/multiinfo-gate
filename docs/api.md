@@ -8,7 +8,11 @@ bramka odbiera z Multiinfo sama, w tle, i przekazuje aplikacji powiadomieniem `m
 na adres webhooka klucza, a ponadto udostępnia je do odczytu (`GET /v1/inbound`) i pozwala na nie
 odpowiedzieć w wątku (`inReplyTo`) - rozdział 5a. Odbiór wymaga dwóch ustawień: kierowania
 odebranych wiadomości do API na koncie Multiinfo (ustawia administrator Polkomtel) oraz
-zaznaczenia odbioru przy kluczu API w panelu bramki. Dokument opisuje każde wywołanie w tym samym
+zaznaczenia odbioru przy kluczu API w panelu bramki. Aplikacje, których formatu nie da się
+zmienić (monitoring, helpdesk, automatyzacje), zamiast tego API używają integracji: adres
+`POST /hooks/<identyfikator>` przyjmuje ładunek aplikacji, a integracje wychodzące przekazują
+odebrane SMS-y i statusy do aplikacji w jej formacie - opis w rozdziale
+[Integracje z aplikacjami](integracje.md). Dokument opisuje każde wywołanie w tym samym
 układzie: przeznaczenie, pełne żądanie w siedmiu wariantach do wyboru zakładką (curl, surowy
 HTTP, PHP, Python, Node.js, PowerShell, C#), odpowiedź oraz błędy tego wywołania wraz
 z zalecanym postępowaniem.
@@ -1499,6 +1503,10 @@ zakończeniu rozsyłki - oraz przy odebraniu SMS-a od abonenta. Dzięki temu apl
 wiadomości. Adres i sekret ustawia administrator bramki przy kluczu API; sekret służy do
 weryfikacji, że żądanie pochodzi od bramki.
 
+Webhook klucza działa niezależnie od integracji wychodzących z rozdziału
+[Integracje z aplikacjami](integracje.md): klucz może mieć jedno i drugie, a to samo zdarzenie
+trafia wtedy na adres webhooka w formacie bramki i do każdej integracji w jej formacie.
+
 Każde żądanie zawiera nagłówki:
 
 | Nagłówek | Wartość |
@@ -1723,7 +1731,11 @@ siedmiu dni albo odbiór wiadomości przychodzących z którejś usługi zatrzym
 Multiinfo (np. `-24`, usługa nieaktywna) - wysyłka albo odbiór mogą nie działać, a administrator
 widzi przyczynę w panelu (na karcie konta). Wywołanie nadaje
 się do monitoringu zewnętrznego (np. sprawdzenie co minutę z alarmem po dwóch kolejnych
-niepowodzeniach).
+niepowodzeniach). Ten sam adres na porcie panelu (przez tunel SSH albo HTTPS za proxy) odpowiada
+szczegółami: wersją, głębokością kolejki, kontami z dniami do wygaśnięcia certyfikatu, stanem
+odbiornika i polem `integrations` z liczbą włączonych integracji (`enabled`) i integracji z błędem
+w ostatniej dobie (`troubled24h`); błędy integracji nie zmieniają statusu, bo dotyczą aplikacji,
+nie bramki.
 
 === "curl"
 

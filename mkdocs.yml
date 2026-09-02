@@ -17,6 +17,7 @@ nav:
   - Start: index.md
   - Uruchomienie krok po kroku: uruchomienie.md
   - API dla aplikacji: api.md
+  - Integracje z aplikacjami: integracje.md
 
 theme:
   name: material
