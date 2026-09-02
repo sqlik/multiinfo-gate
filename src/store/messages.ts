@@ -16,6 +16,8 @@ export interface MessageRow {
   trace: ProtocolTrace | null;
   /** Wiadomość przychodząca, na którą to odpowiedź (`in_...`); Multiinfo dostaje ją jako smsInId. */
   inReplyTo: string | null;
+  /** Integracja, która zleciła wysyłkę; `null` dla żądań z API. */
+  integrationId: number | null;
 }
 
 export interface MessageInput {
@@ -27,6 +29,7 @@ export interface MessageInput {
   /** Czas przyjęcia z zegara bramki. Pominięcie oznacza zegar bazy - tylko dla testów. */
   createdAt?: string;
   inReplyTo?: string | null;
+  integrationId?: number | null;
 }
 
 export interface MessageFilter {
@@ -52,7 +55,7 @@ interface RawMessage {
   provider_code: number | null; error: string | null;
   idempotency_key: string | null;
   created_at: string; sent_at: string | null; final_at: string | null;
-  trace: string | null; in_reply_to: string | null;
+  trace: string | null; in_reply_to: string | null; integration_id: number | null;
 }
 
 /** Statusy, po których wiadomość nie zmieni już stanu i trafia na listę nieudanych. */
@@ -88,6 +91,7 @@ function toRow(r: RawMessage): MessageRow {
     finalAt: r.final_at,
     trace: r.trace === null ? null : JSON.parse(r.trace) as ProtocolTrace,
     inReplyTo: r.in_reply_to,
+    integrationId: r.integration_id,
   };
 }
 
@@ -107,8 +111,8 @@ export class MessagesRepo {
       .prepare(
         `INSERT INTO messages (
            id, api_key_id, account_id, service_id, dest, body, body_hash,
-           encoding, parts, slots, orig, cost_center, valid_to, idempotency_key, in_reply_to, created_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           encoding, parts, slots, orig, cost_center, valid_to, idempotency_key, in_reply_to, integration_id, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                    COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))`,
       )
       .run(
@@ -127,6 +131,7 @@ export class MessagesRepo {
         input.validTo,
         input.idempotencyKey,
         input.inReplyTo ?? null,
+        input.integrationId ?? null,
         input.createdAt ?? null,
       );
   }
