@@ -62,6 +62,6 @@ export const uptimeKuma: Preset = {
     '- **Request Body**: `application/json`',
     '- **Additional Headers**: `{ "Authorization": "Bearer <token>" }` z tokenem, który wpisałeś w bramce',
     '',
-    'Numer odbiorcy wpisz w bramce w liście zapasowej - Uptime Kuma nie przesyła numerów. Żeby SMS szedł tylko przy awarii, dodaj warunek `heartbeat.status równe 0`; bez warunku przyjdzie też SMS o powrocie (`OK: …`) i SMS z przycisku „Test” w Uptime Kumie (ten ładunek nie ma `heartbeat`, szablon wysyła wtedy samo `msg`).',
+    'Zapisz powiadomienie i włącz je przy monitorach, które mają budzić SMS-em (edycja monitora, sekcja Powiadomienia), albo zaznacz „Domyślnie włączone” dla nowych monitorów. Przycisk „Test” w Uptime Kumie wysyła próbny ładunek bez danych monitora - bramka przyjmuje go tylko przy wariancie „zawsze”.',
   ].join('\n'),
 };

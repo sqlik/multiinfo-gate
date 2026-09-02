@@ -494,6 +494,12 @@ bez ingerencji; zapis klucza albo tego konta w panelu ponawia od razu.
 
 ![Karta konta, sekcja Odbiór wiadomości: usługa z odbierającym kluczem, stan aktywny z czasem ostatniego pytania i ostatniej odebranej](obrazki/konto-odbior.png)
 
+Nad listą kluczy panel prosi raz o **adres, pod którym aplikacje widzą bramkę**: przy bramce pod
+domeną (rozdział 6) `https://<TWOJA-DOMENA>`, przy kontenerze na Proxmoksie w sieci firmowej
+`http://<ADRES-KONTENERA>:8080`, bez ścieżki na końcu. Z tym adresem panel pokazuje przy nowym
+kluczu gotowe polecenie `curl` do wklejenia w terminalu, a przy integracjach (punkt 4.7) pełne
+adresy wejściowe zamiast samych ścieżek.
+
 Po zapisaniu panel wyświetla jeden raz dwie wartości: **klucz** (`mig_live_...`) oraz - gdy
 podano adres webhooka - **sekret webhooka**. W bazie bramki pozostaje tylko skrót klucza; panel
 nie pokaże tych wartości ponownie. Należy je zapisać w menedżerze haseł i przekazać osobie
@@ -501,7 +507,7 @@ odpowiedzialnej za aplikację kliencką. Utracony klucz zastępuje się nowym (w
 nowego, przekazanie aplikacji, odwołanie starego); utracony sekret webhooka wydaje ponownie
 edycja klucza ze zmianą adresu webhooka.
 
-![Ekran kluczy API tuż po wygenerowaniu klucza: klucz i sekret webhooka pokazane jeden raz](obrazki/klucz.png)
+![Ekran kluczy API tuż po wygenerowaniu klucza: klucz pokazany jeden raz z gotowym poleceniem curl, nad listą adres bramki dla aplikacji](obrazki/klucz.png)
 
 ### 4.6. Użytkownicy panelu
 
@@ -535,13 +541,16 @@ w jej formacie. Integracja działa w imieniu klucza API z rozdziału 4.5 - zał�
 
 ![Lista integracji z kierunkiem, ustawieniem, kluczem, stanem i licznikami z ostatniej doby](obrazki/integracje.png)
 
-Dodanie integracji to wybór kierunku, gotowego ustawienia (kafelek z nazwą aplikacji) i formularz
-wypełniony szablonem oraz instrukcją, co ustawić po stronie aplikacji. Przycisk **Sprawdź
-szablon** pokazuje wynik na przykładowym ładunku bez zapisu i bez wysyłki. Aplikacja w sieci
-lokalnej jako cel integracji „z SMS-a” wymaga `MIG_WEBHOOK_ALLOW_PRIVATE=1`
-w środowisku bramki (rozdział 7.7), tak samo jak adres webhooka klucza.
+Dodanie integracji to wybór kierunku, gotowego ustawienia (kafelek z nazwą aplikacji)
+i formularz w **trybie prostym**: numery telefonów, kiedy wysyłać SMS i co ma w nim być z list
+przygotowanych dla tej aplikacji, hasło z przyciskiem **Wygeneruj**. Po zapisaniu panel pokazuje
+pełny adres do wklejenia w aplikacji, zdanie, w którym polu, i instrukcję krok po kroku. Przełącznik
+**Zaawansowany** nad formularzem odsłania pola silnika (ścieżki w ładunku, szablony, reguły) dla
+tych, którzy chcą więcej; „Własne” otwiera je od razu. Aplikacja w sieci lokalnej jako cel
+integracji „z SMS-a” wymaga `MIG_WEBHOOK_ALLOW_PRIVATE=1` w środowisku bramki (rozdział 7.7),
+tak samo jak adres webhooka klucza.
 
-![Formularz integracji z ustawienia Uptime Kuma](obrazki/integracja-formularz.png)
+![Formularz integracji z ustawienia Uptime Kuma w trybie prostym](obrazki/integracja-formularz.png)
 
 Ekran **Powiadomienia** ma ustawienia serwera SMTP z mailem testowym i tabelę reguł: błędy
 integracji, niedostarczone webhooki, certyfikat konta na progach dni, konto odrzucające

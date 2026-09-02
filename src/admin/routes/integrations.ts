@@ -280,7 +280,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const ctx = formContext(rodzaj, preset);
     const values = valuesFromPreset(rodzaj, preset);
     const mode = modeOf(tryb, preset, rodzaj, null);
-    return mode.mode === 'prosty' ? simplePage(request, ctx, simpleDefaults(preset, values)) : advancedPage(request, ctx, values);
+    return mode.mode === 'prosty' ? simplePage(request, ctx, simpleDefaults(preset, values, true)) : advancedPage(request, ctx, values);
   });
 
   app.post<{ Body: Body }>('/integracje', async (request, reply) => {

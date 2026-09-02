@@ -117,6 +117,7 @@ tr:last-child td { border-bottom: none; }
 .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
 .field label { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.07em;
                text-transform: uppercase; color: var(--muted); }
+.field label.choice { font-family: inherit; font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--ink); }
 .field input { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; color: var(--ink);
                background: var(--surface); border: 1px solid var(--edge); border-radius: var(--radius);
                padding: 8px 10px; }

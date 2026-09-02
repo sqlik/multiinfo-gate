@@ -37,16 +37,72 @@ Plakietka przy pozycji w menu liczy integracje z błędem w ostatniej dobie.
 
 ![Lista integracji: nazwa z ustawieniem, kierunek, klucz i konto, stan, ostatnie zdarzenie i liczniki z doby](obrazki/integracje.png)
 
+### 2.1. Adres bramki
+
+Zanim dodasz pierwszą integrację, podaj raz **adres, pod którym aplikacje widzą bramkę** - panel
+prosi o niego na ekranie **Klucze API** (i na liście integracji, dopóki go nie ma). To ten sam
+adres, który aplikacje wpisują przed `/v1/messages`: przy bramce pod domeną `https://sms.firma.pl`,
+przy kontenerze na Proxmoksie dostępnym w sieci firmowej `http://10.10.10.159:8080` (adres
+kontenera i port API). Bez ścieżki na końcu. Od tej chwili panel pokazuje przy każdym kluczu gotowe
+wywołanie do wklejenia w terminalu, a przy każdej integracji pełny adres wejściowy zamiast samej
+ścieżki `/hooks/…`. Rozdział 3.1 opisuje, jaki adres wpisać zależnie od tego, jak bramka stoi.
+
+### 2.2. Trzy kroki
+
 Przycisk **Dodaj integrację** prowadzi przez trzy kroki:
 
 1. Kierunek: „Aplikacja wysyła SMS” albo „SMS albo status trafia do aplikacji”.
-2. Gotowe ustawienie: kafelek z nazwą aplikacji (rozdział 6) albo „Własne” z pustym formularzem.
-   Ustawienie tylko wypełnia formularz; po zapisie nie ma z nim sprzężenia i wszystko da się
-   zmienić.
-3. Formularz w sekcjach: podstawy (nazwa, klucz, usługa, nadawca, włączona), wejście albo wyjście,
-   warunek, odbiorca, treść albo żądanie, ochrona i dziennik, próbka.
+2. Gotowe ustawienie: kafelek z nazwą aplikacji (rozdział 6) albo „Własne” dla aplikacji spoza
+   listy.
+3. Formularz. Gotowe ustawienie otwiera się w **trybie prostym**; „Własne” od razu
+   w **zaawansowanym**. Przełącznik nad formularzem zmienia tryb w każdej chwili.
 
-![Formularz integracji z ustawienia Uptime Kuma: klucz, nagłówek z tokenem, warunek, lista zapasowa numerów i szablon treści z listą pól ładunku](obrazki/integracja-formularz.png)
+### 2.3. Tryb prosty
+
+Tryb prosty nie wymaga znajomości ładunku aplikacji ani szablonów. Formularz ma pięć punktów,
+każdy jest decyzją użytkownika w jego języku:
+
+1. **Nazwa i konto** - nazwa integracji i klucz API (SMS-y idą z konta Multiinfo tego klucza).
+2. **Kto ma dostać SMS** - numery telefonów, jeden na linię. Gdy aplikacja sama przesyła numer
+   (Zabbix, Prosty JSON), pole nazywa się „Numery zapasowe” i zdanie pod nim mówi, skąd numer
+   przychodzi.
+3. **Kiedy wysyłać SMS** - lista wariantów przygotowanych dla tej aplikacji, np. w Uptime Kumie
+   „tylko gdy monitor przestanie działać”, „gdy przestanie działać i gdy wróci”, „zawsze, także
+   przy przycisku Test”.
+4. **Co ma być w SMS-ie** - dwa warianty treści pokazane jako gotowy SMS obliczony z prawdziwego
+   ładunku tej aplikacji (np. „AWARIA: Strona firmowa - Request failed with status code 403”),
+   nie jako szablon.
+5. **Zabezpieczenie** - jedno, które dana aplikacja obsługuje: hasło do wpisania też po stronie
+   aplikacji (przycisk **Wygeneruj** losuje bezpieczne), a przy aplikacjach bez takiego pola
+   (FreeScout, Freshdesk) zdanie, co chroni adres zamiast hasła.
+
+![Formularz Uptime Kumy w trybie prostym: numery, kiedy wysyłać, dwa warianty treści jako gotowe SMS-y, hasło z przyciskiem Wygeneruj](obrazki/integracja-formularz.png)
+
+Integracja z SMS-a w trybie prostym ma nazwę i konto, adres aplikacji z podpowiedzią, co tam
+wpisać (np. „adres Twojego FreeScouta z końcówką /api/conversations”), parametry aplikacji (numer
+skrzynki we FreeScoucie) i dostęp do aplikacji (klucz API; przy Freshdesku bramka sama zamienia
+klucz na wymagany nagłówek).
+
+Po zapisaniu panel pokazuje raz ramkę z **pełnym adresem do wklejenia**, zdaniem, gdzie go wkleić
+(np. „w Uptime Kumie w polu Post URL powiadomienia typu Webhook”), i instrukcją krok po kroku dla
+tej aplikacji.
+
+![Ramka po zapisaniu: pełny adres wejściowy, gdzie go wkleić i instrukcja krok po kroku](obrazki/integracja-adres.png)
+
+Tryb prosty zapisuje dokładnie tę samą konfigurację, którą pokazuje tryb zaawansowany: wybrany
+wariant „kiedy” to warunek, wariant treści to szablon, hasło to nagłówek albo basic auth. Dopóki
+konfiguracja mieści się w listach ustawienia, edycja otwiera tryb prosty z zaznaczonymi wyborami.
+Gdy ktoś w trybie zaawansowanym wpisze własny szablon albo warunek, edycja otwiera się
+w zaawansowanym z jednym zdaniem dlaczego, a szczegół integracji pokazuje warunek i szablon zamiast
+słów z list.
+
+### 2.4. Tryb zaawansowany
+
+Tryb zaawansowany pokazuje pola silnika w sekcjach: podstawy (nazwa, klucz, usługa, nadawca,
+włączona), wejście albo wyjście (uwierzytelnianie, lista źródeł; adres, metoda, nagłówki,
+zdarzenia), warunek (reguły albo wyrażenie Liquid), odbiorca (ścieżki numeru i identyfikatorów,
+lista zapasowa), treść albo żądanie (szablon Liquid albo pole z ładunku; body), ochrona
+i dziennik, próbka. Rozdziały 3 i 4 opisują każde pole, rozdział 5 język szablonów.
 
 Pod formularzem są dwa przyciski. **Sprawdź szablon** nie zapisuje niczego i nie wysyła SMS-a:
 bierze próbkę ładunku z pola na dole (z ustawienia albo z dziennika) i pokazuje wynik warunku,
@@ -54,15 +110,15 @@ odbiorców po normalizacji, treść i liczbę części, a dla integracji z SMS-a
 zamaskowane) i body. **Utwórz integrację** zapisuje; zapis wymaga poprawnego szablonu i warunku,
 a błąd składni Liquida wraca jako komunikat z numerem linii i kolumny.
 
-![Podgląd „Sprawdź szablon”: warunek spełniony, odbiorcy, treść SMS-a i liczba części](obrazki/integracja-sprawdz.png)
+![Podgląd „Sprawdź szablon” w trybie zaawansowanym: warunek spełniony, odbiorcy, treść SMS-a i liczba części](obrazki/integracja-sprawdz.png)
 
-Po utworzeniu integracji do SMS panel pokazuje raz ramkę z adresem wejściowym i przyciskiem
-„Kopiuj”. Adres widać też w szczególe i na stronie edycji, gdzie jest przycisk **Wygeneruj nowy**:
+Adres wejściowy widać w szczególe i na stronie edycji, gdzie jest przycisk **Wygeneruj nowy**:
 stary adres przestaje działać natychmiast i trzeba go podmienić w aplikacji.
 
-Sekrety (token w nagłówku, hasło basic auth, sekretne nagłówki integracji z SMS-a) zapisują się
-zaszyfrowane kluczem głównym i nie da się ich potem odczytać w panelu. W edycji puste pole sekretu
-zostawia dotychczasowy; żeby zdjąć warstwę, wyczyść nazwę nagłówka albo login.
+Sekrety (hasło z trybu prostego, token w nagłówku, hasło basic auth, sekretne nagłówki
+integracji z SMS-a) zapisują się zaszyfrowane kluczem głównym i nie da się ich potem odczytać
+w panelu. W edycji puste pole sekretu zostawia dotychczasowy; żeby zdjąć warstwę w trybie
+zaawansowanym, wyczyść nazwę nagłówka albo login.
 
 ## 3. Aplikacja wysyła SMS
 
@@ -76,9 +132,9 @@ klucza i ochrony z rozdziału 3.6. Bramka przyjmuje `Content-Type: application/j
 się tablicą). Ładunek do 256 KB; większy dostaje kod 413, niepoprawny JSON kod 400. Inne metody
 niż `POST` dostają 405, nieznany identyfikator i integracja wyłączona 404 bez wpisu w dzienniku.
 
-Panel pokazuje samą ścieżkę `/hooks/<identyfikator>`, bo nie wie, pod jakim adresem aplikacja
-widzi API bramki. Ścieżkę dokleja się do tego adresu, a on zależy od tego, jak bramka stoi
-i skąd woła ją aplikacja:
+Panel pokazuje pełny adres, gdy zna adres bramki (rozdział 2.1); bez niego samą ścieżkę
+`/hooks/<identyfikator>`, którą dokleja się do adresu, pod jakim aplikacja widzi API bramki.
+Ten adres zależy od tego, jak bramka stoi i skąd woła ją aplikacja:
 
 | Jak bramka stoi | Skąd woła aplikacja | Pełny adres do wpisania w aplikacji |
 |---|---|---|

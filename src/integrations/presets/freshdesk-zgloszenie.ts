@@ -57,6 +57,6 @@ export const freshdeskZgloszenie: Preset = {
     '{ "event": "odpowiedz", "ticket_id": "{{ticket.id}}", "subject": "{{ticket.subject}}", "phone": "{{ticket.contact.phone}}", "mobile": "{{ticket.contact.mobile}}", "text": "{{ticket.latest_public_comment}}" }',
     '```',
     '',
-    'Numery agentów wpisz w bramce w liście zapasowej. Freshdesk nie ma pola na nagłówki, a żądania przychodzą z różnych adresów chmury AWS, więc uwierzytelnieniem zostaje sekret w adresie i limit burzy.',
+    'Freshdesk nie ma pola na hasło ani nagłówki, a żądania przychodzą z różnych adresów chmury - chroni sekret w adresie wejściowym i limit burzy.',
   ].join('\n'),
 };
