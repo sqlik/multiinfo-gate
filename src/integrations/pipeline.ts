@@ -33,7 +33,11 @@ export type InboundOutcome =
 
 export type InboundIntegration = IntegrationRow & { config: InboundConfig };
 
-export interface InboundPreview { matches: boolean; recipients: string[]; text: string; parts: number; error: string | null }
+export interface InboundPreview {
+  matches: boolean; recipients: string[]; text: string; parts: number; error: string | null;
+  /** Brak numeru w ładunku i na liście zapasowej, ale jest identyfikator zgłoszenia - odbiorcą będzie nadawca dopasowanej odebranej. */
+  threadRecipient: boolean;
+}
 
 /** Kontekst szablonu: cały ładunek pod `p`, do tego chwila i nazwa integracji. Nic z sekretów. */
 export function buildInboundContext(payload: unknown, integration: { name: string }, now: Date): Record<string, unknown> {
@@ -48,10 +52,23 @@ export function renderInboundText(engine: TemplateEngine, config: InboundConfig,
   return engine.render(config.text.template, context).trim();
 }
 
-/** Odbiorcy: ścieżka z ładunku, a gdy pusta - lista zapasowa. Surowe, przed normalizacją. */
-function rawRecipients(config: InboundConfig, payload: unknown): string[] {
+/** Identyfikator zgłoszenia z ładunku (ścieżka `ticketRefPath`) jako tekst albo null. */
+function ticketRef(config: InboundConfig, payload: unknown): string | null {
+  if (config.ticketRefPath === undefined) return null;
+  const ref = readPath(payload, config.ticketRefPath);
+  return ref === undefined || ref === null || String(ref) === '' ? null : String(ref);
+}
+
+/**
+ * Odbiorcy, surowi, przed normalizacją: ścieżka z ładunku, potem nadawca odebranego SMS-a
+ * dopasowanego po identyfikatorze zgłoszenia (helpdeski nie przesyłają numeru w webhooku
+ * odpowiedzi), na końcu lista zapasowa.
+ */
+function rawRecipients(config: InboundConfig, payload: unknown, threadSender: string | null): string[] {
   const fromPayload = config.to.path === undefined ? [] : splitRecipients(readPath(payload, config.to.path));
-  return fromPayload.length > 0 ? fromPayload : config.to.fallback;
+  if (fromPayload.length > 0) return fromPayload;
+  if (threadSender !== null) return [threadSender];
+  return config.to.fallback;
 }
 
 /** Przycięcie do `maxParts` części tym samym licznikiem, którym API dzieli wiadomości. */
@@ -84,7 +101,10 @@ export function previewInbound(engine: TemplateEngine, config: InboundConfig, pa
   const context = buildInboundContext(payload, { name: 'podgląd' }, now);
   try {
     const ok = matches(config.condition, context, engine);
-    const recipients = rawRecipients(config, payload).map((r) => {
+    const raw = rawRecipients(config, payload, null);
+    // Podgląd nie sięga do bazy odebranych - mówi tylko, że odbiorca wyjdzie z wątku.
+    const threadRecipient = raw.length === 0 && ticketRef(config, payload) !== null;
+    const recipients = raw.map((r) => {
       try {
         return normalizeRecipient(r, countryCode);
       } catch {
@@ -93,9 +113,9 @@ export function previewInbound(engine: TemplateEngine, config: InboundConfig, pa
     });
     const rendered = renderInboundText(engine, config, context);
     const fitted = rendered === '' ? { text: '', parts: 0 } : fitToParts(rendered, config.overflow === 'truncate' ? config.maxParts : 9);
-    return { matches: ok, recipients, text: fitted.text, parts: fitted.parts, error: rendered === '' ? 'Szablon dał pustą treść.' : null };
+    return { matches: ok, recipients, text: fitted.text, parts: fitted.parts, error: rendered === '' ? 'Szablon dał pustą treść.' : null, threadRecipient };
   } catch (e) {
-    return { matches: false, recipients: [], text: '', parts: 0, error: e instanceof Error ? e.message : String(e) };
+    return { matches: false, recipients: [], text: '', parts: 0, error: e instanceof Error ? e.message : String(e), threadRecipient: false };
   }
 }
 
@@ -129,6 +149,10 @@ export function runInbound(deps: PipelineDeps, integration: InboundIntegration, 
   if (!account) return unavailable('konto nie istnieje');
   if (account.pausedReason !== null) return unavailable(`konto wstrzymane: ${account.pausedReason}`);
 
+  // Odebrany SMS, do którego pasuje identyfikator zgłoszenia z ładunku (tylko z integracji tego klucza).
+  const ref = ticketRef(config, payload);
+  const original = ref === null ? undefined : deps.inbound.findByExternalRefForKey(integration.apiKeyId, ref);
+
   const context = buildInboundContext(payload, integration, now);
   let text: string;
   let recipients: string[];
@@ -150,14 +174,18 @@ export function runInbound(deps: PipelineDeps, integration: InboundIntegration, 
       return { kind: 'throttled', notify: gate.notify };
     }
     text = renderInboundText(deps.engine, config, context);
-    recipients = rawRecipients(config, payload);
+    recipients = rawRecipients(config, payload, original?.sender ?? null);
   } catch (e) {
     if (e instanceof TemplateError) return fail('template', e.message);
     if (e instanceof TooManyRecipientsError) return fail('too_many_recipients', e.message);
     throw e;
   }
   if (text === '') return fail('empty_text', 'Szablon dał pustą treść - sprawdź, czy ładunek ma oczekiwane pola.');
-  if (recipients.length === 0) return fail('no_recipient', 'Brak numeru odbiorcy w ładunku i pusta lista zapasowa.');
+  if (recipients.length === 0) {
+    return fail('no_recipient', ref !== null
+      ? `Brak numeru odbiorcy w ładunku, zgłoszenie ${ref} nie pasuje do żadnego odebranego SMS-a, a lista zapasowa jest pusta.`
+      : 'Brak numeru odbiorcy w ładunku i pusta lista zapasowa.');
+  }
 
   let normalized: string[];
   try {
@@ -170,15 +198,8 @@ export function runInbound(deps: PipelineDeps, integration: InboundIntegration, 
   const fitted = fitToParts(text, config.maxParts);
   if (fitted.over && config.overflow === 'reject') return fail('too_many_parts', `Treść wymaga więcej niż ${config.maxParts} części.`);
 
-  // Odpowiedź w wątku: identyfikator zgłoszenia z ładunku pasuje do odebranej, a odbiorca to jej nadawca.
-  let inReplyTo: string | undefined;
-  if (config.ticketRefPath !== undefined && normalized.length === 1) {
-    const ref = readPath(payload, config.ticketRefPath);
-    if (ref !== undefined && ref !== null && String(ref) !== '') {
-      const original = deps.inbound.findByExternalRefForKey(integration.apiKeyId, String(ref));
-      if (original && original.sender === normalized[0]) inReplyTo = original.id;
-    }
-  }
+  // Odpowiedź w wątku: zgłoszenie pasuje do odebranej, a jedyny odbiorca to jej nadawca.
+  const inReplyTo = original && normalized.length === 1 && original.sender === normalized[0] ? original.id : undefined;
 
   try {
     const results = submitMessages(deps, authFromKey(key), {
