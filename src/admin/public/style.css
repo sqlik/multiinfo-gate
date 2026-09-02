@@ -225,6 +225,7 @@ tr:last-child td { border-bottom: none; }
 .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .tiles-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .tiles-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.tiles-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 a.tile { color: inherit; display: block; }
 a.tile:hover { border-color: var(--edge); }
 .btn.disabled { opacity: 0.45; cursor: default; pointer-events: none; }

@@ -14,6 +14,17 @@ export interface OverviewData {
   webhooks: { pending: number; failed: number };
   /** Odebrane od abonentów w oknie przeglądu. */
   inboundToday: number;
+  /** Integracje z choć jednym błędem w oknie przeglądu. */
+  integrationsTroubled: number;
+}
+
+/** „1 integracja zgłosiła błąd”, „3 integracje zgłosiły błąd”, „5 integracji zgłosiło błąd”. */
+export function troubledIntegrations(n: number): string {
+  const last = n % 10;
+  const tens = n % 100;
+  if (n === 1) return '1 integracja zgłosiła błąd';
+  if (last >= 2 && last <= 4 && (tens < 12 || tens > 14)) return `${n} integracje zgłosiły błąd`;
+  return `${n} integracji zgłosiło błąd`;
 }
 
 /** „1 webhook nie dotarł”, „3 webhooki nie dotarły”, „5 webhooków nie dotarło”. */
@@ -56,6 +67,17 @@ function alerts(data: OverviewData, now: Date): string {
           Aplikacja kliencka nie wie o tych zdarzeniach - sprawdź adres webhooka przy kluczu.</div>
       </div>
       <a href="/klucze">Zobacz klucze</a>
+    </div>`);
+  }
+
+  if (data.integrationsTroubled > 0) {
+    items.push(`<div class="alert">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="sq"></div>
+        <div>${esc(troubledIntegrations(data.integrationsTroubled))} w ostatniej dobie: odrzucone żądanie, pusta treść,
+          przekroczony limit albo niedostarczona dostawa. Szczegóły w dzienniku integracji.</div>
+      </div>
+      <a href="/integracje">Zobacz integracje</a>
     </div>`);
   }
 
@@ -140,7 +162,7 @@ export function overviewPage(data: OverviewData, now: Date): string {
   </div>
   <div class="scroll">
     ${alerts(data, now)}
-    <div class="tiles tiles-6">
+    <div class="tiles tiles-7">
       <a class="tile" href="/wiadomosci">
         <div class="lab">Wychodzące</div>
         <div class="n">${esc(data.counts.total)}</div>
@@ -170,6 +192,11 @@ export function overviewPage(data: OverviewData, now: Date): string {
         <div class="lab">Odebrane</div>
         <div class="n">${esc(data.inboundToday)}</div>
         <div class="d">SMS-ów od abonentów</div>
+      </a>
+      <a class="tile" href="/integracje">
+        <div class="lab">Integracje z błędami</div>
+        <div class="n${data.integrationsTroubled > 0 ? ' fail' : ''}">${esc(data.integrationsTroubled)}</div>
+        <div class="d">integracji z błędem w dzienniku</div>
       </a>
     </div>
 

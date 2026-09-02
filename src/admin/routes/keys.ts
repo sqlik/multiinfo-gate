@@ -219,7 +219,9 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
     const choice = choiceOf(key.accountId);
     if (!choice) return reply.callNotFound();
     reply.type('text/html; charset=utf-8');
-    return render.page(request, { title: `Klucz ${key.name}`, active: 'klucze', body: editKeyPage(choice, key) });
+    return render.page(request, {
+      title: `Klucz ${key.name}`, active: 'klucze', body: editKeyPage(choice, key, null, undefined, deps.integrations.listForKey(key.id)),
+    });
   });
 
   app.post<{ Params: { id: string }; Body: Body }>('/klucze/:id/edytuj', async (request, reply) => {
@@ -237,7 +239,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       reply.code(400);
       const error = checked.ok ? targetError! : checked.error;
       return render.page(request, {
-        title: `Klucz ${key.name}`, active: 'klucze', body: editKeyPage(choice, key, error, v),
+        title: `Klucz ${key.name}`, active: 'klucze', body: editKeyPage(choice, key, error, v, deps.integrations.listForKey(key.id)),
       });
     }
 
@@ -286,6 +288,14 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
     const id = Number(request.params.id);
     const key = deps.apiKeys.get(id);
     if (!key) return reply.callNotFound();
+
+    // Włączona integracja na odwołanym kluczu psułaby się po cichu przy pierwszym zdarzeniu.
+    const live = deps.integrations.listForKey(id).filter((i) => i.enabled === 1);
+    if (live.length > 0) {
+      render.flash(request, 'warn', `Klucz ${key.name} ma włączone integracje (${live.map((i) => i.name).join(', ')}) - `
+        + 'najpierw wyłącz albo przepnij integracje, potem odwołaj klucz.');
+      return reply.redirect('/klucze', 302);
+    }
 
     deps.apiKeys.revoke(id);
     // Odwołany subskrybent może gasić odbiór usługi.

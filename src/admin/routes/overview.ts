@@ -26,6 +26,7 @@ export function registerOverviewRoutes(app: FastifyInstance, deps: AdminDeps, re
         keyNames: new Map(deps.apiKeys.list().map((k) => [k.id, k.name])),
         webhooks: deps.deliveries.counts(since),
         inboundToday: deps.inbound.countSince(since),
+        integrationsTroubled: deps.integrations.countTroubled(since),
       }, at),
     });
   });

@@ -82,6 +82,8 @@ export interface InboundDetail {
   row: InboundRow; accountName: string;
   deliveries: DeliveryView[];
   related: MessageRow | null; replies: MessageRow[];
+  /** Zgłoszenie w obcej aplikacji założone z tej wiadomości przez integrację wychodzącą. */
+  ticket?: { ref: string; integration: { id: number; name: string } } | null;
 }
 
 export function inboundDetailPage(d: InboundDetail): string {
@@ -115,6 +117,7 @@ export function inboundDetailPage(d: InboundDetail): string {
           <div>Protokół / kodowanie</div><div class="m">${esc(r.protocolId)} / ${esc(r.codingScheme)}</div>
           <div>Konektor</div><div class="m">${esc(r.connectorId ?? '-')}</div>
           <div>Zapisana</div><div class="m">${esc(warsawStamp(r.createdAt))}</div>
+          ${!d.ticket ? '' : `<div>Zgłoszenie</div><div class="m">${esc(d.ticket.ref)} (<a href="/integracje/${esc(d.ticket.integration.id)}">${esc(d.ticket.integration.name)}</a>)</div>`}
           <div>Ostatnia wysłana do nadawcy</div><div class="m">${d.related === null ? '<span class="dim">brak w ciągu 48 godzin</span>' : `<a href="/wiadomosci/${esc(d.related.id)}">${esc(d.related.id)}</a> · ${esc(warsawStamp(d.related.createdAt))}`}</div>
           <div style="border-bottom: none;">Odpowiedzi wysłane</div><div style="border-bottom: none;">${replies}</div>
         </div>
