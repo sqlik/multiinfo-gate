@@ -29,4 +29,47 @@ export interface Preset {
   guide: string;
   /** Skąd wzięła się próbka: nazwa źródła i data; „do potwierdzenia” przed wydaniem wypada z listy. */
   sampleSource?: string;
+  /** Tryb prosty: listy wyboru w języku użytkownika; bez niego formularz otwiera się od razu zaawansowany. */
+  simple?: { inbound?: SimpleInbound; outbound?: SimpleOutbound };
+}
+
+// --- tryb prosty ---------------------------------------------------------------------------
+// Gotowe ustawienie opisuje decyzje użytkownika w jego języku: kto dostaje SMS, kiedy, co w nim jest
+// i jak aplikacja się przedstawia. Formularz prosty rysuje z tego listy wyboru, a tryb zaawansowany
+// pokazuje wynikową konfigurację w polach silnika.
+
+/** Wariant „kiedy wysyłać SMS”; pierwszy na liście jest domyślny. */
+export interface SimpleWhen { id: string; label: string; condition: InboundConfig['condition'] }
+
+/** Wariant „co ma być w SMS-ie”; formularz pokazuje wynik na próbce zamiast szablonu. */
+export interface SimpleText { id: string; label: string; text: InboundConfig['text'] }
+
+/** Jak aplikacja przedstawia się bramce - jedno, które dana aplikacja obsługuje. */
+export type SimpleAuth =
+  | { kind: 'header'; name: string; prefix: string; label: string; where: string }
+  | { kind: 'basic'; user: string; label: string; where: string }
+  | { kind: 'none'; note: string };
+
+export interface SimpleInbound {
+  /** Gdzie wkleić adres wejściowy, np. „w Uptime Kumie w polu Post URL”. */
+  addressField: string;
+  /** Skąd numer odbiorcy: z listy w bramce albo z ładunku aplikacji; zdanie wyjaśnia dlaczego. */
+  recipients: { source: 'list' | 'payload'; note: string };
+  when: SimpleWhen[];
+  text: SimpleText[];
+  auth: SimpleAuth;
+}
+
+/** Parametr wpisywany do szablonu body, np. numer skrzynki; w szablonie JSON jako `"klucz": wartość`. */
+export interface SimpleParam { key: string; label: string; hint: string; digits: boolean }
+
+/** Sekret w trybie prostym: co użytkownik wpisuje i jak bramka to przerabia na wartość sekretu. */
+export interface SimpleSecret { ref: string; label: string; hint: string; transform: 'raw' | 'bearer' | 'basic-x' }
+
+export interface SimpleOutbound {
+  address: { label: string; hint: string; placeholder: string };
+  secrets: SimpleSecret[];
+  params: SimpleParam[];
+  /** Zdanie o tym, co aplikacja zrobi z odebranym SMS-em. */
+  note: string;
 }
