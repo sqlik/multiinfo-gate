@@ -171,7 +171,7 @@ describe('edycja', () => {
   });
 
   it('formularz edycji pokazuje adres wejściowy i nie pokazuje sekretu', async () => {
-    const res = await page(`/integracje/${id}/edytuj`);
+    const res = await page(`/integracje/${id}/edytuj?tryb=zaawansowany`);
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain(`/hooks/${h.integrations.get(id)!.hookId}`);
     expect(res.body).not.toContain('Bearer stary');

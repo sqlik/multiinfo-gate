@@ -74,3 +74,23 @@
     });
   }
 })();
+
+// Generowanie hasła do pola wskazanego przez data-generate: 24 znaki bez znaków mylących; pole
+// przełącza się na tekst, żeby dało się je przepisać do aplikacji.
+(function () {
+  var buttons = document.querySelectorAll('[data-generate]');
+  var alphabet = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  for (var i = 0; i < buttons.length; i += 1) {
+    buttons[i].addEventListener('click', function (event) {
+      var target = document.querySelector(event.currentTarget.getAttribute('data-generate'));
+      if (!target || !window.crypto || !window.crypto.getRandomValues) return;
+      var bytes = new Uint8Array(24);
+      window.crypto.getRandomValues(bytes);
+      var out = '';
+      for (var b = 0; b < bytes.length; b += 1) out += alphabet[bytes[b] % alphabet.length];
+      target.type = 'text';
+      target.value = out;
+      target.focus();
+    });
+  }
+})();

@@ -62,11 +62,15 @@ function filterLink(f: IntegrationsFilter, patch: Partial<IntegrationsFilter>): 
   return q === '' ? '/integracje' : `/integracje?${q}`;
 }
 
-/** Ramka z adresem wejściowym pokazywana po utworzeniu albo wymianie adresu. */
-export interface CreatedHook { name: string; hookId: string }
+/** Ramka z adresem wejściowym pokazywana po utworzeniu albo wymianie adresu; z instrukcją, gdy to nowa integracja. */
+export interface CreatedHook { name: string; hookId: string; appField?: string; guide?: string; presetName?: string }
 
-export function hookReveal(created: CreatedHook, apiUrl: string | null, appField?: string): string {
+export function hookReveal(created: CreatedHook, apiUrl: string | null, appField = created.appField): string {
   const where = appField ? `Wklej go ${esc(appField)}.` : 'Wklej go w aplikacji jako adres, na który ma wysyłać żądania POST.';
+  const guide = created.guide === undefined || created.guide === '' ? '' : `<div style="padding: 0 16px 16px;">
+        <div class="lab" style="margin-bottom: 6px;">Krok po kroku: ${esc(created.presetName ?? 'aplikacja')}</div>
+        <div class="guide" style="font-size: 12.5px; line-height: 1.55;">${guideHtml(created.guide)}</div>
+      </div>`;
   const note = apiUrl === null
     ? `To sama ścieżka: panel nie zna jeszcze adresu bramki. Podaj go w panelu „Adres bramki dla aplikacji” (ekran Klucze API), a tu pojawi się pełny adres.
         Do tego czasu doklej ścieżkę do adresu, pod którym aplikacja widzi API bramki, np. https://sms.firma.pl${esc(hookPath(created.hookId))}.`
@@ -78,6 +82,7 @@ export function hookReveal(created: CreatedHook, apiUrl: string | null, appField
         <button class="btn btn-s" type="button" data-copy="#hook-path">Kopiuj</button>
       </div>
       <div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">${note} Wygenerowanie nowego adresu unieważnia ten natychmiast.</div>
+      ${guide}
     </div>`;
 }
 
@@ -594,7 +599,13 @@ function previewPanel(kind: IntegrationKind, p: FormPreview): string {
   </div>`;
 }
 
-export interface FormPageOptions { error?: string | null; preview?: FormPreview | null; created?: CreatedHook | null }
+export interface FormPageOptions {
+  error?: string | null; preview?: FormPreview | null; created?: CreatedHook | null;
+  /** Przełącznik trybu (HTML), gdy ustawienie ma tryb prosty. */
+  modeSwitch?: string;
+  /** Dlaczego formularz otworzył się zaawansowany, choć proszono o prosty. */
+  note?: string;
+}
 
 export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, opts: FormPageOptions = {}): string {
   const edit = ctx.row !== undefined;
@@ -630,6 +641,8 @@ export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, 
     </div>
   </div>
   <div class="scroll">
+    ${opts.modeSwitch ?? ''}
+    ${opts.note ? `<div class="warn">${esc(opts.note)}</div>` : ''}
     ${opts.error ? `<div class="warn">${esc(opts.error)}</div>` : ''}
     ${opts.created ? hookReveal(opts.created, ctx.apiUrl) : ''}
     ${address}
@@ -663,7 +676,11 @@ export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, 
 
 export interface DetailEvent { row: IntegrationEventRow; /** Dostawa nieudana, którą da się ponowić. */ retryable: boolean }
 
-export interface IntegrationDetail { view: IntegrationView; events: DetailEvent[]; apiUrl: string | null }
+export interface IntegrationDetail {
+  view: IntegrationView; events: DetailEvent[]; apiUrl: string | null;
+  /** Wybrane warianty trybu prostego w słowach; null, gdy konfiguracja jest spoza list. */
+  simple?: { when: string; text: string } | null;
+}
 
 /** Warunek w słowach: „heartbeat.status równe 0; monitor.name zawiera prod” albo wyrażenie Liquid. */
 export function conditionWords(condition: IntegrationConfig['condition']): string {
@@ -678,7 +695,7 @@ export function conditionWords(condition: IntegrationConfig['condition']): strin
 const kvRow = (label: string, value: string, mono = false) => `<div>${esc(label)}</div><div${mono ? ' class="m"' : ''}>${value}</div>`;
 const dimOr = (value: string | undefined | null, fallback = 'brak') => (value ? esc(value) : `<span class="dim">${esc(fallback)}</span>`);
 
-function configRows(row: IntegrationRow, apiUrl: string | null): string {
+function configRows(row: IntegrationRow, apiUrl: string | null, simple: IntegrationDetail['simple'] = null): string {
   const rows: string[] = [];
   const c = row.config;
   if (row.kind === 'webhook_in') {
@@ -693,7 +710,7 @@ function configRows(row: IntegrationRow, apiUrl: string | null): string {
     const to = cfg.to.path ? `ścieżka ${cfg.to.path}` : '';
     const fallback = cfg.to.fallback.length > 0 ? `lista zapasowa: ${cfg.to.fallback.join(', ')}` : '';
     rows.push(kvRow('Odbiorcy', dimOr([to, fallback].filter((x) => x !== '').join(' · '))));
-    rows.push(kvRow('Treść', cfg.text.mode === 'path' ? `pole ${esc(cfg.text.path)}` : `szablon Liquid · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
+    rows.push(kvRow('Treść', simple ? esc(simple.text) : cfg.text.mode === 'path' ? `pole ${esc(cfg.text.path)}` : `szablon Liquid · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
     if (cfg.ticketRefPath) rows.push(kvRow('Identyfikator zgłoszenia', esc(cfg.ticketRefPath), true));
     if (cfg.eventIdPath) rows.push(kvRow('Identyfikator zdarzenia', esc(cfg.eventIdPath), true));
   } else {
@@ -706,7 +723,7 @@ function configRows(row: IntegrationRow, apiUrl: string | null): string {
     if (cfg.responseRefPath) rows.push(kvRow('Identyfikator z odpowiedzi', esc(cfg.responseRefPath), true));
     rows.push(kvRow('Podpis X-MIG-Signature', cfg.sign ? 'tak' : 'nie'));
   }
-  rows.push(kvRow('Warunek', esc(conditionWords(c.condition))));
+  rows.push(kvRow(simple ? 'Kiedy SMS' : 'Warunek', esc(simple ? simple.when : conditionWords(c.condition))));
   rows.push(kvRow('Limit burzy', `${esc(c.throttle.limit)} zdarzeń na ${esc(c.throttle.windowMinutes)} minut`));
   rows.push(kvRow('Ładunki', row.storePayloads === 1 ? 'przechowywane 7 dni, zaszyfrowane' : 'nieprzechowywane'));
   rows.push(kvRow('Dziennik', `do ${esc(c.eventLogLimit)} wpisów`));
@@ -766,7 +783,7 @@ export function integrationDetailPage(d: IntegrationDetail): string {
   <div class="scroll">
     <div class="panel">
       <div class="panel-h"><div class="lab">Konfiguracja</div><div class="m dim">24 h: ${esc(d.view.counts.sent)} wysłane · ${esc(d.view.counts.errors)} błędy</div></div>
-      <div class="kv">${configRows(row, d.apiUrl)}</div>
+      <div class="kv">${configRows(row, d.apiUrl, d.simple ?? null)}</div>
     </div>
     <div class="panel">
       <div class="panel-h"><div class="lab">Dziennik</div>

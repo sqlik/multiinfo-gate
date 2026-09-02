@@ -51,7 +51,7 @@ describe('GET /integracje/:id', () => {
     expect(res.body).toContain('Authorization');
     expect(res.body).not.toContain('Bearer x');
     expect(res.body).toContain('203.0.113.0/24');
-    expect(res.body).toContain('heartbeat.status równe 0');
+    expect(res.body).toContain('tylko gdy monitor przestanie działać');
     expect(res.body).toContain('10 zdarzeń na 10 minut');
     expect(res.body).toContain('wysłano');
     expect(res.body).toContain('odrzucono');
