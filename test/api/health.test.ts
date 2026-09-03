@@ -39,4 +39,15 @@ describe('GET /healthz - integracje', () => {
     const res = await h.app.inject({ method: 'GET', url: '/healthz', headers: { host: '10.10.10.159:8081' } });
     expect(res.json()).toEqual({ status: 'ok' });
   });
+
+  it('wariant panelu podaje nowsze wydanie, dopóki jest do pokazania', async () => {
+    let body = (await h.app.inject({ method: 'GET', url: '/healthz' })).json();
+    expect(body.release).toBeUndefined();
+    h.settings.setLatestRelease({ version: '9.9.9', url: 'https://github.com/sqlik/multiinfo-gate/releases/tag/v9.9.9', publishedAt: null }, NOW);
+    body = (await h.app.inject({ method: 'GET', url: '/healthz' })).json();
+    expect(body.release).toEqual({ version: '9.9.9', url: 'https://github.com/sqlik/multiinfo-gate/releases/tag/v9.9.9' });
+    expect(body.status).toBe('ok');
+    const res = await h.app.inject({ method: 'GET', url: '/healthz', headers: { host: '10.10.10.159:8081' } });
+    expect(res.json()).toEqual({ status: 'ok' });
+  });
 });

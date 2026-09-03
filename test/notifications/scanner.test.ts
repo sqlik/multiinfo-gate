@@ -140,4 +140,20 @@ describe('NotificationScanner - podsumowanie dzienne', () => {
     scanner.scan(new Date('2026-09-03T10:00:00Z'));
     expect(mails()).toHaveLength(1);
   });
+
+  it('wspomina o nowszym wydaniu, gdy jest do pokazania', () => {
+    enable(12);
+    smtp();
+    const withRelease = new NotificationScanner({
+      accounts, inboundServices: services, messages: new MessagesRepo(db), inbound: new InboundMessagesRepo(db),
+      integrations: new IntegrationsRepo(db, randomBytes(32)), deliveries: new WebhookDeliveriesRepo(db, randomBytes(32)), notifications,
+      notifier: new Notifier({ notifications, jobs }), jobs,
+      release: () => ({ version: '9.9.9', url: 'https://github.com/sqlik/multiinfo-gate/releases/tag/v9.9.9', publishedAt: null }),
+    });
+    withRelease.scan(T0);
+    const sent = mails();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain('Dostępne wydanie 9.9.9');
+    expect(sent[0]!.text).toContain('https://github.com/sqlik/multiinfo-gate/releases/tag/v9.9.9');
+  });
 });

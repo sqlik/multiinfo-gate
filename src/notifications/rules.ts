@@ -1,4 +1,4 @@
-export const NOTIFICATION_EVENTS = ['integration_error', 'integration_throttled', 'webhook_undelivered', 'certificate_expiring', 'account_rejecting', 'inbound_failure', 'daily_summary'] as const;
+export const NOTIFICATION_EVENTS = ['integration_error', 'integration_throttled', 'webhook_undelivered', 'certificate_expiring', 'account_rejecting', 'inbound_failure', 'daily_summary', 'release_available'] as const;
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
 
 export interface RuleDefaults { enabled: boolean; maxPerHour: number; groupHours: number; params: Record<string, unknown> }
@@ -12,6 +12,7 @@ export const RULE_DEFAULTS: Record<NotificationEvent, RuleDefaults> = {
   account_rejecting: { enabled: true, maxPerHour: 1, groupHours: 0, params: {} },
   inbound_failure: { enabled: true, maxPerHour: 1, groupHours: 0, params: { afterMinutes: 15 } },
   daily_summary: { enabled: false, maxPerHour: 1, groupHours: 0, params: { hour: 8 } },
+  release_available: { enabled: true, maxPerHour: 1, groupHours: 0, params: {} },
 };
 
 const LABELS: Record<NotificationEvent, [string, string]> = {
@@ -22,6 +23,7 @@ const LABELS: Record<NotificationEvent, [string, string]> = {
   account_rejecting: ['Konto Multiinfo odrzuca wysyłkę', 'certyfikat, uwierzytelnienie, wstrzymanie'],
   inbound_failure: ['Awaria odbioru', 'odpytywanie usługi kończy się błędem dłużej niż podany czas'],
   daily_summary: ['Podsumowanie dzienne', 'SMS-y, błędy, stan integracji i kont z ostatniej doby'],
+  release_available: ['Nowe wydanie bramki', 'na GitHubie jest nowsze wydanie niż zainstalowane; jeden mail na wydanie'],
 };
 export const eventLabel = (e: NotificationEvent): string => LABELS[e][0];
 export const eventDescription = (e: NotificationEvent): string => LABELS[e][1];

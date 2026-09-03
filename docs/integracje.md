@@ -725,7 +725,7 @@ listę jego integracji.
 ## 8. Powiadomienia administratora
 
 Bramka wysyła mailem powiadomienia o błędach integracji, niedostarczonych webhookach,
-certyfikatach, kontach i odbiorze. Ekran **Powiadomienia** w grupie „Konfiguracja” ma dwie
+certyfikatach, kontach, odbiorze i nowych wydaniach bramki. Ekran **Powiadomienia** w grupie „Konfiguracja” ma dwie
 zakładki: **Konfiguracja** z formularzem SMTP i **Reguły** z tabelą zdarzeń.
 
 ![Ekran Powiadomienia, zakładka Konfiguracja: formularz SMTP z przyciskiem maila testowego](obrazki/powiadomienia.png)
@@ -759,10 +759,14 @@ wysyłkę z wpisem w logu bramki.
 | Konto Multiinfo odrzuca wysyłkę (certyfikat, uwierzytelnienie, wstrzymanie) | włączone | 1 | brak | - |
 | Awaria odbioru (odpytywanie usługi kończy się błędem dłużej niż podany czas) | włączone | 1 | brak | po minutach: 15 |
 | Podsumowanie dzienne (SMS-y, błędy, stan integracji i kont z ostatniej doby) | wyłączone | 1 | brak | godzina: 8 |
+| Nowe wydanie bramki (na GitHubie jest nowsze wydanie niż zainstalowane) | włączone | 1 | brak | - |
 
 Każdą regułę można wyłączyć, zmienić jej limit na godzinę i grupowanie. Limit burzy zgłasza się
 raz na okno na integrację (rozdział 3.6). Certyfikat, konto i odbiór zgłaszają się raz na
-przyczynę: ten sam próg dni albo ta sama trwająca awaria nie dają drugiego maila.
+przyczynę: ten sam próg dni albo ta sama trwająca awaria nie dają drugiego maila. Nowe wydanie
+zgłasza się raz na numer wydania. Mail zawiera numer nowego i zainstalowanego wydania,
+odnośnik do opisu zmian i do instrukcji aktualizacji (rozdział 7.4 [Uruchomienia](uruchomienie.md)).
+Gdy jest nowsze wydanie, wspomina o nim także podsumowanie dzienne.
 
 ![Ekran Powiadomienia, zakładka Reguły: tabela zdarzeń z włączeniem, limitem na godzinę, grupowaniem i parametrami](obrazki/powiadomienia-reguly.png)
 
@@ -797,6 +801,6 @@ telefonu.
   Adres klienta zza odwrotnego proxy bramka bierze z `X-Forwarded-For` tylko od adresów
   z `MIG_TRUSTED_PROXIES`
 - Dziennik audytu panelu zapisuje utworzenie, zmianę (z listą zmienionych pól), włączenie,
-  wyłączenie i usunięcie integracji, wygenerowanie nowego adresu oraz zmiany SMTP i reguł, bez
-  sekretów
+  wyłączenie i usunięcie integracji, wygenerowanie nowego adresu, zmiany SMTP i reguł oraz
+  odłożenie wydania, bez sekretów
 - Kopia zapasowa bazy obejmuje integracje, dziennik, ustawienia SMTP i kolejkę powiadomień

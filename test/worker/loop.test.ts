@@ -77,6 +77,16 @@ describe('Worker.tick - tura utrzymaniowa', () => {
   });
 });
 
+describe('Worker.tick - sprawdzanie wydań', () => {
+  it('tura utrzymaniowa woła sprawdzenie wydań z bieżącym czasem', async () => {
+    const check = vi.fn(async () => {});
+    deps.releases = { check };
+    const worker = new Worker(deps, { now: () => clock, maintenanceMs: 60_000 });
+    await worker.tick();
+    expect(check).toHaveBeenCalledWith(clock);
+  });
+});
+
 describe('Worker.tick', () => {
   it('wykonuje zadania z jednej partii równolegle, nie po kolei', async () => {
     let release!: () => void;

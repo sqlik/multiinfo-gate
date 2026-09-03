@@ -47,4 +47,19 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: AdminDeps, re
     render.flash(request, 'ok', clear ? 'Adres bramki wyczyszczony.' : 'Adres bramki zapisany.');
     return reply.redirect(back, 302);
   });
+
+  /** Odłożenie wydania: pasek i znacznik znikają dla tego numeru, wracają przy nowszym. */
+  app.post<{ Body: Body }>('/wydanie/odloz', async (request, reply) => {
+    const version = String(request.body?.version ?? '').trim();
+    if (!/^\d+\.\d+\.\d+$/.test(version)) {
+      render.flash(request, 'fail', 'Nieznany numer wydania.');
+      return reply.redirect('/przeglad', 302);
+    }
+    deps.settings.setDismissedRelease(version, now());
+    deps.audit.record({
+      actor: actorOf(request.adminUserId), action: 'ustawienia.wydanie_odlozone', target: 'ustawienia', meta: { wydanie: version }, ip: request.ip,
+    });
+    render.flash(request, 'ok', `Wydanie ${version} odłożone. Panel przypomni przy następnym.`);
+    return reply.redirect('/przeglad', 302);
+  });
 }

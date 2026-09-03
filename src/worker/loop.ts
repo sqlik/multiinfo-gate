@@ -80,6 +80,7 @@ export class Worker {
     const steps: Array<[string, () => unknown]> = [
       ['powiadomienia', () => this.deps.notifier?.flush?.(now)],
       ['skaner', () => this.deps.scanner?.scan(now)],
+      ['wydania', () => { void this.deps.releases?.check(now); }],
       ['idempotencja', () => this.deps.guards?.pruneDedupBefore(new Date(now.getTime() - DAY_MS))],
       ['ladunki', () => this.deps.integrationEvents?.scrubPayloadsBefore(new Date(now.getTime() - 7 * DAY_MS))],
       ['kolejka_powiadomien', () => this.deps.notifications?.pruneBefore(new Date(now.getTime() - 30 * DAY_MS))],

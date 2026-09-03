@@ -15,6 +15,7 @@ import { createLogger } from './log.ts';
 import { systemResolver } from './net/private-address.ts';
 import { Notifier } from './notifications/notifier.ts';
 import { NotificationScanner } from './notifications/scanner.ts';
+import { pendingRelease, ReleaseChecker } from './releases/check.ts';
 import { AccountsRepo } from './store/accounts.ts';
 import { AdminUsersRepo } from './store/admin-users.ts';
 import { ApiKeysRepo } from './store/api-keys.ts';
@@ -68,7 +69,11 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const notifications = new NotificationsRepo(db, config.masterKey);
   const settings = new SettingsRepo(db);
   const notifier = new Notifier({ notifications, jobs, log });
-  const scanner = new NotificationScanner({ accounts, inboundServices, messages, inbound, integrations, deliveries, notifications, notifier, jobs, log });
+  const scanner = new NotificationScanner({
+    accounts, inboundServices, messages, inbound, integrations, deliveries, notifications, notifier, jobs, log,
+    release: () => pendingRelease(settings),
+  });
+  const releases = new ReleaseChecker({ settings, notifier, log, enabled: config.updateCheck });
   const integrationEmit = { integrations, integrationEvents, guards, deliveries, jobs, engine, notifier, log };
 
   const backups = new BackupScheduler({
@@ -79,7 +84,7 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const worker = new Worker({
     accounts, apiKeys, messages, events, deliveries, packages, jobs, clients, inbound,
     reportsDir: join(config.dataDir, 'reports'), log, allowPrivateWebhooks: config.webhookAllowPrivate,
-    integrationEmit, integrations, integrationEvents, guards, notifier, notifications, scanner,
+    integrationEmit, integrations, integrationEvents, guards, notifier, notifications, scanner, releases,
   });
   worker.start();
 

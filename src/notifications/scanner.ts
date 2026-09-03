@@ -7,6 +7,7 @@ import type { IntegrationsRepo } from '../store/integrations.ts';
 import type { JobsRepo } from '../store/jobs.ts';
 import type { MessagesRepo } from '../store/messages.ts';
 import type { NotificationsRepo } from '../store/notifications.ts';
+import type { ReleaseInfo } from '../store/settings.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 import { lastValidDay, warsawDay, warsawStamp } from '../time/warsaw.ts';
 import { composeDaily } from './compose.ts';
@@ -25,6 +26,8 @@ export interface ScannerDeps {
   notifier: AdminNotifier;
   jobs: JobsRepo;
   log?: Logger;
+  /** Nowsze wydanie do wzmianki w podsumowaniu dziennym; bez funkcji podsumowanie o nim milczy. */
+  release?: () => ReleaseInfo | null;
 }
 
 const numbers = (value: unknown): number[] => (Array.isArray(value) ? value.map(Number).filter((n) => Number.isFinite(n) && n > 0) : []);
@@ -114,6 +117,7 @@ export class NotificationScanner {
       deliveries: this.deps.deliveries.counts(since),
       accounts: this.deps.accounts.list().filter((a) => a.active === 1)
         .map((a) => ({ name: a.name, paused: a.pausedReason, certificateDaysLeft: daysLeft(a.certNotAfter, now) })),
+      release: this.deps.release?.() ?? null,
     });
     this.deps.jobs.enqueue('mail', { subject: mail.subject, text: mail.text }, now);
     this.deps.notifications.markSent([id], now);

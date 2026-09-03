@@ -967,6 +967,23 @@ niezgodnych wstecz, druga przy nowych możliwościach, trzecia przy poprawkach. 
 wersji pokazuje maszt panelu oraz `/healthz` na porcie panelu. Lista wydań z opisem zmian jest
 pod adresem `https://github.com/sqlik/multiinfo-gate/releases`.
 
+O nowym wydaniu nie trzeba pamiętać samemu. Bramka raz na dobę pyta GitHub o najnowsze wydanie
+i porównuje je z zainstalowanym. Gdy jest nowsze, na ekranie przeglądu pojawia się pasek
+z numerem, datą, odnośnikiem „Co nowego” i odnośnikami do instrukcji aktualizacji. W maszcie,
+obok bieżącego numeru, widać wtedy znacznik nowego wydania na każdym ekranie. Przycisk
+**Przypomnij przy następnym wydaniu** chowa pasek dla tego numeru. Wraca on dopiero przy
+kolejnym wydaniu. Administrator dostaje też mail, jeden na wydanie, według reguły „Nowe wydanie
+bramki” na ekranie Powiadomienia (rozdział 8.2 w [Integracjach z aplikacjami](integracje.md)).
+Bez ustawionego SMTP zostaje sam pasek.
+
+![Ekran przeglądu z paskiem o nowym wydaniu: numer, data, odnośniki Co nowego i do instrukcji, przycisk odłożenia](obrazki/przeglad-wydanie.png)
+
+Do GitHuba idzie wyłącznie to jedno zapytanie, bez żadnych danych o instalacji. Bramka
+sprawdza tylko wydania stabilne. Brak dostępu do internetu nie jest błędem: bramka próbuje
+ponownie po godzinie, a w dzienniku zostaje wpis na poziomie `info`. Sprawdzanie wyłącza
+zmienna `MIG_UPDATE_CHECK=0` w `docker/.env` (rozdział 7.7), na przykład w sieci bez wyjścia
+na świat.
+
 Obraz jest oznaczony trzema tagami: `1.2.3` (dokładnie ta wersja), `1.2` (najnowsza poprawka
 tej serii) i `1` (najnowsze wydanie zgodne wstecz). Zmienna `MIG_WERSJA` w `docker/.env` wybiera,
 który z nich śledzi bramka. Domyślnie jest to `1`, czyli każda aktualizacja w obrębie pierwszej
@@ -1034,6 +1051,7 @@ Zmienne ustawia się w `docker/.env` (klucz główny, domena) albo w sekcji `env
 | `MIG_INBOUND_TIMEOUT_MS` | `10000` | Ile milisekund Multiinfo może trzymać pytanie o wiadomości przychodzące bez odpowiedzi (1-60000). Przy wartości domyślnej odbiór trwa zwykle poniżej sekundy, najwyżej ok. 10 s, kosztem sześciu pytań na minutę na usługę. Maksimum `60000` (long polling z dokumentacji Multiinfo) zmniejsza liczbę pytań, ale wiadomość, która nadejdzie między dwoma pytaniami, czeka do końca następnego - opóźnienie odbioru sięga wtedy minuty. Mała wartość razem z `MIG_INBOUND_IDLE_MS` daje odpytywanie okresowe |
 | `MIG_INBOUND_IDLE_MS` | `0` | Przerwa po pustej odpowiedzi, zanim bramka zapyta ponownie; `0` to pytanie od razu |
 | `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku), od których API wierzy nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Ustawiana w `docker/.env`: `172.16.0.0/12` dla Caddy i Traefika w Dockerze, `127.0.0.1` dla nginx na serwerze (rozdział 6). Potrzebna, gdy integracje mają listę dozwolonych źródeł albo dziennik ma pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)) |
+| `MIG_UPDATE_CHECK` | `1` | Raz na dobę pytać GitHub o nowsze wydanie i pokazać je na przeglądzie (rozdział 7.4); `0` wyłącza, np. w sieci bez dostępu do internetu |
 | `MIG_WERSJA` | `1` | Tag obrazu do pobrania: `1`, `1.1` albo `1.1.0` (rozdział 7.4) |
 | `MIG_DOMENA` | - | Domena bramki dla wariantu Caddy i Traefik |
 | `COMPOSE_FILE` | - | Dodatkowe pliki Compose oddzielone dwukropkiem: `docker-compose.caddy.yml` włącza Caddy, `docker-compose.traefik.yml` Traefik, `docker-compose.build.yml` budowanie ze źródeł; zawsze po `docker-compose.yml` |
@@ -1269,6 +1287,10 @@ systemctl start multiinfo-gate
 
 `install` kopiuje plik i nadaje mu właściciela usługi. Pliki `-wal` i `-shm` należą do
 poprzedniej bazy i muszą zniknąć, jak w punkcie 7.2.
+
+O nowym wydaniu bramka informuje tak samo jak w Dockerze (punkt 7.4): paskiem na ekranie
+przeglądu, znacznikiem w maszcie i mailem według reguły „Nowe wydanie bramki”. Sprawdzanie
+wyłącza wpis `MIG_UPDATE_CHECK=0` w `/etc/multiinfo-gate/env` i `systemctl restart multiinfo-gate`.
 
 Aktualizacja do najnowszego wydania to jedno polecenie w kontenerze:
 
