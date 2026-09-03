@@ -89,9 +89,12 @@ export function registerHookRoutes(app: FastifyInstance, deps: ApiDeps): void {
       case 'unavailable':
         deps.notifier?.notify('integration_error', `integration:${integration.id}`, `${integration.name}: ${outcome.detail}`, at);
         return reply.code(503).send({ accepted: false, reason: 'unavailable', detail: outcome.detail });
-      case 'error':
-        deps.notifier?.notify('integration_error', `integration:${integration.id}`, `${integration.name}: ${outcome.detail}`, at);
+      case 'error': {
+        // Mail do administratora bez numeru z ładunku: numer to dana osobowa, a szczegół wystarczy w odpowiedzi i dzienniku.
+        const summary = outcome.code === 'invalid_phone' ? 'nieprawidłowy numer odbiorcy w ładunku' : outcome.detail;
+        deps.notifier?.notify('integration_error', `integration:${integration.id}`, `${integration.name}: ${summary}`, at);
         return reply.code(422).send({ accepted: false, reason: outcome.code, detail: outcome.detail });
+      }
     }
   });
 }

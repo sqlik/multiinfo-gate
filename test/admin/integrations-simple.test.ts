@@ -57,6 +57,7 @@ describe('tryb prosty: przychodząca', () => {
     expect(res.body).toContain(`https://sms.firma.pl/hooks/${row.hookId}`);
     expect(res.body).toContain('w Uptime Kumie w polu Post URL');
     expect(res.body).toContain('Krok po kroku: Uptime Kuma');
+    expect(res.body).not.toContain('```');
   });
 
   it('brak numerów przy ustawieniu bez numerów w ładunku to błąd w prostym formularzu, bez zapisu', async () => {

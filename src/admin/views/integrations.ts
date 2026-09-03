@@ -307,16 +307,43 @@ function withSpare<T>(items: T[], empty: T, max: number): T[] {
 }
 
 /** Skromny Markdown z instrukcji ustawienia: pogrubienie, kod, listy i akapity - reszta jako tekst. */
+/** Akapity, listy „- ”, bloki w płotkach ``` (dosłownie, bez formatowania), pogrubienie i kod w linii. */
 export function guideHtml(markdown: string): string {
   const inline = (line: string) => esc(line)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`([^`]+)`/g, '<code>$1</code>');
-  const blocks = markdown.split(/\n\s*\n/);
-  return blocks.map((block) => {
-    const lines = block.split('\n');
+  const paragraph = (lines: string[]): string => {
+    if (lines.length === 0) return '';
     if (lines.every((l) => l.startsWith('- '))) return `<ul>${lines.map((l) => `<li>${inline(l.slice(2))}</li>`).join('')}</ul>`;
     return `<p>${lines.map(inline).join('<br>')}</p>`;
-  }).join('');
+  };
+  const out: string[] = [];
+  let pending: string[] = [];
+  let code: string[] | null = null;
+  for (const line of markdown.split('\n')) {
+    if (code !== null) {
+      if (line.startsWith('```')) {
+        out.push(`<pre class="m" style="white-space: pre-wrap; margin: 8px 0;">${esc(code.join('\n'))}</pre>`);
+        code = null;
+      } else {
+        code.push(line);
+      }
+      continue;
+    }
+    if (line.startsWith('```')) {
+      out.push(paragraph(pending));
+      pending = [];
+      code = [];
+    } else if (line.trim() === '') {
+      out.push(paragraph(pending));
+      pending = [];
+    } else {
+      pending.push(line);
+    }
+  }
+  if (code !== null) out.push(`<pre class="m" style="white-space: pre-wrap; margin: 8px 0;">${esc(code.join('\n'))}</pre>`);
+  out.push(paragraph(pending));
+  return out.join('');
 }
 
 function sectionBasics(ctx: FormContext, v: IntegrationFormValues): string {
@@ -719,7 +746,7 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     rows.push(kvRow('Zdarzenia', esc(cfg.events.join(', ')), true));
     const headers = cfg.headers.map((h) => (h.valueRef !== undefined ? `${h.name}: (sekret)` : `${h.name}: ${h.value ?? ''}`));
     rows.push(kvRow('Nagłówki', headers.length === 0 ? '<span class="dim">brak</span>' : headers.map(esc).join('<br>'), true));
-    rows.push(kvRow('Body', cfg.body.mode === 'json' ? 'JSON z szablonu' : cfg.body.mode === 'form' ? `formularz (${cfg.body.fields.map((f) => f.name).join(', ')})` : 'surowy tekst'));
+    rows.push(kvRow('Body', cfg.body.mode === 'json' ? 'JSON z szablonu' : cfg.body.mode === 'form' ? `formularz (${esc(cfg.body.fields.map((f) => f.name).join(', '))})` : 'surowy tekst'));
     if (cfg.responseRefPath) rows.push(kvRow('Identyfikator z odpowiedzi', esc(cfg.responseRefPath), true));
     rows.push(kvRow('Podpis X-MIG-Signature', cfg.sign ? 'tak' : 'nie'));
   }

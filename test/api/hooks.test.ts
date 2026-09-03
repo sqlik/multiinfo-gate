@@ -131,6 +131,15 @@ describe('POST /hooks/:hookId', () => {
     expect(res.json().reason).toBe('empty_text');
     expect(notify).toHaveBeenCalledWith('integration_error', `integration:${integ.id}`, expect.stringContaining('Kuma'), NOW);
   });
+  it('nieprawidłowy numer: 422 z numerem w odpowiedzi, powiadomienie bez numeru', async () => {
+    const integ = make({ to: { path: 'to', fallback: [] } });
+    const res = await post(integ.hookId!, { msg: 'x', to: '601-nie-numer' });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().reason).toBe('invalid_phone');
+    expect(res.json().detail).toContain('601nienumer');
+    expect(notify).toHaveBeenCalledWith('integration_error', `integration:${integ.id}`, expect.stringContaining('Kuma'), NOW);
+    expect(String(notify.mock.calls[0]![2])).not.toContain('601nienumer');
+  });
   it('za duży ładunek to 413, zły JSON to 400', async () => {
     const integ = make();
     const big = await post(integ.hookId!, { msg: 'x'.repeat(300 * 1024) });

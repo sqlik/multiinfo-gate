@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  compareVersions, fetchLatestRelease, parseRelease, pendingRelease, ReleaseChecker, RELEASES_URL,
+  compareVersions, fetchLatestRelease, parseRelease, pendingRelease, ReleaseChecker, RELEASES_PAGE, RELEASES_URL,
 } from '../../src/releases/check.ts';
 import type { NotificationEvent } from '../../src/notifications/rules.ts';
 import { openDatabase } from '../../src/store/db.ts';
@@ -52,6 +52,12 @@ describe('parseRelease', () => {
     expect(parseRelease({ html_url: 'x' })).toBeNull();
     expect(parseRelease(releaseBody('nightly'))).toBeNull();
     expect(parseRelease('tekst')).toBeNull();
+  });
+
+  it('odnośnik spoza repozytorium na GitHubie zastępuje stroną wydań', () => {
+    expect(parseRelease(releaseBody('v1.6.0', { html_url: 'javascript:alert(1)' }))?.url).toBe(RELEASES_PAGE);
+    expect(parseRelease(releaseBody('v1.6.0', { html_url: 'https://evil.example/sqlik/multiinfo-gate/releases' }))?.url).toBe(RELEASES_PAGE);
+    expect(parseRelease(releaseBody('v1.6.0', { html_url: 'http://github.com/sqlik/multiinfo-gate/releases/tag/v1.6.0' }))?.url).toBe(RELEASES_PAGE);
   });
 });
 

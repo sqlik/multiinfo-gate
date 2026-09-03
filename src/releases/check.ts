@@ -30,9 +30,13 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
+/** Odnośnik do opisu wydania trafia do `href` w panelu i do maila - wolno mu prowadzić tylko do tego repozytorium. */
+const RELEASE_URL_PREFIX = 'https://github.com/sqlik/multiinfo-gate/';
+
 /**
  * Z odpowiedzi GitHuba bierzemy tylko numer z tagu (`v1.6.0`), odnośnik do opisu i datę.
  * Szkic albo wydanie testowe zwraca `null`, tak samo tag bez numeru w postaci `x.y.z`.
+ * Odnośnik spoza repozytorium zastępuje strona z listą wydań.
  */
 export function parseRelease(body: unknown): ReleaseInfo | null {
   if (typeof body !== 'object' || body === null) return null;
@@ -41,7 +45,8 @@ export function parseRelease(body: unknown): ReleaseInfo | null {
   if (typeof r.tag_name !== 'string' || typeof r.html_url !== 'string') return null;
   const m = /^v?(\d+\.\d+\.\d+)$/.exec(r.tag_name.trim());
   if (!m) return null;
-  return { version: m[1]!, url: r.html_url, publishedAt: typeof r.published_at === 'string' ? r.published_at : null };
+  const url = r.html_url.startsWith(RELEASE_URL_PREFIX) ? r.html_url : RELEASES_PAGE;
+  return { version: m[1]!, url, publishedAt: typeof r.published_at === 'string' ? r.published_at : null };
 }
 
 /**

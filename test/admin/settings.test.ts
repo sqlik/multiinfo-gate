@@ -44,6 +44,11 @@ describe('adres bramki', () => {
     const cleared = await post('/adres-bramki', { apiUrl: '', wyczysc: '1', wroc: 'https://zly.example/' });
     expect(cleared.headers.location).toBe('/klucze');
     expect(h.settings.apiUrl()).toBeNull();
+    // Przeglądarki czytają „/\zly.example” jak „//zly.example” - to też obcy adres.
+    for (const wroc of ['/\\zly.example', '//zly.example', '/klucze\\@zly.example']) {
+      const res = await post('/adres-bramki', { apiUrl: 'https://sms.firma.pl', wroc });
+      expect(res.headers.location).toBe('/klucze');
+    }
   });
 
   it('nowy klucz dostaje przykład curl z pełnym adresem, a integracja pełny adres wejściowy', async () => {
