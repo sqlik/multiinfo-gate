@@ -44,6 +44,8 @@ export interface AppConfig {
    * adres klienta w X-Forwarded-For. Bez listy adresem źródłowym jest adres gniazda.
    */
   trustedProxies: string[];
+  /** MIG_UPDATE_CHECK: raz na dobę pytać GitHub o nowsze wydanie; `0` wyłącza. Domyślnie włączone. */
+  updateCheck: boolean;
 }
 
 function intOr(value: string | undefined, fallback: number): number {
@@ -122,5 +124,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env, interfaces: Int
     inboundTimeoutMs: boundedInt('MIG_INBOUND_TIMEOUT_MS', source.MIG_INBOUND_TIMEOUT_MS, 10_000, 1, 60_000),
     inboundIdleMs: boundedInt('MIG_INBOUND_IDLE_MS', source.MIG_INBOUND_IDLE_MS, 0, 0, 3_600_000),
     trustedProxies: proxyList(source.MIG_TRUSTED_PROXIES),
+    updateCheck: source.MIG_UPDATE_CHECK === undefined ? true : flag(source.MIG_UPDATE_CHECK),
   };
 }

@@ -34,3 +34,12 @@ describe('loadEnv - zaufane proxy', () => {
     expect(() => loadEnv({ ...base, MIG_TRUSTED_PROXIES: 'proxy.example' }, {})).toThrow(/MIG_TRUSTED_PROXIES/);
   });
 });
+
+describe('loadEnv - sprawdzanie wydań', () => {
+  it('domyślnie włączone; MIG_UPDATE_CHECK=0 wyłącza', () => {
+    expect(loadEnv(base, {}).updateCheck).toBe(true);
+    expect(loadEnv({ ...base, MIG_UPDATE_CHECK: '1' }, {}).updateCheck).toBe(true);
+    expect(loadEnv({ ...base, MIG_UPDATE_CHECK: '0' }, {}).updateCheck).toBe(false);
+    expect(loadEnv({ ...base, MIG_UPDATE_CHECK: 'nie' }, {}).updateCheck).toBe(false);
+  });
+});

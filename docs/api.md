@@ -1753,7 +1753,9 @@ Ten sam adres na porcie panelu (przez tunel SSH albo HTTPS za proxy) odpowiada s
 wersją, głębokością kolejki, kontami z dniami do wygaśnięcia certyfikatu, stanem odbiornika
 i polem `integrations`. To ostatnie zawiera liczbę włączonych integracji (`enabled`)
 i integracji z błędem w ostatniej dobie (`troubled24h`). Błędy integracji nie zmieniają statusu,
-bo dotyczą aplikacji, nie bramki.
+bo dotyczą aplikacji, nie bramki. Gdy na GitHubie jest nowsze wydanie bramki, odpowiedź ma też
+pole `release` z numerem (`version`) i odnośnikiem do opisu zmian (`url`). Pole znika po
+aktualizacji albo po odłożeniu wydania w panelu.
 
 === "curl"
 

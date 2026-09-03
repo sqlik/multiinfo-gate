@@ -34,7 +34,8 @@ Bramka działa z gotowego obrazu `ghcr.io/sqlik/multiinfo-gate`, publikowanego p
 wydaniu. Do uruchomienia wystarczą pliki z katalogu `docker/`, klucz główny w `docker/.env`
 i polecenie `docker compose up -d`. HTTPS pod własną domeną daje Caddy, nginx albo Traefik,
 według wyboru. Na Proxmox VE jedno polecenie w powłoce hosta tworzy kontener LXC
-z zainstalowaną bramką (rozdział 9 instrukcji). Kolejne kroki, od konta Multiinfo po
+z zainstalowaną bramką (rozdział 9 instrukcji). O nowym wydaniu bramka sama informuje paskiem
+na ekranie przeglądu i mailem do administratora. Kolejne kroki, od konta Multiinfo po
 wystawienie API na świat, opisuje instrukcja poniżej.
 
 ## Dokumentacja

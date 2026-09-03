@@ -11,6 +11,7 @@ import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { AuditRepo } from '../store/audit.ts';
 import { registerHealthRoute, type InboundHealth } from '../api/health.ts';
 import { secureContext } from './secure-context.ts';
+import { pendingRelease } from '../releases/check.ts';
 import type { JobsRepo } from '../store/jobs.ts';
 import type { MessageEventsRepo } from '../store/message-events.ts';
 import type { MessagesRepo } from '../store/messages.ts';
@@ -198,6 +199,7 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
     app,
     {
       accounts: deps.accounts, queueDepth: () => deps.jobs.depth(), now, detailsAllowed: secureContext,
+      release: () => pendingRelease(deps.settings),
       ...(deps.inboundHealth ? { inbound: deps.inboundHealth } : {}),
       integrations: () => ({
         enabled: deps.integrations.countEnabled(), troubled24h: deps.integrations.countTroubled(new Date(now().getTime() - WINDOW_MS)),
@@ -360,7 +362,7 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
     return (recoveryCodesPage(codes));
   });
 
-  const render = createRenderer(deps, new FlashStore());
+  const render = createRenderer(deps, new FlashStore(), () => pendingRelease(deps.settings));
   registerAccountRoutes(app, deps, render);
   registerKeyRoutes(app, deps, render);
   registerIntegrationRoutes(app, deps, render);

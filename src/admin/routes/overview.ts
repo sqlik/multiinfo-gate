@@ -3,6 +3,7 @@ import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
 import { overviewPage } from '../views/overview.ts';
 import { WINDOW_MS } from '../window.ts';
+import { pendingRelease } from '../../releases/check.ts';
 
 /** Ile ostatnich niepowodzeń pokazujemy na przeglądzie. */
 const FAILURES_SHOWN = 8;
@@ -27,6 +28,7 @@ export function registerOverviewRoutes(app: FastifyInstance, deps: AdminDeps, re
         webhooks: deps.deliveries.counts(since),
         inboundToday: deps.inbound.countSince(since),
         integrationsTroubled: deps.integrations.countTroubled(since),
+        release: pendingRelease(deps.settings),
       }, at),
     });
   });

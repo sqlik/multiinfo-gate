@@ -4,6 +4,9 @@ import { describeSubstatus } from '../../multiinfo/status.ts';
 import { warsawDay, warsawStamp } from '../../time/warsaw.ts';
 import { daysUntil } from './accounts.ts';
 import { esc } from './layout.ts';
+import type { ReleaseInfo } from '../../store/settings.ts';
+import { UPDATE_DOCS_DOCKER, UPDATE_DOCS_LXC } from '../../releases/check.ts';
+import { GATE_VERSION } from '../../version.ts';
 
 export interface OverviewData {
   counts: { total: number; delivered: number; failed: number; cancelled: number; transit: number };
@@ -16,6 +19,8 @@ export interface OverviewData {
   inboundToday: number;
   /** Integracje z choć jednym błędem w oknie przeglądu. */
   integrationsTroubled: number;
+  /** Nowsze wydanie z GitHuba, jeszcze nie odłożone; `null` bez paska. */
+  release?: ReleaseInfo | null;
 }
 
 /** „1 integracja zgłosiła błąd”, „3 integracje zgłosiły błąd”, „5 integracji zgłosiło błąd”. */
@@ -58,6 +63,23 @@ function share(part: number, whole: number): string {
 
 function alerts(data: OverviewData, now: Date): string {
   const items: string[] = [];
+
+  if (data.release) {
+    const r = data.release;
+    items.push(`<div class="alert">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="sq"></div>
+        <div>Dostępne wydanie <strong>${esc(r.version)}</strong>${r.publishedAt ? ` z ${esc(warsawDay(r.publishedAt))}` : ''}, zainstalowane ${esc(GATE_VERSION)}.
+          <a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Co nowego</a> ·
+          jak zaktualizować: <a href="${UPDATE_DOCS_DOCKER}" target="_blank" rel="noopener noreferrer">Docker</a>,
+          <a href="${UPDATE_DOCS_LXC}" target="_blank" rel="noopener noreferrer">kontener na Proxmoxie</a></div>
+      </div>
+      <form method="post" action="/wydanie/odloz" style="margin: 0;">
+        <input type="hidden" name="version" value="${esc(r.version)}">
+        <button class="btn btn-s" type="submit">Przypomnij przy następnym wydaniu</button>
+      </form>
+    </div>`);
+  }
 
   if (data.webhooks.failed > 0) {
     items.push(`<div class="alert stop">

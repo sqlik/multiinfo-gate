@@ -1,4 +1,5 @@
 import type { Flash } from '../flash.ts';
+import type { ReleaseInfo } from '../../store/settings.ts';
 import { GATE_VERSION } from '../../version.ts';
 import { FAVICON_LINK } from './favicon.ts';
 
@@ -62,6 +63,8 @@ function countOf(counts: NavCounts, key: NavKey): number | undefined {
 
 export function layout(opts: {
   title: string; active: NavKey | null; counts: NavCounts; body: string; flash?: Flash | null;
+  /** Nowsze wydanie do pokazania w maszcie; przegląd ma pasek ze szczegółami. */
+  release?: ReleaseInfo | null;
 }): string {
   const groups = [...new Set(NAV.map((n) => n.group))];
   const rail = groups.map((group) => {
@@ -92,7 +95,7 @@ ${FAVICON_LINK}
 <body>
 <div class="root">
   <div class="mast">
-    <div class="brand">Multiinfo<span> / </span>Gate <span class="ver">${esc(GATE_VERSION)}</span></div>
+    <div class="brand">Multiinfo<span> / </span>Gate <span class="ver">${esc(GATE_VERSION)}</span>${opts.release ? ` <a class="ver-new" href="/przeglad">nowe wydanie ${esc(opts.release.version)}</a>` : ''}</div>
     <div class="mast-right"><a href="/haslo">Zmień hasło</a><a href="/wyloguj">Wyloguj</a></div>
   </div>
   <div class="body">
