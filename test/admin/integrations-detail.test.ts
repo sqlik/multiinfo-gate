@@ -75,6 +75,18 @@ describe('GET /integracje/:id', () => {
     expect(res.body).toContain('Ładunki nieprzechowywane');
   });
 
+  it('nazwy pól formularza wychodzącej są uciekane', async () => {
+    const id = h.integrations.insert({
+      name: 'Formularz', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1,
+      config: { ...defaultOutboundConfig(), url: 'https://hook.example/x', body: { mode: 'form', fields: [{ name: '<img src=x onerror=alert(1)>', template: 'a' }] } },
+      secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const res = await page(`/integracje/${id}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain('<img src=x');
+    expect(res.body).toContain('formularz (&lt;img src=x onerror=alert(1)&gt;)');
+  });
+
   it('„Użyj jako próbki” prowadzi do formularza z wypełnioną próbką', async () => {
     const id = seedInbound(1);
     h.integrationEvents.record({ integrationId: id, at: NOW, result: 'sent', payload: '{"monitor":{"name":"Z dziennika"}}', logLimit: 200 });

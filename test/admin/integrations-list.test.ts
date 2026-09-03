@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { defaultInboundConfig, defaultOutboundConfig } from '../../src/integrations/config.ts';
 import { presetById } from '../../src/integrations/presets/index.ts';
+import { guideHtml } from '../../src/admin/views/integrations.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
 const NOW = new Date('2026-08-25T10:00:00Z');
@@ -125,5 +126,15 @@ describe('GET /integracje/nowa', () => {
     expect((await page('/integracje/nowa?rodzaj=inny')).statusCode).toBe(404);
     // Slack nie ma wariantu przychodzącego.
     expect((await page('/integracje/nowa?rodzaj=webhook_in&ustawienie=slack')).statusCode).toBe(404);
+  });
+});
+
+describe('guideHtml', () => {
+  it('akapity, listy, płotki kodu dosłownie i bez formatowania w linii', () => {
+    const html = guideHtml(['Krok **pierwszy** z `kodem`.', '', '```json', '{ "to": "<x>", "text": "**nie pogrubiaj**" }', '```', '', '- raz', '- dwa'].join('\n'));
+    expect(html).toBe('<p>Krok <strong>pierwszy</strong> z <code>kodem</code>.</p>'
+      + '<pre class="m" style="white-space: pre-wrap; margin: 8px 0;">{ &quot;to&quot;: &quot;&lt;x&gt;&quot;, &quot;text&quot;: &quot;**nie pogrubiaj**&quot; }</pre>'
+      + '<ul><li>raz</li><li>dwa</li></ul>');
+    expect(html).not.toContain('```');
   });
 });

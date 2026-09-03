@@ -25,9 +25,10 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: AdminDeps, re
 
   app.post<{ Body: Body }>('/adres-bramki', async (request, reply) => {
     const body = request.body ?? {};
-    // Powrót tylko na stronę panelu - nigdy na obcy adres.
+    // Powrót tylko na stronę panelu - nigdy na obcy adres. Ukośnik wsteczny przeglądarki czytają
+    // jak zwykły, więc „/\\obcy.example” też jest obcym adresem.
     const backRaw = String(body.wroc ?? '/klucze');
-    const back = backRaw.startsWith('/') && !backRaw.startsWith('//') ? backRaw : '/klucze';
+    const back = /^\/(?![/\\])[^\\]*$/.test(backRaw) ? backRaw : '/klucze';
     const clear = String(body.wyczysc ?? '') === '1';
     const raw = String(body.apiUrl ?? '');
     if (!clear) {
