@@ -22,6 +22,12 @@ services:
       # odpowiedzi; zmiana tylko przy odpytywaniu okresowym (docs/uruchomienie.md, rozdział 7.7).
       MIG_INBOUND_TIMEOUT_MS: ${MIG_INBOUND_TIMEOUT_MS:-10000}
       MIG_INBOUND_IDLE_MS: ${MIG_INBOUND_IDLE_MS:-0}
+      # Odwrotne proxy, którym wolno podać adres klienta w X-Forwarded-For (lista źródeł i dziennik
+      # integracji): 172.16.0.0/12 dla Caddy i Traefika w Dockerze, 127.0.0.1 dla nginx na hoście.
+      MIG_TRUSTED_PROXIES: ${MIG_TRUSTED_PROXIES:-}
+      # Raz na dobę pytanie do GitHuba o nowsze wydanie (pasek na przeglądzie i mail do administratora).
+      # 0 wyłącza, np. w sieci bez dostępu do internetu (docs/uruchomienie.md, rozdział 7.4).
+      MIG_UPDATE_CHECK: ${MIG_UPDATE_CHECK:-1}
     ports:
       # API i panel tylko na pętli zwrotnej hosta. Na świat API wystawia odwrotne proxy
       # (docker-compose.caddy.yml, nginx na hoście albo docker-compose.traefik.yml) - docs/uruchomienie.md, rozdział 6.

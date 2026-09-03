@@ -539,7 +539,7 @@ describe('teksty ekranów kont', () => {
     const res = await h.app.inject({ method: 'GET', url: '/konta/nowe', headers: { cookie: h.cookie } });
     expect(res.body).toContain('Dane użytkownika API należy utworzyć w panelu Multiinfo.');
     expect(res.body).toContain('href="https://plk-assets.s3.pl-waw.scw.cloud/certyfikaty-multiinfo.zip"');
-    expect(res.body).toContain('api1 lub api2 - informacje o właściwej instancji otrzymasz od przedstawiciela Polkomtel.');
+    expect(res.body).toContain('api1 lub api2 - informacje o właściwej instancji otrzymasz od przedstawiciela Polkomtel');
     expect(res.body).toContain('ID usług, jedno w wierszu');
   });
 

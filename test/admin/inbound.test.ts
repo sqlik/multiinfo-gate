@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { InboundInput } from '../../src/store/inbound-messages.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
+import { defaultOutboundConfig } from '../../src/integrations/config.ts';
 
 const NOW = new Date('2026-08-25T10:00:00Z');
 
@@ -178,6 +179,33 @@ describe('POST /dostawy/:id/ponow', () => {
     expect((await page('/odebrane/in_1')).body).toContain('Dostawa ponowiona');
   });
 
+  it('dostawa integracji: ponowienie zależy od stanu integracji, nie od adresu webhooka klucza', async () => {
+    seed('in_1');
+    const integrations = h.integrations;
+    const integrationId = integrations.insert({
+      name: 'FS', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1,
+      config: { ...defaultOutboundConfig(), url: 'https://fs.example/api' }, secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    h.apiKeys.setWebhook(apiKeyId, null, null);
+    const id = h.deliveries.insert({ apiKeyId, event: 'message.received', payload: '{"text":"Ala"}', url: 'https://fs.example/api', createdAt: NOW, inboundId: 'in_1', integrationId, method: 'POST', headers: { 'X-Key': 'k' } });
+    h.deliveries.markFailed(id, '503');
+    integrations.setEnabled(integrationId, false, NOW);
+    await post(id);
+    expect(h.deliveries.get(id)!.status).toBe('failed');
+    expect((await page('/odebrane/in_1')).body).toContain('najpierw ją włącz');
+    integrations.setEnabled(integrationId, true, NOW);
+    const res = await post(id);
+    expect(res.headers.location).toBe('/odebrane/in_1');
+    expect(h.deliveries.get(id)!.status).toBe('pending');
+    expect(h.audit.list(10, 0)[0]!.meta).toMatchObject({ integracja: 'FS' });
+    // Wyczyszczone body integracji też blokuje ponowienie.
+    const scrubbedId = h.deliveries.insert({ apiKeyId, event: 'message.received', payload: '{"text":"Ala"}', url: 'https://fs.example/api', createdAt: NOW, inboundId: 'in_1', integrationId, scrubAfter: true });
+    h.deliveries.markFailed(scrubbedId, '503');
+    expect(h.deliveries.get(scrubbedId)!.payload).toBe('{"scrubbed":true}');
+    await post(scrubbedId);
+    expect(h.deliveries.get(scrubbedId)!.status).toBe('failed');
+  });
+
   it('odmawia, gdy treść została już usunięta z dostawy (konto bez przechowywania treści)', async () => {
     seed('in_1', { body: null });
     const id = failedDelivery('{"event":"message.received","id":"in_1","kind":"text","bodyHash":"h"}');
@@ -200,5 +228,27 @@ describe('POST /dostawy/:id/ponow', () => {
     await post(failed);
     expect(h.deliveries.get(failed)!.status).toBe('failed');
     expect((await post(9999)).statusCode).toBe(404);
+  });
+});
+
+describe('ślady integracji na odebranej', () => {
+  it('pokazuje zgłoszenie z nazwą integracji i dostawę integracji pod jej nazwą', async () => {
+    const integrationId = h.integrations.insert({
+      name: 'FS', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'freescout', enabled: 1,
+      config: { ...defaultOutboundConfig(), url: 'https://freescout.example/api/conversations' }, secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    seed('in_1');
+    h.inbound.setExternalRef('in_1', integrationId, '4821');
+    const d = h.deliveries.insert({
+      apiKeyId, event: 'message.received', payload: '{}', url: 'https://freescout.example/api/conversations', createdAt: NOW, inboundId: 'in_1',
+      integrationId, method: 'POST', headers: {},
+    });
+    h.deliveries.markDelivered(d, NOW, '201 {"id":4821}');
+    const res = await page('/odebrane/in_1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Zgłoszenie');
+    expect(res.body).toContain(`4821 (<a href="/integracje/${integrationId}">FS</a>)`);
+    expect(res.body).toContain('<strong>FS</strong>');
+    expect(res.body).toContain('integracja');
   });
 });

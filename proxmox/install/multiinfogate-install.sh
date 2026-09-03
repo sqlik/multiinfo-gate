@@ -78,6 +78,8 @@ MIG_WEBHOOK_ALLOW_PRIVATE=0
 # ale opóźnia odbiór nawet o minutę - patrz docs 7.7) i przerwa po pustej odpowiedzi.
 MIG_INBOUND_TIMEOUT_MS=10000
 MIG_INBOUND_IDLE_MS=0
+# Raz na dobę pytanie do GitHuba o nowsze wydanie (pasek na przeglądzie i mail); 0 wyłącza.
+MIG_UPDATE_CHECK=1
 ENV
 chmod 640 /etc/multiinfo-gate/env
 chown root:multiinfo-gate /etc/multiinfo-gate/env

@@ -69,3 +69,33 @@ export function validateOrig(orig: string): void {
   if (orig.length === 0 || orig.length > 11) throw new InvalidOrigError(orig);
   if (/\p{C}/u.test(orig)) throw new InvalidOrigError(orig);
 }
+
+export const MAX_RECIPIENTS_PER_HOOK = 50;
+
+export class TooManyRecipientsError extends Error {
+  constructor(count: number) {
+    super(`Za dużo odbiorców: ${count}; jedno żądanie może wskazać najwyżej ${MAX_RECIPIENTS_PER_HOOK}.`);
+    this.name = 'TooManyRecipientsError';
+  }
+}
+
+/**
+ * Numer z ładunku obcej aplikacji: to samo co `normalizePhone`, ale z międzynarodowym
+ * przedrostkiem `00` (CRM-y wypisują tak numery z kontaktów).
+ */
+export function normalizeRecipient(raw: string, countryCode: string): string {
+  const stripped = stripPhone(raw);
+  return normalizePhone(stripped.startsWith('00') ? stripped.slice(2) : stripped, countryCode);
+}
+
+/** Lista odbiorców z pola ładunku: tablica, liczba albo tekst rozdzielony przecinkami lub średnikami. */
+export function splitRecipients(value: unknown): string[] {
+  const items: unknown[] = Array.isArray(value) ? value
+    : typeof value === 'string' ? value.split(/[,;]/)
+    : typeof value === 'number' ? [String(value)]
+    : [];
+  const out = items.filter((x): x is string | number => typeof x === 'string' || typeof x === 'number')
+    .map((x) => String(x).trim()).filter((x) => x !== '');
+  if (out.length > MAX_RECIPIENTS_PER_HOOK) throw new TooManyRecipientsError(out.length);
+  return out;
+}

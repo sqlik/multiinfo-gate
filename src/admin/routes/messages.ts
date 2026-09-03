@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
+import { deliveryView, integrationLink } from '../views/deliveries.ts';
 import { messagePage, messagesPage } from '../views/messages.ts';
 
 const PAGE_SIZE = 25;
@@ -67,9 +68,8 @@ export function registerMessageViewRoutes(app: FastifyInstance, deps: AdminDeps,
         storeContent: account?.storeContent === 1,
         host: hostOf(account?.baseUrl ?? ''),
         events: deps.events.list(row.id),
-        deliveries: deps.deliveries.listForMessage(row.id).map((delivery) => ({
-          delivery, keyName: deps.apiKeys.get(delivery.apiKeyId)?.name ?? `klucz ${delivery.apiKeyId}`,
-        })),
+        deliveries: deps.deliveries.listForMessage(row.id).map((delivery) => deliveryView(deps, delivery)),
+        integration: row.integrationId === null ? null : integrationLink(deps, row.integrationId),
       }),
     });
   });

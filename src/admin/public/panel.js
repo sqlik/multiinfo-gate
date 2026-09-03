@@ -1,6 +1,7 @@
-// Jedyny JavaScript panelu: zamykanie paska komunikatu (x, Esc) i okno potwierdzenia
-// dla formularzy z data-confirm. Bez tego pliku pasek zostaje do następnego przejścia,
-// a formularz wysyła się bez pytania - panel działa, tylko mniej wygodnie.
+// Jedyny JavaScript panelu: zamykanie paska komunikatu (x, Esc), okno potwierdzenia
+// dla formularzy z data-confirm i przycisk kopiowania (data-copy). Bez tego pliku pasek
+// zostaje do następnego przejścia, formularz wysyła się bez pytania, a adres trzeba
+// zaznaczyć ręcznie - panel działa, tylko mniej wygodnie.
 (function () {
   var flash = document.querySelector('.flash');
   var closeFlash = function () { if (flash) { flash.remove(); flash = null; } };
@@ -57,4 +58,39 @@
     if (event.key !== 'Escape') return;
     if (backdrop) closeModal(); else closeFlash();
   });
+
+  // Kopiowanie treści wskazanego elementu; etykieta potwierdza na dwie sekundy.
+  var copies = document.querySelectorAll('[data-copy]');
+  for (var c = 0; c < copies.length; c += 1) {
+    copies[c].addEventListener('click', function (event) {
+      var button = event.currentTarget;
+      var source = document.querySelector(button.getAttribute('data-copy'));
+      if (!source || !navigator.clipboard) return;
+      var label = button.textContent;
+      navigator.clipboard.writeText(source.textContent.trim()).then(function () {
+        button.textContent = 'Skopiowano';
+        setTimeout(function () { button.textContent = label; }, 2000);
+      });
+    });
+  }
+})();
+
+// Generowanie hasła do pola wskazanego przez data-generate: 24 znaki bez znaków mylących; pole
+// przełącza się na tekst, żeby dało się je przepisać do aplikacji.
+(function () {
+  var buttons = document.querySelectorAll('[data-generate]');
+  var alphabet = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  for (var i = 0; i < buttons.length; i += 1) {
+    buttons[i].addEventListener('click', function (event) {
+      var target = document.querySelector(event.currentTarget.getAttribute('data-generate'));
+      if (!target || !window.crypto || !window.crypto.getRandomValues) return;
+      var bytes = new Uint8Array(24);
+      window.crypto.getRandomValues(bytes);
+      var out = '';
+      for (var b = 0; b < bytes.length; b += 1) out += alphabet[bytes[b] % alphabet.length];
+      target.type = 'text';
+      target.value = out;
+      target.focus();
+    });
+  }
 })();

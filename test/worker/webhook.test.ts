@@ -10,6 +10,9 @@ import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
+import { defaultOutboundConfig } from '../../src/integrations/config.ts';
+import { IntegrationEventsRepo } from '../../src/store/integration-events.ts';
+import { IntegrationsRepo } from '../../src/store/integrations.ts';
 
 const masterKey = randomBytes(32);
 const NOW = new Date('2026-08-25T10:00:00Z');
@@ -42,7 +45,7 @@ beforeEach(() => {
   post = vi.fn();
   deps = {
     accounts, apiKeys, messages: new MessagesRepo(db), jobs: new JobsRepo(db), events: new MessageEventsRepo(db),
-    deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '', clients: {} as never, post,
+    deliveries: new WebhookDeliveriesRepo(db, masterKey), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '', clients: {} as never, post,
     resolve: async () => ['93.184.216.34'],
   };
 });
@@ -237,5 +240,98 @@ describe('handleWebhook - message.received', () => {
     await handleWebhook(job, deps, NOW);
     expect(deps.deliveries.get(id)!.status).toBe('failed');
     expect(JSON.parse(deps.deliveries.get(id)!.payload).text).toBeUndefined();
+  });
+});
+
+describe('handleWebhook - dostawa integracji', () => {
+  let integrationId: number;
+  const notify = vi.fn();
+  beforeEach(() => {
+    notify.mockReset();
+    const integrations = new IntegrationsRepo(db, masterKey);
+    integrationId = integrations.insert({
+      name: 'FS', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1,
+      config: { ...defaultOutboundConfig(), url: 'https://fs.example/api/conversations', method: 'PUT', responseRefPath: 'conversation.id' },
+      secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    deps.integrations = integrations;
+    deps.integrationEvents = new IntegrationEventsRepo(db, masterKey);
+    deps.notifier = { notify };
+    deps.inbound.insertIfNew({ id: 'in_1', accountId, serviceId: '24138', miId: '1', sender: '48601000001', dest: '7968', kind: 'text', body: 'x', bodyHash: 'h', protocolId: 0, codingScheme: 0, connectorId: null, relatedMessageId: null, receivedAt: NOW.toISOString(), createdAt: NOW.toISOString() });
+  });
+  const delivery = (over: { sign?: boolean } = {}) => {
+    if (over.sign) {
+      deps.integrations!.update(integrationId, { name: 'FS', serviceId: null, orig: null, preset: 'custom', enabled: 1, storePayloads: 0, config: { ...defaultOutboundConfig(), url: 'https://fs.example/api/conversations', method: 'PUT', responseRefPath: 'conversation.id', sign: true } }, NOW);
+    }
+    const id = deps.deliveries.insert({ apiKeyId, event: 'message.received', payload: '{"text":"x"}', url: 'https://fs.example/api/conversations', createdAt: NOW, inboundId: 'in_1', integrationId, method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Key': 'k' } });
+    return { id, job: { id: deps.jobs.enqueue('webhook', { deliveryId: id }, NOW), type: 'webhook' as const, payload: { deliveryId: id }, attempts: 0, lastError: null } };
+  };
+  it('używa metody i nagłówków integracji, bez podpisu bramki', async () => {
+    post.mockResolvedValue({ status: 201, body: '{"conversation":{"id":4821}}' });
+    const { id, job } = delivery();
+    await handleWebhook(job, deps, NOW);
+    expect(post).toHaveBeenCalledWith('https://fs.example/api/conversations', { 'Content-Type': 'application/json', 'X-Key': 'k' }, '{"text":"x"}', 'PUT');
+    expect(deps.deliveries.get(id)!.status).toBe('delivered');
+  });
+  it('z włączonym podpisem dokłada nagłówki X-MIG do nagłówków integracji', async () => {
+    post.mockResolvedValue({ status: 200, body: '{}' });
+    const { job } = delivery({ sign: true });
+    await handleWebhook(job, deps, NOW);
+    const headers = post.mock.calls[0]![1] as Record<string, string>;
+    expect(headers['X-Key']).toBe('k');
+    expect(headers['X-MIG-Signature']).toBe(signWebhook('sekret', TIMESTAMP, '{"text":"x"}'));
+    expect(headers['X-MIG-Event']).toBe('message.received');
+  });
+  it('wyciąga identyfikator z odpowiedzi i zapisuje go przy odebranej', async () => {
+    post.mockResolvedValue({ status: 201, body: '{"conversation":{"id":4821}}' });
+    const { id, job } = delivery();
+    await handleWebhook(job, deps, NOW);
+    expect(deps.deliveries.get(id)!.responseRef).toBe('4821');
+    expect(deps.inbound.get('in_1')!.externalRef).toBe('4821');
+    expect(deps.inbound.get('in_1')!.externalIntegrationId).toBe(integrationId);
+    expect(deps.integrationEvents!.list(integrationId, 5)[0]).toMatchObject({ result: 'delivered', deliveryId: id, inboundId: 'in_1', reason: null });
+    expect(deps.inbound.findByExternalRefForKey(apiKeyId, '4821')!.id).toBe('in_1');
+  });
+  it('brak pola w odpowiedzi to dostawa udana z ostrzeżeniem', async () => {
+    post.mockResolvedValue({ status: 200, body: 'ok' });
+    const { id, job } = delivery();
+    await handleWebhook(job, deps, NOW);
+    expect(deps.deliveries.get(id)!.status).toBe('delivered');
+    expect(deps.deliveries.get(id)!.responseRef).toBeNull();
+    expect(deps.integrationEvents!.list(integrationId, 5)[0]!.reason).toMatch(/nie znaleziono/);
+    expect(notify).not.toHaveBeenCalled();
+  });
+  it('4xx kończy bez ponowień wpisem undelivered i powiadomieniem', async () => {
+    post.mockResolvedValue({ status: 404, body: 'Not Found' });
+    const { id, job } = delivery();
+    await handleWebhook(job, deps, NOW);
+    expect(deps.deliveries.get(id)!.status).toBe('failed');
+    expect(deps.integrationEvents!.list(integrationId, 5)[0]).toMatchObject({ result: 'undelivered', response: '404 Not Found' });
+    expect(notify).toHaveBeenCalledWith('webhook_undelivered', `integration:${integrationId}`, expect.stringContaining('FS'), NOW);
+  });
+  it('5xx ponawia bez wpisu; po wyczerpaniu ponowień wpis undelivered', async () => {
+    post.mockResolvedValue({ status: 503, body: '' });
+    const { id, job } = delivery();
+    await handleWebhook(job, deps, NOW);
+    expect(deps.deliveries.get(id)!.status).toBe('pending');
+    expect(deps.integrationEvents!.list(integrationId, 5)).toHaveLength(0);
+    await handleWebhook({ ...job, attempts: WEBHOOK_BACKOFF_MS.length }, deps, NOW);
+    expect(deps.deliveries.get(id)!.status).toBe('failed');
+    expect(deps.integrationEvents!.list(integrationId, 5)[0]!.result).toBe('undelivered');
+  });
+  it('integracja wyłączona w międzyczasie kończy dostawę bez wywołania', async () => {
+    deps.integrations!.setEnabled(integrationId, false, NOW);
+    const { id, job } = delivery();
+    await handleWebhook(job, deps, NOW);
+    expect(post).not.toHaveBeenCalled();
+    expect(deps.deliveries.get(id)!.status).toBe('failed');
+    expect(deps.deliveries.get(id)!.lastResponse).toMatch(/wyłączona/);
+  });
+  it('długa odpowiedź jest przycięta w bazie, a identyfikator i tak odczytany', async () => {
+    post.mockResolvedValue({ status: 200, body: `{"padding":"${'x'.repeat(5000)}","conversation":{"id":"abc"}}` });
+    const { id, job } = delivery();
+    await handleWebhook(job, deps, NOW);
+    expect(deps.deliveries.get(id)!.responseRef).toBe('abc');
+    expect(deps.deliveries.get(id)!.lastResponse!.length).toBeLessThanOrEqual(300);
   });
 });

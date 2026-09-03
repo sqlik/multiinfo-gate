@@ -19,7 +19,7 @@ function setup() {
   const seedInbound = db.prepare(`INSERT INTO inbound_messages (id, account_id, service_id, mi_id, sender, dest, kind, body_hash, protocol_id, coding_scheme, received_at, created_at)
     VALUES (?, ?, '24138', ?, '48601000001', '7968', 'text', 'h', 0, 0, '2026-08-25T09:00:00.000Z', '2026-08-25T09:00:01.000Z')`);
   for (const id of ['in_1', 'in_2']) seedInbound.run(id, accountId, id);
-  return { repo: new WebhookDeliveriesRepo(db), apiKeyId };
+  return { repo: new WebhookDeliveriesRepo(db, key), apiKeyId };
 }
 
 describe('WebhookDeliveriesRepo', () => {
@@ -112,6 +112,19 @@ describe('WebhookDeliveriesRepo - dostawy odebranych', () => {
     repo.insert({ ...base, event: 'message.sent', payload: '{"event":"message.sent","id":"msg_2"}' });
     repo.insert({ ...base, event: 'message.received', payload: '{"event":"message.received","id":"msg_1"}', inboundId: 'in_1' });
     expect(repo.listForMessage('msg_1').map((d) => d.id)).toEqual([sent, delivered]);
+  });
+
+  it('nagłówki dostawy integracji są szyfrowane i wracają przez headers(); dostawa klucza ma pusty zestaw', () => {
+    const { repo, apiKeyId } = setup();
+    const id = repo.insert({ apiKeyId, event: 'message.received', payload: '{}', url: 'https://fs.example', createdAt: NOW, integrationId: null, method: 'PUT', headers: { 'X-Key': 'tajny' } });
+    expect(repo.headers(id)).toEqual({ 'X-Key': 'tajny' });
+    expect(repo.get(id)!.method).toBe('PUT');
+    expect(JSON.stringify(repo.get(id))).not.toContain('tajny');
+    const plain = repo.insert({ apiKeyId, event: 'message.sent', payload: '{}', url: 'u', createdAt: NOW });
+    expect(repo.headers(plain)).toEqual({});
+    expect(repo.get(plain)!.method).toBe('POST');
+    repo.setResponseRef(id, '4821');
+    expect(repo.get(id)!.responseRef).toBe('4821');
   });
 
   it('scrub podmienia treść na skrót i zostawia resztę payloadu', () => {

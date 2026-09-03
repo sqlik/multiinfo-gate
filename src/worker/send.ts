@@ -9,8 +9,15 @@ import type { PackagesRepo } from '../store/packages.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
 import type { Resolver } from '../net/private-address.ts';
+import type { AdminNotifier } from '../notifications/rules.ts';
+import type { IntegrationEventsRepo } from '../store/integration-events.ts';
+import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
+import type { IntegrationsRepo } from '../store/integrations.ts';
+import type { NotificationsRepo } from '../store/notifications.ts';
+import type { Mailer } from './mail.ts';
 import type { ClientPool } from './clients.ts';
 import { pauseForCertificate } from './certificate.ts';
+import { emitIntegrations, isOutboundEvent, type IntegrationEmitDeps } from './integrations.ts';
 import { emitWebhook, type HttpPost, type WebhookEvent } from './webhook.ts';
 
 export interface WorkerDeps {
@@ -32,17 +39,41 @@ export interface WorkerDeps {
   resolve?: Resolver;
   /** MIG_WEBHOOK_ALLOW_PRIVATE: zgoda na webhooki do sieci wewnętrznej (host bramki, sieć kontenerów). */
   allowPrivateWebhooks?: boolean;
+  /** Integracje wychodzące: bez tego zestawu zdarzenia idą tylko webhookiem klucza. */
+  integrationEmit?: IntegrationEmitDeps;
+  /** Dostawa integracji: skąd wziąć adres i konfigurację oraz gdzie zapisać wynik. */
+  integrations?: IntegrationsRepo;
+  integrationEvents?: IntegrationEventsRepo;
+  /** Powiadomienia administratora; `flush` woła tura utrzymaniowa. */
+  notifier?: AdminNotifier & { flush?(now: Date): void };
+  /** Sprawdzanie nowych wydań na GitHubie; bez niego bramka nie pyta. */
+  releases?: { check(now: Date): Promise<void> | void };
+  /** Ustawienie SMTP i kolejka powiadomień - zadanie `mail` i sprzątanie. */
+  notifications?: NotificationsRepo;
+  /** Wysyłka maila; testy podstawiają atrapę. */
+  mailer?: Mailer;
+  /** Skaner stanu (certyfikaty, konta, odbiór, podsumowanie) - tura utrzymaniowa. */
+  scanner?: { scan(now: Date): void };
+  /** Strażnicy integracji - sprzątanie idempotencji w turze utrzymaniowej. */
+  guards?: IntegrationGuardsRepo;
   log?: Logger;
 }
 
-/** Kolejkuje webhook i odnotowuje to w przebiegu wiadomości, jeśli klucz ma adres. */
+/**
+ * Kolejkuje webhook klucza i odnotowuje to w przebiegu wiadomości, jeśli klucz ma adres; do tego
+ * dostawy do integracji wychodzących klucza. Oba tory niezależne - klucz może mieć jedno i drugie.
+ */
 export function notify(
   deps: WorkerDeps, message: { id: string; apiKeyId: number; inReplyTo?: string | null }, event: WebhookEvent,
   payload: Record<string, unknown>, now: Date,
 ): void {
   const thread = message.inReplyTo ? { inReplyTo: message.inReplyTo } : {};
-  if (emitWebhook(deps, message.apiKeyId, event, { id: message.id, ...thread, ...payload }, now) !== null) {
+  const body = { id: message.id, ...thread, ...payload };
+  if (emitWebhook(deps, message.apiKeyId, event, body, now) !== null) {
     deps.events.record(message.id, now, 'webhook', event);
+  }
+  if (deps.integrationEmit && isOutboundEvent(event)) {
+    emitIntegrations(deps.integrationEmit, message.apiKeyId, event, body, now, { messageId: message.id });
   }
 }
 
@@ -149,7 +180,7 @@ export async function handleSend(job: Job, deps: WorkerDeps, now: Date): Promise
     }
 
     if (error.kind === 'certificate') {
-      const reason = pauseForCertificate(deps, message.accountId, error, log);
+      const reason = pauseForCertificate(deps, message.accountId, error, log, now);
       // Wiadomość zostaje w kolejce: po wymianie certyfikatu pójdzie bez zmian
       // i z nienaruszonym harmonogramem ponowień.
       deps.events.record(messageId, now, 'paused', reason);

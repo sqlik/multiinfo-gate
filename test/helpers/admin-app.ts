@@ -15,6 +15,14 @@ import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { InboundServicesRepo } from '../../src/store/inbound-services.ts';
+import { IntegrationsRepo } from '../../src/store/integrations.ts';
+import { IntegrationEventsRepo } from '../../src/store/integration-events.ts';
+import { IntegrationGuardsRepo } from '../../src/store/integration-guards.ts';
+import { NotificationsRepo } from '../../src/store/notifications.ts';
+import { SettingsRepo } from '../../src/store/settings.ts';
+import { TemplateEngine } from '../../src/integrations/templates.ts';
+import type { NotificationEvent } from '../../src/notifications/rules.ts';
+import type { MailContent } from '../../src/worker/mail.ts';
 
 export interface AdminHarness {
   app: ReturnType<typeof buildAdminServer>;
@@ -30,6 +38,16 @@ export interface AdminHarness {
   packages: PackagesRepo;
   inbound: InboundMessagesRepo;
   inboundServices: InboundServicesRepo;
+  integrations: IntegrationsRepo;
+  integrationEvents: IntegrationEventsRepo;
+  guards: IntegrationGuardsRepo;
+  notifications: NotificationsRepo;
+  settings: SettingsRepo;
+  /** Powiadomienia zgłoszone przez trasy panelu - atrapa notifiera. */
+  notified: Array<{ event: NotificationEvent; subjectKey: string | null; summary: string }>;
+  /** Maile wysłane przez panel (mail testowy) i wynik, jaki atrapa ma zwrócić. */
+  mails: MailContent[];
+  mailError: Error | null;
   /** Wywołania `receiver.refresh()` z tras panelu - atrapa odbiornika. */
   refreshed: Array<{ retryAccount?: number }>;
   sessions: SessionStore;
@@ -84,10 +102,19 @@ export async function startAdminHarness(
   const jobs = new JobsRepo(db);
   const users = new AdminUsersRepo(db, masterKey);
   const audit = new AuditRepo(db);
-  const deliveries = new WebhookDeliveriesRepo(db);
+  const deliveries = new WebhookDeliveriesRepo(db, masterKey);
   const packages = new PackagesRepo(db);
   const inbound = new InboundMessagesRepo(db);
   const inboundServices = new InboundServicesRepo(db);
+  const integrations = new IntegrationsRepo(db, masterKey);
+  const integrationEvents = new IntegrationEventsRepo(db, masterKey);
+  const guards = new IntegrationGuardsRepo(db);
+  const notifications = new NotificationsRepo(db, masterKey);
+  const settings = new SettingsRepo(db);
+  const notified: AdminHarness['notified'] = [];
+  const notifier = { notify: (event: NotificationEvent, subjectKey: string | null, summary: string) => { notified.push({ event, subjectKey, summary }); } };
+  const mails: MailContent[] = [];
+  const harness = { mailError: null as Error | null };
   const refreshed: Array<{ retryAccount?: number }> = [];
   const receiver = { refresh: (o: { retryAccount?: number } = {}) => { refreshed.push(o); } };
 
@@ -113,7 +140,9 @@ export async function startAdminHarness(
 
   const resolve = { value: async (_hostname: string) => ['93.184.216.34'] };
   const app = buildAdminServer({
-    accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, receiver,
+    accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, receiver,
+    integrationEvents, guards, engine: new TemplateEngine(), notifications, settings, notifier,
+    mailer: async (_settings, mail) => { if (harness.mailError) throw harness.mailError; mails.push(mail); },
     clients: clients as never, sessions, masterKey, now: () => now,
     resolve: (hostname) => resolve.value(hostname),
     ...(opts.allowPrivateWebhooks ? { allowPrivateWebhooks: true } : {}),
@@ -121,7 +150,10 @@ export async function startAdminHarness(
   await app.ready();
 
   return {
-    app, db, accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, refreshed,
+    app, db, accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, refreshed,
+    integrationEvents, guards, notifications, settings, notified, mails,
+    get mailError() { return harness.mailError; },
+    set mailError(e: Error | null) { harness.mailError = e; },
     sessions, userId, masterKey,
     cookie: `mig_session=${token}`, totpSecret, probe, invalidated, resolve,
   };
