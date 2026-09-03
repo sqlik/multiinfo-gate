@@ -2,10 +2,12 @@ import { shortId } from '../ids.ts';
 import { sha256Hex } from '../text/hash.ts';
 import { silentLogger, type Logger } from '../log.ts';
 import { ProviderError, type InboundSms } from '../multiinfo/response.ts';
+import type { AdminNotifier } from '../notifications/rules.ts';
 import type { AccountsRepo } from '../store/accounts.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
 import type { InboundServicesRepo, InboundTarget } from '../store/inbound-services.ts';
+import type { IntegrationsRepo } from '../store/integrations.ts';
 import type { JobsRepo } from '../store/jobs.ts';
 import type { MessagesRepo } from '../store/messages.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
@@ -13,6 +15,7 @@ import { normalizeSender } from '../text/phone.ts';
 import { warsawCompactToIso } from '../time/warsaw.ts';
 import type { ClientPool } from '../worker/clients.ts';
 import { pauseForCertificate } from '../worker/certificate.ts';
+import { emitIntegrations, type IntegrationEmitDeps } from '../worker/integrations.ts';
 import { emitWebhook } from '../worker/webhook.ts';
 
 export interface ReceiverDeps {
@@ -32,6 +35,11 @@ export interface ReceiverDeps {
   log?: Logger;
   /** Czekanie przerywalne sygnałem; testy podstawiają natychmiastowe. */
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+  /** Integracje wychodzące na message.received; bez obu pól odebrane idą tylko do subskrybentów. */
+  integrations?: IntegrationsRepo;
+  integrationEmit?: IntegrationEmitDeps;
+  /** Powiadomienia administratora (konto wstrzymane za certyfikat). */
+  notifier?: AdminNotifier;
 }
 
 /**
@@ -255,7 +263,7 @@ export class Receiver {
       if (signal?.aborted) return { kind: 'error', error: 'przerwane' };
       if (error instanceof ProviderError && error.kind === 'certificate') {
         // Jak przy wysyłce: konto staje w całości, a odbiornik gasi cel przy najbliższym uzgodnieniu.
-        const reason = pauseForCertificate(this.deps, target.accountId, error, log);
+        const reason = pauseForCertificate(this.deps, target.accountId, error, log, clock());
         return { kind: 'stopped', error: reason };
       }
       const code = error instanceof ProviderError ? error.code : -71;
@@ -330,6 +338,12 @@ export class Receiver {
       };
       for (const key of this.deps.apiKeys.inboundSubscribers(target.accountId, target.serviceId, now)) {
         emitWebhook(this.deps, key.id, 'message.received', payload, now, { inboundId: id, scrubAfter: !keepContent });
+      }
+      // Klucz może być i subskrybentem, i mieć integracje - obie dostawy są niezależne, to zamierzone.
+      if (this.deps.integrations && this.deps.integrationEmit) {
+        for (const keyId of this.deps.integrations.inboundListenerKeyIds(target.accountId, target.serviceId, now)) {
+          emitIntegrations(this.deps.integrationEmit, keyId, 'message.received', payload, now, { inboundId: id, scrubAfter: !keepContent });
+        }
       }
       this.deps.services.markReceived(target, now);
       // Numer nadawcy to identyfikator, nie treść - treść do dziennika nie trafia.

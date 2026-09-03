@@ -1,7 +1,9 @@
 import type { AccountRow } from '../../store/accounts.ts';
 import type { ApiKeyRow } from '../../store/api-keys.ts';
+import type { IntegrationRow } from '../../store/integrations.ts';
 import { lastValidDay, warsawStamp } from '../../time/warsaw.ts';
 import { esc } from './layout.ts';
+import { apiAddressPanel, fullUrl } from './settings.ts';
 
 export interface KeyView {
   row: ApiKeyRow;
@@ -52,6 +54,24 @@ const OSTRZEZENIE_SEKRET =
   'Sekret podpisuje każde wywołanie webhooka nagłówkiem X-MIG-Signature. Pokazujemy go tylko teraz - ' +
   'zmiana adresu wydaje nowy sekret.';
 
+/** Gotowe wywołanie do wklejenia w terminalu - aplikacja dostaje adres i klucz w jednym miejscu. */
+function keyExample(apiUrl: string | null, key: string): string {
+  const base = fullUrl(apiUrl, '');
+  const example = `curl -s ${base}/v1/messages \\
+  -H "Authorization: Bearer ${key}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"to":"48601000001","text":"Test z bramki"}'`;
+  const address = apiUrl === null
+    ? '<span class="dim">Adres bramki nie jest jeszcze znany - podaj go w panelu niżej, a przykład dostanie pełny adres.</span>'
+    : `Adres API dla aplikacji: <span class="m">${esc(apiUrl)}</span>. Ten sam adres z <span class="m">/hooks/…</span> dostają integracje.`;
+  return `<div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">
+        <div style="margin-bottom: 6px;">${address}</div>
+        <div class="dim" style="margin-bottom: 4px;">Sprawdzenie z terminala (wysyła prawdziwy SMS na podany numer):</div>
+        <pre class="m" id="key-example" style="white-space: pre-wrap; margin: 0; font-size: 11.5px;">${esc(example)}</pre>
+        <button class="btn btn-s" type="button" data-copy="#key-example" style="margin-top: 6px;">Kopiuj polecenie</button>
+      </div>`;
+}
+
 /** Ile dni przed wygaśnięciem data na liście zmienia kolor na ostrzegawczy. */
 const EXPIRY_WARNING_DAYS = 7;
 
@@ -99,7 +119,7 @@ export type KeysFilter = 'czynne' | 'odwolane';
  * a API odróżnia klucz odwołany od nieznanego. Na liście schodzą jednak do osobnej zakładki.
  */
 export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne',
-                         created: CreatedKey | null = null, notice: string | null = null): string {
+                         created: CreatedKey | null = null, notice: string | null = null, apiUrl: string | null = null): string {
   const active = all.filter((v) => v.row.revokedAt === null);
   const revoked = all.filter((v) => v.row.revokedAt !== null);
   const views = filter === 'czynne' ? active : revoked;
@@ -142,9 +162,11 @@ export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne
           : `Nowy klucz - „${esc(created.name)}”`}</div>
       </div>
       ${created.key === null ? '' : `<div class="keyline">
-        <div class="keybox">${esc(created.key)}</div>
+        <div class="keybox" id="new-key">${esc(created.key)}</div>
+        <button class="btn btn-s" type="button" data-copy="#new-key">Kopiuj</button>
       </div>
-      <div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">${esc(OSTRZEZENIE)}</div>`}
+      <div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">${esc(OSTRZEZENIE)}</div>
+      ${keyExample(apiUrl, created.key)}`}
       ${created.webhookSecret === null ? '' : `<div class="keyline">
         <div class="lab" style="width: 140px;">Sekret webhooka</div>
         <div class="keybox">${esc(created.webhookSecret)}</div>
@@ -162,6 +184,7 @@ export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne
   <div class="scroll">
     ${notice === null ? '' : `<div class="warn">${esc(notice)}</div>`}
     ${reveal}
+    ${apiAddressPanel(apiUrl, filter === 'czynne' ? '/klucze' : '/klucze?status=odwolane')}
     <div class="bar" style="margin-bottom: 12px;">${tabs}</div>
     <div class="panel">
       <div class="panel-h">
@@ -230,7 +253,7 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
   return `<div class="field">
       <label for="name">Nazwa klucza</label>
       <input id="name" name="name" value="${esc(v.name)}" required>
-      <div class="hint">Widoczna tylko w panelu - po niej rozpoznasz, która aplikacja go używa.</div>
+      <div class="hint">Widoczna tylko w panelu - po niej rozpoznasz, która aplikacja go używa</div>
     </div>
     <div class="field">
       <label>ID usług</label>
@@ -239,13 +262,13 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
     <div class="field">
       <label for="defaultServiceId">Domyślne ID usługi</label>
       <select id="defaultServiceId" name="defaultServiceId">${serviceOptions}</select>
-      <div class="hint">Używane, gdy żądanie nie podaje serviceId.</div>
+      <div class="hint">Używane, gdy żądanie nie podaje serviceId</div>
     </div>
     <div class="field">
       <label>Nadpisy nadawcy</label>
       <div class="choices">${origs}</div>
       <div class="hint">Zaznacz nadpisy, których ta aplikacja może używać.
-        Gdy w żądaniu nie pojawi się żadna ze zdefiniowanych pozycji, bramka użyje domyślnego nadpisu konta.</div>
+        Gdy w żądaniu nie pojawi się żadna ze zdefiniowanych pozycji, bramka użyje domyślnego nadpisu konta</div>
     </div>
     <div class="field">
       <label for="defaultOrig">Domyślny nadpis klucza</label>
@@ -257,7 +280,7 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
     <div class="field">
       <label for="maxParts">Limit części jednej wiadomości (1-9)</label>
       <input id="maxParts" name="maxParts" type="number" min="1" max="9" value="${esc(v.maxParts)}" required>
-      <div class="hint">Dłuższa treść zostanie odrzucona, nie przycięta.</div>
+      <div class="hint">Dłuższa treść zostanie odrzucona, nie przycięta</div>
     </div>
     <div class="field">
       <label for="ratePerMin">Limit żądań na minutę</label>
@@ -276,7 +299,7 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
     ${mode === 'edit' ? `<div class="field">
       <label for="webhookSecret">Sekret webhooka</label>
       <input id="webhookSecret" name="webhookSecret" type="password" autocomplete="off">
-      <div class="hint">Puste pole zostawia dotychczasowy sekret.</div>
+      <div class="hint">Puste pole zostawia dotychczasowy sekret</div>
     </div>` : ''}
     <div class="field">
       <label for="expiresOn">Ważny do</label>
@@ -306,8 +329,23 @@ export function newKeyPage(choice: AccountChoice, error: string | null = null,
   </div>`;
 }
 
+/** Integracje klucza obok formularza: przed odwołaniem klucza trzeba wiedzieć, co na nim wisi. */
+function integrationsPanel(integrations: IntegrationRow[]): string {
+  const rows = integrations.length === 0
+    ? '<tr><td class="dim" colspan="3">Żadna integracja nie korzysta z tego klucza.</td></tr>'
+    : integrations.map((i) => `<tr>
+        <td><a href="/integracje/${esc(i.id)}">${esc(i.name)}</a></td>
+        <td><span class="tag">${i.kind === 'webhook_in' ? 'do SMS' : 'z SMS-a'}</span></td>
+        <td>${i.enabled === 1 ? '<span class="st"><span class="dot dot-ok"></span>włączona</span>' : '<span class="st"><span class="dot dot-dim"></span>wyłączona</span>'}</td>
+      </tr>`).join('');
+  return `<div class="panel" style="max-width: 560px;">
+      <div class="panel-h"><div class="lab">Integracje na tym kluczu</div><a href="/integracje/nowa">Dodaj</a></div>
+      <table><tr><th>Nazwa</th><th style="width: 90px;">Kierunek</th><th style="width: 110px;">Stan</th></tr>${rows}</table>
+    </div>`;
+}
+
 export function editKeyPage(choice: AccountChoice, row: ApiKeyRow, error: string | null = null,
-                            values: KeyFormValues = valuesOf(row)): string {
+                            values: KeyFormValues = valuesOf(row), integrations: IntegrationRow[] = []): string {
   return `<div class="head">
     <div>
       <div class="crumb"><a href="/klucze">Klucze API</a> / edycja</div>
@@ -323,5 +361,6 @@ export function editKeyPage(choice: AccountChoice, row: ApiKeyRow, error: string
         <div><button class="btn btn-p" type="submit">Zapisz klucz</button></div>
       </form>
     </div>
+    ${integrationsPanel(integrations)}
   </div>`;
 }

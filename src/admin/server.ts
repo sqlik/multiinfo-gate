@@ -11,12 +11,21 @@ import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { AuditRepo } from '../store/audit.ts';
 import { registerHealthRoute, type InboundHealth } from '../api/health.ts';
 import { secureContext } from './secure-context.ts';
+import { pendingRelease } from '../releases/check.ts';
 import type { JobsRepo } from '../store/jobs.ts';
 import type { MessageEventsRepo } from '../store/message-events.ts';
 import type { MessagesRepo } from '../store/messages.ts';
 import type { PackagesRepo } from '../store/packages.ts';
 import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
 import type { InboundServicesRepo } from '../store/inbound-services.ts';
+import type { IntegrationEventsRepo } from '../store/integration-events.ts';
+import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
+import type { IntegrationsRepo } from '../store/integrations.ts';
+import type { NotificationsRepo } from '../store/notifications.ts';
+import type { SettingsRepo } from '../store/settings.ts';
+import type { TemplateEngine } from '../integrations/templates.ts';
+import type { AdminNotifier } from '../notifications/rules.ts';
+import type { Mailer } from '../worker/mail.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 import type { Resolver } from '../net/private-address.ts';
 import type { ClientPool } from '../worker/clients.ts';
@@ -27,12 +36,16 @@ import { registerKeyRoutes } from './routes/keys.ts';
 import { registerUserRoutes } from './routes/users.ts';
 import { registerDeliveryRoutes } from './routes/deliveries.ts';
 import { registerInboundViewRoutes } from './routes/inbound.ts';
+import { registerIntegrationRoutes } from './routes/integrations.ts';
 import { registerMessageViewRoutes } from './routes/messages.ts';
+import { registerNotificationRoutes } from './routes/notifications.ts';
+import { registerSettingsRoutes } from './routes/settings.ts';
 import { registerOverviewRoutes } from './routes/overview.ts';
 import { registerPackageViewRoutes } from './routes/packages.ts';
 import { qrSvg } from './qr.ts';
 import { createRenderer } from './render.ts';
 import { LoginThrottle } from './throttle.ts';
+import { WINDOW_MS } from './window.ts';
 import { loginPage, totpPage } from './views/login.ts';
 import { recoveryCodesPage, totpSetupPage } from './views/totp-setup.ts';
 import {
@@ -52,6 +65,18 @@ export interface AdminDeps {
   packages: PackagesRepo;
   inbound: InboundMessagesRepo;
   inboundServices: InboundServicesRepo;
+  integrations: IntegrationsRepo;
+  integrationEvents: IntegrationEventsRepo;
+  guards: IntegrationGuardsRepo;
+  /** Silnik szablonów do „Sprawdź szablon” i walidacji przy zapisie. */
+  engine: TemplateEngine;
+  notifications: NotificationsRepo;
+  /** Ustawienia instancji: adres bramki widziany przez aplikacje. */
+  settings: SettingsRepo;
+  /** Powiadomienia administratora; bez niego panel ich nie zgłasza. */
+  notifier?: AdminNotifier;
+  /** Wysyłka maila testowego z ekranu „Powiadomienia”; testy podstawiają atrapę. */
+  mailer?: Mailer;
   /** Odbiornik: panel każe mu uzgodnić pętle po zmianie klucza albo konta. */
   receiver?: { refresh(opts?: { retryAccount?: number }): void };
   /** Stan odbiornika do /healthz; bez niego pole nie występuje. */
@@ -174,7 +199,11 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
     app,
     {
       accounts: deps.accounts, queueDepth: () => deps.jobs.depth(), now, detailsAllowed: secureContext,
+      release: () => pendingRelease(deps.settings),
       ...(deps.inboundHealth ? { inbound: deps.inboundHealth } : {}),
+      integrations: () => ({
+        enabled: deps.integrations.countEnabled(), troubled24h: deps.integrations.countTroubled(new Date(now().getTime() - WINDOW_MS)),
+      }),
     },
     'admin',
   );
@@ -333,9 +362,12 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
     return (recoveryCodesPage(codes));
   });
 
-  const render = createRenderer(deps, new FlashStore());
+  const render = createRenderer(deps, new FlashStore(), () => pendingRelease(deps.settings));
   registerAccountRoutes(app, deps, render);
   registerKeyRoutes(app, deps, render);
+  registerIntegrationRoutes(app, deps, render);
+  registerNotificationRoutes(app, deps, render);
+  registerSettingsRoutes(app, deps, render);
   registerUserRoutes(app, deps, render);
   registerOverviewRoutes(app, deps, render);
   registerPackageViewRoutes(app, deps, render);

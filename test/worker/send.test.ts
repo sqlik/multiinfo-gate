@@ -10,6 +10,11 @@ import { MessageEventsRepo } from '../../src/store/message-events.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
+import { defaultOutboundConfig } from '../../src/integrations/config.ts';
+import { TemplateEngine } from '../../src/integrations/templates.ts';
+import { IntegrationEventsRepo } from '../../src/store/integration-events.ts';
+import { IntegrationGuardsRepo } from '../../src/store/integration-guards.ts';
+import { IntegrationsRepo } from '../../src/store/integrations.ts';
 import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 
 const masterKey = randomBytes(32);
@@ -49,7 +54,7 @@ beforeEach(() => {
   sendLong = vi.fn();
   cancel = vi.fn();
   deps = {
-    accounts, apiKeys, messages, jobs, events: new MessageEventsRepo(db), deliveries: new WebhookDeliveriesRepo(db), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '',
+    accounts, apiKeys, messages, jobs, events: new MessageEventsRepo(db), deliveries: new WebhookDeliveriesRepo(db, masterKey), packages: new PackagesRepo(db), inbound: new InboundMessagesRepo(db), reportsDir: '',
     clients: { for: () => ({ sendLong, cancel }), invalidate: vi.fn(), closeAll: vi.fn() } as never,
   };
 });
@@ -146,6 +151,18 @@ describe('handleSend', () => {
     expect(deps.messages.get(id)!.status).toBe('failed');
     expect(deps.messages.get(id)!.providerCode).toBe(-24);
     expect(deps.jobs.claim(new Date(NOW.getTime() + 86_400_000), 10)).toHaveLength(0);
+  });
+
+  it('wstrzymanie konta za certyfikat powiadamia administratora raz na powód', async () => {
+    const notify = vi.fn();
+    deps.notifier = { notify };
+    const { job } = seedMessage();
+    sendLong.mockRejectedValue(new ProviderError(-80, 'Brak certyfikatu', 'certificate'));
+    await handleSend(job, deps, NOW);
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify.mock.calls[0]![0]).toBe('account_rejecting');
+    expect(notify.mock.calls[0]![2]).toContain('Konto Firma Info wstrzymane');
+    expect(notify.mock.calls[0]![4]).toMatch(new RegExp(`^account:${accountId}:paused:[0-9a-f]{16}$`));
   });
 
   it('wstrzymuje konto po błędzie certyfikatu i nie oznacza wiadomości jako nieudanej', async () => {
@@ -253,6 +270,25 @@ describe('handleSend', () => {
     const delivery = deps.deliveries.listRecent(1)[0]!;
     expect(delivery.event).toBe('message.failed');
     expect(JSON.parse(delivery.payload)).toMatchObject({ id, status: 'failed', providerCode: -24 });
+  });
+
+  it('integracja wychodząca na message.sent dostaje dostawę, choć klucz nie ma adresu webhooka', async () => {
+    const integrations = new IntegrationsRepo(db, masterKey);
+    const integrationId = integrations.insert({
+      name: 'Slack', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1,
+      config: { ...defaultOutboundConfig(), url: 'https://hooks.slack.example/x', events: ['message.sent', 'message.failed'], body: { mode: 'json', template: '{"text": "{{ status }} do {{ to }} ({{ id }})"}' } },
+      secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    deps.integrationEmit = { integrations, integrationEvents: new IntegrationEventsRepo(db, masterKey), guards: new IntegrationGuardsRepo(db), deliveries: deps.deliveries, jobs: deps.jobs, engine: new TemplateEngine() };
+    const { id, job } = seedMessage();
+    sendLong.mockResolvedValue({ miIds: ['8841207'], trace: TRACE });
+    await handleSend(job, deps, NOW);
+    const delivery = deps.deliveries.listRecent(1)[0]!;
+    expect(delivery.integrationId).toBe(integrationId);
+    expect(JSON.parse(delivery.payload)).toEqual({ text: `sent do 48601135134 (${id})` });
+    // Przebieg wiadomości odnotowuje tylko webhook klucza; dziennik integracji ma własny wpis.
+    expect(deps.events.list(id).map((e) => e.kind)).toEqual(['sent']);
+    expect(deps.integrationEmit.integrationEvents.list(integrationId, 5)[0]).toMatchObject({ result: 'sent', messageId: id });
   });
 
   it('nie kolejkuje webhooka dla klucza bez adresu', async () => {

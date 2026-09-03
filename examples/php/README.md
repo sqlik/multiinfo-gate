@@ -5,6 +5,11 @@ i wzorzec kodu do skopiowania - nie produkt. **Nie wystawiaj go do internetu.**
 
 Wymagania: PHP 8.3 lub nowszy z rozszerzeniami `curl`, `json`, `mbstring`. Bez Composera, bez bazy.
 
+Jeśli aplikacja ma tylko wysyłać SMS-y i nie chcesz w niej klucza API ani obsługi błędów bramki, zamiast
+pełnego API może użyć integracji z gotowym ustawieniem „Prosty JSON”: w panelu bramki dodajesz integrację
+„do SMS”, dostajesz adres `/hooks/<identyfikator>` i wysyłasz tam `POST` z ładunkiem `{ "to": "...", "text": "..." }`.
+Opis w dokumentacji, rozdział „Integracje z aplikacjami”.
+
 ## Uruchomienie w pięciu krokach
 
 1. Skopiuj konfigurację: `cp config.example.php config.php`

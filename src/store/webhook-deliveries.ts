@@ -1,5 +1,6 @@
-import { sha256Hex } from '../text/hash.ts';
 import type { Database } from 'better-sqlite3';
+import { decryptSecret, encryptSecret } from '../secrets/crypto.ts';
+import { sha256Hex } from '../text/hash.ts';
 
 export type DeliveryStatus = 'pending' | 'delivered' | 'failed';
 
@@ -11,11 +12,19 @@ export interface DeliveryRow {
   inboundId: string | null;
   /** Po stanie końcowym treść w payloadzie ma zostać zastąpiona skrótem. */
   scrubAfter: 0 | 1;
+  /** Integracja wychodząca, z której pochodzi dostawa; `null` dla webhooka klucza. */
+  integrationId: number | null;
+  method: string;
+  /** Identyfikator zgłoszenia wyciągnięty z odpowiedzi obcej aplikacji. */
+  responseRef: string | null;
 }
 
 export interface DeliveryInput {
   apiKeyId: number; event: string; payload: string; url: string; createdAt: Date;
   inboundId?: string | null; scrubAfter?: boolean;
+  integrationId?: number | null; method?: string;
+  /** Nagłówki dostawy integracji; szyfrowane, bo bywa wśród nich token obcej aplikacji. */
+  headers?: Record<string, string> | null;
 }
 
 interface Raw {
@@ -23,6 +32,7 @@ interface Raw {
   attempts: number; next_retry_at: string | null; status: DeliveryStatus;
   last_response: string | null; created_at: string; delivered_at: string | null;
   inbound_id: string | null; scrub_after: 0 | 1;
+  integration_id: number | null; method: string; response_ref: string | null;
 }
 
 const toRow = (r: Raw): DeliveryRow => ({
@@ -30,30 +40,48 @@ const toRow = (r: Raw): DeliveryRow => ({
   attempts: r.attempts, nextRetryAt: r.next_retry_at, status: r.status,
   lastResponse: r.last_response, createdAt: r.created_at, deliveredAt: r.delivered_at,
   inboundId: r.inbound_id, scrubAfter: r.scrub_after,
+  integrationId: r.integration_id, method: r.method, responseRef: r.response_ref,
 });
 
 /** Odpowiedź odbiorcy skracamy - w bazie ma zostać diagnoza, nie strona HTML. */
 const RESPONSE_CHARS = 300;
 
+/** Kolumna `headers_enc` nie jest tu wymieniona - nagłówki wychodzą z bazy tylko przez `headers()`. */
+const COLUMNS = `id, api_key_id, event, payload, url, attempts, next_retry_at, status, last_response, created_at,
+  delivered_at, inbound_id, scrub_after, integration_id, method, response_ref`;
+
 export class WebhookDeliveriesRepo {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Database, private readonly masterKey: Buffer) {}
 
   insert(input: DeliveryInput): number {
+    const headers = input.headers && Object.keys(input.headers).length > 0
+      ? encryptSecret(JSON.stringify(input.headers), this.masterKey) : null;
     const info = this.db
       .prepare(
-        `INSERT INTO webhook_deliveries (api_key_id, event, payload, url, created_at, inbound_id, scrub_after)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO webhook_deliveries (api_key_id, event, payload, url, created_at, inbound_id, scrub_after, integration_id, method, headers_enc)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.apiKeyId, input.event, input.payload, input.url, input.createdAt.toISOString(),
-        input.inboundId ?? null, input.scrubAfter ? 1 : 0,
+        input.inboundId ?? null, input.scrubAfter ? 1 : 0, input.integrationId ?? null, input.method ?? 'POST', headers,
       );
     return Number(info.lastInsertRowid);
   }
 
   get(id: number): DeliveryRow | undefined {
-    const row = this.db.prepare('SELECT * FROM webhook_deliveries WHERE id = ?').get(id) as Raw | undefined;
+    const row = this.db.prepare(`SELECT ${COLUMNS} FROM webhook_deliveries WHERE id = ?`).get(id) as Raw | undefined;
     return row ? toRow(row) : undefined;
+  }
+
+  /** Nagłówki dostawy integracji jawnie - tylko do wysyłki. Dostawa klucza ma pusty zestaw. */
+  headers(id: number): Record<string, string> {
+    const row = this.db.prepare('SELECT headers_enc FROM webhook_deliveries WHERE id = ?').get(id) as { headers_enc: string | null } | undefined;
+    if (!row?.headers_enc) return {};
+    return JSON.parse(decryptSecret(row.headers_enc, this.masterKey)) as Record<string, string>;
+  }
+
+  setResponseRef(id: number, ref: string): void {
+    this.db.prepare('UPDATE webhook_deliveries SET response_ref = ? WHERE id = ?').run(ref.slice(0, 200), id);
   }
 
   markRetry(id: number, nextAt: Date, response: string): void {
@@ -96,10 +124,16 @@ export class WebhookDeliveriesRepo {
   /**
    * Po zakończeniu dostawy z konta bez przechowywania treści zostaje skrót zamiast treści.
    * Do tej chwili treść musi być w payloadzie, bo ponowienia wysyłają dokładnie to, co podpisano.
+   * Body dostawy integracji ma kształt obcej aplikacji - nie wiadomo, gdzie w nim treść, więc
+   * znika całe.
    */
   scrub(id: number): void {
     const row = this.get(id);
     if (!row) return;
+    if (row.integrationId !== null) {
+      this.db.prepare('UPDATE webhook_deliveries SET payload = ?, scrub_after = 0 WHERE id = ?').run('{"scrubbed":true}', id);
+      return;
+    }
     const payload = JSON.parse(row.payload) as Record<string, unknown>;
     const content = typeof payload.text === 'string' ? payload.text : typeof payload.hex === 'string' ? payload.hex : null;
     if (content === null) return;
@@ -120,13 +154,19 @@ export class WebhookDeliveriesRepo {
   /** Dostawy zdarzeń o wysyłce (message.sent/delivered/failed) - identyfikator jest w payloadzie. */
   listForMessage(messageId: string): DeliveryRow[] {
     const rows = this.db
-      .prepare(`SELECT * FROM webhook_deliveries WHERE inbound_id IS NULL AND json_extract(payload, '$.id') = ? ORDER BY id`)
+      .prepare(`SELECT ${COLUMNS} FROM webhook_deliveries WHERE inbound_id IS NULL AND json_extract(payload, '$.id') = ? ORDER BY id`)
       .all(messageId) as Raw[];
     return rows.map(toRow);
   }
 
   listForInbound(inboundId: string): DeliveryRow[] {
-    const rows = this.db.prepare('SELECT * FROM webhook_deliveries WHERE inbound_id = ? ORDER BY id').all(inboundId) as Raw[];
+    const rows = this.db.prepare(`SELECT ${COLUMNS} FROM webhook_deliveries WHERE inbound_id = ? ORDER BY id`).all(inboundId) as Raw[];
+    return rows.map(toRow);
+  }
+
+  listForIntegration(integrationId: number, limit: number): DeliveryRow[] {
+    const rows = this.db.prepare(`SELECT ${COLUMNS} FROM webhook_deliveries WHERE integration_id = ? ORDER BY id DESC LIMIT ?`)
+      .all(integrationId, limit) as Raw[];
     return rows.map(toRow);
   }
 
@@ -156,7 +196,7 @@ export class WebhookDeliveriesRepo {
   }
 
   listRecent(limit: number): DeliveryRow[] {
-    const rows = this.db.prepare('SELECT * FROM webhook_deliveries ORDER BY id DESC LIMIT ?').all(limit) as Raw[];
+    const rows = this.db.prepare(`SELECT ${COLUMNS} FROM webhook_deliveries ORDER BY id DESC LIMIT ?`).all(limit) as Raw[];
     return rows.map(toRow);
   }
 }

@@ -1,9 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { InboundHealth } from '../inbound/receiver.ts';
 import type { AccountsRepo } from '../store/accounts.ts';
+import type { ReleaseInfo } from '../store/settings.ts';
 import { GATE_VERSION } from '../version.ts';
 
 export type { InboundHealth };
+
+export interface IntegrationsHealth { enabled: number; troubled24h: number }
 
 /** Poniżej tylu dni do wygaśnięcia certyfikatu bramka zgłasza stan pogorszony. */
 const CERT_WARNING_DAYS = 7;
@@ -13,6 +16,10 @@ export interface HealthDeps {
   queueDepth: () => number;
   /** Stan odbiornika wiadomości przychodzących; bez niego pole nie występuje. */
   inbound?: () => InboundHealth;
+  /** Integracje: włączone i z błędem w ostatniej dobie; bez funkcji pole nie występuje. */
+  integrations?: () => IntegrationsHealth;
+  /** Nowsze wydanie do pokazania (wariant panelu); bez funkcji pole nie występuje. */
+  release?: () => ReleaseInfo | null;
   now?: () => Date;
   /** Wariant panelu: czy to żądanie może dostać szczegóły; bez predykatu dostaje zawsze. */
   detailsAllowed?: (request: FastifyRequest) => boolean;
@@ -37,6 +44,7 @@ export function registerHealthRoute(app: FastifyInstance, deps: HealthDeps, mode
     const status = paused.length > 0 || expiring.length > 0 || (inbound?.errors.length ?? 0) > 0 ? 'degraded' : 'ok';
 
     if (mode === 'public' || (deps.detailsAllowed && !deps.detailsAllowed(request))) return { status };
+    const release = deps.release?.() ?? null;
 
     return {
       status,
@@ -48,6 +56,8 @@ export function registerHealthRoute(app: FastifyInstance, deps: HealthDeps, mode
         certificateDaysLeft: daysLeft(a.certNotAfter, now),
       })),
       ...(inbound ? { inbound } : {}),
+      ...(deps.integrations ? { integrations: deps.integrations() } : {}),
+      ...(release ? { release: { version: release.version, url: release.url } } : {}),
     };
   });
 }

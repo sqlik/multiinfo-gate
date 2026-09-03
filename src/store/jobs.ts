@@ -1,6 +1,6 @@
 import type { Database } from 'better-sqlite3';
 
-export type JobType = 'send' | 'poll' | 'webhook' | 'package.create' | 'package.poll' | 'package.report';
+export type JobType = 'send' | 'poll' | 'webhook' | 'package.create' | 'package.poll' | 'package.report' | 'mail';
 
 export interface Job {
   id: number;

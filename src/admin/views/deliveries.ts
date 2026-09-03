@@ -1,7 +1,25 @@
 import type { DeliveryRow } from '../../store/webhook-deliveries.ts';
+import type { AdminDeps } from '../server.ts';
 import { esc } from './layout.ts';
 
-export interface DeliveryView { delivery: DeliveryRow; keyName: string }
+export interface DeliveryView {
+  delivery: DeliveryRow; keyName: string;
+  /** Dostawa integracji wychodzącej: nazwa integracji zamiast klucza. */
+  integration?: { id: number; name: string } | null;
+}
+
+/** Odnośnik do integracji; usunięta zostaje jako numer, żeby ślad nie zniknął. */
+export function integrationLink(deps: Pick<AdminDeps, 'integrations'>, id: number): { id: number; name: string } {
+  return { id, name: deps.integrations.get(id)?.name ?? `integracja ${id}` };
+}
+
+/** Widok dostawy dla obu szczegółów: klucz po nazwie, a dla dostawy integracji także integracja. */
+export function deliveryView(deps: Pick<AdminDeps, 'apiKeys' | 'integrations'>, delivery: DeliveryRow): DeliveryView {
+  return {
+    delivery, keyName: deps.apiKeys.get(delivery.apiKeyId)?.name ?? `klucz ${delivery.apiKeyId}`,
+    integration: delivery.integrationId === null ? null : integrationLink(deps, delivery.integrationId),
+  };
+}
 
 const state = (d: DeliveryRow) =>
   d.status === 'delivered' ? '<span class="st"><span class="dot dot-ok"></span>doręczony</span>'
@@ -14,6 +32,8 @@ const state = (d: DeliveryRow) =>
  */
 export function scrubbed(d: DeliveryRow): boolean {
   if (d.event !== 'message.received') return false;
+  // Body dostawy integracji ma kształt obcej aplikacji; po wyczyszczeniu zostaje sam znacznik.
+  if (d.integrationId !== null) return d.payload === '{"scrubbed":true}';
   try {
     const payload = JSON.parse(d.payload) as Record<string, unknown>;
     return typeof payload.text !== 'string' && typeof payload.hex !== 'string';
@@ -35,9 +55,9 @@ export function deliveriesTable(rows: DeliveryView[], emptyText: string, withEve
   const columns = withEvent ? 6 : 5;
   const body = rows.length === 0
     ? `<tr><td class="dim" colspan="${columns}">${esc(emptyText)}</td></tr>`
-    : rows.map(({ delivery, keyName }) => `<tr>
+    : rows.map(({ delivery, keyName, integration }) => `<tr>
         <td class="txt">
-          <strong>${esc(keyName)}</strong>
+          ${integration ? `<a href="/integracje/${esc(integration.id)}"><strong>${esc(integration.name)}</strong></a> <span class="tag">integracja</span>` : `<strong>${esc(keyName)}</strong>`}
           <div class="m dim txt" style="font-size: 11px; margin-top: 2px;" title="${esc(delivery.url)}">${esc(delivery.url)}</div>
         </td>
         ${withEvent ? `<td class="m">${esc(delivery.event)}</td>` : ''}
@@ -47,7 +67,7 @@ export function deliveriesTable(rows: DeliveryView[], emptyText: string, withEve
         <td>${action(delivery)}</td>
       </tr>`).join('');
   return `<table style="table-layout: fixed;">
-          <tr><th>Klucz · adres</th>${withEvent ? '<th style="width: 130px;">Zdarzenie</th>' : ''}<th style="width: 36px;">Próby</th><th style="width: 80px;">Stan</th><th style="width: 72px;">Odpowiedź</th><th style="width: 76px;"></th></tr>
+          <tr><th>Klucz albo integracja · adres</th>${withEvent ? '<th style="width: 130px;">Zdarzenie</th>' : ''}<th style="width: 36px;">Próby</th><th style="width: 80px;">Stan</th><th style="width: 72px;">Odpowiedź</th><th style="width: 76px;"></th></tr>
           ${body}
         </table>`;
 }

@@ -128,6 +128,8 @@ export interface MessageDetail {
   events: MessageEvent[];
   /** Dostawy webhooków o tej wiadomości; pusta lista, gdy klucz nie ma adresu webhooka. */
   deliveries: DeliveryView[];
+  /** Integracja, z której wiadomość przyszła (webhook przychodzący); brak dla wysyłki przez API. */
+  integration?: { id: number; name: string } | null;
 }
 
 type Tone = 'ok' | 'wait' | 'fail' | 'dim';
@@ -268,6 +270,7 @@ export function messagePage(d: MessageDetail): string {
           <div>Nadpis</div><div class="m">${esc(m.orig ?? '-')}</div>
           <div>ID usługi</div><div class="m">${esc(m.serviceId)}</div>
           ${m.inReplyTo === null ? '' : `<div>Odpowiedź na</div><div class="m"><a href="/odebrane/${esc(m.inReplyTo)}">${esc(m.inReplyTo)}</a></div>`}
+          ${!d.integration ? '' : `<div>Integracja</div><div><a href="/integracje/${esc(d.integration.id)}">${esc(d.integration.name)}</a></div>`}
           <div>Części w Multiinfo</div><div>${parts}</div>
           <div>Status Multiinfo</div><div class="m">${substatus === null
             ? '<span class="dim">brak</span>'

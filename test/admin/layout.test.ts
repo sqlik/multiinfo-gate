@@ -20,6 +20,13 @@ describe('layout', () => {
     expect(html).toContain('<script src="/panel.js" defer></script>');
   });
 
+  it('nowe wydanie zaznacza w maszcie odnośnikiem do przeglądu', () => {
+    const counts = { wiadomosci: 0, odebrane: 0, konta: 0, klucze: 0, uzytkownicy: 0 };
+    const html = layout({ ...base, counts, release: { version: '9.9.9', url: 'https://github.com/sqlik/multiinfo-gate/releases/tag/v9.9.9', publishedAt: null } });
+    expect(html).toContain('<a class="ver-new" href="/przeglad">nowe wydanie 9.9.9</a>');
+    expect(layout({ ...base, counts })).not.toContain('ver-new');
+  });
+
   it('bez komunikatu nie rysuje paska', () => {
     const html = layout({ ...base, counts: { wiadomosci: 0, odebrane: 0, konta: 0, klucze: 0, uzytkownicy: 0 }, flash: null });
     expect(html).not.toContain('class="flash');

@@ -6,6 +6,8 @@ import { hashApiKey } from '../../src/api/keys.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
+import { integrationDeps } from '../helpers/api-deps.ts';
+import { defaultInboundConfig } from '../../src/integrations/config.ts';
 
 let h: AdminHarness;
 let accountId: number;
@@ -363,7 +365,7 @@ describe('POST /klucze/:id/odwolaj', () => {
     const api = buildApiServer({
       accounts: h.accounts, apiKeys: h.apiKeys, messages: h.messages, jobs: h.jobs,
       events: new MessageEventsRepo(h.db), packages: new PackagesRepo(h.db), clients: {} as never,
-      inbound: new InboundMessagesRepo(h.db), rateLimiter: new RateLimiter(),
+      inbound: new InboundMessagesRepo(h.db), rateLimiter: new RateLimiter(), ...integrationDeps(h.db, h.masterKey),
     });
     await api.ready();
 
@@ -407,7 +409,7 @@ describe('GET /klucze/nowy - teksty', () => {
     const res = await h.app.inject({ method: 'GET', url: `/klucze/nowy?accountId=${accountId}`, headers: { cookie: h.cookie } });
     expect(res.body).toContain('ID usług');
     expect(res.body).toContain('Limit części jednej wiadomości (1-9)');
-    expect(res.body).toContain('Dłuższa treść zostanie odrzucona, nie przycięta.');
+    expect(res.body).toContain('Dłuższa treść zostanie odrzucona, nie przycięta');
     expect(res.body).toContain('Gdy w żądaniu nie pojawi się żadna ze zdefiniowanych pozycji');
     expect(res.body).not.toContain('Najwięcej części');
   });
@@ -467,5 +469,36 @@ describe('klucz - subskrypcja wiadomości przychodzących', () => {
     await create({ webhookUrl: 'https://crm.example/hook', inboundSubscribed: '1' });
     const res = await h.app.inject({ method: 'GET', url: '/klucze', headers: { cookie: h.cookie } });
     expect(res.body).toContain('<span class="tag">odbiera</span>');
+  });
+});
+
+describe('klucz z integracjami', () => {
+  const seedIntegration = (apiKeyId: number, enabled: 0 | 1) => h.integrations.insert({
+    name: 'Kuma', kind: 'webhook_in', apiKeyId, serviceId: null, orig: null, preset: 'uptime-kuma', enabled,
+    config: defaultInboundConfig(), secrets: {}, storePayloads: 0, createdAt: new Date('2026-08-25T10:00:00Z'),
+  });
+
+  it('edycja klucza pokazuje listę integracji klucza', async () => {
+    await create();
+    const key = h.apiKeys.list()[0]!;
+    const id = seedIntegration(key.id, 1);
+    const res = await h.app.inject({ method: 'GET', url: `/klucze/${key.id}/edytuj`, headers: { cookie: h.cookie } });
+    expect(res.body).toContain(`href="/integracje/${id}">Kuma</a>`);
+  });
+
+  it('odwołanie klucza z włączoną integracją jest zablokowane z komunikatem', async () => {
+    await create();
+    const key = h.apiKeys.list()[0]!;
+    const id = seedIntegration(key.id, 1);
+    const res = await h.app.inject({ url: `/klucze/${key.id}/odwolaj`, ...form({}) });
+    expect(res.statusCode).toBe(302);
+    expect(h.apiKeys.get(key.id)!.revokedAt).toBeNull();
+    const list = await h.app.inject({ method: 'GET', url: '/klucze', headers: { cookie: h.cookie } });
+    expect(list.body).toContain('najpierw wyłącz albo przepnij');
+    expect(h.audit.list(10, 0).some((e) => e.action === 'klucz.odwolanie')).toBe(false);
+
+    h.integrations.setEnabled(id, false, new Date());
+    await h.app.inject({ url: `/klucze/${key.id}/odwolaj`, ...form({}) });
+    expect(h.apiKeys.get(key.id)!.revokedAt).not.toBeNull();
   });
 });
