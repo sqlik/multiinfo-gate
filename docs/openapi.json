@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Multiinfo Gate",
-    "version": "1.5.0",
+    "version": "1.6.0",
     "description": "Bramka SMS między aplikacjami a platformą Multiinfo operatora Plus. Opis obejmuje każde wywołanie API bramki: wysyłkę, odczyt wysłanych wiadomości, anulowanie, rozsyłkę wraz z raportem, odczyt wiadomości przychodzących oraz stan bramki. Powiadomienia webhook idą w drugą stronę, więc opisuje je dokumentacja bramki. Przyjęcie wiadomości i rozsyłki jest asynchroniczne: bramka odpowiada kodem 202 po zapisaniu żądania w kolejce, a wysyłka do Multiinfo następuje później.",
     "license": {
       "name": "MIT",
