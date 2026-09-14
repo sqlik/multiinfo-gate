@@ -4,6 +4,7 @@ import { buildApiServer } from '../../src/api/server.ts';
 import { HOOK_RATE_PER_MIN } from '../../src/api/hooks.ts';
 import { RateLimiter } from '../../src/api/rate-limit.ts';
 import { defaultInboundConfig, type InboundConfig } from '../../src/integrations/config.ts';
+import { presetById } from '../../src/integrations/presets/index.ts';
 import { openDatabase } from '../../src/store/db.ts';
 import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
@@ -84,6 +85,18 @@ describe('POST /hooks/:hookId', () => {
     const res = await app.inject({ method: 'POST', url: `/hooks/${integ.hookId}`, payload: 'msg=Formularz&to=48601000001', headers: { 'content-type': 'application/x-www-form-urlencoded' } });
     expect(res.statusCode).toBe(202);
     expect(messages.get(res.json().messageIds[0])!.dest).toBe('48601000001');
+  });
+  it('żądanie próbne WooCommerce dostaje 200 i nie wysyła SMS-a', async () => {
+    // Sklep wysyła je po zapisaniu webhooka: format formularza, ciało webhook_id, żadnego pola zamówienia.
+    // Za udane uznaje wyłącznie kod 200, więc warunek gotowego ustawienia musi je odsiać przed wysyłką.
+    const integ = make({ ...presetById('woocommerce')!.inbound, to: { fallback: ['48601000009'] } });
+    const res = await app.inject({
+      method: 'POST', url: `/hooks/${integ.hookId}`, payload: 'webhook_id=1',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'WooCommerce/11.1.0 Hookshot (WordPress/7.1)' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ accepted: false, reason: 'condition' });
+    expect(messages.list({ limit: 10, offset: 0 })).toHaveLength(0);
   });
   it('token w nagłówku: brak i zły to 401 z wpisem rejected i powiadomieniem, dobry przechodzi', async () => {
     const integ = make({ auth: { header: { name: 'Authorization', valueRef: 'token' }, sources: [] } }, { token: 'Bearer tajne' });
