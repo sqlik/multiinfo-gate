@@ -21,7 +21,7 @@ describe('gotowe ustawienia', () => {
     expect(ids.at(-1)).toBe('custom');
     expect(presetById('uptime-kuma')?.name).toBe('Uptime Kuma');
     expect(presetById('brak')).toBeUndefined();
-    expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'uptime-kuma', 'grafana', 'zabbix', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
+    expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
     expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'freescout', 'freshdesk', 'ntfy', 'custom']);
   });
   it('każde ustawienie ma konfigurację dla każdego swojego rodzaju, instrukcję i sekrety ze wskazówką', () => {
