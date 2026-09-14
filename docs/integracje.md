@@ -954,11 +954,12 @@ zmiennymi z rozdziału 5.2.
 
 ## 7. Dziennik i próbki
 
-Szczegół integracji pokazuje konfigurację w słowach i dziennik. Każdy wpis ma czas, wynik,
-powód, powiązaną wiadomość (odnośnik do wysłanej albo odebranej) i adres źródłowy. Przy
-nieudanej dostawie jest przycisk **Ponów**.
+Nazwa integracji na liście prowadzi do ekranu ze szczegółami. Ekran opisuje konfigurację
+słowami, a pod nią pokazuje dziennik. Każdy wpis dziennika ma czas, wynik, powód, powiązaną
+wiadomość (odnośnik do wysłanej albo odebranej) i adres źródłowy. Przy nieudanej dostawie jest
+przycisk **Ponów**.
 
-![Szczegół integracji: konfiguracja w słowach i dziennik z wpisami „wysłano” i „błąd”](obrazki/integracja-dziennik.png)
+![Szczegóły integracji: konfiguracja opisana słowami i dziennik z wpisami „wysłano” i „błąd”](obrazki/integracja-dziennik.png)
 
 | Wynik | Znaczenie |
 |---|---|
@@ -979,9 +980,9 @@ otwiera edycję z tym ładunkiem w polu próbki. To najszybsza droga do dopasowa
 prawdziwego formatu aplikacji. Ładunki są zaszyfrowane kluczem głównym i znikają po siedmiu
 dniach. Ładunki bywają wrażliwe, dlatego przechowywanie warto włączać tylko na czas strojenia.
 
-Ślady integracji widać też na innych ekranach. Szczegół wiadomości ma wiersz „Integracja”.
-Szczegół odebranej wiadomości ma wiersz „Zgłoszenie” z identyfikatorem i dostawy pod nazwą
-integracji. Przegląd ma kafelek „Integracje z błędami” z ostrzeżeniem. Edycja klucza pokazuje
+Ślady integracji widać też na innych ekranach. Szczegóły wiadomości mają wiersz
+„Integracja”. Szczegóły odebranej wiadomości mają wiersz „Zgłoszenie” z identyfikatorem oraz
+dostawy pod nazwą integracji. Przegląd ma kafelek „Integracje z błędami” z ostrzeżeniem. Edycja klucza pokazuje
 listę jego integracji.
 
 ## 8. Powiadomienia administratora

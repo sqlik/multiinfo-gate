@@ -6,7 +6,7 @@ z kluczem w nagłówku. Aplikacja wysyłająca SMS-y nie instaluje certyfikatów
 
 ![Przegląd: liczniki wiadomości wychodzących i odebranych z ostatniej doby, stan połączeń z Multiinfo i ostatnie niepowodzenia](docs/obrazki/przeglad.png)
 
-![Szczegół wiadomości z podziałem na pięć części UCS-2, przebiegiem doręczenia i śladem protokołu](docs/obrazki/wiadomosc-dluga.png)
+![Szczegóły wiadomości z podziałem na pięć części UCS-2, przebiegiem doręczenia i śladem protokołu](docs/obrazki/wiadomosc-dluga.png)
 
 ## Dla kogo
 
