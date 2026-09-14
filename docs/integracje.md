@@ -113,7 +113,7 @@ Tryb zaawansowany pokazuje pola silnika, podzielone na sekcje:
 - wejście albo wyjście: uwierzytelnianie i lista źródeł, a w drugim kierunku adres, metoda,
   nagłówki i zdarzenia
 - warunek: reguły albo wyrażenie Liquid
-- odbiorca: ścieżki numeru i identyfikatorów, lista zapasowa
+- odbiorca: ścieżki numeru i identyfikatorów, lista zapasowa, odpowiedź na numer nie do odczytania
 - treść albo żądanie: szablon Liquid albo pole z ładunku, a w drugim kierunku body
 - ochrona i dziennik
 - próbka
@@ -211,6 +211,20 @@ wiodący `+` albo `00`. Numer dziewięciocyfrowy uzupełnia kodem kraju konta. W
 50 odbiorców. Każdy dostaje osobną wiadomość z tą samą treścią. Więcej odbiorców daje wpis
 `błąd` bez wysyłki.
 
+Pole „Gdy numeru z ładunku nie da się odczytać” rozstrzyga, co bramka odpowiada aplikacji
+źródłowej. Domyślnie zgłasza błąd. Aplikacja dostaje kod 422, administrator dostaje maila,
+a w dzienniku zostaje wpis `błąd`. Druga możliwość to „pomiń zdarzenie”. Wtedy aplikacja dostaje
+kod 200, maila nie ma, a w dzienniku zostaje wpis `pominięto`.
+
+Pominięcie jest dla sklepów. Sklep liczy każdą odpowiedź inną niż `2xx` jako nieudane
+dostarczenie. Po kilku takich pod rząd sam wyłącza webhook, czyli przestaje wysyłać cokolwiek.
+Jedno zamówienie z telefonem wpisanym po ludzku potrafi w ten sposób zatrzymać całą integrację.
+Dlatego gotowe ustawienie „WooCommerce: status do klienta” ma tu wybrane pominięcie.
+
+Przełącznik dotyczy wyłącznie numeru wziętego z ładunku. Zły numer na liście zapasowej zostaje
+błędem, bo listę wpisuje administrator w tym samym formularzu i pomyłka ma być widoczna. Brak
+numeru w ogóle także zostaje błędem. Przełącznik nie zmienia tego, kto dostaje SMS.
+
 ### 3.4. Treść
 
 Treść SMS-a pochodzi z jednego z dwóch miejsc. Pierwsze to szablon Liquid (rozdział 5),
@@ -269,6 +283,7 @@ Bramka odpowiada po zapisaniu wpisu i zakolejkowaniu wysyłki. Nie czeka na Mult
 | warunek niespełniony | 200 | `{ "accepted": false, "reason": "condition" }` |
 | limit burzy | 200 | `{ "accepted": false, "reason": "throttled" }` |
 | duplikat | 200 | `{ "accepted": false, "reason": "duplicate" }` |
+| numer z ładunku nie do odczytania, gdy ustawienie każe pomijać | 200 | `{ "accepted": false, "reason": "invalid_recipient" }` |
 | pusta treść, brak numeru, zły numer, nadmiar z opcją „odrzuć”, ponad 50 odbiorców | 422 | `{ "accepted": false, "reason": "…", "detail": "…" }` |
 | błąd szablonu w czasie wykonania | 422 | jak wyżej |
 | zły token, basic auth, źródło spoza listy | 401 albo 403 | `{ "accepted": false, "reason": "unauthorized" }` |
@@ -701,7 +716,7 @@ nieudanej dostawie jest przycisk **Ponów**.
 | Wynik | Znaczenie |
 |---|---|
 | wysłano | SMS zakolejkowany albo dostawa zakolejkowana |
-| pominięto | warunek niespełniony |
+| pominięto | warunek niespełniony albo numer z ładunku nie do odczytania przy ustawieniu „pomiń” |
 | duplikat | identyfikator zdarzenia już był w ciągu doby |
 | limit | nadmiar ponad limit burzy |
 | odrzucono | nieudane uwierzytelnienie (z adresem źródłowym) |

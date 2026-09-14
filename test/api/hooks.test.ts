@@ -153,6 +153,14 @@ describe('POST /hooks/:hookId', () => {
     expect(notify).toHaveBeenCalledWith('integration_error', `integration:${integ.id}`, expect.stringContaining('Kuma'), NOW);
     expect(String(notify.mock.calls[0]![2])).not.toContain('601nienumer');
   });
+  it('przy ustawieniu „pomiń” zły numer daje 200, żeby sklep nie liczył nieudanego dostarczenia', async () => {
+    const integ = make({ to: { path: 'to', fallback: [] }, invalidRecipient: 'skip' });
+    const res = await post(integ.hookId!, { msg: 'x', to: '601-nie-numer' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ accepted: false, reason: 'invalid_recipient' });
+    expect(notify).not.toHaveBeenCalled();
+  });
+
   it('za duży ładunek to 413, zły JSON to 400', async () => {
     const integ = make();
     const big = await post(integ.hookId!, { msg: 'x'.repeat(300 * 1024) });

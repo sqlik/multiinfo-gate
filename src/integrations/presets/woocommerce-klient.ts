@@ -46,6 +46,9 @@ export const woocommerceKlient: Preset = {
     to: { path: 'billing.phone', fallback: [] },
     text: TEKST,
     condition: { mode: 'builder', rules: [MA_ZAMOWIENIE, MA_TELEFON, { path: 'status', op: 'eq', value: 'processing' }] },
+    // Sklep liczy odpowiedź inną niż 2xx jako nieudane dostarczenie i po siódmej z rzędu wyłącza webhook,
+    // więc numer, którego wzorzec nie odsiał, a bramka nie umie odczytać, ma pominąć zamówienie po cichu.
+    invalidRecipient: 'skip',
     throttle: { limit: 60, windowMinutes: 10 },
     maxParts: 1, overflow: 'truncate',
   },
