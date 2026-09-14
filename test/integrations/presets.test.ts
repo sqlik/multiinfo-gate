@@ -174,6 +174,16 @@ describe('gotowe ustawienia', () => {
     expect(p.inbound?.to?.fallback).toEqual([]);
   });
 
+  it('WooCommerce do klienta pomija zamówienie bez telefonu, zamiast zwracać błąd', () => {
+    // Błąd znaczy kod 422, a sklep liczy go jako nieudane dostarczenie i po siódmym z rzędu wyłącza webhook.
+    const preset = presetById('woocommerce-klient')!;
+    const bezTelefonu = { ...(preset.sample as Record<string, unknown>), billing: { ...(preset.sample as { billing: object }).billing, phone: '' } };
+    for (const wariant of preset.simple!.inbound!.when) {
+      const config = { ...defaultInboundConfig(), ...preset.inbound, condition: wariant.condition } as InboundConfig;
+      expect(previewInbound(engine, config, bezTelefonu, '48', NOW).matches, wariant.id).toBe(false);
+    }
+  });
+
   it('oba ustawienia WooCommerce odsiewają żądanie próbne sklepu', () => {
     // Ciało żądania próbnego po rozpakowaniu formularza; żaden wariant „kiedy” nie może go przepuścić.
     const proba = { webhook_id: '1' };
