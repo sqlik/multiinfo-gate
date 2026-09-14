@@ -959,7 +959,7 @@ słowami, a pod nią pokazuje dziennik. Każdy wpis dziennika ma czas, wynik, po
 wiadomość (odnośnik do wysłanej albo odebranej) i adres źródłowy. Przy nieudanej dostawie jest
 przycisk **Ponów**.
 
-![Szczegóły integracji: konfiguracja opisana słowami i dziennik z wpisami „wysłano” i „błąd”](obrazki/integracja-dziennik.png)
+![Szczegóły integracji: konfiguracja opisana słowami i dziennik z wpisami „wysłano”, „pominięto” oraz „odrzucono”](obrazki/integracja-dziennik.png)
 
 | Wynik | Znaczenie |
 |---|---|
