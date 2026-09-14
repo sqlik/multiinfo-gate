@@ -2,10 +2,11 @@ import { GATE_VERSION } from '../version.ts';
 import { messageBodySchema } from './messages.ts';
 
 /**
- * Opis API w formacie OpenAPI 3.1. Plik `docs/openapi.json` powstaje z tego modułu poleceniem
- * `npm run openapi`, a test pilnuje, że zapisany plik zgadza się z modułem. Pola ciała wysyłki
- * biorą się z tego samego schematu zod, którego używa trasa, więc nowe pole nie umknie opisowi:
- * pole bez opisu przerywa budowanie dokumentu.
+ * Opis API w formacie OpenAPI 3.0. Plik `docs/openapi.json` powstaje z tego modułu poleceniem
+ * `npm run openapi`, które `npm test` wywołuje samo, a osobny krok w przepływach GitHuba pilnuje,
+ * że zapisany plik nie odstaje od kodu. Pola ciała wysyłki biorą się z tego samego schematu zod,
+ * którego używa trasa, więc nowe pole nie umknie opisowi: pole bez opisu przerywa budowanie
+ * dokumentu. Wersja 3.0, a nie 3.1, bo konektory własne Power Platform czytają tylko 2.0 oraz 3.0.
  */
 
 export interface JsonSchema {
@@ -25,6 +26,8 @@ export interface JsonSchema {
   properties?: Record<string, JsonSchema>;
   required?: string[];
   oneOf?: JsonSchema[];
+  /** Postać z OpenAPI 3.0; pola odczytu bywają puste, a `type: ['string', 'null']` należy do 3.1. */
+  nullable?: boolean;
   example?: unknown;
 }
 
@@ -40,11 +43,11 @@ export interface OpenApiResponse {
 
 export interface OpenApiParameter {
   name: string;
-  in: 'path' | 'header';
+  in: 'path' | 'header' | 'query';
   required: boolean;
   description: string;
   schema: JsonSchema;
-  example?: string;
+  example?: string | number;
 }
 
 export interface OpenApiOperation {
@@ -61,7 +64,7 @@ export type OpenApiPathItem = Partial<Record<'get' | 'post', OpenApiOperation>>;
 
 export interface OpenApiDocument {
   openapi: string;
-  info: { title: string; version: string; description: string; license: { name: string; identifier: string } };
+  info: { title: string; version: string; description: string; license: { name: string; url: string } };
   servers: Array<{
     url: string;
     description: string;
@@ -163,6 +166,15 @@ const POLA_WIADOMOSCI: Record<string, JsonSchema> = {
   },
 };
 
+/** Opis pola wysyłki po nazwie. Brak opisu przerywa budowanie, także przy ciele rozsyłki. */
+function pole(nazwa: string): JsonSchema {
+  const opis = POLA_WIADOMOSCI[nazwa];
+  if (!opis) {
+    throw new Error(`Pole ${nazwa} ze schematu wysyłki nie ma opisu w src/api/openapi.ts`);
+  }
+  return opis;
+}
+
 /**
  * Właściwości ciała wysyłki wprost ze schematu trasy: nazwy pól oraz wymagalność bierze się
  * z zod, opisy z tabeli wyżej. Pole dołożone do schematu bez opisu przerywa budowanie.
@@ -170,13 +182,9 @@ const POLA_WIADOMOSCI: Record<string, JsonSchema> = {
 function cialoWysylki(): JsonSchema {
   const properties: Record<string, JsonSchema> = {};
   const required: string[] = [];
-  for (const [nazwa, pole] of Object.entries(messageBodySchema.shape)) {
-    const opis = POLA_WIADOMOSCI[nazwa];
-    if (!opis) {
-      throw new Error(`Pole ${nazwa} ze schematu wysyłki nie ma opisu w src/api/openapi.ts`);
-    }
-    properties[nazwa] = opis;
-    if (!pole.isOptional()) required.push(nazwa);
+  for (const [nazwa, schemat] of Object.entries(messageBodySchema.shape)) {
+    properties[nazwa] = pole(nazwa);
+    if (!schemat.isOptional()) required.push(nazwa);
   }
   return { type: 'object', required, properties };
 }
@@ -218,11 +226,11 @@ const CIALO_ROZSYLKI: JsonSchema = {
       minLength: 1,
       description: 'Treść dla odbiorców bez własnej treści. Jest wymagana, jeżeli którykolwiek odbiorca jej nie ma',
     },
-    orig: POLA_WIADOMOSCI['orig'] as JsonSchema,
-    serviceId: POLA_WIADOMOSCI['serviceId'] as JsonSchema,
-    encoding: POLA_WIADOMOSCI['encoding'] as JsonSchema,
-    deliveryReport: POLA_WIADOMOSCI['deliveryReport'] as JsonSchema,
-    costCenter: POLA_WIADOMOSCI['costCenter'] as JsonSchema,
+    orig: pole('orig'),
+    serviceId: pole('serviceId'),
+    encoding: pole('encoding'),
+    deliveryReport: pole('deliveryReport'),
+    costCenter: pole('costCenter'),
     startAt: {
       type: 'string',
       format: 'date-time',
@@ -259,6 +267,15 @@ const PARAMETR_ID_WIADOMOSCI: OpenApiParameter = {
   example: 'msg_3f9c2a7b1e4d8c6a5b2f',
 };
 
+const PARAMETR_ID_PRZYCHODZACEJ: OpenApiParameter = {
+  name: 'id',
+  in: 'path',
+  required: true,
+  description: 'Identyfikator wiadomości przychodzącej',
+  schema: { type: 'string', pattern: '^in_[A-Za-z0-9_]+$' },
+  example: 'in_7b3d9f2a1c',
+};
+
 const PARAMETR_ID_ROZSYLKI: OpenApiParameter = {
   name: 'id',
   in: 'path',
@@ -268,18 +285,202 @@ const PARAMETR_ID_ROZSYLKI: OpenApiParameter = {
   example: 'pkg_7c1e9a2b3d4f5a6b7c8d',
 };
 
+const STATUSY_WIADOMOSCI = ['queued', 'sent', 'delivered', 'failed', 'expired', 'cancelled', 'blocked', 'throttled', 'unknown'];
+const STATUSY_ROZSYLKI = ['queued', 'open', 'sending', 'completed', 'cancelled', 'failed'];
+const STATUSY_RAPORTU = ['none', 'pending', 'ready', 'failed'];
+
+/** Stronicowanie obu list wygląda tak samo; wartości spoza zakresu wracają do domyślnych. */
+const PARAMETRY_STRONICOWANIA: OpenApiParameter[] = [
+  {
+    name: 'limit',
+    in: 'query',
+    required: false,
+    description: 'Liczba wyników na stronie',
+    schema: { type: 'integer', minimum: 1, maximum: 200, default: 25 },
+    example: 50,
+  },
+  {
+    name: 'offset',
+    in: 'query',
+    required: false,
+    description: 'Liczba wyników pominiętych od początku listy',
+    schema: { type: 'integer', minimum: 0, default: 0 },
+  },
+];
+
+/** Koperta każdej listy: strona wyników oraz informacja, czy jest następna. */
+function lista(pozycja: JsonSchema, opis: string): JsonSchema {
+  return {
+    type: 'object',
+    description: opis,
+    required: ['data', 'hasMore'],
+    properties: {
+      data: { type: 'array', items: pozycja, description: 'Strona wyników, od najnowszego' },
+      hasMore: { type: 'boolean', description: 'Czy za tą stroną są dalsze wyniki' },
+    },
+  };
+}
+
+const WIADOMOSC: JsonSchema = {
+  type: 'object',
+  description: 'Wiadomość wysłana tym kluczem',
+  required: ['id', 'status', 'to', 'encoding', 'parts', 'slots', 'orig', 'serviceId', 'inReplyTo', 'costCenter',
+    'createdAt', 'sentAt', 'finalAt', 'providerCode', 'error'],
+  properties: {
+    id: { type: 'string', description: 'Identyfikator wiadomości', example: 'msg_3f9c2a7b1e4d8c6a5b2f' },
+    status: {
+      type: 'string',
+      enum: STATUSY_WIADOMOSCI,
+      description: 'Stan wiadomości. Stany delivered, failed, expired, cancelled oraz blocked są ostateczne',
+    },
+    to: { type: 'string', description: 'Numer odbiorcy po normalizacji', example: '48601000001' },
+    text: {
+      type: 'string',
+      description: 'Treść wiadomości. Pole występuje tylko wtedy, gdy konto Multiinfo ma włączone przechowywanie treści',
+    },
+    encoding: { type: 'string', enum: ['gsm', 'ucs2'], description: 'Kodowanie wybrane dla treści' },
+    parts: { type: 'integer', description: 'Liczba części, na które wiadomość została podzielona' },
+    slots: { type: 'integer', description: 'Liczba zajętych miejsc' },
+    orig: { type: 'string', nullable: true, description: 'Nadpis nadawcy użyty przy wysyłce' },
+    serviceId: { type: 'string', description: 'Usługa Multiinfo, z której poszła wiadomość', example: '24138' },
+    inReplyTo: {
+      type: 'string',
+      nullable: true,
+      description: 'Wiadomość przychodząca, na którą to jest odpowiedź. Poza wątkiem null',
+    },
+    costCenter: { type: 'string', nullable: true, description: 'Znacznik rozliczeniowy podany przy wysyłce' },
+    createdAt: { type: 'string', format: 'date-time', description: 'Chwila przyjęcia przez bramkę' },
+    sentAt: { type: 'string', format: 'date-time', nullable: true, description: 'Chwila przekazania do sieci' },
+    finalAt: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      description: 'Chwila osiągnięcia stanu ostatecznego',
+    },
+    providerCode: {
+      type: 'integer',
+      nullable: true,
+      description: 'Kod odmowy albo błędu z Multiinfo; poza błędem null',
+    },
+    error: { type: 'string', nullable: true, description: 'Wyjaśnienie błędu po polsku; poza błędem null' },
+  },
+};
+
+const WIADOMOSC_PRZYCHODZACA: JsonSchema = {
+  type: 'object',
+  description: 'Wiadomość odebrana od abonenta',
+  required: ['id', 'serviceId', 'from', 'to', 'kind', 'receivedAt', 'relatedMessageId', 'protocolId',
+    'codingScheme', 'createdAt'],
+  properties: {
+    id: { type: 'string', description: 'Identyfikator wiadomości przychodzącej', example: 'in_7b3d9f2a1c' },
+    serviceId: { type: 'string', description: 'Usługa Multiinfo, na którą wiadomość przyszła', example: '24138' },
+    from: { type: 'string', description: 'Numer nadawcy; numer krótki albo nietypowy przepisany bez zmian' },
+    to: { type: 'string', description: 'Numer usługi, na który wiadomość przyszła', example: '7968' },
+    kind: { type: 'string', enum: ['text', 'binary'], description: 'Rodzaj treści' },
+    text: { type: 'string', description: 'Treść wiadomości tekstowej. Występuje zamiennie z hex oraz bodyHash' },
+    hex: { type: 'string', description: 'Treść wiadomości binarnej, szesnastkowo, bez interpretacji' },
+    bodyHash: {
+      type: 'string',
+      description: 'SHA-256 treści, szesnastkowo. Zastępuje text oraz hex, gdy konto ma wyłączone przechowywanie treści',
+    },
+    receivedAt: { type: 'string', format: 'date-time', description: 'Chwila odbioru przez Multiinfo' },
+    relatedMessageId: {
+      type: 'string',
+      nullable: true,
+      description: 'Ostatnia wiadomość wysłana z tej usługi na numer nadawcy w ciągu 48 godzin. To podpowiedź'
+        + ' kontekstu, nie stwierdzenie: Multiinfo nie przekazuje, na co abonent odpowiada',
+    },
+    protocolId: { type: 'integer', description: 'Parametr protokołu SMS; dla zwykłego tekstu 0' },
+    codingScheme: { type: 'integer', description: 'Alfabet: 0 dla GSM, 8 dla UCS-2' },
+    createdAt: { type: 'string', format: 'date-time', description: 'Chwila zapisania wiadomości przez bramkę' },
+  },
+};
+
+const STAN_RAPORTU: JsonSchema = {
+  type: 'object',
+  description: 'Stan raportu rozsyłki',
+  required: ['status'],
+  properties: {
+    status: { type: 'string', enum: STATUSY_RAPORTU, description: 'Stan raportu' },
+    expiresAt: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      description: 'Do kiedy raport jest dostępny w Multiinfo',
+    },
+  },
+};
+
+const ROZSYLKA: JsonSchema = {
+  type: 'object',
+  description: 'Rozsyłka zlecona tym kluczem',
+  required: ['id', 'status', 'recipients', 'remaining', 'encoding', 'multipart', 'serviceId', 'orig', 'startAt',
+    'createdAt', 'completedAt', 'providerCode', 'error', 'report', 'summary'],
+  properties: {
+    id: { type: 'string', description: 'Identyfikator rozsyłki', example: 'pkg_7c1e9a2b3d4f5a6b7c8d' },
+    status: { type: 'string', enum: STATUSY_ROZSYLKI, description: 'Stan rozsyłki' },
+    recipients: { type: 'integer', description: 'Liczba przyjętych odbiorców' },
+    remaining: { type: 'integer', nullable: true, description: 'Liczba odbiorców, do których wysyłka jeszcze nie doszła' },
+    encoding: { type: 'string', enum: ['gsm', 'ucs2'], description: 'Kodowanie całej rozsyłki' },
+    multipart: { type: 'boolean', description: 'Czy którakolwiek treść jest dzielona na części' },
+    serviceId: { type: 'string', description: 'Usługa Multiinfo, z której idzie rozsyłka', example: '24138' },
+    orig: { type: 'string', nullable: true, description: 'Nadpis nadawcy użyty w rozsyłce' },
+    startAt: { type: 'string', format: 'date-time', nullable: true, description: 'Zamówiony termin rozpoczęcia' },
+    createdAt: { type: 'string', format: 'date-time', description: 'Chwila przyjęcia przez bramkę' },
+    completedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Chwila zakończenia wysyłki' },
+    providerCode: { type: 'integer', nullable: true, description: 'Kod odmowy albo błędu z Multiinfo' },
+    error: { type: 'string', nullable: true, description: 'Wyjaśnienie błędu po polsku' },
+    report: STAN_RAPORTU,
+    summary: {
+      type: 'object',
+      nullable: true,
+      description: 'Podsumowanie doręczeń. Pojawia się dopiero po wczytaniu raportu, wcześniej null',
+      required: ['delivered', 'failed', 'other'],
+      properties: {
+        delivered: { type: 'integer', description: 'Liczba doręczonych' },
+        failed: { type: 'integer', description: 'Liczba niedoręczonych' },
+        other: { type: 'integer', description: 'Liczba pozostałych, na przykład wciąż w drodze' },
+      },
+    },
+  },
+};
+
+const WIERSZ_RAPORTU: JsonSchema = {
+  type: 'object',
+  description: 'Jeden odbiorca rozsyłki w raporcie',
+  required: ['to', 'clientId', 'miId', 'status', 'miStatus', 'changedAt'],
+  properties: {
+    to: { type: 'string', description: 'Numer odbiorcy po normalizacji', example: '48601000001' },
+    clientId: { type: 'string', nullable: true, description: 'Własny identyfikator odbiorcy podany przy zleceniu' },
+    miId: { type: 'string', nullable: true, description: 'Identyfikator wiadomości w Multiinfo' },
+    status: {
+      type: 'string',
+      enum: STATUSY_WIADOMOSCI,
+      nullable: true,
+      description: 'Stan wiadomości do tego odbiorcy',
+    },
+    miStatus: { type: 'integer', nullable: true, description: 'Surowy kod stanu z Multiinfo' },
+    changedAt: {
+      type: 'string',
+      nullable: true,
+      description: 'Chwila ostatniej zmiany stanu, tak jak podaje ją Multiinfo, czyli w postaci RRRR-MM-DD GG:MM:SS',
+      example: '2026-08-26 12:00:00',
+    },
+  },
+};
+
 export function buildOpenApiDocument(): OpenApiDocument {
   return {
-    openapi: '3.1.0',
+    openapi: '3.0.3',
     info: {
       title: 'Multiinfo Gate',
       version: GATE_VERSION,
-      description: 'Bramka SMS między aplikacjami a platformą Multiinfo operatora Plus. Opis obejmuje wysyłkę'
-        + ' pojedynczej wiadomości, rozsyłkę, anulowanie, zamówienie raportu rozsyłki oraz stan bramki.'
-        + ' Odczyt wiadomości, wiadomości przychodzące i powiadomienia webhook opisuje dokumentacja bramki.'
-        + ' Przyjęcie wiadomości i rozsyłki jest asynchroniczne: bramka odpowiada kodem 202 po zapisaniu żądania'
-        + ' w kolejce, a wysyłka do Multiinfo następuje później.',
-      license: { name: 'MIT', identifier: 'MIT' },
+      description: 'Bramka SMS między aplikacjami a platformą Multiinfo operatora Plus. Opis obejmuje każde'
+        + ' wywołanie API bramki: wysyłkę, odczyt wysłanych wiadomości, anulowanie, rozsyłkę wraz z raportem,'
+        + ' odczyt wiadomości przychodzących oraz stan bramki. Powiadomienia webhook idą w drugą stronę, więc'
+        + ' opisuje je dokumentacja bramki. Przyjęcie wiadomości i rozsyłki jest asynchroniczne: bramka odpowiada'
+        + ' kodem 202 po zapisaniu żądania w kolejce, a wysyłka do Multiinfo następuje później.',
+      license: { name: 'MIT', url: 'https://opensource.org/licenses/MIT' },
     },
     servers: [{
       url: 'https://{domena}',
@@ -302,8 +503,8 @@ export function buildOpenApiDocument(): OpenApiDocument {
             name: 'Idempotency-Key',
             in: 'header',
             required: false,
-            description: 'Własny klucz powtórzenia, najwyżej 128 znaków. Powtórzone żądanie z tym samym kluczem'
-              + ' i tą samą treścią zwraca pierwotną odpowiedź zamiast wysyłać wiadomość drugi raz.',
+            description: 'Własny klucz powtórzenia. Powtórzone żądanie z tym samym kluczem i tą samą treścią'
+              + ' zwraca pierwotną odpowiedź zamiast wysyłać wiadomość drugi raz.',
             schema: { type: 'string' },
             example: 'zamowienie-2026-08-26-114',
           }],
@@ -337,25 +538,101 @@ export function buildOpenApiDocument(): OpenApiDocument {
             },
             '400': blad(
               'Błąd w ciele żądania: invalid_body, invalid_phone, invalid_orig, too_many_parts, service_required,'
-                + ' valid_to_in_past, valid_to_too_far',
+                + ' valid_to_in_past, valid_to_too_far, a przy polu inReplyTo także in_reply_to_single,'
+                + ' in_reply_to_unknown oraz in_reply_to_recipient',
               'invalid_phone',
-              'Numer 4860100000 ma 10 cyfr; numer z kodem kraju 48 ma ich 11.',
+              'Numer odbiorcy jest nieprawidłowy: 4860100000 (numer z kodem 48 ma 11 cyfr)',
             ),
             '401': BLAD_KLUCZA,
             '403': blad(
               'Usługa albo nadpis spoza uprawnień klucza: service_not_allowed, orig_not_allowed',
               'orig_not_allowed',
-              'Klucz nie ma dostępu do nadpisu Firma Info. Dozwolone nadpisy: Firma Sklep.',
+              'Ten klucz może użyć nadpisu: Firma Sklep.',
             ),
             '409': blad(
               'Ten sam Idempotency-Key użyty z inną treścią albo innym numerem',
               'idempotency_conflict',
-              'Klucz idempotencji został już użyty z inną treścią wiadomości.',
+              'Ten klucz idempotencji został już użyty z inną treścią lub innym odbiorcą.',
             ),
             '429': blad(
               'Przekroczony limit żądań klucza na minutę',
               'rate_limited',
               'Przekroczono limit 60 żądań na minutę.',
+            ),
+          },
+        },
+        get: {
+          operationId: 'listaWiadomosci',
+          summary: 'Lista wysłanych wiadomości',
+          description: 'Zwraca wiadomości wysłane tym kluczem, od najnowszej. Filtry można łączyć. Strona ma'
+            + ' domyślnie 25 pozycji, najwyżej 200; następną stronę pobiera się przez offset, dopóki hasMore'
+            + ' jest prawdziwe.',
+          security: KLUCZ,
+          parameters: [
+            {
+              name: 'status',
+              in: 'query',
+              required: false,
+              description: 'Tylko wiadomości w tym stanie',
+              schema: { type: 'string', enum: STATUSY_WIADOMOSCI },
+              example: 'failed',
+            },
+            {
+              name: 'to',
+              in: 'query',
+              required: false,
+              description: 'Tylko wiadomości do tego numeru, w postaci po normalizacji',
+              schema: { type: 'string' },
+              example: '48601000001',
+            },
+            {
+              name: 'from',
+              in: 'query',
+              required: false,
+              description: 'Początek zakresu czasu przyjęcia, ISO 8601',
+              schema: { type: 'string', format: 'date-time' },
+            },
+            {
+              name: 'until',
+              in: 'query',
+              required: false,
+              description: 'Koniec zakresu czasu przyjęcia, ISO 8601',
+              schema: { type: 'string', format: 'date-time' },
+            },
+            ...PARAMETRY_STRONICOWANIA,
+          ],
+          responses: {
+            '200': {
+              description: 'Strona wyników',
+              content: {
+                'application/json': {
+                  schema: lista({ $ref: '#/components/schemas/Wiadomosc' }, 'Strona wysłanych wiadomości'),
+                },
+              },
+            },
+            '401': BLAD_KLUCZA,
+          },
+        },
+      },
+      '/v1/messages/{id}': {
+        get: {
+          operationId: 'odczytajWiadomosc',
+          summary: 'Stan wiadomości',
+          description: 'Zwraca bieżący stan wiadomości: czy została przekazana do sieci, czy została doręczona,'
+            + ' a jeżeli nie, to z jakiego powodu. Bramka odpytuje Multiinfo sama, więc wystarczy odczytywać ten'
+            + ' adres do chwili, w której stan stanie się ostateczny.',
+          security: KLUCZ,
+          parameters: [PARAMETR_ID_WIADOMOSCI],
+          responses: {
+            '200': {
+              description: 'Stan wiadomości',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/Wiadomosc' } } },
+            },
+            '401': BLAD_KLUCZA,
+            '404': blad(
+              'Brak wiadomości albo wiadomość innego klucza; bramka nie rozróżnia tych dwóch sytuacji',
+              'message_not_found',
+              'Nie ma wiadomości o tym identyfikatorze.',
             ),
           },
         },
@@ -484,6 +761,28 @@ export function buildOpenApiDocument(): OpenApiDocument {
           },
         },
       },
+      '/v1/packages/{id}': {
+        get: {
+          operationId: 'odczytajRozsylke',
+          summary: 'Stan rozsyłki',
+          description: 'Zwraca bieżący stan rozsyłki wraz ze stanem raportu. Pole remaining maleje w trakcie'
+            + ' wysyłki. Podsumowanie doręczeń pojawia się dopiero wtedy, gdy raport ma stan ready.',
+          security: KLUCZ,
+          parameters: [PARAMETR_ID_ROZSYLKI],
+          responses: {
+            '200': {
+              description: 'Stan rozsyłki',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/Rozsylka' } } },
+            },
+            '401': BLAD_KLUCZA,
+            '404': blad(
+              'Brak rozsyłki albo rozsyłka innego klucza; bramka nie rozróżnia tych dwóch sytuacji',
+              'package_not_found',
+              'Nie ma rozsyłki o tym identyfikatorze.',
+            ),
+          },
+        },
+      },
       '/v1/packages/{id}/report': {
         post: {
           operationId: 'zamowRaportRozsylki',
@@ -503,18 +802,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
                     required: ['id', 'report'],
                     properties: {
                       id: { type: 'string', description: 'Identyfikator rozsyłki' },
-                      report: {
-                        type: 'object',
-                        required: ['status'],
-                        description: 'Stan raportu',
-                        properties: {
-                          status: {
-                            type: 'string',
-                            enum: ['pending', 'ready', 'failed', 'expired', 'none'],
-                            description: 'Stan raportu; zaraz po zamówieniu pending',
-                          },
-                        },
-                      },
+                      report: STAN_RAPORTU,
                     },
                   },
                   example: { id: 'pkg_7c1e9a2b3d4f5a6b7c8d', report: { status: 'pending' } },
@@ -531,6 +819,170 @@ export function buildOpenApiDocument(): OpenApiDocument {
               'Rozsyłka jeszcze trwa, więc raportu nie ma czego zamówić',
               'package_not_completed',
               'Raport jest dostępny po zakończeniu rozsyłki; stan: sending.',
+            ),
+          },
+        },
+        get: {
+          operationId: 'pobierzRaportRozsylki',
+          summary: 'Pobranie raportu rozsyłki',
+          description: 'Zwraca raport rozsyłki: stan doręczenia dla każdego odbiorcy. Raport jest dostępny'
+            + ' dopiero wtedy, gdy jego stan to ready. Parametr format ustawiony na csv albo nagłówek Accept'
+            + ' z wartością text/csv daje ten sam raport jako plik CSV.',
+          security: KLUCZ,
+          parameters: [
+            PARAMETR_ID_ROZSYLKI,
+            {
+              name: 'format',
+              in: 'query',
+              required: false,
+              description: 'Postać raportu; domyślnie JSON',
+              schema: { type: 'string', enum: ['csv'] },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Gotowy raport',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['id', 'report', 'rows'],
+                    properties: {
+                      id: { type: 'string', description: 'Identyfikator rozsyłki' },
+                      report: STAN_RAPORTU,
+                      rows: {
+                        type: 'array',
+                        items: { $ref: '#/components/schemas/WierszRaportu' },
+                        description: 'Odbiorcy rozsyłki wraz ze stanem doręczenia',
+                      },
+                    },
+                  },
+                  example: {
+                    id: 'pkg_7c1e9a2b3d4f5a6b7c8d',
+                    report: { status: 'ready', expiresAt: '2026-08-26T10:35:00.000Z' },
+                    rows: [{
+                      to: '48601000001',
+                      clientId: null,
+                      miId: '9001',
+                      status: 'delivered',
+                      miStatus: 21,
+                      changedAt: '2026-08-26 12:00:00',
+                    }],
+                  },
+                },
+                'text/csv': {
+                  schema: { type: 'string', description: 'Raport jako plik CSV z wierszem nagłówka' },
+                },
+              },
+            },
+            '401': BLAD_KLUCZA,
+            '404': blad(
+              'Brak rozsyłki albo rozsyłka innego klucza; bramka nie rozróżnia tych dwóch sytuacji',
+              'package_not_found',
+              'Nie ma rozsyłki o tym identyfikatorze.',
+            ),
+            '409': {
+              description: 'Raport nie jest jeszcze gotowy. Poza opisem błędu odpowiedź niesie bieżący stan'
+                + ' raportu, więc widać, czy warto czekać, czy zamówić go jeszcze raz',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/OdpowiedzBleduRaportu' },
+                  example: {
+                    error: { code: 'report_not_ready', message: 'Raport nie jest gotowy; stan: pending.' },
+                    report: { status: 'pending' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/v1/inbound': {
+        get: {
+          operationId: 'listaWiadomosciPrzychodzacych',
+          summary: 'Lista wiadomości przychodzących',
+          description: 'Zwraca wiadomości odebrane od abonentów w usługach, do których klucz ma dostęp, od'
+            + ' najnowszej. Odczyt nie wymaga subskrypcji powiadomień. Strona ma domyślnie 25 pozycji,'
+            + ' najwyżej 200.',
+          security: KLUCZ,
+          parameters: [
+            {
+              name: 'serviceId',
+              in: 'query',
+              required: false,
+              description: 'Tylko wiadomości z tej usługi. Usługa spoza uprawnień klucza kończy się kodem 403',
+              schema: { type: 'string' },
+              example: '24138',
+            },
+            {
+              name: 'from',
+              in: 'query',
+              required: false,
+              description: 'Tylko wiadomości od tego nadawcy. Numer wolno podać w dowolnym zapisie',
+              schema: { type: 'string' },
+              example: '+48 601 000 001',
+            },
+            {
+              name: 'since',
+              in: 'query',
+              required: false,
+              description: 'Początek zakresu czasu odbioru, ISO 8601',
+              schema: { type: 'string', format: 'date-time' },
+            },
+            {
+              name: 'until',
+              in: 'query',
+              required: false,
+              description: 'Koniec zakresu czasu odbioru, ISO 8601',
+              schema: { type: 'string', format: 'date-time' },
+            },
+            ...PARAMETRY_STRONICOWANIA,
+          ],
+          responses: {
+            '200': {
+              description: 'Strona wyników',
+              content: {
+                'application/json': {
+                  schema: lista(
+                    { $ref: '#/components/schemas/WiadomoscPrzychodzaca' },
+                    'Strona wiadomości przychodzących',
+                  ),
+                },
+              },
+            },
+            '400': blad(
+              'Zła wartość parametru adresu: invalid_query',
+              'invalid_query',
+              'since musi być datą ISO 8601.',
+            ),
+            '401': BLAD_KLUCZA,
+            '403': blad(
+              'Usługa spoza uprawnień klucza',
+              'service_not_allowed',
+              'Klucz nie ma dostępu do usługi 24139.',
+            ),
+          },
+        },
+      },
+      '/v1/inbound/{id}': {
+        get: {
+          operationId: 'odczytajWiadomoscPrzychodzaca',
+          summary: 'Jedna wiadomość przychodząca',
+          description: 'Zwraca jedną odebraną wiadomość. Przydaje się po powiadomieniu message.received, gdy'
+            + ' aplikacja chce potwierdzić treść u źródła.',
+          security: KLUCZ,
+          parameters: [PARAMETR_ID_PRZYCHODZACEJ],
+          responses: {
+            '200': {
+              description: 'Wiadomość przychodząca',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/WiadomoscPrzychodzaca' } } },
+            },
+            '401': BLAD_KLUCZA,
+            '404': blad(
+              'Brak wiadomości, wiadomość innego konta albo z usługi spoza uprawnień klucza; bramka nie rozróżnia'
+                + ' tych sytuacji',
+              'inbound_not_found',
+              'Nie ma wiadomości przychodzącej o tym identyfikatorze.',
             ),
           },
         },
@@ -578,6 +1030,10 @@ export function buildOpenApiDocument(): OpenApiDocument {
         },
       },
       schemas: {
+        Wiadomosc: WIADOMOSC,
+        WiadomoscPrzychodzaca: WIADOMOSC_PRZYCHODZACA,
+        Rozsylka: ROZSYLKA,
+        WierszRaportu: WIERSZ_RAPORTU,
         Blad: {
           type: 'object',
           description: 'Opis błędu',
@@ -597,6 +1053,12 @@ export function buildOpenApiDocument(): OpenApiDocument {
           description: 'Kształt każdej odpowiedzi błędu',
           required: ['error'],
           properties: { error: { $ref: '#/components/schemas/Blad' } },
+        },
+        OdpowiedzBleduRaportu: {
+          type: 'object',
+          description: 'Odmowa wydania raportu wraz z jego bieżącym stanem',
+          required: ['error', 'report'],
+          properties: { error: { $ref: '#/components/schemas/Blad' }, report: STAN_RAPORTU },
         },
       },
     },
