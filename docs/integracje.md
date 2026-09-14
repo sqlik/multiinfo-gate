@@ -449,10 +449,11 @@ Zgłoszenie we FreeScoucie z numerem klienta i treścią:
 
 Gotowe ustawienie wypełnia formularz szablonem, warunkiem, ścieżkami, metodą uwierzytelnienia
 i nagłówkami właściwymi dla aplikacji. Obok szablonu pokazuje listę pól jej ładunku oraz
-instrukcję „co ustawić w aplikacji”. Lista obejmuje narzędzia do automatyzacji (Prosty JSON,
-n8n), monitoring (Uptime Kuma, Grafana, Zabbix), sklep (WooCommerce w dwóch wariantach),
-dom inteligentny (Home Assistant), zgłoszenia (FreeScout, Freshdesk) oraz powiadomienia (Slack,
-ntfy). Wartości przykładowe w tym rozdziale (adresy, numery, identyfikatory) są fikcyjne.
+instrukcję „co ustawić w aplikacji”. Lista obejmuje: narzędzia do automatyzacji (Prosty JSON,
+n8n), narzędzia do monitoringu (Uptime Kuma, Grafana, Zabbix), aplikacje eCommerce (WooCommerce
+w dwóch wariantach), zarządzanie inteligentnym domem (Home Assistant), systemy Help Desk
+(FreeScout, Freshdesk) oraz notyfikacje (Slack, ntfy). Wartości przykładowe w tym rozdziale
+(adresy, numery, identyfikatory) są fikcyjne.
 
 | Ustawienie | Do SMS | Z SMS-a | Uwierzytelnienie do SMS |
 |---|---|---|---|
