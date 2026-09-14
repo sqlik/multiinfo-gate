@@ -10,6 +10,13 @@ const TEKST: InboundConfig['text'] = { mode: 'liquid', template: '{{ p.billing.f
  */
 const MA_ZAMOWIENIE = { path: 'id', op: 'exists' as const, value: '' };
 
+/**
+ * Drugi warunek wspólny: kupujący podał telefon. Bez niego bramka odpowiada kodem 422,
+ * a sklep liczy to jako nieudane dostarczenie i po siódmym z rzędu sam wyłącza webhook.
+ * Zamówienie bez telefonu ma zostać pominięte, a nie uznane za błąd sklepu.
+ */
+const MA_TELEFON = { path: 'billing.phone', op: 'ne' as const, value: '' };
+
 export const woocommerceKlient: Preset = {
   id: 'woocommerce-klient',
   name: 'WooCommerce: status do klienta',
@@ -33,7 +40,7 @@ export const woocommerceKlient: Preset = {
   inbound: {
     to: { path: 'billing.phone', fallback: [] },
     text: TEKST,
-    condition: { mode: 'builder', rules: [MA_ZAMOWIENIE, { path: 'status', op: 'eq', value: 'processing' }] },
+    condition: { mode: 'builder', rules: [MA_ZAMOWIENIE, MA_TELEFON, { path: 'status', op: 'eq', value: 'processing' }] },
     throttle: { limit: 60, windowMinutes: 10 },
     maxParts: 1, overflow: 'truncate',
   },
@@ -45,9 +52,9 @@ export const woocommerceKlient: Preset = {
       addressField: 'w sklepie w polu Adres dostarczenia webhooka',
       recipients: { source: 'payload', note: 'Numer bierzemy z danych kupującego. Lista zapasowa zostaje pusta: gdy kupujący nie podał telefonu, SMS nie ma iść do nikogo innego.' },
       when: [
-        { id: 'realizacja', label: 'gdy zamówienie trafia do realizacji', condition: { mode: 'builder', rules: [MA_ZAMOWIENIE, { path: 'status', op: 'eq', value: 'processing' }] } },
-        { id: 'zrealizowane', label: 'gdy zamówienie jest zrealizowane', condition: { mode: 'builder', rules: [MA_ZAMOWIENIE, { path: 'status', op: 'eq', value: 'completed' }] } },
-        { id: 'kazda-zmiana', label: 'przy każdej zmianie statusu', condition: { mode: 'builder', rules: [MA_ZAMOWIENIE] } },
+        { id: 'realizacja', label: 'gdy zamówienie trafia do realizacji', condition: { mode: 'builder', rules: [MA_ZAMOWIENIE, MA_TELEFON, { path: 'status', op: 'eq', value: 'processing' }] } },
+        { id: 'zrealizowane', label: 'gdy zamówienie jest zrealizowane', condition: { mode: 'builder', rules: [MA_ZAMOWIENIE, MA_TELEFON, { path: 'status', op: 'eq', value: 'completed' }] } },
+        { id: 'kazda-zmiana', label: 'przy każdej zmianie statusu', condition: { mode: 'builder', rules: [MA_ZAMOWIENIE, MA_TELEFON] } },
       ],
       text: [
         { id: 'krotkie', label: 'imię oraz numer zamówienia', text: TEKST },
@@ -64,7 +71,7 @@ export const woocommerceKlient: Preset = {
     '',
     'Sklep wysyła jedno żądanie na jedną zmianę, ale kilka zmian pod rząd potrafi zlać w jedno. Gdy w ciągu kilkunastu sekund przestawisz zamówienie z „W trakcie realizacji” na „Zrealizowane”, do bramki dojdzie tylko stan końcowy. Jeśli klient ma dostać obie wiadomości, zmieniaj status dopiero wtedy, gdy naprawdę się zmienia.',
     '',
-    'Numer telefonu bierzemy z pola rozliczeniowego zamówienia. Jeśli kupujący go nie podał, integracja zapisuje błąd w dzienniku i nic nie wysyła. Aby telefon był zawsze, ustaw go jako pole wymagane w **WooCommerce → Ustawienia → Ogólne**.',
+    'Numer telefonu bierzemy z pola rozliczeniowego zamówienia. Zamówienie bez telefonu integracja pomija i zapisuje w dzienniku jako pominięte. Aby telefon był zawsze, ustaw go jako pole wymagane w **WooCommerce → Ustawienia → Ogólne**.',
     '',
     'Adres bramki musi kończyć się portem 443, 80 albo 8080, bo WordPress nie dostarcza webhooków na inne porty.',
   ].join('\n'),
