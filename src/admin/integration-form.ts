@@ -36,7 +36,8 @@ export function formValues(body: Body): IntegrationFormValues {
     authHeaderName: s('authHeaderName'), authHeaderValue: String(body.authHeaderValue ?? '').trim(),
     authBasicUser: s('authBasicUser'), authBasicPass: String(body.authBasicPass ?? ''),
     sources: String(body.sources ?? ''),
-    toPath: s('toPath'), toFallback: String(body.toFallback ?? ''), ticketRefPath: s('ticketRefPath'), eventIdPath: s('eventIdPath'),
+    toPath: s('toPath'), toFallback: String(body.toFallback ?? ''), invalidRecipient: s('invalidRecipient') === 'skip' ? 'skip' : 'error',
+    ticketRefPath: s('ticketRefPath'), eventIdPath: s('eventIdPath'),
     textMode: s('textMode') === 'path' ? 'path' : 'liquid', textPath: s('textPath'), textTemplate: String(body.textTemplate ?? ''),
     maxParts: s('maxParts'), overflow: s('overflow') === 'reject' ? 'reject' : 'truncate',
     events: list(body.events).filter((e) => e !== ''), url: s('url'), method: s('method') || 'POST',
@@ -158,6 +159,7 @@ export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, en
     config = {
       ...common, auth, to: { ...toPath, fallback }, ...(ticketRef.path ? { ticketRefPath: ticketRef.path } : {}),
       ...(eventId.path ? { eventIdPath: eventId.path } : {}), text, maxParts, overflow: v.overflow,
+      invalidRecipient: v.invalidRecipient,
     };
   } else {
     const events = v.events.filter((e): e is OutboundEvent => (OUTBOUND_EVENTS as readonly string[]).includes(e));

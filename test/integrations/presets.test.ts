@@ -188,6 +188,12 @@ describe('gotowe ustawienia', () => {
     }
   });
 
+  it('WooCommerce do klienta odpowiada sklepowi pominięciem, nie błędem, gdy numer jest nie do odczytania', () => {
+    // Ostatnia zapora: numer, którego wzorzec nie odsiał, a bramka nie umie odczytać, nie może dać 422.
+    expect(presetById('woocommerce-klient')!.inbound!.invalidRecipient).toBe('skip');
+    expect(presetById('woocommerce')!.inbound!.invalidRecipient).toBeUndefined();
+  });
+
   it('WooCommerce do klienta przepuszcza numer w każdym zapisie, jakiego używają kupujący', () => {
     const preset = presetById('woocommerce-klient')!;
     const przepuszczane = ['601000001', '601 000 001', '+48 601 000 001', '48-601-000-001', '(48) 601 000 001'];

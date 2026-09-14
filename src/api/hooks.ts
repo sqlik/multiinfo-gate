@@ -77,7 +77,7 @@ export function registerHookRoutes(app: FastifyInstance, deps: ApiDeps): void {
         return reply.code(202).send({ accepted: true, messageIds: outcome.messageIds });
       // 200 przy odrzuceniu jest celowe: aplikacje źródłowe biorą je za sukces i nie ponawiają.
       case 'skipped':
-        return reply.code(200).send({ accepted: false, reason: 'condition' });
+        return reply.code(200).send({ accepted: false, reason: outcome.reason ?? 'condition' });
       case 'duplicate':
         return reply.code(200).send({ accepted: false, reason: 'duplicate' });
       case 'throttled':

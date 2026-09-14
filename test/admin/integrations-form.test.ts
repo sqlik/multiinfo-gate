@@ -196,6 +196,24 @@ describe('edycja', () => {
     expect(JSON.stringify(entry!.meta)).toContain('auth');
   });
 
+  it('przełącznik „pomiń” przeżywa edycję w formularzu zaawansowanym', async () => {
+    const preset = presetById('woocommerce-klient')!;
+    const sklepId = h.integrations.insert({
+      name: 'Sklep', kind: 'webhook_in', apiKeyId, serviceId: null, orig: null, preset: preset.id, enabled: 1,
+      config: { ...defaultInboundConfig(), ...preset.inbound }, secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const form = await page(`/integracje/${sklepId}/edytuj?tryb=zaawansowany`);
+    expect(form.body).toContain('<option value="skip" selected>');
+
+    // Formularz przebudowuje konfigurację od zera, więc bez pola w formularzu ustawienie by przepadło.
+    await post(`/integracje/${sklepId}/edytuj`, inboundFields({ name: 'Sklep', preset: preset.id, invalidRecipient: 'skip' }));
+    expect((h.integrations.get(sklepId)!.config as InboundConfig).invalidRecipient).toBe('skip');
+
+    // Żądanie bez pola wraca do wartości domyślnej, czyli do błędu.
+    await post(`/integracje/${sklepId}/edytuj`, inboundFields({ name: 'Sklep', preset: preset.id }));
+    expect((h.integrations.get(sklepId)!.config as InboundConfig).invalidRecipient).toBe('error');
+  });
+
   it('sekretny nagłówek wychodzącej przenosi się przy edycji bez wartości', async () => {
     const outId = h.integrations.insert({
       name: 'Helpdesk', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1,
