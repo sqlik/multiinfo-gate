@@ -65,6 +65,8 @@ Przycisk **Dodaj integrację** prowadzi przez trzy kroki:
 3. Formularz. Gotowe ustawienie otwiera się w **trybie prostym**, „Własne” od razu
    w **zaawansowanym**. Przełącznik nad formularzem zmienia tryb w każdej chwili.
 
+![Wybór gotowego ustawienia: kafelki z nazwą aplikacji i jednym zdaniem o tym, co ustawienie robi](obrazki/integracja-katalog.png)
+
 Niektóre ustawienia pokazują nad przyciskiem zapisu uwagę w ramce. Uwaga zbiera to, o czym warto
 wiedzieć przed uruchomieniem integracji, a czego nie widać w samych polach formularza. Tak jest
 przy ustawieniu „WooCommerce: status do klienta”, bo SMS idzie tam do klienta sklepu, a nie do
@@ -725,6 +727,14 @@ Z ładunku z poprzedniego podrozdziału wychodzi „Anna, Twoje zamowienie #14 j
 To jedyne ustawienie w katalogu, które pisze do klienta sklepu, a nie do obsługi. Dlatego
 formularz pokazuje nad przyciskiem zapisu uwagę o numerze nadawcy oraz o zgodzie na treści
 marketingowe (rozdział 2.2).
+
+![Formularz ustawienia „WooCommerce: status do klienta” w trybie prostym: numer z danych kupującego, trzy warianty statusu, trzy warianty treści jako gotowe SMS-y, uwaga nad przyciskiem zapisu](obrazki/integracja-sklep.png)
+
+Dziennik integracji pokazuje każde żądanie ze sklepu. Zamówienie ze statusem spoza warunku oraz
+zamówienie bez telefonu dostają wpis `pominięto`, a sklep odpowiedź z kodem 200. Zamówienie,
+które przeszło warunek, dostaje wpis `wysłano` wraz z odnośnikiem do wiadomości.
+
+![Dziennik integracji ze sklepem: konfiguracja w słowach, wpisy „wysłano” z odnośnikiem do wiadomości i wpisy „pominięto” z powodem](obrazki/integracja-sklep-dziennik.png)
 
 ### 6.8. Home Assistant
 
