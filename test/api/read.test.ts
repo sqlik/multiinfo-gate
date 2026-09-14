@@ -109,6 +109,18 @@ describe('GET /v1/messages/:id', () => {
     expect(body.createdAt).toBeTruthy();
   });
 
+  it('zwraca centrum kosztów podane przy wysyłce', async () => {
+    // Dokumentacja i opis API obiecują to pole przy odczycie, bo po nim aplikacja rozlicza wysyłki.
+    messages.insert({
+      id: 'msg_ck', apiKeyId: apiKeyAId, accountId, serviceId: '24138', dest: '48601135134', body: null, bodyHash: 'h',
+      encoding: 'gsm', parts: 1, slots: 11, orig: null, costCenter: 'faktury', validTo: null, idempotencyKey: null,
+    });
+    expect((await get('/v1/messages/msg_ck')).json().costCenter).toBe('faktury');
+    expect((await get('/v1/messages/msg_ck')).json()).toHaveProperty('costCenter');
+    seed('msg_a1', apiKeyAId, accountId);
+    expect((await get('/v1/messages/msg_a1')).json().costCenter).toBeNull();
+  });
+
   it('podaje inReplyTo dla odpowiedzi w wątku', async () => {
     baseDeps.inbound.insertIfNew({
       id: 'in_1', accountId, serviceId: '24138', miId: '22', sender: '48601135134', dest: '7968', kind: 'text', body: 'Pytanie',
