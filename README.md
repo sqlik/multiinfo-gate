@@ -20,6 +20,12 @@ w wątku (`inReplyTo`). Od wersji 1.5 integruje się z aplikacjami o narzuconym 
 Kuma, Grafana, Zabbix, FreeScout, Freshdesk, ntfy. Służy do tego adres wejściowy `/hooks/`
 i szablony Liquid. Administratora bramka powiadamia mailem o błędach i certyfikatach.
 
+Wersja 1.6 dokłada do katalogu pięć gotowych ustawień: n8n, WooCommerce w wariancie „nowe
+zamówienie” oraz w wariancie „status do klienta”, Home Assistanta i Slacka. Sklep zawiadamia
+SMS-em obsługę o nowym zamówieniu albo kupującego o zmianie statusu. Do tego dochodzi opis API
+w formacie OpenAPI, plik `docs/openapi.json`. Plik jest czytany przez Power Automate, Make oraz
+generatory bibliotek klienckich, co niweluje przepisywanie ręczne pól z dokumentacji.
+
 ## Co trzeba mieć
 
 - Konto Multiinfo z użytkownikiem API i certyfikatem (`.pfx` z hasłem)
