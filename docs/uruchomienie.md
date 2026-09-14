@@ -100,9 +100,11 @@ klucz API do wybranych. Wysyłka z nieznanym identyfikatorem kończy się kodem 
 
 Nadpis nadawcy to tekst wyświetlany na telefonie odbiorcy w miejscu numeru, na przykład
 `Firma Info`. Nadpis jest opcjonalny. Wiadomość wysłana bez nadpisu ma jako nadawcę numer
-przydzielony do konta w Multiinfo. Bramka obsługuje oba przypadki. Pole `orig` w żądaniu można
-pominąć, a konto i klucz mogą nie mieć nadpisu domyślnego. Bramka nie przekazuje wtedy
-parametru `orig` do Multiinfo.
+przydzielony do konta w Multiinfo, w postaci `486610xxxxx`. Taki numer jest w standardzie
+każdego planu Multiinfo, więc masz go od początku. Nadpis to usługa dodatkowa o nazwie
+**Dynamiczny Nadpis**. Polkomtel włącza ją na wniosek, opisany niżej. Bramka obsługuje oba
+przypadki. Pole `orig` w żądaniu można pominąć, a konto i klucz mogą nie mieć nadpisu
+domyślnego. Bramka nie przekazuje wtedy parametru `orig` do Multiinfo.
 
 O nadawcy widocznym na telefonie ostatecznie decyduje konfiguracja użytkownika API po stronie
 Multiinfo. Chodzi o zakładkę Nadpisy i pola „Domyślny nadpis” oraz „Wymuś wybrany nadpis”. Ta
