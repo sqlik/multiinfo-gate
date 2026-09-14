@@ -160,6 +160,7 @@ export function simpleFormPage(ctx: FormContext, sv: SimpleValues, opts: SimpleP
         <input type="hidden" name="preset" value="${esc(ctx.preset.id)}">
         <input type="hidden" name="tryb" value="prosty">
         ${inbound ? inboundSections(ctx, sv, opts) : outboundSections(ctx, sv)}
+        ${ctx.preset.warning ? `<div class="notice">${esc(ctx.preset.warning)}</div>` : ''}
         <div class="bar">
           <button class="btn btn-p" type="submit" name="action" value="zapisz">${edit ? 'Zapisz integrację' : 'Utwórz integrację'}</button>
         </div>

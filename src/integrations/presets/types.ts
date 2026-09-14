@@ -29,6 +29,8 @@ export interface Preset {
   guide: string;
   /** Skąd wzięła się próbka: nazwa źródła i data; „do potwierdzenia” przed wydaniem wypada z listy. */
   sampleSource?: string;
+  /** Zdanie nad przyciskiem zapisu: obowiązki, o których użytkownik musi wiedzieć przed uruchomieniem. */
+  warning?: string;
   /** Tryb prosty: listy wyboru w języku użytkownika; bez niego formularz otwiera się od razu zaawansowany. */
   simple?: { inbound?: SimpleInbound; outbound?: SimpleOutbound };
 }
