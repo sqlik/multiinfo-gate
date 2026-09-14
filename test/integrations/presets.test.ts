@@ -21,7 +21,7 @@ describe('gotowe ustawienia', () => {
     expect(ids.at(-1)).toBe('custom');
     expect(presetById('uptime-kuma')?.name).toBe('Uptime Kuma');
     expect(presetById('brak')).toBeUndefined();
-    expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
+    expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
     expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'freescout', 'freshdesk', 'ntfy', 'custom']);
   });
   it('każde ustawienie ma konfigurację dla każdego swojego rodzaju, instrukcję i sekrety ze wskazówką', () => {
@@ -165,5 +165,24 @@ describe('gotowe ustawienia', () => {
     const text = "Jan Nowak : <div>To jest odpowiedź klienta</div><div><br></div><div>----- Original message -----</div><div></div><div class='freshdesk_quote'><blockquote class='freshdesk_quote'><div>From: Support</div><div>Subject: Re: [#6541] Nie działa</div></blockquote></div>";
     const out = previewInbound(engine, config, { event: 'odpowiedz', ticket_id: '6541', text }, '48', NOW);
     expect(out.text).toBe('Odpowiedz klienta w #6541 - Jan Nowak : To jest odpowiedz klienta');
+  });
+
+  it('ustawienie wysyłające do klienta końcowego niesie ostrzeżenie o nadawcy', () => {
+    const p = presetById('woocommerce-klient')!;
+    expect(p.warning).toContain('Dynamiczny Nadpis');
+    expect(p.warning).toContain('486610xxxxx');
+    expect(p.inbound?.to?.fallback).toEqual([]);
+  });
+
+  it('oba ustawienia WooCommerce odsiewają żądanie próbne sklepu', () => {
+    // Ciało żądania próbnego po rozpakowaniu formularza; żaden wariant „kiedy” nie może go przepuścić.
+    const proba = { webhook_id: '1' };
+    for (const id of ['woocommerce', 'woocommerce-klient']) {
+      const preset = presetById(id)!;
+      for (const wariant of preset.simple!.inbound!.when) {
+        const config = { ...defaultInboundConfig(), ...preset.inbound, condition: wariant.condition } as InboundConfig;
+        expect(previewInbound(engine, config, proba, '48', NOW).matches, `${id}/${wariant.id}`).toBe(false);
+      }
+    }
   });
 });
