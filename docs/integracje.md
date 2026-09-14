@@ -65,6 +65,12 @@ Przycisk **Dodaj integrację** prowadzi przez trzy kroki:
 3. Formularz. Gotowe ustawienie otwiera się w **trybie prostym**, „Własne” od razu
    w **zaawansowanym**. Przełącznik nad formularzem zmienia tryb w każdej chwili.
 
+Niektóre ustawienia pokazują nad przyciskiem zapisu uwagę w ramce. Uwaga zbiera to, o czym warto
+wiedzieć przed uruchomieniem integracji, a czego nie widać w samych polach formularza. Tak jest
+przy ustawieniu „WooCommerce: status do klienta”, bo SMS idzie tam do klienta sklepu, a nie do
+obsługi. Ramka mówi wtedy, jaki numer nadawcy zobaczy klient oraz że wiadomość o treści
+marketingowej wymaga jego zgody. Pojawia się w obu trybach formularza. Niczego nie blokuje.
+
 ### 2.3. Tryb prosty
 
 Tryb prosty nie wymaga znajomości ładunku aplikacji ani szablonów. Formularz ma pięć punktów.
@@ -258,7 +264,7 @@ który przy awarii łącza wysyła alert o każdym z 40 hostów, kosztuje wtedy 
 
 Ścieżka „identyfikator zdarzenia” (sekcja „Odbiorca”) chroni przed podwójnym SMS-em. Aplikacja
 czasem ponawia żądanie po przekroczeniu czasu. Ten sam identyfikator w ciągu doby dostaje wtedy
-wpis `duplikat` i odpowiedź 200. Zabbix ma `{EVENT.ID}`. Skrypt z rozdziału 6.4 dokleja do niego
+wpis `duplikat` i odpowiedź 200. Zabbix ma `{EVENT.ID}`. Skrypt z rozdziału 6.5 dokleja do niego
 status, bo rozwiązanie problemu dostaje ten sam identyfikator co problem. Prosty JSON ma pole
 `eventId`. Klucz grupy Grafany nie nadaje się na identyfikator, bo jest stały dla grupy alertów.
 
@@ -443,26 +449,33 @@ Zgłoszenie we FreeScoucie z numerem klienta i treścią:
 
 Gotowe ustawienie wypełnia formularz szablonem, warunkiem, ścieżkami, metodą uwierzytelnienia
 i nagłówkami właściwymi dla aplikacji. Obok szablonu pokazuje listę pól jej ładunku oraz
-instrukcję „co ustawić w aplikacji”. Wartości przykładowe w tym rozdziale (adresy, numery,
-identyfikatory) są fikcyjne.
+instrukcję „co ustawić w aplikacji”. Lista obejmuje narzędzia do automatyzacji (Prosty JSON,
+n8n), monitoring (Uptime Kuma, Grafana, Zabbix), sklep (WooCommerce w dwóch wariantach),
+dom inteligentny (Home Assistant), zgłoszenia (FreeScout, Freshdesk) oraz powiadomienia (Slack,
+ntfy). Wartości przykładowe w tym rozdziale (adresy, numery, identyfikatory) są fikcyjne.
 
 | Ustawienie | Do SMS | Z SMS-a | Uwierzytelnienie do SMS |
 |---|---|---|---|
 | Prosty JSON | tak | tak | opcjonalny nagłówek |
+| n8n | tak | tak | nagłówek `Authorization` |
 | Uptime Kuma | tak | nie | nagłówek `Authorization` |
 | Grafana | tak | nie | basic auth |
 | Zabbix | tak | nie | nagłówek `Authorization` |
+| WooCommerce: nowe zamówienie | tak | nie | sam adres wejściowy |
+| WooCommerce: status do klienta | tak | nie | sam adres wejściowy |
+| Home Assistant | tak | tak | opcjonalny nagłówek |
 | FreeScout: nowe zgłoszenie | tak | nie | lista źródeł |
 | FreeScout: zgłoszenie z SMS-a | nie | tak | nie dotyczy |
 | Freshdesk: nowe zgłoszenie | tak | nie | sekret w adresie |
 | Freshdesk: zgłoszenie z SMS-a | nie | tak | nie dotyczy |
+| Slack | nie | tak | nie dotyczy |
 | ntfy | nie | tak | nie dotyczy |
 | Własne | tak | tak | dowolne |
 
 ### 6.1. Prosty JSON
 
-Ustawienie dla n8n, Make, Zapiera, własnych skryptów i NAS-ów. Nadaje się dla wszystkiego, co
-potrafi wysłać żądanie HTTP z dowolnym JSON-em.
+Ustawienie dla Make, Zapiera, własnych skryptów i NAS-ów. Nadaje się dla wszystkiego, co
+potrafi wysłać żądanie HTTP z dowolnym JSON-em. n8n ma własny kafelek (rozdział 6.2).
 
 **Do SMS.** Aplikacja wysyła `POST` na adres wejściowy z nagłówkiem
 `Content-Type: application/json` i takim ładunkiem:
@@ -481,7 +494,35 @@ a nadmiar odrzuca. Jeżeli aplikacja ma pole na nagłówki, dodaj w bramce nagł
 `serviceId`, `from`, `to`, `kind`, `text`, `receivedAt`, `relatedMessageId`). Szablon body to
 `{{ p | json }}`.
 
-### 6.2. Uptime Kuma
+### 6.2. n8n
+
+SMS z przepływu n8n oraz odebrany SMS jako wyzwalacz przepływu. Ustawienie działa w obie strony.
+
+**Do SMS.** W przepływie dodaj węzeł **HTTP Request**. **Method** ustaw na `POST`, a **URL** to
+adres wejściowy integracji. Włącz **Send Body** i ustaw **Body Content Type** na `JSON`. W ciele
+podaj dwa pola:
+
+```json
+{ "to": "48601000001", "text": "Zadanie zakonczone bledem" }
+```
+
+Wartość z poprzedniego węzła wstawisz wyrażeniem, na przykład `{{ $json.telefon }}`. Pole `to`
+przyjmuje jeden numer, tekst z numerami po przecinku albo tablicę. Pole `eventId` chroni przed
+podwójną wysyłką, gdy n8n ponowi krok. Hasło ustaw w **Authentication → Generic Credential
+Type → Header Auth**: nazwa `Authorization`, wartość `Bearer <hasło z bramki>`.
+
+**Z SMS-a.** W przepływie dodaj węzeł **Webhook** i ustaw **HTTP Method** na `POST`. Skopiuj
+z węzła adres produkcyjny i wklej go jako adres integracji wychodzącej. Przepływ musi być
+zapisany i aktywny, bo adres testowy działa tylko przy otwartym oknie edytora.
+
+Bramka wysyła pełne zdarzenie w tym samym formacie, co przy Prostym JSON-ie. Węzeł Webhook
+wkłada je do pola `body`, więc w kolejnych węzłach czytasz je wyrażeniami `{{ $json.body.from }}`
+i `{{ $json.body.text }}`.
+
+n8n stoi zwykle w sieci prywatnej, a bramka domyślnie nie woła adresów prywatnych. Ustaw zmienną
+`MIG_WEBHOOK_ALLOW_PRIVATE=1` albo wystaw n8n pod adresem publicznym.
+
+### 6.3. Uptime Kuma
 
 SMS przy awarii monitora. W Uptime Kumie otwórz **Ustawienia → Powiadomienia → Dodaj
 powiadomienie** i wybierz typ **Webhook**. Wypełnij:
@@ -513,7 +554,7 @@ Przycisk „Test” w Uptime Kumie wysyła ładunek bez `heartbeat`. Wtedy idzie
 Żeby SMS szedł tylko przy awarii, dodaj warunek `heartbeat.status równe 0`. Bez warunku
 przyjdzie też SMS o powrocie i SMS z przycisku „Test”.
 
-### 6.3. Grafana
+### 6.4. Grafana
 
 SMS z alertów Grafany. W Grafanie otwórz **Alerting → Contact points → Add contact point**
 i wybierz integrację **Webhook**. W polu **URL** wpisz adres wejściowy integracji, a w **HTTP
@@ -551,7 +592,7 @@ grupy, więc nie nadaje się na identyfikator zdarzenia. SMS o alarmie przychodz
 interval** (domyślnie 5 min). Żeby dostawać SMS tylko o alarmie, dodaj warunek `status równe
 firing`.
 
-### 6.4. Zabbix
+### 6.5. Zabbix
 
 SMS z akcji Zabbiksa przez typ mediów Webhook. W Zabbiksie otwórz **Alerts → Media types →
 Create media type** i wybierz typ **Webhook**. Dodaj parametry: `url` (adres wejściowy
@@ -593,7 +634,142 @@ identyfikator co problemowi. Dzięki temu ponowienie tej samej wysyłki bramka o
 powtórkę, a SMS o rozwiązaniu przechodzi. Żeby nie dostawać SMS-a o rozwiązaniu, dodaj warunek
 `status równe PROBLEM`.
 
-### 6.5. FreeScout: nowe zgłoszenie
+### 6.6. WooCommerce: nowe zamówienie
+
+SMS do obsługi sklepu o każdym nowym zamówieniu. W sklepie wybierz **WooCommerce → Ustawienia →
+Zaawansowane → Webhooki → Dodaj webhook**. **Status** ustaw na `Aktywny`, **Temat** na `Order
+created`, a w polu **Adres dostarczenia** wklej adres wejściowy integracji. **Wersję API**
+zostaw najnowszą z listy. Pole **Klucz** służy do podpisywania żądań. Bramka będzie go sprawdzać
+od wersji 1.8, więc na razie zostaw wygenerowaną wartość.
+
+Zamówienie nie niesie numerów obsługi. Wpisz je w bramce w liście odbiorców.
+
+Adres bramki musi kończyć się portem 443, 80 albo 8080. WordPress nie dostarcza webhooków na
+inne porty i zapisuje wtedy w dzienniku sklepu „Podano nieprawidłowy adres URL”. Przy zwykłym
+adresie z certyfikatem nie musisz nic robić, bo to jest port 443.
+
+Tak wygląda ładunek z WooCommerce 11.1.0, przycięty do pól, które coś znaczą (pełny ma 47 pól
+zamówienia):
+
+```json
+{
+  "id": 14, "number": "14", "status": "processing", "currency": "PLN", "total": "49.00",
+  "date_created": "2026-09-14T15:33:48", "payment_method_title": "Płatność przy odbiorze",
+  "billing": { "first_name": "Anna", "last_name": "Kowalska", "phone": "+48 601 000 001", "email": "anna.kowalska@example.test", "city": "Warszawa" },
+  "line_items": [{ "id": 3, "name": "Kubek testowy", "quantity": 1, "total": "49.00" }]
+}
+```
+
+Domyślny szablon składa numer zamówienia, kwotę i kupującego. Filtr `gsm` zdejmuje polskie znaki
+z imienia oraz nazwiska, żeby SMS zmieścił się w jednej części:
+
+```liquid
+Nowe zamowienie #{{ p.number }} na {{ p.total }} {{ p.currency }} od {{ p.billing.first_name | gsm }} {{ p.billing.last_name | gsm }}
+```
+
+Z ładunku wyżej wychodzi „Nowe zamowienie #14 na 49.00 PLN od Anna Kowalska”. Dwa pozostałe
+warianty treści dokładają sposób płatności albo liczbę pozycji.
+
+Warunek ustawienia sprawdza, czy ładunek ma pole `id`. Zaraz po zapisaniu webhooka sklep wysyła
+pod ten adres żądanie próbne z ciałem `webhook_id=1`. Warunek je odsiewa, więc bramka odpowiada
+kodem 200 i nie wysyła SMS-a. Bez tego warunku zamiast zamówienia poszedłby SMS bez treści,
+a sklep pokazałby błąd zapisu.
+
+Jeśli bramka będzie długo nieosiągalna, sklep sam wyłączy webhook po siódmej nieudanej próbie
+z rzędu. Wtedy wróć do listy webhooków i przestaw **Status** z powrotem na `Aktywny`.
+
+WooCommerce nie pozwala dodać własnego nagłówka ani hasła, więc integracji broni sam adres
+wejściowy. Trzymaj go w tajemnicy, a gdy wycieknie, wymień go przyciskiem obok adresu.
+
+### 6.7. WooCommerce: status do klienta
+
+SMS do kupującego, gdy zmienia się status zamówienia. Webhook zakładasz tak samo, jak przy nowym
+zamówieniu. Różnica jest jedna: **Temat** ustaw na `Order updated`.
+
+Numer bierzemy z pola rozliczeniowego zamówienia, czyli z `billing.phone`. Lista zapasowa zostaje
+pusta. Gdy kupujący nie podał telefonu, SMS nie ma iść do nikogo innego.
+
+Sklep wysyła żądanie przy każdej zmianie zamówienia, nie tylko przy zmianie statusu. Dlatego
+warunek zawęża wysyłkę do wybranego statusu. Domyślnie jest to `processing`, czyli „W trakcie
+realizacji”. Bez warunku klient dostanie SMS także po poprawieniu adresu albo notatki.
+
+Pole rozliczeniowe jest zwykłym tekstem, więc kupujący wpisuje w nim, co chce. Drugi warunek
+ustawienia przepuszcza tylko to, co wygląda na numer telefonu:
+
+```
+billing.phone pasuje do wzorca ^[+(]?[0-9][0-9 ().-]{7,}[0-9]$
+```
+
+Wzorzec przyjmuje zapis ludzki: z plusem, ze spacjami, z myślnikami albo w nawiasach. Odsiewa
+wpisy w rodzaju „brak” oraz dwa numery w jednym polu. Cyfr nie liczy, więc numer o złej długości
+przez warunek przejdzie. Takiego numeru bramka nie odczyta. Dlatego ustawienie ma w sekcji
+„Odbiorca” wybrane pominięcie zdarzenia (rozdział 3.3). Sklep dostaje wtedy kod 200 i nie liczy
+tego jako nieudanego dostarczenia. Aby telefon był w każdym zamówieniu, ustaw go jako pole
+wymagane w **WooCommerce → Ustawienia → Ogólne**.
+
+Sklep wysyła jedno żądanie na jedną zmianę, ale kilka zmian pod rząd potrafi zlać w jedno. Gdy
+w ciągu kilkunastu sekund przestawisz zamówienie z „W trakcie realizacji” na „Zrealizowane”, do
+bramki dojdzie tylko stan końcowy. Jeśli klient ma dostać obie wiadomości, zmieniaj status
+dopiero wtedy, gdy naprawdę się zmienia.
+
+Ładunek ma ten sam kształt, co przy nowym zamówieniu. Zamiast `date_created` niesie
+`date_modified` z czasem zmiany. Domyślny szablon zwraca się do kupującego po imieniu:
+
+```liquid
+{{ p.billing.first_name | gsm }}, Twoje zamowienie #{{ p.number }} jest w realizacji
+```
+
+Z ładunku z poprzedniego podrozdziału wychodzi „Anna, Twoje zamowienie #14 jest w realizacji”.
+
+To jedyne ustawienie w katalogu, które pisze do klienta sklepu, a nie do obsługi. Dlatego
+formularz pokazuje nad przyciskiem zapisu uwagę o numerze nadawcy oraz o zgodzie na treści
+marketingowe (rozdział 2.2).
+
+### 6.8. Home Assistant
+
+SMS z automatyzacji Home Assistanta oraz odebrany SMS jako wyzwalacz automatyzacji.
+
+**Do SMS.** W pliku `configuration.yaml` dodaj blok:
+
+```yaml
+rest_command:
+  sms:
+    url: "https://bramka.example/hooks/<identyfikator>"
+    method: post
+    content_type: "application/json"
+    payload: '{"to": {{ to | to_json }}, "text": {{ text | to_json }}}'
+```
+
+Filtr `to_json` sam zakłada cudzysłowy. Dzięki temu treść z cudzysłowem albo z przełamaniem
+wiersza nie psuje ładunku. W `to` wolno wtedy podać jeden numer albo listę numerów.
+
+Po dodaniu bloku uruchom Home Assistanta od nowa. Samo przeładowanie konfiguracji YAML nie
+wystarczy, bo nie wczytuje nowej integracji. Późniejsze zmiany w bloku przeładujesz już akcją
+`rest_command.reload`.
+
+W automatyzacji wywołaj akcję `rest_command.sms` z danymi `to` oraz `text`. Jeśli chcesz
+uwierzytelniać nagłówkiem, dopisz do bloku `headers: { Authorization: "Bearer <token>" }`
+i wpisz ten sam token w bramce.
+
+**Z SMS-a.** W automatyzacji dodaj wyzwalacz **Webhook** z własnym identyfikatorem. Adresem
+integracji wychodzącej jest wtedy `https://<ha>/api/webhook/<identyfikator>`. Bramka wysyła trzy
+pola:
+
+```json
+{ "from": "48601000001", "text": "Pomocy, nie działa", "receivedAt": "2026-09-02T10:00:00.000Z" }
+```
+
+W akcjach automatyzacji sięgasz po nie wyrażeniem `{{ trigger.json.text }}`.
+
+Wyzwalacz webhooka ma domyślnie zaznaczone **Tylko z sieci lokalnej**. Jeśli bramka stoi poza
+siecią Home Assistanta, odznacz to pole albo dopisz do wyzwalacza `local_only: false`. Bez tego
+Home Assistant odpowiada kodem 200, a automatyzacja się nie uruchamia. W dzienniku integracji
+zobaczysz wtedy „dostarczono”, choć nic się nie wydarzyło.
+
+Home Assistant stoi zwykle w sieci lokalnej, a bramka domyślnie nie woła takich adresów. Ustaw
+zmienną `MIG_WEBHOOK_ALLOW_PRIVATE=1` albo wystaw Home Assistanta pod adresem publicznym.
+
+### 6.9. FreeScout: nowe zgłoszenie
 
 SMS do agentów, gdy we FreeScoucie pojawia się nowa rozmowa albo klient odpowiada. Wymaga
 modułu **API & Webhooks**. Otwórz Zarządzaj → API & Webhooks → Webhooks → Dodaj. Jako URL wpisz
@@ -622,7 +798,7 @@ Warunek `mailboxId równe 3` ogranicza SMS-y do jednej skrzynki. FreeScout nie m
 nagłówki. Zamiast tokenu wpisz więc listę źródeł z adresem serwera FreeScouta. Obiekt
 `customer` w webhooku nie zawiera telefonów, nawet gdy kontakt ma numer.
 
-### 6.6. FreeScout: zgłoszenie z SMS-a
+### 6.10. FreeScout: zgłoszenie z SMS-a
 
 Odebrany SMS zakłada rozmowę w skrzynce. Adres to `https://<freescout>/api/conversations`.
 Klucz API (moduł API & Webhooks, zakładka **API Keys**) wpisz jako sekret nagłówka
@@ -633,7 +809,7 @@ FreeScout odpowiada kodem 201 i obiektem rozmowy z polem `id`. Ten identyfikator
 odebranej wiadomości w panelu. Agent widzi rozmowę i oddzwania albo odpisuje własnym kanałem.
 Bramka nie wysyła odpowiedzi z FreeScouta SMS-em.
 
-### 6.7. Freshdesk: nowe zgłoszenie
+### 6.11. Freshdesk: nowe zgłoszenie
 
 SMS do agentów o nowym zgłoszeniu albo odpowiedzi klienta. We Freshdesku otwórz Admin →
 Workflows → Automations i załóż dwie reguły. Obie mają akcję „Uruchom element webhook”
@@ -674,7 +850,7 @@ Numery agentów wpisz w liście zapasowej. Freshdesk nie ma pola na nagłówki, 
 przychodzą z różnych adresów chmury AWS. Uwierzytelnieniem zostaje więc sekret w adresie
 i limit burzy.
 
-### 6.8. Freshdesk: zgłoszenie z SMS-a
+### 6.12. Freshdesk: zgłoszenie z SMS-a
 
 Odebrany SMS zakłada zgłoszenie. Adres to `https://<firma>.freshdesk.com/api/v2/tickets`.
 Freshdesk uwierzytelnia przez basic auth: kluczem API jako loginem i literą `X` jako hasłem.
@@ -689,7 +865,67 @@ zostanie rozpoznany, a z `601000001` nie. W drugim przypadku powstanie nowy kont
 e-maila. Agent widzi zgłoszenie i oddzwania albo odpisuje własnym kanałem. Bramka nie wysyła
 odpowiedzi z Freshdeska SMS-em.
 
-### 6.9. ntfy
+### 6.13. Slack
+
+Odebrany SMS jako wiadomość na kanale Slacka. Bramka korzysta z webhooka przychodzącego, czyli
+z adresu, który Slack wydaje twojej własnej aplikacji.
+
+**Aplikacja.** Wejdź na **api.slack.com/apps** i kliknij **Create New App**. Wybierz **From
+a manifest**, wskaż przestrzeń i wklej gotowy opis aplikacji:
+
+```yaml
+display_information:
+  name: Multiinfo Gate
+  description: SMS odebrane przez bramkę trafiają na kanał
+features:
+  bot_user:
+    display_name: Multiinfo Gate
+    always_online: false
+oauth_config:
+  scopes:
+    bot:
+      - incoming-webhook
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
+```
+
+Manifest wnosi zakres `incoming-webhook`, więc funkcja webhooków jest od razu włączona. Jeśli
+wolisz bez manifestu, wybierz **Blank app** oraz włącz ją sam w **Features → Incoming Webhooks**.
+
+**Webhook.** W **Features → Incoming Webhooks** kliknij **Add New Webhook to Workspace**. Wybierz
+kanał i potwierdź przyciskiem **Allow**. Adres `https://hooks.slack.com/services/…` wklej jako
+adres integracji wychodzącej. Jeden adres obsługuje jeden kanał. Na drugi kanał zrób drugi
+webhook tym samym przyciskiem.
+
+Body ma jedno pole `text`:
+
+```liquid
+{% capture msg %}SMS od {{ from }}: {{ text }}{% endcapture %}{"text": {{ msg | json }}}
+```
+
+Na kanale widać wtedy „SMS od 48601000001: Pomocy, nie działa”. Slack przyjmuje też bloki
+(`blocks`), jeśli zmienisz szablon. Nazwę i obrazek, pod którymi bramka pisze na kanale,
+ustawisz w **Basic Information → Display Information**.
+
+Pozostałych danych z sekcji **App Credentials** bramka nie potrzebuje. Client Secret oraz Signing
+Secret służą do ruchu w drugą stronę, czyli wtedy, gdy to Slack wysyła żądania do twojej
+aplikacji.
+
+Adres webhooka sam w sobie jest hasłem. Kto go ma, ten pisze na kanale. Trzymaj go wyłącznie
+w bramce, a gdy wycieknie, skasuj webhook w ustawieniach aplikacji i zrób nowy.
+
+W przestrzeni firmowej bywa włączone **Require approved apps**. Wtedy aplikację instaluje osoba
+z rolą App Manager, czyli właściciel przestrzeni albo ktoś wskazany przez administratora. Zwykły
+członek może jedynie poprosić o zatwierdzenie. Jeśli nie masz tej roli, poproś administratora
+Slacka o założenie aplikacji oraz o adres webhooka.
+
+W katalogu aplikacji Slacka jest też gotowa pozycja **Incoming WebHooks**. Daje ten sam adres,
+ale to stara integracja. Slack odradza jej zakładanie i zapowiada wycofanie, więc rób własną
+aplikację.
+
+### 6.14. ntfy
 
 Odebrany SMS jako powiadomienie push na telefon. Adres to serwer i nazwa tematu, na przykład
 `https://ntfy.sh/firma-sms`. Body jest surowym tekstem `{{ text }}`. Tytuł i priorytet idą
@@ -697,7 +933,7 @@ nagłówkami `Title: SMS od {{ from }}` i `Priority: default`. Dla tematu chroni
 nagłówek `Authorization` z tokenem `Bearer tk_…` jako sekretem. W aplikacji ntfy zasubskrybuj
 temat.
 
-### 6.10. Własne
+### 6.15. Własne
 
 Pusty formularz dla aplikacji spoza listy. Do SMS: wskaż ścieżką pole z numerem albo wpisz
 numery w liście zapasowej. Treść podaj jako ścieżkę albo jako szablon z ładunkiem pod `p`.
