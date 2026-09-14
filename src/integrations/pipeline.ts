@@ -25,7 +25,8 @@ export type InboundErrorCode = 'empty_text' | 'no_recipient' | 'invalid_phone' |
 
 export type InboundOutcome =
   | { kind: 'sent'; messageIds: string[] }
-  | { kind: 'skipped' }
+  /** Bez powodu: zdarzenie odsiał warunek. Z powodem: zadziałało odstępstwo opisane przy powodzie. */
+  | { kind: 'skipped'; reason?: 'invalid_recipient' }
   | { kind: 'duplicate' }
   | { kind: 'throttled'; notify: boolean }
   | { kind: 'error'; code: InboundErrorCode; detail: string }
@@ -64,11 +65,15 @@ function ticketRef(config: InboundConfig, payload: unknown): string | null {
  * dopasowanego po identyfikatorze zgłoszenia (helpdeski nie przesyłają numeru w webhooku
  * odpowiedzi), na końcu lista zapasowa.
  */
-function rawRecipients(config: InboundConfig, payload: unknown, threadSender: string | null): string[] {
+/**
+ * Odbiorcy wraz ze źródłem. Źródło rozstrzyga, czy zły numer jest daną z zewnątrz, czy pomyłką
+ * administratora: lista zapasowa oraz nadawca wątku pochodzą z bramki, ładunek z obcej aplikacji.
+ */
+function rawRecipients(config: InboundConfig, payload: unknown, threadSender: string | null): { list: string[]; fromPayload: boolean } {
   const fromPayload = config.to.path === undefined ? [] : splitRecipients(readPath(payload, config.to.path));
-  if (fromPayload.length > 0) return fromPayload;
-  if (threadSender !== null) return [threadSender];
-  return config.to.fallback;
+  if (fromPayload.length > 0) return { list: fromPayload, fromPayload: true };
+  if (threadSender !== null) return { list: [threadSender], fromPayload: false };
+  return { list: config.to.fallback, fromPayload: false };
 }
 
 /** Przycięcie do `maxParts` części tym samym licznikiem, którym API dzieli wiadomości. */
@@ -101,7 +106,7 @@ export function previewInbound(engine: TemplateEngine, config: InboundConfig, pa
   const context = buildInboundContext(payload, { name: 'podgląd' }, now);
   try {
     const ok = matches(config.condition, context, engine);
-    const raw = rawRecipients(config, payload, null);
+    const raw = rawRecipients(config, payload, null).list;
     // Podgląd nie sięga do bazy odebranych - mówi tylko, że odbiorca wyjdzie z wątku.
     const threadRecipient = raw.length === 0 && ticketRef(config, payload) !== null;
     const recipients = raw.map((r) => {
@@ -155,7 +160,7 @@ export function runInbound(deps: PipelineDeps, integration: InboundIntegration, 
 
   const context = buildInboundContext(payload, integration, now);
   let text: string;
-  let recipients: string[];
+  let recipients: { list: string[]; fromPayload: boolean };
   try {
     if (!matches(config.condition, context, deps.engine)) {
       note('skipped', { reason: 'warunek niespełniony' });
@@ -181,7 +186,7 @@ export function runInbound(deps: PipelineDeps, integration: InboundIntegration, 
     throw e;
   }
   if (text === '') return fail('empty_text', 'Szablon dał pustą treść - sprawdź, czy ładunek ma oczekiwane pola.');
-  if (recipients.length === 0) {
+  if (recipients.list.length === 0) {
     return fail('no_recipient', ref !== null
       ? `Brak numeru odbiorcy w ładunku, zgłoszenie ${ref} nie pasuje do żadnego odebranego SMS-a, a lista zapasowa jest pusta.`
       : 'Brak numeru odbiorcy w ładunku i pusta lista zapasowa.');
@@ -189,9 +194,17 @@ export function runInbound(deps: PipelineDeps, integration: InboundIntegration, 
 
   let normalized: string[];
   try {
-    normalized = recipients.map((r) => normalizeRecipient(r, account.defaultCountryCode));
+    normalized = recipients.list.map((r) => normalizeRecipient(r, account.defaultCountryCode));
   } catch (e) {
-    if (e instanceof InvalidPhoneError) return fail('invalid_phone', e.message);
+    if (e instanceof InvalidPhoneError) {
+      // Ustawienie „pomiń” dotyczy wyłącznie numeru z ładunku. Numer z listy zapasowej wpisuje
+      // administrator, więc jego błąd zostaje błędem, inaczej pomyłka w formularzu zapadłaby w ciszę.
+      if (config.invalidRecipient === 'skip' && recipients.fromPayload) {
+        note('skipped', { reason: 'numer odbiorcy w ładunku nie do odczytania' });
+        return { kind: 'skipped', reason: 'invalid_recipient' };
+      }
+      return fail('invalid_phone', e.message);
+    }
     throw e;
   }
 

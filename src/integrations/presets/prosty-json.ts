@@ -3,7 +3,7 @@ import type { Preset } from './types.ts';
 export const prostyJson: Preset = {
   id: 'prosty-json',
   name: 'Prosty JSON',
-  blurb: 'n8n, Make, Zapier, własne skrypty, NAS - ładunek { to, text }',
+  blurb: 'Make, Zapier, własne skrypty, NAS - ładunek { to, text }',
   kinds: ['webhook_in', 'webhook_out'],
   sample: { to: '48601000001', text: 'Wiadomość testowa z automatu' },
   fields: [

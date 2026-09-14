@@ -86,6 +86,31 @@ describe('runInbound', () => {
     expect(runInbound(deps, integ, { msg: 'x' }, ip, NOW)).toMatchObject({ kind: 'error', code: 'no_recipient' });
     expect(runInbound(deps, integ, { to: 'jan@firma.pl', msg: 'x' }, ip, NOW)).toMatchObject({ kind: 'error', code: 'invalid_phone' });
   });
+  it('numer kupującego z wiodącym zerem idzie na SMS, nie na błąd', () => {
+    // Formularz zamówienia w sklepie przyjmuje numer w zapisie krajowym z zerem międzymiastowym.
+    const integ = make({ to: { path: 'billing.phone', fallback: [] } });
+    const out = runInbound(deps, integ, { billing: { phone: '0601 000 001' }, msg: 'x' }, ip, NOW) as { messageIds: string[] };
+    expect(deps.messages.get(out.messageIds[0]!)!.dest).toBe('48601000001');
+  });
+  it('przełącznik „pomiń” zamienia zły numer z ładunku na pominięcie, ale tylko numer z ładunku', () => {
+    // Sklepy liczą odpowiedź inną niż 2xx jako nieudane dostarczenie i po kilku z rzędu wyłączają webhook.
+    const pomijaj = make({ to: { path: 'to', fallback: [] }, invalidRecipient: 'skip' });
+    expect(runInbound(deps, pomijaj, { to: 'jan@firma.pl', msg: 'x' }, ip, NOW))
+      .toEqual({ kind: 'skipped', reason: 'invalid_recipient' });
+    expect(events(pomijaj.id)).toEqual(['skipped']);
+
+    // Brak numeru w ogóle to dalej błąd: nie ma czego pomijać, jest co naprawić w ustawieniu.
+    expect(runInbound(deps, pomijaj, { msg: 'x' }, ip, NOW)).toMatchObject({ kind: 'error', code: 'no_recipient' });
+
+    // Numer z listy zapasowej wpisuje administrator, więc jego błąd zostaje błędem także przy „pomiń”.
+    const zapasowa = make({ to: { fallback: ['jan@firma.pl'] }, invalidRecipient: 'skip' }, { name: 'Sklep' });
+    expect(runInbound(deps, zapasowa, { msg: 'x' }, ip, NOW)).toMatchObject({ kind: 'error', code: 'invalid_phone' });
+  });
+  it('domyślnie zły numer z ładunku zostaje błędem', () => {
+    const integ = make({ to: { path: 'to', fallback: [] } });
+    expect(integ.config.invalidRecipient).toBe('error');
+    expect(runInbound(deps, integ, { to: 'jan@firma.pl', msg: 'x' }, ip, NOW)).toMatchObject({ kind: 'error', code: 'invalid_phone' });
+  });
   it('ponad 50 odbiorców to too_many_recipients', () => {
     const integ = make({});
     const to = Array.from({ length: 51 }, (_, i) => `4860100${String(i).padStart(4, '0')}`);

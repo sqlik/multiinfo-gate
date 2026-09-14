@@ -96,7 +96,7 @@ export function inboundDetailPage(d: InboundDetail): string {
     : d.replies.map((m) => `<a href="/wiadomosci/${esc(m.id)}">${esc(m.id)}</a> <span class="st"><span class="dot dot-${statusTone(m.status)}"></span>${esc(statusLabel(m.status))}</span>`).join('<br>');
   return `<div class="head">
     <div>
-      <div class="crumb"><a href="/odebrane">Odebrane</a> / szczegół</div>
+      <div class="crumb"><a href="/odebrane">Odebrane</a> / szczegóły</div>
       <h1 class="h1 id">${esc(r.id)}</h1>
       <p class="sub">odebrana ${esc(warsawStamp(r.receivedAt))} · konto ${esc(d.accountName)} · usługa ${esc(r.serviceId)}</p>
     </div>

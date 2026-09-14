@@ -6,7 +6,7 @@ z kluczem w nagłówku. Aplikacja wysyłająca SMS-y nie instaluje certyfikatów
 
 ![Przegląd: liczniki wiadomości wychodzących i odebranych z ostatniej doby, stan połączeń z Multiinfo i ostatnie niepowodzenia](docs/obrazki/przeglad.png)
 
-![Szczegół wiadomości z podziałem na pięć części UCS-2, przebiegiem doręczenia i śladem protokołu](docs/obrazki/wiadomosc-dluga.png)
+![Szczegóły wiadomości z podziałem na pięć części UCS-2, przebiegiem doręczenia i śladem protokołu](docs/obrazki/wiadomosc-dluga.png)
 
 ## Dla kogo
 
@@ -19,6 +19,12 @@ Od wersji 1.3 bramka odbiera też SMS-y od abonentów. Przekazuje je aplikacji p
 w wątku (`inReplyTo`). Od wersji 1.5 integruje się z aplikacjami o narzuconym formacie: Uptime
 Kuma, Grafana, Zabbix, FreeScout, Freshdesk, ntfy. Służy do tego adres wejściowy `/hooks/`
 i szablony Liquid. Administratora bramka powiadamia mailem o błędach i certyfikatach.
+
+Wersja 1.6 dokłada do katalogu pięć gotowych ustawień: n8n, WooCommerce w wariancie „nowe
+zamówienie” oraz w wariancie „status do klienta”, Home Assistanta i Slacka. Sklep zawiadamia
+SMS-em obsługę o nowym zamówieniu albo kupującego o zmianie statusu. Do tego dochodzi opis API
+w formacie OpenAPI, plik `docs/openapi.json`. Plik jest czytany przez Power Automate, Make oraz
+generatory bibliotek klienckich, co niweluje przepisywanie ręczne pól z dokumentacji.
 
 ## Co trzeba mieć
 

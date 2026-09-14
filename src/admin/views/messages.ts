@@ -251,7 +251,7 @@ export function messagePage(d: MessageDetail): string {
 
   return `<div class="head">
     <div>
-      <div class="crumb"><a href="/wiadomosci">Wiadomości</a> / szczegół</div>
+      <div class="crumb"><a href="/wiadomosci">Wiadomości</a> / szczegóły</div>
       <h1 class="h1 id">${esc(m.id)}</h1>
       <p class="sub">${esc(stamp(m.createdAt))} · konto ${esc(d.accountName)} · klucz „${esc(d.keyName)}”</p>
     </div>

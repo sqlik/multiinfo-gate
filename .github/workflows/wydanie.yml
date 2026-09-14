@@ -25,6 +25,15 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm test
+      - name: Opis API zgodny z kodem
+        # npm test generuje docs/openapi.json ze schematów. Różnica znaczy, że plik w repozytorium
+        # jest starszy niż kod: trzeba wywołać npm run openapi i dołożyć plik do commitu.
+        run: |
+          if ! git diff --quiet -- docs/openapi.json; then
+            echo "docs/openapi.json nie zgadza się z kodem; wywołaj npm run openapi i dołóż plik do commitu" >&2
+            git diff -- docs/openapi.json >&2
+            exit 1
+          fi
       - run: npm run check:tekst
       - name: Tag zgodny z wersją w package.json
         run: |

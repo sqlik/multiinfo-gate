@@ -80,12 +80,27 @@ export class TooManyRecipientsError extends Error {
 }
 
 /**
- * Numer z ładunku obcej aplikacji: to samo co `normalizePhone`, ale z międzynarodowym
- * przedrostkiem `00` (CRM-y wypisują tak numery z kontaktów).
+ * Numer z ładunku obcej aplikacji: to samo co `normalizePhone`, ale z dwoma zapisami, których
+ * programista API by nie użył, a które w sklepach i CRM-ach są codziennością. Międzynarodowy
+ * przedrostek `00` zastępuje plusa, a wiodące zero to krajowy prefiks międzymiastowy, którym
+ * kupujący wpisuje numer w formularzu zamówienia („0601 000 001”).
  */
 export function normalizeRecipient(raw: string, countryCode: string): string {
   const stripped = stripPhone(raw);
-  return normalizePhone(stripped.startsWith('00') ? stripped.slice(2) : stripped, countryCode);
+  if (stripped.startsWith('00')) return normalizePhone(stripped.slice(2), countryCode);
+  return normalizePhone(withoutTrunkPrefix(stripped, countryCode), countryCode);
+}
+
+/**
+ * Zdejmuje wiodące zero tylko wtedy, gdy reszta jest numerem krajowym właściwej długości dla
+ * kodu kraju konta. Bez znanej długości numeracji zero zostaje: równie dobrze może być cyfrą
+ * numeru zagranicznego, a zgadywanie kończyłoby się SMS-em pod cudzy numer.
+ */
+function withoutTrunkPrefix(stripped: string, countryCode: string): string {
+  const nationalLength = NATIONAL_LENGTH[countryCode];
+  if (nationalLength === undefined) return stripped;
+  if (!stripped.startsWith('0') || stripped.length !== nationalLength + 1) return stripped;
+  return stripped.slice(1);
 }
 
 /** Lista odbiorców z pola ładunku: tablica, liczba albo tekst rozdzielony przecinkami lub średnikami. */
