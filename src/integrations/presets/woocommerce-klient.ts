@@ -11,11 +11,16 @@ const TEKST: InboundConfig['text'] = { mode: 'liquid', template: '{{ p.billing.f
 const MA_ZAMOWIENIE = { path: 'id', op: 'exists' as const, value: '' };
 
 /**
- * Drugi warunek wspólny: kupujący podał telefon. Bez niego bramka odpowiada kodem 422,
- * a sklep liczy to jako nieudane dostarczenie i po siódmym z rzędu sam wyłącza webhook.
- * Zamówienie bez telefonu ma zostać pominięte, a nie uznane za błąd sklepu.
+ * Drugi warunek wspólny: kupujący podał coś, co jest numerem telefonu. Numer nie do odczytania
+ * kończy się kodem 422, a sklep liczy to jako nieudane dostarczenie i po siódmym z rzędu sam
+ * wyłącza webhook. Takie zamówienie ma zostać pominięte, a nie uznane za błąd sklepu.
+ *
+ * Pole rozliczeniowe sklepu to zwykły tekst, więc nie wystarczy sprawdzić, czy jest niepuste.
+ * Wzorzec przepuszcza numer w zapisie, jakiego używają kupujący: z plusem, spacjami, myślnikami
+ * albo nawiasami. Odsiewa wpisy w rodzaju „brak”, samą spację oraz dwa numery w jednym polu.
+ * Wzorzec nie liczy cyfr, więc numer o złej długości nadal skończy się błędem.
  */
-const MA_TELEFON = { path: 'billing.phone', op: 'ne' as const, value: '' };
+const MA_TELEFON = { path: 'billing.phone', op: 'regex' as const, value: '^[+(]?[0-9][0-9 ().-]{7,}[0-9]$' };
 
 export const woocommerceKlient: Preset = {
   id: 'woocommerce-klient',
@@ -71,7 +76,7 @@ export const woocommerceKlient: Preset = {
     '',
     'Sklep wysyła jedno żądanie na jedną zmianę, ale kilka zmian pod rząd potrafi zlać w jedno. Gdy w ciągu kilkunastu sekund przestawisz zamówienie z „W trakcie realizacji” na „Zrealizowane”, do bramki dojdzie tylko stan końcowy. Jeśli klient ma dostać obie wiadomości, zmieniaj status dopiero wtedy, gdy naprawdę się zmienia.',
     '',
-    'Numer telefonu bierzemy z pola rozliczeniowego zamówienia. Zamówienie bez telefonu integracja pomija i zapisuje w dzienniku jako pominięte. Aby telefon był zawsze, ustaw go jako pole wymagane w **WooCommerce → Ustawienia → Ogólne**.',
+    'Numer telefonu bierzemy z pola rozliczeniowego zamówienia. To pole jest zwykłym tekstem, więc kupujący wpisuje w nim, co chce. Zamówienie bez telefonu oraz z wpisem, który nie jest numerem, integracja pomija i zapisuje w dzienniku jako pominięte. Aby telefon był zawsze, ustaw go jako pole wymagane w **WooCommerce → Ustawienia → Ogólne**.',
     '',
     'Adres bramki musi kończyć się portem 443, 80 albo 8080, bo WordPress nie dostarcza webhooków na inne porty.',
   ].join('\n'),

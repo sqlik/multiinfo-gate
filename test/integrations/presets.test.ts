@@ -174,13 +174,29 @@ describe('gotowe ustawienia', () => {
     expect(p.inbound?.to?.fallback).toEqual([]);
   });
 
-  it('WooCommerce do klienta pomija zamówienie bez telefonu, zamiast zwracać błąd', () => {
+  it('WooCommerce do klienta pomija zamówienie bez telefonu oraz z wpisem, który nie jest numerem', () => {
     // Błąd znaczy kod 422, a sklep liczy go jako nieudane dostarczenie i po siódmym z rzędu wyłącza webhook.
+    // Pole rozliczeniowe sklepu to zwykły tekst, więc trafia tam wszystko, co kupujący wpisze.
     const preset = presetById('woocommerce-klient')!;
-    const bezTelefonu = { ...(preset.sample as Record<string, unknown>), billing: { ...(preset.sample as { billing: object }).billing, phone: '' } };
-    for (const wariant of preset.simple!.inbound!.when) {
-      const config = { ...defaultInboundConfig(), ...preset.inbound, condition: wariant.condition } as InboundConfig;
-      expect(previewInbound(engine, config, bezTelefonu, '48', NOW).matches, wariant.id).toBe(false);
+    const odsiewane = ['', ' ', 'brak', 'nie podam', '601000001 lub 602000002', '+48 601 000 001 (dom)'];
+    for (const phone of odsiewane) {
+      const zamowienie = { ...(preset.sample as Record<string, unknown>), billing: { ...(preset.sample as { billing: object }).billing, phone } };
+      for (const wariant of preset.simple!.inbound!.when) {
+        const config = { ...defaultInboundConfig(), ...preset.inbound, condition: wariant.condition } as InboundConfig;
+        expect(previewInbound(engine, config, zamowienie, '48', NOW).matches, `${wariant.id}: ${phone}`).toBe(false);
+      }
+    }
+  });
+
+  it('WooCommerce do klienta przepuszcza numer w każdym zapisie, jakiego używają kupujący', () => {
+    const preset = presetById('woocommerce-klient')!;
+    const przepuszczane = ['601000001', '601 000 001', '+48 601 000 001', '48-601-000-001', '(48) 601 000 001'];
+    for (const phone of przepuszczane) {
+      const zamowienie = { ...(preset.sample as Record<string, unknown>), billing: { ...(preset.sample as { billing: object }).billing, phone } };
+      const config = { ...defaultInboundConfig(), ...preset.inbound } as InboundConfig;
+      const out = previewInbound(engine, config, zamowienie, '48', NOW);
+      expect(out.matches, phone).toBe(true);
+      expect(out.recipients, phone).toEqual(['48601000001']);
     }
   });
 
