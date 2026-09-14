@@ -6,7 +6,11 @@ import { ApiError } from './errors.ts';
 import type { ApiDeps } from './server.ts';
 import { submitMessages } from './submit.ts';
 
-const bodySchema = z.object({
+/**
+ * Schemat ciała wysyłki. Poza trasą używa go opis API w formacie OpenAPI
+ * (`src/api/openapi.ts`), żeby nowe pole nie mogło umknąć opisowi.
+ */
+export const messageBodySchema = z.object({
   to: z.union([z.string(), z.array(z.string()).min(1).max(500)]),
   text: z.string().min(1),
   orig: z.string().optional(),
@@ -31,7 +35,7 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
       throw new ApiError(429, 'rate_limited', `Przekroczono limit ${auth.ratePerMin} żądań na minutę.`);
     }
 
-    const parsed = bodySchema.safeParse(request.body);
+    const parsed = messageBodySchema.safeParse(request.body);
     if (!parsed.success) {
       throw new ApiError(
         400,
