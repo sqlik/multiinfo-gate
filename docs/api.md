@@ -329,6 +329,9 @@ bramka rozszerza klucz o przyrostek `#<indeks>` dla każdego numeru.
 | 400 | `too_many_parts` | treść przekracza limit części; `message` podaje, ile miejsc należy usunąć | skrócić treść albo uzgodnić wyższy limit klucza |
 | 400 | `service_required` | klucz nie ma usługi domyślnej, a `serviceId` nie podano | podać `serviceId` |
 | 400 | `valid_to_in_past`, `valid_to_too_far` | `validTo` w przeszłości albo dalej niż 72 godziny | poprawić `validTo` |
+| 400 | `in_reply_to_single` | `inReplyTo` podano razem z listą odbiorców | odpowiadać jednemu odbiorcy naraz |
+| 400 | `in_reply_to_unknown` | wskazanej wiadomości przychodzącej nie ma w tej usłudze | sprawdzić identyfikator `in_...` oraz `serviceId` |
+| 400 | `in_reply_to_recipient` | odbiorca odpowiedzi to ktoś inny niż nadawca wskazanej wiadomości | wysłać odpowiedź na numer nadawcy; `message` go podaje |
 | 403 | `service_not_allowed` | usługa spoza uprawnień klucza | użyć usługi przypisanej do klucza |
 | 403 | `orig_not_allowed` | nadpis spoza uprawnień klucza; `message` wymienia dozwolone | użyć jednego z wymienionych |
 | 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią wiadomości albo numerem | użyć nowego klucza idempotencji |
