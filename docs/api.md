@@ -21,7 +21,8 @@ jest w rozdziale [Integracje z aplikacjami](integracje.md).
 
 Dokument opisuje każde wywołanie w tym samym układzie: przeznaczenie, pełne żądanie w siedmiu
 wariantach do wyboru zakładką (curl, surowy HTTP, PHP, Python, Node.js, PowerShell, C#),
-odpowiedź oraz błędy tego wywołania wraz z zalecanym postępowaniem.
+odpowiedź oraz błędy tego wywołania wraz z zalecanym postępowaniem. To samo API opisuje plik
+w formacie OpenAPI, który czytają narzędzia (rozdział 11).
 
 ## 1. Informacje ogólne
 
@@ -329,6 +330,9 @@ bramka rozszerza klucz o przyrostek `#<indeks>` dla każdego numeru.
 | 400 | `too_many_parts` | treść przekracza limit części; `message` podaje, ile miejsc należy usunąć | skrócić treść albo uzgodnić wyższy limit klucza |
 | 400 | `service_required` | klucz nie ma usługi domyślnej, a `serviceId` nie podano | podać `serviceId` |
 | 400 | `valid_to_in_past`, `valid_to_too_far` | `validTo` w przeszłości albo dalej niż 72 godziny | poprawić `validTo` |
+| 400 | `in_reply_to_single` | `inReplyTo` podano razem z listą odbiorców | odpowiadać jednemu odbiorcy naraz |
+| 400 | `in_reply_to_unknown` | wskazanej wiadomości przychodzącej nie ma w tej usłudze | sprawdzić identyfikator `in_...` oraz `serviceId` |
+| 400 | `in_reply_to_recipient` | odbiorca odpowiedzi to ktoś inny niż nadawca wskazanej wiadomości | wysłać odpowiedź na numer nadawcy; `message` go podaje |
 | 403 | `service_not_allowed` | usługa spoza uprawnień klucza | użyć usługi przypisanej do klucza |
 | 403 | `orig_not_allowed` | nadpis spoza uprawnień klucza; `message` wymienia dozwolone | użyć jednego z wymienionych |
 | 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią wiadomości albo numerem | użyć nowego klucza idempotencji |
@@ -1820,3 +1824,42 @@ aktualizacji albo po odłożeniu wydania w panelu.
     var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/healthz"));
     Console.WriteLine(odpowiedz.RootElement.GetProperty("status"));
     ```
+
+## 11. Opis API w formacie OpenAPI
+
+Opis API to jeden plik JSON w formacie OpenAPI 3.0. Wypisuje wszystkie wywołania z tego
+dokumentu: ścieżki, metody, nagłówek z kluczem, pola żądania, pola odpowiedzi oraz kody błędów.
+Człowiekowi nie zastąpi tego dokumentu, bo nie tłumaczy, kiedy czego użyć. Narzędzia czytają go
+za to same, więc nie musisz przepisywać pól z dokumentacji ręcznie.
+
+Plik leży w repozytorium pod ścieżką `docs/openapi.json`, a strona dokumentacji wystawia go pod
+adresem [sqlik.github.io/multiinfo-gate/openapi.json](https://sqlik.github.io/multiinfo-gate/openapi.json).
+Pobierz go stamtąd na dysk:
+
+```bash
+curl -O https://sqlik.github.io/multiinfo-gate/openapi.json
+```
+
+Adres bazowy jest w pliku zmienną `domena`. Narzędzie zapyta o nią przy imporcie. Podaj domenę,
+pod którą wystawiłeś bramkę, bez `https://` na początku.
+
+Trzy typowe zastosowania:
+
+- **Konektor własny w Power Automate.** W [make.powerautomate.com](https://make.powerautomate.com)
+  wybierz **Więcej → Wszystkie odkrycia → Konektory niestandardowe → Nowy konektor → Zaimportuj
+  plik OpenAPI**. Wskaż pobrany plik. Kreator sam wypełni akcje oraz pola. Zostaje dopisać klucz
+  API w zabezpieczeniach konektora. Gotowy konektor bramki jest w planach na wydanie 1.9
+- **Aplikacja w Make.** W [make.com](https://make.com) otwórz **Custom apps → Create a new app**
+  i użyj opcji importu opisu OpenAPI. Powstaną z niego moduły aplikacji, które wstawisz do
+  scenariusza obok pozostałych
+- **Wygenerowana biblioteka kliencka.** Generator taki jak OpenAPI Generator zrobi z pliku
+  bibliotekę w wybranym języku, na przykład w Javie, w Go albo w C#. Wtedy w kodzie wołasz metody
+  obiektu zamiast składać żądania HTTP samodzielnie
+
+Plik powstaje z tych samych schematów, na których bramka sprawdza żądania. Opis nie może się
+więc rozjechać z zachowaniem API. Pilnuje tego test: po zmianie pola w kodzie plik trzeba
+przeliczyć poleceniem `npm run openapi`, inaczej testy padają.
+
+Wersja 3.0 zamiast nowszej 3.1 jest wyborem świadomym. Konektory własne Power Platformu czytają
+wyłącznie formaty 2.0 oraz 3.0. Dokument nie używa niczego, czego nie ma w wersji 3.0, więc
+pozostałe narzędzia przyjmują go tak samo dobrze.

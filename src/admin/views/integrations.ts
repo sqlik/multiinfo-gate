@@ -203,7 +203,7 @@ export interface IntegrationFormValues {
   storePayloads: boolean; throttleLimit: string; throttleWindow: string; eventLogLimit: string;
   conditionMode: 'builder' | 'liquid'; rules: RuleValues[]; conditionExpr: string;
   authHeaderName: string; authHeaderValue: string; authBasicUser: string; authBasicPass: string; sources: string;
-  toPath: string; toFallback: string; ticketRefPath: string; eventIdPath: string;
+  toPath: string; toFallback: string; invalidRecipient: 'error' | 'skip'; ticketRefPath: string; eventIdPath: string;
   textMode: 'path' | 'liquid'; textPath: string; textTemplate: string; maxParts: string; overflow: 'truncate' | 'reject';
   events: string[]; url: string; method: string; headers: HeaderValues[]; bodyMode: 'json' | 'form' | 'text';
   bodyTemplate: string; formFields: FormFieldValues[]; responseRefPath: string; sign: boolean;
@@ -232,7 +232,8 @@ export function configToValues(kind: IntegrationKind, config: IntegrationConfig,
     conditionExpr: config.condition.mode === 'liquid' ? config.condition.expr : '',
     authHeaderName: inbound.auth.header?.name ?? '', authHeaderValue: '', authBasicUser: inbound.auth.basic?.user ?? '', authBasicPass: '',
     sources: inbound.auth.sources.join('\n'),
-    toPath: inbound.to.path ?? '', toFallback: inbound.to.fallback.join('\n'), ticketRefPath: inbound.ticketRefPath ?? '', eventIdPath: inbound.eventIdPath ?? '',
+    toPath: inbound.to.path ?? '', toFallback: inbound.to.fallback.join('\n'), invalidRecipient: inbound.invalidRecipient,
+    ticketRefPath: inbound.ticketRefPath ?? '', eventIdPath: inbound.eventIdPath ?? '',
     textMode: inbound.text.mode, textPath: inbound.text.mode === 'path' ? inbound.text.path : '',
     textTemplate: inbound.text.mode === 'liquid' ? inbound.text.template : '', maxParts: String(inbound.maxParts), overflow: inbound.overflow,
     events: [...outbound.events], url: outbound.url, method: outbound.method,
@@ -501,6 +502,14 @@ function sectionRecipient(v: IntegrationFormValues): string {
       <div class="hint">Jeden numer na linię. Dziewięć cyfr dostaje kod kraju konta.</div>
     </div>
     <div class="field">
+      <label for="invalidRecipient">Gdy numeru z ładunku nie da się odczytać</label>
+      <select id="invalidRecipient" name="invalidRecipient">
+        <option value="error"${v.invalidRecipient === 'error' ? ' selected' : ''}>zgłoś błąd aplikacji źródłowej</option>
+        <option value="skip"${v.invalidRecipient === 'skip' ? ' selected' : ''}>pomiń zdarzenie</option>
+      </select>
+      <div class="hint">Błąd to kod 422 oraz mail do administratora. Pominięcie to kod 200 i sam wpis w dzienniku - dla sklepów, które po kilku błędach z rzędu same wyłączają webhook</div>
+    </div>
+    <div class="field">
       <label for="ticketRefPath">Ścieżka identyfikatora zgłoszenia</label>
       <input id="ticketRefPath" name="ticketRefPath" value="${esc(v.ticketRefPath)}" placeholder="np. id">
       <div class="hint">Gdy identyfikator pasuje do odebranego SMS-a, odpowiedź idzie w jego wątku</div>
@@ -690,6 +699,7 @@ export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, 
               : 'Zdarzenie bramki w takiej postaci, w jakiej trafia do szablonu.'}</div>
           </div>
         </details>
+        ${ctx.preset.warning ? `<div class="notice">${esc(ctx.preset.warning)}</div>` : ''}
         <div class="bar">
           <button class="btn btn-s" type="submit" name="action" value="sprawdz">Sprawdź szablon</button>
           <button class="btn btn-p" type="submit" name="action" value="zapisz">${edit ? 'Zapisz integrację' : 'Utwórz integrację'}</button>
@@ -699,7 +709,7 @@ export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, 
   </div>`;
 }
 
-// --- szczegół ---------------------------------------------------------------------------
+// --- szczegóły ---------------------------------------------------------------------------
 
 export interface DetailEvent { row: IntegrationEventRow; /** Dostawa nieudana, którą da się ponowić. */ retryable: boolean }
 
@@ -736,7 +746,9 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     rows.push(kvRow('Uwierzytelnianie', auth.length === 0 ? '<span class="dim">tylko sekret w adresie</span>' : esc(auth.join(' · '))));
     const to = cfg.to.path ? `ścieżka ${cfg.to.path}` : '';
     const fallback = cfg.to.fallback.length > 0 ? `lista zapasowa: ${cfg.to.fallback.join(', ')}` : '';
-    rows.push(kvRow('Odbiorcy', dimOr([to, fallback].filter((x) => x !== '').join(' · '))));
+    // Wiersz tylko przy „pomiń”: to odstępstwo od zwykłego zachowania i ma być widoczne.
+    const zlyNumer = cfg.invalidRecipient === 'skip' ? 'numer nie do odczytania: pominięcie' : '';
+    rows.push(kvRow('Odbiorcy', dimOr([to, fallback, zlyNumer].filter((x) => x !== '').join(' · '))));
     rows.push(kvRow('Treść', simple ? esc(simple.text) : cfg.text.mode === 'path' ? `pole ${esc(cfg.text.path)}` : `szablon Liquid · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
     if (cfg.ticketRefPath) rows.push(kvRow('Identyfikator zgłoszenia', esc(cfg.ticketRefPath), true));
     if (cfg.eventIdPath) rows.push(kvRow('Identyfikator zdarzenia', esc(cfg.eventIdPath), true));
@@ -797,7 +809,7 @@ export function integrationDetailPage(d: IntegrationDetail): string {
     : d.events.map((e) => eventRow(row.id, e)).join('');
   return `<div class="head">
     <div>
-      <div class="crumb"><a href="/integracje">Integracje</a> / szczegół</div>
+      <div class="crumb"><a href="/integracje">Integracje</a> / szczegóły</div>
       <h1 class="h1">${esc(row.name)}</h1>
       <p class="sub"><span class="tag">${esc(kindLabel(row.kind))}</span> ${esc(d.view.presetName)} · klucz ${esc(d.view.keyName)} · ${stateCell(d.view)}</p>
     </div>

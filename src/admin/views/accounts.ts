@@ -201,7 +201,7 @@ function origsForm(v: AccountView): string {
     </form>`;
 }
 
-/** Szczegół konta: wymiana certyfikatu, odczytane pola i ślad sprawdzenia połączenia. */
+/** Szczegóły konta: wymiana certyfikatu, odczytane pola i ślad sprawdzenia połączenia. */
 export interface AccountFormValues {
   name: string; baseUrl: string; defaultCountryCode: string; storeContent: '0' | '1'; serviceIds: string;
 }

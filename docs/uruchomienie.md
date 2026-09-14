@@ -100,9 +100,11 @@ klucz API do wybranych. Wysyłka z nieznanym identyfikatorem kończy się kodem 
 
 Nadpis nadawcy to tekst wyświetlany na telefonie odbiorcy w miejscu numeru, na przykład
 `Firma Info`. Nadpis jest opcjonalny. Wiadomość wysłana bez nadpisu ma jako nadawcę numer
-przydzielony do konta w Multiinfo. Bramka obsługuje oba przypadki. Pole `orig` w żądaniu można
-pominąć, a konto i klucz mogą nie mieć nadpisu domyślnego. Bramka nie przekazuje wtedy
-parametru `orig` do Multiinfo.
+przydzielony do konta w Multiinfo, w postaci `486610xxxxx`. Taki numer jest w standardzie
+każdego planu Multiinfo, więc masz go od początku. Nadpis to usługa dodatkowa o nazwie
+**Dynamiczny Nadpis**. Polkomtel włącza ją na wniosek, opisany niżej. Bramka obsługuje oba
+przypadki. Pole `orig` w żądaniu można pominąć, a konto i klucz mogą nie mieć nadpisu
+domyślnego. Bramka nie przekazuje wtedy parametru `orig` do Multiinfo.
 
 O nadawcy widocznym na telefonie ostatecznie decyduje konfiguracja użytkownika API po stronie
 Multiinfo. Chodzi o zakładkę Nadpisy i pola „Domyślny nadpis” oraz „Wymuś wybrany nadpis”. Ta
@@ -620,11 +622,11 @@ pokazuje panel na ekranie **Wiadomości**.
 
 ![Lista wiadomości w panelu z filtrami stanu, kodowaniem, liczbą części i stanem doręczenia](obrazki/wiadomosci.png)
 
-Szczegół wiadomości (odnośnik w kolumnie identyfikatora) pokazuje podgląd segmentów, przebieg
+Szczegóły wiadomości (odnośnik w kolumnie identyfikatora) pokazują podgląd segmentów, przebieg
 z czasami kolejnych zdarzeń oraz ślad protokołu. Ślad to pełne żądanie do Multiinfo
 z zamaskowanym hasłem i odpowiedź linia po linii.
 
-![Szczegół doręczonej wiadomości: podgląd segmentów, dane, przebieg i ślad protokołu](obrazki/wiadomosc.png)
+![Szczegóły doręczonej wiadomości: podgląd segmentów, dane, przebieg i ślad protokołu](obrazki/wiadomosc.png)
 
 Gdy stan to `failed`, odpowiedź zawiera pola `providerCode` i `error` z powodem:
 
@@ -649,7 +651,7 @@ uruchomienia jest w `examples/php/README.md`.
 Po ustawieniu kierowania do API w Multiinfo (punkt 1.6) i zaznaczeniu odbioru przy kluczu
 (punkt 4.5) wyślij z telefonu SMS-a na numer usługi. W ciągu kilku sekund wiadomość pojawi się
 w panelu w zakładce **Odebrane** (ekran poniżej), a aplikacja dostanie powiadomienie
-`message.received`. Szczegół wiadomości pokazuje, do których kluczy poszło powiadomienie
+`message.received`. Szczegóły wiadomości pokazują, do których kluczy poszło powiadomienie
 i z jakim skutkiem.
 
 Jeżeli lista pozostaje pusta, sprawdź na karcie konta sekcję „Odbiór wiadomości”. Stan
@@ -659,7 +661,7 @@ Wtedy wiadomości najpewniej trafiają do panelu WWW Multiinfo zamiast do API.
 
 ![Zakładka Odebrane z trzema wiadomościami od abonentów, jedna powiązana z wysłaną wiadomością](obrazki/odebrane.png)
 
-Szczegół odebranej wiadomości (odnośnik w kolumnie identyfikatora) pokazuje dane z Multiinfo:
+Szczegóły odebranej wiadomości (odnośnik w kolumnie identyfikatora) pokazują dane z Multiinfo:
 numer nadawcy, numer usługi, identyfikator w Multiinfo, protokół. Pokazuje też ostatnią
 wiadomość wysłaną do nadawcy w ciągu 48 godzin. To podpowiedź kontekstu, bo Multiinfo nie mówi,
 na co abonent odpowiada. Dalej są odpowiedzi wysłane w wątku oraz ślad dostaw do aplikacji:
@@ -672,7 +674,7 @@ aplikacji”. Wyjątkiem jest konto bez przechowywania treści. Po zakończeniu 
 już treści SMS-a, więc zamiast przycisku jest podpis, a aplikacja dociąga wiadomość przez
 `GET /v1/inbound`.
 
-![Szczegół odebranej wiadomości: treść, dane, powiązana wysłana wiadomość i dostawa do aplikacji ze stanem doręczony](obrazki/odebrana.png)
+![Szczegóły odebranej wiadomości: treść, dane, powiązana wysłana wiadomość i dostawa do aplikacji ze stanem doręczony](obrazki/odebrana.png)
 
 Odpowiedź na odebraną wiadomość wysyła się zwykłym `POST /v1/messages` z polem `inReplyTo`
 (`docs/api.md`, rozdział 5a.3). Przykładowa aplikacja ma do tego formularz w sekcji „Odebrane

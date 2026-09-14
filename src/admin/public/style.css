@@ -131,6 +131,10 @@ table input.cell { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-siz
 .warn { border-left: 3px solid var(--fail); background: var(--fail-bg); color: var(--fail-ink);
         font-size: 12.5px; padding: 9px 11px; margin-bottom: 16px; }
 
+/* Rzeczowa uwaga przed zapisem: ta sama geometria co .warn, ton neutralny - to nie jest błąd. */
+.notice { border-left: 3px solid var(--edge); background: var(--rail); color: var(--ink);
+          font-size: 12.5px; padding: 9px 11px; margin-bottom: 16px; max-width: 760px; }
+
 /* Jednorazowy komunikat po akcji: cały pasek w tonie wyniku, x po prawej. */
 .flash { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
          border-left: 3px solid var(--ok); background: var(--ok-bg); color: var(--ok-ink);
@@ -264,7 +268,7 @@ a.tile:hover { border-color: var(--edge); }
 .foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
         border-top: 1px solid var(--rule); color: var(--muted); font-size: 12px; }
 
-/* Szczegół wiadomości: znacznik stanu i przebieg w czasie. */
+/* Szczegóły wiadomości: znacznik stanu i przebieg w czasie. */
 .pill { display: inline-flex; align-items: center; border: 1px solid var(--rule); border-radius: var(--radius);
         padding: 3px 9px; font-size: 12px; background: var(--surface); }
 .crumb { font-size: 12px; color: var(--muted); margin-bottom: 5px; }

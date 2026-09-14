@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type OutboundConfig } from '../../src/integrations/config.ts';
-import { presetById } from '../../src/integrations/presets/index.ts';
+import { presetById, type Preset } from '../../src/integrations/presets/index.ts';
+import { integrationFormPage, valuesFromPreset, type FormContext } from '../../src/admin/views/integrations.ts';
+import { simpleFormPage } from '../../src/admin/views/integration-simple.ts';
+import { simpleDefaults } from '../../src/admin/simple-form.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
 const NOW = new Date('2026-08-25T10:00:00Z');
@@ -193,6 +196,24 @@ describe('edycja', () => {
     expect(JSON.stringify(entry!.meta)).toContain('auth');
   });
 
+  it('przełącznik „pomiń” przeżywa edycję w formularzu zaawansowanym', async () => {
+    const preset = presetById('woocommerce-klient')!;
+    const sklepId = h.integrations.insert({
+      name: 'Sklep', kind: 'webhook_in', apiKeyId, serviceId: null, orig: null, preset: preset.id, enabled: 1,
+      config: { ...defaultInboundConfig(), ...preset.inbound }, secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const form = await page(`/integracje/${sklepId}/edytuj?tryb=zaawansowany`);
+    expect(form.body).toContain('<option value="skip" selected>');
+
+    // Formularz przebudowuje konfigurację od zera, więc bez pola w formularzu ustawienie by przepadło.
+    await post(`/integracje/${sklepId}/edytuj`, inboundFields({ name: 'Sklep', preset: preset.id, invalidRecipient: 'skip' }));
+    expect((h.integrations.get(sklepId)!.config as InboundConfig).invalidRecipient).toBe('skip');
+
+    // Żądanie bez pola wraca do wartości domyślnej, czyli do błędu.
+    await post(`/integracje/${sklepId}/edytuj`, inboundFields({ name: 'Sklep', preset: preset.id }));
+    expect((h.integrations.get(sklepId)!.config as InboundConfig).invalidRecipient).toBe('error');
+  });
+
   it('sekretny nagłówek wychodzącej przenosi się przy edycji bez wartości', async () => {
     const outId = h.integrations.insert({
       name: 'Helpdesk', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1,
@@ -236,5 +257,32 @@ describe('edycja', () => {
   it('edycja nieistniejącej to 404', async () => {
     expect((await page('/integracje/999/edytuj')).statusCode).toBe(404);
     expect((await post('/integracje/999/wlacz', {})).statusCode).toBe(404);
+  });
+});
+
+describe('ostrzeżenie gotowego ustawienia', () => {
+  const bazowy = presetById('prosty-json')!;
+  const zOstrzezeniem = { ...bazowy, warning: 'Klient zobaczy numer nadawcy' };
+  const ctx = (preset: Preset): FormContext => ({
+    kind: 'webhook_in', preset, keys: [{ id: 1, name: 'Klucz', accountName: 'Konto', serviceIds: ['24138'], origs: [] }],
+    secretNames: [], apiUrl: null,
+  });
+
+  it('formularz zaawansowany pokazuje ostrzeżenie nad przyciskami', () => {
+    const html = integrationFormPage(ctx(zOstrzezeniem), valuesFromPreset('webhook_in', zOstrzezeniem));
+    expect(html).toContain('class="notice"');
+    expect(html).toContain('Klient zobaczy numer nadawcy');
+    expect(html.indexOf('class="notice"')).toBeLessThan(html.indexOf('value="zapisz"'));
+  });
+
+  it('formularz prosty pokazuje to samo ostrzeżenie', () => {
+    const wartosci = valuesFromPreset('webhook_in', zOstrzezeniem);
+    const html = simpleFormPage(ctx(zOstrzezeniem), simpleDefaults(zOstrzezeniem, wartosci, true), { textPreviews: {} });
+    expect(html).toContain('Klient zobaczy numer nadawcy');
+  });
+
+  it('ustawienie bez ostrzeżenia nie rysuje ramki', () => {
+    const html = integrationFormPage(ctx(bazowy), valuesFromPreset('webhook_in', bazowy));
+    expect(html).not.toContain('class="notice"');
   });
 });

@@ -40,6 +40,14 @@ export const inboundConfigSchema = z.object({
   ]),
   maxParts: z.number().int().min(1).max(9),
   overflow: z.enum(['truncate', 'reject']),
+  /**
+   * Co zrobić, gdy numeru odbiorcy z ładunku nie da się odczytać. Wartość `error` to kod 422,
+   * mail do administratora oraz wpis o błędzie. Wartość `skip` to kod 200 i wpis o pominięciu:
+   * dla sklepów, które liczą odpowiedź inną niż 2xx jako nieudane dostarczenie i po kilku takich
+   * z rzędu same wyłączają webhook. Przełącznik zmienia tylko odpowiedź oraz wpis w dzienniku,
+   * nigdy tego, kto dostaje SMS. Zapisane wcześniej integracje czyta się jako `error`.
+   */
+  invalidRecipient: z.enum(['error', 'skip']).default('error'),
 });
 export type InboundConfig = z.infer<typeof inboundConfigSchema>;
 
@@ -73,6 +81,7 @@ export function parseConfig(kind: IntegrationKind, raw: unknown): IntegrationCon
 export const defaultInboundConfig = (): InboundConfig => ({
   condition: { mode: 'builder', rules: [] }, throttle: { limit: 10, windowMinutes: 10 }, eventLogLimit: 200,
   auth: { sources: [] }, to: { fallback: [] }, text: { mode: 'liquid', template: '' }, maxParts: 1, overflow: 'truncate',
+  invalidRecipient: 'error',
 });
 
 /** Adres jest pusty celowo: formularz go wymaga, a schemat zod odrzuca - domyślna wychodząca nie przejdzie bez adresu. */
