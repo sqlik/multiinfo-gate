@@ -86,6 +86,12 @@ describe('runInbound', () => {
     expect(runInbound(deps, integ, { msg: 'x' }, ip, NOW)).toMatchObject({ kind: 'error', code: 'no_recipient' });
     expect(runInbound(deps, integ, { to: 'jan@firma.pl', msg: 'x' }, ip, NOW)).toMatchObject({ kind: 'error', code: 'invalid_phone' });
   });
+  it('numer kupującego z wiodącym zerem idzie na SMS, nie na błąd', () => {
+    // Formularz zamówienia w sklepie przyjmuje numer w zapisie krajowym z zerem międzymiastowym.
+    const integ = make({ to: { path: 'billing.phone', fallback: [] } });
+    const out = runInbound(deps, integ, { billing: { phone: '0601 000 001' }, msg: 'x' }, ip, NOW) as { messageIds: string[] };
+    expect(deps.messages.get(out.messageIds[0]!)!.dest).toBe('48601000001');
+  });
   it('przełącznik „pomiń” zamienia zły numer z ładunku na pominięcie, ale tylko numer z ładunku', () => {
     // Sklepy liczą odpowiedź inną niż 2xx jako nieudane dostarczenie i po kilku z rzędu wyłączają webhook.
     const pomijaj = make({ to: { path: 'to', fallback: [] }, invalidRecipient: 'skip' });

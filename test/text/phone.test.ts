@@ -79,12 +79,24 @@ describe('normalizeRecipient', () => {
     ['0048601000001', '48601000001'],
     ['00 48 601 000 001', '48601000001'],
     ['48601000001', '48601000001'],
+    ['0601 000 001', '48601000001'],
+    ['0601000001', '48601000001'],
+    ['0-601-000-001', '48601000001'],
   ])('%s -> %s', (raw, expected) => {
     expect(normalizeRecipient(raw, '48')).toBe(expected);
   });
   it('odrzuca litery i za krótkie', () => {
     expect(() => normalizeRecipient('jan@firma.pl', '48')).toThrow(InvalidPhoneError);
     expect(() => normalizeRecipient('12345', '48')).toThrow(InvalidPhoneError);
+  });
+  it('zero krajowe zdejmuje tylko przed numerem właściwej długości', () => {
+    // Jedenaście cyfr po zerze to nie jest polski numer krajowy. Zero zostaje wtedy daną,
+    // nie prefiksem, a numer przechodzi tak, jak przechodził przed tą regułą.
+    expect(normalizeRecipient('060100000123', '48')).toBe('060100000123');
+  });
+  it('zero krajowe zdejmuje tylko dla kodu o znanej długości numeracji', () => {
+    // Kod 49 nie ma w bramce długości numeracji, więc zero zostaje daną, nie prefiksem.
+    expect(() => normalizeRecipient('0151 000 001', '49')).toThrow(InvalidPhoneError);
   });
 });
 

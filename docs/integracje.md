@@ -213,11 +213,12 @@ Numer odbiorcy bramka bierze z trzech źródeł, w tej kolejności:
    które numerów nie przesyłają.
 
 Normalizacja przyjmuje zapisy ludzkie. Usuwa spacje, myślniki, nawiasy i kropki. Zdejmuje
-wiodący `+` albo `00`. Numer dziewięciocyfrowy uzupełnia kodem kraju konta. W efekcie
-`+48 601 000 001`, `601-000-001`, `(48) 601.000.001` i `0048601000001` dają to samo:
-`48601000001`. Wynik przechodzi ten sam walidator, co numery w API. Jedno żądanie może mieć do
-50 odbiorców. Każdy dostaje osobną wiadomość z tą samą treścią. Więcej odbiorców daje wpis
-`błąd` bez wysyłki.
+wiodący `+` albo `00`. Zdejmuje też wiodące zero, czyli krajowy prefiks międzymiastowy, którym
+kupujący wpisuje numer w formularzu zamówienia. Numer dziewięciocyfrowy uzupełnia kodem kraju
+konta. W efekcie `+48 601 000 001`, `601-000-001`, `(48) 601.000.001`, `0048601000001`
+oraz `0601 000 001` dają to samo: `48601000001`. Wynik przechodzi ten sam walidator, co numery
+w API. Jedno żądanie może mieć do 50 odbiorców. Każdy dostaje osobną wiadomość z tą samą
+treścią. Więcej odbiorców daje wpis `błąd` bez wysyłki.
 
 Pole „Gdy numeru z ładunku nie da się odczytać” rozstrzyga, co bramka odpowiada aplikacji
 źródłowej. Domyślnie zgłasza błąd. Aplikacja dostaje kod 422, administrator dostaje maila,
