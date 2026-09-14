@@ -108,6 +108,7 @@ function present(m: MessageRow) {
     orig: m.orig,
     serviceId: m.serviceId,
     inReplyTo: m.inReplyTo,
+    costCenter: m.costCenter,
     createdAt: m.createdAt,
     sentAt: m.sentAt,
     finalAt: m.finalAt,
