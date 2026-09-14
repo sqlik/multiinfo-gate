@@ -690,6 +690,7 @@ export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, 
               : 'Zdarzenie bramki w takiej postaci, w jakiej trafia do szablonu.'}</div>
           </div>
         </details>
+        ${ctx.preset.warning ? `<div class="notice">${esc(ctx.preset.warning)}</div>` : ''}
         <div class="bar">
           <button class="btn btn-s" type="submit" name="action" value="sprawdz">Sprawdź szablon</button>
           <button class="btn btn-p" type="submit" name="action" value="zapisz">${edit ? 'Zapisz integrację' : 'Utwórz integrację'}</button>
