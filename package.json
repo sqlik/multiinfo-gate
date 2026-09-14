@@ -13,6 +13,7 @@
     "start": "node dist/index.js",
     "admin:dodaj": "node dist/cli/admin.js",
     "dev": "node --watch --experimental-strip-types src/index.ts",
+    "openapi": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/openapi.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "check:tekst": "sh scripts/check-tekst.sh",

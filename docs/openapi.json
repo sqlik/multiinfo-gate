@@ -1,0 +1,933 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Multiinfo Gate",
+    "version": "1.5.0",
+    "description": "Bramka SMS między aplikacjami a platformą Multiinfo operatora Plus. Opis obejmuje wysyłkę pojedynczej wiadomości, rozsyłkę, anulowanie, zamówienie raportu rozsyłki oraz stan bramki. Odczyt wiadomości, wiadomości przychodzące i powiadomienia webhook opisuje dokumentacja bramki. Przyjęcie wiadomości i rozsyłki jest asynchroniczne: bramka odpowiada kodem 202 po zapisaniu żądania w kolejce, a wysyłka do Multiinfo następuje później.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://{domena}",
+      "description": "Adres bramki. W trakcie testów przez tunel SSH jest to http://127.0.0.1:8080",
+      "variables": {
+        "domena": {
+          "default": "bramka.example.com",
+          "description": "Domena, pod którą wystawione jest API bramki"
+        }
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/v1/messages": {
+      "post": {
+        "operationId": "wyslijWiadomosc",
+        "summary": "Wysyłka wiadomości",
+        "description": "Wysyła jedną wiadomość do jednego numeru albo tę samą treść do kilku numerów, najwyżej 500. Bramka zapisuje wiadomość w kolejce i odpowiada natychmiast. Błędny numer na dowolnej pozycji odrzuca całe żądanie, więc żadna wiadomość nie trafia wtedy do kolejki.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Własny klucz powtórzenia, najwyżej 128 znaków. Powtórzone żądanie z tym samym kluczem i tą samą treścią zwraca pierwotną odpowiedź zamiast wysyłać wiadomość drugi raz.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "zamowienie-2026-08-26-114"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "to",
+                  "text"
+                ],
+                "properties": {
+                  "to": {
+                    "description": "Numer odbiorcy albo lista numerów, najwyżej 500. Numer bez kodu kraju dostaje kod domyślny konta, dla Polski 48. Lista jest przyjmowana w całości albo wcale.",
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "example": "48601000001"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "minItems": 1,
+                        "maxItems": 500
+                      }
+                    ]
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Treść wiadomości. Znaki spoza alfabetu GSM, w tym polskie, są dozwolone; wpływają na kodowanie i liczbę części.",
+                    "example": "Przypominamy o wizycie 26.08 o 10:00."
+                  },
+                  "orig": {
+                    "type": "string",
+                    "description": "Nadpis nadawcy. Musi należeć do nadpisów dozwolonych dla klucza. Pominięty oznacza nadpis domyślny klucza albo konta, a gdy żadnego nie ma, nadawcą jest numer przydzielony kontu w Multiinfo.",
+                    "example": "Firma Info"
+                  },
+                  "serviceId": {
+                    "description": "Identyfikator usługi Multiinfo. Pominięty oznacza usługę domyślną klucza",
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ],
+                    "example": "24138"
+                  },
+                  "encoding": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "gsm",
+                      "unicode"
+                    ],
+                    "default": "auto",
+                    "description": "Kodowanie treści. Wartość auto wybiera GSM-7, a przy znakach spoza GSM przechodzi na UCS-2. Wartość gsm wymusza GSM-7, przez co Multiinfo zastępuje polskie znaki łacińskimi odpowiednikami. Wartość unicode wymusza UCS-2."
+                  },
+                  "maxParts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9,
+                    "description": "Górna granica liczby części tej wiadomości. Nie może przekraczać limitu klucza"
+                  },
+                  "deliveryReport": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Raport doręczenia. Wartość false oznacza rezygnację z raportu, przez co stan wiadomości kończy się na sent"
+                  },
+                  "validTo": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Czas ważności w formacie ISO 8601, najwyżej 72 godziny od przyjęcia. Wiadomość niedoręczona do tego czasu dostaje stan expired.",
+                    "example": "2026-08-26T12:00:00.000Z"
+                  },
+                  "costCenter": {
+                    "type": "string",
+                    "description": "Dowolny znacznik na potrzeby rozliczeń aplikacji. Bramka zwraca go przy odczycie wiadomości"
+                  },
+                  "inReplyTo": {
+                    "type": "string",
+                    "pattern": "^in_[A-Za-z0-9_]{1,40}$",
+                    "description": "Identyfikator wiadomości przychodzącej, na którą to jest odpowiedź. Wolno go podać tylko przy jednym odbiorcy, którym jest nadawca tamtej wiadomości, i w tej samej usłudze, z której przyszła.",
+                    "example": "in_7b3d9f2a1c"
+                  }
+                }
+              },
+              "example": {
+                "to": "48601000001",
+                "text": "Przypominamy o wizycie 26.08 o 10:00.",
+                "orig": "Firma Info"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Wiadomość przyjęta do kolejki. Przy liście numerów odpowiedź jest tablicą takich obiektów, w kolejności numerów",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "description": "Wiadomość przyjęta do kolejki",
+                      "required": [
+                        "id",
+                        "status",
+                        "encoding",
+                        "parts",
+                        "characters",
+                        "slots",
+                        "slotsRemaining"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "Identyfikator wiadomości",
+                          "example": "msg_3f9c2a7b1e4d8c6a5b2f"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "Stan wiadomości zaraz po przyjęciu",
+                          "example": "queued"
+                        },
+                        "encoding": {
+                          "type": "string",
+                          "enum": [
+                            "gsm",
+                            "ucs2"
+                          ],
+                          "description": "Kodowanie wybrane dla treści"
+                        },
+                        "parts": {
+                          "type": "integer",
+                          "description": "Liczba części, na które wiadomość została podzielona. Operator rozlicza każdą część osobno"
+                        },
+                        "characters": {
+                          "type": "integer",
+                          "description": "Liczba znaków treści"
+                        },
+                        "slots": {
+                          "type": "integer",
+                          "description": "Liczba zajętych miejsc. W kodowaniu GSM-7 znaki { } [ ] ~ ^ | \\ i euro zajmują po dwa miejsca"
+                        },
+                        "slotsRemaining": {
+                          "type": "integer",
+                          "description": "Liczba wolnych miejsc w ostatniej części"
+                        }
+                      }
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "description": "Wiadomość przyjęta do kolejki",
+                        "required": [
+                          "id",
+                          "status",
+                          "encoding",
+                          "parts",
+                          "characters",
+                          "slots",
+                          "slotsRemaining"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "description": "Identyfikator wiadomości",
+                            "example": "msg_3f9c2a7b1e4d8c6a5b2f"
+                          },
+                          "status": {
+                            "type": "string",
+                            "description": "Stan wiadomości zaraz po przyjęciu",
+                            "example": "queued"
+                          },
+                          "encoding": {
+                            "type": "string",
+                            "enum": [
+                              "gsm",
+                              "ucs2"
+                            ],
+                            "description": "Kodowanie wybrane dla treści"
+                          },
+                          "parts": {
+                            "type": "integer",
+                            "description": "Liczba części, na które wiadomość została podzielona. Operator rozlicza każdą część osobno"
+                          },
+                          "characters": {
+                            "type": "integer",
+                            "description": "Liczba znaków treści"
+                          },
+                          "slots": {
+                            "type": "integer",
+                            "description": "Liczba zajętych miejsc. W kodowaniu GSM-7 znaki { } [ ] ~ ^ | \\ i euro zajmują po dwa miejsca"
+                          },
+                          "slotsRemaining": {
+                            "type": "integer",
+                            "description": "Liczba wolnych miejsc w ostatniej części"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "example": {
+                  "id": "msg_3f9c2a7b1e4d8c6a5b2f",
+                  "status": "queued",
+                  "encoding": "gsm",
+                  "parts": 1,
+                  "characters": 39,
+                  "slots": 39,
+                  "slotsRemaining": 121
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Błąd w ciele żądania: invalid_body, invalid_phone, invalid_orig, too_many_parts, service_required, valid_to_in_past, valid_to_too_far",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "invalid_phone",
+                    "message": "Numer 4860100000 ma 10 cyfr; numer z kodem kraju 48 ma ich 11."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Klucz API brakujący, nieznany, odwołany albo wygasły: missing_api_key, invalid_api_key, revoked_api_key, expired_api_key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "missing_api_key",
+                    "message": "Brak nagłówka Authorization ze schematem Bearer."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Usługa albo nadpis spoza uprawnień klucza: service_not_allowed, orig_not_allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "orig_not_allowed",
+                    "message": "Klucz nie ma dostępu do nadpisu Firma Info. Dozwolone nadpisy: Firma Sklep."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Ten sam Idempotency-Key użyty z inną treścią albo innym numerem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "idempotency_conflict",
+                    "message": "Klucz idempotencji został już użyty z inną treścią wiadomości."
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Przekroczony limit żądań klucza na minutę",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "rate_limited",
+                    "message": "Przekroczono limit 60 żądań na minutę."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/messages/{id}/cancel": {
+      "post": {
+        "operationId": "anulujWiadomosc",
+        "summary": "Anulowanie wiadomości",
+        "description": "Zatrzymuje wiadomość, która nie dotarła jeszcze do odbiorcy. Wiadomość czekającą w kolejce bramka anuluje natychmiast. Wiadomość przekazaną do Multiinfo anuluje operator, o ile nie poszła jeszcze do sieci. Wiadomość wieloczęściowa jest anulowana część po części.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Identyfikator wiadomości zwrócony przy wysyłce",
+            "schema": {
+              "type": "string",
+              "pattern": "^msg_[A-Za-z0-9]+$"
+            },
+            "example": "msg_3f9c2a7b1e4d8c6a5b2f"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Wiadomość anulowana",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "status"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "Identyfikator wiadomości"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "cancelled"
+                      ],
+                      "description": "Stan po anulowaniu"
+                    }
+                  }
+                },
+                "example": {
+                  "id": "msg_3f9c2a7b1e4d8c6a5b2f",
+                  "status": "cancelled"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Klucz API brakujący, nieznany, odwołany albo wygasły: missing_api_key, invalid_api_key, revoked_api_key, expired_api_key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "missing_api_key",
+                    "message": "Brak nagłówka Authorization ze schematem Bearer."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak wiadomości albo wiadomość innego klucza; bramka nie rozróżnia tych dwóch sytuacji",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "message_not_found",
+                    "message": "Nie ma wiadomości o tym identyfikatorze."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Anulowanie nie jest już możliwe: already_final, gdy wiadomość ma stan ostateczny, albo already_passed, gdy Multiinfo przekazało ją do abonenta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "already_final",
+                    "message": "Wiadomość ma już stan ostateczny: delivered."
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Błąd po stronie Multiinfo; body zawiera providerCode",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "provider_error",
+                    "message": "Multiinfo odrzuciło żądanie anulowania."
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Multiinfo odrzuciło certyfikat bramki; naprawa należy do administratora bramki",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "account_certificate",
+                    "message": "Multiinfo odrzuciło certyfikat bramki."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/packages": {
+      "post": {
+        "operationId": "utworzRozsylke",
+        "summary": "Utworzenie rozsyłki",
+        "description": "Zleca rozsyłkę do listy odbiorców, najwyżej 5000 pozycji. Każdy odbiorca może mieć własną treść oraz własny identyfikator zwracany w raporcie. Kodowanie jest wspólne dla całej rozsyłki: jeżeli którakolwiek treść wymaga UCS-2, wszystkie wiadomości idą w UCS-2.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "recipients"
+                ],
+                "properties": {
+                  "recipients": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 5000,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "to"
+                      ],
+                      "properties": {
+                        "to": {
+                          "type": "string",
+                          "description": "Numer odbiorcy",
+                          "example": "48601000001"
+                        },
+                        "text": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Treść dla tego odbiorcy. Pominięta oznacza treść domyślną rozsyłki"
+                        },
+                        "clientId": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9._-]{1,20}$",
+                          "description": "Własny identyfikator odbiorcy, od 1 do 20 znaków. Bramka zwraca go w raporcie, co ułatwia dopasowanie wyników do rekordów aplikacji.",
+                          "example": "faktura-114"
+                        }
+                      }
+                    },
+                    "description": "Lista odbiorców, od 1 do 5000 pozycji"
+                  },
+                  "defaultText": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Treść dla odbiorców bez własnej treści. Jest wymagana, jeżeli którykolwiek odbiorca jej nie ma"
+                  },
+                  "orig": {
+                    "type": "string",
+                    "description": "Nadpis nadawcy. Musi należeć do nadpisów dozwolonych dla klucza. Pominięty oznacza nadpis domyślny klucza albo konta, a gdy żadnego nie ma, nadawcą jest numer przydzielony kontu w Multiinfo.",
+                    "example": "Firma Info"
+                  },
+                  "serviceId": {
+                    "description": "Identyfikator usługi Multiinfo. Pominięty oznacza usługę domyślną klucza",
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ],
+                    "example": "24138"
+                  },
+                  "encoding": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "gsm",
+                      "unicode"
+                    ],
+                    "default": "auto",
+                    "description": "Kodowanie treści. Wartość auto wybiera GSM-7, a przy znakach spoza GSM przechodzi na UCS-2. Wartość gsm wymusza GSM-7, przez co Multiinfo zastępuje polskie znaki łacińskimi odpowiednikami. Wartość unicode wymusza UCS-2."
+                  },
+                  "deliveryReport": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Raport doręczenia. Wartość false oznacza rezygnację z raportu, przez co stan wiadomości kończy się na sent"
+                  },
+                  "costCenter": {
+                    "type": "string",
+                    "description": "Dowolny znacznik na potrzeby rozliczeń aplikacji. Bramka zwraca go przy odczycie wiadomości"
+                  },
+                  "startAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Termin rozpoczęcia rozsyłki w formacie ISO 8601. Musi być w przyszłości; Multiinfo rusza o tej godzinie.",
+                    "example": "2026-08-27T08:00:00.000Z"
+                  }
+                }
+              },
+              "example": {
+                "defaultText": "Przypominamy o wizycie.",
+                "recipients": [
+                  {
+                    "to": "48601000001"
+                  },
+                  {
+                    "to": "48605000001",
+                    "text": "Faktura 114 oczekuje na oplacenie.",
+                    "clientId": "faktura-114"
+                  }
+                ],
+                "orig": "Firma Info"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Rozsyłka przyjęta do kolejki",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "status",
+                    "recipients",
+                    "encoding",
+                    "multipart"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "Identyfikator rozsyłki"
+                    },
+                    "status": {
+                      "type": "string",
+                      "description": "Stan rozsyłki zaraz po przyjęciu",
+                      "example": "queued"
+                    },
+                    "recipients": {
+                      "type": "integer",
+                      "description": "Liczba przyjętych odbiorców"
+                    },
+                    "encoding": {
+                      "type": "string",
+                      "enum": [
+                        "gsm",
+                        "ucs2"
+                      ],
+                      "description": "Kodowanie całej rozsyłki"
+                    },
+                    "multipart": {
+                      "type": "boolean",
+                      "description": "Czy którakolwiek treść jest dzielona na części"
+                    }
+                  }
+                },
+                "example": {
+                  "id": "pkg_7c1e9a2b3d4f5a6b7c8d",
+                  "status": "queued",
+                  "recipients": 2,
+                  "encoding": "gsm",
+                  "multipart": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Błąd w ciele żądania: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts, invalid_orig, service_required, start_at_in_past",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "text_required",
+                    "message": "recipients.3: brak treści i brak treści domyślnej."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Klucz API brakujący, nieznany, odwołany albo wygasły: missing_api_key, invalid_api_key, revoked_api_key, expired_api_key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "missing_api_key",
+                    "message": "Brak nagłówka Authorization ze schematem Bearer."
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Usługa albo nadpis spoza uprawnień klucza: service_not_allowed, orig_not_allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "service_not_allowed",
+                    "message": "Klucz nie ma dostępu do usługi 24139."
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Przekroczony limit żądań klucza na minutę",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "rate_limited",
+                    "message": "Przekroczono limit 60 żądań na minutę."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/packages/{id}/report": {
+      "post": {
+        "operationId": "zamowRaportRozsylki",
+        "summary": "Zamówienie raportu rozsyłki",
+        "description": "Zamawia raport rozsyłki jeszcze raz. Bramka zamawia go sama po zakończeniu rozsyłki, więc to wywołanie przydaje się, gdy poprzedni raport ma stan failed. Gotowy raport odczytuje się wywołaniem GET pod tym samym adresem.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Identyfikator rozsyłki zwrócony przy jej utworzeniu",
+            "schema": {
+              "type": "string",
+              "pattern": "^pkg_[A-Za-z0-9]+$"
+            },
+            "example": "pkg_7c1e9a2b3d4f5a6b7c8d"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Raport zamówiony; bramka pobierze go z Multiinfo w tle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "report"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "Identyfikator rozsyłki"
+                    },
+                    "report": {
+                      "type": "object",
+                      "required": [
+                        "status"
+                      ],
+                      "description": "Stan raportu",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "ready",
+                            "failed",
+                            "expired",
+                            "none"
+                          ],
+                          "description": "Stan raportu; zaraz po zamówieniu pending"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "id": "pkg_7c1e9a2b3d4f5a6b7c8d",
+                  "report": {
+                    "status": "pending"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Klucz API brakujący, nieznany, odwołany albo wygasły: missing_api_key, invalid_api_key, revoked_api_key, expired_api_key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "missing_api_key",
+                    "message": "Brak nagłówka Authorization ze schematem Bearer."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak rozsyłki albo rozsyłka innego klucza; bramka nie rozróżnia tych dwóch sytuacji",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "package_not_found",
+                    "message": "Nie ma rozsyłki o tym identyfikatorze."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Rozsyłka jeszcze trwa, więc raportu nie ma czego zamówić",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "package_not_completed",
+                    "message": "Raport jest dostępny po zakończeniu rozsyłki; stan: sending."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "stanBramki",
+        "summary": "Stan bramki",
+        "description": "Zwraca stan bramki bez klucza API. Stan degraded oznacza jedną z trzech sytuacji: konto Multiinfo jest wstrzymane, jego certyfikat wygasa w ciągu siedmiu dni albo odbiór wiadomości przychodzących zatrzymał się na błędzie Multiinfo. Wywołanie nadaje się do monitoringu zewnętrznego. Ten sam adres na porcie panelu odpowiada szczegółami.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Stan bramki",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok",
+                        "degraded"
+                      ],
+                      "description": "Stan bramki"
+                    }
+                  }
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Klucz API bramki w nagłówku Authorization, w postaci Bearer mig_live_... Klucz generuje administrator bramki w panelu."
+      }
+    },
+    "schemas": {
+      "Blad": {
+        "type": "object",
+        "description": "Opis błędu",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stała wartość do rozpoznania błędu w kodzie",
+            "example": "invalid_phone"
+          },
+          "message": {
+            "type": "string",
+            "description": "Wyjaśnienie po polsku, z wartościami z żądania"
+          },
+          "providerCode": {
+            "type": "integer",
+            "description": "Kod błędu Multiinfo. Występuje tylko przy błędach pochodzących od operatora",
+            "example": -41
+          }
+        }
+      },
+      "OdpowiedzBledu": {
+        "type": "object",
+        "description": "Kształt każdej odpowiedzi błędu",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/Blad"
+          }
+        }
+      }
+    }
+  }
+}
