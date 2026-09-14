@@ -709,7 +709,7 @@ export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, 
   </div>`;
 }
 
-// --- szczegół ---------------------------------------------------------------------------
+// --- szczegóły ---------------------------------------------------------------------------
 
 export interface DetailEvent { row: IntegrationEventRow; /** Dostawa nieudana, którą da się ponowić. */ retryable: boolean }
 
@@ -809,7 +809,7 @@ export function integrationDetailPage(d: IntegrationDetail): string {
     : d.events.map((e) => eventRow(row.id, e)).join('');
   return `<div class="head">
     <div>
-      <div class="crumb"><a href="/integracje">Integracje</a> / szczegół</div>
+      <div class="crumb"><a href="/integracje">Integracje</a> / szczegóły</div>
       <h1 class="h1">${esc(row.name)}</h1>
       <p class="sub"><span class="tag">${esc(kindLabel(row.kind))}</span> ${esc(d.view.presetName)} · klucz ${esc(d.view.keyName)} · ${stateCell(d.view)}</p>
     </div>

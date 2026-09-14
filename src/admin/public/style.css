@@ -268,7 +268,7 @@ a.tile:hover { border-color: var(--edge); }
 .foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
         border-top: 1px solid var(--rule); color: var(--muted); font-size: 12px; }
 
-/* Szczegół wiadomości: znacznik stanu i przebieg w czasie. */
+/* Szczegóły wiadomości: znacznik stanu i przebieg w czasie. */
 .pill { display: inline-flex; align-items: center; border: 1px solid var(--rule); border-radius: var(--radius);
         padding: 3px 9px; font-size: 12px; background: var(--surface); }
 .crumb { font-size: 12px; color: var(--muted); margin-bottom: 5px; }

@@ -134,7 +134,7 @@ export function packagePage(d: PackageDetail): string {
 
   return `<div class="head">
     <div>
-      <div class="crumb"><a href="/rozsylki">Rozsyłki</a> / szczegół</div>
+      <div class="crumb"><a href="/rozsylki">Rozsyłki</a> / szczegóły</div>
       <h1 class="h1 id">${esc(p.id)}</h1>
       <p class="sub">${esc(stamp(p.createdAt))} · konto ${esc(d.accountName)} · klucz „${esc(d.keyName)}”</p>
     </div>
