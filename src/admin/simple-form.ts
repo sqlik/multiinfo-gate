@@ -1,5 +1,5 @@
 import type { IntegrationKind } from '../integrations/config.ts';
-import type { Preset, SimpleSecret } from '../integrations/presets/types.ts';
+import type { Preset, SimpleParam, SimpleSecret } from '../integrations/presets/types.ts';
 import type { IntegrationFormValues } from './views/integrations.ts';
 
 type Body = Record<string, string | string[] | undefined>;
@@ -44,7 +44,15 @@ export function simpleDefaults(preset: Preset, base: IntegrationFormValues, fres
   };
 }
 
-const paramPattern = (key: string) => new RegExp(`"${key}":\\s*("[^"]*"|\\d+)`);
+/** Klucz parametru jest daną z ustawienia, nie wyrażeniem - nawiasy Bitriksa muszą zostać nawiasami. */
+const escapeRe = (raw: string): string => raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const paramPattern = (key: string) => new RegExp(`"${escapeRe(key)}":\\s*("[^"]*"|\\d+)`);
+/** Parametr w ciągu zapytania: `klucz=wartość` do najbliższego `&` albo końca wartości tekstowej. */
+const queryPattern = (key: string) => new RegExp(`${escapeRe(key)}=([^&"]*)`);
+
+/** Wzorzec, którym ustawienie znajduje swój parametr w szablonie body. */
+export const paramPatternFor = (param: SimpleParam): RegExp => param.where === 'query' ? queryPattern(param.key) : paramPattern(param.key);
 
 /** Nazwa konta wchodzi do adresu, pod który bramka sama zadzwoni - bez ukośnika, kropki i znaku zapytania. */
 const ACCOUNT_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -52,7 +60,7 @@ const ACCOUNT_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 function paramsFromTemplate(preset: Preset, template: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const p of preset.simple?.outbound?.params ?? []) {
-    const m = paramPattern(p.key).exec(template);
+    const m = paramPatternFor(p).exec(template);
     out[p.key] = m ? m[1]!.replace(/^"|"$/g, '') : '';
   }
   return out;
@@ -122,6 +130,9 @@ export function simpleToValues(kind: IntegrationKind, preset: Preset, sv: Simple
   const simple = preset.simple?.outbound;
   if (!simple) return fail('To ustawienie nie ma trybu prostego.');
   v.url = sv.url;
+  if (simple.address.mustEndWith !== undefined && !sv.url.endsWith(simple.address.mustEndWith)) {
+    return fail(`${simple.address.label} musi kończyć się na ${simple.address.mustEndWith} - dopisz to na końcu adresu z aplikacji.`);
+  }
   v.headers = base.headers.map((h) => ({ ...h }));
   for (const sec of simple.secrets) {
     const raw = sv.secrets[sec.ref] ?? '';
@@ -136,8 +147,11 @@ export function simpleToValues(kind: IntegrationKind, preset: Preset, sv: Simple
     const raw = sv.params[p.key] ?? '';
     if (raw === '') return fail(`Podaj: ${p.label.toLowerCase()}.`);
     if (p.digits && !/^\d{1,12}$/.test(raw)) return fail(`${p.label}: podaj liczbę.`);
-    if (!paramPattern(p.key).test(template)) return fail(`Szablon nie ma pola ${p.key} - zmień je w trybie zaawansowanym.`);
-    template = template.replace(paramPattern(p.key), `"${p.key}": ${p.digits ? raw : JSON.stringify(raw)}`);
+    const wzor = paramPatternFor(p);
+    if (!wzor.test(template)) return fail(`Szablon nie ma pola ${p.key} - zmień je w trybie zaawansowanym.`);
+    // W ciągu zapytania wartość idzie bez cudzysłowów; w JSON-ie z cudzysłowami, gdy nie jest liczbą.
+    const podstaw = p.where === 'query' ? `${p.key}=${raw}` : `"${p.key}": ${p.digits ? raw : JSON.stringify(raw)}`;
+    template = template.replace(wzor, () => podstaw);
   }
   v.bodyTemplate = template;
   return { ok: true, values: v };
@@ -195,10 +209,11 @@ export function detectSimple(preset: Preset, kind: IntegrationKind, v: Integrati
   let expected = body.template;
   const params: Record<string, string> = {};
   for (const param of simple.params) {
-    const m = paramPattern(param.key).exec(v.bodyTemplate);
+    const wzor = paramPatternFor(param);
+    const m = wzor.exec(v.bodyTemplate);
     if (!m) return null;
     params[param.key] = m[1]!.replace(/^"|"$/g, '');
-    expected = expected.replace(paramPattern(param.key), m[0]);
+    expected = expected.replace(wzor, () => m[0]);
   }
   if (v.bodyTemplate !== expected) return null;
   if ((v.responseRefPath || '') !== (p.responseRefPath ?? '')) return null;

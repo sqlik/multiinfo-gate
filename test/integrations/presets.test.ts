@@ -3,6 +3,7 @@ import { defaultInboundConfig, defaultOutboundConfig, parseConfig, type InboundC
 import { PRESETS, presetById, presetsFor } from '../../src/integrations/presets/index.ts';
 import { previewInbound } from '../../src/integrations/pipeline.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
+import { paramPatternFor } from '../../src/admin/simple-form.ts';
 import { buildOutboundContext, renderOutbound } from '../../src/worker/integrations.ts';
 
 const engine = new TemplateEngine();
@@ -22,7 +23,7 @@ describe('gotowe ustawienia', () => {
     expect(presetById('uptime-kuma')?.name).toBe('Uptime Kuma');
     expect(presetById('brak')).toBeUndefined();
     expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'fakturownia', 'fakturownia-klient', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
-    expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'home-assistant', 'freescout', 'freshdesk', 'slack', 'ntfy', 'custom']);
+    expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'home-assistant', 'freescout', 'freshdesk', 'slack', 'ntfy', 'bitrix24', 'custom']);
   });
   it('każde ustawienie ma konfigurację dla każdego swojego rodzaju, instrukcję i sekrety ze wskazówką', () => {
     for (const p of PRESETS) {
@@ -92,7 +93,7 @@ describe('gotowe ustawienia', () => {
       const body = preset.outbound!.body!;
       for (const param of simple.params) {
         expect(body.mode).toBe('json');
-        expect((body as { template: string }).template).toMatch(new RegExp(`"${param.key}":\\s*("[^"]*"|\\d+)`));
+        expect((body as { template: string }).template).toMatch(paramPatternFor(param));
       }
       for (const s of simple.secrets) expect(preset.outbound!.headers!.some((h) => h.valueRef === s.ref), `${preset.id} ${s.ref}`).toBe(true);
     });
