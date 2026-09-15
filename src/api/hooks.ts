@@ -81,7 +81,7 @@ export function registerHookRoutes(app: FastifyInstance, deps: ApiDeps): void {
     }
 
     const payload = request.body ?? {};
-    const outcome = runInbound(deps, inbound, payload, { sourceIp: request.ip }, at);
+    const outcome = await runInbound(deps, inbound, payload, { sourceIp: request.ip }, at);
     switch (outcome.kind) {
       case 'sent':
         return reply.code(202).send({ accepted: true, messageIds: outcome.messageIds });
