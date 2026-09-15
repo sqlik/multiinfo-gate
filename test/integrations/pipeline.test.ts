@@ -99,6 +99,22 @@ describe('runInbound: zapytanie uzupełniające', () => {
     expect(wolano).toBe(1);
   });
 
+  it('kartoteka z dopytania bez numeru: przy „pomiń” pominięcie, przy „błąd” no_recipient', async () => {
+    deps.resolve = async () => ['93.184.216.34'];
+    deps.enrichGet = async () => ({ status: 200, body: '{"name":"Anna","mobile_phone":""}' });
+    const pomijaj = make({ ...zKartoteki, enrich: DOPYTANIE, invalidRecipient: 'skip' });
+    expect(await runInbound(deps, pomijaj, { deal: { client: { id: 5 } } }, ip, NOW)).toEqual({ kind: 'skipped', reason: 'invalid_recipient' });
+    expect(events(pomijaj.id)).toEqual(['skipped']);
+
+    // Bez przełącznika „pomiń” brak numeru zostaje błędem, tak jak przy numerze z ładunku.
+    const zglaszaj = make({ ...zKartoteki, enrich: DOPYTANIE }, { name: 'Faktury' });
+    expect(await runInbound(deps, zglaszaj, { deal: { client: { id: 5 } } }, ip, NOW)).toMatchObject({ kind: 'error', code: 'no_recipient' });
+
+    // Przełącznik nie rozciąga się na numer, który ma przyjść z ładunku - tam brak numeru to dalej błąd ustawienia.
+    const zLadunku = make({ ...zKartoteki, to: { path: 'telefon', fallback: [] }, invalidRecipient: 'skip', enrich: DOPYTANIE }, { name: 'Z ladunku' });
+    expect(await runInbound(deps, zLadunku, { deal: { client: { id: 5 } } }, ip, NOW)).toMatchObject({ kind: 'error', code: 'no_recipient' });
+  });
+
   it('sekret dopytania nie trafia do dziennika ani do treści SMS-a', async () => {
     deps.resolve = async () => ['93.184.216.34'];
     deps.enrichGet = async () => ({ status: 500, body: '{}' });

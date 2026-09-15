@@ -121,12 +121,22 @@ export function fitToParts(text: string, maxParts: number): { text: string; part
   return { text: cut, parts: fits(cut) ?? maxParts, over: true };
 }
 
-/** Podgląd do „Sprawdź szablon” - bez zapisu, bez wysyłki, bez strażników. */
-export function previewInbound(engine: TemplateEngine, config: InboundConfig, payload: unknown, countryCode: string, now: Date): InboundPreview {
+/**
+ * Podgląd do „Sprawdź szablon” - bez zapisu, bez wysyłki, bez strażników. Podgląd nie pyta
+ * aplikacji po sieci: gdy ustawienie ma zapytanie uzupełniające, podstawia jego przykładową
+ * odpowiedź, tak samo jak zrobiłby to potok z prawdziwą.
+ */
+export function previewInbound(
+  engine: TemplateEngine, config: InboundConfig, payload: unknown, countryCode: string, now: Date, enrichSample?: unknown,
+): InboundPreview {
   const context = buildInboundContext(payload, { name: 'podgląd' }, now);
+  if (config.enrich && enrichSample !== undefined) {
+    context[config.enrich.as] = enrichSample;
+    context.p = withEnriched(payload, config.enrich.as, enrichSample);
+  }
   try {
     const ok = matches(config.condition, context, engine);
-    const raw = rawRecipients(config, payload, null).list;
+    const raw = rawRecipients(config, context.p, null).list;
     // Podgląd nie sięga do bazy odebranych - mówi tylko, że odbiorca wyjdzie z wątku.
     const threadRecipient = raw.length === 0 && ticketRef(config, payload) !== null;
     const recipients = raw.map((r) => {
@@ -227,6 +237,13 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
   }
   if (text === '') return fail('empty_text', 'Szablon dał pustą treść - sprawdź, czy ładunek ma oczekiwane pola.');
   if (recipients.list.length === 0) {
+    // Kartoteka klienta bywa bez komórki, a to dana z aplikacji, nie pomyłka administratora.
+    // Dlatego przy numerze spod dopytania przełącznik „pomiń” obejmuje także brak numeru.
+    const zDopytania = config.enrich !== undefined && config.to.path?.startsWith(`${config.enrich.as}.`) === true;
+    if (zDopytania && config.invalidRecipient === 'skip') {
+      note('skipped', { reason: 'odpowiedź dopytania nie ma numeru odbiorcy' });
+      return { kind: 'skipped', reason: 'invalid_recipient' };
+    }
     return fail('no_recipient', ref !== null
       ? `Brak numeru odbiorcy w ładunku, zgłoszenie ${ref} nie pasuje do żadnego odebranego SMS-a, a lista zapasowa jest pusta.`
       : 'Brak numeru odbiorcy w ładunku i pusta lista zapasowa.');

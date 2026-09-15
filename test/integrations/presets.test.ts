@@ -21,7 +21,7 @@ describe('gotowe ustawienia', () => {
     expect(ids.at(-1)).toBe('custom');
     expect(presetById('uptime-kuma')?.name).toBe('Uptime Kuma');
     expect(presetById('brak')).toBeUndefined();
-    expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'fakturownia', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
+    expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'fakturownia', 'fakturownia-klient', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
     expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'home-assistant', 'freescout', 'freshdesk', 'slack', 'ntfy', 'custom']);
   });
   it('każde ustawienie ma konfigurację dla każdego swojego rodzaju, instrukcję i sekrety ze wskazówką', () => {
@@ -47,7 +47,7 @@ describe('gotowe ustawienia', () => {
     if (preset.inbound && preset.sample !== undefined && preset.expect) {
       it(`${preset.id}: przykładowy ładunek daje oczekiwany wynik`, () => {
         const config = { ...defaultInboundConfig(), ...preset.inbound };
-        const out = previewInbound(engine, config, preset.sample, '48', NOW);
+        const out = previewInbound(engine, config, preset.sample, '48', NOW, preset.enrichSample);
         expect(out.error).toBeNull();
         if (preset.expect!.skipped) expect(out.matches).toBe(false);
         if (preset.expect!.recipients) expect(out.recipients).toEqual(preset.expect!.recipients);
@@ -75,7 +75,7 @@ describe('gotowe ustawienia', () => {
       for (const w of simple.when) {
         for (const t of simple.text) {
           const config = parseConfig('webhook_in', { ...defaultInboundConfig(), ...preset.inbound, condition: w.condition, text: t.text });
-          const out = previewInbound(engine, config, preset.sample, '48', NOW);
+          const out = previewInbound(engine, config, preset.sample, '48', NOW, preset.enrichSample);
           expect(out.error, `${preset.id} ${w.id} ${t.id}`).toBeNull();
           if (out.matches) expect(out.text, `${preset.id} ${t.id}`).not.toBe('');
         }

@@ -26,9 +26,14 @@ let messages: MessagesRepo;
 let apiKeys: ApiKeysRepo;
 let apiKeyId: number;
 const notify = vi.fn();
+/** Atrapa zapytania uzupełniającego: co bramka zapytała oraz co dostała w odpowiedzi. */
+let zapytania: string[] = [];
+let odpowiedz: { status: number; body: string } = { status: 200, body: '{}' };
 
 beforeEach(async () => {
   notify.mockReset();
+  zapytania = [];
+  odpowiedz = { status: 200, body: '{}' };
   const db = openDatabase(':memory:');
   const key = randomBytes(32);
   const accounts = new AccountsRepo(db, key);
@@ -44,6 +49,8 @@ beforeEach(async () => {
     clients: {} as never, inbound: new InboundMessagesRepo(db), rateLimiter: new RateLimiter(), now: () => NOW,
     // Stały zegar: kubełek nie uzupełnia się w trakcie testu zalewu.
     ...deps, hookLimiter: new RateLimiter(() => NOW.getTime()), notifier: { notify },
+    resolve: async () => ['93.184.216.34'],
+    enrichGet: async (url) => { zapytania.push(url); return odpowiedz; },
   });
   await app.ready();
 });
@@ -176,6 +183,40 @@ describe('POST /hooks/:hookId', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ accepted: false, reason: 'invalid_recipient' });
     expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('Fakturownia dla klienta: token z ładunku, dopytanie o kartotekę, SMS na komórkę nabywcy', async () => {
+    const preset = presetById('fakturownia-klient')!;
+    const konto = { ...preset.inbound!.enrich!, url: 'https://firma.fakturownia.pl/clients/{{ p.deal.client.external_ids.fakturownia }}.json' };
+    const integ = make({ ...preset.inbound, enrich: konto }, { payloadToken: 'tajne123', enrichToken: 'api456' });
+    odpowiedz = { status: 200, body: JSON.stringify(preset.enrichSample) };
+    const res = await post(integ.hookId!, { ...(preset.sample as object), api_token: 'tajne123' });
+    expect(res.statusCode).toBe(202);
+    expect(zapytania[0]).toContain('/clients/276200905.json');
+    expect(zapytania[0]).toContain('api_token=api456');
+    const wyslana = messages.get(res.json().messageIds[0])!;
+    expect(wyslana.dest).toBe('48601000001');
+    expect(wyslana.body).toBe(preset.expect!.text);
+    // Token z ładunku ani kod API nie mają prawa wylądować w dzienniku integracji.
+    const wpisy = JSON.stringify(integrationEvents.list(integ.id, 10));
+    expect(wpisy).not.toContain('tajne123');
+    expect(wpisy).not.toContain('api456');
+  });
+
+  it('Fakturownia dla klienta: kartoteka bez komórki daje 200 z pominięciem, nie błąd', async () => {
+    const preset = presetById('fakturownia-klient')!;
+    const konto = { ...preset.inbound!.enrich!, url: 'https://firma.fakturownia.pl/clients/{{ p.deal.client.external_ids.fakturownia }}.json' };
+    const integ = make({ ...preset.inbound, enrich: konto }, { payloadToken: 'tajne123', enrichToken: 'api456' });
+    odpowiedz = { status: 200, body: '{"id":276200905,"name":"Anna Kowalska","phone":"+48 22 123 45 67","mobile_phone":""}' };
+    const bez = await post(integ.hookId!, { ...(preset.sample as object), api_token: 'tajne123' });
+    expect(bez.statusCode).toBe(200);
+    expect(bez.json()).toMatchObject({ accepted: false });
+
+    // Niedostępna aplikacja też nie może zgłosić błędu: Fakturownia wyłącza webhooka po serii nieudanych dostarczeń.
+    odpowiedz = { status: 500, body: '{}' };
+    const padla = await post(integ.hookId!, { ...(preset.sample as object), api_token: 'tajne123' });
+    expect(padla.statusCode).toBe(200);
+    expect(integrationEvents.list(integ.id, 10).map((e) => e.result)).toEqual(['skipped', 'skipped']);
   });
 
   it('za duży ładunek to 413, zły JSON to 400', async () => {
