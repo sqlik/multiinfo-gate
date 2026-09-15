@@ -1,8 +1,10 @@
 import fastifyFormbody from '@fastify/formbody';
 import Fastify, { type FastifyInstance } from 'fastify';
+import type { EnrichGet } from '../integrations/enrich.ts';
 import type { SourceMatcher } from '../integrations/sources.ts';
 import type { TemplateEngine } from '../integrations/templates.ts';
 import { silentLogger, type Logger } from '../log.ts';
+import type { Resolver } from '../net/private-address.ts';
 import type { AdminNotifier } from '../notifications/rules.ts';
 import type { IntegrationEventsRepo } from '../store/integration-events.ts';
 import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
@@ -44,6 +46,11 @@ export interface ApiDeps {
   sources: SourceMatcher;
   /** Limit żądań na adres źródłowy dla `/hooks/`; bez niego brak limitu (testy). */
   hookLimiter?: RateLimiter;
+  /** Wysyłka zapytania uzupełniającego oraz rozwiązywanie jego nazwy; testy podstawiają atrapy. */
+  enrichGet?: EnrichGet;
+  resolve?: Resolver;
+  /** MIG_WEBHOOK_ALLOW_PRIVATE: zgoda na zapytanie uzupełniające do sieci wewnętrznej. */
+  allowPrivateWebhooks?: boolean;
   notifier?: AdminNotifier;
   /** Odwrotne proxy, którym wolno podać adres klienta (MIG_TRUSTED_PROXIES). */
   trustedProxies?: string[];

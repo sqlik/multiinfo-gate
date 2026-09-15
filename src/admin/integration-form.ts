@@ -2,10 +2,11 @@ import { RULE_OPS, type Rule, type RuleOp } from '../integrations/conditions.ts'
 import {
   OUTBOUND_EVENTS, parseConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type OutboundConfig, type OutboundEvent,
 } from '../integrations/config.ts';
+import { urlShape } from '../integrations/enrich.ts';
 import { isValidPath } from '../integrations/paths.ts';
 import { parseSourceEntry } from '../integrations/sources.ts';
 import type { TemplateEngine } from '../integrations/templates.ts';
-import { INBOUND_BASIC_REF, INBOUND_TOKEN_REF, type IntegrationFormValues } from './views/integrations.ts';
+import { INBOUND_BASIC_REF, INBOUND_ENRICH_REF, INBOUND_PAYLOAD_REF, INBOUND_TOKEN_REF, type IntegrationFormValues } from './views/integrations.ts';
 
 type Body = Record<string, string | string[] | undefined>;
 
@@ -35,7 +36,9 @@ export function formValues(body: Body): IntegrationFormValues {
     conditionExpr: String(body.conditionExpr ?? ''),
     authHeaderName: s('authHeaderName'), authHeaderValue: String(body.authHeaderValue ?? '').trim(),
     authBasicUser: s('authBasicUser'), authBasicPass: String(body.authBasicPass ?? ''),
+    authPayloadPath: s('authPayloadPath'), authPayloadValue: String(body.authPayloadValue ?? '').trim(),
     sources: String(body.sources ?? ''),
+    enrichUrl: s('enrichUrl'), enrichToken: String(body.enrichToken ?? '').trim(), enrichOnError: s('enrichOnError') === 'skip' ? 'skip' : 'error',
     toPath: s('toPath'), toFallback: String(body.toFallback ?? ''), invalidRecipient: s('invalidRecipient') === 'skip' ? 'skip' : 'error',
     ticketRefPath: s('ticketRefPath'), eventIdPath: s('eventIdPath'),
     textMode: s('textMode') === 'path' ? 'path' : 'liquid', textPath: s('textPath'), textTemplate: String(body.textTemplate ?? ''),
@@ -122,6 +125,13 @@ export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, en
       else return fail('Podaj wartość nagłówka z tokenem albo wyczyść jego nazwę.');
       auth.header = { name: v.authHeaderName, valueRef: INBOUND_TOKEN_REF };
     }
+    if (v.authPayloadPath !== '') {
+      if (!isValidPath(v.authPayloadPath)) return fail(`Pole ładunku z tokenem: „${v.authPayloadPath}” nie jest poprawną ścieżką.`);
+      if (v.authPayloadValue !== '') secrets[INBOUND_PAYLOAD_REF] = v.authPayloadValue;
+      else if (existing.names.includes(INBOUND_PAYLOAD_REF)) carried[INBOUND_PAYLOAD_REF] = INBOUND_PAYLOAD_REF;
+      else return fail('Podaj wartość tokenu, którą wysyła aplikacja, albo wyczyść ścieżkę pola.');
+      auth.payload = { path: v.authPayloadPath, valueRef: INBOUND_PAYLOAD_REF };
+    }
     if (v.authBasicUser !== '') {
       if (v.authBasicPass !== '') secrets[INBOUND_BASIC_REF] = v.authBasicPass;
       else if (existing.names.includes(INBOUND_BASIC_REF)) carried[INBOUND_BASIC_REF] = INBOUND_BASIC_REF;
@@ -133,6 +143,36 @@ export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, en
       auth.sources.push(entry);
     }
     if (auth.sources.length > 50) return fail('Dozwolone źródła: najwyżej 50 pozycji.');
+
+    // Kształt zapytania jest w tym wydaniu jeden, dopasowany do Fakturowni: token w parametrze adresu, metoda GET.
+    let enrichConfig: InboundConfig['enrich'];
+    if (v.enrichUrl !== '') {
+      const problem = engine.validate(v.enrichUrl);
+      if (problem !== null) return fail(`Adres zapytania uzupełniającego: ${problem}`);
+      // Kształt adresu sprawdzamy już tutaj, bo odmowa ma przyjść przy zapisie, kiedy administrator
+      // na nią patrzy. Przy „pomiń wiadomość” zła konfiguracja znaczy inaczej, że aplikacja dostaje
+      // 200, wiadomości nie ma, a ślad jest tylko w dzienniku.
+      let caly: URL;
+      try {
+        caly = new URL(v.enrichUrl.replace(/\{\{[^}]*\}\}|\{%[^%]*%\}/g, 'x'));
+      } catch {
+        return fail('Adres zapytania uzupełniającego: podaj pełny adres, razem z https:// na początku.');
+      }
+      if (caly.protocol !== 'https:' && caly.protocol !== 'http:') {
+        return fail('Adres zapytania uzupełniającego: musi zaczynać się od https:// albo http://.');
+      }
+      if (urlShape(v.enrichUrl) === null) {
+        return fail('Adres zapytania uzupełniającego: nazwę serwera wpisz wprost. Pola z ładunku wstawiaj dopiero dalej, w ścieżce, bo inaczej to nadawca ładunku decyduje, dokąd bramka wyśle kod autoryzacyjny.');
+      }
+      if (v.enrichToken !== '') secrets[INBOUND_ENRICH_REF] = v.enrichToken;
+      else if (existing.names.includes(INBOUND_ENRICH_REF)) carried[INBOUND_ENRICH_REF] = INBOUND_ENRICH_REF;
+      else return fail('Podaj kod autoryzacyjny API aplikacji, którą bramka ma dopytać.');
+      enrichConfig = {
+        url: v.enrichUrl, method: 'GET', headers: [],
+        query: [{ name: 'api_token', valueRef: INBOUND_ENRICH_REF }],
+        timeoutMs: 2000, as: 'e', onError: v.enrichOnError,
+      };
+    }
 
     const toPath = pathOr(v.toPath, 'Ścieżka numeru');
     if (typeof toPath === 'string') return fail(toPath);
@@ -157,7 +197,7 @@ export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, en
     if (typeof maxParts === 'string') return fail(maxParts);
 
     config = {
-      ...common, auth, to: { ...toPath, fallback }, ...(ticketRef.path ? { ticketRefPath: ticketRef.path } : {}),
+      ...common, auth, ...(enrichConfig ? { enrich: enrichConfig } : {}), to: { ...toPath, fallback }, ...(ticketRef.path ? { ticketRefPath: ticketRef.path } : {}),
       ...(eventId.path ? { eventIdPath: eventId.path } : {}), text, maxParts, overflow: v.overflow,
       invalidRecipient: v.invalidRecipient,
     };
@@ -165,6 +205,8 @@ export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, en
     const events = v.events.filter((e): e is OutboundEvent => (OUTBOUND_EVENTS as readonly string[]).includes(e));
     if (events.length === 0) return fail('Zaznacz przynajmniej jedno zdarzenie.');
     if (!/^https?:\/\/\S+$/.test(v.url)) return fail('Adres musi zaczynać się od https:// (albo http:// w sieci wewnętrznej).');
+    // Gotowe ustawienia wstawiają wielokropek tam, gdzie administrator ma wkleić swój klucz webhooka.
+    if (v.url.includes('…')) return fail('Adres ma jeszcze wielokropek w miejscu do uzupełnienia - wklej w to miejsce swój adres z aplikacji.');
     if (!['POST', 'PUT', 'PATCH'].includes(v.method)) return fail('Metoda: POST, PUT albo PATCH.');
     if (v.headers.length > 20) return fail('Nagłówki: najwyżej 20.');
     const headers: OutboundConfig['headers'] = [];
