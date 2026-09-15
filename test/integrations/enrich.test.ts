@@ -154,8 +154,9 @@ describe('zapytanie uzupełniające', () => {
     expect(out.reason).toContain('nie rozwiązuje się');
   });
 
-  it('adres do dziennika gubi część zapytania z tokenem', () => {
+  it('adres do dziennika gubi część zapytania z tokenem, a szablon zostaje czytelny', () => {
     expect(safeUrl('https://firma.fakturownia.pl/clients/5.json?api_token=tajne123')).toBe('https://firma.fakturownia.pl/clients/5.json');
-    expect(safeUrl('nie adres')).toBe('(adres nie do odczytania)');
+    expect(safeUrl('https://firma.fakturownia.pl/clients/{{ p.id }}.json?api_token=tajne123')).toBe('https://firma.fakturownia.pl/clients/{{ p.id }}.json');
+    expect(safeUrl('')).toBe('(adres nie do odczytania)');
   });
 });

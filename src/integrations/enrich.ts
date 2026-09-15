@@ -94,12 +94,12 @@ export async function enrich(opts: EnrichOptions): Promise<EnrichResult> {
   }
 }
 
-/** Adres do dziennika: bez części zapytania, bo tam siedzą tokeny. */
+/**
+ * Adres do dziennika: bez części zapytania, bo tam siedzą tokeny. Obcinamy tekstem, nie przez
+ * `URL`, żeby administrator zobaczył swój adres tak, jak go wpisał - z klamrami szablonu, a nie
+ * z `%7B%7B`. Wszystko od pierwszego znaku zapytania odpada, więc token nie ma którędy wyjść.
+ */
 export function safeUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    return `${u.origin}${u.pathname}`;
-  } catch {
-    return '(adres nie do odczytania)';
-  }
+  const bez = url.split('?')[0]!.trim();
+  return bez === '' ? '(adres nie do odczytania)' : bez;
 }

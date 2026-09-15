@@ -1,5 +1,6 @@
 import { OUTBOUND_EVENTS, defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type OutboundConfig } from '../../integrations/config.ts';
 import { RULE_OPS, ruleOpLabel, type RuleOp } from '../../integrations/conditions.ts';
+import { safeUrl } from '../../integrations/enrich.ts';
 import type { Preset } from '../../integrations/presets/index.ts';
 import type { EventResult, IntegrationEventRow } from '../../store/integration-events.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
@@ -787,6 +788,7 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
       <button class="btn btn-s" type="button" data-copy="#hook-path" style="padding: 3px 9px; font-size: 12px;">Kopiuj</button></div>`));
     const auth: string[] = [];
     if (cfg.auth.header) auth.push(`nagłówek ${cfg.auth.header.name} (sekret)`);
+    if (cfg.auth.payload) auth.push(`token w polu ${cfg.auth.payload.path} (sekret)`);
     if (cfg.auth.basic) auth.push(`basic auth, login ${cfg.auth.basic.user}`);
     if (cfg.auth.sources.length > 0) auth.push(`źródła: ${cfg.auth.sources.join(', ')}`);
     rows.push(kvRow('Uwierzytelnianie', auth.length === 0 ? '<span class="dim">tylko sekret w adresie</span>' : esc(auth.join(' · '))));
@@ -795,6 +797,11 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     // Wiersz tylko przy „pomiń”: to odstępstwo od zwykłego zachowania i ma być widoczne.
     const zlyNumer = cfg.invalidRecipient === 'skip' ? 'numer nie do odczytania: pominięcie' : '';
     rows.push(kvRow('Odbiorcy', dimOr([to, fallback, zlyNumer].filter((x) => x !== '').join(' · '))));
+    // Dopytanie widać na ekranie szczegółu, bo to jedyne miejsce, z którego bramka sama dzwoni po dane.
+    if (cfg.enrich) {
+      const gdy = cfg.enrich.onError === 'skip' ? 'bez odpowiedzi: pominięcie' : 'bez odpowiedzi: błąd';
+      rows.push(kvRow('Zapytanie uzupełniające', `${esc(safeUrl(cfg.enrich.url))} · odpowiedź pod ${esc(cfg.enrich.as)} · ${esc(gdy)}`, true));
+    }
     rows.push(kvRow('Treść', simple ? esc(simple.text) : cfg.text.mode === 'path' ? `pole ${esc(cfg.text.path)}` : `szablon Liquid · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
     if (cfg.ticketRefPath) rows.push(kvRow('Identyfikator zgłoszenia', esc(cfg.ticketRefPath), true));
     if (cfg.eventIdPath) rows.push(kvRow('Identyfikator zdarzenia', esc(cfg.eventIdPath), true));

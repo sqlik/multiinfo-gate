@@ -36,7 +36,7 @@ export type InboundErrorCode = 'empty_text' | 'no_recipient' | 'invalid_phone' |
 export type InboundOutcome =
   | { kind: 'sent'; messageIds: string[] }
   /** Bez powodu: zdarzenie odsiał warunek. Z powodem: zadziałało odstępstwo opisane przy powodzie. */
-  | { kind: 'skipped'; reason?: 'invalid_recipient' }
+  | { kind: 'skipped'; reason?: 'invalid_recipient' | 'enrich' }
   | { kind: 'duplicate' }
   | { kind: 'throttled'; notify: boolean }
   | { kind: 'error'; code: InboundErrorCode; detail: string }
@@ -221,7 +221,8 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
         const opis = `dopytanie ${safeUrl(config.enrich.url)}: ${wynik.reason}`;
         if (config.enrich.onError === 'skip') {
           note('skipped', { reason: opis });
-          return { kind: 'skipped' };
+          // Powód w odpowiedzi mówi aplikacji, że to nie warunek ją odsiał, tylko nieudane dopytanie.
+          return { kind: 'skipped', reason: 'enrich' };
         }
         return fail('enrich', opis);
       }
