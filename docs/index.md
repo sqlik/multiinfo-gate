@@ -7,7 +7,9 @@ Od wersji 1.3 bramka odbiera też SMS-y od abonentów i przekazuje je aplikacji 
 webhook. Od wersji 1.5 integruje się z aplikacjami, których formatu nie da się zmienić: monitoring
 i helpdesk wysyłają SMS-y własnym ładunkiem na adres wejściowy bramki, a odebrane SMS-y i statusy
 trafiają do helpdesku albo na telefon przez ntfy w ich formacie; administrator dostaje mailem
-powiadomienia o błędach i certyfikatach.
+powiadomienia o błędach i certyfikatach. Od wersji 1.7 bramka potrafi też dopytać aplikację
+o dane, których nie ma w powiadomieniu. Dzięki temu Fakturownia powiadamia SMS-em nabywcę
+faktury, choć numeru telefonu w samym powiadomieniu nie ma.
 
 ![Przegląd: liczniki wiadomości wychodzących i odebranych z ostatniej doby, stan połączeń z Multiinfo i ostatnie niepowodzenia](obrazki/przeglad.png)
 
@@ -23,8 +25,8 @@ zamiast certyfikatów, oraz panel do zarządzania kontami, kluczami i podglądu 
 - [API dla aplikacji](api.md) - każde wywołanie z przykładem w siedmiu wariantach (curl, HTTP, PHP,
   Python, Node.js, PowerShell, C#), webhooki, błędy, limity
 - [Integracje z aplikacjami](integracje.md) - adres wejściowy dla aplikacji z własnym formatem,
-  szablony Liquid, gotowe ustawienia (Uptime Kuma, Grafana, Zabbix, FreeScout, Freshdesk, ntfy),
-  powiadomienia administratora mailem
+  szablony Liquid, gotowe ustawienia (Uptime Kuma, Grafana, Zabbix, WooCommerce, Fakturownia,
+  FreeScout, Freshdesk, Bitrix24, Slack, ntfy), powiadomienia administratora mailem
 - [Przykład w PHP](https://github.com/sqlik/multiinfo-gate/tree/main/examples/php) - strona
   testowa i kod do skopiowania, w repozytorium
 

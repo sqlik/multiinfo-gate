@@ -259,6 +259,10 @@ export function valuesFromPreset(kind: IntegrationKind, preset: Preset): Integra
   const config: IntegrationConfig = kind === 'webhook_in'
     ? { ...defaultInboundConfig(), ...preset.inbound }
     : { ...defaultOutboundConfig(), ...preset.outbound };
+  // Adres gotowego ustawienia bywa niepełny: Slack, Teamsy oraz Bitrix24 mają w nim wielokropek
+  // w miejscu klucza webhooka. Taki adres zostawiamy pusty, żeby administrator zobaczył
+  // podpowiedź z przykładem zamiast wartości, której i tak nie da się zapisać.
+  if (kind === 'webhook_out' && 'url' in config && config.url.includes('…')) config.url = '';
   const sample = kind === 'webhook_in' ? preset.sample ?? {} : OUTBOUND_SAMPLE;
   return configToValues(kind, config, {
     name: preset.id === 'custom' ? '' : preset.name, apiKeyId: '', serviceId: '', orig: '', enabled: true, preset: preset.id,

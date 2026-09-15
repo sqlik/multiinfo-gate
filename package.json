@@ -2,7 +2,7 @@
   "name": "multiinfo-gate",
   "license": "MIT",
   "author": "Tomasz Sawko",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "type": "module",
   "engines": {
