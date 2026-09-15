@@ -149,6 +149,20 @@ describe('POST /integracje', () => {
     expect(h.integrations.list()).toHaveLength(0);
   });
 
+  it('zapytanie uzupełniające: adres bez schematu http odpada już przy zapisie', async () => {
+    // Odmowa przy zapisie, nie przy pierwszym webhooku: przy „pomiń wiadomość” zła konfiguracja
+    // znaczy, że aplikacja dostaje 200, a SMS-a nie ma.
+    for (const zly of ['firma.fakturownia.pl/clients/5.json', 'ftp://firma.fakturownia.pl/x', '/clients/5.json']) {
+      const res = await post('/integracje', inboundFields({ enrichUrl: zly, enrichToken: 'x' }));
+      expect(res.statusCode, zly).toBe(400);
+      expect(res.body, zly).toContain('Adres zapytania uzupełniającego');
+    }
+    // Klamry szablonu nie przeszkadzają w sprawdzeniu.
+    const dobry = await post('/integracje', inboundFields({ enrichUrl: 'https://firma.fakturownia.pl/clients/{{ p.id | url_encode }}.json', enrichToken: 'x' }));
+    expect(dobry.statusCode).toBe(200);
+    expect(h.integrations.list()).toHaveLength(1);
+  });
+
   it('błąd składni szablonu wraca do formularza z komunikatem i numerem linii, bez zapisu', async () => {
     const res = await post('/integracje', inboundFields({ textTemplate: 'Awaria\n{{ p.monitor.name' }));
     expect(res.statusCode).toBe(400);

@@ -192,6 +192,8 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
   const original = ref === null ? undefined : deps.inbound.findByExternalRefForKey(integration.apiKeyId, ref);
 
   const context = buildInboundContext(payload, integration, now);
+  /** Klucz zajęty przez dedup w tym przebiegu; zdejmujemy go, gdy prosimy aplikację o ponowienie. */
+  let dedupKey: string | null = null;
   let text: string;
   let recipients: { list: string[]; fromPayload: boolean };
   try {
@@ -201,9 +203,12 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
     }
     if (config.eventIdPath !== undefined) {
       const eventId = readPath(payload, config.eventIdPath);
-      if (eventId !== undefined && eventId !== null && String(eventId) !== '' && !deps.guards.dedup(integration.id, String(eventId), now)) {
-        note('duplicate', { reason: `identyfikator zdarzenia ${String(eventId)}` });
-        return { kind: 'duplicate' };
+      if (eventId !== undefined && eventId !== null && String(eventId) !== '') {
+        if (!deps.guards.dedup(integration.id, String(eventId), now)) {
+          note('duplicate', { reason: `identyfikator zdarzenia ${String(eventId)}` });
+          return { kind: 'duplicate' };
+        }
+        dedupKey = String(eventId);
       }
     }
     const gate = deps.guards.throttle(integration.id, config.throttle.limit, config.throttle.windowMinutes, now);
@@ -225,8 +230,12 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
         if (config.enrich.onError === 'skip') {
           note('skipped', { reason: opis });
           // Powód w odpowiedzi mówi aplikacji, że to nie warunek ją odsiał, tylko nieudane dopytanie.
+          // Żeton dedupu zostaje zużyty: aplikacja dostaje 200, więc ponowienia nie będzie.
           return { kind: 'skipped', reason: 'enrich' };
         }
+        // Odpowiadamy 422, czyli prosimy o ponowienie, więc żeton dedupu musi wrócić. Niedostępna
+        // aplikacja to błąd przejściowy, inaczej niż błąd szablonu albo zły numer.
+        if (dedupKey !== null) deps.guards.releaseDedup(integration.id, dedupKey);
         return fail('enrich', opis);
       }
       context[config.enrich.as] = wynik.value;

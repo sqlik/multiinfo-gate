@@ -11,6 +11,15 @@ export class IntegrationGuardsRepo {
     return info.changes === 1;
   }
 
+  /**
+   * Zdejmuje klucz zdarzenia zapisany przez `dedup`. Potrzebne, gdy potok odpowiada aplikacji
+   * błędem przejściowym, czyli prosi o ponowienie: bez tego ponowienie wróciłoby jako duplikat.
+   */
+  releaseDedup(integrationId: number, eventKey: string): void {
+    this.db.prepare('DELETE FROM integration_dedup WHERE integration_id = ? AND event_key = ?')
+      .run(integrationId, eventKey.slice(0, 200));
+  }
+
   pruneDedupBefore(at: Date): number {
     return this.db.prepare('DELETE FROM integration_dedup WHERE at < ?').run(at.toISOString()).changes;
   }
