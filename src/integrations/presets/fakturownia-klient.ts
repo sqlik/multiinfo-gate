@@ -90,7 +90,7 @@ export const fakturowniaKlient: Preset = {
     },
   },
   guide: [
-    '**Gdzie to ustawić.** W Fakturowni wejdź w **Ustawienia**, potem **Ustawienia konta**, zakładka **Integracja**. Na dole strony jest sekcja **Webhooki**.',
+    '**Gdzie to ustawić.** W Fakturowni wejdź w **Ustawienia**, potem **Ustawienia konta**, zakładka **Integracja**. Na dole strony znajdziesz sekcję **Webhooki**.',
     '',
     'W pierwszym wolnym wierszu ustaw **Rodzaj** na `invoice:create`. W polu **Adres** wklej adres wejściowy integracji. W polu **Api token** wpisz to samo hasło, które podałeś w bramce. Zaznacz **Aktywny** i zapisz stronę.',
     '',

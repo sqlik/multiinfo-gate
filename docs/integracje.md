@@ -817,10 +817,10 @@ SMS na Twój numer, gdy w Fakturowni powstaje nowa faktura.
 
 Fakturownia ma własny dodatek do wysyłki SMS. Działa inaczej niż ta integracja. Tamten wysyła
 wiadomości z zegarem, w oknie od 8:00 do 18:00, a liczbę dni przed terminem ustala system.
-Bramka wysyła od razu po wystawieniu faktury oraz treścią, którą ułożysz sam.
+Bramka wysyła od razu po wystawieniu faktury oraz z treścią, którą ułożysz sam.
 
 **Webhook.** W Fakturowni wejdź w **Ustawienia**, potem **Ustawienia konta** i zakładkę
-**Integracja**. Na dole strony jest sekcja **Webhooki**. W pierwszym wolnym wierszu ustaw
+**Integracja**. Na dole strony znajdziesz sekcję **Webhooki**. W pierwszym wolnym wierszu ustaw
 **Rodzaj** na `invoice:create`. W polu **Adres** wklej adres wejściowy integracji. Zaznacz
 **Aktywny** oraz zapisz stronę.
 
@@ -858,7 +858,7 @@ podaje numer faktury wraz z odnośnikiem do dokumentu.
 
 Faktura nie niesie numeru telefonu nabywcy. Dlatego to ustawienie wysyła SMS na numery wpisane
 w bramce, w liście odbiorców. Wpisz tam swój numer albo numery obsługi. Żeby powiadamiać klienta,
-użyj następnego ustawienia.
+użyj następnej integracji.
 
 Webhook przychodzi z opóźnieniem do minuty od zapisania faktury. Limit burzy jest ustawiony na
 60 wiadomości na 10 minut, bo faktury wychodzą seriami. Przy fakturowaniu miesięcznym powstaje
