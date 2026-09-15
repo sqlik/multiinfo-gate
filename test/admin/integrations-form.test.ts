@@ -180,6 +180,17 @@ describe('POST /integracje', () => {
     expect(h.integrations.list()).toHaveLength(0);
   });
 
+  it('nowa integracja nie ma wpisanego adresu z wielokropkiem', async () => {
+    // Slack, Teamsy oraz Bitrix24 trzymają w adresie wielokropek zamiast klucza webhooka. Jako
+    // wartość początkowa dałby administratorowi pole, którego nie da się zapisać bez poprawki.
+    for (const id of ['slack', 'teams', 'bitrix24']) {
+      const preset = presetById(id);
+      if (!preset) continue;
+      const values = valuesFromPreset('webhook_out', preset);
+      expect(values.url, id).not.toContain('…');
+    }
+  });
+
   it('adres z wielokropkiem do uzupełnienia nie przechodzi przez zapis', async () => {
     // Gotowe ustawienia Slacka, Teamsów oraz Bitrixa24 wstawiają w adres wielokropek w miejsce
     // klucza webhooka. Bez tego sprawdzenia zapisywał się jako adres, bo nie ma w nim odstępu.

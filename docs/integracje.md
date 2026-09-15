@@ -153,7 +153,7 @@ warstwę w trybie zaawansowanym, wyczyść nazwę nagłówka albo login.
 Adres wejściowy to `POST /hooks/<identyfikator>` na porcie API bramki, czyli tym samym, na
 którym działa `/v1/messages`. Przykład: `https://sms.firma.example/hooks/k9x…`. Identyfikator
 ma 32 losowe znaki i sam w sobie jest sekretem. Kto go zna, może wysyłać SMS-y na koszt konta,
-do wysokości limitów klucza i w granicach ochrony z rozdziału 3.6.
+do wysokości limitów klucza i w granicach ochrony z rozdziału 3.7.
 
 Bramka przyjmuje `Content-Type: application/json` oraz `application/x-www-form-urlencoded`.
 Formularz zamienia na płaski obiekt, a powtórzone pole staje się tablicą. Ładunek może mieć do
@@ -180,18 +180,19 @@ o adresach w sieci wewnętrznej.
 
 ### 3.2. Uwierzytelnianie
 
-Bramka ma cztery warstwy uwierzytelniania. Pierwsza działa zawsze. Pozostałe włącza się
+Bramka ma pięć warstw uwierzytelniania. Pierwsza działa zawsze. Pozostałe włącza się
 w sekcji „Wejście”:
 
 | Warstwa | Jak działa | Kiedy używać |
 |---|---|---|
 | sekret w adresie | identyfikator z adresu wejściowego | zawsze |
 | nagłówek z tokenem | nazwa nagłówka i wartość z konfiguracji, np. `Authorization: Bearer …`, porównanie w stałym czasie | aplikacje z polem na nagłówki: Uptime Kuma, Zabbix, automaty |
+| sekret w polu ładunku | ścieżka do pola i wartość z konfiguracji, porównanie w stałym czasie | aplikacje bez pola na nagłówki, które wkładają token do treści żądania: Fakturownia |
 | basic auth | login i hasło z konfiguracji | Grafana i inne z gotowym polem „Basic Authentication” |
 | lista źródeł | adresy IP, zakresy CIDR (IPv4 i IPv6) albo nazwy hostów rozwiązywane przy żądaniu z buforem 60 s | aplikacje ze stałym adresem albo NAS z DDNS |
 
-Nieudane uwierzytelnienie daje kod 401 (token, basic auth) albo 403 (źródło). W dzienniku
-powstaje wpis `odrzucono` z adresem źródłowym, bez ładunku. Administrator dostaje mail,
+Nieudane uwierzytelnienie daje kod 401 (token, sekret w polu ładunku, basic auth) albo 403
+(źródło). W dzienniku powstaje wpis `odrzucono` z adresem źródłowym, bez ładunku. Administrator dostaje mail,
 grupowany. Niezależnie od limitów klucza adres `/hooks/` ma własny limit: 120 żądań na minutę
 z jednego adresu źródłowego. Nadmiar dostaje kod 429.
 
@@ -200,6 +201,10 @@ Traefik), adresem gniazda jest adres proxy. Żeby lista źródeł i dziennik wid
 podaj adresy proxy w zmiennej `MIG_TRUSTED_PROXIES` ([Uruchomienie](uruchomienie.md), rozdział
 7.7). Bramka zaufa nagłówkowi `X-Forwarded-For` tylko od tych zdefiniowanych adresów.
 
+Sekret podany w polu ładunku bramka wycina z treści żądania od razu po sprawdzeniu. W dzienniku,
+w podglądzie ładunku oraz w szablonie w jego miejscu stoi słowo `(sekret)`. Nazwa pola zostaje,
+bo pomaga rozpoznać żądanie.
+
 ### 3.3. Odbiorcy i normalizacja
 
 Numer odbiorcy bramka bierze z trzech źródeł, w tej kolejności:
@@ -207,7 +212,7 @@ Numer odbiorcy bramka bierze z trzech źródeł, w tej kolejności:
 1. Ze ścieżki w ładunku (sekcja „Odbiorca”), na przykład `phone` albo `to`. Wartość może być
    tekstem z numerami po przecinku albo tablicą.
 2. Od nadawcy odebranego SMS-a, do którego pasuje identyfikator zgłoszenia z ładunku
-   (rozdział 3.8). To droga dla własnych integracji, w których aplikacja przesyła identyfikator
+   (rozdział 3.9). To droga dla własnych integracji, w których aplikacja przesyła identyfikator
    zgłoszenia założonego z SMS-a, ale nie przesyła numeru.
 3. Z listy zapasowej w konfiguracji, jeden numer na linię. Tak działają Uptime Kuma i Grafana,
    które numerów nie przesyłają.
@@ -234,7 +239,69 @@ Przełącznik dotyczy wyłącznie numeru wziętego z ładunku. Zły numer na li�
 błędem, bo listę wpisuje administrator w tym samym formularzu i pomyłka ma być widoczna. Brak
 numeru w ogóle także zostaje błędem. Przełącznik nie zmienia tego, kto dostaje SMS.
 
-### 3.4. Treść
+### 3.4. Zapytanie uzupełniające
+
+Niektóre aplikacje wysyłają powiadomienie bez numeru telefonu. Fakturownia przy wystawieniu
+faktury przysyła dane dokumentu oraz nazwę nabywcy. Numeru w tym powiadomieniu nie ma, bo numer
+stoi w kartotece klienta. Zapytanie uzupełniające służy do tego, żeby bramka sama po niego
+sięgnęła.
+
+Przebiega to tak. Bramka odbiera powiadomienie. Odczytuje z niego identyfikator klienta. Pyta
+aplikację o kartotekę tego klienta. Z odpowiedzi bierze numer telefonu i dopiero wtedy składa
+SMS-a. Pyta raz na jedno powiadomienie. Nie ponawia zapytania ani nie pyta o nic więcej.
+
+Odpowiedź aplikacji trafia do szablonu pod nazwą `e`. Ładunek powiadomienia zostaje pod `p`.
+Numer komórkowy z kartoteki zapiszesz więc jako `e.mobile_phone`, a nazwę klienta jako `e.name`.
+Tej samej nazwy użyj w sekcji „Odbiorca”. Wpisz tam `e.mobile_phone`, żeby SMS poszedł na numer
+z kartoteki.
+
+Zapytanie ustawia się w sekcji „Zapytanie uzupełniające”. Potrzebne są dwie rzeczy. Pierwsza to
+adres, pod którym aplikacja udostępnia kartoteki. Druga to kod autoryzacyjny do jej API. Kod
+zapisujemy zaszyfrowany. Bramka dokleja go do adresu jako parametr `api_token`. Nie trafia ani
+do szablonu, ani do dziennika.
+
+![Sekcja „Zapytanie uzupełniające” w trybie zaawansowanym: adres zapytania z polem ładunku i filtrem url_encode, kod autoryzacyjny API oraz lista „Gdy aplikacja nie odpowie”](obrazki/integracja-dopytanie.png)
+
+Adres jest szablonem, tak samo jak treść SMS-a. Identyfikator klienta wstawia się do niego
+z ładunku:
+
+```liquid
+https://firma.fakturownia.pl/clients/{{ p.deal.client.external_ids.fakturownia | url_encode }}.json
+```
+
+Filtr `url_encode` jest tutaj obowiązkowy. Wartość wstawiana do adresu pochodzi od aplikacji,
+która wysłała powiadomienie. Bez filtru mogłaby zawierać ukośnik albo znak zapytania i tak
+przestawić adres na inne miejsce w aplikacji.
+
+Bramka pilnuje tego niezależnie od filtru. Zapamiętuje nazwę serwera oraz początek ścieżki
+wpisane wprost, czyli wszystko przed pierwszym miejscem ze zmienną. Gdy złożony adres z tego
+miejsca wychodzi, zapytania nie będzie. Nazwę serwera wpisuj więc zawsze wprost. Pola z ładunku
+wstawiaj dopiero dalej, w ścieżce.
+
+Bramka nie pyta aplikacji w sieci wewnętrznej. Obowiązuje ta sama zasada, co przy integracjach
+wychodzących. Gdy aplikacja stoi w tej samej sieci co bramka, ustaw `MIG_WEBHOOK_ALLOW_PRIVATE`
+([Uruchomienie](uruchomienie.md), rozdział 7.7).
+
+Aplikacja może nie odpowiedzieć. Może też odpowiedzieć kartoteką bez numeru telefonu. Pole „Gdy
+aplikacja nie odpowie” rozstrzyga, co bramka zrobi w takim razie.
+
+Domyślnie zgłasza błąd. Aplikacja dostaje kod 422, administrator dostaje maila, a w dzienniku
+zostaje wpis `błąd`. Kod 422 jest prośbą o ponowienie żądania. Ponowione powiadomienie przejdzie
+przez bramkę zwyczajnie, nawet przy włączonej ochronie przed duplikatami z rozdziału 3.8.
+
+Druga możliwość to „pomiń wiadomość”. Aplikacja dostaje wtedy kod 200, maila nie ma, a w
+dzienniku zostaje wpis `pominięto`. Wybieraj ją w aplikacjach, które liczą nieudane dostarczenia
+i po kilku z rzędu wyłączają webhook. Tak robi Fakturownia, dlatego oba jej gotowe ustawienia
+mają tutaj pominięcie.
+
+Zapytanie odchodzi dopiero wtedy, gdy powiadomienie przejdzie warunek, ochronę przed duplikatami
+oraz limit burzy. Powiadomienie odsiane po drodze nie zajmuje aplikacji.
+
+Podgląd „Sprawdź szablon” o nic aplikacji nie pyta. Gotowe ustawienia mają przykładową odpowiedź
+i podgląd podstawia właśnie ją. Własne ustawienie takiej próbki nie ma, więc pola spod `e`
+zostaną w podglądzie puste. Bramka mówi o tym pod podglądem.
+
+### 3.5. Treść
 
 Treść SMS-a pochodzi z jednego z dwóch miejsc. Pierwsze to szablon Liquid (rozdział 5),
 w którym ładunek jest dostępny pod nazwą `p`. Drugie to pole z ładunku wskazane ścieżką, gdy
@@ -243,7 +310,7 @@ i zachowanie przy nadmiarze: „przytnij z wielokropkiem” albo „odrzuć zdar
 ten sam kod, który dzieli wiadomości w API. Polskie znaki skracają więc część do 70 znaków.
 Filtr `gsm` zamienia je na łacińskie i przywraca 160.
 
-### 3.5. Warunek
+### 3.6. Warunek
 
 Sekcja „Warunek” decyduje, czy zdarzenie ma iść dalej. Ma dwa tryby. W trybie reguł wpisuje
 się wiersze „ścieżka, operator, wartość”, łączone spójnikiem „i”. Operatory to: równe, różne od,
@@ -256,14 +323,14 @@ odrzucone warunkiem dostaje wpis `pominięto` i odpowiedź 200 bez SMS-a.
 Typowe reguły: `heartbeat.status równe 0` (Uptime Kuma tylko przy awarii), `status równe firing`
 (Grafana bez powiadomienia o powrocie), `status równe PROBLEM` (Zabbix).
 
-### 3.6. Ochrona przed burzą
+### 3.7. Ochrona przed burzą
 
 Sekcja „Ochrona i dziennik” ma limit burzy: liczbę zdarzeń w oknie minut, domyślnie 10 w 10
 minut. Okno liczy się od pierwszego zdarzenia. Nadmiar dostaje wpis `limit` i odpowiedź 200 bez
 SMS-a. Administrator dostaje jeden mail na okno, nie na każde zdarzenie. Przykład: monitoring,
 który przy awarii łącza wysyła alert o każdym z 40 hostów, kosztuje wtedy 10 SMS-ów, nie 40.
 
-### 3.7. Idempotencja
+### 3.8. Idempotencja
 
 Ścieżka „identyfikator zdarzenia” (sekcja „Odbiorca”) chroni przed podwójnym SMS-em. Aplikacja
 czasem ponawia żądanie po przekroczeniu czasu. Ten sam identyfikator w ciągu doby dostaje wtedy
@@ -271,7 +338,7 @@ wpis `duplikat` i odpowiedź 200. Zabbix ma `{EVENT.ID}`. Skrypt z rozdziału 6.
 status, bo rozwiązanie problemu dostaje ten sam identyfikator co problem. Prosty JSON ma pole
 `eventId`. Klucz grupy Grafany nie nadaje się na identyfikator, bo jest stały dla grupy alertów.
 
-### 3.8. Odpowiedź w wątku
+### 3.9. Odpowiedź w wątku
 
 Ścieżka „identyfikator zgłoszenia” łączy oba kierunki w integracjach własnych. Scenariusz
 wygląda tak. Integracja z SMS-a założyła w aplikacji zgłoszenie z odebranego SMS-a i odczytała
@@ -282,7 +349,7 @@ wtedy, gdy to numer nadawcy. Odpowiedź widać przy odebranej wiadomości. Bez d
 zwykły SMS na numer z ładunku albo z listy zapasowej. Gdy nie ma ani jednego, ani drugiego,
 powstaje wpis `błąd` z numerem zgłoszenia w powodzie.
 
-### 3.9. Kody odpowiedzi
+### 3.10. Kody odpowiedzi
 
 Bramka odpowiada po zapisaniu wpisu i zakolejkowaniu wysyłki. Nie czeka na Multiinfo:
 
@@ -293,6 +360,8 @@ Bramka odpowiada po zapisaniu wpisu i zakolejkowaniu wysyłki. Nie czeka na Mult
 | limit burzy | 200 | `{ "accepted": false, "reason": "throttled" }` |
 | duplikat | 200 | `{ "accepted": false, "reason": "duplicate" }` |
 | numer z ładunku nie do odczytania, gdy ustawienie każe pomijać | 200 | `{ "accepted": false, "reason": "invalid_recipient" }` |
+| aplikacja nie odpowiedziała na zapytanie uzupełniające, gdy ustawienie każe pomijać | 200 | `{ "accepted": false, "reason": "enrich" }` |
+| aplikacja nie odpowiedziała na zapytanie uzupełniające, gdy ustawienie każe zgłosić błąd | 422 | `{ "accepted": false, "reason": "enrich", "detail": "…" }` |
 | pusta treść, brak numeru, zły numer, nadmiar z opcją „odrzuć”, ponad 50 odbiorców | 422 | `{ "accepted": false, "reason": "…", "detail": "…" }` |
 | błąd szablonu w czasie wykonania | 422 | jak wyżej |
 | zły token, basic auth, źródło spoza listy | 401 albo 403 | `{ "accepted": false, "reason": "unauthorized" }` |
@@ -316,7 +385,7 @@ zdarzenia z usług, do których klucz ma dostęp. Włączona integracja nasłuch
 `message.received` sama uruchamia odbiór z usług klucza. Nie trzeba zaznaczać odbioru przy
 kluczu ani podawać adresu webhooka.
 
-Warunek działa jak w rozdziale 3.5, tylko na polach zdarzenia. Przykłady: `from zaczyna się od
+Warunek działa jak w rozdziale 3.6, tylko na polach zdarzenia. Przykłady: `from zaczyna się od
 48601`, `text zaczyna się od POMOC`, `serviceId równe 24138`, `status równe failed`. Dwie
 integracje z różnymi warunkami rozdzielają ruch. SMS-y z prefiksem `POMOC` idą do helpdesku,
 a reszta na telefon przez ntfy.
@@ -363,7 +432,7 @@ Pole „ścieżka identyfikatora w odpowiedzi” (na przykład `id` we FreeScouc
 bramce odczytać z odpowiedzi JSON aplikacji identyfikator założonego zgłoszenia. Dla
 `message.received` identyfikator zapisuje się przy odebranej wiadomości. W jej szczególe widać
 wiersz „Zgłoszenie: 4821 (FreeScout)”. Integracje własne mogą użyć tego identyfikatora do
-odpowiedzi w wątku z rozdziału 3.8. Gdy ścieżka jest wskazana, a w odpowiedzi nie ma wartości,
+odpowiedzi w wątku z rozdziału 3.9. Gdy ścieżka jest wskazana, a w odpowiedzi nie ma wartości,
 dostawa jest udana, ale wpis dostaje ostrzeżenie.
 
 ### 4.5. Wiele integracji i webhook klucza
@@ -400,6 +469,7 @@ W szablonie dostępne są te zmienne:
 | Zmienna | Gdzie | Znaczenie |
 |---|---|---|
 | `p` | oba kierunki | cały ładunek aplikacji (do SMS) albo całe zdarzenie bramki (z SMS-a); dostęp kropką i indeksem: `p.alerts[0].labels.alertname` |
+| `e` | do SMS | odpowiedź na zapytanie uzupełniające, gdy integracja je ma (rozdział 3.4); nazwę można zmienić w ustawieniach zaawansowanych |
 | `now` | oba | chwila renderowania, ISO 8601 |
 | `integration.name` | oba | nazwa integracji |
 | `event`, `at`, `id` | z SMS-a | rodzaj zdarzenia, czas, identyfikator wiadomości |
@@ -454,9 +524,10 @@ Gotowe ustawienie wypełnia formularz szablonem, warunkiem, ścieżkami, metodą
 i nagłówkami właściwymi dla aplikacji. Obok szablonu pokazuje listę pól jej ładunku oraz
 instrukcję „co ustawić w aplikacji”. Lista obejmuje: narzędzia do automatyzacji (Prosty JSON,
 n8n), narzędzia do monitoringu (Uptime Kuma, Grafana, Zabbix), aplikacje eCommerce (WooCommerce
-w dwóch wariantach), zarządzanie inteligentnym domem (Home Assistant), systemy Help Desk
-(FreeScout, Freshdesk) oraz notyfikacje (Slack, ntfy). Wartości przykładowe w tym rozdziale
-(adresy, numery, identyfikatory) są fikcyjne.
+w dwóch wariantach), fakturowanie (Fakturownia w dwóch wariantach), zarządzanie inteligentnym
+domem (Home Assistant), systemy Help Desk (FreeScout, Freshdesk), CRM (Bitrix24) oraz
+notyfikacje (Slack, ntfy). Wartości przykładowe w tym rozdziale (adresy, numery, identyfikatory)
+są fikcyjne.
 
 | Ustawienie | Do SMS | Z SMS-a | Uwierzytelnienie do SMS |
 |---|---|---|---|
@@ -467,6 +538,8 @@ w dwóch wariantach), zarządzanie inteligentnym domem (Home Assistant), systemy
 | Zabbix | tak | nie | nagłówek `Authorization` |
 | WooCommerce: nowe zamówienie | tak | nie | sam adres wejściowy |
 | WooCommerce: status do klienta | tak | nie | sam adres wejściowy |
+| Fakturownia: powiadomienie obsługi | tak | nie | sekret w polu ładunku |
+| Fakturownia: powiadomienie klienta | tak | nie | sekret w polu ładunku |
 | Home Assistant | tak | tak | opcjonalny nagłówek |
 | FreeScout: nowe zgłoszenie | tak | nie | lista źródeł |
 | FreeScout: zgłoszenie z SMS-a | nie | tak | nie dotyczy |
@@ -474,6 +547,7 @@ w dwóch wariantach), zarządzanie inteligentnym domem (Home Assistant), systemy
 | Freshdesk: zgłoszenie z SMS-a | nie | tak | nie dotyczy |
 | Slack | nie | tak | nie dotyczy |
 | ntfy | nie | tak | nie dotyczy |
+| Bitrix24: zadanie z SMS-a | nie | tak | nie dotyczy |
 | Własne | tak | tak | dowolne |
 
 ### 6.1. Prosty JSON
@@ -737,7 +811,114 @@ które przeszło warunek, dostaje wpis `wysłano` wraz z odnośnikiem do wiadomo
 
 ![Dziennik integracji ze sklepem: konfiguracja w słowach, wpisy „wysłano” z odnośnikiem do wiadomości i wpisy „pominięto” z powodem](obrazki/integracja-sklep-dziennik.png)
 
-### 6.8. Home Assistant
+### 6.8. Fakturownia: powiadomienie obsługi
+
+SMS na Twój numer, gdy w Fakturowni powstaje nowa faktura.
+
+Fakturownia ma własny dodatek do wysyłki SMS. Działa inaczej niż ta integracja. Tamten wysyła
+wiadomości z zegarem, w oknie od 8:00 do 18:00, a liczbę dni przed terminem ustala system.
+Bramka wysyła od razu po wystawieniu faktury oraz treścią, którą ułożysz sam.
+
+**Webhook.** W Fakturowni wejdź w **Ustawienia**, potem **Ustawienia konta** i zakładkę
+**Integracja**. Na dole strony jest sekcja **Webhooki**. W pierwszym wolnym wierszu ustaw
+**Rodzaj** na `invoice:create`. W polu **Adres** wklej adres wejściowy integracji. Zaznacz
+**Aktywny** oraz zapisz stronę.
+
+Rodzaj wybierz dokładnie `invoice:create`. Fakturownia wysyła webhooki także dla klientów oraz
+produktów. Te zdarzenia mają zupełnie inny kształt. Warunek ustawienia sprawdza, czy ładunek ma
+numer faktury, więc bramka je pominie.
+
+**Hasło.** Fakturownia nie ma pola na własny nagłówek. Ma za to pole **Api token** w tym samym
+wierszu webhooka. Wpisz w nim dowolne długie hasło. To samo hasło podaj w bramce. Fakturownia
+wyśle je w treści żądania, a bramka porówna z zapisanym (rozdział 3.2).
+
+Tak wygląda ładunek zdarzenia `invoice:create`, przycięty do pól, które coś znaczą:
+
+```json
+{
+  "id": 564047351,
+  "deal": {
+    "name": "Usluga testowa", "price": "123.0", "paid": false, "date": "2026-09-15",
+    "invoice_no": "1/09/2026", "kind": "vat", "status": "issued", "currency": "PLN",
+    "url": "https://firma.fakturownia.net/f/1-09-2026/przykladowyodnosnik",
+    "client": { "name": "Anna Kowalska", "external_ids": { "fakturownia": 276200905 } }
+  },
+  "app_name": "fakturownia", "locale": "pl"
+}
+```
+
+Domyślny szablon składa numer faktury, kwotę oraz nazwę nabywcy:
+
+```liquid
+Faktura {{ p.deal.invoice_no }} na {{ p.deal.price }} {{ p.deal.currency }} dla {{ p.deal.client.name | gsm | sms_truncate: 40 }}
+```
+
+Z ładunku wyżej wychodzi „Faktura 1/09/2026 na 123.0 PLN dla Anna Kowalska”. Drugi wariant treści
+podaje numer faktury wraz z odnośnikiem do dokumentu.
+
+Faktura nie niesie numeru telefonu nabywcy. Dlatego to ustawienie wysyła SMS na numery wpisane
+w bramce, w liście odbiorców. Wpisz tam swój numer albo numery obsługi. Żeby powiadamiać klienta,
+użyj następnego ustawienia.
+
+Webhook przychodzi z opóźnieniem do minuty od zapisania faktury. Limit burzy jest ustawiony na
+60 wiadomości na 10 minut, bo faktury wychodzą seriami. Przy fakturowaniu miesięcznym powstaje
+ich naraz kilkadziesiąt.
+
+### 6.9. Fakturownia: powiadomienie klienta
+
+SMS do nabywcy z numerem faktury oraz odnośnikiem do dokumentu.
+
+Webhook zakładasz tak samo, jak w poprzednim ustawieniu. Rodzaj, adres oraz pole **Api token**
+wypełniasz identycznie. Różnica jest w tym, skąd bramka bierze numer telefonu.
+
+**Numer klienta.** Webhook faktury niesie tylko identyfikator nabywcy. Numer telefonu stoi
+w kartotece klienta. Bramka pyta więc Fakturownię o tę kartotekę i bierze z niej pole **Telefon
+komórkowy**. Nazywa się to zapytaniem uzupełniającym (rozdział 3.4).
+
+Do zapytania potrzebne są dwie rzeczy. Pierwsza to nazwa Twojego konta w Fakturowni. Jest nią
+pierwszy człon adresu panelu. Gdy logujesz się na `firma.fakturownia.pl`, nazwą konta jest
+`firma`. Druga to kod autoryzacyjny API. Znajdziesz go w tym samym miejscu, co webhooki:
+**Ustawienia**, **Ustawienia konta**, zakładka **Integracja**, przycisk **Zobacz ApiTokeny**.
+Wklej go w bramce. Zapiszemy go zaszyfrowany.
+
+W trybie prostym wpisujesz obie wartości w formularzu. Bramka sama składa z nich adres zapytania.
+W trybie zaawansowanym adres widać wprost. Zawiera wtedy znacznik `NAZWA-KONTA`, który podmieniasz
+na nazwę swojego konta:
+
+```liquid
+https://NAZWA-KONTA.fakturownia.pl/clients/{{ p.deal.client.external_ids.fakturownia | url_encode }}.json
+```
+
+Numer bierzemy wyłącznie z pola **Telefon komórkowy**. Numer z pola **Telefon** jest pomijany, bo
+bywa stacjonarny, a SMS na niego nie dojdzie. Lista zapasowa zostaje pusta. Gdy kartoteka nie ma
+komórki, SMS nie ma iść do nikogo innego.
+
+Kartoteka bez numeru komórkowego oznacza pominięcie faktury. W dzienniku zostaje wpis
+`pominięto`, a Fakturownia dostaje kod 200. Odpowiedź z kodem 200 jest tutaj istotna. Fakturownia
+liczy nieudane dostarczenia i po serii niepowodzeń wyłącza webhook.
+
+Domyślny szablon zwraca się do nabywcy jego nazwą z kartoteki:
+
+```liquid
+{{ p.deal.client.name | gsm | sms_truncate: 30 }}, faktura {{ p.deal.invoice_no }} na {{ p.deal.price }} {{ p.deal.currency }}: {{ p.deal.url }}
+```
+
+Wychodzi z tego „Anna Kowalska, faktura 1/09/2026 na 123.0 PLN: https://firma.fakturownia.net/f/1-09-2026/przykladowyodnosnik”.
+
+To ustawienie pisze do Twojego klienta, a nie do obsługi. Dlatego formularz pokazuje nad
+przyciskiem zapisu uwagę o numerze nadawcy oraz o podstawie do wysyłki na numer klienta
+(rozdział 2.2).
+
+![Formularz ustawienia „Fakturownia: powiadomienie klienta” w trybie prostym: pusta lista zapasowa z wyjaśnieniem, dwa warianty chwili wysyłki, dwa warianty treści jako gotowe SMS-y, token webhooka oraz dostęp do kartoteki klienta](obrazki/integracja-fakturownia.png)
+
+Dziennik integracji pokazuje każde powiadomienie z Fakturowni. Faktura dla klienta z numerem
+komórkowym w kartotece dostaje wpis `wysłano` wraz z odnośnikiem do wiadomości. Faktura dla
+klienta bez tego numeru dostaje wpis `pominięto` z powodem. Zdarzenie, które nie jest fakturą,
+odsiewa warunek.
+
+![Szczegół integracji z Fakturownią: konfiguracja w słowach wraz z adresem zapytania uzupełniającego, pod nią dziennik z wpisami „wysłano” oraz „pominięto”](obrazki/integracja-fakturownia-dziennik.png)
+
+### 6.10. Home Assistant
 
 SMS z automatyzacji Home Assistanta oraz odebrany SMS jako wyzwalacz automatyzacji.
 
@@ -781,7 +962,7 @@ zobaczysz wtedy „dostarczono”, choć nic się nie wydarzyło.
 Home Assistant stoi zwykle w sieci lokalnej, a bramka domyślnie nie woła takich adresów. Ustaw
 zmienną `MIG_WEBHOOK_ALLOW_PRIVATE=1` albo wystaw Home Assistanta pod adresem publicznym.
 
-### 6.9. FreeScout: nowe zgłoszenie
+### 6.11. FreeScout: nowe zgłoszenie
 
 SMS do agentów, gdy we FreeScoucie pojawia się nowa rozmowa albo klient odpowiada. Wymaga
 modułu **API & Webhooks**. Otwórz Zarządzaj → API & Webhooks → Webhooks → Dodaj. Jako URL wpisz
@@ -810,7 +991,7 @@ Warunek `mailboxId równe 3` ogranicza SMS-y do jednej skrzynki. FreeScout nie m
 nagłówki. Zamiast tokenu wpisz więc listę źródeł z adresem serwera FreeScouta. Obiekt
 `customer` w webhooku nie zawiera telefonów, nawet gdy kontakt ma numer.
 
-### 6.10. FreeScout: zgłoszenie z SMS-a
+### 6.12. FreeScout: zgłoszenie z SMS-a
 
 Odebrany SMS zakłada rozmowę w skrzynce. Adres to `https://<freescout>/api/conversations`.
 Klucz API (moduł API & Webhooks, zakładka **API Keys**) wpisz jako sekret nagłówka
@@ -821,7 +1002,7 @@ FreeScout odpowiada kodem 201 i obiektem rozmowy z polem `id`. Ten identyfikator
 odebranej wiadomości w panelu. Agent widzi rozmowę i oddzwania albo odpisuje własnym kanałem.
 Bramka nie wysyła odpowiedzi z FreeScouta SMS-em.
 
-### 6.11. Freshdesk: nowe zgłoszenie
+### 6.13. Freshdesk: nowe zgłoszenie
 
 SMS do agentów o nowym zgłoszeniu albo odpowiedzi klienta. We Freshdesku otwórz Admin →
 Workflows → Automations i załóż dwie reguły. Obie mają akcję „Uruchom element webhook”
@@ -862,7 +1043,7 @@ Numery agentów wpisz w liście zapasowej. Freshdesk nie ma pola na nagłówki, 
 przychodzą z różnych adresów chmury AWS. Uwierzytelnieniem zostaje więc sekret w adresie
 i limit burzy.
 
-### 6.12. Freshdesk: zgłoszenie z SMS-a
+### 6.14. Freshdesk: zgłoszenie z SMS-a
 
 Odebrany SMS zakłada zgłoszenie. Adres to `https://<firma>.freshdesk.com/api/v2/tickets`.
 Freshdesk uwierzytelnia przez basic auth: kluczem API jako loginem i literą `X` jako hasłem.
@@ -877,7 +1058,7 @@ zostanie rozpoznany, a z `601000001` nie. W drugim przypadku powstanie nowy kont
 e-maila. Agent widzi zgłoszenie i oddzwania albo odpisuje własnym kanałem. Bramka nie wysyła
 odpowiedzi z Freshdeska SMS-em.
 
-### 6.13. Slack
+### 6.15. Slack
 
 Odebrany SMS jako wiadomość na kanale Slacka. Bramka korzysta z webhooka przychodzącego, czyli
 z adresu, który Slack wydaje twojej własnej aplikacji.
@@ -937,7 +1118,7 @@ W katalogu aplikacji Slacka jest też gotowa pozycja **Incoming WebHooks**. Daje
 ale to stara integracja. Slack odradza jej zakładanie i zapowiada wycofanie, więc rób własną
 aplikację.
 
-### 6.14. ntfy
+### 6.16. ntfy
 
 Odebrany SMS jako powiadomienie push na telefon. Adres to serwer i nazwa tematu, na przykład
 `https://ntfy.sh/firma-sms`. Body jest surowym tekstem `{{ text }}`. Tytuł i priorytet idą
@@ -945,7 +1126,61 @@ nagłówkami `Title: SMS od {{ from }}` i `Priority: default`. Dla tematu chroni
 nagłówek `Authorization` z tokenem `Bearer tk_…` jako sekretem. W aplikacji ntfy zasubskrybuj
 temat.
 
-### 6.15. Własne
+### 6.17. Bitrix24: zadanie z SMS-a
+
+Odebrany SMS zakłada w Bitrixie zadanie powiązane z kartoteką klienta. Bramka korzysta
+z webhooka przychodzącego, czyli z adresu, który Bitrix wydaje Twojemu portalowi.
+
+**Webhook.** W Bitrixie wejdź w **Aplikacje**, potem **Zasoby dla programistów** i wybierz
+kafelek **Webhook przychodzący**.
+
+**Uprawnienia.** Zaznacz wyłącznie dwa: **CRM (crm)** oraz **Zadania (task)**. Pierwsze pozwala
+odnaleźć kontakt po numerze. Drugie pozwala założyć zadanie. Więcej uprawnień nie jest potrzebne.
+Każde dodatkowe rozszerza to, co może zrobić ten, kto zdobędzie adres.
+
+**Adres.** Bitrix pokaże adres w postaci `https://firma.bitrix24.pl/rest/1/abcdefghij123456/`.
+Dopisz na jego końcu `batch.json`. Jest to nazwa wywołania, które przyjmuje paczkę poleceń. Pełny
+adres wygląda tak:
+
+```
+https://firma.bitrix24.pl/rest/1/abcdefghij123456/batch.json
+```
+
+**Numer pracownika.** Zadania trafiają na jedną osobę. Jej numer zobaczysz w adresie profilu
+w Bitrixie. Przy `/company/personal/user/1/` numerem jest 1. Wpisz go w formularzu bramki.
+
+Bramka wysyła w jednym żądaniu dwa polecenia. Pierwsze szuka kontaktu po numerze nadawcy. Drugie
+zakłada zadanie i wiąże je z tym kontaktem. Bitrix nie ma jednego wywołania, które zrobiłoby oba
+kroki naraz. Osobne żądanie z bramki nie miałoby skąd wziąć numeru kontaktu:
+
+```liquid
+{"halt":0,"cmd":{
+"znajdz":"crm.duplicate.findbycomm?entity_type=CONTACT&type=PHONE&values[0]={{ from | prepend: "+" | url_encode }}",
+"zadanie":"tasks.task.add?fields[TITLE]={{ "SMS od " | append: from | url_encode }}&fields[DESCRIPTION]={{ text | url_encode }}&fields[RESPONSIBLE_ID]=1&fields[UF_CRM_TASK][0]=C_$result[znajdz][CONTACT][0]"
+}}
+```
+
+Zapis `$result[znajdz]` jest poleceniem dla Bitrixa. Oznacza wynik pierwszego wywołania. Dzięki
+niemu drugie wywołanie zna numer znalezionego kontaktu.
+
+**Czego się spodziewać.** Zadanie ma w tytule numer nadawcy, w opisie treść SMS-a, a w polu CRM
+powiązanie z kontaktem. Gdy numer nie pasuje do żadnego kontaktu, zadanie powstaje bez powiązania
+oraz czeka na liście zadań pracownika.
+
+**Numery w kartotekach muszą mieć kod kraju.** Bitrix szuka kontaktu po numerze w takim zapisie,
+w jakim go dostaje. Bramka podaje numer z kodem kraju, czyli `+48601000001`. Kontakt zapisany jako
+`+48 601 000 001` zostanie znaleziony, bo Bitrix pomija spacje. Kontakt z samym `601 000 001`
+znaleziony nie będzie. Zadanie powstanie wtedy bez powiązania z kartoteką.
+
+![Formularz ustawienia „Bitrix24: zadanie z SMS-a” w trybie prostym: adres webhooka z końcówką batch.json, numer pracownika oraz uwaga, że adres jest hasłem do portalu](obrazki/integracja-bitrix.png)
+
+Adres webhooka jest hasłem. Kto go ma, ten czyta CRM oraz zakłada zadania. Trzymaj go wyłącznie
+w bramce. Gdy wycieknie, skasuj webhook w Bitrixie oraz zrób nowy.
+
+Powiadomienia wychodzące z Bitrixa, w tym przypomnienia o rezerwacjach, przyjdą w późniejszym
+wydaniu bramki.
+
+### 6.18. Własne
 
 Pusty formularz dla aplikacji spoza listy. Do SMS: wskaż ścieżką pole z numerem albo wpisz
 numery w liście zapasowej. Treść podaj jako ścieżkę albo jako szablon z ładunkiem pod `p`.
@@ -1026,7 +1261,7 @@ wysyłkę z wpisem w logu bramki.
 | Nowe wydanie bramki (na GitHubie jest nowsze wydanie niż zainstalowane) | włączone | 1 | brak | - |
 
 Każdą regułę można wyłączyć, zmienić jej limit na godzinę i grupowanie. Limit burzy zgłasza się
-raz na okno na integrację (rozdział 3.6). Certyfikat, konto i odbiór zgłaszają się raz na
+raz na okno na integrację (rozdział 3.7). Certyfikat, konto i odbiór zgłaszają się raz na
 przyczynę: ten sam próg dni albo ta sama trwająca awaria nie dają drugiego maila. Nowe wydanie
 zgłasza się raz na numer wydania. Mail zawiera numer nowego i zainstalowanego wydania,
 odnośnik do opisu zmian i do instrukcji aktualizacji (rozdział 7.4 [Uruchomienia](uruchomienie.md)).
