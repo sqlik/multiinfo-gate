@@ -4,8 +4,8 @@ import { TemplateEngine } from './templates.ts';
 
 export type EnrichConfig = NonNullable<InboundConfig['enrich']>;
 
-/** Odpowiedź czytamy do tylu znaków; kartoteka klienta mieści się w tym z zapasem. */
-const READ_LIMIT = 256 * 1024;
+/** Odpowiedź czytamy do tylu bajtów; kartoteka klienta mieści się w tym z zapasem. */
+export const READ_LIMIT = 256 * 1024;
 
 /** Nazwy zajęte w kontekście szablonu - pole `as` nie może ich przykryć. */
 const ZAJETE = new Set(['p', 'now', 'integration']);
@@ -28,10 +28,36 @@ export interface EnrichOptions {
   allowPrivate?: boolean;
 }
 
-/** Bez przekierowań: przekierowanie mogłoby zaprowadzić żądanie z sekretem w sieć wewnętrzną. */
+/**
+ * Bez przekierowań: przekierowanie mogłoby zaprowadzić żądanie z sekretem w sieć wewnętrzną.
+ * Odpowiedź czytamy strumieniem z licznikiem, a nie w całości do pamięci: aplikacja, która
+ * odpowiada bez końca, ma zająć `READ_LIMIT` bajtów, a nie tyle, ile zdąży wysłać do czasu odcięcia.
+ */
 export const httpGet: EnrichGet = async (url, headers, method, timeoutMs) => {
   const res = await fetch(url, { method, headers, signal: AbortSignal.timeout(timeoutMs), redirect: 'manual' });
-  return { status: res.status, body: (await res.text()).slice(0, READ_LIMIT) };
+  const zapowiedziane = Number(res.headers.get('content-length'));
+  if (Number.isFinite(zapowiedziane) && zapowiedziane > READ_LIMIT) {
+    await res.body?.cancel();
+    return { status: res.status, body: '' };
+  }
+  if (res.body === null) return { status: res.status, body: '' };
+  const reader = res.body.getReader();
+  const dekoder = new TextDecoder();
+  let body = '';
+  let przeczytane = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      przeczytane += value.byteLength;
+      body += dekoder.decode(value, { stream: true });
+      if (przeczytane >= READ_LIMIT) break;
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  // Ostatni kawałek bywa większy niż to, czego brakowało do limitu, więc przycinamy na koniec.
+  return { status: res.status, body: body.slice(0, READ_LIMIT) };
 };
 
 /**

@@ -1,5 +1,7 @@
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
-import { enrich, safeUrl } from '../../src/integrations/enrich.ts';
+import { enrich, httpGet, READ_LIMIT, safeUrl } from '../../src/integrations/enrich.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
 
 const engine = new TemplateEngine();
@@ -159,4 +161,53 @@ describe('zapytanie uzupełniające', () => {
     expect(safeUrl('https://firma.fakturownia.pl/clients/{{ p.id }}.json?api_token=tajne123')).toBe('https://firma.fakturownia.pl/clients/{{ p.id }}.json');
     expect(safeUrl('')).toBe('(adres nie do odczytania)');
   });
+});
+
+describe('httpGet: czytanie odpowiedzi', () => {
+  /** Serwer, który odpowiada tak, jak każe `zachowanie`; zwraca adres oraz sprzątanie. */
+  const serwer = async (zachowanie: Parameters<typeof createServer>[1]) => {
+    const srv = createServer(zachowanie);
+    await new Promise<void>((gotowe) => srv.listen(0, '127.0.0.1', gotowe));
+    const { port } = srv.address() as AddressInfo;
+    return { url: `http://127.0.0.1:${port}/`, koniec: () => new Promise<void>((z) => { srv.close(() => z()); }) };
+  };
+
+  it('przerywa czytanie strumienia bez końca zamiast zbierać go w pamięci', async () => {
+    let stop = false;
+    const kawalek = 'x'.repeat(64 * 1024);
+    const s = await serwer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.on('close', () => { stop = true; });
+      const pisz = () => {
+        if (stop) return res.end();
+        if (res.write(kawalek)) setImmediate(pisz);
+        else res.once('drain', pisz);
+      };
+      pisz();
+    });
+    try {
+      const out = await httpGet(s.url, {}, 'GET', 5000);
+      expect(out.status).toBe(200);
+      expect(out.body.length).toBeGreaterThan(0);
+      expect(out.body.length).toBeLessThanOrEqual(READ_LIMIT);
+    } finally {
+      stop = true;
+      await s.koniec();
+    }
+  });
+
+  it('nie czeka na odpowiedź zapowiedzianą ponad limit', async () => {
+    const s = await serwer((_req, res) => {
+      // Zapowiedź ogromna, treść skąpa: bez sprawdzenia nagłówka klient czekałby do przekroczenia czasu.
+      res.writeHead(200, { 'content-type': 'application/json', 'content-length': String(READ_LIMIT * 10) });
+      res.write('{"a":1}');
+    });
+    try {
+      const out = await httpGet(s.url, {}, 'GET', 5000);
+      expect(out.status).toBe(200);
+      expect(out.body).toBe('');
+    } finally {
+      await s.koniec();
+    }
+  }, 8000);
 });

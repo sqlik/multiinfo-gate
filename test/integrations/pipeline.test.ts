@@ -84,6 +84,30 @@ describe('runInbound: zapytanie uzupełniające', () => {
     expect(out.detail).toContain('500');
   });
 
+  it('po nieudanym dopytaniu ponowienie tego samego zdarzenia przechodzi, nie wpada w duplikat', async () => {
+    // Przy „zgłoś błąd” bramka odpowiada 422, czyli prosi aplikację o ponowienie. Gdyby żeton
+    // dedupu został zużyty, ponowienie dostałoby „duplikat” i 200, a wiadomość by przepadła.
+    deps.resolve = async () => ['93.184.216.34'];
+    deps.enrichGet = async () => ({ status: 500, body: '{}' });
+    const integ = make({ ...zKartoteki, eventIdPath: 'id', enrich: DOPYTANIE });
+    const ladunek = { id: 'e1', deal: { client: { id: 5 } } };
+    expect(await runInbound(deps, integ, ladunek, ip, NOW)).toMatchObject({ kind: 'error', code: 'enrich' });
+
+    deps.enrichGet = async () => ({ status: 200, body: '{"name":"Anna","mobile_phone":"+48 601 000 001"}' });
+    expect((await runInbound(deps, integ, ladunek, ip, NOW)).kind).toBe('sent');
+    // Trzeci raz to już prawdziwy duplikat: poprzedni przebieg zdarzenie przyjął.
+    expect(await runInbound(deps, integ, ladunek, ip, NOW)).toEqual({ kind: 'duplicate' });
+  });
+
+  it('przy „pomiń” nieudane dopytanie zużywa żeton dedupu, bo aplikacja dostaje 200', async () => {
+    deps.resolve = async () => ['93.184.216.34'];
+    deps.enrichGet = async () => ({ status: 500, body: '{}' });
+    const integ = make({ ...zKartoteki, eventIdPath: 'id', enrich: { ...DOPYTANIE, onError: 'skip' } });
+    const ladunek = { id: 'e2', deal: { client: { id: 5 } } };
+    expect(await runInbound(deps, integ, ladunek, ip, NOW)).toEqual({ kind: 'skipped', reason: 'enrich' });
+    expect(await runInbound(deps, integ, ladunek, ip, NOW)).toEqual({ kind: 'duplicate' });
+  });
+
   it('nie dopytuje, gdy warunek, duplikat albo burza odsiały zdarzenie', async () => {
     let wolano = 0;
     deps.resolve = async () => ['93.184.216.34'];
