@@ -3,6 +3,7 @@ import { defaultInboundConfig, defaultOutboundConfig, parseConfig, type InboundC
 import { PRESETS, presetById, presetsFor } from '../../src/integrations/presets/index.ts';
 import { previewInbound } from '../../src/integrations/pipeline.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
+import { paramPatternFor } from '../../src/admin/simple-form.ts';
 import { buildOutboundContext, renderOutbound } from '../../src/worker/integrations.ts';
 
 const engine = new TemplateEngine();
@@ -21,8 +22,19 @@ describe('gotowe ustawienia', () => {
     expect(ids.at(-1)).toBe('custom');
     expect(presetById('uptime-kuma')?.name).toBe('Uptime Kuma');
     expect(presetById('brak')).toBeUndefined();
-    expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
-    expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'home-assistant', 'freescout', 'freshdesk', 'slack', 'ntfy', 'custom']);
+    expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'fakturownia', 'fakturownia-klient', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
+    expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'home-assistant', 'freescout', 'freshdesk', 'slack', 'ntfy', 'bitrix24', 'custom']);
+  });
+  it('wartości z ładunku w adresie zapytania uzupełniającego są kodowane', () => {
+    for (const preset of PRESETS) {
+      const url = preset.inbound?.enrich?.url;
+      if (url === undefined) continue;
+      // Ładunek podaje ten, kto zna sekret webhooka. Bez kodowania wstawiłby ukośnik albo znak
+      // zapytania i przestawiłby żądanie na inną końcówkę API konta.
+      for (const znacznik of url.matchAll(/\{\{([^}]*)\}\}/g)) {
+        expect(znacznik[1], `${preset.id}: ${znacznik[0]}`).toMatch(/\|\s*url_encode\s*$/);
+      }
+    }
   });
   it('każde ustawienie ma konfigurację dla każdego swojego rodzaju, instrukcję i sekrety ze wskazówką', () => {
     for (const p of PRESETS) {
@@ -47,7 +59,7 @@ describe('gotowe ustawienia', () => {
     if (preset.inbound && preset.sample !== undefined && preset.expect) {
       it(`${preset.id}: przykładowy ładunek daje oczekiwany wynik`, () => {
         const config = { ...defaultInboundConfig(), ...preset.inbound };
-        const out = previewInbound(engine, config, preset.sample, '48', NOW);
+        const out = previewInbound(engine, config, preset.sample, '48', NOW, preset.enrichSample);
         expect(out.error).toBeNull();
         if (preset.expect!.skipped) expect(out.matches).toBe(false);
         if (preset.expect!.recipients) expect(out.recipients).toEqual(preset.expect!.recipients);
@@ -75,7 +87,7 @@ describe('gotowe ustawienia', () => {
       for (const w of simple.when) {
         for (const t of simple.text) {
           const config = parseConfig('webhook_in', { ...defaultInboundConfig(), ...preset.inbound, condition: w.condition, text: t.text });
-          const out = previewInbound(engine, config, preset.sample, '48', NOW);
+          const out = previewInbound(engine, config, preset.sample, '48', NOW, preset.enrichSample);
           expect(out.error, `${preset.id} ${w.id} ${t.id}`).toBeNull();
           if (out.matches) expect(out.text, `${preset.id} ${t.id}`).not.toBe('');
         }
@@ -92,7 +104,7 @@ describe('gotowe ustawienia', () => {
       const body = preset.outbound!.body!;
       for (const param of simple.params) {
         expect(body.mode).toBe('json');
-        expect((body as { template: string }).template).toMatch(new RegExp(`"${param.key}":\\s*("[^"]*"|\\d+)`));
+        expect((body as { template: string }).template).toMatch(paramPatternFor(param));
       }
       for (const s of simple.secrets) expect(preset.outbound!.headers!.some((h) => h.valueRef === s.ref), `${preset.id} ${s.ref}`).toBe(true);
     });
@@ -165,6 +177,19 @@ describe('gotowe ustawienia', () => {
     const text = "Jan Nowak : <div>To jest odpowiedź klienta</div><div><br></div><div>----- Original message -----</div><div></div><div class='freshdesk_quote'><blockquote class='freshdesk_quote'><div>From: Support</div><div>Subject: Re: [#6541] Nie działa</div></blockquote></div>";
     const out = previewInbound(engine, config, { event: 'odpowiedz', ticket_id: '6541', text }, '48', NOW);
     expect(out.text).toBe('Odpowiedz klienta w #6541 - Jan Nowak : To jest odpowiedz klienta');
+  });
+
+  it('Fakturownia: webhook bez faktury jest pomijany, a wariant nieopłaconych odsiewa opłacone', () => {
+    const preset = presetById('fakturownia')!;
+    const config = (over: Partial<InboundConfig> = {}) => ({ ...defaultInboundConfig(), ...preset.inbound, ...over } as InboundConfig);
+    // Webhook zdarzenia klienta ma inny kształt: bez numeru faktury nie ma z czego złożyć SMS-a.
+    expect(previewInbound(engine, config(), { id: 276200905, app_name: 'fakturownia', locale: 'pl' }, '48', NOW).matches).toBe(false);
+
+    const nieoplacone = preset.simple!.inbound!.when.find((w) => w.id === 'tylko-nieoplacone')!;
+    const zWariantem = config({ condition: nieoplacone.condition });
+    expect(previewInbound(engine, zWariantem, preset.sample, '48', NOW).matches).toBe(true);
+    const oplacona = { ...(preset.sample as { deal: object }), deal: { ...(preset.sample as { deal: object }).deal, paid: true } };
+    expect(previewInbound(engine, zWariantem, oplacona, '48', NOW).matches).toBe(false);
   });
 
   it('ustawienie wysyłające do klienta końcowego niesie ostrzeżenie o nadawcy', () => {

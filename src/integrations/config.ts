@@ -29,8 +29,28 @@ export const inboundConfigSchema = z.object({
   auth: z.object({
     header: z.object({ name: headerName, valueRef: z.string().min(1) }).optional(),
     basic: z.object({ user: z.string().min(1).max(200), passRef: z.string().min(1) }).optional(),
+    /**
+     * Sekret w polu ładunku: aplikacje, które nie umieją nagłówka, wkładają token do treści.
+     * Fakturownia wysyła go pod kluczem `api_token`. Sprawdzanie jest stałoczasowe, a wartość
+     * nigdy nie trafia do dziennika.
+     */
+    payload: z.object({ path, valueRef: z.string().min(1) }).optional(),
     sources: z.array(z.string().min(1).max(253)).max(50),
   }),
+  /**
+   * Zapytanie uzupełniające: jedno pytanie do aplikacji o pole, którego nie ma w ładunku.
+   * Fakturownia nie wysyła numeru klienta przy fakturze, wysyła jego identyfikator. Odpowiedź
+   * wchodzi do kontekstu szablonu pod nazwą z `as`, obok ładunku pod `p`.
+   */
+  enrich: z.object({
+    url: z.string().min(1).max(2000),
+    method: z.enum(['GET', 'POST']).default('GET'),
+    headers: z.array(z.object({ name: headerName, value: z.string().max(2000).optional(), valueRef: z.string().optional() })).max(10).default([]),
+    query: z.array(z.object({ name: z.string().min(1).max(100), value: z.string().max(2000).optional(), valueRef: z.string().optional() })).max(10).default([]),
+    timeoutMs: z.number().int().min(200).max(5000).default(2000),
+    as: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/).default('e'),
+    onError: z.enum(['error', 'skip']).default('error'),
+  }).optional(),
   to: z.object({ path: path.optional(), fallback: z.array(z.string().min(1)).max(50) }),
   ticketRefPath: path.optional(),
   eventIdPath: path.optional(),

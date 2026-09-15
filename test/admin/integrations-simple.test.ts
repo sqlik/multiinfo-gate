@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type OutboundConfig } from '../../src/integrations/config.ts';
 import { presetById } from '../../src/integrations/presets/index.ts';
-import { detectSimple, transformSecret } from '../../src/admin/simple-form.ts';
-import { valuesFromPreset } from '../../src/admin/views/integrations.ts';
+import { detectSimple, simpleDefaults, simpleToValues, transformSecret, type SimpleValues } from '../../src/admin/simple-form.ts';
+import { simpleFormPage } from '../../src/admin/views/integration-simple.ts';
+import type { Preset } from '../../src/integrations/presets/types.ts';
+import { valuesFromPreset, type FormContext } from '../../src/admin/views/integrations.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
 const NOW = new Date('2026-09-02T10:00:00Z');
@@ -149,6 +151,32 @@ describe('tryb prosty: wychodząca', () => {
     expect(transformSecret('basic-x', 'abc123')).toBe(`Basic ${Buffer.from('abc123:X').toString('base64')}`);
   });
 
+  it('Bitrix24: numer pracownika wchodzi w ciąg zapytania paczki batch, adres wymaga końcówki', async () => {
+    const pola = {
+      kind: 'webhook_out', preset: 'bitrix24', tryb: 'prosty', name: 'Bitrix z SMS-a', apiKeyId: String(apiKeyId), enabled: '1',
+      url: 'https://firma.bitrix24.pl/rest/1/abcdefghij123456/batch.json', 'param_fields[RESPONSIBLE_ID]': '7', action: 'zapisz',
+    };
+    const res = await post('/integracje', pola);
+    expect(res.statusCode).toBe(302);
+    const row = h.integrations.list()[0]!;
+    const template = ((row.config as OutboundConfig).body as { template: string }).template;
+    expect(template).toContain('fields[RESPONSIBLE_ID]=7');
+    expect(template).not.toContain('fields[RESPONSIBLE_ID]=1');
+    // Podstawienie nie może ruszyć niczego obok: powiązanie z kontaktem zostaje nietknięte.
+    expect(template).toContain('fields[UF_CRM_TASK][0]=C_$result[znajdz][CONTACT][0]');
+    const edit = await page(`/integracje/${row.id}/edytuj`);
+    expect(edit.body).toContain('value="7"');
+    expect(edit.body).toContain('Numer pracownika');
+
+    const bezKoncowki = await post('/integracje', { ...pola, name: 'Bitrix 2', url: 'https://firma.bitrix24.pl/rest/1/abcdefghij123456/' });
+    expect(bezKoncowki.statusCode).toBe(400);
+    expect(bezKoncowki.body).toContain('batch.json');
+    const nieLiczba = await post('/integracje', { ...pola, name: 'Bitrix 3', 'param_fields[RESPONSIBLE_ID]': 'jan' });
+    expect(nieLiczba.statusCode).toBe(400);
+    expect(nieLiczba.body).toContain('podaj liczbę');
+    expect(h.integrations.list()).toHaveLength(1);
+  });
+
   it('brak numeru skrzynki i zły numer to błędy w prostym formularzu', async () => {
     const empty = await post('/integracje', { kind: 'webhook_out', preset: 'freescout', tryb: 'prosty', name: 'FS', apiKeyId: String(apiKeyId), enabled: '1', url: 'https://pomoc.firma.pl/api/conversations', secret_apiKey: 'k', param_mailboxId: '', action: 'zapisz' });
     expect(empty.statusCode).toBe(400);
@@ -159,8 +187,139 @@ describe('tryb prosty: wychodząca', () => {
     expect(h.integrations.list()).toHaveLength(0);
   });
 
+  it('Fakturownia dla klienta: prosty formularz pyta o konto i kod API, zapis składa adres zapytania', async () => {
+    const formularz = await page('/integracje/nowa?rodzaj=webhook_in&ustawienie=fakturownia-klient');
+    expect(formularz.statusCode).toBe(200);
+    expect(formularz.body).toContain('Nazwa Twojego konta w Fakturowni');
+    expect(formularz.body).toContain('Kod autoryzacyjny API');
+    expect(formularz.body).toContain('Token, który Fakturownia wyśle w treści');
+    // Znacznik nazwy konta pojawia się wyłącznie w instrukcji, przy zdaniu o trybie zaawansowanym.
+    expect(formularz.body).not.toContain('value="NAZWA-KONTA"');
+    expect(formularz.body).not.toContain('Ścieżka numeru');
+
+    const res = await post('/integracje', {
+      kind: 'webhook_in', preset: 'fakturownia-klient', tryb: 'prosty', name: 'Faktury do klientów',
+      apiKeyId: String(apiKeyId), enabled: '1', numbers: '', whenId: 'wystawienie', textId: 'nabywca-numer-odnosnik',
+      secret: 'tajne123', account: 'firma', enrichSecret: 'api456', action: 'zapisz',
+    });
+    expect(res.statusCode).toBe(200);
+    const row = h.integrations.list()[0]!;
+    const config = row.config as InboundConfig;
+    expect(config.enrich?.url).toBe('https://firma.fakturownia.pl/clients/{{ p.deal.client.external_ids.fakturownia | url_encode }}.json');
+    expect(config.enrich?.query).toEqual([{ name: 'api_token', valueRef: 'enrichToken' }]);
+    expect(config.auth.payload).toEqual({ path: 'api_token', valueRef: 'payloadToken' });
+    expect(config.to.path).toBe('e.mobile_phone');
+    expect(h.integrations.secrets(row.id)).toEqual({ payloadToken: 'tajne123', enrichToken: 'api456' });
+
+    // Edycja wraca do trybu prostego z nazwą konta wyjętą z zapisanego adresu.
+    const edycja = await page(`/integracje/${row.id}/edytuj`);
+    expect(edycja.body).toContain('value="firma"');
+    expect(edycja.body).toContain('Nazwa Twojego konta w Fakturowni');
+    expect(edycja.body).toContain('zapisany - puste pole zostawia dotychczasowy');
+  });
+
+  it('Fakturownia dla klienta: brak nazwy konta oraz nazwa z ukośnikiem to błędy prostego formularza', async () => {
+    const pola = {
+      kind: 'webhook_in', preset: 'fakturownia-klient', tryb: 'prosty', name: 'Faktury', apiKeyId: String(apiKeyId), enabled: '1',
+      numbers: '', whenId: 'wystawienie', textId: 'nabywca-numer-odnosnik', secret: 'tajne123', enrichSecret: 'api456', action: 'zapisz',
+    };
+    const bez = await post('/integracje', { ...pola, account: '' });
+    expect(bez.statusCode).toBe(400);
+    expect(bez.body).toContain('nazwa twojego konta w fakturowni');
+    const zla = await post('/integracje', { ...pola, account: 'firma.fakturownia.pl/klienci' });
+    expect(zla.statusCode).toBe(400);
+    expect(zla.body).toContain('małe litery');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
+  it('tryb prosty składa token w polu ładunku i rozpoznaje go przy edycji', () => {
+    // Ustawienie próbne, bo katalog dostaje pierwszą taką aplikację dopiero z Fakturownią.
+    const base = presetById('uptime-kuma')!;
+    const preset: Preset = {
+      ...base, id: 'proba-token-w-ladunku',
+      inbound: { ...base.inbound, auth: { sources: [], payload: { path: 'api_token', valueRef: 'payloadToken' } } },
+      simple: { inbound: { ...base.simple!.inbound!, auth: { kind: 'payload', path: 'api_token', label: 'Token, który aplikacja wyśle w treści', where: 'w aplikacji w polu Api token' } } },
+    };
+    const values = valuesFromPreset('webhook_in', preset);
+    const sv: SimpleValues = {
+      name: 'Proba', apiKeyId: String(apiKeyId), enabled: true, numbers: '601 000 001',
+      whenId: 'awaria', textId: 'z-komunikatem', secret: 'tajne123', url: '', secrets: {}, params: {},
+    };
+    const out = simpleToValues('webhook_in', preset, sv, values);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.values.authPayloadPath).toBe('api_token');
+    expect(out.values.authPayloadValue).toBe('tajne123');
+    expect(out.values.authHeaderName).toBe('');
+    expect(out.values.authBasicUser).toBe('');
+    expect(detectSimple(preset, 'webhook_in', out.values)).toEqual({ whenId: 'awaria', textId: 'z-komunikatem' });
+    // Zmiana ścieżki w trybie zaawansowanym wypycha formularz z trybu prostego.
+    expect(detectSimple(preset, 'webhook_in', { ...out.values, authPayloadPath: 'token' })).toBeNull();
+  });
+
+  it('tryb prosty składa zapytanie uzupełniające z nazwy konta oraz kodu autoryzacyjnego', () => {
+    // Ustawienie próbne, bo pierwszą aplikacją z dopytaniem jest Fakturownia dla klienta.
+    const base = presetById('uptime-kuma')!;
+    const preset: Preset = {
+      ...base, id: 'proba-dopytanie',
+      inbound: {
+        ...base.inbound, to: { path: 'e.mobile_phone', fallback: [] },
+        enrich: {
+          url: 'https://NAZWA-KONTA.aplikacja.pl/clients/{{ p.client_id }}.json', method: 'GET', headers: [],
+          query: [{ name: 'api_token', valueRef: 'enrichToken' }], timeoutMs: 2000, as: 'e', onError: 'skip',
+        },
+      },
+      simple: {
+        inbound: {
+          ...base.simple!.inbound!,
+          recipients: { source: 'payload', note: 'SMS idzie na numer z kartoteki klienta' },
+          enrich: {
+            secretLabel: 'Kod autoryzacyjny API',
+            where: 'w aplikacji w Ustawieniach konta',
+            account: { label: 'Nazwa Twojego konta', hint: 'Pierwszy człon adresu panelu', placeholder: 'firma', marker: 'NAZWA-KONTA' },
+          },
+        },
+      },
+    };
+    const values = valuesFromPreset('webhook_in', preset);
+    const sv: SimpleValues = {
+      name: 'Proba', apiKeyId: String(apiKeyId), enabled: true, numbers: '', whenId: 'awaria', textId: 'z-komunikatem',
+      secret: 'tajne123', account: 'firma', enrichSecret: 'api456', url: '', secrets: {}, params: {},
+    };
+    const out = simpleToValues('webhook_in', preset, sv, values);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.values.enrichUrl).toBe('https://firma.aplikacja.pl/clients/{{ p.client_id }}.json');
+    expect(out.values.enrichToken).toBe('api456');
+    expect(out.values.enrichOnError).toBe('skip');
+    expect(detectSimple(preset, 'webhook_in', out.values)).toEqual({ whenId: 'awaria', textId: 'z-komunikatem', account: 'firma' });
+    // Własny adres wpisany w trybie zaawansowanym wypycha formularz z trybu prostego.
+    expect(detectSimple(preset, 'webhook_in', { ...out.values, enrichUrl: 'https://inna.aplikacja.pl/x.json' })).toBeNull();
+
+    // Formularz prosty pyta o nazwę konta oraz o kod API słowami ustawienia, bez znacznika i bez szablonu.
+    const ctx: FormContext = {
+      kind: 'webhook_in', preset, keys: [{ id: apiKeyId, name: 'Klucz', accountName: 'Konto', serviceIds: ['24138'], origs: [] }],
+      secretNames: [], apiUrl: null,
+    };
+    const html = simpleFormPage(ctx, simpleDefaults(preset, values, true), { textPreviews: {} });
+    expect(html).toContain('Nazwa Twojego konta');
+    expect(html).toContain('Pierwszy człon adresu panelu');
+    expect(html).toContain('placeholder="firma"');
+    expect(html).toContain('Kod autoryzacyjny API');
+    expect(html).toContain('w aplikacji w Ustawieniach konta');
+    expect(html).not.toContain('NAZWA-KONTA');
+    expect(html).not.toContain('{{');
+
+    const bez = simpleToValues('webhook_in', preset, { ...sv, account: '' }, values);
+    expect(bez.ok).toBe(false);
+    if (bez.ok) return;
+    expect(bez.error).toContain('nazwa twojego konta');
+    const zla = simpleToValues('webhook_in', preset, { ...sv, account: 'firma.pl/klienci' }, values);
+    expect(zla.ok).toBe(false);
+  });
+
   it('detectSimple: domyślne wartości każdego ustawienia z trybem prostym rozpoznają się jako proste', () => {
-    for (const id of ['uptime-kuma', 'grafana', 'zabbix', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'prosty-json']) {
+    for (const id of ['uptime-kuma', 'grafana', 'zabbix', 'fakturownia', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'prosty-json']) {
       const preset = presetById(id)!;
       const v = valuesFromPreset('webhook_in', preset);
       // Warunek ustawienia to „wszystko”; w listach musi być wariant z takim samym warunkiem albo pierwszy wariant po zapisie.

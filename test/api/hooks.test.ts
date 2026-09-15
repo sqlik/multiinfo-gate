@@ -26,9 +26,14 @@ let messages: MessagesRepo;
 let apiKeys: ApiKeysRepo;
 let apiKeyId: number;
 const notify = vi.fn();
+/** Atrapa zapytania uzupełniającego: co bramka zapytała oraz co dostała w odpowiedzi. */
+let zapytania: string[] = [];
+let odpowiedz: { status: number; body: string } = { status: 200, body: '{}' };
 
 beforeEach(async () => {
   notify.mockReset();
+  zapytania = [];
+  odpowiedz = { status: 200, body: '{}' };
   const db = openDatabase(':memory:');
   const key = randomBytes(32);
   const accounts = new AccountsRepo(db, key);
@@ -44,15 +49,17 @@ beforeEach(async () => {
     clients: {} as never, inbound: new InboundMessagesRepo(db), rateLimiter: new RateLimiter(), now: () => NOW,
     // Stały zegar: kubełek nie uzupełnia się w trakcie testu zalewu.
     ...deps, hookLimiter: new RateLimiter(() => NOW.getTime()), notifier: { notify },
+    resolve: async () => ['93.184.216.34'],
+    enrichGet: async (url) => { zapytania.push(url); return odpowiedz; },
   });
   await app.ready();
 });
 
-const make = (config: Partial<InboundConfig> = {}, secrets: Record<string, string> = {}) => {
+const make = (config: Partial<InboundConfig> = {}, secrets: Record<string, string> = {}, storePayloads = 0) => {
   const id = integrations.insert({
     name: 'Kuma', kind: 'webhook_in', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1,
     config: { ...defaultInboundConfig(), text: { mode: 'liquid', template: '{{ p.msg }}' }, to: { fallback: ['48601000009'] }, ...config },
-    secrets, storePayloads: 0, createdAt: NOW,
+    secrets, storePayloads, createdAt: NOW,
   });
   return integrations.get(id)!;
 };
@@ -117,6 +124,34 @@ describe('POST /hooks/:hookId', () => {
     expect((await post(integ.hookId!, { msg: 'x' }, { authorization: `Basic ${Buffer.from('grafana:zle').toString('base64')}` })).statusCode).toBe(401);
     expect((await post(integ.hookId!, { msg: 'x' })).statusCode).toBe(401);
   });
+  it('sekret w polu ładunku: pasujący przechodzi, niepasujący oraz brak pola to 401', async () => {
+    const integ = make({ auth: { sources: [], payload: { path: 'api_token', valueRef: 'payloadToken' } } }, { payloadToken: 'tajne123' });
+    expect((await post(integ.hookId!, { api_token: 'tajne123', msg: 'x' })).statusCode).toBe(202);
+    const zly = await post(integ.hookId!, { api_token: 'inne', msg: 'x' });
+    expect(zly.statusCode).toBe(401);
+    expect(zly.json()).toEqual({ accepted: false, reason: 'unauthorized' });
+    expect((await post(integ.hookId!, { msg: 'x' })).statusCode).toBe(401);
+  });
+  it('sekret w polu ładunku nie trafia do dziennika ani do powiadomienia', async () => {
+    const integ = make({ auth: { sources: [], payload: { path: 'api_token', valueRef: 'payloadToken' } } }, { payloadToken: 'tajne123' });
+    await post(integ.hookId!, { api_token: 'inne', msg: 'x' });
+    const wpisy = JSON.stringify(integrationEvents.list(integ.id, 10));
+    expect(wpisy).toContain('api_token');
+    expect(wpisy).not.toContain('tajne123');
+    expect(wpisy).not.toContain('inne');
+    expect(JSON.stringify(notify.mock.calls)).not.toContain('tajne123');
+  });
+  it('sekret w polu ładunku nie trafia do przechowanego ładunku ani do treści SMS-a', async () => {
+    const integ = make(
+      { auth: { sources: [], payload: { path: 'api_token', valueRef: 'payloadToken' } }, text: { mode: 'liquid', template: '{{ p.msg }} {{ p.api_token }}' } },
+      { payloadToken: 'tajne123' }, 1,
+    );
+    const res = await post(integ.hookId!, { api_token: 'tajne123', msg: 'x' });
+    expect(res.statusCode).toBe(202);
+    expect(integrationEvents.latestPayload(integ.id)).toContain('api_token');
+    expect(integrationEvents.latestPayload(integ.id)).not.toContain('tajne123');
+    expect(messages.get(res.json().messageIds[0])!.body).not.toContain('tajne123');
+  });
   it('lista źródeł: adres spoza listy to 403, nazwa rozwiązana pasuje', async () => {
     const integ = make({ auth: { sources: ['203.0.113.0/24', 'nas.dyndns.example'] } });
     expect((await post(integ.hookId!, { msg: 'x' }, {}, '203.0.113.9')).statusCode).toBe(202);
@@ -159,6 +194,40 @@ describe('POST /hooks/:hookId', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ accepted: false, reason: 'invalid_recipient' });
     expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('Fakturownia dla klienta: token z ładunku, dopytanie o kartotekę, SMS na komórkę nabywcy', async () => {
+    const preset = presetById('fakturownia-klient')!;
+    const konto = { ...preset.inbound!.enrich!, url: 'https://firma.fakturownia.pl/clients/{{ p.deal.client.external_ids.fakturownia }}.json' };
+    const integ = make({ ...preset.inbound, enrich: konto }, { payloadToken: 'tajne123', enrichToken: 'api456' });
+    odpowiedz = { status: 200, body: JSON.stringify(preset.enrichSample) };
+    const res = await post(integ.hookId!, { ...(preset.sample as object), api_token: 'tajne123' });
+    expect(res.statusCode).toBe(202);
+    expect(zapytania[0]).toContain('/clients/276200905.json');
+    expect(zapytania[0]).toContain('api_token=api456');
+    const wyslana = messages.get(res.json().messageIds[0])!;
+    expect(wyslana.dest).toBe('48601000001');
+    expect(wyslana.body).toBe(preset.expect!.text);
+    // Token z ładunku ani kod API nie mają prawa wylądować w dzienniku integracji.
+    const wpisy = JSON.stringify(integrationEvents.list(integ.id, 10));
+    expect(wpisy).not.toContain('tajne123');
+    expect(wpisy).not.toContain('api456');
+  });
+
+  it('Fakturownia dla klienta: kartoteka bez komórki daje 200 z pominięciem, nie błąd', async () => {
+    const preset = presetById('fakturownia-klient')!;
+    const konto = { ...preset.inbound!.enrich!, url: 'https://firma.fakturownia.pl/clients/{{ p.deal.client.external_ids.fakturownia }}.json' };
+    const integ = make({ ...preset.inbound, enrich: konto }, { payloadToken: 'tajne123', enrichToken: 'api456' });
+    odpowiedz = { status: 200, body: '{"id":276200905,"name":"Anna Kowalska","phone":"+48 22 123 45 67","mobile_phone":""}' };
+    const bez = await post(integ.hookId!, { ...(preset.sample as object), api_token: 'tajne123' });
+    expect(bez.statusCode).toBe(200);
+    expect(bez.json()).toMatchObject({ accepted: false });
+
+    // Niedostępna aplikacja też nie może zgłosić błędu: Fakturownia wyłącza webhooka po serii nieudanych dostarczeń.
+    odpowiedz = { status: 500, body: '{}' };
+    const padla = await post(integ.hookId!, { ...(preset.sample as object), api_token: 'tajne123' });
+    expect(padla.statusCode).toBe(200);
+    expect(integrationEvents.list(integ.id, 10).map((e) => e.result)).toEqual(['skipped', 'skipped']);
   });
 
   it('za duży ładunek to 413, zły JSON to 400', async () => {

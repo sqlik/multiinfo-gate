@@ -1,5 +1,5 @@
 import type { IntegrationKind } from '../integrations/config.ts';
-import type { Preset, SimpleSecret } from '../integrations/presets/types.ts';
+import type { Preset, SimpleParam, SimpleSecret } from '../integrations/presets/types.ts';
 import type { IntegrationFormValues } from './views/integrations.ts';
 
 type Body = Record<string, string | string[] | undefined>;
@@ -12,6 +12,8 @@ export interface SimpleValues {
   name: string; apiKeyId: string; enabled: boolean;
   /** Przychodząca: numery (jeden na linię), wybory z list i hasło aplikacji. */
   numbers: string; whenId: string; textId: string; secret: string;
+  /** Dopytanie: nazwa konta w aplikacji (wchodzi w adres) oraz kod autoryzacyjny jej API. */
+  account: string; enrichSecret: string;
   /** Wychodząca: adres aplikacji, sekrety po odniesieniu i parametry po kluczu. */
   url: string; secrets: Record<string, string>; params: Record<string, string>;
 }
@@ -22,6 +24,7 @@ export function simpleValuesFromBody(body: Body, preset: Preset): SimpleValues {
   return {
     name: s('name'), apiKeyId: s('apiKeyId'), enabled: s('enabled') === '1',
     numbers: String(body.numbers ?? ''), whenId: s('whenId'), textId: s('textId'), secret: String(body.secret ?? '').trim(),
+    account: s('account'), enrichSecret: String(body.enrichSecret ?? '').trim(),
     url: s('url'),
     secrets: Object.fromEntries((out?.secrets ?? []).map((sec) => [sec.ref, String(body[`secret_${sec.ref}`] ?? '').trim()])),
     params: Object.fromEntries((out?.params ?? []).map((p) => [p.key, s(`param_${p.key}`)])),
@@ -36,16 +39,28 @@ export function simpleDefaults(preset: Preset, base: IntegrationFormValues, fres
   return {
     name: base.name, apiKeyId: base.apiKeyId, enabled: base.enabled,
     numbers: base.toFallback, whenId: detected?.whenId ?? inbound?.when[0]?.id ?? '', textId: detected?.textId ?? inbound?.text[0]?.id ?? '', secret: '',
+    account: detected?.account ?? '', enrichSecret: '',
     url: base.url, secrets: {}, params: paramsFromTemplate(preset, base.bodyTemplate),
   };
 }
 
-const paramPattern = (key: string) => new RegExp(`"${key}":\\s*("[^"]*"|\\d+)`);
+/** Klucz parametru jest daną z ustawienia, nie wyrażeniem - nawiasy Bitrixa muszą zostać nawiasami. */
+const escapeRe = (raw: string): string => raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const paramPattern = (key: string) => new RegExp(`"${escapeRe(key)}":\\s*("[^"]*"|\\d+)`);
+/** Parametr w ciągu zapytania: `klucz=wartość` do najbliższego `&` albo końca wartości tekstowej. */
+const queryPattern = (key: string) => new RegExp(`${escapeRe(key)}=([^&"]*)`);
+
+/** Wzorzec, którym ustawienie znajduje swój parametr w szablonie body. */
+export const paramPatternFor = (param: SimpleParam): RegExp => param.where === 'query' ? queryPattern(param.key) : paramPattern(param.key);
+
+/** Nazwa konta wchodzi do adresu, pod który bramka sama zadzwoni - bez ukośnika, kropki i znaku zapytania. */
+const ACCOUNT_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 function paramsFromTemplate(preset: Preset, template: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const p of preset.simple?.outbound?.params ?? []) {
-    const m = paramPattern(p.key).exec(template);
+    const m = paramPatternFor(p).exec(template);
     out[p.key] = m ? m[1]!.replace(/^"|"$/g, '') : '';
   }
   return out;
@@ -82,27 +97,44 @@ export function simpleToValues(kind: IntegrationKind, preset: Preset, sv: Simple
     v.toFallback = sv.numbers;
     if (simple.recipients.source === 'list' && sv.numbers.trim() === '') return fail('Podaj przynajmniej jeden numer telefonu, na który ma iść SMS.');
     const auth = simple.auth;
+    v.authHeaderName = '';
+    v.authHeaderValue = '';
+    v.authBasicUser = '';
+    v.authBasicPass = '';
+    v.authPayloadPath = '';
+    v.authPayloadValue = '';
     if (auth.kind === 'header') {
       v.authHeaderName = auth.name;
       v.authHeaderValue = sv.secret === '' ? '' : `${auth.prefix}${sv.secret}`;
-      v.authBasicUser = '';
-      v.authBasicPass = '';
     } else if (auth.kind === 'basic') {
       v.authBasicUser = auth.user;
       v.authBasicPass = sv.secret;
-      v.authHeaderName = '';
-      v.authHeaderValue = '';
-    } else {
-      v.authHeaderName = '';
-      v.authHeaderValue = '';
-      v.authBasicUser = '';
-      v.authBasicPass = '';
+    } else if (auth.kind === 'payload') {
+      v.authPayloadPath = auth.path;
+      v.authPayloadValue = sv.secret;
+    }
+    v.enrichUrl = '';
+    v.enrichToken = '';
+    if (simple.enrich) {
+      const url = preset.inbound?.enrich?.url;
+      if (url === undefined) return fail('To ustawienie nie ma adresu zapytania uzupełniającego.');
+      const marker = simple.enrich.account.marker;
+      const konto = sv.account.trim();
+      if (konto === '') return fail(`Podaj: ${simple.enrich.account.label.toLowerCase()}.`);
+      if (!ACCOUNT_NAME.test(konto)) return fail(`${simple.enrich.account.label}: dozwolone są małe litery, cyfry oraz myślnik.`);
+      if (!url.includes(marker)) return fail('Adres zapytania nie ma miejsca na nazwę konta - zmień je w trybie zaawansowanym.');
+      v.enrichUrl = url.replaceAll(marker, konto);
+      v.enrichToken = sv.enrichSecret;
+      v.enrichOnError = preset.inbound?.enrich?.onError ?? 'error';
     }
     return { ok: true, values: v };
   }
   const simple = preset.simple?.outbound;
   if (!simple) return fail('To ustawienie nie ma trybu prostego.');
   v.url = sv.url;
+  if (simple.address.mustEndWith !== undefined && !sv.url.endsWith(simple.address.mustEndWith)) {
+    return fail(`${simple.address.label} musi kończyć się na ${simple.address.mustEndWith} - dopisz to na końcu adresu z aplikacji.`);
+  }
   v.headers = base.headers.map((h) => ({ ...h }));
   for (const sec of simple.secrets) {
     const raw = sv.secrets[sec.ref] ?? '';
@@ -117,14 +149,17 @@ export function simpleToValues(kind: IntegrationKind, preset: Preset, sv: Simple
     const raw = sv.params[p.key] ?? '';
     if (raw === '') return fail(`Podaj: ${p.label.toLowerCase()}.`);
     if (p.digits && !/^\d{1,12}$/.test(raw)) return fail(`${p.label}: podaj liczbę.`);
-    if (!paramPattern(p.key).test(template)) return fail(`Szablon nie ma pola ${p.key} - zmień je w trybie zaawansowanym.`);
-    template = template.replace(paramPattern(p.key), `"${p.key}": ${p.digits ? raw : JSON.stringify(raw)}`);
+    const wzor = paramPatternFor(p);
+    if (!wzor.test(template)) return fail(`Szablon nie ma pola ${p.key} - zmień je w trybie zaawansowanym.`);
+    // W ciągu zapytania wartość idzie bez cudzysłowów; w JSON-ie z cudzysłowami, gdy nie jest liczbą.
+    const podstaw = p.where === 'query' ? `${p.key}=${raw}` : `"${p.key}": ${p.digits ? raw : JSON.stringify(raw)}`;
+    template = template.replace(wzor, () => podstaw);
   }
   v.bodyTemplate = template;
   return { ok: true, values: v };
 }
 
-export interface SimpleDetected { whenId?: string; textId?: string; params?: Record<string, string> }
+export interface SimpleDetected { whenId?: string; textId?: string; params?: Record<string, string>; account?: string }
 
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
@@ -142,13 +177,25 @@ export function detectSimple(preset: Preset, kind: IntegrationKind, v: Integrati
     const text = simple.text.find((t) => same(t.text, v.textMode === 'path' ? { mode: 'path', path: v.textPath } : { mode: 'liquid', template: v.textTemplate }));
     if (!when || !text) return null;
     const auth = simple.auth;
-    const authOk = auth.kind === 'header' ? v.authHeaderName === auth.name && v.authBasicUser === ''
-      : auth.kind === 'basic' ? v.authBasicUser === auth.user && v.authHeaderName === ''
-      : v.authHeaderName === '' && v.authBasicUser === '';
+    const authOk = auth.kind === 'header' ? v.authHeaderName === auth.name && v.authBasicUser === '' && v.authPayloadPath === ''
+      : auth.kind === 'basic' ? v.authBasicUser === auth.user && v.authHeaderName === '' && v.authPayloadPath === ''
+      : auth.kind === 'payload' ? v.authPayloadPath === auth.path && v.authHeaderName === '' && v.authBasicUser === ''
+      : v.authHeaderName === '' && v.authBasicUser === '' && v.authPayloadPath === '';
     if (!authOk) return null;
     if (v.toPath !== (p.to?.path ?? '') || v.ticketRefPath !== (p.ticketRefPath ?? '') || v.eventIdPath !== (p.eventIdPath ?? '')) return null;
     if (v.textMode === 'liquid' && (v.maxParts !== String(p.maxParts ?? 1) || v.overflow !== (p.overflow ?? 'truncate'))) return null;
-    return { whenId: when.id, textId: text.id };
+    // Adres dopytania musi powstać z adresu ustawienia przez podmianę znacznika; własny adres to tryb zaawansowany.
+    let account: string | undefined;
+    if (simple.enrich) {
+      const czesci = (p.enrich?.url ?? '').split(simple.enrich.account.marker);
+      const przed = czesci[0] ?? '';
+      const po = czesci[1] ?? '';
+      if (czesci.length !== 2 || !v.enrichUrl.startsWith(przed) || !v.enrichUrl.endsWith(po)) return null;
+      account = v.enrichUrl.slice(przed.length, v.enrichUrl.length - po.length);
+      if (!ACCOUNT_NAME.test(account)) return null;
+      if (v.enrichOnError !== (p.enrich?.onError ?? 'error')) return null;
+    } else if (v.enrichUrl !== '') return null;
+    return { whenId: when.id, textId: text.id, ...(account === undefined ? {} : { account }) };
   }
   const simple = preset.simple?.outbound;
   const p = preset.outbound;
@@ -164,10 +211,11 @@ export function detectSimple(preset: Preset, kind: IntegrationKind, v: Integrati
   let expected = body.template;
   const params: Record<string, string> = {};
   for (const param of simple.params) {
-    const m = paramPattern(param.key).exec(v.bodyTemplate);
+    const wzor = paramPatternFor(param);
+    const m = wzor.exec(v.bodyTemplate);
     if (!m) return null;
     params[param.key] = m[1]!.replace(/^"|"$/g, '');
-    expected = expected.replace(paramPattern(param.key), m[0]);
+    expected = expected.replace(wzor, () => m[0]);
   }
   if (v.bodyTemplate !== expected) return null;
   if ((v.responseRefPath || '') !== (p.responseRefPath ?? '')) return null;

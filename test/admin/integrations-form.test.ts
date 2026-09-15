@@ -88,12 +88,115 @@ describe('POST /integracje', () => {
     expect(row.hookId).toBeNull();
   });
 
+  it('token w polu ładunku zapisuje się obok pozostałych warstw, a pusta wartość zostawia zapisany', async () => {
+    const pola = { authHeaderName: '', authHeaderValue: '', authPayloadPath: 'api_token' };
+    const res = await post('/integracje', inboundFields({ ...pola, authPayloadValue: 'tajne123' }));
+    expect(res.statusCode).toBe(200);
+    const row = h.integrations.list()[0]!;
+    expect((row.config as InboundConfig).auth.payload).toEqual({ path: 'api_token', valueRef: 'payloadToken' });
+    expect(h.integrations.secrets(row.id)).toEqual({ payloadToken: 'tajne123' });
+
+    const form = await page(`/integracje/${row.id}/edytuj?tryb=zaawansowany`);
+    expect(form.body).toContain('name="authPayloadPath"');
+    expect(form.body).not.toContain('tajne123');
+
+    const keep = await post(`/integracje/${row.id}/edytuj`, inboundFields({ ...pola, authPayloadValue: '' }));
+    expect(keep.statusCode).toBe(302);
+    expect(h.integrations.secrets(row.id)).toEqual({ payloadToken: 'tajne123' });
+
+    // Pusta ścieżka zdejmuje warstwę i kasuje token, tak samo jak pusta nazwa nagłówka.
+    await post(`/integracje/${row.id}/edytuj`, inboundFields({ ...pola, authPayloadPath: '', authPayloadValue: '' }));
+    expect((h.integrations.get(row.id)!.config as InboundConfig).auth.payload).toBeUndefined();
+    expect(h.integrations.secrets(row.id)).toEqual({});
+  });
+
+  it('token w polu ładunku: zła ścieżka oraz brak wartości to błędy formularza', async () => {
+    const zla = await post('/integracje', inboundFields({ authPayloadPath: 'api..token', authPayloadValue: 'x' }));
+    expect(zla.statusCode).toBe(400);
+    expect(zla.body).toContain('Pole ładunku z tokenem');
+    const bez = await post('/integracje', inboundFields({ authPayloadPath: 'api_token', authPayloadValue: '' }));
+    expect(bez.statusCode).toBe(400);
+    expect(bez.body).toContain('Podaj wartość tokenu');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
+  it('zapytanie uzupełniające zapisuje się z tokenem w parametrze adresu, a pusta wartość zostawia zapisany', async () => {
+    const adres = 'https://firma.fakturownia.pl/clients/{{ p.deal.client.id }}.json';
+    const res = await post('/integracje', inboundFields({ enrichUrl: adres, enrichToken: 'api456', enrichOnError: 'skip' }));
+    expect(res.statusCode).toBe(200);
+    const row = h.integrations.list()[0]!;
+    const enrich = (row.config as InboundConfig).enrich;
+    expect(enrich).toMatchObject({ url: adres, method: 'GET', query: [{ name: 'api_token', valueRef: 'enrichToken' }], as: 'e', onError: 'skip' });
+    expect(h.integrations.secrets(row.id)).toMatchObject({ enrichToken: 'api456' });
+
+    const keep = await post(`/integracje/${row.id}/edytuj`, inboundFields({ enrichUrl: adres, enrichToken: '', enrichOnError: 'skip' }));
+    expect(keep.statusCode).toBe(302);
+    expect(h.integrations.secrets(row.id)).toMatchObject({ enrichToken: 'api456' });
+
+    // Pusty adres zdejmuje dopytanie i kasuje jego kod autoryzacyjny.
+    await post(`/integracje/${row.id}/edytuj`, inboundFields({ enrichUrl: '', enrichToken: '' }));
+    expect((h.integrations.get(row.id)!.config as InboundConfig).enrich).toBeUndefined();
+    expect(h.integrations.secrets(row.id).enrichToken).toBeUndefined();
+  });
+
+  it('zapytanie uzupełniające: błąd składni w adresie oraz brak kodu autoryzacyjnego to błędy formularza', async () => {
+    const zly = await post('/integracje', inboundFields({ enrichUrl: 'https://firma.fakturownia.pl/clients/{{ p.deal', enrichToken: 'x' }));
+    expect(zly.statusCode).toBe(400);
+    expect(zly.body).toContain('Adres zapytania uzupełniającego');
+    const bez = await post('/integracje', inboundFields({ enrichUrl: 'https://firma.fakturownia.pl/clients/5.json', enrichToken: '' }));
+    expect(bez.statusCode).toBe(400);
+    expect(bez.body).toContain('kod autoryzacyjny');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
+  it('zapytanie uzupełniające: adres bez schematu http odpada już przy zapisie', async () => {
+    // Odmowa przy zapisie, nie przy pierwszym webhooku: przy „pomiń wiadomość” zła konfiguracja
+    // znaczy, że aplikacja dostaje 200, a SMS-a nie ma.
+    for (const zly of ['firma.fakturownia.pl/clients/5.json', 'ftp://firma.fakturownia.pl/x', '/clients/5.json']) {
+      const res = await post('/integracje', inboundFields({ enrichUrl: zly, enrichToken: 'x' }));
+      expect(res.statusCode, zly).toBe(400);
+      expect(res.body, zly).toContain('Adres zapytania uzupełniającego');
+    }
+    // Klamry szablonu nie przeszkadzają w sprawdzeniu.
+    const dobry = await post('/integracje', inboundFields({ enrichUrl: 'https://firma.fakturownia.pl/clients/{{ p.id | url_encode }}.json', enrichToken: 'x' }));
+    expect(dobry.statusCode).toBe(200);
+    expect(h.integrations.list()).toHaveLength(1);
+  });
+
+  it('zapytanie uzupełniające: wyrażenie w nazwie serwera odpada przy zapisie', async () => {
+    // Wartość z ładunku decydowałaby, dokąd pojedzie kod autoryzacyjny API administratora.
+    const res = await post('/integracje', inboundFields({ enrichUrl: 'https://{{ p.account }}.aplikacja.pl/clients/5.json', enrichToken: 'x' }));
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('nazw');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
   it('błąd składni szablonu wraca do formularza z komunikatem i numerem linii, bez zapisu', async () => {
     const res = await post('/integracje', inboundFields({ textTemplate: 'Awaria\n{{ p.monitor.name' }));
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain('Szablon treści');
     expect(res.body).toContain('linia 2');
     expect(res.body).toContain('name="textTemplate"');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
+  it('nowa integracja nie ma wpisanego adresu z wielokropkiem', async () => {
+    // Slack, Teamsy oraz Bitrix24 trzymają w adresie wielokropek zamiast klucza webhooka. Jako
+    // wartość początkowa dałby administratorowi pole, którego nie da się zapisać bez poprawki.
+    for (const id of ['slack', 'teams', 'bitrix24']) {
+      const preset = presetById(id);
+      if (!preset) continue;
+      const values = valuesFromPreset('webhook_out', preset);
+      expect(values.url, id).not.toContain('…');
+    }
+  });
+
+  it('adres z wielokropkiem do uzupełnienia nie przechodzi przez zapis', async () => {
+    // Gotowe ustawienia Slacka, Teamsów oraz Bitrixa24 wstawiają w adres wielokropek w miejsce
+    // klucza webhooka. Bez tego sprawdzenia zapisywał się jako adres, bo nie ma w nim odstępu.
+    const res = await post('/integracje', outboundFields({ url: 'https://firma.bitrix24.pl/rest/1/…/batch.json' }));
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('wielokropek');
     expect(h.integrations.list()).toHaveLength(0);
   });
 
@@ -143,6 +246,49 @@ describe('POST /integracje', () => {
     const bad = await post('/integracje', inboundFields({ action: 'sprawdz', sample: '{nie json' }));
     expect(bad.statusCode).toBe(400);
     expect(bad.body).toContain('Próbka nie jest poprawnym JSON-em');
+  });
+
+  it('formularz tłumaczy dopytanie przykładem pola, a pola z odpowiedzi pokazuje bez przedrostka ładunku', async () => {
+    const res = await page('/integracje/nowa?rodzaj=webhook_in&ustawienie=fakturownia-klient&tryb=zaawansowany');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('{{ e.mobile_phone }}');
+    expect(res.body).toContain('tylko zamiast <code>p</code> piszesz <code>e</code>');
+    // Lista pól ustawienia: pole z kartoteki bez „p.”, pole z faktury z „p.”
+    expect(res.body).toContain('{{ e.name }}');
+    expect(res.body).toContain('{{ p.deal.invoice_no }}');
+    expect(res.body).not.toContain('{{ p.e.mobile_phone }}');
+  });
+
+  it('podgląd ustawienia z dopytaniem liczy odbiorcę z przykładowej odpowiedzi aplikacji', async () => {
+    const preset = presetById('fakturownia-klient')!;
+    const res = await post('/integracje', inboundFields({
+      preset: preset.id, name: 'Faktury do klientów', action: 'sprawdz',
+      authHeaderName: '', authHeaderValue: '', authPayloadPath: 'api_token', authPayloadValue: 'tajne123',
+      enrichUrl: preset.inbound!.enrich!.url, enrichToken: 'api456', enrichOnError: 'skip',
+      toPath: 'e.mobile_phone', toFallback: '', maxParts: '2',
+      rulePath: ['deal.invoice_no', ''], ruleOp: ['exists', 'eq'], ruleValue: ['', ''],
+      textTemplate: (preset.inbound!.text as { template: string }).template,
+      sample: JSON.stringify(preset.sample),
+    }));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Podgląd z próbki');
+    expect(res.body).toContain('48601000001');
+    expect(res.body).toContain('przykładowej odpowiedzi');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
+  it('podgląd dopytania bez przykładowej odpowiedzi mówi, dlaczego pola spod e są puste', async () => {
+    // Ustawienie własne z ręcznie wpisanym dopytaniem nie ma `enrichSample`, więc podgląd
+    // pokazywałby pustego odbiorcę bez słowa wyjaśnienia.
+    const res = await post('/integracje', inboundFields({
+      action: 'sprawdz', preset: 'custom',
+      enrichUrl: 'https://firma.aplikacja.pl/clients/{{ p.client_id | url_encode }}.json', enrichToken: 'api456', enrichOnError: 'skip',
+      toPath: 'e.mobile_phone', toFallback: '',
+    }));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('nie ma przykładowej odpowiedzi');
+    expect(res.body).not.toContain('Pola spod <code>e</code> pochodzą z przykładowej');
+    expect(h.integrations.list()).toHaveLength(0);
   });
 
   it('podgląd wychodzącej pokazuje nagłówki z zamaskowanym sekretem i body', async () => {

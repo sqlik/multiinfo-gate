@@ -23,6 +23,11 @@ export interface Preset {
   outbound?: Partial<OutboundConfig>;
   /** Sekrety, o które formularz zapyta. */
   secrets?: PresetSecret[];
+  /**
+   * Przykładowa odpowiedź zapytania uzupełniającego. Podgląd oraz test katalogu podstawiają ją
+   * pod nazwę z `enrich.as`, bo ani jedno, ani drugie nie ma prawa pytać aplikacji po sieci.
+   */
+  enrichSample?: unknown;
   /** Oczekiwany wynik przykładowego ładunku. */
   expect?: { recipients?: string[]; text?: string; skipped?: boolean; outboundJson?: Record<string, unknown>; outboundText?: string };
   /** Instrukcja „co ustawić w aplikacji” do panelu i dokumentacji, Markdown. */
@@ -50,6 +55,8 @@ export interface SimpleText { id: string; label: string; text: InboundConfig['te
 export type SimpleAuth =
   | { kind: 'header'; name: string; prefix: string; label: string; where: string }
   | { kind: 'basic'; user: string; label: string; where: string }
+  /** Token w treści żądania: aplikacje, które nie umieją własnych nagłówków, np. Fakturownia. */
+  | { kind: 'payload'; path: string; label: string; where: string }
   | { kind: 'none'; note: string };
 
 export interface SimpleInbound {
@@ -60,16 +67,30 @@ export interface SimpleInbound {
   when: SimpleWhen[];
   text: SimpleText[];
   auth: SimpleAuth;
+  /**
+   * Dopytanie aplikacji o pole spoza ładunku. Formularz prosi o dwie rzeczy: nazwę konta,
+   * bo adres aplikacji nie przychodzi w ładunku, oraz kod autoryzacyjny API. Nazwa konta
+   * podmienia w adresie znacznik `marker`.
+   */
+  enrich?: {
+    secretLabel: string; where: string;
+    account: { label: string; hint: string; placeholder: string; marker: string };
+  };
 }
 
-/** Parametr wpisywany do szablonu body, np. numer skrzynki; w szablonie JSON jako `"klucz": wartość`. */
-export interface SimpleParam { key: string; label: string; hint: string; digits: boolean }
+/**
+ * Parametr wpisywany do szablonu body, np. numer skrzynki. Domyślnie siedzi w szablonie JSON
+ * jako `"klucz": wartość`; `where: 'query'` znajduje go w ciągu zapytania, czyli jako `klucz=wartość`
+ * wewnątrz wartości tekstowej - tak wygląda paczka batch Bitrixa.
+ */
+export interface SimpleParam { key: string; label: string; hint: string; digits: boolean; where?: 'json' | 'query' }
 
 /** Sekret w trybie prostym: co użytkownik wpisuje i jak bramka to przerabia na wartość sekretu. */
 export interface SimpleSecret { ref: string; label: string; hint: string; transform: 'raw' | 'bearer' | 'basic-x' }
 
 export interface SimpleOutbound {
-  address: { label: string; hint: string; placeholder: string };
+  /** `mustEndWith`: końcówka wymagana przez aplikację, np. `batch.json` - formularz sprawdza ją przed zapisem. */
+  address: { label: string; hint: string; placeholder: string; mustEndWith?: string };
   secrets: SimpleSecret[];
   params: SimpleParam[];
   /** Zdanie o tym, co aplikacja zrobi z odebranym SMS-em. */

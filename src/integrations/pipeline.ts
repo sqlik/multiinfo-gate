@@ -4,29 +4,39 @@ import { silentLogger, type Logger } from '../log.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { IntegrationEventInput, IntegrationEventsRepo } from '../store/integration-events.ts';
 import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
-import type { IntegrationRow } from '../store/integrations.ts';
+import type { IntegrationRow, IntegrationsRepo } from '../store/integrations.ts';
 import { measureText } from '../text/measure.ts';
 import { InvalidPhoneError, normalizeRecipient, splitRecipients, TooManyRecipientsError } from '../text/phone.ts';
 import { segmentText, TooManyPartsError } from '../text/segment.ts';
 import type { InboundConfig } from './config.ts';
 import { matches } from './conditions.ts';
-import { readPath } from './paths.ts';
+import { enrich, safeUrl, type EnrichGet } from './enrich.ts';
+import { maskPath, readPath } from './paths.ts';
 import { TemplateEngine, TemplateError } from './templates.ts';
+import type { Resolver } from '../net/private-address.ts';
 
 export interface PipelineDeps extends SubmitDeps {
   apiKeys: ApiKeysRepo;
+  /** Sekrety integracji - zapytanie uzupełniające podstawia je poza szablonem. */
+  integrations: IntegrationsRepo;
   integrationEvents: IntegrationEventsRepo;
   guards: IntegrationGuardsRepo;
   engine: TemplateEngine;
+  /** Wysyłka zapytania uzupełniającego; testy podstawiają atrapę, produkcja bierze `httpGet`. */
+  enrichGet?: EnrichGet;
+  /** Rozwiązywanie nazwy celu zapytania uzupełniającego; testy podstawiają atrapę. */
+  resolve?: Resolver;
+  /** MIG_WEBHOOK_ALLOW_PRIVATE: zgoda na pytanie aplikacji w sieci wewnętrznej. */
+  allowPrivateWebhooks?: boolean;
   log?: Logger;
 }
 
-export type InboundErrorCode = 'empty_text' | 'no_recipient' | 'invalid_phone' | 'too_many_recipients' | 'too_many_parts' | 'template' | 'service';
+export type InboundErrorCode = 'empty_text' | 'no_recipient' | 'invalid_phone' | 'too_many_recipients' | 'too_many_parts' | 'template' | 'enrich' | 'service';
 
 export type InboundOutcome =
   | { kind: 'sent'; messageIds: string[] }
   /** Bez powodu: zdarzenie odsiał warunek. Z powodem: zadziałało odstępstwo opisane przy powodzie. */
-  | { kind: 'skipped'; reason?: 'invalid_recipient' }
+  | { kind: 'skipped'; reason?: 'invalid_recipient' | 'enrich' }
   | { kind: 'duplicate' }
   | { kind: 'throttled'; notify: boolean }
   | { kind: 'error'; code: InboundErrorCode; detail: string }
@@ -76,6 +86,16 @@ function rawRecipients(config: InboundConfig, payload: unknown, threadSender: st
   return { list: config.to.fallback, fromPayload: false };
 }
 
+/**
+ * Ładunek widziany przez ścieżki po dopytaniu: odpowiedź aplikacji siada w nim pod nazwą z `as`,
+ * dzięki czemu `to.path` oraz tryb ścieżki czytają ją tak samo jak szablon czyta `{{ e.pole }}`.
+ * Ładunek, który nie jest obiektem, zostaje bez zmian - nie ma do czego dopisać.
+ */
+function withEnriched(payload: unknown, as: string, value: unknown): unknown {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return payload;
+  return { ...payload, [as]: value };
+}
+
 /** Przycięcie do `maxParts` części tym samym licznikiem, którym API dzieli wiadomości. */
 export function fitToParts(text: string, maxParts: number): { text: string; parts: number; over: boolean } {
   const fits = (candidate: string): number | null => {
@@ -101,12 +121,22 @@ export function fitToParts(text: string, maxParts: number): { text: string; part
   return { text: cut, parts: fits(cut) ?? maxParts, over: true };
 }
 
-/** Podgląd do „Sprawdź szablon” - bez zapisu, bez wysyłki, bez strażników. */
-export function previewInbound(engine: TemplateEngine, config: InboundConfig, payload: unknown, countryCode: string, now: Date): InboundPreview {
+/**
+ * Podgląd do „Sprawdź szablon” - bez zapisu, bez wysyłki, bez strażników. Podgląd nie pyta
+ * aplikacji po sieci: gdy ustawienie ma zapytanie uzupełniające, podstawia jego przykładową
+ * odpowiedź, tak samo jak zrobiłby to potok z prawdziwą.
+ */
+export function previewInbound(
+  engine: TemplateEngine, config: InboundConfig, payload: unknown, countryCode: string, now: Date, enrichSample?: unknown,
+): InboundPreview {
   const context = buildInboundContext(payload, { name: 'podgląd' }, now);
+  if (config.enrich && enrichSample !== undefined) {
+    context[config.enrich.as] = enrichSample;
+    context.p = withEnriched(payload, config.enrich.as, enrichSample);
+  }
   try {
     const ok = matches(config.condition, context, engine);
-    const raw = rawRecipients(config, payload, null).list;
+    const raw = rawRecipients(config, context.p, null).list;
     // Podgląd nie sięga do bazy odebranych - mówi tylko, że odbiorca wyjdzie z wątku.
     const threadRecipient = raw.length === 0 && ticketRef(config, payload) !== null;
     const recipients = raw.map((r) => {
@@ -125,13 +155,16 @@ export function previewInbound(engine: TemplateEngine, config: InboundConfig, pa
 }
 
 /**
- * Potok przychodzący: klucz i konto, filtr, idempotencja, burza, szablony, wysyłka przez
+ * Potok przychodzący: klucz i konto, filtr, idempotencja, burza, dopytanie, szablony, wysyłka przez
  * `submitMessages`, wpis w dzienniku. Każde wyjście zapisuje wpis; wołający zamienia wynik
  * na kod HTTP i ewentualne powiadomienie administratora.
  */
-export function runInbound(deps: PipelineDeps, integration: InboundIntegration, payload: unknown, meta: { sourceIp: string }, now: Date): InboundOutcome {
+export async function runInbound(deps: PipelineDeps, integration: InboundIntegration, raw: unknown, meta: { sourceIp: string }, now: Date): Promise<InboundOutcome> {
   const log = deps.log ?? silentLogger;
   const config = integration.config;
+  // Sekret z pola ładunku dalej nie jedzie: uwierzytelnienie już go sprawdziło w warstwie HTTP, a
+  // ładunek stąd trafia do dziennika zdarzeń, do podglądu w panelu oraz do kontekstu szablonu.
+  const payload = config.auth.payload === undefined ? raw : maskPath(raw, config.auth.payload.path);
   const stored = integration.storePayloads === 1 ? JSON.stringify(payload) : null;
   const note = (result: IntegrationEventInput['result'], extra: Partial<IntegrationEventInput> = {}) =>
     deps.integrationEvents.record({ integrationId: integration.id, at: now, result, sourceIp: meta.sourceIp, payload: stored, logLimit: config.eventLogLimit, ...extra });
@@ -159,6 +192,8 @@ export function runInbound(deps: PipelineDeps, integration: InboundIntegration, 
   const original = ref === null ? undefined : deps.inbound.findByExternalRefForKey(integration.apiKeyId, ref);
 
   const context = buildInboundContext(payload, integration, now);
+  /** Klucz zajęty przez dedup w tym przebiegu; zdejmujemy go, gdy prosimy aplikację o ponowienie. */
+  let dedupKey: string | null = null;
   let text: string;
   let recipients: { list: string[]; fromPayload: boolean };
   try {
@@ -168,9 +203,12 @@ export function runInbound(deps: PipelineDeps, integration: InboundIntegration, 
     }
     if (config.eventIdPath !== undefined) {
       const eventId = readPath(payload, config.eventIdPath);
-      if (eventId !== undefined && eventId !== null && String(eventId) !== '' && !deps.guards.dedup(integration.id, String(eventId), now)) {
-        note('duplicate', { reason: `identyfikator zdarzenia ${String(eventId)}` });
-        return { kind: 'duplicate' };
+      if (eventId !== undefined && eventId !== null && String(eventId) !== '') {
+        if (!deps.guards.dedup(integration.id, String(eventId), now)) {
+          note('duplicate', { reason: `identyfikator zdarzenia ${String(eventId)}` });
+          return { kind: 'duplicate' };
+        }
+        dedupKey = String(eventId);
       }
     }
     const gate = deps.guards.throttle(integration.id, config.throttle.limit, config.throttle.windowMinutes, now);
@@ -178,8 +216,33 @@ export function runInbound(deps: PipelineDeps, integration: InboundIntegration, 
       note('throttled', { reason: `ponad ${config.throttle.limit} w ${config.throttle.windowMinutes} min` });
       return { kind: 'throttled', notify: gate.notify };
     }
+    // Dopytanie dopiero tutaj: odsiane, zduplikowane oraz zdławione zdarzenie nie zajmuje aplikacji.
+    if (config.enrich) {
+      const wynik = await enrich({
+        config: config.enrich, secrets: deps.integrations.secrets(integration.id), context, engine: deps.engine,
+        ...(deps.resolve ? { resolve: deps.resolve } : {}),
+        ...(deps.enrichGet ? { get: deps.enrichGet } : {}),
+        ...(deps.allowPrivateWebhooks ? { allowPrivate: true } : {}),
+      });
+      if (!wynik.ok) {
+        // Adres bez części zapytania: tam siedzi token do aplikacji.
+        const opis = `dopytanie ${safeUrl(config.enrich.url)}: ${wynik.reason}`;
+        if (config.enrich.onError === 'skip') {
+          note('skipped', { reason: opis });
+          // Powód w odpowiedzi mówi aplikacji, że to nie warunek ją odsiał, tylko nieudane dopytanie.
+          // Żeton dedupu zostaje zużyty: aplikacja dostaje 200, więc ponowienia nie będzie.
+          return { kind: 'skipped', reason: 'enrich' };
+        }
+        // Odpowiadamy 422, czyli prosimy o ponowienie, więc żeton dedupu musi wrócić. Niedostępna
+        // aplikacja to błąd przejściowy, inaczej niż błąd szablonu albo zły numer.
+        if (dedupKey !== null) deps.guards.releaseDedup(integration.id, dedupKey);
+        return fail('enrich', opis);
+      }
+      context[config.enrich.as] = wynik.value;
+      context.p = withEnriched(payload, config.enrich.as, wynik.value);
+    }
     text = renderInboundText(deps.engine, config, context);
-    recipients = rawRecipients(config, payload, original?.sender ?? null);
+    recipients = rawRecipients(config, context.p, original?.sender ?? null);
   } catch (e) {
     if (e instanceof TemplateError) return fail('template', e.message);
     if (e instanceof TooManyRecipientsError) return fail('too_many_recipients', e.message);
@@ -187,6 +250,13 @@ export function runInbound(deps: PipelineDeps, integration: InboundIntegration, 
   }
   if (text === '') return fail('empty_text', 'Szablon dał pustą treść - sprawdź, czy ładunek ma oczekiwane pola.');
   if (recipients.list.length === 0) {
+    // Kartoteka klienta bywa bez komórki, a to dana z aplikacji, nie pomyłka administratora.
+    // Dlatego przy numerze spod dopytania przełącznik „pomiń” obejmuje także brak numeru.
+    const zDopytania = config.enrich !== undefined && config.to.path?.startsWith(`${config.enrich.as}.`) === true;
+    if (zDopytania && config.invalidRecipient === 'skip') {
+      note('skipped', { reason: 'odpowiedź dopytania nie ma numeru odbiorcy' });
+      return { kind: 'skipped', reason: 'invalid_recipient' };
+    }
     return fail('no_recipient', ref !== null
       ? `Brak numeru odbiorcy w ładunku, zgłoszenie ${ref} nie pasuje do żadnego odebranego SMS-a, a lista zapasowa jest pusta.`
       : 'Brak numeru odbiorcy w ładunku i pusta lista zapasowa.');

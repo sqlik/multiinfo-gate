@@ -50,3 +50,39 @@ export function readPath(value: unknown, path: string): unknown {
   }
   return current;
 }
+
+/** Znacznik w miejscu sekretu; nazwa pola zostaje, bo pomaga administratorowi, wartość znika. */
+export const SEKRET_ZASTEPCZY = '(sekret)';
+
+/**
+ * Kopia ładunku z wartością spod ścieżki zamienioną na znacznik. Klonujemy tylko człony leżące
+ * na ścieżce, reszta idzie przez referencję: ładunek bywa duży, a zmieniamy w nim jedno pole.
+ * Ścieżka nie do odczytania albo pole, którego nie ma, zwracają ładunek bez zmian.
+ */
+export function maskPath(value: unknown, path: string): unknown {
+  let segments: Array<string | number>;
+  try {
+    segments = parsePath(path);
+  } catch {
+    return value;
+  }
+  const mask = (current: unknown, i: number): unknown => {
+    if (current === null || typeof current !== 'object') return current;
+    const seg = segments[i]!;
+    const last = i === segments.length - 1;
+    if (typeof seg === 'number') {
+      if (!Array.isArray(current) || seg >= current.length) return current;
+      const copy = [...current];
+      copy[seg] = last ? SEKRET_ZASTEPCZY : mask(current[seg], i + 1);
+      return copy;
+    }
+    if (FORBIDDEN.has(seg) || Array.isArray(current)) return current;
+    if (!Object.prototype.hasOwnProperty.call(current, seg)) return current;
+    const copy = { ...(current as Record<string, unknown>) };
+    // Przez `defineProperty`, bo ładunek z obcej aplikacji może nieść własne pole o nazwie
+    // przykrywającej zapis wprost.
+    Object.defineProperty(copy, seg, { value: last ? SEKRET_ZASTEPCZY : mask(copy[seg], i + 1), enumerable: true, writable: true, configurable: true });
+    return copy;
+  };
+  return mask(value, 0);
+}

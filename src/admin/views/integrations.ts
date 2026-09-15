@@ -1,5 +1,6 @@
 import { OUTBOUND_EVENTS, defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type OutboundConfig } from '../../integrations/config.ts';
 import { RULE_OPS, ruleOpLabel, type RuleOp } from '../../integrations/conditions.ts';
+import { safeUrl } from '../../integrations/enrich.ts';
 import type { Preset } from '../../integrations/presets/index.ts';
 import type { EventResult, IntegrationEventRow } from '../../store/integration-events.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
@@ -202,7 +203,9 @@ export interface IntegrationFormValues {
   name: string; apiKeyId: string; serviceId: string; orig: string; enabled: boolean; preset: string;
   storePayloads: boolean; throttleLimit: string; throttleWindow: string; eventLogLimit: string;
   conditionMode: 'builder' | 'liquid'; rules: RuleValues[]; conditionExpr: string;
-  authHeaderName: string; authHeaderValue: string; authBasicUser: string; authBasicPass: string; sources: string;
+  authHeaderName: string; authHeaderValue: string; authBasicUser: string; authBasicPass: string;
+  authPayloadPath: string; authPayloadValue: string; sources: string;
+  enrichUrl: string; enrichToken: string; enrichOnError: 'error' | 'skip';
   toPath: string; toFallback: string; invalidRecipient: 'error' | 'skip'; ticketRefPath: string; eventIdPath: string;
   textMode: 'path' | 'liquid'; textPath: string; textTemplate: string; maxParts: string; overflow: 'truncate' | 'reject';
   events: string[]; url: string; method: string; headers: HeaderValues[]; bodyMode: 'json' | 'form' | 'text';
@@ -214,6 +217,9 @@ export interface IntegrationFormValues {
 /** Nazwy sekretów integracji przychodzącej - stałe, bo formularz ma po jednym polu na każdy. */
 export const INBOUND_TOKEN_REF = 'token';
 export const INBOUND_BASIC_REF = 'basicPass';
+export const INBOUND_PAYLOAD_REF = 'payloadToken';
+/** Kod autoryzacyjny API aplikacji, którą bramka dopytuje o brakujące pole. */
+export const INBOUND_ENRICH_REF = 'enrichToken';
 
 /** Przykładowe zdarzenie wychodzące - próbka dla integracji z SMS-a, gdy nie ma przechowanego ładunku. */
 export const OUTBOUND_SAMPLE = {
@@ -231,7 +237,9 @@ export function configToValues(kind: IntegrationKind, config: IntegrationConfig,
     rules: config.condition.mode === 'builder' ? config.condition.rules.map((r) => ({ path: r.path, op: r.op, value: r.value })) : [],
     conditionExpr: config.condition.mode === 'liquid' ? config.condition.expr : '',
     authHeaderName: inbound.auth.header?.name ?? '', authHeaderValue: '', authBasicUser: inbound.auth.basic?.user ?? '', authBasicPass: '',
+    authPayloadPath: inbound.auth.payload?.path ?? '', authPayloadValue: '',
     sources: inbound.auth.sources.join('\n'),
+    enrichUrl: inbound.enrich?.url ?? '', enrichToken: '', enrichOnError: inbound.enrich?.onError ?? 'error',
     toPath: inbound.to.path ?? '', toFallback: inbound.to.fallback.join('\n'), invalidRecipient: inbound.invalidRecipient,
     ticketRefPath: inbound.ticketRefPath ?? '', eventIdPath: inbound.eventIdPath ?? '',
     textMode: inbound.text.mode, textPath: inbound.text.mode === 'path' ? inbound.text.path : '',
@@ -251,6 +259,10 @@ export function valuesFromPreset(kind: IntegrationKind, preset: Preset): Integra
   const config: IntegrationConfig = kind === 'webhook_in'
     ? { ...defaultInboundConfig(), ...preset.inbound }
     : { ...defaultOutboundConfig(), ...preset.outbound };
+  // Adres gotowego ustawienia bywa niepełny: Slack, Teamsy oraz Bitrix24 mają w nim wielokropek
+  // w miejscu klucza webhooka. Taki adres zostawiamy pusty, żeby administrator zobaczył
+  // podpowiedź z przykładem zamiast wartości, której i tak nie da się zapisać.
+  if (kind === 'webhook_out' && 'url' in config && config.url.includes('…')) config.url = '';
   const sample = kind === 'webhook_in' ? preset.sample ?? {} : OUTBOUND_SAMPLE;
   return configToValues(kind, config, {
     name: preset.id === 'custom' ? '' : preset.name, apiKeyId: '', serviceId: '', orig: '', enabled: true, preset: preset.id,
@@ -272,6 +284,8 @@ export interface FormPreview {
   recipients?: string[]; text?: string; parts?: number;
   /** Odbiorca wyjdzie z wątku: nadawca odebranego SMS-a dopasowanego po identyfikatorze zgłoszenia. */
   threadRecipient?: boolean;
+  /** Podgląd użył przykładowej odpowiedzi zapytania uzupełniającego, bo aplikacji nie pyta. */
+  enriched?: 'z-probka' | 'bez-probki';
   headers?: Record<string, string>; body?: string;
 }
 
@@ -405,6 +419,14 @@ function sectionInput(ctx: FormContext, v: IntegrationFormValues): string {
       <div class="hint">Opcjonalny. ${esc(secretHint(INBOUND_TOKEN_REF, 'Token'))} Pusta nazwa nagłówka zdejmuje tę warstwę i kasuje token.</div>
     </div>
     <div class="field">
+      <label for="authPayloadPath">Pole ładunku z tokenem</label>
+      <div class="inline">
+        <input id="authPayloadPath" name="authPayloadPath" value="${esc(v.authPayloadPath)}" placeholder="ścieżka, np. api_token" style="width: 40%;">
+        <input id="authPayloadValue" name="authPayloadValue" type="password" autocomplete="off" placeholder="wartość tokenu" style="flex: 1;">
+      </div>
+      <div class="hint">Opcjonalne. Dla aplikacji, które wysyłają token w treści żądania, nie w nagłówku. ${esc(secretHint(INBOUND_PAYLOAD_REF, 'Token z ładunku'))} Pusta ścieżka zdejmuje tę warstwę i kasuje token.</div>
+    </div>
+    <div class="field">
       <label for="authBasicUser">Basic auth</label>
       <div class="inline">
         <input id="authBasicUser" name="authBasicUser" value="${esc(v.authBasicUser)}" placeholder="login" style="width: 40%;">
@@ -488,6 +510,35 @@ function sectionCondition(v: IntegrationFormValues): string {
   </details>`;
 }
 
+function sectionEnrich(ctx: FormContext, v: IntegrationFormValues): string {
+  const zapisany = ctx.secretNames.includes(INBOUND_ENRICH_REF);
+  return `<details${v.enrichUrl === '' ? '' : ' open'}>
+    <summary>Zapytanie uzupełniające</summary>
+    <div class="hint" style="margin: 0 0 10px;">Bramka zapyta aplikację o dane, których nie ma w ładunku, na przykład o numer telefonu klienta.
+      Pola z odpowiedzi wstawiasz tak samo jak pola ładunku, tylko zamiast <code>p</code> piszesz <code>e</code>:
+      numer komórki z kartoteki to <code>{{ e.mobile_phone }}</code>, a nazwa klienta to <code>{{ e.name }}</code></div>
+    <div class="field">
+      <label for="enrichUrl">Adres zapytania</label>
+      <input id="enrichUrl" name="enrichUrl" value="${esc(v.enrichUrl)}" placeholder="https://firma.aplikacja.pl/clients/{{ p.client_id | url_encode }}.json">
+      <div class="hint">Szablon Liquid, tak jak treść. Wartość z ładunku wstawiaj przez <code>{{ p.pole | url_encode }}</code>,
+        żeby ukośnik albo znak zapytania w niej nie przestawił adresu na inną końcówkę aplikacji. Puste pole wyłącza dopytanie</div>
+    </div>
+    <div class="field">
+      <label for="enrichToken">Kod autoryzacyjny API</label>
+      <input id="enrichToken" name="enrichToken" type="password" autocomplete="off" placeholder="${zapisany ? 'zapisany - puste zostawia dotychczasowy' : 'wartość z aplikacji'}">
+      <div class="hint">Bramka doda go do adresu jako parametr <code>api_token</code>. Zapisujemy zaszyfrowany; nie trafia ani do szablonu, ani do dziennika</div>
+    </div>
+    <div class="field">
+      <label for="enrichOnError">Gdy aplikacja nie odpowie</label>
+      <select id="enrichOnError" name="enrichOnError">
+        <option value="error"${v.enrichOnError === 'error' ? ' selected' : ''}>zgłoś błąd</option>
+        <option value="skip"${v.enrichOnError === 'skip' ? ' selected' : ''}>pomiń wiadomość</option>
+      </select>
+      <div class="hint">Pominięcie chroni webhooka przed wyłączeniem po stronie aplikacji, która liczy błędy dostarczenia</div>
+    </div>
+  </details>`;
+}
+
 function sectionRecipient(v: IntegrationFormValues): string {
   return `<details open>
     <summary>Odbiorca</summary>
@@ -524,7 +575,12 @@ function sectionRecipient(v: IntegrationFormValues): string {
 
 function fieldsHint(preset: Preset): string {
   if (preset.fields.length === 0) return '<div class="hint">Ładunek dostępny pod <code>p</code>, np. <code>{{ p.message }}</code>; do tego <code>now</code> i <code>integration.name</code>.</div>';
-  const items = preset.fields.map((f) => `<code>{{ p.${esc(f.path)} }}</code> <span class="dim">${esc(f.label)}</span>`).join('<br>');
+  // Pola z zapytania uzupełniającego mają własny przedrostek, więc przedrostek ładunku by tu mylił.
+  const zDopytania = preset.inbound?.enrich === undefined ? null : `${preset.inbound.enrich.as}.`;
+  const items = preset.fields.map((f) => {
+    const wyrazenie = zDopytania !== null && f.path.startsWith(zDopytania) ? f.path : `p.${f.path}`;
+    return `<code>{{ ${esc(wyrazenie)} }}</code> <span class="dim">${esc(f.label)}</span>`;
+  }).join('<br>');
   return `<div class="hint">Pola z ustawienia:<br>${items}</div>`;
 }
 
@@ -623,6 +679,11 @@ function previewPanel(kind: IntegrationKind, p: FormPreview): string {
       : p.threadRecipient ? '<span class="dim">nadawca odebranego SMS-a, do którego pasuje identyfikator zgłoszenia</span>' : '<span class="fail">brak</span>'}</div>`);
     rows.push(`<div>Treść</div><div>${p.text ? `<div class="ruler" style="padding: 0 0 4px;">${esc(p.text)}</div>` : '<span class="dim">pusta</span>'}</div>`);
     rows.push(`<div>Części</div><div class="m">${esc(p.parts ?? 0)}</div>`);
+    if (p.enriched === 'z-probka') {
+      rows.push('<div>Dopytanie</div><div class="dim">Pola spod <code>e</code> pochodzą z przykładowej odpowiedzi tej aplikacji. Podgląd o nic jej nie pyta</div>');
+    } else if (p.enriched === 'bez-probki') {
+      rows.push('<div>Dopytanie</div><div class="dim">To ustawienie nie ma przykładowej odpowiedzi, więc pola spod <code>e</code> są w podglądzie puste. Podgląd o nic aplikacji nie pyta</div>');
+    }
   } else {
     const headers = Object.entries(p.headers ?? {}).map(([k, val]) => `${esc(k)}: ${esc(val)}`).join('<br>');
     rows.push(`<div>Nagłówki</div><div class="m">${headers || '<span class="dim">brak</span>'}</div>`);
@@ -648,7 +709,7 @@ export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, 
   const action = edit ? `/integracje/${ctx.row!.id}/edytuj` : '/integracje';
   const inbound = ctx.kind === 'webhook_in';
   const sections = inbound
-    ? [sectionBasics(ctx, v), sectionInput(ctx, v), sectionCondition(v), sectionRecipient(v), sectionTextInbound(ctx, v), sectionGuard(v)]
+    ? [sectionBasics(ctx, v), sectionInput(ctx, v), sectionCondition(v), sectionEnrich(ctx, v), sectionRecipient(v), sectionTextInbound(ctx, v), sectionGuard(v)]
     : [sectionBasics(ctx, v), sectionOutput(ctx, v), sectionCondition(v), sectionBodyOutbound(v), sectionGuard(v)];
 
   const address = edit && inbound && ctx.row!.hookId !== null && !opts.created ? `<div class="panel" style="max-width: 760px;">
@@ -741,6 +802,7 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
       <button class="btn btn-s" type="button" data-copy="#hook-path" style="padding: 3px 9px; font-size: 12px;">Kopiuj</button></div>`));
     const auth: string[] = [];
     if (cfg.auth.header) auth.push(`nagłówek ${cfg.auth.header.name} (sekret)`);
+    if (cfg.auth.payload) auth.push(`token w polu ${cfg.auth.payload.path} (sekret)`);
     if (cfg.auth.basic) auth.push(`basic auth, login ${cfg.auth.basic.user}`);
     if (cfg.auth.sources.length > 0) auth.push(`źródła: ${cfg.auth.sources.join(', ')}`);
     rows.push(kvRow('Uwierzytelnianie', auth.length === 0 ? '<span class="dim">tylko sekret w adresie</span>' : esc(auth.join(' · '))));
@@ -749,6 +811,11 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     // Wiersz tylko przy „pomiń”: to odstępstwo od zwykłego zachowania i ma być widoczne.
     const zlyNumer = cfg.invalidRecipient === 'skip' ? 'numer nie do odczytania: pominięcie' : '';
     rows.push(kvRow('Odbiorcy', dimOr([to, fallback, zlyNumer].filter((x) => x !== '').join(' · '))));
+    // Dopytanie widać na ekranie szczegółu, bo to jedyne miejsce, z którego bramka sama dzwoni po dane.
+    if (cfg.enrich) {
+      const gdy = cfg.enrich.onError === 'skip' ? 'bez odpowiedzi: pominięcie' : 'bez odpowiedzi: błąd';
+      rows.push(kvRow('Zapytanie uzupełniające', `${esc(safeUrl(cfg.enrich.url))} · pola odpowiedzi w szablonie jako ${esc(cfg.enrich.as)}.nazwa · ${esc(gdy)}`, true));
+    }
     rows.push(kvRow('Treść', simple ? esc(simple.text) : cfg.text.mode === 'path' ? `pole ${esc(cfg.text.path)}` : `szablon Liquid · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
     if (cfg.ticketRefPath) rows.push(kvRow('Identyfikator zgłoszenia', esc(cfg.ticketRefPath), true));
     if (cfg.eventIdPath) rows.push(kvRow('Identyfikator zdarzenia', esc(cfg.eventIdPath), true));
