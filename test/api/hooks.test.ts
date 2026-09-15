@@ -117,6 +117,23 @@ describe('POST /hooks/:hookId', () => {
     expect((await post(integ.hookId!, { msg: 'x' }, { authorization: `Basic ${Buffer.from('grafana:zle').toString('base64')}` })).statusCode).toBe(401);
     expect((await post(integ.hookId!, { msg: 'x' })).statusCode).toBe(401);
   });
+  it('sekret w polu ładunku: pasujący przechodzi, niepasujący oraz brak pola to 401', async () => {
+    const integ = make({ auth: { sources: [], payload: { path: 'api_token', valueRef: 'payloadToken' } } }, { payloadToken: 'tajne123' });
+    expect((await post(integ.hookId!, { api_token: 'tajne123', msg: 'x' })).statusCode).toBe(202);
+    const zly = await post(integ.hookId!, { api_token: 'inne', msg: 'x' });
+    expect(zly.statusCode).toBe(401);
+    expect(zly.json()).toEqual({ accepted: false, reason: 'unauthorized' });
+    expect((await post(integ.hookId!, { msg: 'x' })).statusCode).toBe(401);
+  });
+  it('sekret w polu ładunku nie trafia do dziennika ani do powiadomienia', async () => {
+    const integ = make({ auth: { sources: [], payload: { path: 'api_token', valueRef: 'payloadToken' } } }, { payloadToken: 'tajne123' });
+    await post(integ.hookId!, { api_token: 'inne', msg: 'x' });
+    const wpisy = JSON.stringify(integrationEvents.list(integ.id, 10));
+    expect(wpisy).toContain('api_token');
+    expect(wpisy).not.toContain('tajne123');
+    expect(wpisy).not.toContain('inne');
+    expect(JSON.stringify(notify.mock.calls)).not.toContain('tajne123');
+  });
   it('lista źródeł: adres spoza listy to 403, nazwa rozwiązana pasuje', async () => {
     const integ = make({ auth: { sources: ['203.0.113.0/24', 'nas.dyndns.example'] } });
     expect((await post(integ.hookId!, { msg: 'x' }, {}, '203.0.113.9')).statusCode).toBe(202);

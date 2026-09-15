@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { readPath } from '../integrations/paths.ts';
 import { runInbound, type InboundIntegration } from '../integrations/pipeline.ts';
 import { silentLogger } from '../log.ts';
 import type { ApiDeps } from './server.ts';
@@ -17,7 +18,7 @@ function sameSecret(given: string, expected: string): boolean {
 
 type AuthVerdict = { ok: true } | { ok: false; status: 401 | 403; reason: string };
 
-/** Warstwy poza sekretem w adresie: nagłówek z tokenem, basic auth, lista źródeł. Każda opcjonalna. */
+/** Warstwy poza sekretem w adresie: nagłówek z tokenem, token w polu ładunku, basic auth, lista źródeł. Każda opcjonalna. */
 async function verify(request: FastifyRequest, integration: InboundIntegration, secrets: Record<string, string>, deps: ApiDeps): Promise<AuthVerdict> {
   const auth = integration.config.auth;
   if (auth.header) {
@@ -25,6 +26,15 @@ async function verify(request: FastifyRequest, integration: InboundIntegration, 
     const expected = secrets[auth.header.valueRef];
     if (typeof given !== 'string' || expected === undefined || !sameSecret(given, expected)) {
       return { ok: false, status: 401, reason: `nagłówek ${auth.header.name} nie pasuje` };
+    }
+  }
+  // Token w treści: aplikacje bez własnych nagłówków (Fakturownia) wkładają go do ładunku.
+  if (auth.payload) {
+    const given = readPath(request.body ?? {}, auth.payload.path);
+    const expected = secrets[auth.payload.valueRef];
+    // Powód niesie nazwę pola, nigdy wartość: nazwa pomaga administratorowi, wartość byłaby wyciekiem.
+    if (typeof given !== 'string' || expected === undefined || !sameSecret(given, expected)) {
+      return { ok: false, status: 401, reason: `pole ${auth.payload.path} nie pasuje` };
     }
   }
   if (auth.basic) {

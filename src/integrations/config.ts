@@ -29,6 +29,12 @@ export const inboundConfigSchema = z.object({
   auth: z.object({
     header: z.object({ name: headerName, valueRef: z.string().min(1) }).optional(),
     basic: z.object({ user: z.string().min(1).max(200), passRef: z.string().min(1) }).optional(),
+    /**
+     * Sekret w polu ładunku: aplikacje, które nie umieją nagłówka, wkładają token do treści.
+     * Fakturownia wysyła go pod kluczem `api_token`. Sprawdzanie jest stałoczasowe, a wartość
+     * nigdy nie trafia do dziennika.
+     */
+    payload: z.object({ path, valueRef: z.string().min(1) }).optional(),
     sources: z.array(z.string().min(1).max(253)).max(50),
   }),
   to: z.object({ path: path.optional(), fallback: z.array(z.string().min(1)).max(50) }),
