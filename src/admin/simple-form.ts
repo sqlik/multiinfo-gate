@@ -82,21 +82,21 @@ export function simpleToValues(kind: IntegrationKind, preset: Preset, sv: Simple
     v.toFallback = sv.numbers;
     if (simple.recipients.source === 'list' && sv.numbers.trim() === '') return fail('Podaj przynajmniej jeden numer telefonu, na który ma iść SMS.');
     const auth = simple.auth;
+    v.authHeaderName = '';
+    v.authHeaderValue = '';
+    v.authBasicUser = '';
+    v.authBasicPass = '';
+    v.authPayloadPath = '';
+    v.authPayloadValue = '';
     if (auth.kind === 'header') {
       v.authHeaderName = auth.name;
       v.authHeaderValue = sv.secret === '' ? '' : `${auth.prefix}${sv.secret}`;
-      v.authBasicUser = '';
-      v.authBasicPass = '';
     } else if (auth.kind === 'basic') {
       v.authBasicUser = auth.user;
       v.authBasicPass = sv.secret;
-      v.authHeaderName = '';
-      v.authHeaderValue = '';
-    } else {
-      v.authHeaderName = '';
-      v.authHeaderValue = '';
-      v.authBasicUser = '';
-      v.authBasicPass = '';
+    } else if (auth.kind === 'payload') {
+      v.authPayloadPath = auth.path;
+      v.authPayloadValue = sv.secret;
     }
     return { ok: true, values: v };
   }
@@ -142,9 +142,10 @@ export function detectSimple(preset: Preset, kind: IntegrationKind, v: Integrati
     const text = simple.text.find((t) => same(t.text, v.textMode === 'path' ? { mode: 'path', path: v.textPath } : { mode: 'liquid', template: v.textTemplate }));
     if (!when || !text) return null;
     const auth = simple.auth;
-    const authOk = auth.kind === 'header' ? v.authHeaderName === auth.name && v.authBasicUser === ''
-      : auth.kind === 'basic' ? v.authBasicUser === auth.user && v.authHeaderName === ''
-      : v.authHeaderName === '' && v.authBasicUser === '';
+    const authOk = auth.kind === 'header' ? v.authHeaderName === auth.name && v.authBasicUser === '' && v.authPayloadPath === ''
+      : auth.kind === 'basic' ? v.authBasicUser === auth.user && v.authHeaderName === '' && v.authPayloadPath === ''
+      : auth.kind === 'payload' ? v.authPayloadPath === auth.path && v.authHeaderName === '' && v.authBasicUser === ''
+      : v.authHeaderName === '' && v.authBasicUser === '' && v.authPayloadPath === '';
     if (!authOk) return null;
     if (v.toPath !== (p.to?.path ?? '') || v.ticketRefPath !== (p.ticketRefPath ?? '') || v.eventIdPath !== (p.eventIdPath ?? '')) return null;
     if (v.textMode === 'liquid' && (v.maxParts !== String(p.maxParts ?? 1) || v.overflow !== (p.overflow ?? 'truncate'))) return null;
