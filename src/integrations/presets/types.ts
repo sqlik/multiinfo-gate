@@ -62,6 +62,15 @@ export interface SimpleInbound {
   when: SimpleWhen[];
   text: SimpleText[];
   auth: SimpleAuth;
+  /**
+   * Dopytanie aplikacji o pole spoza ładunku. Formularz prosi o dwie rzeczy: nazwę konta,
+   * bo adres aplikacji nie przychodzi w ładunku, oraz kod autoryzacyjny API. Nazwa konta
+   * podmienia w adresie znacznik `marker`.
+   */
+  enrich?: {
+    secretLabel: string; where: string;
+    account: { label: string; hint: string; placeholder: string; marker: string };
+  };
 }
 
 /** Parametr wpisywany do szablonu body, np. numer skrzynki; w szablonie JSON jako `"klucz": wartość`. */

@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type OutboundConfig } from '../../src/integrations/config.ts';
 import { presetById } from '../../src/integrations/presets/index.ts';
-import { detectSimple, simpleToValues, transformSecret, type SimpleValues } from '../../src/admin/simple-form.ts';
+import { detectSimple, simpleDefaults, simpleToValues, transformSecret, type SimpleValues } from '../../src/admin/simple-form.ts';
+import { simpleFormPage } from '../../src/admin/views/integration-simple.ts';
 import type { Preset } from '../../src/integrations/presets/types.ts';
-import { valuesFromPreset } from '../../src/admin/views/integrations.ts';
+import { valuesFromPreset, type FormContext } from '../../src/admin/views/integrations.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
 const NOW = new Date('2026-09-02T10:00:00Z');
@@ -183,6 +184,67 @@ describe('tryb prosty: wychodząca', () => {
     expect(detectSimple(preset, 'webhook_in', out.values)).toEqual({ whenId: 'awaria', textId: 'z-komunikatem' });
     // Zmiana ścieżki w trybie zaawansowanym wypycha formularz z trybu prostego.
     expect(detectSimple(preset, 'webhook_in', { ...out.values, authPayloadPath: 'token' })).toBeNull();
+  });
+
+  it('tryb prosty składa zapytanie uzupełniające z nazwy konta oraz kodu autoryzacyjnego', () => {
+    // Ustawienie próbne, bo pierwszą aplikacją z dopytaniem jest Fakturownia dla klienta.
+    const base = presetById('uptime-kuma')!;
+    const preset: Preset = {
+      ...base, id: 'proba-dopytanie',
+      inbound: {
+        ...base.inbound, to: { path: 'e.mobile_phone', fallback: [] },
+        enrich: {
+          url: 'https://NAZWA-KONTA.aplikacja.pl/clients/{{ p.client_id }}.json', method: 'GET', headers: [],
+          query: [{ name: 'api_token', valueRef: 'enrichToken' }], timeoutMs: 2000, as: 'e', onError: 'skip',
+        },
+      },
+      simple: {
+        inbound: {
+          ...base.simple!.inbound!,
+          recipients: { source: 'payload', note: 'SMS idzie na numer z kartoteki klienta' },
+          enrich: {
+            secretLabel: 'Kod autoryzacyjny API',
+            where: 'w aplikacji w Ustawieniach konta',
+            account: { label: 'Nazwa Twojego konta', hint: 'Pierwszy człon adresu panelu', placeholder: 'firma', marker: 'NAZWA-KONTA' },
+          },
+        },
+      },
+    };
+    const values = valuesFromPreset('webhook_in', preset);
+    const sv: SimpleValues = {
+      name: 'Proba', apiKeyId: String(apiKeyId), enabled: true, numbers: '', whenId: 'awaria', textId: 'z-komunikatem',
+      secret: 'tajne123', account: 'firma', enrichSecret: 'api456', url: '', secrets: {}, params: {},
+    };
+    const out = simpleToValues('webhook_in', preset, sv, values);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.values.enrichUrl).toBe('https://firma.aplikacja.pl/clients/{{ p.client_id }}.json');
+    expect(out.values.enrichToken).toBe('api456');
+    expect(out.values.enrichOnError).toBe('skip');
+    expect(detectSimple(preset, 'webhook_in', out.values)).toEqual({ whenId: 'awaria', textId: 'z-komunikatem', account: 'firma' });
+    // Własny adres wpisany w trybie zaawansowanym wypycha formularz z trybu prostego.
+    expect(detectSimple(preset, 'webhook_in', { ...out.values, enrichUrl: 'https://inna.aplikacja.pl/x.json' })).toBeNull();
+
+    // Formularz prosty pyta o nazwę konta oraz o kod API słowami ustawienia, bez znacznika i bez szablonu.
+    const ctx: FormContext = {
+      kind: 'webhook_in', preset, keys: [{ id: apiKeyId, name: 'Klucz', accountName: 'Konto', serviceIds: ['24138'], origs: [] }],
+      secretNames: [], apiUrl: null,
+    };
+    const html = simpleFormPage(ctx, simpleDefaults(preset, values, true), { textPreviews: {} });
+    expect(html).toContain('Nazwa Twojego konta');
+    expect(html).toContain('Pierwszy człon adresu panelu');
+    expect(html).toContain('placeholder="firma"');
+    expect(html).toContain('Kod autoryzacyjny API');
+    expect(html).toContain('w aplikacji w Ustawieniach konta');
+    expect(html).not.toContain('NAZWA-KONTA');
+    expect(html).not.toContain('{{');
+
+    const bez = simpleToValues('webhook_in', preset, { ...sv, account: '' }, values);
+    expect(bez.ok).toBe(false);
+    if (bez.ok) return;
+    expect(bez.error).toContain('nazwa twojego konta');
+    const zla = simpleToValues('webhook_in', preset, { ...sv, account: 'firma.pl/klienci' }, values);
+    expect(zla.ok).toBe(false);
   });
 
   it('detectSimple: domyślne wartości każdego ustawienia z trybem prostym rozpoznają się jako proste', () => {

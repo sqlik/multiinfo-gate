@@ -5,7 +5,7 @@ import {
 import { isValidPath } from '../integrations/paths.ts';
 import { parseSourceEntry } from '../integrations/sources.ts';
 import type { TemplateEngine } from '../integrations/templates.ts';
-import { INBOUND_BASIC_REF, INBOUND_PAYLOAD_REF, INBOUND_TOKEN_REF, type IntegrationFormValues } from './views/integrations.ts';
+import { INBOUND_BASIC_REF, INBOUND_ENRICH_REF, INBOUND_PAYLOAD_REF, INBOUND_TOKEN_REF, type IntegrationFormValues } from './views/integrations.ts';
 
 type Body = Record<string, string | string[] | undefined>;
 
@@ -37,6 +37,7 @@ export function formValues(body: Body): IntegrationFormValues {
     authBasicUser: s('authBasicUser'), authBasicPass: String(body.authBasicPass ?? ''),
     authPayloadPath: s('authPayloadPath'), authPayloadValue: String(body.authPayloadValue ?? '').trim(),
     sources: String(body.sources ?? ''),
+    enrichUrl: s('enrichUrl'), enrichToken: String(body.enrichToken ?? '').trim(), enrichOnError: s('enrichOnError') === 'skip' ? 'skip' : 'error',
     toPath: s('toPath'), toFallback: String(body.toFallback ?? ''), invalidRecipient: s('invalidRecipient') === 'skip' ? 'skip' : 'error',
     ticketRefPath: s('ticketRefPath'), eventIdPath: s('eventIdPath'),
     textMode: s('textMode') === 'path' ? 'path' : 'liquid', textPath: s('textPath'), textTemplate: String(body.textTemplate ?? ''),
@@ -142,6 +143,21 @@ export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, en
     }
     if (auth.sources.length > 50) return fail('Dozwolone źródła: najwyżej 50 pozycji.');
 
+    // Kształt zapytania jest w tym wydaniu jeden, dopasowany do Fakturowni: token w parametrze adresu, metoda GET.
+    let enrichConfig: InboundConfig['enrich'];
+    if (v.enrichUrl !== '') {
+      const problem = engine.validate(v.enrichUrl);
+      if (problem !== null) return fail(`Adres zapytania uzupełniającego: ${problem}`);
+      if (v.enrichToken !== '') secrets[INBOUND_ENRICH_REF] = v.enrichToken;
+      else if (existing.names.includes(INBOUND_ENRICH_REF)) carried[INBOUND_ENRICH_REF] = INBOUND_ENRICH_REF;
+      else return fail('Podaj kod autoryzacyjny API aplikacji, którą bramka ma dopytać.');
+      enrichConfig = {
+        url: v.enrichUrl, method: 'GET', headers: [],
+        query: [{ name: 'api_token', valueRef: INBOUND_ENRICH_REF }],
+        timeoutMs: 2000, as: 'e', onError: v.enrichOnError,
+      };
+    }
+
     const toPath = pathOr(v.toPath, 'Ścieżka numeru');
     if (typeof toPath === 'string') return fail(toPath);
     const fallback = lines(v.toFallback);
@@ -165,7 +181,7 @@ export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, en
     if (typeof maxParts === 'string') return fail(maxParts);
 
     config = {
-      ...common, auth, to: { ...toPath, fallback }, ...(ticketRef.path ? { ticketRefPath: ticketRef.path } : {}),
+      ...common, auth, ...(enrichConfig ? { enrich: enrichConfig } : {}), to: { ...toPath, fallback }, ...(ticketRef.path ? { ticketRefPath: ticketRef.path } : {}),
       ...(eventId.path ? { eventIdPath: eventId.path } : {}), text, maxParts, overflow: v.overflow,
       invalidRecipient: v.invalidRecipient,
     };
