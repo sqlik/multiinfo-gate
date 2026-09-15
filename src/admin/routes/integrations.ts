@@ -168,7 +168,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
         ok: true,
         preview: {
           matches: p.matches, recipients: p.recipients, text: p.text, parts: p.parts, error: p.error, threadRecipient: p.threadRecipient,
-          enriched: inbound.enrich !== undefined && enrichSample !== undefined,
+          ...(inbound.enrich === undefined ? {} : { enriched: enrichSample === undefined ? 'bez-probki' as const : 'z-probka' as const }),
         },
       };
     }
