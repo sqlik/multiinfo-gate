@@ -281,7 +281,7 @@ export interface FormPreview {
   /** Odbiorca wyjdzie z wątku: nadawca odebranego SMS-a dopasowanego po identyfikatorze zgłoszenia. */
   threadRecipient?: boolean;
   /** Podgląd użył przykładowej odpowiedzi zapytania uzupełniającego, bo aplikacji nie pyta. */
-  enriched?: boolean;
+  enriched?: 'z-probka' | 'bez-probki';
   headers?: Record<string, string>; body?: string;
 }
 
@@ -675,8 +675,10 @@ function previewPanel(kind: IntegrationKind, p: FormPreview): string {
       : p.threadRecipient ? '<span class="dim">nadawca odebranego SMS-a, do którego pasuje identyfikator zgłoszenia</span>' : '<span class="fail">brak</span>'}</div>`);
     rows.push(`<div>Treść</div><div>${p.text ? `<div class="ruler" style="padding: 0 0 4px;">${esc(p.text)}</div>` : '<span class="dim">pusta</span>'}</div>`);
     rows.push(`<div>Części</div><div class="m">${esc(p.parts ?? 0)}</div>`);
-    if (p.enriched) {
+    if (p.enriched === 'z-probka') {
       rows.push('<div>Dopytanie</div><div class="dim">Pola spod <code>e</code> pochodzą z przykładowej odpowiedzi tej aplikacji. Podgląd o nic jej nie pyta</div>');
+    } else if (p.enriched === 'bez-probki') {
+      rows.push('<div>Dopytanie</div><div class="dim">To ustawienie nie ma przykładowej odpowiedzi, więc pola spod <code>e</code> są w podglądzie puste. Podgląd o nic aplikacji nie pyta</div>');
     }
   } else {
     const headers = Object.entries(p.headers ?? {}).map(([k, val]) => `${esc(k)}: ${esc(val)}`).join('<br>');

@@ -113,6 +113,8 @@ export function simpleToValues(kind: IntegrationKind, preset: Preset, sv: Simple
       v.authPayloadPath = auth.path;
       v.authPayloadValue = sv.secret;
     }
+    v.enrichUrl = '';
+    v.enrichToken = '';
     if (simple.enrich) {
       const url = preset.inbound?.enrich?.url;
       if (url === undefined) return fail('To ustawienie nie ma adresu zapytania uzupełniającego.');

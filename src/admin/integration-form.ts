@@ -201,6 +201,8 @@ export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, en
     const events = v.events.filter((e): e is OutboundEvent => (OUTBOUND_EVENTS as readonly string[]).includes(e));
     if (events.length === 0) return fail('Zaznacz przynajmniej jedno zdarzenie.');
     if (!/^https?:\/\/\S+$/.test(v.url)) return fail('Adres musi zaczynać się od https:// (albo http:// w sieci wewnętrznej).');
+    // Gotowe ustawienia wstawiają wielokropek tam, gdzie administrator ma wkleić swój klucz webhooka.
+    if (v.url.includes('…')) return fail('Adres ma jeszcze wielokropek w miejscu do uzupełnienia - wklej w to miejsce swój adres z aplikacji.');
     if (!['POST', 'PUT', 'PATCH'].includes(v.method)) return fail('Metoda: POST, PUT albo PATCH.');
     if (v.headers.length > 20) return fail('Nagłówki: najwyżej 20.');
     const headers: OutboundConfig['headers'] = [];

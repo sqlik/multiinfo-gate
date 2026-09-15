@@ -172,6 +172,15 @@ describe('POST /integracje', () => {
     expect(h.integrations.list()).toHaveLength(0);
   });
 
+  it('adres z wielokropkiem do uzupełnienia nie przechodzi przez zapis', async () => {
+    // Gotowe ustawienia Slacka, Teamsów oraz Bitrixa24 wstawiają w adres wielokropek w miejsce
+    // klucza webhooka. Bez tego sprawdzenia zapisywał się jako adres, bo nie ma w nim odstępu.
+    const res = await post('/integracje', outboundFields({ url: 'https://firma.bitrix24.pl/rest/1/…/batch.json' }));
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('wielokropek');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
   it('adres wychodzący w sieci wewnętrznej bez zgody to błąd formularza', async () => {
     h.resolve.value = async () => ['192.168.1.20'];
     const res = await post('/integracje', outboundFields({ url: 'https://helpdesk.local/api' }));
@@ -246,6 +255,20 @@ describe('POST /integracje', () => {
     expect(res.body).toContain('Podgląd z próbki');
     expect(res.body).toContain('48601000001');
     expect(res.body).toContain('przykładowej odpowiedzi');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
+  it('podgląd dopytania bez przykładowej odpowiedzi mówi, dlaczego pola spod e są puste', async () => {
+    // Ustawienie własne z ręcznie wpisanym dopytaniem nie ma `enrichSample`, więc podgląd
+    // pokazywałby pustego odbiorcę bez słowa wyjaśnienia.
+    const res = await post('/integracje', inboundFields({
+      action: 'sprawdz', preset: 'custom',
+      enrichUrl: 'https://firma.aplikacja.pl/clients/{{ p.client_id | url_encode }}.json', enrichToken: 'api456', enrichOnError: 'skip',
+      toPath: 'e.mobile_phone', toFallback: '',
+    }));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('nie ma przykładowej odpowiedzi');
+    expect(res.body).not.toContain('Pola spod <code>e</code> pochodzą z przykładowej');
     expect(h.integrations.list()).toHaveLength(0);
   });
 
