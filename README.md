@@ -26,6 +26,12 @@ SMS-em obsługę o nowym zamówieniu albo kupującego o zmianie statusu. Do tego
 w formacie OpenAPI, plik `docs/openapi.json`. Plik jest czytany przez Power Automate, Make oraz
 generatory bibliotek klienckich, co niweluje przepisywanie ręczne pól z dokumentacji.
 
+Wersja 1.7 dokłada trzy gotowe ustawienia: Fakturownię w wariancie „powiadomienie obsługi” oraz
+w wariancie „powiadomienie klienta”, a także Bitrix24. Fakturownia zawiadamia SMS-em o nowej
+fakturze, a Bitrix24 zakłada zadanie z odebranego SMS-a przy kartotece klienta. Bramka potrafi
+teraz dopytać aplikację o dane, których nie ma w powiadomieniu. Dzięki temu SMS trafia do
+nabywcy faktury, choć numeru telefonu w samym powiadomieniu nie ma.
+
 ## Co trzeba mieć
 
 - Konto Multiinfo z użytkownikiem API i certyfikatem (`.pfx` z hasłem)
