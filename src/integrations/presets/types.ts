@@ -78,14 +78,19 @@ export interface SimpleInbound {
   };
 }
 
-/** Parametr wpisywany do szablonu body, np. numer skrzynki; w szablonie JSON jako `"klucz": wartość`. */
-export interface SimpleParam { key: string; label: string; hint: string; digits: boolean }
+/**
+ * Parametr wpisywany do szablonu body, np. numer skrzynki. Domyślnie siedzi w szablonie JSON
+ * jako `"klucz": wartość`; `where: 'query'` znajduje go w ciągu zapytania, czyli jako `klucz=wartość`
+ * wewnątrz wartości tekstowej - tak wygląda paczka batch Bitriksa.
+ */
+export interface SimpleParam { key: string; label: string; hint: string; digits: boolean; where?: 'json' | 'query' }
 
 /** Sekret w trybie prostym: co użytkownik wpisuje i jak bramka to przerabia na wartość sekretu. */
 export interface SimpleSecret { ref: string; label: string; hint: string; transform: 'raw' | 'bearer' | 'basic-x' }
 
 export interface SimpleOutbound {
-  address: { label: string; hint: string; placeholder: string };
+  /** `mustEndWith`: końcówka wymagana przez aplikację, np. `batch.json` - formularz sprawdza ją przed zapisem. */
+  address: { label: string; hint: string; placeholder: string; mustEndWith?: string };
   secrets: SimpleSecret[];
   params: SimpleParam[];
   /** Zdanie o tym, co aplikacja zrobi z odebranym SMS-em. */

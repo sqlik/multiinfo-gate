@@ -1,4 +1,5 @@
 import type { IntegrationKind } from '../config.ts';
+import { bitrix24 } from './bitrix24.ts';
 import { custom } from './custom.ts';
 import { fakturownia } from './fakturownia.ts';
 import { fakturowniaKlient } from './fakturownia-klient.ts';
@@ -21,7 +22,7 @@ import { zabbix } from './zabbix.ts';
 export type { Preset, PresetField, PresetSecret } from './types.ts';
 
 /** Kolejność z tabeli specu; „Własne” zawsze na końcu kafelków. Teams czeka na potwierdzenie próbką (plik obok). */
-export const PRESETS: Preset[] = [prostyJson, n8n, uptimeKuma, grafana, zabbix, woocommerce, woocommerceKlient, fakturownia, fakturowniaKlient, homeAssistant, freescoutZgloszenie, freescout, freshdeskZgloszenie, freshdesk, slack, ntfy, custom];
+export const PRESETS: Preset[] = [prostyJson, n8n, uptimeKuma, grafana, zabbix, woocommerce, woocommerceKlient, fakturownia, fakturowniaKlient, homeAssistant, freescoutZgloszenie, freescout, freshdeskZgloszenie, freshdesk, slack, ntfy, bitrix24, custom];
 
 export const presetById = (id: string): Preset | undefined => PRESETS.find((p) => p.id === id);
 

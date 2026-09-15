@@ -151,6 +151,32 @@ describe('tryb prosty: wychodząca', () => {
     expect(transformSecret('basic-x', 'abc123')).toBe(`Basic ${Buffer.from('abc123:X').toString('base64')}`);
   });
 
+  it('Bitrix24: numer pracownika wchodzi w ciąg zapytania paczki batch, adres wymaga końcówki', async () => {
+    const pola = {
+      kind: 'webhook_out', preset: 'bitrix24', tryb: 'prosty', name: 'Bitrix z SMS-a', apiKeyId: String(apiKeyId), enabled: '1',
+      url: 'https://firma.bitrix24.pl/rest/1/abcdefghij123456/batch.json', 'param_fields[RESPONSIBLE_ID]': '7', action: 'zapisz',
+    };
+    const res = await post('/integracje', pola);
+    expect(res.statusCode).toBe(302);
+    const row = h.integrations.list()[0]!;
+    const template = ((row.config as OutboundConfig).body as { template: string }).template;
+    expect(template).toContain('fields[RESPONSIBLE_ID]=7');
+    expect(template).not.toContain('fields[RESPONSIBLE_ID]=1');
+    // Podstawienie nie może ruszyć niczego obok: powiązanie z kontaktem zostaje nietknięte.
+    expect(template).toContain('fields[UF_CRM_TASK][0]=C_$result[znajdz][CONTACT][0]');
+    const edit = await page(`/integracje/${row.id}/edytuj`);
+    expect(edit.body).toContain('value="7"');
+    expect(edit.body).toContain('Numer pracownika');
+
+    const bezKoncowki = await post('/integracje', { ...pola, name: 'Bitrix 2', url: 'https://firma.bitrix24.pl/rest/1/abcdefghij123456/' });
+    expect(bezKoncowki.statusCode).toBe(400);
+    expect(bezKoncowki.body).toContain('batch.json');
+    const nieLiczba = await post('/integracje', { ...pola, name: 'Bitrix 3', 'param_fields[RESPONSIBLE_ID]': 'jan' });
+    expect(nieLiczba.statusCode).toBe(400);
+    expect(nieLiczba.body).toContain('podaj liczbę');
+    expect(h.integrations.list()).toHaveLength(1);
+  });
+
   it('brak numeru skrzynki i zły numer to błędy w prostym formularzu', async () => {
     const empty = await post('/integracje', { kind: 'webhook_out', preset: 'freescout', tryb: 'prosty', name: 'FS', apiKeyId: String(apiKeyId), enabled: '1', url: 'https://pomoc.firma.pl/api/conversations', secret_apiKey: 'k', param_mailboxId: '', action: 'zapisz' });
     expect(empty.statusCode).toBe(400);
