@@ -18,7 +18,7 @@ const BODY = [
 export const bitrix24: Preset = {
   id: 'bitrix24',
   name: 'Bitrix24: zadanie z SMS-a',
-  blurb: 'Odebrany SMS zakłada zadanie przy kartotece klienta (webhook przychodzący Bitriksa)',
+  blurb: 'Odebrany SMS zakłada zadanie przy kartotece klienta (webhook przychodzący Bitrixa)',
   kinds: ['webhook_out'],
   fields: [
     { path: 'from', label: 'numer nadawcy' },
@@ -45,7 +45,7 @@ export const bitrix24: Preset = {
   simple: {
     outbound: {
       address: {
-        label: 'Adres webhooka z Bitriksa',
+        label: 'Adres webhooka z Bitrixa',
         hint: 'Adres z kafelka Webhook przychodzący, uzupełniony o końcówkę batch.json',
         placeholder: 'https://firma.bitrix24.pl/rest/1/abcdefghij123456/batch.json',
         mustEndWith: 'batch.json',
@@ -54,15 +54,15 @@ export const bitrix24: Preset = {
       params: [{
         key: 'fields[RESPONSIBLE_ID]',
         label: 'Numer pracownika, na którego idą zadania',
-        hint: 'Widoczny w adresie profilu w Bitriksie: /company/personal/user/1/ to numer 1',
+        hint: 'Widoczny w adresie profilu w Bitrixie: /company/personal/user/1/ to numer 1',
         digits: true, where: 'query',
       }],
-      note: 'Każdy odebrany SMS zakłada w Bitriksie zadanie z treścią wiadomości, powiązane z kontaktem o tym numerze.',
+      note: 'Każdy odebrany SMS zakłada w Bitrixie zadanie z treścią wiadomości, powiązane z kontaktem o tym numerze.',
     },
   },
   warning: 'Adres webhooka jest hasłem do Twojego portalu. Nie wklejaj go do zgłoszeń ani na zrzuty ekranu.',
   guide: [
-    '**Webhook.** W Bitriksie wejdź w **Aplikacje**, potem **Zasoby dla programistów** i wybierz kafelek **Webhook przychodzący**.',
+    '**Webhook.** W Bitrixie wejdź w **Aplikacje**, potem **Zasoby dla programistów** i wybierz kafelek **Webhook przychodzący**.',
     '',
     '**Uprawnienia.** Zaznacz wyłącznie dwa: **CRM (crm)** oraz **Zadania (task)**. Pierwsze pozwala odnaleźć kontakt po numerze, drugie założyć zadanie. Więcej uprawnień nie jest potrzebne, a każde dodatkowe rozszerza to, co może zrobić ten, kto zdobędzie adres.',
     '',
@@ -72,12 +72,12 @@ export const bitrix24: Preset = {
     'https://firma.bitrix24.pl/rest/1/abcdefghij123456/batch.json',
     '```',
     '',
-    '**Numer pracownika.** Zadania trafią na jedną osobę. Jej numer zobaczysz w adresie profilu w Bitriksie: przy `/company/personal/user/1/` numerem jest 1.',
+    '**Numer pracownika.** Zadania trafią na jedną osobę. Jej numer zobaczysz w adresie profilu w Bitrixie: przy `/company/personal/user/1/` numerem jest 1.',
     '',
     '**Czego się spodziewać.** Zadanie ma w tytule numer nadawcy, w opisie treść SMS-a, a w polu CRM powiązanie z kontaktem. Gdy numer nie pasuje do żadnego kontaktu, zadanie powstaje bez powiązania i jest widoczne na liście zadań pracownika.',
     '',
-    'Adres webhooka jest hasłem: kto go ma, ten czyta CRM i zakłada zadania. Trzymaj go wyłącznie w bramce. Gdy wyciekł, skasuj webhook w Bitriksie oraz zrób nowy.',
+    'Adres webhooka jest hasłem: kto go ma, ten czyta CRM i zakłada zadania. Trzymaj go wyłącznie w bramce. Gdy wyciekł, skasuj webhook w Bitrixie oraz zrób nowy.',
     '',
-    'Powiadomienia wychodzące z Bitriksa, w tym przypomnienia o rezerwacjach, przyjdą w późniejszym wydaniu bramki.',
+    'Powiadomienia wychodzące z Bitrixa, w tym przypomnienia o rezerwacjach, przyjdą w późniejszym wydaniu bramki.',
   ].join('\n'),
 };

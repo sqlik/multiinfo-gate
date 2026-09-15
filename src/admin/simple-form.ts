@@ -44,7 +44,7 @@ export function simpleDefaults(preset: Preset, base: IntegrationFormValues, fres
   };
 }
 
-/** Klucz parametru jest daną z ustawienia, nie wyrażeniem - nawiasy Bitriksa muszą zostać nawiasami. */
+/** Klucz parametru jest daną z ustawienia, nie wyrażeniem - nawiasy Bitrixa muszą zostać nawiasami. */
 const escapeRe = (raw: string): string => raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const paramPattern = (key: string) => new RegExp(`"${escapeRe(key)}":\\s*("[^"]*"|\\d+)`);

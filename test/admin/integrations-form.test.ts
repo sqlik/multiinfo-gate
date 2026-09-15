@@ -206,6 +206,17 @@ describe('POST /integracje', () => {
     expect(bad.body).toContain('Próbka nie jest poprawnym JSON-em');
   });
 
+  it('formularz tłumaczy dopytanie przykładem pola, a pola z odpowiedzi pokazuje bez przedrostka ładunku', async () => {
+    const res = await page('/integracje/nowa?rodzaj=webhook_in&ustawienie=fakturownia-klient&tryb=zaawansowany');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('{{ e.mobile_phone }}');
+    expect(res.body).toContain('tylko zamiast <code>p</code> piszesz <code>e</code>');
+    // Lista pól ustawienia: pole z kartoteki bez „p.”, pole z faktury z „p.”
+    expect(res.body).toContain('{{ e.name }}');
+    expect(res.body).toContain('{{ p.deal.invoice_no }}');
+    expect(res.body).not.toContain('{{ p.e.mobile_phone }}');
+  });
+
   it('podgląd ustawienia z dopytaniem liczy odbiorcę z przykładowej odpowiedzi aplikacji', async () => {
     const preset = presetById('fakturownia-klient')!;
     const res = await post('/integracje', inboundFields({
