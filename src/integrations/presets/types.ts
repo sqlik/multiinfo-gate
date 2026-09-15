@@ -81,7 +81,7 @@ export interface SimpleInbound {
 /**
  * Parametr wpisywany do szablonu body, np. numer skrzynki. Domyślnie siedzi w szablonie JSON
  * jako `"klucz": wartość`; `where: 'query'` znajduje go w ciągu zapytania, czyli jako `klucz=wartość`
- * wewnątrz wartości tekstowej - tak wygląda paczka batch Bitriksa.
+ * wewnątrz wartości tekstowej - tak wygląda paczka batch Bitrixa.
  */
 export interface SimpleParam { key: string; label: string; hint: string; digits: boolean; where?: 'json' | 'query' }
 

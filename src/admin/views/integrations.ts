@@ -510,7 +510,9 @@ function sectionEnrich(ctx: FormContext, v: IntegrationFormValues): string {
   const zapisany = ctx.secretNames.includes(INBOUND_ENRICH_REF);
   return `<details${v.enrichUrl === '' ? '' : ' open'}>
     <summary>Zapytanie uzupełniające</summary>
-    <div class="hint" style="margin: 0 0 10px;">Bramka zapyta aplikację o dane, których nie ma w ładunku, na przykład o numer telefonu klienta. Odpowiedź wchodzi do szablonu pod <code>e</code>, a do ścieżek jako <code>e.pole</code></div>
+    <div class="hint" style="margin: 0 0 10px;">Bramka zapyta aplikację o dane, których nie ma w ładunku, na przykład o numer telefonu klienta.
+      Pola z odpowiedzi wstawiasz tak samo jak pola ładunku, tylko zamiast <code>p</code> piszesz <code>e</code>:
+      numer komórki z kartoteki to <code>{{ e.mobile_phone }}</code>, a nazwa klienta to <code>{{ e.name }}</code></div>
     <div class="field">
       <label for="enrichUrl">Adres zapytania</label>
       <input id="enrichUrl" name="enrichUrl" value="${esc(v.enrichUrl)}" placeholder="https://firma.aplikacja.pl/clients/{{ p.client_id }}.json">
@@ -568,7 +570,12 @@ function sectionRecipient(v: IntegrationFormValues): string {
 
 function fieldsHint(preset: Preset): string {
   if (preset.fields.length === 0) return '<div class="hint">Ładunek dostępny pod <code>p</code>, np. <code>{{ p.message }}</code>; do tego <code>now</code> i <code>integration.name</code>.</div>';
-  const items = preset.fields.map((f) => `<code>{{ p.${esc(f.path)} }}</code> <span class="dim">${esc(f.label)}</span>`).join('<br>');
+  // Pola z zapytania uzupełniającego mają własny przedrostek, więc przedrostek ładunku by tu mylił.
+  const zDopytania = preset.inbound?.enrich === undefined ? null : `${preset.inbound.enrich.as}.`;
+  const items = preset.fields.map((f) => {
+    const wyrazenie = zDopytania !== null && f.path.startsWith(zDopytania) ? f.path : `p.${f.path}`;
+    return `<code>{{ ${esc(wyrazenie)} }}</code> <span class="dim">${esc(f.label)}</span>`;
+  }).join('<br>');
   return `<div class="hint">Pola z ustawienia:<br>${items}</div>`;
 }
 
@@ -800,7 +807,7 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     // Dopytanie widać na ekranie szczegółu, bo to jedyne miejsce, z którego bramka sama dzwoni po dane.
     if (cfg.enrich) {
       const gdy = cfg.enrich.onError === 'skip' ? 'bez odpowiedzi: pominięcie' : 'bez odpowiedzi: błąd';
-      rows.push(kvRow('Zapytanie uzupełniające', `${esc(safeUrl(cfg.enrich.url))} · odpowiedź pod ${esc(cfg.enrich.as)} · ${esc(gdy)}`, true));
+      rows.push(kvRow('Zapytanie uzupełniające', `${esc(safeUrl(cfg.enrich.url))} · pola odpowiedzi w szablonie jako ${esc(cfg.enrich.as)}.nazwa · ${esc(gdy)}`, true));
     }
     rows.push(kvRow('Treść', simple ? esc(simple.text) : cfg.text.mode === 'path' ? `pole ${esc(cfg.text.path)}` : `szablon Liquid · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
     if (cfg.ticketRefPath) rows.push(kvRow('Identyfikator zgłoszenia', esc(cfg.ticketRefPath), true));
