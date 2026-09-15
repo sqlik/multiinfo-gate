@@ -161,6 +161,51 @@ describe('tryb prosty: wychodząca', () => {
     expect(h.integrations.list()).toHaveLength(0);
   });
 
+  it('Fakturownia dla klienta: prosty formularz pyta o konto i kod API, zapis składa adres zapytania', async () => {
+    const formularz = await page('/integracje/nowa?rodzaj=webhook_in&ustawienie=fakturownia-klient');
+    expect(formularz.statusCode).toBe(200);
+    expect(formularz.body).toContain('Nazwa Twojego konta w Fakturowni');
+    expect(formularz.body).toContain('Kod autoryzacyjny API');
+    expect(formularz.body).toContain('Token, który Fakturownia wyśle w treści');
+    // Znacznik nazwy konta pojawia się wyłącznie w instrukcji, przy zdaniu o trybie zaawansowanym.
+    expect(formularz.body).not.toContain('value="NAZWA-KONTA"');
+    expect(formularz.body).not.toContain('Ścieżka numeru');
+
+    const res = await post('/integracje', {
+      kind: 'webhook_in', preset: 'fakturownia-klient', tryb: 'prosty', name: 'Faktury do klientów',
+      apiKeyId: String(apiKeyId), enabled: '1', numbers: '', whenId: 'wystawienie', textId: 'nabywca-numer-odnosnik',
+      secret: 'tajne123', account: 'firma', enrichSecret: 'api456', action: 'zapisz',
+    });
+    expect(res.statusCode).toBe(200);
+    const row = h.integrations.list()[0]!;
+    const config = row.config as InboundConfig;
+    expect(config.enrich?.url).toBe('https://firma.fakturownia.pl/clients/{{ p.deal.client.external_ids.fakturownia }}.json');
+    expect(config.enrich?.query).toEqual([{ name: 'api_token', valueRef: 'enrichToken' }]);
+    expect(config.auth.payload).toEqual({ path: 'api_token', valueRef: 'payloadToken' });
+    expect(config.to.path).toBe('e.mobile_phone');
+    expect(h.integrations.secrets(row.id)).toEqual({ payloadToken: 'tajne123', enrichToken: 'api456' });
+
+    // Edycja wraca do trybu prostego z nazwą konta wyjętą z zapisanego adresu.
+    const edycja = await page(`/integracje/${row.id}/edytuj`);
+    expect(edycja.body).toContain('value="firma"');
+    expect(edycja.body).toContain('Nazwa Twojego konta w Fakturowni');
+    expect(edycja.body).toContain('zapisany - puste pole zostawia dotychczasowy');
+  });
+
+  it('Fakturownia dla klienta: brak nazwy konta oraz nazwa z ukośnikiem to błędy prostego formularza', async () => {
+    const pola = {
+      kind: 'webhook_in', preset: 'fakturownia-klient', tryb: 'prosty', name: 'Faktury', apiKeyId: String(apiKeyId), enabled: '1',
+      numbers: '', whenId: 'wystawienie', textId: 'nabywca-numer-odnosnik', secret: 'tajne123', enrichSecret: 'api456', action: 'zapisz',
+    };
+    const bez = await post('/integracje', { ...pola, account: '' });
+    expect(bez.statusCode).toBe(400);
+    expect(bez.body).toContain('nazwa twojego konta w fakturowni');
+    const zla = await post('/integracje', { ...pola, account: 'firma.fakturownia.pl/klienci' });
+    expect(zla.statusCode).toBe(400);
+    expect(zla.body).toContain('małe litery');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
   it('tryb prosty składa token w polu ładunku i rozpoznaje go przy edycji', () => {
     // Ustawienie próbne, bo katalog dostaje pierwszą taką aplikację dopiero z Fakturownią.
     const base = presetById('uptime-kuma')!;
@@ -248,7 +293,7 @@ describe('tryb prosty: wychodząca', () => {
   });
 
   it('detectSimple: domyślne wartości każdego ustawienia z trybem prostym rozpoznają się jako proste', () => {
-    for (const id of ['uptime-kuma', 'grafana', 'zabbix', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'prosty-json']) {
+    for (const id of ['uptime-kuma', 'grafana', 'zabbix', 'fakturownia', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'prosty-json']) {
       const preset = presetById(id)!;
       const v = valuesFromPreset('webhook_in', preset);
       // Warunek ustawienia to „wszystko”; w listach musi być wariant z takim samym warunkiem albo pierwszy wariant po zapisie.

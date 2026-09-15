@@ -121,7 +121,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const out: Record<string, string> = {};
     for (const t of preset.simple?.inbound?.text ?? []) {
       const config: InboundConfig = { ...defaultInboundConfig(), ...preset.inbound, condition: { mode: 'builder', rules: [] }, text: t.text };
-      const p = previewInbound(deps.engine, config, preset.sample ?? {}, '48', now());
+      const p = previewInbound(deps.engine, config, preset.sample ?? {}, '48', now(), preset.enrichSample);
       out[t.id] = p.error === null ? p.text ?? '' : `(błąd szablonu: ${p.error})`;
     }
     return out;
@@ -152,7 +152,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     });
 
   /** Podgląd „Sprawdź szablon” z próbki; błąd JSON-a próbki to błąd formularza, nie podglądu. */
-  const preview = (kind: IntegrationKind, config: IntegrationRow['config'], v: IntegrationFormValues, secretNames: string[], countryCode: string):
+  const preview = (kind: IntegrationKind, config: IntegrationRow['config'], v: IntegrationFormValues, secretNames: string[], countryCode: string, enrichSample?: unknown):
     { ok: true; preview: FormPreview } | { ok: false; error: string } => {
     let sample: unknown;
     try {
@@ -162,8 +162,15 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }
     const at = now();
     if (kind === 'webhook_in') {
-      const p = previewInbound(deps.engine, config as InboundConfig, sample, countryCode, at);
-      return { ok: true, preview: { matches: p.matches, recipients: p.recipients, text: p.text, parts: p.parts, error: p.error, threadRecipient: p.threadRecipient } };
+      const inbound = config as InboundConfig;
+      const p = previewInbound(deps.engine, inbound, sample, countryCode, at, enrichSample);
+      return {
+        ok: true,
+        preview: {
+          matches: p.matches, recipients: p.recipients, text: p.text, parts: p.parts, error: p.error, threadRecipient: p.threadRecipient,
+          enriched: inbound.enrich !== undefined && enrichSample !== undefined,
+        },
+      };
     }
     const out = config as OutboundConfig;
     const event = typeof sample === 'object' && sample !== null ? sample as Record<string, unknown> : {};
@@ -215,7 +222,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
 
     if (String(body.action ?? '') === 'sprawdz') {
       const secretNames = [...new Set([...existing.names, ...Object.keys(built.secrets), ...Object.keys(built.carried)])];
-      const result = preview(kind, built.config, v, secretNames, countryCodeOf(key.accountId));
+      const result = preview(kind, built.config, v, secretNames, countryCodeOf(key.accountId), ctx.preset.enrichSample);
       if (!result.ok) return fail(result.error);
       void title;
       return advancedPage(request, ctx, v, { preview: result.preview });

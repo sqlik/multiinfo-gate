@@ -206,6 +206,24 @@ describe('POST /integracje', () => {
     expect(bad.body).toContain('Próbka nie jest poprawnym JSON-em');
   });
 
+  it('podgląd ustawienia z dopytaniem liczy odbiorcę z przykładowej odpowiedzi aplikacji', async () => {
+    const preset = presetById('fakturownia-klient')!;
+    const res = await post('/integracje', inboundFields({
+      preset: preset.id, name: 'Faktury do klientów', action: 'sprawdz',
+      authHeaderName: '', authHeaderValue: '', authPayloadPath: 'api_token', authPayloadValue: 'tajne123',
+      enrichUrl: preset.inbound!.enrich!.url, enrichToken: 'api456', enrichOnError: 'skip',
+      toPath: 'e.mobile_phone', toFallback: '', maxParts: '2',
+      rulePath: ['deal.invoice_no', ''], ruleOp: ['exists', 'eq'], ruleValue: ['', ''],
+      textTemplate: (preset.inbound!.text as { template: string }).template,
+      sample: JSON.stringify(preset.sample),
+    }));
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Podgląd z próbki');
+    expect(res.body).toContain('48601000001');
+    expect(res.body).toContain('przykładowej odpowiedzi');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
   it('podgląd wychodzącej pokazuje nagłówki z zamaskowanym sekretem i body', async () => {
     const res = await post('/integracje', outboundFields({ action: 'sprawdz' }));
     expect(res.statusCode).toBe(200);

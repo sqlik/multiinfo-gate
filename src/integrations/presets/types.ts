@@ -23,6 +23,11 @@ export interface Preset {
   outbound?: Partial<OutboundConfig>;
   /** Sekrety, o które formularz zapyta. */
   secrets?: PresetSecret[];
+  /**
+   * Przykładowa odpowiedź zapytania uzupełniającego. Podgląd oraz test katalogu podstawiają ją
+   * pod nazwę z `enrich.as`, bo ani jedno, ani drugie nie ma prawa pytać aplikacji po sieci.
+   */
+  enrichSample?: unknown;
   /** Oczekiwany wynik przykładowego ładunku. */
   expect?: { recipients?: string[]; text?: string; skipped?: boolean; outboundJson?: Record<string, unknown>; outboundText?: string };
   /** Instrukcja „co ustawić w aplikacji” do panelu i dokumentacji, Markdown. */
