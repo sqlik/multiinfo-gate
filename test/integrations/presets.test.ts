@@ -25,6 +25,17 @@ describe('gotowe ustawienia', () => {
     expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'fakturownia', 'fakturownia-klient', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
     expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'home-assistant', 'freescout', 'freshdesk', 'slack', 'ntfy', 'bitrix24', 'custom']);
   });
+  it('wartości z ładunku w adresie zapytania uzupełniającego są kodowane', () => {
+    for (const preset of PRESETS) {
+      const url = preset.inbound?.enrich?.url;
+      if (url === undefined) continue;
+      // Ładunek podaje ten, kto zna sekret webhooka. Bez kodowania wstawiłby ukośnik albo znak
+      // zapytania i przestawiłby żądanie na inną końcówkę API konta.
+      for (const znacznik of url.matchAll(/\{\{([^}]*)\}\}/g)) {
+        expect(znacznik[1], `${preset.id}: ${znacznik[0]}`).toMatch(/\|\s*url_encode\s*$/);
+      }
+    }
+  });
   it('każde ustawienie ma konfigurację dla każdego swojego rodzaju, instrukcję i sekrety ze wskazówką', () => {
     for (const p of PRESETS) {
       if (p.kinds.includes('webhook_in')) expect(p.inbound, p.id).toBeDefined();
