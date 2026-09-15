@@ -55,11 +55,11 @@ beforeEach(async () => {
   await app.ready();
 });
 
-const make = (config: Partial<InboundConfig> = {}, secrets: Record<string, string> = {}) => {
+const make = (config: Partial<InboundConfig> = {}, secrets: Record<string, string> = {}, storePayloads = 0) => {
   const id = integrations.insert({
     name: 'Kuma', kind: 'webhook_in', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1,
     config: { ...defaultInboundConfig(), text: { mode: 'liquid', template: '{{ p.msg }}' }, to: { fallback: ['48601000009'] }, ...config },
-    secrets, storePayloads: 0, createdAt: NOW,
+    secrets, storePayloads, createdAt: NOW,
   });
   return integrations.get(id)!;
 };
@@ -140,6 +140,17 @@ describe('POST /hooks/:hookId', () => {
     expect(wpisy).not.toContain('tajne123');
     expect(wpisy).not.toContain('inne');
     expect(JSON.stringify(notify.mock.calls)).not.toContain('tajne123');
+  });
+  it('sekret w polu ładunku nie trafia do przechowanego ładunku ani do treści SMS-a', async () => {
+    const integ = make(
+      { auth: { sources: [], payload: { path: 'api_token', valueRef: 'payloadToken' } }, text: { mode: 'liquid', template: '{{ p.msg }} {{ p.api_token }}' } },
+      { payloadToken: 'tajne123' }, 1,
+    );
+    const res = await post(integ.hookId!, { api_token: 'tajne123', msg: 'x' });
+    expect(res.statusCode).toBe(202);
+    expect(integrationEvents.latestPayload(integ.id)).toContain('api_token');
+    expect(integrationEvents.latestPayload(integ.id)).not.toContain('tajne123');
+    expect(messages.get(res.json().messageIds[0])!.body).not.toContain('tajne123');
   });
   it('lista źródeł: adres spoza listy to 403, nazwa rozwiązana pasuje', async () => {
     const integ = make({ auth: { sources: ['203.0.113.0/24', 'nas.dyndns.example'] } });

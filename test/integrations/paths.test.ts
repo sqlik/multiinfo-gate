@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InvalidPathError, isValidPath, parsePath, readPath } from '../../src/integrations/paths.ts';
+import { InvalidPathError, isValidPath, maskPath, parsePath, readPath } from '../../src/integrations/paths.ts';
 
 const payload = { contact: { phone: '+48 601 000 001', tags: ['vip', 'pl'] }, alerts: [{ labels: { alertname: 'CPU' } }], 'x-y': 1 };
 
@@ -29,5 +29,24 @@ describe('readPath', () => {
   it('nie sięga do prototypu', () => {
     expect(readPath({}, 'constructor')).toBeUndefined();
     expect(readPath({}, '__proto__')).toBeUndefined();
+  });
+});
+
+describe('maskPath', () => {
+  it('zamienia wartość spod ścieżki, nie ruszając reszty', () => {
+    const out = maskPath({ api_token: 'tajne', msg: 'x' }, 'api_token') as Record<string, unknown>;
+    expect(out).toEqual({ api_token: '(sekret)', msg: 'x' });
+  });
+  it('sięga w głąb oraz w tablice, zostawiając oryginał nietknięty', () => {
+    const wejscie = { auth: { token: 'tajne' }, alerts: [{ key: 'tajne' }] };
+    expect(maskPath(wejscie, 'auth.token')).toEqual({ auth: { token: '(sekret)' }, alerts: [{ key: 'tajne' }] });
+    expect(maskPath(wejscie, 'alerts[0].key')).toEqual({ auth: { token: 'tajne' }, alerts: [{ key: '(sekret)' }] });
+    expect(wejscie.auth.token).toBe('tajne');
+  });
+  it('brak pola, zła ścieżka oraz prototyp zostawiają ładunek bez zmian', () => {
+    expect(maskPath({ msg: 'x' }, 'api_token')).toEqual({ msg: 'x' });
+    expect(maskPath({ msg: 'x' }, 'a[]')).toEqual({ msg: 'x' });
+    expect(maskPath({ msg: 'x' }, '__proto__')).toEqual({ msg: 'x' });
+    expect(maskPath('nie obiekt', 'a')).toBe('nie obiekt');
   });
 });

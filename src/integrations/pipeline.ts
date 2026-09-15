@@ -11,7 +11,7 @@ import { segmentText, TooManyPartsError } from '../text/segment.ts';
 import type { InboundConfig } from './config.ts';
 import { matches } from './conditions.ts';
 import { enrich, safeUrl, type EnrichGet } from './enrich.ts';
-import { readPath } from './paths.ts';
+import { maskPath, readPath } from './paths.ts';
 import { TemplateEngine, TemplateError } from './templates.ts';
 import type { Resolver } from '../net/private-address.ts';
 
@@ -159,9 +159,12 @@ export function previewInbound(
  * `submitMessages`, wpis w dzienniku. Każde wyjście zapisuje wpis; wołający zamienia wynik
  * na kod HTTP i ewentualne powiadomienie administratora.
  */
-export async function runInbound(deps: PipelineDeps, integration: InboundIntegration, payload: unknown, meta: { sourceIp: string }, now: Date): Promise<InboundOutcome> {
+export async function runInbound(deps: PipelineDeps, integration: InboundIntegration, raw: unknown, meta: { sourceIp: string }, now: Date): Promise<InboundOutcome> {
   const log = deps.log ?? silentLogger;
   const config = integration.config;
+  // Sekret z pola ładunku dalej nie jedzie: uwierzytelnienie już go sprawdziło w warstwie HTTP, a
+  // ładunek stąd trafia do dziennika zdarzeń, do podglądu w panelu oraz do kontekstu szablonu.
+  const payload = config.auth.payload === undefined ? raw : maskPath(raw, config.auth.payload.path);
   const stored = integration.storePayloads === 1 ? JSON.stringify(payload) : null;
   const note = (result: IntegrationEventInput['result'], extra: Partial<IntegrationEventInput> = {}) =>
     deps.integrationEvents.record({ integrationId: integration.id, at: now, result, sourceIp: meta.sourceIp, payload: stored, logLimit: config.eventLogLimit, ...extra });
