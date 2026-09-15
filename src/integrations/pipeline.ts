@@ -125,11 +125,11 @@ export function previewInbound(engine: TemplateEngine, config: InboundConfig, pa
 }
 
 /**
- * Potok przychodzący: klucz i konto, filtr, idempotencja, burza, szablony, wysyłka przez
+ * Potok przychodzący: klucz i konto, filtr, idempotencja, burza, dopytanie, szablony, wysyłka przez
  * `submitMessages`, wpis w dzienniku. Każde wyjście zapisuje wpis; wołający zamienia wynik
  * na kod HTTP i ewentualne powiadomienie administratora.
  */
-export function runInbound(deps: PipelineDeps, integration: InboundIntegration, payload: unknown, meta: { sourceIp: string }, now: Date): InboundOutcome {
+export async function runInbound(deps: PipelineDeps, integration: InboundIntegration, payload: unknown, meta: { sourceIp: string }, now: Date): Promise<InboundOutcome> {
   const log = deps.log ?? silentLogger;
   const config = integration.config;
   const stored = integration.storePayloads === 1 ? JSON.stringify(payload) : null;
