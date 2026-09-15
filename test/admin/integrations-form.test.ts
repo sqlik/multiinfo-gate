@@ -88,6 +88,38 @@ describe('POST /integracje', () => {
     expect(row.hookId).toBeNull();
   });
 
+  it('token w polu ładunku zapisuje się obok pozostałych warstw, a pusta wartość zostawia zapisany', async () => {
+    const pola = { authHeaderName: '', authHeaderValue: '', authPayloadPath: 'api_token' };
+    const res = await post('/integracje', inboundFields({ ...pola, authPayloadValue: 'tajne123' }));
+    expect(res.statusCode).toBe(200);
+    const row = h.integrations.list()[0]!;
+    expect((row.config as InboundConfig).auth.payload).toEqual({ path: 'api_token', valueRef: 'payloadToken' });
+    expect(h.integrations.secrets(row.id)).toEqual({ payloadToken: 'tajne123' });
+
+    const form = await page(`/integracje/${row.id}/edytuj?tryb=zaawansowany`);
+    expect(form.body).toContain('name="authPayloadPath"');
+    expect(form.body).not.toContain('tajne123');
+
+    const keep = await post(`/integracje/${row.id}/edytuj`, inboundFields({ ...pola, authPayloadValue: '' }));
+    expect(keep.statusCode).toBe(302);
+    expect(h.integrations.secrets(row.id)).toEqual({ payloadToken: 'tajne123' });
+
+    // Pusta ścieżka zdejmuje warstwę i kasuje token, tak samo jak pusta nazwa nagłówka.
+    await post(`/integracje/${row.id}/edytuj`, inboundFields({ ...pola, authPayloadPath: '', authPayloadValue: '' }));
+    expect((h.integrations.get(row.id)!.config as InboundConfig).auth.payload).toBeUndefined();
+    expect(h.integrations.secrets(row.id)).toEqual({});
+  });
+
+  it('token w polu ładunku: zła ścieżka oraz brak wartości to błędy formularza', async () => {
+    const zla = await post('/integracje', inboundFields({ authPayloadPath: 'api..token', authPayloadValue: 'x' }));
+    expect(zla.statusCode).toBe(400);
+    expect(zla.body).toContain('Pole ładunku z tokenem');
+    const bez = await post('/integracje', inboundFields({ authPayloadPath: 'api_token', authPayloadValue: '' }));
+    expect(bez.statusCode).toBe(400);
+    expect(bez.body).toContain('Podaj wartość tokenu');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
   it('błąd składni szablonu wraca do formularza z komunikatem i numerem linii, bez zapisu', async () => {
     const res = await post('/integracje', inboundFields({ textTemplate: 'Awaria\n{{ p.monitor.name' }));
     expect(res.statusCode).toBe(400);

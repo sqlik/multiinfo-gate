@@ -50,6 +50,8 @@ export interface SimpleText { id: string; label: string; text: InboundConfig['te
 export type SimpleAuth =
   | { kind: 'header'; name: string; prefix: string; label: string; where: string }
   | { kind: 'basic'; user: string; label: string; where: string }
+  /** Token w treści żądania: aplikacje, które nie umieją własnych nagłówków, np. Fakturownia. */
+  | { kind: 'payload'; path: string; label: string; where: string }
   | { kind: 'none'; note: string };
 
 export interface SimpleInbound {

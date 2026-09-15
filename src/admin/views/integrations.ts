@@ -202,7 +202,8 @@ export interface IntegrationFormValues {
   name: string; apiKeyId: string; serviceId: string; orig: string; enabled: boolean; preset: string;
   storePayloads: boolean; throttleLimit: string; throttleWindow: string; eventLogLimit: string;
   conditionMode: 'builder' | 'liquid'; rules: RuleValues[]; conditionExpr: string;
-  authHeaderName: string; authHeaderValue: string; authBasicUser: string; authBasicPass: string; sources: string;
+  authHeaderName: string; authHeaderValue: string; authBasicUser: string; authBasicPass: string;
+  authPayloadPath: string; authPayloadValue: string; sources: string;
   toPath: string; toFallback: string; invalidRecipient: 'error' | 'skip'; ticketRefPath: string; eventIdPath: string;
   textMode: 'path' | 'liquid'; textPath: string; textTemplate: string; maxParts: string; overflow: 'truncate' | 'reject';
   events: string[]; url: string; method: string; headers: HeaderValues[]; bodyMode: 'json' | 'form' | 'text';
@@ -214,6 +215,7 @@ export interface IntegrationFormValues {
 /** Nazwy sekretów integracji przychodzącej - stałe, bo formularz ma po jednym polu na każdy. */
 export const INBOUND_TOKEN_REF = 'token';
 export const INBOUND_BASIC_REF = 'basicPass';
+export const INBOUND_PAYLOAD_REF = 'payloadToken';
 
 /** Przykładowe zdarzenie wychodzące - próbka dla integracji z SMS-a, gdy nie ma przechowanego ładunku. */
 export const OUTBOUND_SAMPLE = {
@@ -231,6 +233,7 @@ export function configToValues(kind: IntegrationKind, config: IntegrationConfig,
     rules: config.condition.mode === 'builder' ? config.condition.rules.map((r) => ({ path: r.path, op: r.op, value: r.value })) : [],
     conditionExpr: config.condition.mode === 'liquid' ? config.condition.expr : '',
     authHeaderName: inbound.auth.header?.name ?? '', authHeaderValue: '', authBasicUser: inbound.auth.basic?.user ?? '', authBasicPass: '',
+    authPayloadPath: inbound.auth.payload?.path ?? '', authPayloadValue: '',
     sources: inbound.auth.sources.join('\n'),
     toPath: inbound.to.path ?? '', toFallback: inbound.to.fallback.join('\n'), invalidRecipient: inbound.invalidRecipient,
     ticketRefPath: inbound.ticketRefPath ?? '', eventIdPath: inbound.eventIdPath ?? '',
@@ -403,6 +406,14 @@ function sectionInput(ctx: FormContext, v: IntegrationFormValues): string {
         <input id="authHeaderValue" name="authHeaderValue" type="password" autocomplete="off" placeholder="wartość, np. Bearer …" style="flex: 1;">
       </div>
       <div class="hint">Opcjonalny. ${esc(secretHint(INBOUND_TOKEN_REF, 'Token'))} Pusta nazwa nagłówka zdejmuje tę warstwę i kasuje token.</div>
+    </div>
+    <div class="field">
+      <label for="authPayloadPath">Pole ładunku z tokenem</label>
+      <div class="inline">
+        <input id="authPayloadPath" name="authPayloadPath" value="${esc(v.authPayloadPath)}" placeholder="ścieżka, np. api_token" style="width: 40%;">
+        <input id="authPayloadValue" name="authPayloadValue" type="password" autocomplete="off" placeholder="wartość tokenu" style="flex: 1;">
+      </div>
+      <div class="hint">Opcjonalne. Dla aplikacji, które wysyłają token w treści żądania, nie w nagłówku. ${esc(secretHint(INBOUND_PAYLOAD_REF, 'Token z ładunku'))} Pusta ścieżka zdejmuje tę warstwę i kasuje token.</div>
     </div>
     <div class="field">
       <label for="authBasicUser">Basic auth</label>

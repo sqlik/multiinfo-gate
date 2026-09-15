@@ -5,7 +5,7 @@ import {
 import { isValidPath } from '../integrations/paths.ts';
 import { parseSourceEntry } from '../integrations/sources.ts';
 import type { TemplateEngine } from '../integrations/templates.ts';
-import { INBOUND_BASIC_REF, INBOUND_TOKEN_REF, type IntegrationFormValues } from './views/integrations.ts';
+import { INBOUND_BASIC_REF, INBOUND_PAYLOAD_REF, INBOUND_TOKEN_REF, type IntegrationFormValues } from './views/integrations.ts';
 
 type Body = Record<string, string | string[] | undefined>;
 
@@ -35,6 +35,7 @@ export function formValues(body: Body): IntegrationFormValues {
     conditionExpr: String(body.conditionExpr ?? ''),
     authHeaderName: s('authHeaderName'), authHeaderValue: String(body.authHeaderValue ?? '').trim(),
     authBasicUser: s('authBasicUser'), authBasicPass: String(body.authBasicPass ?? ''),
+    authPayloadPath: s('authPayloadPath'), authPayloadValue: String(body.authPayloadValue ?? '').trim(),
     sources: String(body.sources ?? ''),
     toPath: s('toPath'), toFallback: String(body.toFallback ?? ''), invalidRecipient: s('invalidRecipient') === 'skip' ? 'skip' : 'error',
     ticketRefPath: s('ticketRefPath'), eventIdPath: s('eventIdPath'),
@@ -121,6 +122,13 @@ export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, en
       else if (existing.names.includes(INBOUND_TOKEN_REF)) carried[INBOUND_TOKEN_REF] = INBOUND_TOKEN_REF;
       else return fail('Podaj wartość nagłówka z tokenem albo wyczyść jego nazwę.');
       auth.header = { name: v.authHeaderName, valueRef: INBOUND_TOKEN_REF };
+    }
+    if (v.authPayloadPath !== '') {
+      if (!isValidPath(v.authPayloadPath)) return fail(`Pole ładunku z tokenem: „${v.authPayloadPath}” nie jest poprawną ścieżką.`);
+      if (v.authPayloadValue !== '') secrets[INBOUND_PAYLOAD_REF] = v.authPayloadValue;
+      else if (existing.names.includes(INBOUND_PAYLOAD_REF)) carried[INBOUND_PAYLOAD_REF] = INBOUND_PAYLOAD_REF;
+      else return fail('Podaj wartość tokenu, którą wysyła aplikacja, albo wyczyść ścieżkę pola.');
+      auth.payload = { path: v.authPayloadPath, valueRef: INBOUND_PAYLOAD_REF };
     }
     if (v.authBasicUser !== '') {
       if (v.authBasicPass !== '') secrets[INBOUND_BASIC_REF] = v.authBasicPass;

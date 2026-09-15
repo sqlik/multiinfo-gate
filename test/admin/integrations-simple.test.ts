@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type OutboundConfig } from '../../src/integrations/config.ts';
 import { presetById } from '../../src/integrations/presets/index.ts';
-import { detectSimple, transformSecret } from '../../src/admin/simple-form.ts';
+import { detectSimple, simpleToValues, transformSecret, type SimpleValues } from '../../src/admin/simple-form.ts';
+import type { Preset } from '../../src/integrations/presets/types.ts';
 import { valuesFromPreset } from '../../src/admin/views/integrations.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
@@ -157,6 +158,31 @@ describe('tryb prosty: wychodząca', () => {
     expect(bad.statusCode).toBe(400);
     expect(bad.body).toContain('podaj liczbę');
     expect(h.integrations.list()).toHaveLength(0);
+  });
+
+  it('tryb prosty składa token w polu ładunku i rozpoznaje go przy edycji', () => {
+    // Ustawienie próbne, bo katalog dostaje pierwszą taką aplikację dopiero z Fakturownią.
+    const base = presetById('uptime-kuma')!;
+    const preset: Preset = {
+      ...base, id: 'proba-token-w-ladunku',
+      inbound: { ...base.inbound, auth: { sources: [], payload: { path: 'api_token', valueRef: 'payloadToken' } } },
+      simple: { inbound: { ...base.simple!.inbound!, auth: { kind: 'payload', path: 'api_token', label: 'Token, który aplikacja wyśle w treści', where: 'w aplikacji w polu Api token' } } },
+    };
+    const values = valuesFromPreset('webhook_in', preset);
+    const sv: SimpleValues = {
+      name: 'Proba', apiKeyId: String(apiKeyId), enabled: true, numbers: '601 000 001',
+      whenId: 'awaria', textId: 'z-komunikatem', secret: 'tajne123', url: '', secrets: {}, params: {},
+    };
+    const out = simpleToValues('webhook_in', preset, sv, values);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.values.authPayloadPath).toBe('api_token');
+    expect(out.values.authPayloadValue).toBe('tajne123');
+    expect(out.values.authHeaderName).toBe('');
+    expect(out.values.authBasicUser).toBe('');
+    expect(detectSimple(preset, 'webhook_in', out.values)).toEqual({ whenId: 'awaria', textId: 'z-komunikatem' });
+    // Zmiana ścieżki w trybie zaawansowanym wypycha formularz z trybu prostego.
+    expect(detectSimple(preset, 'webhook_in', { ...out.values, authPayloadPath: 'token' })).toBeNull();
   });
 
   it('detectSimple: domyślne wartości każdego ustawienia z trybem prostym rozpoznają się jako proste', () => {
