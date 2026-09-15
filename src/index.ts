@@ -100,6 +100,7 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
     inboundHealth: () => receiver.health(),
     integrations, integrationEvents, guards, engine, sources: new SourceMatcher(systemResolver),
     hookLimiter: new RateLimiter(), trustedProxies: config.trustedProxies, notifier,
+    allowPrivateWebhooks: config.webhookAllowPrivate,
   });
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,

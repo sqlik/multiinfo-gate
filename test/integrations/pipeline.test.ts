@@ -33,7 +33,7 @@ beforeEach(() => {
   deps = {
     accounts, apiKeys, messages: new MessagesRepo(db), events: new MessageEventsRepo(db), jobs: new JobsRepo(db),
     inbound: new InboundMessagesRepo(db), integrationEvents: new IntegrationEventsRepo(db, key), guards: new IntegrationGuardsRepo(db),
-    engine: new TemplateEngine(),
+    engine: new TemplateEngine(), integrations,
   };
 });
 
@@ -47,6 +47,116 @@ const make = (config: Partial<InboundConfig>, over: Partial<Parameters<Integrati
 };
 const events = (id: number) => deps.integrationEvents.list(id, 10).map((e) => e.result);
 const ip = { sourceIp: '203.0.113.1' };
+
+const DOPYTANIE = {
+  url: 'https://przyklad.test/clients/{{ p.deal.client.id }}.json',
+  method: 'GET' as const, headers: [], query: [], timeoutMs: 2000, as: 'e', onError: 'error' as const,
+};
+const zKartoteki = { to: { path: 'e.mobile_phone', fallback: [] }, text: { mode: 'liquid' as const, template: 'Faktura {{ p.deal.invoice_no }} dla {{ e.name }}' } };
+
+describe('runInbound: zapytanie uzupełniające', () => {
+  it('dopytuje aplikację, a odpowiedź daje odbiorcę oraz pola do treści', async () => {
+    const integ = make({ ...zKartoteki, enrich: DOPYTANIE });
+    deps.resolve = async () => ['93.184.216.34'];
+    deps.enrichGet = async () => ({ status: 200, body: '{"name":"Anna","mobile_phone":"+48 601 000 001"}' });
+    const out = await runInbound(deps, integ, { deal: { invoice_no: '1/09/2026', client: { id: 5 } } }, ip, NOW);
+    expect(out.kind).toBe('sent');
+    if (out.kind !== 'sent') return;
+    const m = deps.messages.get(out.messageIds[0]!)!;
+    expect(m.dest).toBe('48601000001');
+    expect(m.body).toBe('Faktura 1/09/2026 dla Anna');
+  });
+
+  it('przy błędzie dopytania i ustawieniu „pomiń” kończy pominięciem, przy „błąd” błędem enrich', async () => {
+    deps.resolve = async () => ['93.184.216.34'];
+    deps.enrichGet = async () => ({ status: 500, body: '{}' });
+    const pomijaj = make({ ...zKartoteki, enrich: { ...DOPYTANIE, onError: 'skip' } });
+    expect(await runInbound(deps, pomijaj, { deal: { client: { id: 5 } } }, ip, NOW)).toEqual({ kind: 'skipped' });
+    expect(events(pomijaj.id)).toEqual(['skipped']);
+
+    const zglaszaj = make({ ...zKartoteki, enrich: DOPYTANIE }, { name: 'Faktury' });
+    const out = await runInbound(deps, zglaszaj, { deal: { client: { id: 5 } } }, ip, NOW);
+    expect(out).toMatchObject({ kind: 'error', code: 'enrich' });
+    if (out.kind !== 'error') return;
+    expect(out.detail).toContain('https://przyklad.test/clients/');
+    expect(out.detail).toContain('500');
+  });
+
+  it('nie dopytuje, gdy warunek, duplikat albo burza odsiały zdarzenie', async () => {
+    let wolano = 0;
+    deps.resolve = async () => ['93.184.216.34'];
+    deps.enrichGet = async () => { wolano += 1; return { status: 200, body: '{}' }; };
+    const integ = make({
+      ...zKartoteki, enrich: DOPYTANIE,
+      condition: { mode: 'builder', rules: [{ path: 'status', op: 'eq', value: 'issued' }] },
+      throttle: { limit: 1, windowMinutes: 10 },
+    });
+    expect((await runInbound(deps, integ, { status: 'draft' }, ip, NOW)).kind).toBe('skipped');
+    expect(wolano).toBe(0);
+    await runInbound(deps, integ, { status: 'issued', deal: { client: { id: 5 } } }, ip, NOW);
+    expect(wolano).toBe(1);
+    expect((await runInbound(deps, integ, { status: 'issued', deal: { client: { id: 5 } } }, ip, NOW)).kind).toBe('throttled');
+    expect(wolano).toBe(1);
+  });
+
+  it('sekret dopytania nie trafia do dziennika ani do treści SMS-a', async () => {
+    deps.resolve = async () => ['93.184.216.34'];
+    deps.enrichGet = async () => ({ status: 500, body: '{}' });
+    const integ = make(
+      { ...zKartoteki, enrich: { ...DOPYTANIE, headers: [{ name: 'Authorization', valueRef: 'enrichToken' }], query: [{ name: 'api_token', valueRef: 'enrichToken' }] } },
+      { secrets: { enrichToken: 'tajne123' } },
+    );
+    const out = await runInbound(deps, integ, { deal: { client: { id: 5 } } }, ip, NOW);
+    expect(out.kind).toBe('error');
+    expect(JSON.stringify(deps.integrationEvents.list(integ.id, 10))).not.toContain('tajne123');
+    if (out.kind !== 'error') return;
+    expect(out.detail).not.toContain('tajne123');
+  });
+
+  it('sekret dopytania dociera do zapytania z repozytorium integracji', async () => {
+    let widziany = { naglowek: '', adres: '' };
+    deps.resolve = async () => ['93.184.216.34'];
+    deps.enrichGet = async (url, headers) => {
+      widziany = { naglowek: headers.Authorization ?? '', adres: url };
+      return { status: 200, body: '{"mobile_phone":"48601000001","name":"Anna"}' };
+    };
+    const integ = make(
+      { ...zKartoteki, enrich: { ...DOPYTANIE, headers: [{ name: 'Authorization', valueRef: 'enrichToken' }], query: [{ name: 'api_token', valueRef: 'enrichToken' }] } },
+      { secrets: { enrichToken: 'tajne123' } },
+    );
+    expect((await runInbound(deps, integ, { deal: { client: { id: 5 } } }, ip, NOW)).kind).toBe('sent');
+    expect(widziany.naglowek).toBe('tajne123');
+    expect(widziany.adres).toContain('api_token=tajne123');
+  });
+
+  it('adres dopytania w sieci wewnętrznej bez zgody to błąd, ze zgodą przechodzi', async () => {
+    deps.resolve = async () => ['192.168.1.20'];
+    deps.enrichGet = async () => ({ status: 200, body: '{"mobile_phone":"48601000001","name":"Anna"}' });
+    const integ = make({ ...zKartoteki, enrich: DOPYTANIE });
+    const out = await runInbound(deps, integ, { deal: { client: { id: 5 } } }, ip, NOW);
+    expect(out).toMatchObject({ kind: 'error', code: 'enrich' });
+    if (out.kind !== 'error') return;
+    expect(out.detail).toContain('sieć wewnętrzną');
+
+    deps.allowPrivateWebhooks = true;
+    expect((await runInbound(deps, integ, { deal: { client: { id: 5 } } }, ip, NOW)).kind).toBe('sent');
+  });
+
+  it('odpowiedź dopytania widzą też ścieżki, a ładunek w dzienniku zostaje bez niej', async () => {
+    deps.resolve = async () => ['93.184.216.34'];
+    deps.enrichGet = async () => ({ status: 200, body: '{"mobile_phone":"48601000001","tresc":"Anna Kowalska"}' });
+    const integ = make(
+      { enrich: DOPYTANIE, to: { path: 'e.mobile_phone', fallback: [] }, text: { mode: 'path', path: 'e.tresc' } },
+      { storePayloads: 1 },
+    );
+    const out = await runInbound(deps, integ, { deal: { client: { id: 5 } } }, ip, NOW);
+    expect(out.kind).toBe('sent');
+    if (out.kind !== 'sent') return;
+    expect(deps.messages.get(out.messageIds[0]!)!.body).toBe('Anna Kowalska');
+    const wpis = deps.integrationEvents.list(integ.id, 1)[0]!;
+    expect(wpis.payload).toBe('{"deal":{"client":{"id":5}}}');
+  });
+});
 
 describe('runInbound', () => {
   it('wysyła na numer z ładunku i zapisuje wpis sent z adresem źródłowym', async () => {
