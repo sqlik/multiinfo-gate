@@ -21,7 +21,7 @@ describe('gotowe ustawienia', () => {
     expect(ids.at(-1)).toBe('custom');
     expect(presetById('uptime-kuma')?.name).toBe('Uptime Kuma');
     expect(presetById('brak')).toBeUndefined();
-    expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
+    expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'fakturownia', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
     expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'home-assistant', 'freescout', 'freshdesk', 'slack', 'ntfy', 'custom']);
   });
   it('każde ustawienie ma konfigurację dla każdego swojego rodzaju, instrukcję i sekrety ze wskazówką', () => {
@@ -165,6 +165,19 @@ describe('gotowe ustawienia', () => {
     const text = "Jan Nowak : <div>To jest odpowiedź klienta</div><div><br></div><div>----- Original message -----</div><div></div><div class='freshdesk_quote'><blockquote class='freshdesk_quote'><div>From: Support</div><div>Subject: Re: [#6541] Nie działa</div></blockquote></div>";
     const out = previewInbound(engine, config, { event: 'odpowiedz', ticket_id: '6541', text }, '48', NOW);
     expect(out.text).toBe('Odpowiedz klienta w #6541 - Jan Nowak : To jest odpowiedz klienta');
+  });
+
+  it('Fakturownia: webhook bez faktury jest pomijany, a wariant nieopłaconych odsiewa opłacone', () => {
+    const preset = presetById('fakturownia')!;
+    const config = (over: Partial<InboundConfig> = {}) => ({ ...defaultInboundConfig(), ...preset.inbound, ...over } as InboundConfig);
+    // Webhook zdarzenia klienta ma inny kształt: bez numeru faktury nie ma z czego złożyć SMS-a.
+    expect(previewInbound(engine, config(), { id: 276200905, app_name: 'fakturownia', locale: 'pl' }, '48', NOW).matches).toBe(false);
+
+    const nieoplacone = preset.simple!.inbound!.when.find((w) => w.id === 'tylko-nieoplacone')!;
+    const zWariantem = config({ condition: nieoplacone.condition });
+    expect(previewInbound(engine, zWariantem, preset.sample, '48', NOW).matches).toBe(true);
+    const oplacona = { ...(preset.sample as { deal: object }), deal: { ...(preset.sample as { deal: object }).deal, paid: true } };
+    expect(previewInbound(engine, zWariantem, oplacona, '48', NOW).matches).toBe(false);
   });
 
   it('ustawienie wysyłające do klienta końcowego niesie ostrzeżenie o nadawcy', () => {
