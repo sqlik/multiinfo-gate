@@ -103,7 +103,7 @@ function inboundSections(ctx: FormContext, sv: SimpleValues, opts: SimplePageOpt
     </details>
     <details open><summary>4. Co ma być w SMS-ie</summary>
       <div class="field"><div class="choices" style="flex-direction: column; gap: 10px;">${texts}</div>
-      <div class="hint">Przykłady policzone z prawdziwego zdarzenia z ${esc(ctx.preset.name)}; inną treść ustawisz w trybie zaawansowanym</div></div>
+      <div class="hint">Przykłady policzone z prawdziwego zdarzenia z aplikacji ${esc(ctx.preset.name.split(':')[0]!)}; inną treść ustawisz w trybie zaawansowanym</div></div>
     </details>
     <details open><summary>5. Zabezpieczenie</summary>${auth}</details>
     ${simple.enrich ? enrichFields(ctx, sv) : ''}`;

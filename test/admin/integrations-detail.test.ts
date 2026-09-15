@@ -127,6 +127,28 @@ describe('GET /integracje/:id', () => {
     expect(res.body).toContain(`action="/dostawy/${deliveryId}/ponow"`);
   });
 
+  it('szczegół ustawienia z dopytaniem mówi o tokenie w ładunku oraz o zapytaniu, bez kodu API w adresie', async () => {
+    const preset = presetById('fakturownia-klient')!;
+    const id = h.integrations.insert({
+      name: 'Faktury do klientów', kind: 'webhook_in', apiKeyId, serviceId: null, orig: null, preset: preset.id, enabled: 1,
+      config: {
+        ...defaultInboundConfig(), ...preset.inbound,
+        enrich: { ...preset.inbound!.enrich!, url: 'https://firma.fakturownia.pl/clients/{{ p.deal.client.external_ids.fakturownia }}.json' },
+      },
+      secrets: { payloadToken: 'tajne123', enrichToken: 'api456' }, storePayloads: 0, createdAt: NOW,
+    });
+    const res = await page(`/integracje/${id}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('token w polu api_token');
+    expect(res.body).not.toContain('tylko sekret w adresie');
+    expect(res.body).toContain('Zapytanie uzupełniające');
+    expect(res.body).toContain('https://firma.fakturownia.pl/clients/{{ p.deal.client.external_ids.fakturownia }}.json');
+    expect(res.body).toContain('bez odpowiedzi: pominięcie');
+    expect(res.body).not.toContain('api_token=');
+    expect(res.body).not.toContain('api456');
+    expect(res.body).not.toContain('tajne123');
+  });
+
   it('nieistniejąca integracja to 404', async () => {
     expect((await page('/integracje/999')).statusCode).toBe(404);
   });

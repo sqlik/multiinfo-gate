@@ -71,8 +71,10 @@ describe('runInbound: zapytanie uzupełniające', () => {
     deps.resolve = async () => ['93.184.216.34'];
     deps.enrichGet = async () => ({ status: 500, body: '{}' });
     const pomijaj = make({ ...zKartoteki, enrich: { ...DOPYTANIE, onError: 'skip' } });
-    expect(await runInbound(deps, pomijaj, { deal: { client: { id: 5 } } }, ip, NOW)).toEqual({ kind: 'skipped' });
+    expect(await runInbound(deps, pomijaj, { deal: { client: { id: 5 } } }, ip, NOW)).toEqual({ kind: 'skipped', reason: 'enrich' });
     expect(events(pomijaj.id)).toEqual(['skipped']);
+    // Adres w dzienniku czytelny dla administratora: klamry szablonu zostają klamrami, token odpada.
+    expect(deps.integrationEvents.list(pomijaj.id, 1)[0]!.reason).toContain('https://przyklad.test/clients/{{ p.deal.client.id }}.json');
 
     const zglaszaj = make({ ...zKartoteki, enrich: DOPYTANIE }, { name: 'Faktury' });
     const out = await runInbound(deps, zglaszaj, { deal: { client: { id: 5 } } }, ip, NOW);
