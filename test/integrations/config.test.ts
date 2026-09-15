@@ -20,4 +20,12 @@ describe('parseConfig', () => {
     expect(() => parseConfig('webhook_out', { ...outbound(), method: 'DELETE' })).toThrow();
     expect(() => parseConfig('webhook_out', { ...outbound(), headers: [{ name: '', value: 'x' }] })).toThrow();
   });
+  it('przyjmuje sekret w polu ładunku', () => {
+    const config = parseConfig('webhook_in', { ...defaultInboundConfig(), auth: { sources: [], payload: { path: 'api_token', valueRef: 'payloadToken' } } });
+    expect(config.auth.payload).toEqual({ path: 'api_token', valueRef: 'payloadToken' });
+  });
+  it('odrzuca sekret w polu ładunku z nieprawidłową ścieżką albo bez odniesienia', () => {
+    expect(() => parseConfig('webhook_in', { ...defaultInboundConfig(), auth: { sources: [], payload: { path: 'a..b', valueRef: 'payloadToken' } } })).toThrow();
+    expect(() => parseConfig('webhook_in', { ...defaultInboundConfig(), auth: { sources: [], payload: { path: 'api_token', valueRef: '' } } })).toThrow();
+  });
 });
