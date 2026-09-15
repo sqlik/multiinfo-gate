@@ -2,7 +2,7 @@ import type { IntegrationKind } from '../../integrations/config.ts';
 import type { Preset } from '../../integrations/presets/index.ts';
 import type { SimpleValues } from '../simple-form.ts';
 import { esc } from './layout.ts';
-import { guideHtml, hookPath, hookReveal, kindLabel, type CreatedHook, type FormContext } from './integrations.ts';
+import { guideHtml, hookPath, hookReveal, INBOUND_ENRICH_REF, kindLabel, type CreatedHook, type FormContext } from './integrations.ts';
 import { fullUrl } from './settings.ts';
 
 /** Co formularz prosty ma pokazać poza polami: błąd, świeży adres, podglądy wariantów treści. */
@@ -58,6 +58,28 @@ function secretField(ctx: FormContext, label: string, where: string): string {
     </div>`;
 }
 
+/**
+ * Dostęp do kartoteki: nazwa konta wchodzi w adres, pod który bramka zapyta o brakujące pole,
+ * a kod autoryzacyjny użytkownik kopiuje z aplikacji - stąd inna podpowiedź niż przy haśle webhooka.
+ */
+function enrichFields(ctx: FormContext, sv: SimpleValues): string {
+  const simple = ctx.preset.simple!.inbound!;
+  const enrich = simple.enrich!;
+  const zapisany = ctx.secretNames.includes(INBOUND_ENRICH_REF);
+  return `<details open><summary>6. Dostęp do kartoteki klienta</summary>
+    <div class="field">
+      <label for="account">${esc(enrich.account.label)}</label>
+      <input id="account" name="account" value="${esc(sv.account)}" placeholder="${esc(enrich.account.placeholder)}" style="max-width: 260px;" required>
+      <div class="hint">${esc(enrich.account.hint)}</div>
+    </div>
+    <div class="field">
+      <label for="enrichSecret">${esc(enrich.secretLabel)}</label>
+      <input id="enrichSecret" name="enrichSecret" type="password" autocomplete="off" placeholder="${zapisany ? 'zapisany - puste pole zostawia dotychczasowy' : 'wklej z aplikacji'}">
+      <div class="hint">Znajdziesz go ${esc(enrich.where)}. Bramka pyta nim o dane klienta. Zapisujemy go zaszyfrowanego; potem da się tylko ustawić nowy.</div>
+    </div>
+  </details>`;
+}
+
 function inboundSections(ctx: FormContext, sv: SimpleValues, opts: SimplePageOptions): string {
   const simple = ctx.preset.simple!.inbound!;
   const numbers = `<div class="field">
@@ -83,7 +105,8 @@ function inboundSections(ctx: FormContext, sv: SimpleValues, opts: SimplePageOpt
       <div class="field"><div class="choices" style="flex-direction: column; gap: 10px;">${texts}</div>
       <div class="hint">Przykłady policzone z prawdziwego zdarzenia z ${esc(ctx.preset.name)}; inną treść ustawisz w trybie zaawansowanym</div></div>
     </details>
-    <details open><summary>5. Zabezpieczenie</summary>${auth}</details>`;
+    <details open><summary>5. Zabezpieczenie</summary>${auth}</details>
+    ${simple.enrich ? enrichFields(ctx, sv) : ''}`;
 }
 
 function outboundSections(ctx: FormContext, sv: SimpleValues): string {

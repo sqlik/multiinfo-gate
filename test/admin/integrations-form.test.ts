@@ -120,6 +120,35 @@ describe('POST /integracje', () => {
     expect(h.integrations.list()).toHaveLength(0);
   });
 
+  it('zapytanie uzupełniające zapisuje się z tokenem w parametrze adresu, a pusta wartość zostawia zapisany', async () => {
+    const adres = 'https://firma.fakturownia.pl/clients/{{ p.deal.client.id }}.json';
+    const res = await post('/integracje', inboundFields({ enrichUrl: adres, enrichToken: 'api456', enrichOnError: 'skip' }));
+    expect(res.statusCode).toBe(200);
+    const row = h.integrations.list()[0]!;
+    const enrich = (row.config as InboundConfig).enrich;
+    expect(enrich).toMatchObject({ url: adres, method: 'GET', query: [{ name: 'api_token', valueRef: 'enrichToken' }], as: 'e', onError: 'skip' });
+    expect(h.integrations.secrets(row.id)).toMatchObject({ enrichToken: 'api456' });
+
+    const keep = await post(`/integracje/${row.id}/edytuj`, inboundFields({ enrichUrl: adres, enrichToken: '', enrichOnError: 'skip' }));
+    expect(keep.statusCode).toBe(302);
+    expect(h.integrations.secrets(row.id)).toMatchObject({ enrichToken: 'api456' });
+
+    // Pusty adres zdejmuje dopytanie i kasuje jego kod autoryzacyjny.
+    await post(`/integracje/${row.id}/edytuj`, inboundFields({ enrichUrl: '', enrichToken: '' }));
+    expect((h.integrations.get(row.id)!.config as InboundConfig).enrich).toBeUndefined();
+    expect(h.integrations.secrets(row.id).enrichToken).toBeUndefined();
+  });
+
+  it('zapytanie uzupełniające: błąd składni w adresie oraz brak kodu autoryzacyjnego to błędy formularza', async () => {
+    const zly = await post('/integracje', inboundFields({ enrichUrl: 'https://firma.fakturownia.pl/clients/{{ p.deal', enrichToken: 'x' }));
+    expect(zly.statusCode).toBe(400);
+    expect(zly.body).toContain('Adres zapytania uzupełniającego');
+    const bez = await post('/integracje', inboundFields({ enrichUrl: 'https://firma.fakturownia.pl/clients/5.json', enrichToken: '' }));
+    expect(bez.statusCode).toBe(400);
+    expect(bez.body).toContain('kod autoryzacyjny');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
   it('błąd składni szablonu wraca do formularza z komunikatem i numerem linii, bez zapisu', async () => {
     const res = await post('/integracje', inboundFields({ textTemplate: 'Awaria\n{{ p.monitor.name' }));
     expect(res.statusCode).toBe(400);

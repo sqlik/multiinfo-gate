@@ -12,6 +12,8 @@ export interface SimpleValues {
   name: string; apiKeyId: string; enabled: boolean;
   /** Przychodząca: numery (jeden na linię), wybory z list i hasło aplikacji. */
   numbers: string; whenId: string; textId: string; secret: string;
+  /** Dopytanie: nazwa konta w aplikacji (wchodzi w adres) oraz kod autoryzacyjny jej API. */
+  account: string; enrichSecret: string;
   /** Wychodząca: adres aplikacji, sekrety po odniesieniu i parametry po kluczu. */
   url: string; secrets: Record<string, string>; params: Record<string, string>;
 }
@@ -22,6 +24,7 @@ export function simpleValuesFromBody(body: Body, preset: Preset): SimpleValues {
   return {
     name: s('name'), apiKeyId: s('apiKeyId'), enabled: s('enabled') === '1',
     numbers: String(body.numbers ?? ''), whenId: s('whenId'), textId: s('textId'), secret: String(body.secret ?? '').trim(),
+    account: s('account'), enrichSecret: String(body.enrichSecret ?? '').trim(),
     url: s('url'),
     secrets: Object.fromEntries((out?.secrets ?? []).map((sec) => [sec.ref, String(body[`secret_${sec.ref}`] ?? '').trim()])),
     params: Object.fromEntries((out?.params ?? []).map((p) => [p.key, s(`param_${p.key}`)])),
@@ -36,11 +39,15 @@ export function simpleDefaults(preset: Preset, base: IntegrationFormValues, fres
   return {
     name: base.name, apiKeyId: base.apiKeyId, enabled: base.enabled,
     numbers: base.toFallback, whenId: detected?.whenId ?? inbound?.when[0]?.id ?? '', textId: detected?.textId ?? inbound?.text[0]?.id ?? '', secret: '',
+    account: detected?.account ?? '', enrichSecret: '',
     url: base.url, secrets: {}, params: paramsFromTemplate(preset, base.bodyTemplate),
   };
 }
 
 const paramPattern = (key: string) => new RegExp(`"${key}":\\s*("[^"]*"|\\d+)`);
+
+/** Nazwa konta wchodzi do adresu, pod który bramka sama zadzwoni - bez ukośnika, kropki i znaku zapytania. */
+const ACCOUNT_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 function paramsFromTemplate(preset: Preset, template: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -98,6 +105,18 @@ export function simpleToValues(kind: IntegrationKind, preset: Preset, sv: Simple
       v.authPayloadPath = auth.path;
       v.authPayloadValue = sv.secret;
     }
+    if (simple.enrich) {
+      const url = preset.inbound?.enrich?.url;
+      if (url === undefined) return fail('To ustawienie nie ma adresu zapytania uzupełniającego.');
+      const marker = simple.enrich.account.marker;
+      const konto = sv.account.trim();
+      if (konto === '') return fail(`Podaj: ${simple.enrich.account.label.toLowerCase()}.`);
+      if (!ACCOUNT_NAME.test(konto)) return fail(`${simple.enrich.account.label}: dozwolone są małe litery, cyfry oraz myślnik.`);
+      if (!url.includes(marker)) return fail('Adres zapytania nie ma miejsca na nazwę konta - zmień je w trybie zaawansowanym.');
+      v.enrichUrl = url.replaceAll(marker, konto);
+      v.enrichToken = sv.enrichSecret;
+      v.enrichOnError = preset.inbound?.enrich?.onError ?? 'error';
+    }
     return { ok: true, values: v };
   }
   const simple = preset.simple?.outbound;
@@ -124,7 +143,7 @@ export function simpleToValues(kind: IntegrationKind, preset: Preset, sv: Simple
   return { ok: true, values: v };
 }
 
-export interface SimpleDetected { whenId?: string; textId?: string; params?: Record<string, string> }
+export interface SimpleDetected { whenId?: string; textId?: string; params?: Record<string, string>; account?: string }
 
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
@@ -149,7 +168,18 @@ export function detectSimple(preset: Preset, kind: IntegrationKind, v: Integrati
     if (!authOk) return null;
     if (v.toPath !== (p.to?.path ?? '') || v.ticketRefPath !== (p.ticketRefPath ?? '') || v.eventIdPath !== (p.eventIdPath ?? '')) return null;
     if (v.textMode === 'liquid' && (v.maxParts !== String(p.maxParts ?? 1) || v.overflow !== (p.overflow ?? 'truncate'))) return null;
-    return { whenId: when.id, textId: text.id };
+    // Adres dopytania musi powstać z adresu ustawienia przez podmianę znacznika; własny adres to tryb zaawansowany.
+    let account: string | undefined;
+    if (simple.enrich) {
+      const czesci = (p.enrich?.url ?? '').split(simple.enrich.account.marker);
+      const przed = czesci[0] ?? '';
+      const po = czesci[1] ?? '';
+      if (czesci.length !== 2 || !v.enrichUrl.startsWith(przed) || !v.enrichUrl.endsWith(po)) return null;
+      account = v.enrichUrl.slice(przed.length, v.enrichUrl.length - po.length);
+      if (!ACCOUNT_NAME.test(account)) return null;
+      if (v.enrichOnError !== (p.enrich?.onError ?? 'error')) return null;
+    } else if (v.enrichUrl !== '') return null;
+    return { whenId: when.id, textId: text.id, ...(account === undefined ? {} : { account }) };
   }
   const simple = preset.simple?.outbound;
   const p = preset.outbound;

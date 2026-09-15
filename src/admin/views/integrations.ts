@@ -204,6 +204,7 @@ export interface IntegrationFormValues {
   conditionMode: 'builder' | 'liquid'; rules: RuleValues[]; conditionExpr: string;
   authHeaderName: string; authHeaderValue: string; authBasicUser: string; authBasicPass: string;
   authPayloadPath: string; authPayloadValue: string; sources: string;
+  enrichUrl: string; enrichToken: string; enrichOnError: 'error' | 'skip';
   toPath: string; toFallback: string; invalidRecipient: 'error' | 'skip'; ticketRefPath: string; eventIdPath: string;
   textMode: 'path' | 'liquid'; textPath: string; textTemplate: string; maxParts: string; overflow: 'truncate' | 'reject';
   events: string[]; url: string; method: string; headers: HeaderValues[]; bodyMode: 'json' | 'form' | 'text';
@@ -216,6 +217,8 @@ export interface IntegrationFormValues {
 export const INBOUND_TOKEN_REF = 'token';
 export const INBOUND_BASIC_REF = 'basicPass';
 export const INBOUND_PAYLOAD_REF = 'payloadToken';
+/** Kod autoryzacyjny API aplikacji, którą bramka dopytuje o brakujące pole. */
+export const INBOUND_ENRICH_REF = 'enrichToken';
 
 /** Przykładowe zdarzenie wychodzące - próbka dla integracji z SMS-a, gdy nie ma przechowanego ładunku. */
 export const OUTBOUND_SAMPLE = {
@@ -235,6 +238,7 @@ export function configToValues(kind: IntegrationKind, config: IntegrationConfig,
     authHeaderName: inbound.auth.header?.name ?? '', authHeaderValue: '', authBasicUser: inbound.auth.basic?.user ?? '', authBasicPass: '',
     authPayloadPath: inbound.auth.payload?.path ?? '', authPayloadValue: '',
     sources: inbound.auth.sources.join('\n'),
+    enrichUrl: inbound.enrich?.url ?? '', enrichToken: '', enrichOnError: inbound.enrich?.onError ?? 'error',
     toPath: inbound.to.path ?? '', toFallback: inbound.to.fallback.join('\n'), invalidRecipient: inbound.invalidRecipient,
     ticketRefPath: inbound.ticketRefPath ?? '', eventIdPath: inbound.eventIdPath ?? '',
     textMode: inbound.text.mode, textPath: inbound.text.mode === 'path' ? inbound.text.path : '',
@@ -499,6 +503,32 @@ function sectionCondition(v: IntegrationFormValues): string {
   </details>`;
 }
 
+function sectionEnrich(ctx: FormContext, v: IntegrationFormValues): string {
+  const zapisany = ctx.secretNames.includes(INBOUND_ENRICH_REF);
+  return `<details${v.enrichUrl === '' ? '' : ' open'}>
+    <summary>Zapytanie uzupełniające</summary>
+    <div class="hint" style="margin: 0 0 10px;">Bramka zapyta aplikację o dane, których nie ma w ładunku, na przykład o numer telefonu klienta. Odpowiedź wchodzi do szablonu pod <code>e</code>, a do ścieżek jako <code>e.pole</code></div>
+    <div class="field">
+      <label for="enrichUrl">Adres zapytania</label>
+      <input id="enrichUrl" name="enrichUrl" value="${esc(v.enrichUrl)}" placeholder="https://firma.aplikacja.pl/clients/{{ p.client_id }}.json">
+      <div class="hint">Szablon Liquid, tak jak treść. Puste pole wyłącza dopytanie</div>
+    </div>
+    <div class="field">
+      <label for="enrichToken">Kod autoryzacyjny API</label>
+      <input id="enrichToken" name="enrichToken" type="password" autocomplete="off" placeholder="${zapisany ? 'zapisany - puste zostawia dotychczasowy' : 'wartość z aplikacji'}">
+      <div class="hint">Bramka doda go do adresu jako parametr <code>api_token</code>. Zapisujemy zaszyfrowany; nie trafia ani do szablonu, ani do dziennika</div>
+    </div>
+    <div class="field">
+      <label for="enrichOnError">Gdy aplikacja nie odpowie</label>
+      <select id="enrichOnError" name="enrichOnError">
+        <option value="error"${v.enrichOnError === 'error' ? ' selected' : ''}>zgłoś błąd</option>
+        <option value="skip"${v.enrichOnError === 'skip' ? ' selected' : ''}>pomiń wiadomość</option>
+      </select>
+      <div class="hint">Pominięcie chroni webhooka przed wyłączeniem po stronie aplikacji, która liczy błędy dostarczenia</div>
+    </div>
+  </details>`;
+}
+
 function sectionRecipient(v: IntegrationFormValues): string {
   return `<details open>
     <summary>Odbiorca</summary>
@@ -659,7 +689,7 @@ export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, 
   const action = edit ? `/integracje/${ctx.row!.id}/edytuj` : '/integracje';
   const inbound = ctx.kind === 'webhook_in';
   const sections = inbound
-    ? [sectionBasics(ctx, v), sectionInput(ctx, v), sectionCondition(v), sectionRecipient(v), sectionTextInbound(ctx, v), sectionGuard(v)]
+    ? [sectionBasics(ctx, v), sectionInput(ctx, v), sectionCondition(v), sectionEnrich(ctx, v), sectionRecipient(v), sectionTextInbound(ctx, v), sectionGuard(v)]
     : [sectionBasics(ctx, v), sectionOutput(ctx, v), sectionCondition(v), sectionBodyOutbound(v), sectionGuard(v)];
 
   const address = edit && inbound && ctx.row!.hookId !== null && !opts.created ? `<div class="panel" style="max-width: 760px;">
