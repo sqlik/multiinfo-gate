@@ -4,6 +4,12 @@ import type { Preset } from './types.ts';
  * Paczka batch: dwa wywołania REST w jednym żądaniu. Pierwsze szuka kontaktu po numerze, drugie
  * zakłada zadanie i wiąże je z tym kontaktem przez `$result`. Bitrix nie ma jednego wywołania,
  * które zrobiłoby oba kroki, a drugie żądanie z bramki nie miałoby skąd wziąć identyfikatora.
+ *
+ * Sprawdzone na żywym portalu 2026-09-15: przy znalezionym kontakcie pole CRM zadania dostaje
+ * `C_<id>`. Przy pustym wyniku szukania Bitrix NIE podstawia nic, tylko zapisuje znacznik
+ * dosłownie - w interfejsie zadania nie widać z tego nic, bo nierozwiązanego elementu portal
+ * nie rysuje, ale w polu zostaje tekst. Instrukcja mówi o tym wprost, bo poprawić tego w paczce
+ * nie da się: batch nie ma warunków.
  */
 const BODY = [
   '{"halt":0,"cmd":{',
@@ -74,7 +80,9 @@ export const bitrix24: Preset = {
     '',
     '**Numer pracownika.** Zadania trafią na jedną osobę. Jej numer zobaczysz w adresie profilu w Bitrixie: przy `/company/personal/user/1/` numerem jest 1.',
     '',
-    '**Czego się spodziewać.** Zadanie ma w tytule numer nadawcy, w opisie treść SMS-a, a w polu CRM powiązanie z kontaktem. Gdy numer nie pasuje do żadnego kontaktu, zadanie powstaje bez powiązania i jest widoczne na liście zadań pracownika.',
+    '**Czego się spodziewać.** Zadanie ma w tytule numer nadawcy, w opisie treść SMS-a, a w polu CRM powiązanie z kontaktem. Gdy numer nie pasuje do żadnego kontaktu, zadanie powstaje bez powiązania i czeka na liście zadań pracownika.',
+    '',
+    '**Numery w kartotekach muszą mieć kod kraju.** Bitrix szuka kontaktu po numerze w takim zapisie, w jakim go dostaje, czyli u nas `+48601000001`. Kontakt z numerem `+48 601 000 001` zostanie znaleziony, bo Bitrix pomija spacje. Kontakt z samym `601 000 001`, bez kodu kraju, nie zostanie znaleziony i zadanie powstanie bez powiązania.',
     '',
     'Adres webhooka jest hasłem: kto go ma, ten czyta CRM i zakłada zadania. Trzymaj go wyłącznie w bramce. Gdy wyciekł, skasuj webhook w Bitrixie oraz zrób nowy.',
     '',
