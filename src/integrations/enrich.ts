@@ -10,6 +10,25 @@ export const READ_LIMIT = 256 * 1024;
 /** Nazwy zajęte w kontekście szablonu - pole `as` nie może ich przykryć. */
 const ZAJETE = new Set(['p', 'now', 'integration']);
 
+/** Wyrażenie szablonu w adresie; wszystko poza nim administrator wpisał sam. */
+const WYRAZENIE = /\{\{[^}]*\}\}|\{%[^%]*%\}/;
+
+/**
+ * Miejsce, w którym adres ma zostać: serwer oraz początek ścieżki wpisane wprost, do pierwszego
+ * wyrażenia. Wartość z ładunku ma adres uzupełnić, a nie przestawić go na inny serwer ani cofnąć
+ * ścieżki wyżej. `null` znaczy, że wyrażenie siedzi w schemacie albo w nazwie serwera, czego nie
+ * dopuszczamy w ogóle: podstawiona wartość decydowałaby wtedy, dokąd pojedzie kod autoryzacyjny.
+ */
+export function urlShape(url: string): { origin: string; prefix: string } | null {
+  const i = url.search(WYRAZENIE);
+  try {
+    const { origin, pathname } = new URL(i === -1 ? url : url.slice(0, i));
+    return { origin, prefix: pathname };
+  } catch {
+    return null;
+  }
+}
+
 export type EnrichResult =
   | { ok: true; value: unknown }
   | { ok: false; reason: string };
@@ -85,6 +104,13 @@ export async function enrich(opts: EnrichOptions): Promise<EnrichResult> {
   }
   if (adres.protocol !== 'https:' && adres.protocol !== 'http:') {
     return { ok: false, reason: 'adres zapytania musi zaczynać się od https:// albo http://' };
+  }
+  const shape = urlShape(config.url);
+  if (shape === null) {
+    return { ok: false, reason: 'adres zapytania ma wyrażenie w nazwie serwera - wpisz serwer wprost' };
+  }
+  if (adres.origin !== shape.origin || !adres.pathname.startsWith(shape.prefix)) {
+    return { ok: false, reason: 'adres zapytania wyszedł poza miejsce wpisane w ustawieniu' };
   }
 
   const headers: Record<string, string> = { Accept: 'application/json' };

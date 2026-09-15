@@ -163,6 +163,39 @@ describe('zapytanie uzupełniające', () => {
   });
 });
 
+describe('adres zapytania zostaje tam, gdzie go wpisano', () => {
+  const zapytaj = async (url: string, p: unknown) => {
+    const wywolania: string[] = [];
+    const out = await enrich({
+      config: { ...bazowa, url, query: [{ name: 'api_token', valueRef: 'token' }] },
+      secrets: { token: 'TOKEN-ADMINA' }, context: { p, now: '', integration: { name: 'proba' } },
+      engine, resolve: publiczny,
+      get: async (adres) => { wywolania.push(adres); return { status: 200, body: '{"ok":1}' }; },
+    });
+    return { out, wywolania };
+  };
+
+  it('odmawia, gdy wyrażenie siedzi w nazwie serwera', async () => {
+    // Inaczej wartość z ładunku przestawia żądanie na obcy serwer, a bramka dokleja do niego
+    // kod autoryzacyjny API administratora.
+    const { out, wywolania } = await zapytaj('https://{{ p.account }}.aplikacja.example/v1/x', { account: 'napastnik.example/?' });
+    expect(out.ok).toBe(false);
+    expect(wywolania).toHaveLength(0);
+  });
+
+  it('odmawia, gdy wartość z ładunku wyprowadza ścieżkę poza wpisaną', async () => {
+    const { out, wywolania } = await zapytaj('https://konto.fakturownia.pl/clients/{{ p.id }}.json', { id: '1/../../invoices' });
+    expect(out.ok).toBe(false);
+    expect(wywolania).toHaveLength(0);
+  });
+
+  it('zwykłe uzupełnienie ścieżki przechodzi', async () => {
+    const { out, wywolania } = await zapytaj('https://konto.fakturownia.pl/clients/{{ p.id }}.json', { id: '276200905' });
+    expect(out.ok).toBe(true);
+    expect(wywolania[0]).toBe('https://konto.fakturownia.pl/clients/276200905.json?api_token=TOKEN-ADMINA');
+  });
+});
+
 describe('httpGet: czytanie odpowiedzi', () => {
   /** Serwer, który odpowiada tak, jak każe `zachowanie`; zwraca adres oraz sprzątanie. */
   const serwer = async (zachowanie: Parameters<typeof createServer>[1]) => {

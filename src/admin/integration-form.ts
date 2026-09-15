@@ -2,6 +2,7 @@ import { RULE_OPS, type Rule, type RuleOp } from '../integrations/conditions.ts'
 import {
   OUTBOUND_EVENTS, parseConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type OutboundConfig, type OutboundEvent,
 } from '../integrations/config.ts';
+import { urlShape } from '../integrations/enrich.ts';
 import { isValidPath } from '../integrations/paths.ts';
 import { parseSourceEntry } from '../integrations/sources.ts';
 import type { TemplateEngine } from '../integrations/templates.ts';
@@ -148,17 +149,20 @@ export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, en
     if (v.enrichUrl !== '') {
       const problem = engine.validate(v.enrichUrl);
       if (problem !== null) return fail(`Adres zapytania uzupełniającego: ${problem}`);
-      // Kształt adresu sprawdzamy z klamrami zamienionymi na znak, bo odmowa ma przyjść przy
-      // zapisie, kiedy administrator na nią patrzy. Przy „pomiń wiadomość” zła konfiguracja znaczy
-      // inaczej, że aplikacja dostaje 200, wiadomości nie ma, a ślad jest tylko w dzienniku.
-      let adres: URL;
+      // Kształt adresu sprawdzamy już tutaj, bo odmowa ma przyjść przy zapisie, kiedy administrator
+      // na nią patrzy. Przy „pomiń wiadomość” zła konfiguracja znaczy inaczej, że aplikacja dostaje
+      // 200, wiadomości nie ma, a ślad jest tylko w dzienniku.
+      let caly: URL;
       try {
-        adres = new URL(v.enrichUrl.replace(/\{\{[^}]*\}\}|\{%[^%]*%\}/g, 'x'));
+        caly = new URL(v.enrichUrl.replace(/\{\{[^}]*\}\}|\{%[^%]*%\}/g, 'x'));
       } catch {
         return fail('Adres zapytania uzupełniającego: podaj pełny adres, razem z https:// na początku.');
       }
-      if (adres.protocol !== 'https:' && adres.protocol !== 'http:') {
+      if (caly.protocol !== 'https:' && caly.protocol !== 'http:') {
         return fail('Adres zapytania uzupełniającego: musi zaczynać się od https:// albo http://.');
+      }
+      if (urlShape(v.enrichUrl) === null) {
+        return fail('Adres zapytania uzupełniającego: nazwę serwera wpisz wprost. Pola z ładunku wstawiaj dopiero dalej, w ścieżce, bo inaczej to nadawca ładunku decyduje, dokąd bramka wyśle kod autoryzacyjny.');
       }
       if (v.enrichToken !== '') secrets[INBOUND_ENRICH_REF] = v.enrichToken;
       else if (existing.names.includes(INBOUND_ENRICH_REF)) carried[INBOUND_ENRICH_REF] = INBOUND_ENRICH_REF;

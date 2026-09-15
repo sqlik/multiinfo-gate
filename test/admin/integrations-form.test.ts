@@ -163,6 +163,14 @@ describe('POST /integracje', () => {
     expect(h.integrations.list()).toHaveLength(1);
   });
 
+  it('zapytanie uzupełniające: wyrażenie w nazwie serwera odpada przy zapisie', async () => {
+    // Wartość z ładunku decydowałaby, dokąd pojedzie kod autoryzacyjny API administratora.
+    const res = await post('/integracje', inboundFields({ enrichUrl: 'https://{{ p.account }}.aplikacja.pl/clients/5.json', enrichToken: 'x' }));
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('nazw');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
   it('błąd składni szablonu wraca do formularza z komunikatem i numerem linii, bez zapisu', async () => {
     const res = await post('/integracje', inboundFields({ textTemplate: 'Awaria\n{{ p.monitor.name' }));
     expect(res.statusCode).toBe(400);
