@@ -38,7 +38,7 @@ export const fakturowniaKlient: Preset = {
     text: TEKST,
     auth: { sources: [], payload: { path: 'api_token', valueRef: 'payloadToken' } },
     enrich: {
-      url: `https://${ZNACZNIK_KONTA}.fakturownia.pl/clients/{{ p.deal.client.external_ids.fakturownia }}.json`,
+      url: `https://${ZNACZNIK_KONTA}.fakturownia.pl/clients/{{ p.deal.client.external_ids.fakturownia | url_encode }}.json`,
       method: 'GET', headers: [], query: [{ name: 'api_token', valueRef: 'enrichToken' }],
       // Kartoteka bez komórki albo chwilowa niedostępność aplikacji ma pominąć fakturę, a nie zgłosić błąd:
       // Fakturownia wyłącza webhooka po serii nieudanych dostarczeń.

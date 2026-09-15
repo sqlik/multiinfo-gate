@@ -516,7 +516,8 @@ function sectionEnrich(ctx: FormContext, v: IntegrationFormValues): string {
     <div class="field">
       <label for="enrichUrl">Adres zapytania</label>
       <input id="enrichUrl" name="enrichUrl" value="${esc(v.enrichUrl)}" placeholder="https://firma.aplikacja.pl/clients/{{ p.client_id }}.json">
-      <div class="hint">Szablon Liquid, tak jak treść. Puste pole wyłącza dopytanie</div>
+      <div class="hint">Szablon Liquid, tak jak treść. Wartość z ładunku wstawiaj przez <code>{{ p.pole | url_encode }}</code>,
+        żeby ukośnik albo znak zapytania w niej nie przestawił adresu na inną końcówkę aplikacji. Puste pole wyłącza dopytanie</div>
     </div>
     <div class="field">
       <label for="enrichToken">Kod autoryzacyjny API</label>

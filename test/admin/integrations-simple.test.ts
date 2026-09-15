@@ -205,7 +205,7 @@ describe('tryb prosty: wychodząca', () => {
     expect(res.statusCode).toBe(200);
     const row = h.integrations.list()[0]!;
     const config = row.config as InboundConfig;
-    expect(config.enrich?.url).toBe('https://firma.fakturownia.pl/clients/{{ p.deal.client.external_ids.fakturownia }}.json');
+    expect(config.enrich?.url).toBe('https://firma.fakturownia.pl/clients/{{ p.deal.client.external_ids.fakturownia | url_encode }}.json');
     expect(config.enrich?.query).toEqual([{ name: 'api_token', valueRef: 'enrichToken' }]);
     expect(config.auth.payload).toEqual({ path: 'api_token', valueRef: 'payloadToken' });
     expect(config.to.path).toBe('e.mobile_phone');
