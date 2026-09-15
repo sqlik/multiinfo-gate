@@ -4,24 +4,34 @@ import { silentLogger, type Logger } from '../log.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { IntegrationEventInput, IntegrationEventsRepo } from '../store/integration-events.ts';
 import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
-import type { IntegrationRow } from '../store/integrations.ts';
+import type { IntegrationRow, IntegrationsRepo } from '../store/integrations.ts';
 import { measureText } from '../text/measure.ts';
 import { InvalidPhoneError, normalizeRecipient, splitRecipients, TooManyRecipientsError } from '../text/phone.ts';
 import { segmentText, TooManyPartsError } from '../text/segment.ts';
 import type { InboundConfig } from './config.ts';
 import { matches } from './conditions.ts';
+import { enrich, safeUrl, type EnrichGet } from './enrich.ts';
 import { readPath } from './paths.ts';
 import { TemplateEngine, TemplateError } from './templates.ts';
+import type { Resolver } from '../net/private-address.ts';
 
 export interface PipelineDeps extends SubmitDeps {
   apiKeys: ApiKeysRepo;
+  /** Sekrety integracji - zapytanie uzupełniające podstawia je poza szablonem. */
+  integrations: IntegrationsRepo;
   integrationEvents: IntegrationEventsRepo;
   guards: IntegrationGuardsRepo;
   engine: TemplateEngine;
+  /** Wysyłka zapytania uzupełniającego; testy podstawiają atrapę, produkcja bierze `httpGet`. */
+  enrichGet?: EnrichGet;
+  /** Rozwiązywanie nazwy celu zapytania uzupełniającego; testy podstawiają atrapę. */
+  resolve?: Resolver;
+  /** MIG_WEBHOOK_ALLOW_PRIVATE: zgoda na pytanie aplikacji w sieci wewnętrznej. */
+  allowPrivateWebhooks?: boolean;
   log?: Logger;
 }
 
-export type InboundErrorCode = 'empty_text' | 'no_recipient' | 'invalid_phone' | 'too_many_recipients' | 'too_many_parts' | 'template' | 'service';
+export type InboundErrorCode = 'empty_text' | 'no_recipient' | 'invalid_phone' | 'too_many_recipients' | 'too_many_parts' | 'template' | 'enrich' | 'service';
 
 export type InboundOutcome =
   | { kind: 'sent'; messageIds: string[] }
@@ -74,6 +84,16 @@ function rawRecipients(config: InboundConfig, payload: unknown, threadSender: st
   if (fromPayload.length > 0) return { list: fromPayload, fromPayload: true };
   if (threadSender !== null) return { list: [threadSender], fromPayload: false };
   return { list: config.to.fallback, fromPayload: false };
+}
+
+/**
+ * Ładunek widziany przez ścieżki po dopytaniu: odpowiedź aplikacji siada w nim pod nazwą z `as`,
+ * dzięki czemu `to.path` oraz tryb ścieżki czytają ją tak samo jak szablon czyta `{{ e.pole }}`.
+ * Ładunek, który nie jest obiektem, zostaje bez zmian - nie ma do czego dopisać.
+ */
+function withEnriched(payload: unknown, as: string, value: unknown): unknown {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return payload;
+  return { ...payload, [as]: value };
 }
 
 /** Przycięcie do `maxParts` części tym samym licznikiem, którym API dzieli wiadomości. */
@@ -178,8 +198,28 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
       note('throttled', { reason: `ponad ${config.throttle.limit} w ${config.throttle.windowMinutes} min` });
       return { kind: 'throttled', notify: gate.notify };
     }
+    // Dopytanie dopiero tutaj: odsiane, zduplikowane oraz zdławione zdarzenie nie zajmuje aplikacji.
+    if (config.enrich) {
+      const wynik = await enrich({
+        config: config.enrich, secrets: deps.integrations.secrets(integration.id), context, engine: deps.engine,
+        ...(deps.resolve ? { resolve: deps.resolve } : {}),
+        ...(deps.enrichGet ? { get: deps.enrichGet } : {}),
+        ...(deps.allowPrivateWebhooks ? { allowPrivate: true } : {}),
+      });
+      if (!wynik.ok) {
+        // Adres bez części zapytania: tam siedzi token do aplikacji.
+        const opis = `dopytanie ${safeUrl(config.enrich.url)}: ${wynik.reason}`;
+        if (config.enrich.onError === 'skip') {
+          note('skipped', { reason: opis });
+          return { kind: 'skipped' };
+        }
+        return fail('enrich', opis);
+      }
+      context[config.enrich.as] = wynik.value;
+      context.p = withEnriched(payload, config.enrich.as, wynik.value);
+    }
     text = renderInboundText(deps.engine, config, context);
-    recipients = rawRecipients(config, payload, original?.sender ?? null);
+    recipients = rawRecipients(config, context.p, original?.sender ?? null);
   } catch (e) {
     if (e instanceof TemplateError) return fail('template', e.message);
     if (e instanceof TooManyRecipientsError) return fail('too_many_recipients', e.message);
