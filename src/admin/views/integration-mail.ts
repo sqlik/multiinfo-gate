@@ -5,7 +5,7 @@ import type { MailFieldValues, MailFormValues } from '../mail-form.ts';
 import { checkbox, guideHtml, intervalWords, kindLabel, radio, ruleRows, sectionBasics, sectionGuard, textarea, type FormContext } from './integrations.ts';
 import { esc } from './layout.ts';
 
-export type MailConnection = Awaited<ReturnType<typeof checkMailbox>> | 'unavailable';
+export type MailConnection = Awaited<ReturnType<typeof checkMailbox>>;
 
 export interface MailFormOptions {
   mode: 'prosty' | 'zaawansowany';
@@ -246,7 +246,6 @@ function sectionSample(v: MailFormValues): string {
 }
 
 function connectionPanel(c: MailConnection): string {
-  if (c === 'unavailable') return '<div class="panel" style="max-width: 760px;"><div class="warn">Sprawdzanie połączenia niedostępne w tym środowisku</div></div>';
   if (c.ok) {
     const folders = c.folders.map((f) => `<button class="btn btn-s" type="button" data-fill="#folder" data-value="${esc(f)}" style="padding: 3px 9px; font-size: 12px;">${esc(f)}</button>`).join(' ');
     return `<div class="panel" style="max-width: 760px;">

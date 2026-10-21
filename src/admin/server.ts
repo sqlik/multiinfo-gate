@@ -73,7 +73,7 @@ export interface AdminDeps {
   /** Stan skrzynek pocztowych: formularz skrzynki, lista, szczegóły, kafelek przeglądu. */
   mailIn?: MailInRepo;
   /** Połączenie ze skrzynką do „Sprawdź połączenie”; testy podstawiają podróbkę. */
-  mailboxConnect?: MailboxConnect;
+  mailboxConnect: MailboxConnect;
   /** Silnik szablonów do „Sprawdź szablon” i walidacji przy zapisie. */
   engine: TemplateEngine;
   notifications: NotificationsRepo;

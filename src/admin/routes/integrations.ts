@@ -254,6 +254,17 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     ? mailConfigToValues(row.config as MailInConfig, { name: row.name, apiKeyId: String(row.apiKeyId), serviceId: row.serviceId ?? '', orig: row.orig ?? '', enabled: row.enabled === 1, preset: row.preset, storePayloads: row.storePayloads === 1 })
     : mailConfigToValues({ ...defaultMailInConfig(), ...preset.mailIn }, { name: preset.id === 'poczta-wlasny' ? '' : preset.name, apiKeyId: '', serviceId: '', orig: '', enabled: true, preset: preset.id, storePayloads: false }));
 
+  /** Trzy pola próbki z ładunku wpisu dziennika skrzynki (JSON z `runMailIn`); ładunek spoza tego kształtu daje pustą próbkę. */
+  const mailSampleOf = (payload: string): Pick<MailFormValues, 'sampleFrom' | 'sampleSubject' | 'sampleText'> | null => {
+    try {
+      const p = JSON.parse(payload) as Record<string, unknown>;
+      const str = (k: string): string => (typeof p[k] === 'string' ? (p[k] as string) : '');
+      return { sampleFrom: str('from'), sampleSubject: str('subject'), sampleText: str('text_full') };
+    } catch {
+      return null;
+    }
+  };
+
   /** Tryb formularza skrzynki: prosty, chyba że konfiguracja używa pól zaawansowanych albo proszono o zaawansowany. */
   const mailModeOf = (tryb: string | undefined, config: MailInConfig | null): { mode: MailFormOptions['mode']; note?: string } => {
     if (tryb === 'zaawansowany') return { mode: 'zaawansowany' };
@@ -302,9 +313,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
 
     if (action === 'polaczenie') {
       const password = built.password ?? (row ? deps.integrations.secrets(row.id)[MAIL_IN_PASSWORD_REF] ?? '' : '');
-      const connection: MailConnection = deps.mailboxConnect
-        ? await checkMailbox(deps.mailboxConnect, { ...built.config.imap, password }, built.config.folder)
-        : 'unavailable';
+      const connection: MailConnection = await checkMailbox(deps.mailboxConnect, { ...built.config.imap, password }, built.config.folder);
       return mailPage(request, ctx, v, { mode, connection, warnings });
     }
     if (action === 'sprawdz') {
@@ -458,8 +467,11 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const preset = presetOf(row);
     if (row.kind === 'mail_in') {
       const config = row.config as MailInConfig;
-      const mode = mailModeOf(request.query.tryb, config);
-      return mailPage(request, formContext('mail_in', preset, row), mailValuesOf(preset, row), { ...mode, warnings: mailWarnings(config) });
+      // Próbka z dziennika: ładunek wpisu (nadawca, temat, treść) wchodzi w trzy pola próbki, tryb zaawansowany.
+      const fromEvent = request.query.probka === undefined ? undefined : deps.integrationEvents.get(Number(request.query.probka));
+      const sample = fromEvent && fromEvent.integrationId === row.id && fromEvent.payload !== null ? mailSampleOf(fromEvent.payload) : null;
+      const mode = mailModeOf(sample === null ? request.query.tryb : 'zaawansowany', config);
+      return mailPage(request, formContext('mail_in', preset, row), { ...mailValuesOf(preset, row), ...sample }, { ...mode, warnings: mailWarnings(config) });
     }
     const values = valuesOf(row, null);
     const mode = modeOf(request.query.probka === undefined ? request.query.tryb : 'zaawansowany', preset, row.kind, values);

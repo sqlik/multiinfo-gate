@@ -114,7 +114,7 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
-    integrationEvents, guards, mailIn, engine, notifications, settings, notifier, mailer: nodemailerMailer,
+    integrationEvents, guards, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate,
   });
 
