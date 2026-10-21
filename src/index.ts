@@ -75,7 +75,7 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const notifier = new Notifier({ notifications, jobs, log });
   const scanner = new NotificationScanner({
     accounts, inboundServices, messages, inbound, integrations, deliveries, notifications, notifier, jobs, log,
-    release: () => pendingRelease(settings),
+    release: () => pendingRelease(settings), mailIn,
   });
   const releases = new ReleaseChecker({ settings, notifier, log, enabled: config.updateCheck });
   const integrationEmit = { integrations, integrationEvents, guards, deliveries, jobs, engine, notifier, log };
@@ -114,7 +114,7 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
-    integrationEvents, guards, engine, notifications, settings, notifier, mailer: nodemailerMailer,
+    integrationEvents, guards, mailIn, engine, notifications, settings, notifier, mailer: nodemailerMailer,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate,
   });
 

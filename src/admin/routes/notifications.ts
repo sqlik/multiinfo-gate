@@ -160,6 +160,10 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps
         const afterMinutes = intIn(raw.afterMinutes_inbound_failure, 1, 1440, 15);
         if (afterMinutes === null) return fail('Awaria odbioru: liczba minut od 1 do 1440.');
         params = { afterMinutes };
+      } else if (event === 'mailbox_failure') {
+        const afterMinutes = intIn(raw.afterMinutes_mailbox_failure, 1, 1440, 15);
+        if (afterMinutes === null) return fail('Awaria skrzynki pocztowej: liczba minut od 1 do 1440.');
+        params = { afterMinutes };
       } else if (event === 'daily_summary') {
         const hour = intIn(raw.hour_daily_summary, 0, 23, 8);
         if (hour === null) return fail('Podsumowanie dzienne: godzina od 0 do 23.');
