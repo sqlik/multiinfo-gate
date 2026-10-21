@@ -143,6 +143,21 @@ describe('MailInPoller: próg i zaległe', () => {
     expect(events(integ.id)[0]![0]).toBe('sent');
   });
 
+  it('podrobiony From z listy bez SPF/DKIM też nie zatruwa deduplikacji po Message-ID', async () => {
+    integrations.setEnabled(integ.id, false, NOW);
+    integ = make({ requireAuthResults: true });
+    await poller.tick(NOW);
+    box.add({ uid: 2, seen: false, source: eml('ups@przyklad.test', 'Podszycie', 'x', '<ups-18@ups.local>') });
+    await poller.tick(at(60_000));
+    expect(smsCount()).toBe(0);
+    expect(events(integ.id)[0]).toEqual(['skipped', 'brak potwierdzenia SPF/DKIM od serwera']);
+    const auth = 'Authentication-Results: mx.przyklad.test; dkim=pass header.d=przyklad.test\r\n';
+    box.add({ uid: 3, seen: false, source: eml('ups@przyklad.test', 'Alarm', 'ON BATTERY', '<ups-18@ups.local>').replace('From:', `${auth}From:`) });
+    await poller.tick(at(120_000));
+    expect(smsCount()).toBe(1);
+    expect(events(integ.id)[0]![0]).toBe('sent');
+  });
+
   it('za duży mail jest pomijany bez pobierania treści, ale podlega działaniu po przetworzeniu', async () => {
     await poller.tick(NOW);
     box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', 'Duży', 'x', '<2@x>'), size: MAX_MAIL_BYTES + 1 });
