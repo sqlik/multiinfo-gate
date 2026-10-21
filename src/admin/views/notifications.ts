@@ -53,6 +53,8 @@ function paramsCell(rule: RuleRow, raw: Record<string, string> | null | undefine
       return cell(`<input class="cell" name="days_certificate_expiring" value="${val('days_certificate_expiring', numbersText(rule.params.days))}"${disabled}>`, 'dni przed wygaśnięciem, mail raz na każdy próg');
     case 'inbound_failure':
       return cell(`<input class="cell" name="afterMinutes_inbound_failure" type="number" min="1" max="1440" value="${val('afterMinutes_inbound_failure', String(rule.params.afterMinutes ?? 15))}"${disabled}>`, 'po ilu minutach');
+    case 'mailbox_failure':
+      return cell(`<input class="cell" name="afterMinutes_mailbox_failure" type="number" min="1" max="1440" value="${val('afterMinutes_mailbox_failure', String(rule.params.afterMinutes ?? 15))}"${disabled}>`, 'po ilu minutach; logowanie odrzucone od razu');
     case 'daily_summary':
       return cell(`<input class="cell" name="hour_daily_summary" type="number" min="0" max="23" value="${val('hour_daily_summary', String(rule.params.hour ?? 8))}"${disabled}>`, 'o której godzinie');
     default:

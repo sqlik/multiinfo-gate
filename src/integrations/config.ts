@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { RULE_OPS } from './conditions.ts';
 import { isValidPath } from './paths.ts';
 
-export type IntegrationKind = 'webhook_in' | 'webhook_out';
-export const INTEGRATION_KINDS: IntegrationKind[] = ['webhook_in', 'webhook_out'];
+export type IntegrationKind = 'webhook_in' | 'webhook_out' | 'mail_in';
+export const INTEGRATION_KINDS: IntegrationKind[] = ['webhook_in', 'webhook_out', 'mail_in'];
 
 export const OUTBOUND_EVENTS = ['message.received', 'message.sent', 'message.delivered', 'message.failed'] as const;
 export type OutboundEvent = (typeof OUTBOUND_EVENTS)[number];
@@ -88,14 +88,75 @@ export const outboundConfigSchema = z.object({
 });
 export type OutboundConfig = z.infer<typeof outboundConfigSchema>;
 
-export type IntegrationConfig = InboundConfig | OutboundConfig;
+/** Nazwa sekretu z hasłem IMAP w `secrets_enc`. */
+export const MAIL_IN_PASSWORD_REF = 'imap_password';
+/** Dopuszczalne częstotliwości odpytywania skrzynki w sekundach; dolna granica 30 s chroni przed odcięciem przez dostawcę. */
+export const MAIL_IN_INTERVALS = [30, 60, 120, 300, 900, 1800, 3600] as const;
+export type MailInInterval = (typeof MAIL_IN_INTERVALS)[number];
+export const MAIL_SECURITIES = ['tls', 'starttls', 'none'] as const;
+export type MailSecurity = (typeof MAIL_SECURITIES)[number];
+
+/** Pozycja listy nadawców: pełny adres albo cała domena z wiodącą małpą. */
+const senderPattern = z.string().min(3).max(254).regex(/^(@[^@\s]+\.[^@\s]+|[^@\s]+@[^@\s]+\.[^@\s]+)$/, 'adres albo @domena');
+const fieldName = z.string().regex(/^[a-z][a-z0-9_]{0,39}$/);
+const compiles = (pattern: string): boolean => { try { new RegExp(pattern); return true; } catch { return false; } };
+const phrase = z.string().min(1).max(200);
+
+/** Wycinek z treści maila: tekst po frazie do frazy albo końca linii, albo wyrażenie regularne (do 200 znaków). */
+export const mailFieldSchema = z.discriminatedUnion('mode', [
+  z.object({ name: fieldName, mode: z.literal('between'), after: phrase, until: phrase.optional() }),
+  z.object({ name: fieldName, mode: z.literal('regex'), pattern: z.string().min(1).max(200).refine(compiles, 'wzorzec się nie kompiluje'), flags: z.string().regex(/^[im]{0,2}$/).optional() }),
+]);
+export type MailField = z.infer<typeof mailFieldSchema>;
+
+/**
+ * Skrzynka pocztowa czytana przez IMAP. Pusty `host` i `user` przechodzą celowo, jak pusty `url`
+ * w wychodzącej: formularz ich wymaga, a domyślna konfiguracja musi być poprawna.
+ */
+export const mailInConfigSchema = z.object({
+  ...common,
+  imap: z.object({
+    host: z.string().max(253),
+    port: z.number().int().min(1).max(65535),
+    security: z.enum(MAIL_SECURITIES),
+    verifyCert: z.boolean(),
+    user: z.string().max(254),
+    passRef: z.literal(MAIL_IN_PASSWORD_REF),
+  }),
+  folder: z.string().min(1).max(200),
+  intervalSec: z.number().int().refine((n): n is MailInInterval => (MAIL_IN_INTERVALS as readonly number[]).includes(n), 'częstotliwość spoza listy'),
+  senders: z.array(z.object({ pattern: senderPattern, recipients: z.array(z.string().min(1)).max(50) })).max(100),
+  requireAuthResults: z.boolean(),
+  recipientsFromMail: z.object({ enabled: z.boolean(), where: z.enum(['subject', 'body']) }),
+  to: z.object({ fallback: z.array(z.string().min(1)).max(50) }),
+  clean: z.object({ cutFrom: z.array(phrase).max(10) }),
+  fields: z.array(mailFieldSchema).max(20),
+  text: z.discriminatedUnion('mode', [
+    z.object({ mode: z.literal('simple'), variant: z.enum(['subject_text', 'subject', 'text']) }),
+    z.object({ mode: z.literal('liquid'), template: z.string().max(4000) }),
+  ]),
+  maxParts: z.number().int().min(1).max(9),
+  overflow: z.enum(['truncate', 'reject']),
+  after: z.discriminatedUnion('action', [
+    z.object({ action: z.literal('keep') }),
+    z.object({ action: z.literal('delete') }),
+    z.object({ action: z.literal('move'), folder: z.string().min(1).max(200) }),
+  ]),
+  reply: z.object({ enabled: z.boolean() }),
+});
+export type MailInConfig = z.infer<typeof mailInConfigSchema>;
+
+export type IntegrationConfig = InboundConfig | OutboundConfig | MailInConfig;
 export type IntegrationSecrets = Record<string, string>;
 
 export function parseConfig(kind: 'webhook_in', raw: unknown): InboundConfig;
 export function parseConfig(kind: 'webhook_out', raw: unknown): OutboundConfig;
+export function parseConfig(kind: 'mail_in', raw: unknown): MailInConfig;
 export function parseConfig(kind: IntegrationKind, raw: unknown): IntegrationConfig;
 export function parseConfig(kind: IntegrationKind, raw: unknown): IntegrationConfig {
-  return kind === 'webhook_in' ? inboundConfigSchema.parse(raw) : outboundConfigSchema.parse(raw);
+  if (kind === 'webhook_in') return inboundConfigSchema.parse(raw);
+  if (kind === 'mail_in') return mailInConfigSchema.parse(raw);
+  return outboundConfigSchema.parse(raw);
 }
 
 export const defaultInboundConfig = (): InboundConfig => ({
@@ -108,4 +169,13 @@ export const defaultInboundConfig = (): InboundConfig => ({
 export const defaultOutboundConfig = (): OutboundConfig => ({
   condition: { mode: 'builder', rules: [] }, throttle: { limit: 10, windowMinutes: 10 }, eventLogLimit: 200,
   events: ['message.received'], url: '', method: 'POST', headers: [], body: { mode: 'json', template: '' }, sign: false,
+});
+
+/** Wartości po bezpiecznej stronie: TLS, pusta lista nadawców (nikt), numery z maila i odpowiedzi wyłączone, mail zostaje w skrzynce. */
+export const defaultMailInConfig = (): MailInConfig => ({
+  condition: { mode: 'builder', rules: [] }, throttle: { limit: 10, windowMinutes: 10 }, eventLogLimit: 200,
+  imap: { host: '', port: 993, security: 'tls', verifyCert: true, user: '', passRef: MAIL_IN_PASSWORD_REF },
+  folder: 'INBOX', intervalSec: 60, senders: [], requireAuthResults: false,
+  recipientsFromMail: { enabled: false, where: 'subject' }, to: { fallback: [] }, clean: { cutFrom: [] }, fields: [],
+  text: { mode: 'simple', variant: 'subject_text' }, maxParts: 1, overflow: 'truncate', after: { action: 'keep' }, reply: { enabled: false },
 });

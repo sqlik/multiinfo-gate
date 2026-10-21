@@ -1,0 +1,16 @@
+From: NAS <nas@przyklad.test>
+To: bramka@przyklad.test
+Subject: Raport dysku
+Date: Mon, 20 Oct 2026 09:20:00 +0200
+Message-ID: <nas-1@przyklad.test>
+Authentication-Results: mx.przyklad.test; spf=pass smtp.mailfrom=przyklad.test; dkim=pass header.d=przyklad.test
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="granica1"
+
+--granica1
+Content-Type: application/pdf; name="raport.pdf"
+Content-Disposition: attachment; filename="raport.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKJcOkw7zDtsOfCjEgMCBvYmoKPDwvVHlwZS9DYXRhbG9nPj4KZW5kb2JqCg==
+--granica1--

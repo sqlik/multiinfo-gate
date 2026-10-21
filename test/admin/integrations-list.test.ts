@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { defaultInboundConfig, defaultOutboundConfig } from '../../src/integrations/config.ts';
+import { defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig } from '../../src/integrations/config.ts';
 import { presetById } from '../../src/integrations/presets/index.ts';
 import { guideHtml } from '../../src/admin/views/integrations.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
@@ -28,6 +28,41 @@ function seedInbound(name = 'Kuma produkcja'): number {
     config: { ...defaultInboundConfig(), ...preset.inbound }, secrets: { token: 'Bearer x' }, storePayloads: 0, createdAt: NOW,
   });
 }
+
+function seedMailbox(name: string, enabled: 0 | 1 = 1): number {
+  return h.integrations.insert({
+    name, kind: 'mail_in', apiKeyId, serviceId: null, orig: null, preset: 'poczta-wlasny', enabled,
+    config: defaultMailInConfig(), secrets: { imap_password: 'x' }, storePayloads: 0, createdAt: NOW,
+  });
+}
+
+describe('GET /integracje - skrzynki', () => {
+  it('skrzynka na liście ma rodzaj „z poczty” i stan: sprawdzono, błąd albo wyłączona; filtr rodzaj=mail', async () => {
+    const ok = seedMailbox('Poczta OK');
+    const bad = seedMailbox('Poczta zła');
+    const off = seedMailbox('Poczta wyłączona', 0);
+    const fresh = seedMailbox('Poczta nowa');
+    h.mailIn.ensureState(ok, NOW);
+    h.mailIn.recordPoll(ok, { ok: true, uidvalidity: 7, unseen: 0, at: new Date(NOW.getTime() - 120_000), nextPollAt: NOW });
+    h.mailIn.ensureState(bad, NOW);
+    h.mailIn.recordPoll(bad, { ok: false, error: 'LOGIN failed', errorKind: 'auth', at: new Date('2026-08-25T11:05:00Z'), nextPollAt: NOW });
+    h.mailIn.ensureState(off, NOW);
+    h.mailIn.ensureState(fresh, NOW);
+    seedInbound();
+    const res = await page('/integracje?rodzaj=mail');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('z poczty');
+    expect(res.body).not.toContain('Kuma produkcja');
+    expect(res.body).toContain('sprawdzono 2 min temu');
+    expect(res.body).toContain('błąd od 13:05');
+    expect(res.body).toContain('wyłączona');
+    expect(res.body).toContain('czeka na pierwsze sprawdzenie');
+    expect(res.body).toContain('Z poczty');
+    const all = await page('/integracje');
+    expect(all.body).toContain('Kuma produkcja');
+    expect(all.body).toContain('sprawdzono 2 min temu');
+  });
+});
 
 describe('GET /integracje', () => {
   it('pokazuje listę z rodzajem, ustawieniem, kluczem i stanem', async () => {

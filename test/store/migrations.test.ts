@@ -12,6 +12,14 @@ describe('migracja 006', () => {
     expect(cols('messages')).toContain('integration_id');
     expect(cols('inbound_messages')).toEqual(expect.arrayContaining(['external_ref', 'external_integration_id']));
     expect(cols('webhook_deliveries')).toEqual(expect.arrayContaining(['integration_id', 'method', 'headers_enc', 'response_ref']));
-    expect(db.pragma('user_version', { simple: true })).toBe(7);
+    expect(db.pragma('user_version', { simple: true })).toBe(8);
+  });
+});
+
+describe('migracja 008', () => {
+  it('008 zakłada tabele stanu skrzynki i przetworzonych maili', () => {
+    const db = openDatabase(':memory:');
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mail_in_%' ORDER BY name").all().map((r) => (r as { name: string }).name);
+    expect(tables).toEqual(['mail_in_seen', 'mail_in_state']);
   });
 });

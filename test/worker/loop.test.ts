@@ -78,6 +78,15 @@ describe('Worker.tick - tura utrzymaniowa', () => {
 });
 
 describe('Worker.tick - sprawdzanie wydań', () => {
+  it('tura woła tor skrzynek i sprząta przetworzone starsze niż 180 dni', async () => {
+    const tick = vi.fn(async () => {});
+    const pruneSeenBefore = vi.fn(() => 0);
+    const worker = new Worker({ ...deps, mailIn: { tick }, mailInRepo: { pruneSeenBefore } as never }, { now: () => clock, maintenanceMs: 60_000 });
+    await worker.tick();
+    expect(tick).toHaveBeenCalledWith(clock);
+    expect(pruneSeenBefore).toHaveBeenCalledWith(new Date(clock.getTime() - 180 * 86_400_000));
+  });
+
   it('tura utrzymaniowa woła sprawdzenie wydań z bieżącym czasem', async () => {
     const check = vi.fn(async () => {});
     deps.releases = { check };

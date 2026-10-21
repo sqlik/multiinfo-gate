@@ -1,0 +1,11 @@
+From: =?UTF-8?Q?Tomasz_Sawko?= <Tomek@Przyklad.TEST>
+To: bramka@przyklad.test
+Subject: =?UTF-8?Q?Pr=C3=B3ba_kodowania?=
+Date: Mon, 20 Oct 2026 09:25:00 +0200
+Message-ID: <rfc2047-1@przyklad.test>
+Authentication-Results: mx.przyklad.test; spf=pass smtp.mailfrom=przyklad.test; dkim=pass header.d=przyklad.test
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Tre=C5=9B=C4=87 pr=C3=B3bna.

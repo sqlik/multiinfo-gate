@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { Database } from 'better-sqlite3';
 import { decryptSecret, encryptSecret } from '../secrets/crypto.ts';
 import {
-  parseConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type IntegrationSecrets,
+  parseConfig, type InboundConfig, type IntegrationConfig, type MailInConfig, type IntegrationKind, type IntegrationSecrets,
   type OutboundConfig, type OutboundEvent,
 } from '../integrations/config.ts';
 
@@ -41,6 +41,7 @@ const toRow = (r: Raw): IntegrationRow => ({
 
 export const isInbound = (r: IntegrationRow): r is IntegrationRow & { config: InboundConfig } => r.kind === 'webhook_in';
 export const isOutbound = (r: IntegrationRow): r is IntegrationRow & { config: OutboundConfig } => r.kind === 'webhook_out';
+export const isMailIn = (r: IntegrationRow): r is IntegrationRow & { config: MailInConfig } => r.kind === 'mail_in';
 
 /** 24 bajty losowe = 32 znaki base64url; tyle samo entropii co klucz API. */
 export const newHookId = (): string => randomBytes(24).toString('base64url');
@@ -124,6 +125,20 @@ export class IntegrationsRepo {
 
   remove(id: number): void {
     this.db.prepare('DELETE FROM integrations WHERE id = ?').run(id);
+  }
+
+  /**
+   * Kopia integracji pod nową nazwą: ta sama konfiguracja i sekrety (ten sam klucz główny), wyłączona,
+   * przychodząca dostaje nowy adres wejściowy. Zwraca identyfikator kopii.
+   */
+  copy(id: number, name: string, at: Date): number {
+    const source = this.get(id);
+    if (!source) throw new Error(`Integracja ${id} nie istnieje.`);
+    const info = this.db.prepare(
+      `INSERT INTO integrations (name, kind, api_key_id, service_id, orig, preset, enabled, hook_id, config, secrets_enc, store_payloads, created_at, updated_at)
+       SELECT ?, kind, api_key_id, service_id, orig, preset, 0, ?, config, secrets_enc, store_payloads, ?, ? FROM integrations WHERE id = ?`,
+    ).run(name, source.kind === 'webhook_in' ? newHookId() : null, at.toISOString(), at.toISOString(), id);
+    return Number(info.lastInsertRowid);
   }
 
   regenerateHook(id: number, at: Date): string {
