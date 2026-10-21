@@ -6,10 +6,16 @@ import type { IntegrationEventInput, IntegrationEventsRepo } from '../store/inte
 import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
 import type { IntegrationRow, IntegrationsRepo } from '../store/integrations.ts';
 import { measureText } from '../text/measure.ts';
-import { InvalidPhoneError, normalizeRecipient, splitRecipients, TooManyRecipientsError } from '../text/phone.ts';
+import { InvalidPhoneError, MAX_RECIPIENTS_PER_HOOK, normalizeRecipient, splitRecipients, TooManyRecipientsError } from '../text/phone.ts';
 import { segmentText, TooManyPartsError } from '../text/segment.ts';
-import type { InboundConfig } from './config.ts';
+import type { InboundConfig, MailInConfig } from './config.ts';
 import { matches } from './conditions.ts';
+import { authResultsPass, domainOf } from './mail/auth-results.ts';
+import { cleanText } from './mail/clean.ts';
+import { FieldError, extractFields } from './mail/fields.ts';
+import type { ParsedMail } from './mail/parse.ts';
+import { pullRecipients } from './mail/recipients.ts';
+import { matchSender } from './mail/senders.ts';
 import { enrich, safeUrl, type EnrichGet } from './enrich.ts';
 import { maskPath, readPath } from './paths.ts';
 import { TemplateEngine, TemplateError } from './templates.ts';
@@ -154,6 +160,84 @@ export function previewInbound(
   }
 }
 
+import type { AccountRow } from '../store/accounts.ts';
+import type { ApiKeyRow } from '../store/api-keys.ts';
+
+/** Zapis wpisu dziennika integracji dla bieżącego zdarzenia; każdy potok składa go po swojemu. */
+export type Noter = (result: IntegrationEventInput['result'], extra?: Partial<IntegrationEventInput>) => void;
+
+/** Klucz i konto integracji; powody niedostępności słowami, do wpisu dziennika. */
+export function resolveKeyAccount(deps: PipelineDeps, integration: IntegrationRow, now: Date):
+  { ok: true; key: ApiKeyRow; account: AccountRow } | { ok: false; detail: string } {
+  const key = deps.apiKeys.get(integration.apiKeyId);
+  if (!key) return { ok: false, detail: 'klucz API nie istnieje' };
+  const usable = keyUsable(key, now);
+  if (!usable.ok) return { ok: false, detail: usable.reason };
+  const account = deps.accounts.get(key.accountId);
+  if (!account) return { ok: false, detail: 'konto nie istnieje' };
+  if (account.pausedReason !== null) return { ok: false, detail: `konto wstrzymane: ${account.pausedReason}` };
+  return { ok: true, key, account };
+}
+
+/**
+ * Filtr warunku oraz ochrona przed burzą, z wpisami dziennika. `between` to krok między nimi
+ * (webhook sprawdza tam idempotencję): wynik inny niż null kończy potok.
+ */
+export function passGuards(
+  deps: PipelineDeps, integration: IntegrationRow, config: { condition: InboundConfig['condition']; throttle: InboundConfig['throttle'] },
+  context: Record<string, unknown>, note: Noter, between: (() => { kind: 'duplicate' } | null) | undefined, now: Date,
+): { kind: 'ok' } | { kind: 'skipped' } | { kind: 'duplicate' } | { kind: 'throttled'; notify: boolean } {
+  if (!matches(config.condition, context, deps.engine)) {
+    note('skipped', { reason: 'warunek niespełniony' });
+    return { kind: 'skipped' };
+  }
+  const stop = between?.();
+  if (stop) return stop;
+  const gate = deps.guards.throttle(integration.id, config.throttle.limit, config.throttle.windowMinutes, now);
+  if (!gate.allowed) {
+    note('throttled', { reason: `ponad ${config.throttle.limit} w ${config.throttle.windowMinutes} min` });
+    return { kind: 'throttled', notify: gate.notify };
+  }
+  return { kind: 'ok' };
+}
+
+/** Limit części, wysyłka przez `submitMessages`, wpis `sent` albo `error`. */
+export function dispatch(
+  deps: PipelineDeps, integration: IntegrationRow, key: ApiKeyRow, text: string, recipients: string[],
+  config: { maxParts: number; overflow: 'truncate' | 'reject' }, note: Noter, now: Date,
+  extra: { inReplyTo?: string; sentReason?: string } = {},
+): { kind: 'sent'; messageIds: string[]; parts: number } | { kind: 'error'; code: InboundErrorCode; detail: string } {
+  const fitted = fitToParts(text, config.maxParts);
+  if (fitted.over && config.overflow === 'reject') {
+    const detail = `Treść wymaga więcej niż ${config.maxParts} części.`;
+    note('error', { reason: detail });
+    return { kind: 'error', code: 'too_many_parts', detail };
+  }
+  try {
+    const results = submitMessages(deps, authFromKey(key), {
+      to: recipients, text: fitted.text, integrationId: integration.id, maxParts: config.maxParts,
+      ...(integration.serviceId ? { serviceId: integration.serviceId } : {}),
+      ...(integration.orig ? { orig: integration.orig } : {}),
+      ...(extra.inReplyTo ? { inReplyTo: extra.inReplyTo } : {}),
+    }, now);
+    const messageIds = results.map((r) => r.id);
+    const reason = [messageIds.length > 1 ? `${messageIds.length} odbiorców` : null, extra.sentReason ?? null].filter((r) => r !== null).join('; ');
+    note('sent', {
+      ...(messageIds[0] ? { messageId: messageIds[0] } : {}),
+      ...(extra.inReplyTo ? { inboundId: extra.inReplyTo } : {}),
+      ...(reason !== '' ? { reason } : {}),
+    });
+    return { kind: 'sent', messageIds, parts: fitted.parts };
+  } catch (e) {
+    if (e instanceof ApiError) {
+      const code: InboundErrorCode = e.code === 'invalid_phone' ? 'invalid_phone' : e.code === 'too_many_parts' ? 'too_many_parts' : 'service';
+      note('error', { reason: e.message });
+      return { kind: 'error', code, detail: e.message };
+    }
+    throw e;
+  }
+}
+
 /**
  * Potok przychodzący: klucz i konto, filtr, idempotencja, burza, dopytanie, szablony, wysyłka przez
  * `submitMessages`, wpis w dzienniku. Każde wyjście zapisuje wpis; wołający zamienia wynik
@@ -179,13 +263,9 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
     return { kind: 'unavailable', detail };
   };
 
-  const key = deps.apiKeys.get(integration.apiKeyId);
-  if (!key) return unavailable('klucz API nie istnieje');
-  const usable = keyUsable(key, now);
-  if (!usable.ok) return unavailable(usable.reason);
-  const account = deps.accounts.get(key.accountId);
-  if (!account) return unavailable('konto nie istnieje');
-  if (account.pausedReason !== null) return unavailable(`konto wstrzymane: ${account.pausedReason}`);
+  const resolved = resolveKeyAccount(deps, integration, now);
+  if (!resolved.ok) return unavailable(resolved.detail);
+  const { key, account } = resolved;
 
   // Odebrany SMS, do którego pasuje identyfikator zgłoszenia z ładunku (tylko z integracji tego klucza).
   const ref = ticketRef(config, payload);
@@ -197,25 +277,19 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
   let text: string;
   let recipients: { list: string[]; fromPayload: boolean };
   try {
-    if (!matches(config.condition, context, deps.engine)) {
-      note('skipped', { reason: 'warunek niespełniony' });
-      return { kind: 'skipped' };
-    }
-    if (config.eventIdPath !== undefined) {
+    const dedup = (): { kind: 'duplicate' } | null => {
+      if (config.eventIdPath === undefined) return null;
       const eventId = readPath(payload, config.eventIdPath);
-      if (eventId !== undefined && eventId !== null && String(eventId) !== '') {
-        if (!deps.guards.dedup(integration.id, String(eventId), now)) {
-          note('duplicate', { reason: `identyfikator zdarzenia ${String(eventId)}` });
-          return { kind: 'duplicate' };
-        }
-        dedupKey = String(eventId);
+      if (eventId === undefined || eventId === null || String(eventId) === '') return null;
+      if (!deps.guards.dedup(integration.id, String(eventId), now)) {
+        note('duplicate', { reason: `identyfikator zdarzenia ${String(eventId)}` });
+        return { kind: 'duplicate' };
       }
-    }
-    const gate = deps.guards.throttle(integration.id, config.throttle.limit, config.throttle.windowMinutes, now);
-    if (!gate.allowed) {
-      note('throttled', { reason: `ponad ${config.throttle.limit} w ${config.throttle.windowMinutes} min` });
-      return { kind: 'throttled', notify: gate.notify };
-    }
+      dedupKey = String(eventId);
+      return null;
+    };
+    const guard = passGuards(deps, integration, config, context, note, dedup, now);
+    if (guard.kind !== 'ok') return guard;
     // Dopytanie dopiero tutaj: odsiane, zduplikowane oraz zdławione zdarzenie nie zajmuje aplikacji.
     if (config.enrich) {
       const wynik = await enrich({
@@ -278,31 +352,179 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
     throw e;
   }
 
-  const fitted = fitToParts(text, config.maxParts);
-  if (fitted.over && config.overflow === 'reject') return fail('too_many_parts', `Treść wymaga więcej niż ${config.maxParts} części.`);
-
   // Odpowiedź w wątku: zgłoszenie pasuje do odebranej, a jedyny odbiorca to jej nadawca.
   const inReplyTo = original && normalized.length === 1 && original.sender === normalized[0] ? original.id : undefined;
 
-  try {
-    const results = submitMessages(deps, authFromKey(key), {
-      to: normalized, text: fitted.text, integrationId: integration.id, maxParts: config.maxParts,
-      ...(integration.serviceId ? { serviceId: integration.serviceId } : {}),
-      ...(integration.orig ? { orig: integration.orig } : {}),
-      ...(inReplyTo ? { inReplyTo } : {}),
-    }, now);
-    const messageIds = results.map((r) => r.id);
-    note('sent', {
-      ...(messageIds[0] ? { messageId: messageIds[0] } : {}),
-      ...(inReplyTo ? { inboundId: inReplyTo } : {}),
-      ...(messageIds.length > 1 ? { reason: `${messageIds.length} odbiorców` } : {}),
-    });
-    return { kind: 'sent', messageIds };
-  } catch (e) {
-    if (e instanceof ApiError) {
-      const code: InboundErrorCode = e.code === 'invalid_phone' ? 'invalid_phone' : e.code === 'too_many_parts' ? 'too_many_parts' : 'service';
-      return fail(code, e.message);
+  const sent = dispatch(deps, integration, key, text, normalized, config, note, now, inReplyTo ? { inReplyTo } : {});
+  if (sent.kind === 'error') {
+    log.warn('integracja.blad', { integrationId: integration.id, code: sent.code });
+    return sent;
+  }
+  return { kind: 'sent', messageIds: sent.messageIds };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Skrzynka pocztowa: ten sam potok co webhook, z własnym kontekstem i własnym wyznaczaniem numerów.
+// ---------------------------------------------------------------------------------------------
+
+export type MailInIntegration = IntegrationRow & { config: MailInConfig };
+export type MailInSkipReason = 'sender_not_allowed' | 'auth_failed' | 'condition';
+export type MailInOutcome =
+  | { kind: 'sent'; messageIds: string[]; recipients: string[]; invalid: string[]; parts: number }
+  | { kind: 'skipped'; reason: MailInSkipReason }
+  | { kind: 'throttled'; notify: boolean }
+  | { kind: 'error'; code: InboundErrorCode; detail: string }
+  | { kind: 'unavailable'; detail: string };
+
+export type RecipientsLevel = 'mail' | 'sender' | 'fallback' | 'none';
+
+export interface MailInPreview {
+  senderAllowed: boolean; recipients: string[]; recipientsLevel: RecipientsLevel; invalid: string[];
+  fields: Record<string, string>; cleaned: string; text: string; parts: number; error: string | null;
+}
+
+/** Kontekst z sekcji 8.4 specu: pola maila po angielsku, do tego `now`, `integration.name` i cały kontekst pod `p`. */
+export function buildMailContext(mail: ParsedMail, subject: string, text: string, fields: Record<string, string>, integration: { name: string }, now: Date): Record<string, unknown> {
+  const p: Record<string, unknown> = {
+    from: mail.from, from_name: mail.fromName, subject, text, text_full: mail.textFull, date: mail.date,
+    to: mail.to, message_id: mail.messageId ?? '', fields: { ...fields },
+  };
+  return { ...p, now: now.toISOString(), integration: { name: integration.name }, p };
+}
+
+export function renderMailText(engine: TemplateEngine, config: MailInConfig, context: Record<string, unknown>): string {
+  if (config.text.mode === 'liquid') return engine.render(config.text.template, context).trim();
+  const subject = String(context.subject ?? '').trim();
+  const text = String(context.text ?? '').trim();
+  if (config.text.variant === 'subject') return subject;
+  if (config.text.variant === 'text') return text;
+  return [subject, text].filter((part) => part !== '').join('\n');
+}
+
+/**
+ * Treść i odbiorcy maila przed strażnikami i wysyłką: czyszczenie, numery z maila, wycinki,
+ * kontekst, trzy poziomy odbiorców. Wspólne dla potoku i podglądu, żeby podgląd pokazywał to,
+ * co naprawdę pójdzie.
+ */
+function prepareMail(engine: TemplateEngine, config: MailInConfig, mail: ParsedMail, sender: { recipients: string[] } | null, countryCode: string, integration: { name: string }, now: Date): {
+  context: Record<string, unknown>; cleaned: string; fields: Record<string, string>;
+  level: RecipientsLevel; raw: string[]; recipients: string[]; invalid: string[]; render: () => string;
+} {
+  const cleaned = cleanText(mail.textFull, config.clean.cutFrom);
+  const pulled = config.recipientsFromMail.enabled ? pullRecipients(mail.subject, cleaned, config.recipientsFromMail.where) : { numbers: [], subject: mail.subject, text: cleaned };
+  // Nadawca z listy może wskazać odbiorców, ale nie więcej, niż przyjmuje API w jednym żądaniu (spec 7.1: do 50).
+  if (pulled.numbers.length > MAX_RECIPIENTS_PER_HOOK) throw new TooManyRecipientsError(pulled.numbers.length);
+  const fields = extractFields(mail.textFull, config.fields);
+  const context = buildMailContext(mail, pulled.subject, pulled.text, fields, integration, now);
+  const level: RecipientsLevel = pulled.numbers.length > 0 ? 'mail' : (sender?.recipients.length ?? 0) > 0 ? 'sender' : config.to.fallback.length > 0 ? 'fallback' : 'none';
+  const raw = level === 'mail' ? pulled.numbers : level === 'sender' ? sender!.recipients : level === 'fallback' ? config.to.fallback : [];
+  const recipients: string[] = [];
+  const invalid: string[] = [];
+  for (const r of raw) {
+    try {
+      recipients.push(normalizeRecipient(r, countryCode));
+    } catch (e) {
+      if (!(e instanceof InvalidPhoneError)) throw e;
+      invalid.push(r.trim());
     }
+  }
+  // Szablon liczy się dopiero po warunku i burzy (spec 3.2), żeby mail odrzucony warunkiem nie dawał błędu szablonu.
+  return { context, cleaned, fields, level, raw, recipients: [...new Set(recipients)], invalid, render: () => renderMailText(engine, config, context) };
+}
+
+/**
+ * Potok skrzynki według sekcji 3.2 specu, kroki 4-11: klucz i konto, nadawca, SPF/DKIM, treść,
+ * warunek i burza, odbiorcy z trzech poziomów, wysyłka, wpis dziennika. Działanie na mailu
+ * oraz odpowiedź do nadawcy robi wołający (poller), bo potok nie zna sesji IMAP.
+ */
+export async function runMailIn(deps: PipelineDeps, integration: MailInIntegration, mail: ParsedMail, now: Date): Promise<MailInOutcome> {
+  const log = deps.log ?? silentLogger;
+  const config = integration.config;
+  const stored = integration.storePayloads === 1
+    ? JSON.stringify({ from: mail.from, subject: mail.subject, text_full: mail.textFull, date: mail.date, message_id: mail.messageId })
+    : null;
+  // Spec 4.5: podsumowanie wpisu to nadawca (w polu źródła) oraz temat ucięty do 80 znaków, dopisany po właściwym powodzie.
+  const subject = mail.subject.trim() === '' ? 'temat (bez tematu)' : `temat „${mail.subject.trim().slice(0, 80)}”`;
+  const note: Noter = (result, extra = {}) =>
+    deps.integrationEvents.record({
+      integrationId: integration.id, at: now, result, payload: stored, logLimit: config.eventLogLimit, ...(mail.from ? { sourceIp: mail.from } : {}), ...extra,
+      reason: [extra.reason, subject].filter((r) => r !== undefined && r !== '').join(' · '),
+    });
+  const fail = (code: InboundErrorCode, detail: string): MailInOutcome => {
+    note('error', { reason: detail });
+    log.warn('integracja.blad', { integrationId: integration.id, code });
+    return { kind: 'error', code, detail };
+  };
+
+  const resolved = resolveKeyAccount(deps, integration, now);
+  if (!resolved.ok) {
+    note('error', { reason: resolved.detail });
+    log.warn('integracja.niedostepna', { integrationId: integration.id });
+    return { kind: 'unavailable', detail: resolved.detail };
+  }
+  const { key, account } = resolved;
+
+  const sender = matchSender(mail.from, config.senders);
+  if (sender === null) {
+    note('skipped', { reason: `nadawca spoza listy: ${mail.from || 'brak adresu'}` });
+    return { kind: 'skipped', reason: 'sender_not_allowed' };
+  }
+  if (config.requireAuthResults && !authResultsPass(mail.authResults, domainOf(mail.from))) {
+    note('skipped', { reason: 'brak potwierdzenia SPF/DKIM od serwera' });
+    return { kind: 'skipped', reason: 'auth_failed' };
+  }
+
+  let prepared: ReturnType<typeof prepareMail>;
+  try {
+    prepared = prepareMail(deps.engine, config, mail, sender, account.defaultCountryCode, integration, now);
+  } catch (e) {
+    if (e instanceof FieldError || e instanceof TemplateError) return fail('template', e.message);
+    if (e instanceof TooManyRecipientsError) return fail('too_many_recipients', e.message);
     throw e;
+  }
+
+  const guard = passGuards(deps, integration, config, prepared.context, note, undefined, now);
+  if (guard.kind === 'skipped') return { kind: 'skipped', reason: 'condition' };
+  if (guard.kind === 'throttled') return guard;
+
+  if (prepared.level === 'none') return fail('no_recipient', 'Brak numeru odbiorcy: wiadomość go nie zawiera, nadawca nie ma przypisanych numerów, a stała lista jest pusta.');
+  if (prepared.recipients.length === 0) {
+    return fail('invalid_phone', prepared.level === 'mail'
+      ? `Wszystkie numery podane w wiadomości są nieprawidłowe: ${prepared.invalid.join(', ')}.`
+      : `Numer odbiorcy jest nieprawidłowy: ${prepared.invalid.join(', ')}.`);
+  }
+  // Na poziomie nadawcy i stałej listy numer wpisał administrator: pomyłka nie może zapaść w ciszę.
+  if (prepared.level !== 'mail' && prepared.invalid.length > 0) return fail('invalid_phone', `Numer odbiorcy jest nieprawidłowy: ${prepared.invalid.join(', ')}.`);
+  let text: string;
+  try {
+    text = prepared.render();
+  } catch (e) {
+    if (e instanceof TemplateError) return fail('template', e.message);
+    throw e;
+  }
+  if (text === '') return fail('empty_text', 'Treść SMS-a jest pusta: wiadomość po usunięciu podpisu i cytatów nie zawiera treści.');
+
+  const sentReason = prepared.invalid.length > 0 ? `pominięto nieprawidłowe numery: ${prepared.invalid.join(', ')}` : undefined;
+  const sent = dispatch(deps, integration, key, text, prepared.recipients, config, note, now, sentReason ? { sentReason } : {});
+  if (sent.kind === 'error') {
+    log.warn('integracja.blad', { integrationId: integration.id, code: sent.code });
+    return sent;
+  }
+  return { kind: 'sent', messageIds: sent.messageIds, recipients: prepared.recipients, invalid: prepared.invalid, parts: sent.parts };
+}
+
+/** Podgląd do „Sprawdź szablon” dla skrzynki: nic nie wysyła, nic nie zapisuje. */
+export function previewMailIn(engine: TemplateEngine, config: MailInConfig, mail: ParsedMail, countryCode: string, now: Date): MailInPreview {
+  const sender = matchSender(mail.from, config.senders);
+  try {
+    const p = prepareMail(engine, config, mail, sender, countryCode, { name: 'podgląd' }, now);
+    const text = p.render();
+    const fitted = text === '' ? { text: '', parts: 0 } : fitToParts(text, config.overflow === 'truncate' ? config.maxParts : 9);
+    return {
+      senderAllowed: sender !== null, recipients: p.recipients, recipientsLevel: p.level, invalid: p.invalid, fields: p.fields, cleaned: p.cleaned,
+      text: fitted.text, parts: fitted.parts, error: text === '' ? 'Treść SMS-a jest pusta.' : null,
+    };
+  } catch (e) {
+    return { senderAllowed: sender !== null, recipients: [], recipientsLevel: 'none', invalid: [], fields: {}, cleaned: '', text: '', parts: 0, error: e instanceof Error ? e.message : String(e) };
   }
 }

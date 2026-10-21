@@ -9,6 +9,7 @@ import type { MessagesRepo } from '../store/messages.ts';
 import type { NotificationsRepo } from '../store/notifications.ts';
 import type { ReleaseInfo } from '../store/settings.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
+import type { MailInRepo } from '../store/mail-in.ts';
 import { lastValidDay, warsawDay, warsawStamp } from '../time/warsaw.ts';
 import { composeDaily } from './compose.ts';
 import type { AdminNotifier } from './rules.ts';
@@ -28,6 +29,8 @@ export interface ScannerDeps {
   log?: Logger;
   /** Nowsze wydanie do wzmianki w podsumowaniu dziennym; bez funkcji podsumowanie o nim milczy. */
   release?: () => ReleaseInfo | null;
+  /** Skrzynki pocztowe do podsumowania dziennego. */
+  mailIn?: Pick<MailInRepo, 'counts'>;
 }
 
 const numbers = (value: unknown): number[] => (Array.isArray(value) ? value.map(Number).filter((n) => Number.isFinite(n) && n > 0) : []);
@@ -114,6 +117,7 @@ export class NotificationScanner {
       messages: this.deps.messages.countSince(since),
       inbound: this.deps.inbound.countSince(since),
       integrationsTroubled: this.deps.integrations.countTroubled(since),
+      ...(this.deps.mailIn ? { mailboxes: this.deps.mailIn.counts() } : {}),
       deliveries: this.deps.deliveries.counts(since),
       accounts: this.deps.accounts.list().filter((a) => a.active === 1)
         .map((a) => ({ name: a.name, paused: a.pausedReason, certificateDaysLeft: daysLeft(a.certNotAfter, now) })),

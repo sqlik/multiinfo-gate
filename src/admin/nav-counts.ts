@@ -2,6 +2,7 @@ import type { AdminUsersRepo } from '../store/admin-users.ts';
 import type { AccountsRepo } from '../store/accounts.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { IntegrationsRepo } from '../store/integrations.ts';
+import type { MailInRepo } from '../store/mail-in.ts';
 import type { MessagesRepo } from '../store/messages.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 import type { NavCounts } from './views/layout.ts';
@@ -14,6 +15,8 @@ export interface NavCountsDeps {
   users: AdminUsersRepo;
   deliveries: WebhookDeliveriesRepo;
   integrations: IntegrationsRepo;
+  /** Skrzynki pocztowe w błędzie liczą się razem z integracjami. */
+  mailIn?: Pick<MailInRepo, 'counts'>;
   now?: () => Date;
 }
 
@@ -32,7 +35,7 @@ export function navCounts(deps: NavCountsDeps): NavCounts {
     odebrane: deps.deliveries.troubledInboundCount(new Date(at.getTime() - WINDOW_MS)),
     konta: deps.accounts.list().length,
     klucze: deps.apiKeys.list().length,
-    integracje: deps.integrations.countTroubled(new Date(at.getTime() - WINDOW_MS)),
+    integracje: deps.integrations.countTroubled(new Date(at.getTime() - WINDOW_MS)) + (deps.mailIn?.counts().failing ?? 0),
     uzytkownicy: deps.users.count(),
   };
 }

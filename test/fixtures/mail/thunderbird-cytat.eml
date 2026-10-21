@@ -1,0 +1,15 @@
+From: Jan Kowalski <jan@przyklad.test>
+To: bramka@przyklad.test
+Subject: Re: Jutro przerwa serwisowa
+Date: Mon, 20 Oct 2026 10:08:00 +0200
+Message-ID: <tb-1@przyklad.test>
+Authentication-Results: mx.przyklad.test; spf=pass smtp.mailfrom=przyklad.test; dkim=pass header.d=przyklad.test
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Potwierdzam przerwę od 8:00.
+
+Dnia 20.10.2026 o 09:12, Anna Nowak pisze:
+> Serwer plików będzie niedostępny jutro od 8:00 do 10:00.
+> Proszę zapisać pracę przed 7:50.

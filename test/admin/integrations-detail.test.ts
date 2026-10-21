@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { defaultInboundConfig, defaultOutboundConfig } from '../../src/integrations/config.ts';
+import { defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig } from '../../src/integrations/config.ts';
 import { presetById } from '../../src/integrations/presets/index.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
@@ -32,6 +32,66 @@ function seedInbound(storePayloads: 0 | 1, name = 'Kuma produkcja'): number {
     secrets: { token: 'Bearer x' }, storePayloads, createdAt: NOW,
   });
 }
+
+const post = (url: string) => h.app.inject({ method: 'POST', url, headers: { cookie: h.cookie, 'content-type': 'application/x-www-form-urlencoded' }, payload: '' });
+
+function seedMailbox(name = 'Skrzynka'): number {
+  return h.integrations.insert({
+    name, kind: 'mail_in', apiKeyId, serviceId: null, orig: null, preset: 'poczta-wlasny', enabled: 1,
+    config: { ...defaultMailInConfig(), imap: { ...defaultMailInConfig().imap, host: 'imap.przyklad.test', user: 'u' }, senders: [{ pattern: '@przyklad.test', recipients: [] }] },
+    secrets: { imap_password: 'TajneHaslo9' }, storePayloads: 0, createdAt: NOW,
+  });
+}
+
+describe('GET /integracje/:id - skrzynka', () => {
+  it('szczegóły skrzynki pokazują stan i przyciski Sprawdź teraz oraz Utwórz kopię', async () => {
+    const id = seedMailbox();
+    h.mailIn.ensureState(id, NOW);
+    h.mailIn.recordPoll(id, { ok: true, uidvalidity: 7, unseen: 3, at: new Date(NOW.getTime() - 60_000), nextPollAt: NOW });
+    h.mailIn.recordPoll(id, { ok: false, error: 'connect ECONNREFUSED', errorKind: 'network', at: NOW, nextPollAt: NOW });
+    const res = await page(`/integracje/${id}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Ostatnie sprawdzenie');
+    expect(res.body).toContain('Nieprzeczytanych');
+    expect(res.body).toContain('serwer nie odpowiada');
+    expect(res.body).toContain('connect ECONNREFUSED');
+    expect(res.body).toContain('Sprawdź teraz');
+    expect(res.body).toContain('Utwórz kopię');
+    expect(res.body).toContain('imap.przyklad.test');
+    expect(res.body).not.toContain('TajneHaslo9');
+  });
+
+  it('Sprawdź teraz ustawia termin odpytania na teraz; dla webhooka to 404', async () => {
+    const id = seedMailbox();
+    h.mailIn.ensureState(id, new Date(NOW.getTime() - 3_600_000));
+    h.mailIn.recordPoll(id, { ok: true, uidvalidity: 7, unseen: 0, at: NOW, nextPollAt: new Date(NOW.getTime() + 3_600_000) });
+    const res = await post(`/integracje/${id}/sprawdz-teraz`);
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe(`/integracje/${id}`);
+    expect(h.mailIn.state(id)?.nextPollAt).toBe(NOW.toISOString());
+    expect((await post(`/integracje/${seedInbound(0)}/sprawdz-teraz`)).statusCode).toBe(404);
+  });
+
+  it('Utwórz kopię zakłada wyłączoną kopię z dopiskiem i otwiera edycję; dla skrzynki kopia dostaje własny stan; kolejna kopia dostaje numer', async () => {
+    const id = seedMailbox();
+    const res = await post(`/integracje/${id}/kopiuj`);
+    expect(res.statusCode).toBe(302);
+    const copyId = Number(/\/integracje\/(\d+)\/edytuj/.exec(res.headers.location as string)?.[1]);
+    const copy = h.integrations.get(copyId)!;
+    expect([copy.name, copy.enabled, copy.kind]).toEqual(['Skrzynka (kopia)', 0, 'mail_in']);
+    expect(h.integrations.secrets(copyId)).toEqual({ imap_password: 'TajneHaslo9' });
+    expect(h.mailIn.state(copyId)).toBeDefined();
+    expect(h.audit.list(10, 0)[0]).toMatchObject({ action: 'integracja.kopia', meta: { z: id, nazwa: 'Skrzynka (kopia)' } });
+    const second = await post(`/integracje/${id}/kopiuj`);
+    const secondId = Number(/\/integracje\/(\d+)\/edytuj/.exec(second.headers.location as string)?.[1]);
+    expect(h.integrations.get(secondId)?.name).toBe('Skrzynka (kopia 2)');
+    const hook = seedInbound(0);
+    const hookCopy = await post(`/integracje/${hook}/kopiuj`);
+    const hookCopyId = Number(/\/integracje\/(\d+)\/edytuj/.exec(hookCopy.headers.location as string)?.[1]);
+    expect(h.integrations.get(hookCopyId)?.hookId).not.toBe(h.integrations.get(hook)?.hookId);
+    expect((await page(`/integracje/${hookCopyId}/edytuj`)).statusCode).toBe(200);
+  });
+});
 
 describe('GET /integracje/:id', () => {
   it('pokazuje konfigurację w słowach, adres wejściowy i dziennik z plakietkami', async () => {
@@ -98,6 +158,38 @@ describe('GET /integracje/:id', () => {
     const other = seedInbound(1, 'Kuma druga');
     const foreign = await page(`/integracje/${other}/edytuj?probka=${eventId}`);
     expect(foreign.body).not.toContain('Z dziennika');
+  });
+
+  it('dziennik skrzynki ma kolumnę Nadawca zamiast adresu źródłowego', async () => {
+    const id = seedMailbox();
+    const res = await page(`/integracje/${id}`);
+    expect(res.body).toContain('>Nadawca</th>');
+    expect(res.body).not.toContain('Adres źródłowy');
+  });
+
+  it('włączenie wyłączonej skrzynki ustawia próg od nowa i odpytanie natychmiast', async () => {
+    const id = seedMailbox();
+    h.mailIn.ensureState(id, NOW);
+    h.mailIn.setFloor(id, 5, 7);
+    await post(`/integracje/${id}/wylacz`);
+    expect(h.mailIn.state(id)).toMatchObject({ uidFloor: 5, uidvalidity: 7 });
+    await post(`/integracje/${id}/wlacz`);
+    expect(h.mailIn.state(id)).toMatchObject({ uidFloor: 0, uidvalidity: 0 });
+  });
+
+  it('skrzynka: „Użyj jako próbki” wypełnia nadawcę, temat i treść z ładunku wpisu i otwiera tryb zaawansowany', async () => {
+    const id = seedMailbox();
+    h.integrationEvents.record({ integrationId: id, at: NOW, result: 'sent', payload: '{"from":"ups@przyklad.test","subject":"UPS-01 alarm","text_full":"Device UPS-01\\nStatus ON BATTERY","date":"2026-10-20T07:15:00.000Z","message_id":"<ups-1@przyklad.test>"}', logLimit: 200 });
+    const eventId = h.integrationEvents.list(id, 1)[0]!.id;
+    const res = await page(`/integracje/${id}/edytuj?probka=${eventId}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('name="sampleFrom" value="ups@przyklad.test"');
+    expect(res.body).toContain('name="sampleSubject" value="UPS-01 alarm"');
+    expect(res.body).toContain('Device UPS-01\nStatus ON BATTERY');
+    expect(res.body).toContain('tryb=zaawansowany" class="on"');
+    const other = seedMailbox('Druga');
+    const foreign = await page(`/integracje/${other}/edytuj?probka=${eventId}`);
+    expect(foreign.body).not.toContain('UPS-01 alarm');
   });
 
   it('wychodząca: adres docelowy, zdarzenia, nagłówki bez sekretów i „Ponów” przy niedostarczonej', async () => {

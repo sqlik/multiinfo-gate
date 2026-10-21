@@ -26,6 +26,9 @@ import { InboundMessagesRepo } from './store/inbound-messages.ts';
 import { InboundServicesRepo } from './store/inbound-services.ts';
 import { IntegrationEventsRepo } from './store/integration-events.ts';
 import { IntegrationGuardsRepo } from './store/integration-guards.ts';
+import { MailInRepo } from './store/mail-in.ts';
+import { imapConnect } from './integrations/mail/client.ts';
+import { MailInPoller } from './worker/mail-in.ts';
 import { IntegrationsRepo } from './store/integrations.ts';
 import { JobsRepo } from './store/jobs.ts';
 import { MessageEventsRepo } from './store/message-events.ts';
@@ -65,13 +68,14 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const integrations = new IntegrationsRepo(db, config.masterKey);
   const integrationEvents = new IntegrationEventsRepo(db, config.masterKey);
   const guards = new IntegrationGuardsRepo(db);
+  const mailIn = new MailInRepo(db);
   const engine = new TemplateEngine();
   const notifications = new NotificationsRepo(db, config.masterKey);
   const settings = new SettingsRepo(db);
   const notifier = new Notifier({ notifications, jobs, log });
   const scanner = new NotificationScanner({
     accounts, inboundServices, messages, inbound, integrations, deliveries, notifications, notifier, jobs, log,
-    release: () => pendingRelease(settings),
+    release: () => pendingRelease(settings), mailIn,
   });
   const releases = new ReleaseChecker({ settings, notifier, log, enabled: config.updateCheck });
   const integrationEmit = { integrations, integrationEvents, guards, deliveries, jobs, engine, notifier, log };
@@ -81,10 +85,15 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   });
   backups.start();
 
+  const mailInPoller = new MailInPoller({
+    accounts, apiKeys, messages, events, jobs, inbound, integrations, integrationEvents, guards, engine,
+    mailIn, connect: imapConnect, notifier, notifications, log,
+  });
   const worker = new Worker({
     accounts, apiKeys, messages, events, deliveries, packages, jobs, clients, inbound,
     reportsDir: join(config.dataDir, 'reports'), log, allowPrivateWebhooks: config.webhookAllowPrivate,
     integrationEmit, integrations, integrationEvents, guards, notifier, notifications, scanner, releases,
+    mailIn: mailInPoller, mailInRepo: mailIn,
   });
   worker.start();
 
@@ -105,7 +114,7 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
-    integrationEvents, guards, engine, notifications, settings, notifier, mailer: nodemailerMailer,
+    integrationEvents, guards, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate,
   });
 

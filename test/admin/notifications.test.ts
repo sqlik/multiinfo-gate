@@ -32,6 +32,11 @@ describe('GET /powiadomienia', () => {
     expect(rules.body).toContain('Błąd integracji');
     expect(rules.body).toContain('Podsumowanie dzienne');
   });
+  it('ekran reguł pokazuje „Awaria skrzynki pocztowej” z parametrem minut', async () => {
+    const rules = await page('reguly');
+    expect(rules.body).toContain('Awaria skrzynki pocztowej');
+    expect(rules.body).toMatch(/name="afterMinutes_mailbox_failure"[^>]*value="15"/);
+  });
 });
 
 describe('POST /powiadomienia/smtp', () => {
@@ -125,6 +130,7 @@ describe('POST /powiadomienia/reguly', () => {
       enabled_certificate_expiring: '1', maxPerHour_certificate_expiring: '1', groupHours_certificate_expiring: '0', days_certificate_expiring: '60, 30, 7',
       enabled_account_rejecting: '1', maxPerHour_account_rejecting: '1', groupHours_account_rejecting: '0',
       enabled_inbound_failure: '1', maxPerHour_inbound_failure: '1', groupHours_inbound_failure: '0', afterMinutes_inbound_failure: '30',
+      enabled_mailbox_failure: '1', maxPerHour_mailbox_failure: '5', groupHours_mailbox_failure: '0', afterMinutes_mailbox_failure: '20',
       enabled_daily_summary: '1', maxPerHour_daily_summary: '1', groupHours_daily_summary: '0', hour_daily_summary: '7',
     });
     expect(res.statusCode).toBe(302);
@@ -133,6 +139,7 @@ describe('POST /powiadomienia/reguly', () => {
     expect(rules.get('integration_throttled')!.enabled).toBe(0);
     expect(rules.get('certificate_expiring')!.params).toEqual({ days: [60, 30, 7] });
     expect(rules.get('inbound_failure')!.params).toEqual({ afterMinutes: 30 });
+    expect(rules.get('mailbox_failure')!.params).toEqual({ afterMinutes: 20 });
     expect(rules.get('daily_summary')).toMatchObject({ enabled: 1, params: { hour: 7 } });
     const shown = await page('reguly');
     expect(shown.body).toContain('value="60, 30, 7"');

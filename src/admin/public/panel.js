@@ -75,6 +75,18 @@
   }
 })();
 
+// Wpisanie wartości do pola wskazanego przez data-fill (lista folderów skrzynki pod „Sprawdź połączenie”).
+(function () {
+  var fills = document.querySelectorAll('[data-fill]');
+  for (var i = 0; i < fills.length; i += 1) {
+    fills[i].addEventListener('click', function (event) {
+      var button = event.currentTarget;
+      var target = document.querySelector(button.getAttribute('data-fill'));
+      if (target) target.value = button.getAttribute('data-value') || '';
+    });
+  }
+})();
+
 // Generowanie hasła do pola wskazanego przez data-generate: 24 znaki bez znaków mylących; pole
 // przełącza się na tekst, żeby dało się je przepisać do aplikacji.
 (function () {

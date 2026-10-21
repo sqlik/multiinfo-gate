@@ -12,7 +12,7 @@ export const GROUP_LINES = 100;
 /** Ekran panelu właściwy dla zdarzenia - odnośnik w mailu, gdy administrator podał adres panelu. */
 const PANEL_PATH: Record<NotificationEvent, string> = {
   integration_error: '/integracje', integration_throttled: '/integracje', webhook_undelivered: '/integracje',
-  certificate_expiring: '/konta', account_rejecting: '/konta', inbound_failure: '/odebrane', daily_summary: '/przeglad',
+  certificate_expiring: '/konta', account_rejecting: '/konta', inbound_failure: '/odebrane', mailbox_failure: '/integracje', daily_summary: '/przeglad',
   release_available: '/przeglad',
 };
 
@@ -52,6 +52,8 @@ export interface DailyData {
   messages: { total: number; delivered: number; failed: number; cancelled: number; transit: number };
   inbound: number;
   integrationsTroubled: number;
+  /** Skrzynki pocztowe: liczba włączonych i w błędzie; bez tego pola podsumowanie o nich milczy. */
+  mailboxes?: { total: number; failing: number };
   deliveries: { pending: number; failed: number };
   accounts: Array<{ name: string; paused: string | null; certificateDaysLeft: number }>;
   /** Nowsze wydanie bramki, jeżeli jest do pokazania. */
@@ -69,6 +71,7 @@ export function composeDaily(s: Settings, d: DailyData): Mail {
     `- w toku: ${d.messages.transit}`,
     `Odebrane: ${d.inbound}`, '',
     `Integracje z błędami: ${d.integrationsTroubled}`,
+    ...(d.mailboxes ? [`Skrzynki pocztowe: ${d.mailboxes.total}, w błędzie ${d.mailboxes.failing}`] : []),
     `Webhooki: w toku ${d.deliveries.pending}, nieudane ${d.deliveries.failed}`, '',
     'Konta:',
   ];
