@@ -14,6 +14,12 @@ describe('pullRecipients', () => {
     expect(pullRecipients('600100200, serwer: x', 'treść', 'subject').numbers).toEqual([]);
     expect(pullRecipients('Awaria', 'treść', 'subject')).toEqual({ numbers: [], subject: 'Awaria', text: 'treść' });
   });
+  it('pierwsza linia treści dłuższa niż 400 znaków nie jest listą numerów', () => {
+    const line = Array.from({ length: 45 }, (_, i) => `6010${String(i).padStart(5, '0')}`).join(', ');
+    expect(line.length).toBeGreaterThan(400);
+    expect(pullRecipients('Awaria', `${line}\nx`, 'body').numbers).toEqual([]);
+  });
+
   it('tryb tematu nie rusza treści, tryb treści nie rusza tematu', () => {
     expect(pullRecipients('600100200: Awaria', '600100201\nx', 'subject').text).toBe('600100201\nx');
     expect(pullRecipients('600100200: Awaria', '600100201\nx', 'body').subject).toBe('600100200: Awaria');
