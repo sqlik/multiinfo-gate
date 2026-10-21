@@ -131,6 +131,18 @@ describe('MailInPoller: próg i zaległe', () => {
     expect(events(integ.id)[0]).toEqual(['skipped', 'już przetworzony']);
   });
 
+  it('nadawca spoza listy nie zatruwa deduplikacji: późniejszy mail z listy z tym samym Message-ID idzie normalnie', async () => {
+    await poller.tick(NOW);
+    box.add({ uid: 2, seen: false, source: eml('obcy@inna.test', 'Podszycie', 'x', '<ups-17@ups.local>') });
+    await poller.tick(at(60_000));
+    expect(smsCount()).toBe(0);
+    expect(events(integ.id)[0]![0]).toBe('skipped');
+    box.add({ uid: 3, seen: false, source: eml('ups@przyklad.test', 'Alarm', 'ON BATTERY', '<ups-17@ups.local>') });
+    await poller.tick(at(120_000));
+    expect(smsCount()).toBe(1);
+    expect(events(integ.id)[0]![0]).toBe('sent');
+  });
+
   it('za duży mail jest pomijany bez pobierania treści, ale podlega działaniu po przetworzeniu', async () => {
     await poller.tick(NOW);
     box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', 'Duży', 'x', '<2@x>'), size: MAX_MAIL_BYTES + 1 });

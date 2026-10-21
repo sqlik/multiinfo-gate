@@ -19,8 +19,9 @@ describe('authResultsPass', () => {
     expect(authResultsPass([], 'sqlik.com')).toBe(false);
     expect(authResultsPass(AR('dkim=pass header.d=sqlik.com'), '')).toBe(false);
   });
-  it('kilka nagłówków: wystarczy jeden pozytywny', () => {
-    expect(authResultsPass([...AR('spf=fail smtp.mailfrom=x.pl'), ...AR('dkim=pass header.d=sqlik.com')], 'sqlik.com')).toBe(true);
+  it('liczy się tylko pierwszy nagłówek od góry (serwer skrzynki); nagłówek dopisany niżej przez nadawcę nie przepuszcza', () => {
+    expect(authResultsPass([...AR('spf=fail smtp.mailfrom=x.pl; dkim=none'), 'atakujacy.test; dkim=pass header.d=sqlik.com'], 'sqlik.com')).toBe(false);
+    expect(authResultsPass([...AR('dkim=pass header.d=sqlik.com'), 'atakujacy.test; spf=fail smtp.mailfrom=x.pl'], 'sqlik.com')).toBe(true);
   });
   it('domainOf zwraca część po małpie małymi literami', () => {
     expect(domainOf('Tomek@SQLIK.com')).toBe('sqlik.com');
