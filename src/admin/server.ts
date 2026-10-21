@@ -21,6 +21,7 @@ import type { InboundServicesRepo } from '../store/inbound-services.ts';
 import type { IntegrationEventsRepo } from '../store/integration-events.ts';
 import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
 import type { MailInRepo } from '../store/mail-in.ts';
+import type { MailboxConnect } from '../integrations/mail/client.ts';
 import type { IntegrationsRepo } from '../store/integrations.ts';
 import type { NotificationsRepo } from '../store/notifications.ts';
 import type { SettingsRepo } from '../store/settings.ts';
@@ -71,6 +72,8 @@ export interface AdminDeps {
   guards: IntegrationGuardsRepo;
   /** Stan skrzynek pocztowych: formularz skrzynki, lista, szczegóły, kafelek przeglądu. */
   mailIn?: MailInRepo;
+  /** Połączenie ze skrzynką do „Sprawdź połączenie”; testy podstawiają podróbkę. */
+  mailboxConnect?: MailboxConnect;
   /** Silnik szablonów do „Sprawdź szablon” i walidacji przy zapisie. */
   engine: TemplateEngine;
   notifications: NotificationsRepo;

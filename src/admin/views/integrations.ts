@@ -1,4 +1,4 @@
-import { OUTBOUND_EVENTS, defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type OutboundConfig } from '../../integrations/config.ts';
+import { OUTBOUND_EVENTS, defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type MailInConfig, type OutboundConfig } from '../../integrations/config.ts';
 import { RULE_OPS, ruleOpLabel, type RuleOp } from '../../integrations/conditions.ts';
 import { safeUrl } from '../../integrations/enrich.ts';
 import type { Preset } from '../../integrations/presets/index.ts';
@@ -159,7 +159,7 @@ export function chooseKindPage(): string {
     </div>
   </div>
   <div class="scroll">
-    <div class="tiles" style="grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 760px;">
+    <div class="tiles" style="grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 980px;">
       <a class="tile" href="/integracje/nowa?rodzaj=webhook_in">
         <div class="lab">Do SMS</div>
         <div style="font-size: 15px; font-weight: 600; margin-top: 6px;">Aplikacja wysyła SMS</div>
@@ -169,6 +169,11 @@ export function chooseKindPage(): string {
         <div class="lab">Z SMS-a</div>
         <div style="font-size: 15px; font-weight: 600; margin-top: 6px;">SMS albo status trafia do aplikacji</div>
         <div class="d">Odebrany SMS albo status wysyłki idzie do aplikacji w jej formacie, np. helpdesk, ntfy, własny skrypt</div>
+      </a>
+      <a class="tile" href="/integracje/nowa?rodzaj=mail_in">
+        <div class="lab">Z poczty</div>
+        <div style="font-size: 15px; font-weight: 600; margin-top: 6px;">Mail trafia na telefon jako SMS</div>
+        <div class="d">Bramka czyta skrzynkę IMAP i wysyła SMS-y z maili od dozwolonych nadawców, np. alarm z UPS-a, raport z NAS-a, wiadomość pracownika</div>
       </a>
     </div>
   </div>`;
@@ -180,11 +185,12 @@ export function choosePresetPage(kind: IntegrationKind, presets: Preset[]): stri
         <div style="font-size: 15px; font-weight: 600;">${esc(p.name)}</div>
         <div class="d">${esc(p.blurb)}</div>
       </a>`).join('');
+  const mail = kind === 'mail_in';
   return `<div class="head">
     <div>
       <div class="crumb"><a href="/integracje">Integracje</a> / <a href="/integracje/nowa">nowa</a> / ${esc(kindLabel(kind))}</div>
-      <h1 class="h1">Z jaką aplikacją?</h1>
-      <p class="sub">Ustawienie wypełnia formularz; wszystko da się potem zmienić</p>
+      <h1 class="h1">${mail ? 'Gdzie jest skrzynka?' : 'Z jaką aplikacją?'}</h1>
+      <p class="sub">${mail ? 'Ustawienie wypełnia serwer i port; hasło i nadawców podasz w formularzu' : 'Ustawienie wypełnia formularz; wszystko da się potem zmienić'}</p>
     </div>
   </div>
   <div class="scroll">
@@ -306,13 +312,13 @@ const MAX_HEADER_ROWS = 20;
 const MAX_FORM_FIELD_ROWS = 30;
 const SPARE_ROWS = 3;
 
-const textarea = (name: string, value: string, rows: number, extra = '') =>
+export const textarea = (name: string, value: string, rows: number, extra = '') =>
   `<textarea id="${esc(name)}" name="${esc(name)}" rows="${rows}"${extra}>${esc(value)}</textarea>`;
 
-const checkbox = (name: string, checked: boolean, label: string, value = '1') =>
+export const checkbox = (name: string, checked: boolean, label: string, value = '1') =>
   `<label class="choice"><input type="checkbox" name="${esc(name)}" value="${esc(value)}"${checked ? ' checked' : ''}> ${esc(label)}</label>`;
 
-const radio = (name: string, value: string, current: string, label: string) =>
+export const radio = (name: string, value: string, current: string, label: string) =>
   `<label class="choice"><input type="radio" name="${esc(name)}" value="${esc(value)}"${current === value ? ' checked' : ''}> ${esc(label)}</label>`;
 
 /** Wiersze do edycji list: istniejące plus kilka pustych, nigdy ponad limit schematu. */
@@ -361,7 +367,7 @@ export function guideHtml(markdown: string): string {
   return out.join('');
 }
 
-function sectionBasics(ctx: FormContext, v: IntegrationFormValues): string {
+export function sectionBasics(ctx: FormContext, v: Pick<IntegrationFormValues, 'name' | 'apiKeyId' | 'serviceId' | 'orig' | 'enabled'>): string {
   const services = [...new Set(ctx.keys.flatMap((k) => k.serviceIds))];
   const origs = [...new Set(ctx.keys.flatMap((k) => k.origs))];
   const keyField = ctx.row
@@ -483,15 +489,19 @@ function sectionOutput(ctx: FormContext, v: IntegrationFormValues): string {
   </details>`;
 }
 
-function sectionCondition(v: IntegrationFormValues): string {
-  const rules = withSpare(v.rules, { path: '', op: 'eq', value: '' }, MAX_RULE_ROWS);
-  const rows = rules.map((r) => `<div class="inline" style="margin-bottom: 6px;">
-        <input name="rulePath" value="${esc(r.path)}" placeholder="ścieżka, np. heartbeat.status" style="width: 38%;">
+/** Wiersze reguł konstruktora warunku: istniejące plus kilka pustych. */
+export function ruleRows(rules: RuleValues[], placeholder = 'ścieżka, np. heartbeat.status'): string {
+  return withSpare(rules, { path: '', op: 'eq', value: '' }, MAX_RULE_ROWS).map((r) => `<div class="inline" style="margin-bottom: 6px;">
+        <input name="rulePath" value="${esc(r.path)}" placeholder="${esc(placeholder)}" style="width: 38%;">
         <select name="ruleOp" style="width: 170px;">
           ${RULE_OPS.map((op) => `<option value="${op}"${r.op === op ? ' selected' : ''}>${esc(ruleOpLabel(op as RuleOp))}</option>`).join('')}
         </select>
         <input name="ruleValue" value="${esc(r.value)}" placeholder="wartość" style="flex: 1;">
       </div>`).join('');
+}
+
+function sectionCondition(v: IntegrationFormValues): string {
+  const rows = ruleRows(v.rules);
   return `<details${v.conditionMode === 'liquid' || v.rules.length > 0 ? ' open' : ''}>
     <summary>Warunek</summary>
     <div class="field">
@@ -648,7 +658,7 @@ function sectionBodyOutbound(v: IntegrationFormValues): string {
   </details>`;
 }
 
-function sectionGuard(v: IntegrationFormValues): string {
+export function sectionGuard(v: Pick<IntegrationFormValues, 'throttleLimit' | 'throttleWindow' | 'eventLogLimit' | 'storePayloads'>): string {
   return `<details>
     <summary>Ochrona i dziennik</summary>
     <div class="field">
@@ -790,6 +800,9 @@ export function conditionWords(condition: IntegrationConfig['condition']): strin
   }).join('; ');
 }
 
+/** Częstotliwość odpytywania słowami: „30 s”, „1 min”, „60 min”. */
+export const intervalWords = (sec: number): string => (sec < 60 ? `${sec} s` : `${Math.round(sec / 60)} min`);
+
 const kvRow = (label: string, value: string, mono = false) => `<div>${esc(label)}</div><div${mono ? ' class="m"' : ''}>${value}</div>`;
 const dimOr = (value: string | undefined | null, fallback = 'brak') => (value ? esc(value) : `<span class="dim">${esc(fallback)}</span>`);
 
@@ -819,6 +832,17 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     rows.push(kvRow('Treść', simple ? esc(simple.text) : cfg.text.mode === 'path' ? `pole ${esc(cfg.text.path)}` : `szablon Liquid · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
     if (cfg.ticketRefPath) rows.push(kvRow('Identyfikator zgłoszenia', esc(cfg.ticketRefPath), true));
     if (cfg.eventIdPath) rows.push(kvRow('Identyfikator zdarzenia', esc(cfg.eventIdPath), true));
+  } else if (row.kind === 'mail_in') {
+    const cfg = c as MailInConfig;
+    const sec = cfg.imap.security === 'tls' ? 'TLS' : cfg.imap.security === 'starttls' ? 'STARTTLS' : 'bez szyfrowania';
+    rows.push(kvRow('Skrzynka', `${esc(cfg.imap.user)} · ${esc(cfg.imap.host)}:${esc(cfg.imap.port)} ${esc(sec)}${cfg.imap.verifyCert ? '' : ' · bez sprawdzania certyfikatu'} · folder ${esc(cfg.folder)} · co ${esc(intervalWords(cfg.intervalSec))}`, true));
+    rows.push(kvRow('Nadawcy', cfg.senders.length === 0 ? '<span class="fail">pusta lista: żaden mail nie przejdzie</span>' : esc(cfg.senders.map((s) => s.pattern).join(', ')) + (cfg.requireAuthResults ? ' · wymagane SPF/DKIM' : '')));
+    const levels = [cfg.recipientsFromMail.enabled ? `numery z maila (${cfg.recipientsFromMail.where === 'subject' ? 'temat' : 'pierwsza linia'})` : '', cfg.senders.some((s) => s.recipients.length > 0) ? 'numery nadawców' : '', cfg.to.fallback.length > 0 ? `stała lista: ${cfg.to.fallback.join(', ')}` : ''];
+    rows.push(kvRow('Odbiorcy', dimOr(levels.filter((x) => x !== '').join(' · '))));
+    const text = cfg.text.mode === 'liquid' ? 'szablon Liquid' : cfg.text.variant === 'subject_text' ? 'temat i treść' : cfg.text.variant === 'subject' ? 'tylko temat' : 'tylko treść';
+    rows.push(kvRow('Treść', `${esc(text)} · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}${cfg.fields.length > 0 ? ` · wycinki: ${esc(cfg.fields.map((f) => f.name).join(', '))}` : ''}`));
+    const after = cfg.after.action === 'keep' ? 'zostaje w skrzynce, oznaczony jako przeczytany' : cfg.after.action === 'delete' ? 'usunięcie' : `przeniesienie do folderu ${cfg.after.folder}`;
+    rows.push(kvRow('Po przetworzeniu', `${esc(after)}${cfg.reply.enabled ? ' · odpowiedź mailem do nadawcy' : ''}`));
   } else {
     const cfg = c as OutboundConfig;
     rows.push(kvRow('Adres docelowy', `${esc(cfg.method)} ${esc(cfg.url)}`, true));

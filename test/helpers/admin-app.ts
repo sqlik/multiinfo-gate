@@ -24,6 +24,7 @@ import { SettingsRepo } from '../../src/store/settings.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
 import type { NotificationEvent } from '../../src/notifications/rules.ts';
 import type { MailContent } from '../../src/worker/mail.ts';
+import { FakeMailbox, fakeConnect } from './fake-mailbox.ts';
 
 export interface AdminHarness {
   app: ReturnType<typeof buildAdminServer>;
@@ -43,6 +44,8 @@ export interface AdminHarness {
   integrationEvents: IntegrationEventsRepo;
   guards: IntegrationGuardsRepo;
   mailIn: MailInRepo;
+  /** Podróbka skrzynki pocztowej do „Sprawdź połączenie”; hasło TajneHaslo9, UIDVALIDITY 7. */
+  mailbox: FakeMailbox;
   notifications: NotificationsRepo;
   settings: SettingsRepo;
   /** Powiadomienia zgłoszone przez trasy panelu - atrapa notifiera. */
@@ -112,6 +115,7 @@ export async function startAdminHarness(
   const integrationEvents = new IntegrationEventsRepo(db, masterKey);
   const guards = new IntegrationGuardsRepo(db);
   const mailIn = new MailInRepo(db);
+  const mailbox = new FakeMailbox({ password: 'TajneHaslo9', uidValidity: 7 });
   const notifications = new NotificationsRepo(db, masterKey);
   const settings = new SettingsRepo(db);
   const notified: AdminHarness['notified'] = [];
@@ -144,7 +148,7 @@ export async function startAdminHarness(
   const resolve = { value: async (_hostname: string) => ['93.184.216.34'] };
   const app = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, receiver,
-    integrationEvents, guards, mailIn, engine: new TemplateEngine(), notifications, settings, notifier,
+    integrationEvents, guards, mailIn, mailboxConnect: fakeConnect(mailbox), engine: new TemplateEngine(), notifications, settings, notifier,
     mailer: async (_settings, mail) => { if (harness.mailError) throw harness.mailError; mails.push(mail); },
     clients: clients as never, sessions, masterKey, now: () => now,
     resolve: (hostname) => resolve.value(hostname),
@@ -154,7 +158,7 @@ export async function startAdminHarness(
 
   return {
     app, db, accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, refreshed,
-    integrationEvents, guards, mailIn, notifications, settings, notified, mails,
+    integrationEvents, guards, mailIn, mailbox, notifications, settings, notified, mails,
     get mailError() { return harness.mailError; },
     set mailError(e: Error | null) { harness.mailError = e; },
     sessions, userId, masterKey,

@@ -1,7 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { matches } from '../../integrations/conditions.ts';
-import { INTEGRATION_KINDS, defaultInboundConfig, type InboundConfig, type IntegrationKind, type OutboundConfig } from '../../integrations/config.ts';
-import { previewInbound } from '../../integrations/pipeline.ts';
+import { INTEGRATION_KINDS, MAIL_IN_PASSWORD_REF, defaultInboundConfig, defaultMailInConfig, type InboundConfig, type IntegrationKind, type MailInConfig, type OutboundConfig } from '../../integrations/config.ts';
+import { previewInbound, previewMailIn } from '../../integrations/pipeline.ts';
+import { checkMailbox } from '../../worker/mail-in.ts';
+import { mailConfigToValues, mailFormToConfig, mailFormValues, mailWarnings, needsAdvanced, sampleMail, type MailFormValues } from '../mail-form.ts';
+import { mailFormPage, type MailConnection, type MailFormOptions } from '../views/integration-mail.ts';
 import { presetById, presetsFor, type Preset } from '../../integrations/presets/index.ts';
 import { PRIVATE_TARGET_MESSAGE, systemResolver, webhookTarget } from '../../net/private-address.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
@@ -31,7 +34,7 @@ const isKind = (raw: string | undefined): raw is IntegrationKind => (INTEGRATION
 export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps, render: Renderer): void {
   const now = deps.now ?? (() => new Date());
 
-  const presetNames = new Map(presetsFor('webhook_in').concat(presetsFor('webhook_out')).map((p) => [p.id, p.name]));
+  const presetNames = new Map(presetsFor('webhook_in').concat(presetsFor('webhook_out'), presetsFor('mail_in')).map((p) => [p.id, p.name]));
 
   /** Czynne klucze z usługami i nadpisami - do wyboru w formularzu i do filtra listy. */
   const keyOptions = (): KeyOption[] => {
@@ -103,7 +106,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
   };
 
   /** Klucz, usługa i nadpis z formularza: klucz czynny, usługa i nadpis z jego listy albo puste (domyślne klucza). */
-  const keyCheck = (v: IntegrationFormValues, fixedKeyId?: number): { ok: true; keyId: number; accountId: number } | { ok: false; error: string } => {
+  const keyCheck = (v: Pick<IntegrationFormValues, 'apiKeyId' | 'serviceId' | 'orig'>, fixedKeyId?: number): { ok: true; keyId: number; accountId: number } | { ok: false; error: string } => {
     const keyId = fixedKeyId ?? Number.parseInt(v.apiKeyId, 10);
     const key = deps.apiKeys.get(keyId);
     if (!key || key.revokedAt !== null) return { ok: false, error: 'Wskaż czynny klucz API.' };
@@ -242,6 +245,80 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }
   };
 
+  /** Wartości formularza skrzynki z wiersza albo z ustawienia. */
+  const mailValuesOf = (preset: Preset, row?: IntegrationRow): MailFormValues => (row
+    ? mailConfigToValues(row.config as MailInConfig, { name: row.name, apiKeyId: String(row.apiKeyId), serviceId: row.serviceId ?? '', orig: row.orig ?? '', enabled: row.enabled === 1, preset: row.preset, storePayloads: row.storePayloads === 1 })
+    : mailConfigToValues({ ...defaultMailInConfig(), ...preset.mailIn }, { name: preset.id === 'poczta-wlasny' ? '' : preset.name, apiKeyId: '', serviceId: '', orig: '', enabled: true, preset: preset.id, storePayloads: false }));
+
+  /** Tryb formularza skrzynki: prosty, chyba że konfiguracja używa pól zaawansowanych albo proszono o zaawansowany. */
+  const mailModeOf = (tryb: string | undefined, config: MailInConfig | null): { mode: MailFormOptions['mode']; note?: string } => {
+    if (tryb === 'zaawansowany') return { mode: 'zaawansowany' };
+    if (config !== null && needsAdvanced(config)) {
+      return { mode: 'zaawansowany', note: 'Ta skrzynka ma ustawienia spoza trybu prostego (szablon Liquid, wyrażenie regularne, warunek Liquid albo wyłączone sprawdzanie certyfikatu), dlatego otwiera się w trybie zaawansowanym.' };
+    }
+    return { mode: 'prosty' };
+  };
+
+  const mailPage = (request: FastifyRequest, ctx: FormContext, v: MailFormValues, opts: Omit<MailFormOptions, 'hasPassword' | 'smtpConfigured'>) =>
+    render.page(request, {
+      title: ctx.row ? ctx.row.name : 'Nowa skrzynka', active: 'integracje',
+      body: mailFormPage(ctx, v, { ...opts, hasPassword: ctx.secretNames.includes(MAIL_IN_PASSWORD_REF), smtpConfigured: deps.notifications.smtp() !== null }),
+    });
+
+  interface SavedMailForm { config: MailInConfig; password: string | null; keyId: number; v: MailFormValues }
+
+  /** Droga POST skrzynki: walidacja, „Sprawdź połączenie”, „Sprawdź szablon”, zapis przez `save`. */
+  const handleMailForm = async (request: FastifyRequest, reply: FastifyReply, preset: Preset, row: IntegrationRow | undefined, save: (saved: SavedMailForm) => string) => {
+    reply.type('text/html; charset=utf-8');
+    const body = (request.body ?? {}) as Body;
+    const ctx = formContext('mail_in', preset, row);
+    const v = mailFormValues(body);
+    const mode = mailModeOf(String(body.tryb ?? ''), null).mode;
+    const hasPassword = ctx.secretNames.includes(MAIL_IN_PASSWORD_REF);
+    const fail = (error: string, code = 400) => {
+      reply.code(code);
+      return mailPage(request, ctx, v, { mode, error });
+    };
+    const key = keyCheck(v, row?.apiKeyId);
+    if (!key.ok) return fail(key.error);
+    const built = mailFormToConfig(v, hasPassword, deps.engine);
+    if (!built.ok) return fail(built.error);
+    const warnings = mailWarnings(built.config);
+    const action = String(body.action ?? '');
+
+    if (action === 'polaczenie') {
+      const password = built.password ?? (row ? deps.integrations.secrets(row.id)[MAIL_IN_PASSWORD_REF] ?? '' : '');
+      const connection: MailConnection = deps.mailboxConnect
+        ? await checkMailbox(deps.mailboxConnect, { ...built.config.imap, password }, built.config.folder)
+        : 'unavailable';
+      return mailPage(request, ctx, v, { mode, connection, warnings });
+    }
+    if (action === 'sprawdz') {
+      const sample = await sampleMail(v, now());
+      if (sample === null) return fail('Podaj próbkę: wklej surowy mail albo wypełnij nadawcę, temat i treść.');
+      const preview = previewMailIn(deps.engine, built.config, sample, countryCodeOf(key.accountId), now());
+      return mailPage(request, ctx, v, { mode, preview, warnings });
+    }
+    try {
+      return save({ config: built.config, password: built.password, keyId: key.keyId, v });
+    } catch (e) {
+      if ((e as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') return fail(`Integracja o tej nazwie już istnieje przy tym kluczu: ${v.name}.`);
+      throw e;
+    }
+  };
+
+  /** Stan skrzynki po zapisie: wiersz stanu, zaległe na jedno uruchomienie, nowy próg po zmianie folderu albo konta. */
+  const afterMailSave = (id: number, v: MailFormValues, before: MailInConfig | null, after: MailInConfig) => {
+    const at = now();
+    deps.mailIn?.ensureState(id, at);
+    deps.mailIn?.setBacklog(id, v.backlog ? 1 : 0);
+    const moved = before !== null && (before.folder !== after.folder || before.imap.host !== after.imap.host || before.imap.user !== after.imap.user);
+    if (moved) {
+      deps.mailIn?.setFloor(id, 0, 0);
+      deps.mailIn?.pollNow(id, at);
+    }
+  };
+
   /** Pola konfiguracji, które zmieniły się między dwiema wersjami - do dziennika audytu, bez wartości. */
   const changedFields = (before: IntegrationRow, after: IntegrationRow): string[] => {
     const out: string[] = [];
@@ -284,6 +361,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const preset = presetById(ustawienie);
     if (!preset || !preset.kinds.includes(rodzaj)) return reply.callNotFound();
     reply.type('text/html; charset=utf-8');
+    if (rodzaj === 'mail_in') return mailPage(request, formContext('mail_in', preset), mailValuesOf(preset), { mode: mailModeOf(tryb, null).mode });
     const ctx = formContext(rodzaj, preset);
     const values = valuesFromPreset(rodzaj, preset);
     const mode = modeOf(tryb, preset, rodzaj, null);
@@ -295,6 +373,24 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const kind = String(body.kind ?? '');
     const preset = presetById(String(body.preset ?? ''));
     if (!isKind(kind) || !preset || !preset.kinds.includes(kind)) return reply.callNotFound();
+
+    if (kind === 'mail_in') {
+      return handleMailForm(request, reply, preset, undefined, ({ config, password, keyId, v }) => {
+        const id = deps.integrations.insert({
+          name: v.name, kind, apiKeyId: keyId, serviceId: v.serviceId || null, orig: v.orig || null, preset: preset.id,
+          enabled: v.enabled ? 1 : 0, config, secrets: { [MAIL_IN_PASSWORD_REF]: password ?? '' }, storePayloads: v.storePayloads ? 1 : 0, createdAt: now(),
+        });
+        afterMailSave(id, v, null, config);
+        deps.audit.record({
+          actor: actorOf(request.adminUserId), action: 'integracja.utworzenie', target: `integracja:${id}`,
+          meta: { nazwa: v.name, rodzaj: kind, ustawienie: preset.id, klucz: keyId, wlaczona: v.enabled, sekrety: [MAIL_IN_PASSWORD_REF] },
+          ip: request.ip,
+        });
+        render.flash(request, 'ok', `Skrzynka ${v.name} utworzona. Pierwsze sprawdzenie za chwilę.`);
+        reply.redirect('/integracje', 302);
+        return '';
+      });
+    }
 
     return handleForm(request, reply, kind, preset, undefined, ({ config, secrets, keyId, accountId, v }) => {
       const id = deps.integrations.insert({
@@ -346,6 +442,11 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     if (!row) return;
     reply.type('text/html; charset=utf-8');
     const preset = presetOf(row);
+    if (row.kind === 'mail_in') {
+      const config = row.config as MailInConfig;
+      const mode = mailModeOf(request.query.tryb, config);
+      return mailPage(request, formContext('mail_in', preset, row), mailValuesOf(preset, row), { ...mode, warnings: mailWarnings(config) });
+    }
     const values = valuesOf(row, null);
     const mode = modeOf(request.query.probka === undefined ? request.query.tryb : 'zaawansowany', preset, row.kind, values);
     if (mode.mode === 'prosty') return simplePage(request, formContext(row.kind, preset, row), simpleDefaults(preset, values));
@@ -359,6 +460,25 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
   app.post<{ Params: { id: string }; Body: Body }>('/integracje/:id/edytuj', async (request, reply) => {
     const row = rowOr404(request.params.id, reply);
     if (!row) return;
+    if (row.kind === 'mail_in') {
+      return handleMailForm(request, reply, presetOf(row), row, ({ config, password, v }) => {
+        deps.integrations.update(row.id, {
+          name: v.name, serviceId: v.serviceId || null, orig: v.orig || null, preset: row.preset, enabled: v.enabled ? 1 : 0,
+          config, storePayloads: v.storePayloads ? 1 : 0, ...(password !== null ? { secrets: { [MAIL_IN_PASSWORD_REF]: password } } : {}),
+        }, now());
+        afterMailSave(row.id, v, row.config as MailInConfig, config);
+        const after = deps.integrations.get(row.id)!;
+        const fields = changedFields(row, after);
+        if (password !== null) fields.push('secrets');
+        deps.audit.record({
+          actor: actorOf(request.adminUserId), action: 'integracja.edycja', target: `integracja:${row.id}`,
+          meta: { nazwa: v.name, pola: [...new Set(fields)] }, ip: request.ip,
+        });
+        render.flash(request, 'ok', `Skrzynka ${v.name} zapisana.`);
+        reply.redirect(`/integracje/${row.id}`, 302);
+        return '';
+      });
+    }
     return handleForm(request, reply, row.kind, presetOf(row), row, ({ config, secrets, secretsChanged, accountId, v }) => {
       // Cały zestaw sekretów od nowa: nieużyte odniesienia kasujemy pustą wartością.
       const patch: Record<string, string> = Object.fromEntries(deps.integrations.secretNames(row.id).map((n) => [n, '']));
