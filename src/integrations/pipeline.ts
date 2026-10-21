@@ -154,6 +154,84 @@ export function previewInbound(
   }
 }
 
+import type { AccountRow } from '../store/accounts.ts';
+import type { ApiKeyRow } from '../store/api-keys.ts';
+
+/** Zapis wpisu dziennika integracji dla bieżącego zdarzenia; każdy potok składa go po swojemu. */
+export type Noter = (result: IntegrationEventInput['result'], extra?: Partial<IntegrationEventInput>) => void;
+
+/** Klucz i konto integracji; powody niedostępności słowami, do wpisu dziennika. */
+export function resolveKeyAccount(deps: PipelineDeps, integration: IntegrationRow, now: Date):
+  { ok: true; key: ApiKeyRow; account: AccountRow } | { ok: false; detail: string } {
+  const key = deps.apiKeys.get(integration.apiKeyId);
+  if (!key) return { ok: false, detail: 'klucz API nie istnieje' };
+  const usable = keyUsable(key, now);
+  if (!usable.ok) return { ok: false, detail: usable.reason };
+  const account = deps.accounts.get(key.accountId);
+  if (!account) return { ok: false, detail: 'konto nie istnieje' };
+  if (account.pausedReason !== null) return { ok: false, detail: `konto wstrzymane: ${account.pausedReason}` };
+  return { ok: true, key, account };
+}
+
+/**
+ * Filtr warunku oraz ochrona przed burzą, z wpisami dziennika. `between` to krok między nimi
+ * (webhook sprawdza tam idempotencję): wynik inny niż null kończy potok.
+ */
+export function passGuards(
+  deps: PipelineDeps, integration: IntegrationRow, config: { condition: InboundConfig['condition']; throttle: InboundConfig['throttle'] },
+  context: Record<string, unknown>, note: Noter, between: (() => { kind: 'duplicate' } | null) | undefined, now: Date,
+): { kind: 'ok' } | { kind: 'skipped' } | { kind: 'duplicate' } | { kind: 'throttled'; notify: boolean } {
+  if (!matches(config.condition, context, deps.engine)) {
+    note('skipped', { reason: 'warunek niespełniony' });
+    return { kind: 'skipped' };
+  }
+  const stop = between?.();
+  if (stop) return stop;
+  const gate = deps.guards.throttle(integration.id, config.throttle.limit, config.throttle.windowMinutes, now);
+  if (!gate.allowed) {
+    note('throttled', { reason: `ponad ${config.throttle.limit} w ${config.throttle.windowMinutes} min` });
+    return { kind: 'throttled', notify: gate.notify };
+  }
+  return { kind: 'ok' };
+}
+
+/** Limit części, wysyłka przez `submitMessages`, wpis `sent` albo `error`. */
+export function dispatch(
+  deps: PipelineDeps, integration: IntegrationRow, key: ApiKeyRow, text: string, recipients: string[],
+  config: { maxParts: number; overflow: 'truncate' | 'reject' }, note: Noter, now: Date,
+  extra: { inReplyTo?: string; sentReason?: string } = {},
+): { kind: 'sent'; messageIds: string[]; parts: number } | { kind: 'error'; code: InboundErrorCode; detail: string } {
+  const fitted = fitToParts(text, config.maxParts);
+  if (fitted.over && config.overflow === 'reject') {
+    const detail = `Treść wymaga więcej niż ${config.maxParts} części.`;
+    note('error', { reason: detail });
+    return { kind: 'error', code: 'too_many_parts', detail };
+  }
+  try {
+    const results = submitMessages(deps, authFromKey(key), {
+      to: recipients, text: fitted.text, integrationId: integration.id, maxParts: config.maxParts,
+      ...(integration.serviceId ? { serviceId: integration.serviceId } : {}),
+      ...(integration.orig ? { orig: integration.orig } : {}),
+      ...(extra.inReplyTo ? { inReplyTo: extra.inReplyTo } : {}),
+    }, now);
+    const messageIds = results.map((r) => r.id);
+    const reason = [messageIds.length > 1 ? `${messageIds.length} odbiorców` : null, extra.sentReason ?? null].filter((r) => r !== null).join('; ');
+    note('sent', {
+      ...(messageIds[0] ? { messageId: messageIds[0] } : {}),
+      ...(extra.inReplyTo ? { inboundId: extra.inReplyTo } : {}),
+      ...(reason !== '' ? { reason } : {}),
+    });
+    return { kind: 'sent', messageIds, parts: fitted.parts };
+  } catch (e) {
+    if (e instanceof ApiError) {
+      const code: InboundErrorCode = e.code === 'invalid_phone' ? 'invalid_phone' : e.code === 'too_many_parts' ? 'too_many_parts' : 'service';
+      note('error', { reason: e.message });
+      return { kind: 'error', code, detail: e.message };
+    }
+    throw e;
+  }
+}
+
 /**
  * Potok przychodzący: klucz i konto, filtr, idempotencja, burza, dopytanie, szablony, wysyłka przez
  * `submitMessages`, wpis w dzienniku. Każde wyjście zapisuje wpis; wołający zamienia wynik
@@ -179,13 +257,9 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
     return { kind: 'unavailable', detail };
   };
 
-  const key = deps.apiKeys.get(integration.apiKeyId);
-  if (!key) return unavailable('klucz API nie istnieje');
-  const usable = keyUsable(key, now);
-  if (!usable.ok) return unavailable(usable.reason);
-  const account = deps.accounts.get(key.accountId);
-  if (!account) return unavailable('konto nie istnieje');
-  if (account.pausedReason !== null) return unavailable(`konto wstrzymane: ${account.pausedReason}`);
+  const resolved = resolveKeyAccount(deps, integration, now);
+  if (!resolved.ok) return unavailable(resolved.detail);
+  const { key, account } = resolved;
 
   // Odebrany SMS, do którego pasuje identyfikator zgłoszenia z ładunku (tylko z integracji tego klucza).
   const ref = ticketRef(config, payload);
@@ -197,25 +271,19 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
   let text: string;
   let recipients: { list: string[]; fromPayload: boolean };
   try {
-    if (!matches(config.condition, context, deps.engine)) {
-      note('skipped', { reason: 'warunek niespełniony' });
-      return { kind: 'skipped' };
-    }
-    if (config.eventIdPath !== undefined) {
+    const dedup = (): { kind: 'duplicate' } | null => {
+      if (config.eventIdPath === undefined) return null;
       const eventId = readPath(payload, config.eventIdPath);
-      if (eventId !== undefined && eventId !== null && String(eventId) !== '') {
-        if (!deps.guards.dedup(integration.id, String(eventId), now)) {
-          note('duplicate', { reason: `identyfikator zdarzenia ${String(eventId)}` });
-          return { kind: 'duplicate' };
-        }
-        dedupKey = String(eventId);
+      if (eventId === undefined || eventId === null || String(eventId) === '') return null;
+      if (!deps.guards.dedup(integration.id, String(eventId), now)) {
+        note('duplicate', { reason: `identyfikator zdarzenia ${String(eventId)}` });
+        return { kind: 'duplicate' };
       }
-    }
-    const gate = deps.guards.throttle(integration.id, config.throttle.limit, config.throttle.windowMinutes, now);
-    if (!gate.allowed) {
-      note('throttled', { reason: `ponad ${config.throttle.limit} w ${config.throttle.windowMinutes} min` });
-      return { kind: 'throttled', notify: gate.notify };
-    }
+      dedupKey = String(eventId);
+      return null;
+    };
+    const guard = passGuards(deps, integration, config, context, note, dedup, now);
+    if (guard.kind !== 'ok') return guard;
     // Dopytanie dopiero tutaj: odsiane, zduplikowane oraz zdławione zdarzenie nie zajmuje aplikacji.
     if (config.enrich) {
       const wynik = await enrich({
@@ -278,31 +346,13 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
     throw e;
   }
 
-  const fitted = fitToParts(text, config.maxParts);
-  if (fitted.over && config.overflow === 'reject') return fail('too_many_parts', `Treść wymaga więcej niż ${config.maxParts} części.`);
-
   // Odpowiedź w wątku: zgłoszenie pasuje do odebranej, a jedyny odbiorca to jej nadawca.
   const inReplyTo = original && normalized.length === 1 && original.sender === normalized[0] ? original.id : undefined;
 
-  try {
-    const results = submitMessages(deps, authFromKey(key), {
-      to: normalized, text: fitted.text, integrationId: integration.id, maxParts: config.maxParts,
-      ...(integration.serviceId ? { serviceId: integration.serviceId } : {}),
-      ...(integration.orig ? { orig: integration.orig } : {}),
-      ...(inReplyTo ? { inReplyTo } : {}),
-    }, now);
-    const messageIds = results.map((r) => r.id);
-    note('sent', {
-      ...(messageIds[0] ? { messageId: messageIds[0] } : {}),
-      ...(inReplyTo ? { inboundId: inReplyTo } : {}),
-      ...(messageIds.length > 1 ? { reason: `${messageIds.length} odbiorców` } : {}),
-    });
-    return { kind: 'sent', messageIds };
-  } catch (e) {
-    if (e instanceof ApiError) {
-      const code: InboundErrorCode = e.code === 'invalid_phone' ? 'invalid_phone' : e.code === 'too_many_parts' ? 'too_many_parts' : 'service';
-      return fail(code, e.message);
-    }
-    throw e;
+  const sent = dispatch(deps, integration, key, text, normalized, config, note, now, inReplyTo ? { inReplyTo } : {});
+  if (sent.kind === 'error') {
+    log.warn('integracja.blad', { integrationId: integration.id, code: sent.code });
+    return sent;
   }
+  return { kind: 'sent', messageIds: sent.messageIds };
 }
