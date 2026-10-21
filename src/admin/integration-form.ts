@@ -79,7 +79,7 @@ function pathOr(raw: string, what: string): { path?: string } | string {
   return { path: raw };
 }
 
-function condition(v: IntegrationFormValues, engine: TemplateEngine): InboundConfig['condition'] | string {
+function condition(v: CommonValues, engine: TemplateEngine): InboundConfig['condition'] | string {
   if (v.conditionMode === 'liquid') {
     if (v.conditionExpr.trim() === '') return 'Warunek w trybie Liquid wymaga wyrażenia - albo przełącz na reguły.';
     const problem = engine.validate(v.conditionExpr);
@@ -95,22 +95,31 @@ function condition(v: IntegrationFormValues, engine: TemplateEngine): InboundCon
   return { mode: 'builder', rules };
 }
 
+export type CommonValues = Pick<IntegrationFormValues, 'name' | 'throttleLimit' | 'throttleWindow' | 'eventLogLimit' | 'conditionMode' | 'rules' | 'conditionExpr'>;
+export type CommonConfig = Pick<InboundConfig, 'condition' | 'throttle' | 'eventLogLimit'>;
+
+/** Pola wspólne każdej integracji (nazwa, burza, dziennik, warunek) z formularza; błąd jako zdanie po polsku. */
+export function commonFromValues(v: CommonValues, engine: TemplateEngine): CommonConfig | string {
+  if (v.name === '') return 'Podaj nazwę integracji.';
+  const throttleLimit = int(v.throttleLimit, 1, 1000, 'Limit burzy');
+  if (typeof throttleLimit === 'string') return throttleLimit;
+  const throttleWindow = int(v.throttleWindow, 1, 1440, 'Okno limitu burzy');
+  if (typeof throttleWindow === 'string') return throttleWindow;
+  const eventLogLimit = int(v.eventLogLimit, 20, 2000, 'Wpisów w dzienniku');
+  if (typeof eventLogLimit === 'string') return eventLogLimit;
+  const cond = condition(v, engine);
+  if (typeof cond === 'string') return cond;
+  return { condition: cond, throttle: { limit: throttleLimit, windowMinutes: throttleWindow }, eventLogLimit };
+}
+
 /**
  * Wartości formularza na konfigurację i sekrety; komunikaty po polsku, bo trasa rysuje formularz
  * z pierwszym błędem. `carried` to sekrety do przeniesienia z dotychczasowych (nowe odniesienie → stare).
  */
 export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, engine: TemplateEngine, existing: ExistingSecrets): FormToConfig {
   const fail = (error: string): FormToConfig => ({ ok: false, error });
-  if (v.name === '') return fail('Podaj nazwę integracji.');
-  const throttleLimit = int(v.throttleLimit, 1, 1000, 'Limit burzy');
-  if (typeof throttleLimit === 'string') return fail(throttleLimit);
-  const throttleWindow = int(v.throttleWindow, 1, 1440, 'Okno limitu burzy');
-  if (typeof throttleWindow === 'string') return fail(throttleWindow);
-  const eventLogLimit = int(v.eventLogLimit, 20, 2000, 'Wpisów w dzienniku');
-  if (typeof eventLogLimit === 'string') return fail(eventLogLimit);
-  const cond = condition(v, engine);
-  if (typeof cond === 'string') return fail(cond);
-  const common = { condition: cond, throttle: { limit: throttleLimit, windowMinutes: throttleWindow }, eventLogLimit };
+  const common = commonFromValues(v, engine);
+  if (typeof common === 'string') return fail(common);
 
   const secrets: Record<string, string> = {};
   const carried: Record<string, string> = {};

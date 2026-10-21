@@ -1,4 +1,4 @@
-import type { InboundConfig, IntegrationKind, OutboundConfig } from '../config.ts';
+import type { InboundConfig, IntegrationKind, MailInConfig, OutboundConfig } from '../config.ts';
 
 export interface PresetField { path: string; label: string }
 
@@ -21,6 +21,8 @@ export interface Preset {
   fields: PresetField[];
   inbound?: Partial<InboundConfig>;
   outbound?: Partial<OutboundConfig>;
+  /** Skrzynka pocztowa: ustawienie wypełnia tylko sekcję „Skrzynka” (serwer, port, zabezpieczenie). */
+  mailIn?: Partial<MailInConfig>;
   /** Sekrety, o które formularz zapyta. */
   secrets?: PresetSecret[];
   /**
