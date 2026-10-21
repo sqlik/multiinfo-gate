@@ -21,7 +21,7 @@ describe('mailConfigToValues i mailFormToConfig', () => {
       ...defaultMailInConfig(),
       imap: { host: 'h', port: 143, security: 'starttls' as const, verifyCert: false, user: 'u', passRef: 'imap_password' as const },
       folder: 'Alarmy', intervalSec: 300 as const,
-      senders: [{ pattern: 'tomek@plus.pl', recipients: ['601000001', '601000002'] }, { pattern: '@sqlik.com', recipients: [] }],
+      senders: [{ pattern: 'jan@przyklad.pl', recipients: ['601000001', '601000002'] }, { pattern: '@przyklad.pl', recipients: [] }],
       requireAuthResults: true, recipientsFromMail: { enabled: true, where: 'body' as const }, to: { fallback: ['48601000009'] },
       clean: { cutFrom: ['Wygenerowano automatycznie'] },
       fields: [{ name: 'kod', mode: 'between' as const, after: 'Error code:', until: '(' }, { name: 'stan', mode: 'regex' as const, pattern: 'Status: (\\w+)', flags: 'i' }],
@@ -30,7 +30,7 @@ describe('mailConfigToValues i mailFormToConfig', () => {
       condition: { mode: 'builder' as const, rules: [{ path: 'subject', op: 'contains' as const, value: 'UPS' }] },
     };
     const values = mailConfigToValues(config, base);
-    expect(values.senders).toBe('tomek@plus.pl: 601000001, 601000002\n@sqlik.com');
+    expect(values.senders).toBe('jan@przyklad.pl: 601000001, 601000002\n@przyklad.pl');
     expect(values.fields).toEqual([
       { name: 'kod', mode: 'between', after: 'Error code:', until: '(', pattern: '', flags: '' },
       { name: 'stan', mode: 'regex', after: '', until: '', pattern: 'Status: (\\w+)', flags: 'i' },
@@ -44,9 +44,9 @@ describe('mailConfigToValues i mailFormToConfig', () => {
   });
 
   it('lista nadawców: jedna pozycja na linię, numery po dwukropku rozdzielone przecinkami', () => {
-    const r = mailFormToConfig({ ...v(), senders: 'tomek@plus.pl: 601000001, 601000002\n@sqlik.com\nups@przyklad.test:' }, false, engine);
+    const r = mailFormToConfig({ ...v(), senders: 'jan@przyklad.pl: 601000001, 601000002\n@przyklad.pl\nups@przyklad.test:' }, false, engine);
     expect(r.ok && r.config.senders).toEqual([
-      { pattern: 'tomek@plus.pl', recipients: ['601000001', '601000002'] }, { pattern: '@sqlik.com', recipients: [] }, { pattern: 'ups@przyklad.test', recipients: [] },
+      { pattern: 'jan@przyklad.pl', recipients: ['601000001', '601000002'] }, { pattern: '@przyklad.pl', recipients: [] }, { pattern: 'ups@przyklad.test', recipients: [] },
     ]);
   });
 
@@ -55,7 +55,7 @@ describe('mailConfigToValues i mailFormToConfig', () => {
     expect(mailFormToConfig({ ...v(), password: '' }, false, engine)).toEqual({ ok: false, error: 'Podaj hasło skrzynki.' });
     expect(mailFormToConfig({ ...v(), password: '' }, true, engine).ok).toBe(true);
     expect(mailFormToConfig({ ...v(), user: '' }, true, engine)).toEqual({ ok: false, error: 'Podaj login skrzynki.' });
-    expect(mailFormToConfig({ ...v(), senders: 'sqlik.com' }, true, engine)).toEqual({ ok: false, error: 'Nadawca „sqlik.com”: podaj pełny adres albo domenę z małpą, np. @sqlik.com.' });
+    expect(mailFormToConfig({ ...v(), senders: 'przyklad.pl' }, true, engine)).toEqual({ ok: false, error: 'Nadawca „przyklad.pl”: podaj pełny adres albo domenę z małpą, np. @przyklad.pl.' });
     expect(mailFormToConfig({ ...v(), afterAction: 'move', afterFolder: '' }, true, engine)).toEqual({ ok: false, error: 'Podaj folder, do którego przenosić przetworzone wiadomości.' });
     expect(mailFormToConfig({ ...v(), fields: [{ name: '', mode: 'between', after: 'x', until: '', pattern: '', flags: '' }] }, true, engine)).toEqual({ ok: false, error: 'Wycinek bez nazwy: podaj nazwę małymi literami, np. kod.' });
     expect(mailFormToConfig({ ...v(), fields: [{ name: 'Kod', mode: 'between', after: 'x', until: '', pattern: '', flags: '' }] }, true, engine).ok).toBe(false);

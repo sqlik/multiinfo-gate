@@ -36,8 +36,8 @@ describe('parseMail', () => {
 
   it('nagłówek From zakodowany w RFC 2047 jest zdekodowany, adres małymi literami', async () => {
     const m = await parseMail(read('from-rfc2047.eml'));
-    expect(m.from).toBe('tomek@przyklad.test');
-    expect(m.fromName).toBe('Tomasz Sawko');
+    expect(m.from).toBe('jan@przyklad.test');
+    expect(m.fromName).toBe('Jan Kowalski');
     expect(m.subject).toBe('Próba kodowania');
     expect(m.textFull).toContain('Treść próbna.');
   });

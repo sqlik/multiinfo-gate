@@ -97,7 +97,7 @@ function sectionSenders(v: MailFormValues): string {
     <summary>Kto może wysyłać</summary>
     <div class="field">
       <label for="senders">Nadawcy</label>
-      ${textarea('senders', v.senders, 5, ' placeholder="tomek@plus.pl: 601000001, 601000002\n@sqlik.com\nups@przyklad.pl"')}
+      ${textarea('senders', v.senders, 5, ' placeholder="ups@przyklad.pl: 601000001, 601000002\n@przyklad.pl\njan@przyklad.pl"')}
       ${hint('Jedna pozycja w wierszu: pełny adres albo domena poprzedzona znakiem @. Po dwukropku można podać numery, na które mają trafiać SMS-y od tego nadawcy. Pusta lista oznacza, że żadna wiadomość nie zostanie przetworzona')}
     </div>
     <div class="field">
@@ -288,7 +288,7 @@ export function mailFormPage(ctx: FormContext, v: MailFormValues, opts: MailForm
   const edit = ctx.row !== undefined;
   const action = edit ? `/integracje/${ctx.row!.id}/edytuj` : '/integracje';
   const guide = ctx.preset.guide === '' ? '' : `<details class="panel" style="max-width: 760px; padding: 0;">
-      <summary style="padding: 12px 16px;">Gdzie wziąć dane skrzynki: ${esc(ctx.preset.name)}</summary>
+      <summary style="padding: 12px 16px;">Dane serwera IMAP: ${esc(ctx.preset.name)}</summary>
       <div class="guide" style="padding: 0 16px 12px; font-size: 12.5px; line-height: 1.55;">${guideHtml(ctx.preset.guide)}</div>
     </details>`;
   const warnings = (opts.warnings ?? []).map((w) => `<div class="notice">${esc(w)}</div>`).join('');
