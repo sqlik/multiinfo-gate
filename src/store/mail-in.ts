@@ -64,6 +64,11 @@ export class MailInRepo {
     this.db.prepare('INSERT OR IGNORE INTO mail_in_state (integration_id, next_poll_at) VALUES (?, ?)').run(integrationId, now.toISOString());
   }
 
+  /** Wiersz stanu dla każdej integracji mail_in, która go nie ma (założonej poza formularzem); zwraca liczbę dodanych. */
+  ensureAll(now: Date): number {
+    return this.db.prepare("INSERT OR IGNORE INTO mail_in_state (integration_id, next_poll_at) SELECT id, ? FROM integrations WHERE kind = 'mail_in'").run(now.toISOString()).changes;
+  }
+
   state(integrationId: number): MailInState | undefined {
     const row = this.db.prepare('SELECT * FROM mail_in_state WHERE integration_id = ?').get(integrationId) as StateRow | undefined;
     return row ? toState(row) : undefined;
@@ -129,6 +134,16 @@ export class MailInRepo {
   remember(integrationId: number, key: SeenKey, outcome: SeenOutcome, at: Date): void {
     this.db.prepare('INSERT OR IGNORE INTO mail_in_seen (integration_id, message_id, uidvalidity, uid, at, outcome) VALUES (?, ?, ?, ?, ?, ?)')
       .run(integrationId, key.messageId, key.uidvalidity, key.uid, at.toISOString(), outcome);
+  }
+
+  /** Wynik po przetworzeniu: wiersz powstaje przed wysyłką jako `skipped`, tu dostaje właściwy wynik. */
+  setOutcome(integrationId: number, key: SeenKey, outcome: SeenOutcome): void {
+    this.db.prepare('UPDATE mail_in_seen SET outcome = ? WHERE integration_id = ? AND uidvalidity = ? AND uid = ?').run(outcome, integrationId, key.uidvalidity, key.uid);
+  }
+
+  /** Wyniki zapamiętanych maili integracji, rosnąco po UID; do testów i diagnostyki. */
+  outcomes(integrationId: number): Array<{ uid: number; outcome: SeenOutcome }> {
+    return this.db.prepare('SELECT uid, outcome FROM mail_in_seen WHERE integration_id = ? ORDER BY uidvalidity, uid').all(integrationId) as Array<{ uid: number; outcome: SeenOutcome }>;
   }
 
   /** Sprzątanie w turze utrzymaniowej; zwraca liczbę usuniętych wierszy. */

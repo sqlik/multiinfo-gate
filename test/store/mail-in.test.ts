@@ -5,7 +5,7 @@ import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
 import { IntegrationsRepo } from '../../src/store/integrations.ts';
 import { MailInRepo } from '../../src/store/mail-in.ts';
-import { defaultInboundConfig } from '../../src/integrations/config.ts';
+import { defaultInboundConfig, defaultMailInConfig } from '../../src/integrations/config.ts';
 import { accountInput } from './helpers.ts';
 
 const NOW = new Date('2026-10-21T10:00:00Z');
@@ -31,6 +31,16 @@ describe('MailInRepo: stan skrzynki', () => {
     repo.ensureState(id, later(60_000));
     expect(repo.state(id)?.nextPollAt).toBe(NOW.toISOString());
     expect(repo.state(id)?.uidFloor).toBe(0);
+  });
+
+  it('ensureAll zakłada stan każdej integracji mail_in bez stanu, nie rusza istniejących', () => {
+    expect(repo.ensureAll(NOW)).toBe(0);
+    const mail = integrations.insert({ name: 'm', kind: 'mail_in', apiKeyId: integrations.get(id)!.apiKeyId, serviceId: null, orig: null, preset: 'poczta-wlasny', enabled: 1, config: defaultMailInConfig(), secrets: {}, storePayloads: 0, createdAt: NOW });
+    expect(repo.ensureAll(NOW)).toBe(1);
+    repo.setFloor(mail, 5, 7);
+    expect(repo.ensureAll(later(1000))).toBe(0);
+    expect(repo.state(mail)).toMatchObject({ uidFloor: 5, nextPollAt: NOW.toISOString() });
+    expect(repo.state(id)).toBeUndefined();
   });
 
   it('due zwraca tylko włączone integracje z terminem nie późniejszym niż teraz', () => {
@@ -98,6 +108,12 @@ describe('MailInRepo: przetworzone maile', () => {
     expect(repo.seen(id, { messageId: '<a@x>', uidvalidity: 8, uid: 1 })).toBe(true);
     expect(repo.seen(id, { messageId: null, uidvalidity: 7, uid: 10 })).toBe(true);
     expect(repo.seen(id, { messageId: '<b@x>', uidvalidity: 7, uid: 11 })).toBe(false);
+  });
+
+  it('setOutcome zmienia wynik zapamiętanego maila', () => {
+    repo.remember(id, { messageId: '<a@x>', uidvalidity: 7, uid: 10 }, 'skipped', NOW);
+    repo.setOutcome(id, { messageId: '<a@x>', uidvalidity: 7, uid: 10 }, 'sent');
+    expect(repo.outcomes(id)).toEqual([{ uid: 10, outcome: 'sent' }]);
   });
 
   it('remember tego samego UID drugi raz nie rzuca, pruneSeenBefore kasuje stare', () => {

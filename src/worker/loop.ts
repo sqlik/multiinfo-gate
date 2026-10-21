@@ -54,6 +54,8 @@ export class Worker {
     this.running = true;
     try {
       const now = (this.opts.now ?? (() => new Date()))();
+      // Skrzynki w osobnym torze: wisząca skrzynka nie wstrzymuje wysyłki SMS-ów, a poller sam pilnuje, by jedną odpytywać raz naraz.
+      void this.deps.mailIn?.tick(now).catch((error: unknown) => { (this.deps.log ?? silentLogger).error('worker.skrzynki_blad', { error }); });
       const jobs = this.deps.jobs.claim(now, this.opts.batch ?? 10);
       const width = Math.max(1, this.opts.concurrency ?? DEFAULT_CONCURRENCY);
       const queue = [...jobs];
@@ -84,6 +86,7 @@ export class Worker {
       ['idempotencja', () => this.deps.guards?.pruneDedupBefore(new Date(now.getTime() - DAY_MS))],
       ['ladunki', () => this.deps.integrationEvents?.scrubPayloadsBefore(new Date(now.getTime() - 7 * DAY_MS))],
       ['kolejka_powiadomien', () => this.deps.notifications?.pruneBefore(new Date(now.getTime() - 30 * DAY_MS))],
+      ['skrzynki_przetworzone', () => this.deps.mailInRepo?.pruneSeenBefore(new Date(now.getTime() - 180 * DAY_MS))],
     ];
     for (const [name, step] of steps) {
       try {
