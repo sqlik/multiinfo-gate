@@ -10,6 +10,10 @@ export class FakeMailbox {
   rejectMove = false;
   /** Opóźnienie każdego połączenia; do testu, że wisząca skrzynka nie blokuje innych. */
   delayMs = 0;
+  /** Opóźnienie każdego pobrania treści; do testu przerwania odpytania w połowie. */
+  delaySourceMs = 0;
+  /** Błąd rzucany przy pobraniu treści danego UID; do testu nieczytelnego maila. */
+  readonly failSource = new Map<number, Error>();
   readonly calls: string[] = [];
   private readonly folderSet: Set<string>;
   private readonly items: FakeMessage[] = [];
@@ -66,7 +70,13 @@ export class FakeMailbox {
         const id = /^Message-ID:\s*(<[^>]+>)/im.exec(m.source);
         return { uid, size: m.size, messageId: id ? id[1]! : null };
       }),
-      source: async (uid) => { this.calls.push(`source:${uid}`); return Buffer.from(need(uid).source); },
+      source: async (uid) => {
+        this.calls.push(`source:${uid}`);
+        if (this.delaySourceMs > 0) await new Promise((r) => setTimeout(r, this.delaySourceMs));
+        const fail = this.failSource.get(uid);
+        if (fail) throw fail;
+        return Buffer.from(need(uid).source);
+      },
       markSeen: async (uid) => { this.calls.push(`markSeen:${uid}`); need(uid).seen = true; },
       move: async (uid, folder) => {
         this.calls.push(`move:${uid}:${folder}`);

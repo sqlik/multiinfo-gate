@@ -110,6 +110,21 @@ describe('formularz skrzynki', () => {
     expect(h.integrations.list()).toHaveLength(0);
   });
 
+  it('Sprawdź połączenie ze złą nazwą folderu pokazuje błąd folderu razem z listą folderów do kliknięcia', async () => {
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody({ folder: 'Nieistniejacy' }) });
+    expect(res.body).toContain('Folder nie istnieje');
+    expect(res.body).toContain('data-fill="#folder"');
+    expect(res.body).toContain('data-value="INBOX"');
+  });
+
+  it('włączenie skrzynki przez formularz edycji ustawia próg od nowa', async () => {
+    await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody({ enabled: '' }) });
+    const row = h.integrations.list()[0]!;
+    h.mailIn.setFloor(row.id, 5, 7);
+    await post(`/integracje/${row.id}/edytuj`, formBody({ password: '', enabled: '1' }));
+    expect(h.mailIn.state(row.id)).toMatchObject({ uidFloor: 0, uidvalidity: 0 });
+  });
+
   it('Sprawdź połączenie przy złym haśle pokazuje błąd logowania bez hasła w treści; dla zapisanej skrzynki używa zapisanego hasła', async () => {
     const bad = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody({ password: 'Inne' }) });
     expect(bad.body).toContain('Logowanie odrzucone');

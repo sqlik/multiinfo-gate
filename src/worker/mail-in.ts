@@ -85,15 +85,17 @@ export function replyFor(outcome: MailInOutcome, mail: ParsedMail, config: MailI
 
 /** „Sprawdź połączenie”: logowanie, otwarcie folderu, lista folderów; nic nie przetwarza, nic nie zapisuje. */
 export async function checkMailbox(connect: MailboxConnect, settings: MailboxSettings, folder: string):
-  Promise<{ ok: true; unseen: number; folders: string[] } | { ok: false; kind: MailboxErrorKind; error: string }> {
+  Promise<{ ok: true; unseen: number; folders: string[] } | { ok: false; kind: MailboxErrorKind; error: string; folders: string[] }> {
   let session: MailboxSession | null = null;
+  let folders: string[] = [];
   try {
     session = await connect(settings, CONNECT_TIMEOUT_MS);
-    const folders = await session.folders();
+    folders = await session.folders();
     const box = await session.open(folder);
     return { ok: true, unseen: box.unseen, folders };
   } catch (e) {
-    return { ok: false, kind: errorKindOf(e), error: scrubError(errorMessageOf(e), [settings.password, settings.user]) };
+    // Lista folderów zostaje, gdy logowanie się udało, a zawiodła nazwa folderu: użytkownik od razu widzi właściwą.
+    return { ok: false, kind: errorKindOf(e), error: scrubError(errorMessageOf(e), [settings.password, settings.user]), folders };
   } finally {
     await session?.close();
   }
@@ -113,7 +115,9 @@ export class MailInPoller {
   async tick(now: Date): Promise<void> {
     this.deps.mailIn.ensureAll(now);
     const queue = this.deps.mailIn.due(now).filter((id) => !this.active.has(id));
-    const width = Math.max(1, this.opts.concurrency ?? MAILBOX_CONCURRENCY);
+    // Limit liczy trwające odpytania z poprzednich tur: nowa tura dostaje tylko wolne miejsca.
+    const width = Math.max(1, this.opts.concurrency ?? MAILBOX_CONCURRENCY) - this.active.size;
+    if (width <= 0) return;
     const lane = async () => {
       for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
         if (this.active.has(id)) continue;
@@ -136,17 +140,24 @@ export class MailInPoller {
     const config = integration.config;
     mailIn.ensureState(integration.id, now);
     const password = this.deps.integrations.secrets(integration.id)[MAIL_IN_PASSWORD_REF] ?? '';
-    let session: MailboxSession | null = null;
     let timer: NodeJS.Timeout | null = null;
+    // Po przekroczeniu limitu praca kończy bieżący mail i przerywa pętlę; spóźnione połączenie jest zamykane bez pracy.
+    let aborted = false;
     try {
       if (password === '') throw new MailboxError('auth', 'brak hasła w konfiguracji');
       const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new MailboxError('network', `odpytanie przekroczyło ${POLL_TIMEOUT_MS / 1000} s`)), POLL_TIMEOUT_MS);
+        timer = setTimeout(() => { aborted = true; reject(new MailboxError('network', `odpytanie przekroczyło ${POLL_TIMEOUT_MS / 1000} s`)); }, POLL_TIMEOUT_MS);
       });
       const work = (async () => {
-        session = await this.deps.connect({ ...config.imap, password }, CONNECT_TIMEOUT_MS);
-        return this.process(session, integration, now);
+        const session = await this.deps.connect({ ...config.imap, password }, CONNECT_TIMEOUT_MS);
+        try {
+          if (aborted) throw new MailboxError('network', 'połączenie nawiązane po przekroczeniu limitu');
+          return await this.process(session, integration, now, () => aborted);
+        } finally {
+          await session.close().catch(() => undefined);
+        }
       })();
+      work.catch(() => undefined);
       const result = await Promise.race([work, timeout]);
       if (result.actionError !== null) throw result.actionError;
       mailIn.recordPoll(integration.id, { ok: true, uidvalidity: result.uidValidity, unseen: result.unseen, at: now, nextPollAt: new Date(now.getTime() + config.intervalSec * 1000) });
@@ -159,7 +170,6 @@ export class MailInPoller {
       this.notifyFailure(integration, kind, error, now);
     } finally {
       if (timer) clearTimeout(timer);
-      if (session) await (session as MailboxSession).close().catch(() => undefined);
     }
   }
 
@@ -167,7 +177,7 @@ export class MailInPoller {
    * Otwarcie folderu, próg „od teraz”, maile od najstarszego, potok, działanie na mailu, odpowiedź.
    * Zwraca błąd działania na mailu (np. odrzucone MOVE), który nie przerywa przetwarzania, ale ląduje w stanie.
    */
-  private async process(session: MailboxSession, integration: MailInIntegration, now: Date): Promise<{ uidValidity: number; unseen: number; actionError: Error | null }> {
+  private async process(session: MailboxSession, integration: MailInIntegration, now: Date, aborted: () => boolean = () => false): Promise<{ uidValidity: number; unseen: number; actionError: Error | null }> {
     const { mailIn } = this.deps;
     const config = integration.config;
     const box = await session.open(config.folder);
@@ -187,6 +197,8 @@ export class MailInPoller {
     let actionError: Error | null = null;
     let highest = floor;
     for (const meta of metas) {
+      // Po przekroczeniu limitu reszta czeka na następne odpytanie; próg wskazuje ostatni obejrzany mail.
+      if (aborted()) break;
       highest = Math.max(highest, meta.uid);
       const key: SeenKey = { messageId: meta.messageId, uidvalidity: box.uidValidity, uid: meta.uid };
       const note = (result: 'skipped', reason: string) =>
@@ -205,14 +217,24 @@ export class MailInPoller {
       }
       // Zapis przed pobraniem i wysyłką: awaria w połowie kosztuje jeden niedosłany SMS, nie dubel.
       mailIn.remember(integration.id, key, 'skipped', now);
-      const mail = await parseMail(await session.source(meta.uid), now);
-      const outcome = await runMailIn(this.deps, integration, mail, now);
-      mailIn.setOutcome(integration.id, key, seenOutcomeOf(outcome));
-      // Mail odrzucony przed potwierdzeniem nadawcy (spoza listy albo bez SPF/DKIM) nie zajmuje cudzego Message-ID.
-      if (outcome.kind === 'skipped' && (outcome.reason === 'sender_not_allowed' || outcome.reason === 'auth_failed')) mailIn.forgetMessageId(integration.id, key);
-      this.notifyOutcome(integration, outcome, now);
-      actionError = (await this.afterAction(session, config, meta.uid)) ?? actionError;
-      this.reply(integration, outcome, mail, now);
+      try {
+        const mail = await parseMail(await session.source(meta.uid), now);
+        const outcome = await runMailIn(this.deps, integration, mail, now);
+        mailIn.setOutcome(integration.id, key, seenOutcomeOf(outcome));
+        // Mail odrzucony przed potwierdzeniem nadawcy (spoza listy albo bez SPF/DKIM) nie zajmuje cudzego Message-ID.
+        if (outcome.kind === 'skipped' && (outcome.reason === 'sender_not_allowed' || outcome.reason === 'auth_failed')) mailIn.forgetMessageId(integration.id, key);
+        this.notifyOutcome(integration, outcome, now);
+        actionError = (await this.afterAction(session, config, meta.uid)) ?? actionError;
+        this.reply(integration, outcome, mail, now);
+      } catch (e) {
+        // Jeden nieczytelny mail nie zatrzymuje partii ani nie znika po cichu: wpis błędu, wynik failed, działanie jak dla odrzuconego.
+        if (e instanceof MailboxError && e.kind !== 'other') throw e;
+        mailIn.setOutcome(integration.id, key, 'failed');
+        const message = scrubError(errorMessageOf(e), [config.imap.user]);
+        this.deps.integrationEvents.record({ integrationId: integration.id, at: now, result: 'error', reason: `nieczytelny mail: ${message}`, logLimit: config.eventLogLimit });
+        this.deps.notifier?.notify('integration_error', `integration:${integration.id}`, `${integration.name}: nieczytelny mail: ${message}`, now);
+        actionError = (await this.afterAction(session, config, meta.uid)) ?? actionError;
+      }
     }
     // Próg przesuwa się na najwyższy obejrzany UID: mail oznaczony ponownie jako nieprzeczytany
     // nie wraca co odpytanie, a tabela przetworzonych chroni po restarcie i po zmianie UIDVALIDITY.
@@ -240,7 +262,10 @@ export class MailInPoller {
 
   private notifyOutcome(integration: MailInIntegration, outcome: MailInOutcome, now: Date): void {
     const subject = `integration:${integration.id}`;
-    if (outcome.kind === 'error') {
+    if (outcome.kind === 'sent' && outcome.invalid.length > 0) {
+      const n = outcome.invalid.length;
+      this.deps.notifier?.notify('integration_error', subject, `${integration.name}: pominięto ${n} nieprawidłow${n === 1 ? 'y numer' : 'e numery'}: ${outcome.invalid.join(', ')}`, now);
+    } else if (outcome.kind === 'error') {
       const summary = outcome.code === 'invalid_phone' ? 'nieprawidłowy numer odbiorcy w mailu' : outcome.detail;
       this.deps.notifier?.notify('integration_error', subject, `${integration.name}: ${summary}`, now);
     } else if (outcome.kind === 'unavailable') {

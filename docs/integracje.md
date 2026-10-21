@@ -589,7 +589,7 @@ dostaje powiadomienie, dopóki nie poprawi listy. Jeden mail może wskazać do 5
 
 Bramka zamienia mail na tekst. Bierze część tekstową, a gdy mail ma tylko HTML, zamienia go na
 tekst: tabele jako wiersze z komórkami oddzielonymi dwiema spacjami, odnośniki bez adresów,
-obrazki pominięte. Załączniki nie są pobierane nigdy. Mail większy niż 2 MB jest pomijany bez
+obrazki pominięte. Załączniki nie są czytane ani zapisywane. Mail większy niż 2 MB jest pomijany bez
 pobierania.
 
 Z tekstu bramka usuwa to, czego w SMS-ie nie chcesz:
@@ -689,8 +689,8 @@ sprawdzania ani odtworzenie skrzynki u dostawcy nie dają drugiego SMS-a.
 ### 5.7. Odpowiedź do nadawcy
 
 Przełącznik **Odpowiadaj nadawcy mailem** każe bramce odpisać na każdy mail, który wzięła pod
-uwagę. Wymaga skonfigurowanego SMTP z rozdziału 9.1. Bez SMTP formularz pokazuje, że opcja jest
-nieczynna, i daje odnośnik do ustawień. Domyślnie wyłączony.
+uwagę. Wymaga skonfigurowanego SMTP z rozdziału 9.1. Bez SMTP formularz mówi, że opcja jest
+nieczynna. Obok jest odnośnik do ustawień. Domyślnie wyłączony.
 
 Odpowiedź jest zwykłym tekstem, w wątku maila nadawcy, z tematem `Re: <temat>`. Treść mówi, co
 się stało: `SMS wysłany do 2 odbiorców (…001, …002), 1 część.` z numerami jako ostatnie trzy
@@ -699,8 +699,8 @@ cyfry, `SMS wysłany do 1 odbiorcy (…001), 1 część. Pominięto nieprawidło
 się ustalić odbiorcy.` albo `SMS nie został wysłany: przekroczono limit integracji (10 w 10
 min).`
 
-Odpowiedź dostaje wyłącznie nadawca z listy. Do nadawcy spoza listy bramka nie odpisuje nigdy, bo
-zdradziłaby, że skrzynka jest bramką, i zapraszała spam. Nie odpisuje też na maile
+Odpowiedź dostaje wyłącznie nadawca z listy. Do nadawcy spoza listy bramka nie odpisuje nigdy.
+Taka odpowiedź zdradzałaby, że skrzynka jest bramką, a to zaprasza spam. Nie odpisuje też na maile
 automatyczne (oznaczone jako wysłane przez system albo z listy dyskusyjnej), na maile pominięte
 jako zbyt duże albo już przetworzone ani na maile odrzucone warunkiem, bo te administrator
 filtruje celowo.
@@ -766,7 +766,7 @@ w błędzie.
 - Numery z maila i odpowiedzi do nadawcy są domyślnie wyłączone. Włączenie to świadome
   kliknięcie z czytelnym skutkiem pod polem
 - Bramka odpowiada wyłącznie nadawcom z listy i nigdy na maile automatyczne
-- HTML jest zamieniany na tekst, nie wykonywany. Załączniki nie są pobierane. Mail większy niż
+- HTML jest zamieniany na tekst, nie wykonywany. Załączniki nie są czytane ani zapisywane. Mail większy niż
   2 MB jest pomijany bez pobierania
 - Wyrażenia regularne wycinków mają limit 200 znaków i 50 ms na dopasowanie
 - TLS i STARTTLS sprawdzają certyfikat serwera, a wyłączenie sprawdzania pokazuje ostrzeżenie.
