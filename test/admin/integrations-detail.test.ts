@@ -160,6 +160,21 @@ describe('GET /integracje/:id', () => {
     expect(foreign.body).not.toContain('Z dziennika');
   });
 
+  it('skrzynka: „Użyj jako próbki” wypełnia nadawcę, temat i treść z ładunku wpisu i otwiera tryb zaawansowany', async () => {
+    const id = seedMailbox();
+    h.integrationEvents.record({ integrationId: id, at: NOW, result: 'sent', payload: '{"from":"ups@przyklad.test","subject":"UPS-01 alarm","text_full":"Device UPS-01\\nStatus ON BATTERY","date":"2026-10-20T07:15:00.000Z","message_id":"<ups-1@przyklad.test>"}', logLimit: 200 });
+    const eventId = h.integrationEvents.list(id, 1)[0]!.id;
+    const res = await page(`/integracje/${id}/edytuj?probka=${eventId}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('name="sampleFrom" value="ups@przyklad.test"');
+    expect(res.body).toContain('name="sampleSubject" value="UPS-01 alarm"');
+    expect(res.body).toContain('Device UPS-01\nStatus ON BATTERY');
+    expect(res.body).toContain('tryb=zaawansowany" class="on"');
+    const other = seedMailbox('Druga');
+    const foreign = await page(`/integracje/${other}/edytuj?probka=${eventId}`);
+    expect(foreign.body).not.toContain('UPS-01 alarm');
+  });
+
   it('wychodząca: adres docelowy, zdarzenia, nagłówki bez sekretów i „Ponów” przy niedostarczonej', async () => {
     const id = h.integrations.insert({
       name: 'Helpdesk', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1,
