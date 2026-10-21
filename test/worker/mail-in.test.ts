@@ -290,7 +290,7 @@ describe('MailInPoller: awarie', () => {
     expect(notified[0]!.summary).toContain('folder niedostępny');
   });
 
-  it('odpytanie, które wisi dłużej niż limit, kończy się błędem sieci', async () => {
+  it('odpytanie, które wisi dłużej niż limit, kończy się błędem sieci; spóźniona sesja jest zamykana bez pracy', async () => {
     vi.useFakeTimers({ now: NOW });
     box.delayMs = 120_000;
     const t = poller.tick(NOW);
@@ -299,10 +299,73 @@ describe('MailInPoller: awarie', () => {
     expect(mailIn.state(integ.id)).toMatchObject({ errorKind: 'network' });
     expect(mailIn.state(integ.id)?.error).toContain('60 s');
     await vi.advanceTimersByTimeAsync(120_000);
+    expect(box.calls).toContain('close');
+    expect(box.calls).not.toContain('open:INBOX');
+  });
+
+  it('odpytanie przerwane w połowie kończy bieżący mail, zostawia resztę na następny raz i nie zgłasza „już przetworzony”', async () => {
+    vi.useFakeTimers({ now: NOW });
+    await poller.tick(NOW);
+    for (const uid of [2, 3, 4, 5]) box.add({ uid, seen: false, source: eml('tomek@przyklad.test', `M${uid}`, 'x', `<${uid}@x>`) });
+    box.delaySourceMs = 25_000;
+    const t = poller.tick(at(60_000));
+    await vi.advanceTimersByTimeAsync(130_000);
+    await t;
+    expect(smsCount()).toBe(3);
+    expect(mailIn.state(integ.id)).toMatchObject({ errorKind: 'network', uidFloor: 4 });
+    box.delaySourceMs = 0;
+    const t2 = poller.tick(at(1_000_000));
+    await vi.advanceTimersByTimeAsync(1_000);
+    await t2;
+    expect(smsCount()).toBe(4);
+    expect(events(integ.id).map((e) => e[1])).not.toContain('już przetworzony');
   });
 });
 
 describe('MailInPoller: powiadomienia i odpowiedzi', () => {
+  it('pominięty nieprawidłowy numer z maila daje powiadomienie integration_error, SMS idzie do pozostałych', async () => {
+    const num = make({ recipientsFromMail: { enabled: true, where: 'subject' } });
+    integrations.setEnabled(integ.id, false, NOW);
+    await poller.tick(NOW);
+    box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', '48601000001, 4860100000: Awaria', 'x', '<2@x>') });
+    await poller.tick(at(60_000));
+    expect(smsCount()).toBe(1);
+    expect(notified.map((n) => [n.event, n.summary])).toEqual([['integration_error', `${num.name}: pominięto 1 nieprawidłowy numer: 4860100000`]]);
+  });
+
+  it('nieczytelny mail dostaje wpis błąd i działanie po przetworzeniu, a reszta partii idzie dalej', async () => {
+    await poller.tick(NOW);
+    for (const uid of [2, 3, 4]) box.add({ uid, seen: false, source: eml('tomek@przyklad.test', `M${uid}`, 'x', `<${uid}@x>`) });
+    box.failSource.set(3, new Error('boom'));
+    await poller.tick(at(60_000));
+    expect(smsCount()).toBe(2);
+    expect(events(integ.id)).toContainEqual(['error', 'nieczytelny mail: boom']);
+    expect(mailIn.outcomes(integ.id).find((o) => o.uid === 3)?.outcome).toBe('failed');
+    expect(box.calls).toContain('markSeen:3');
+    expect(mailIn.state(integ.id)).toMatchObject({ errorKind: null, uidFloor: 4 });
+    await poller.tick(at(120_000));
+    expect(events(integ.id).map((e) => e[1])).not.toContain('już przetworzony');
+  });
+
+  it('limit pięciu skrzynek naraz obowiązuje między turami, nie tylko w jednej', async () => {
+    vi.useFakeTimers({ now: NOW });
+    const p = new MailInPoller(deps, { concurrency: 2 });
+    make(); make(); make();
+    box.delayMs = 10_000;
+    const connects = () => box.calls.filter((c) => c === 'connect').length;
+    const t1 = p.tick(NOW);
+    await vi.advanceTimersByTimeAsync(1_000);
+    const t2 = p.tick(at(1_000));
+    await vi.advanceTimersByTimeAsync(1_000);
+    // Druga tura nie dokłada połączeń ponad limit, dopóki trwają dwa z pierwszej.
+    expect(connects()).toBe(2);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(connects()).toBe(4);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await Promise.all([t1, t2]);
+    expect(connects()).toBe(4);
+  });
+
   it('błąd potoku daje integration_error, burza integration_throttled raz na okno', async () => {
     const pusta = make({ to: { fallback: [] }, throttle: { limit: 1, windowMinutes: 10 } });
     integrations.setEnabled(integ.id, false, NOW);
@@ -416,7 +479,7 @@ describe('nextPollDelayMs, replyFor, checkMailbox', () => {
     expect(await checkMailbox(fakeConnect(box), settings, 'INBOX')).toEqual({ ok: true, unseen: 1, folders: ['INBOX'] });
     expect(box.calls).toContain('close');
     box.failConnect = new Error(`LOGIN ${PASSWORD} rejected`);
-    expect(await checkMailbox(fakeConnect(box), settings, 'INBOX')).toEqual({ ok: false, kind: 'other', error: 'LOGIN *** rejected' });
+    expect(await checkMailbox(fakeConnect(box), settings, 'INBOX')).toEqual({ ok: false, kind: 'other', error: 'LOGIN *** rejected', folders: [] });
     box.failConnect = null;
     expect(await checkMailbox(fakeConnect(box), { ...settings, password: 'x' }, 'INBOX')).toMatchObject({ ok: false, kind: 'auth' });
     expect(await checkMailbox(fakeConnect(box), settings, 'Niema')).toMatchObject({ ok: false, kind: 'folder' });

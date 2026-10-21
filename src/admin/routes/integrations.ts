@@ -331,11 +331,12 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
   };
 
   /** Stan skrzynki po zapisie: wiersz stanu, zaległe na jedno uruchomienie, nowy próg po zmianie folderu albo konta. */
-  const afterMailSave = (id: number, v: MailFormValues, before: MailInConfig | null, after: MailInConfig) => {
+  const afterMailSave = (id: number, v: MailFormValues, before: MailInConfig | null, after: MailInConfig, reenabled = false) => {
     const at = now();
     deps.mailIn?.ensureState(id, at);
     deps.mailIn?.setBacklog(id, v.backlog ? 1 : 0);
-    const moved = before !== null && (before.folder !== after.folder || before.imap.host !== after.imap.host || before.imap.user !== after.imap.user);
+    // Włączenie wyłączonej skrzynki działa jak nowe włączenie (spec 5.4): maile z okresu wyłączenia zostają nietknięte.
+    const moved = reenabled || (before !== null && (before.folder !== after.folder || before.imap.host !== after.imap.host || before.imap.user !== after.imap.user));
     if (moved) {
       deps.mailIn?.setFloor(id, 0, 0);
       deps.mailIn?.pollNow(id, at);
@@ -492,7 +493,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
           name: v.name, serviceId: v.serviceId || null, orig: v.orig || null, preset: row.preset, enabled: v.enabled ? 1 : 0,
           config, storePayloads: v.storePayloads ? 1 : 0, ...(password !== null ? { secrets: { [MAIL_IN_PASSWORD_REF]: password } } : {}),
         }, now());
-        afterMailSave(row.id, v, row.config as MailInConfig, config);
+        afterMailSave(row.id, v, row.config as MailInConfig, config, row.enabled === 0 && v.enabled);
         const after = deps.integrations.get(row.id)!;
         const fields = changedFields(row, after);
         if (password !== null) fields.push('secrets');
@@ -552,6 +553,12 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const row = rowOr404(request.params.id, reply);
     if (!row) return;
     deps.integrations.setEnabled(row.id, enabled, now());
+    if (enabled && row.enabled === 0 && row.kind === 'mail_in') {
+      // Spec 5.4: włączenie wyłączonej skrzynki to start „od teraz”, a odpytanie przy najbliższej turze.
+      deps.mailIn?.ensureState(row.id, now());
+      deps.mailIn?.setFloor(row.id, 0, 0);
+      deps.mailIn?.pollNow(row.id, now());
+    }
     const key = deps.apiKeys.get(row.apiKeyId);
     deps.receiver?.refresh(key ? { retryAccount: key.accountId } : {});
     deps.audit.record({

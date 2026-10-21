@@ -69,7 +69,7 @@ function sectionMailbox(v: MailFormValues, opts: MailFormOptions): string {
     <div class="field">
       <label for="password">Hasło</label>
       <input id="password" name="password" type="password" value="" autocomplete="new-password"${opts.hasPassword ? '' : ' required'}>
-      ${hint(opts.hasPassword ? 'Skrzynka ma hasło zapisane. Puste pole zostawia dotychczasowe' : 'Hasło zapisujemy zaszyfrowane; nie da się go potem odczytać w panelu. U Gmaila i Outlook.com to hasło aplikacji')}
+      ${hint(opts.hasPassword ? 'Skrzynka ma hasło zapisane. Puste pole zostawia dotychczasowe' : 'Hasło zapisujemy zaszyfrowane; nie da się go potem odczytać w panelu. U Gmaila to hasło aplikacji')}
     </div>
     <div class="field">
       <label for="folder">Folder</label>
@@ -102,7 +102,7 @@ function sectionSenders(v: MailFormValues): string {
     </div>
     <div class="field">
       ${checkbox('requireAuthResults', v.requireAuthResults, 'Wymagaj potwierdzenia nadawcy przez serwer (SPF/DKIM)')}
-      ${hint('Ma sens u dostawców publicznych (Gmail, Outlook.com, home.pl, OVH). Serwery wewnętrzne zwykle nie dopisują tych nagłówków i wtedy każdy mail zostanie odrzucony')}
+      ${hint('Ma sens u dostawców publicznych (Gmail, home.pl, OVH). Serwery wewnętrzne zwykle nie dopisują tych nagłówków i wtedy każdy mail zostanie odrzucony')}
     </div>
   </details>`;
 }
@@ -246,22 +246,23 @@ function sectionSample(v: MailFormValues): string {
 }
 
 function connectionPanel(c: MailConnection): string {
+  const folders = c.folders.map((f) => `<button class="btn btn-s" type="button" data-fill="#folder" data-value="${esc(f)}" style="padding: 3px 9px; font-size: 12px;">${esc(f)}</button>`).join(' ');
   if (c.ok) {
-    const folders = c.folders.map((f) => `<button class="btn btn-s" type="button" data-fill="#folder" data-value="${esc(f)}" style="padding: 3px 9px; font-size: 12px;">${esc(f)}</button>`).join(' ');
     return `<div class="panel" style="max-width: 760px;">
       <div class="panel-h"><div class="lab">Połączenie działa</div><div class="m dim">nieprzeczytanych: ${esc(c.unseen)}</div></div>
       <div class="kv"><div>Foldery</div><div>${folders || '<span class="dim">brak</span>'}<div class="hint">Kliknięcie wpisuje nazwę do pola folderu</div></div></div>
     </div>`;
   }
-  const titles = { auth: ['Logowanie odrzucone', 'Sprawdź login i hasło. U Gmaila i Outlook.com potrzebne jest hasło aplikacji, nie hasło do konta; IMAP musi być włączony'],
+  const titles = { auth: ['Logowanie odrzucone', 'Sprawdź login i hasło. U Gmaila potrzebne jest hasło aplikacji, nie hasło do konta; w Google Workspace IMAP musi być włączony przez administratora'],
     network: ['Serwer nie odpowiada', 'Sprawdź nazwę serwera, port i zabezpieczenie oraz czy z maszyny bramki da się połączyć z serwerem poczty'],
-    folder: ['Folder nie istnieje', 'Wpisz nazwę folderu dokładnie tak, jak podaje ją serwer; lista folderów pojawia się po udanym logowaniu'],
+    folder: ['Folder nie istnieje', 'Wpisz nazwę folderu dokładnie tak, jak podaje ją serwer; kliknięcie w nazwę z listy poniżej wpisuje ją do pola'],
     other: ['Błąd połączenia', 'Serwer odpowiedział błędem; jego komunikat poniżej'] } as const;
   const [title, advice] = titles[c.kind];
   return `<div class="panel" style="max-width: 760px;">
     <div class="panel-h"><div class="lab">${esc(title)}</div></div>
     <div class="warn">${esc(advice)}</div>
     <div class="m dim" style="padding: 8px 0;">${esc(c.error)}</div>
+    ${folders ? `<div class="kv"><div>Foldery</div><div>${folders}</div></div>` : ''}
   </div>`;
 }
 

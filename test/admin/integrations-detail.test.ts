@@ -160,6 +160,16 @@ describe('GET /integracje/:id', () => {
     expect(foreign.body).not.toContain('Z dziennika');
   });
 
+  it('włączenie wyłączonej skrzynki ustawia próg od nowa i odpytanie natychmiast', async () => {
+    const id = seedMailbox();
+    h.mailIn.ensureState(id, NOW);
+    h.mailIn.setFloor(id, 5, 7);
+    await post(`/integracje/${id}/wylacz`);
+    expect(h.mailIn.state(id)).toMatchObject({ uidFloor: 5, uidvalidity: 7 });
+    await post(`/integracje/${id}/wlacz`);
+    expect(h.mailIn.state(id)).toMatchObject({ uidFloor: 0, uidvalidity: 0 });
+  });
+
   it('skrzynka: „Użyj jako próbki” wypełnia nadawcę, temat i treść z ładunku wpisu i otwiera tryb zaawansowany', async () => {
     const id = seedMailbox();
     h.integrationEvents.record({ integrationId: id, at: NOW, result: 'sent', payload: '{"from":"ups@przyklad.test","subject":"UPS-01 alarm","text_full":"Device UPS-01\\nStatus ON BATTERY","date":"2026-10-20T07:15:00.000Z","message_id":"<ups-1@przyklad.test>"}', logLimit: 200 });
