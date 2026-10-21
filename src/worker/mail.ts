@@ -4,7 +4,15 @@ import type { Job } from '../store/jobs.ts';
 import type { SmtpSettings } from '../store/notifications.ts';
 import type { WorkerDeps } from './send.ts';
 
-export interface MailContent { subject: string; text: string }
+export interface MailContent {
+  subject: string;
+  text: string;
+  /** Adresaci inni niż administrator (potwierdzenie zwrotne do nadawcy maila); brak to adresaci z ustawień SMTP. */
+  to?: string[];
+  /** Nagłówki wątku, żeby odpowiedź wpadła pod mail nadawcy. */
+  inReplyTo?: string;
+  references?: string;
+}
 
 /** Wysyłka jednego maila; testy podstawiają atrapę. */
 export type Mailer = (settings: SmtpSettings & { password: string | null }, mail: MailContent) => Promise<void>;
@@ -26,13 +34,22 @@ export const nodemailerMailer: Mailer = async (s, mail) => {
   });
   try {
     await transport.sendMail({
-      from: { name: s.fromName, address: s.fromAddress }, to: s.recipients.join(', '),
+      from: { name: s.fromName, address: s.fromAddress }, to: (mail.to ?? s.recipients).join(', '),
       subject: mail.subject, text: mail.text,
+      ...(mail.inReplyTo ? { inReplyTo: mail.inReplyTo } : {}),
+      ...(mail.references ? { references: mail.references } : {}),
     });
   } finally {
     transport.close();
   }
 };
+
+/** Lista adresów z ładunku zadania: tablica napisów albo jeden napis; reszta to pusta lista. */
+function addressList(value: unknown): string[] {
+  if (typeof value === 'string') return value.trim() === '' ? [] : [value.trim()];
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === 'string' && v.trim() !== '').map((v) => v.trim());
+  return [];
+}
 
 export async function handleMail(job: Job, deps: WorkerDeps, now: Date): Promise<void> {
   const log = deps.log ?? silentLogger;
@@ -44,10 +61,14 @@ export async function handleMail(job: Job, deps: WorkerDeps, now: Date): Promise
     return;
   }
   const mail: MailContent = { subject: String(job.payload.subject ?? ''), text: String(job.payload.text ?? '') };
+  const to = addressList(job.payload.to);
+  if (to.length > 0) mail.to = to;
+  if (typeof job.payload.inReplyTo === 'string' && job.payload.inReplyTo !== '') mail.inReplyTo = job.payload.inReplyTo;
+  if (typeof job.payload.references === 'string' && job.payload.references !== '') mail.references = job.payload.references;
   try {
     await (deps.mailer ?? nodemailerMailer)({ ...settings, password: deps.notifications?.smtpPassword() ?? null }, mail);
     deps.jobs.complete(job.id);
-    log.info('mail.wyslany', { jobId: job.id, recipients: settings.recipients.length, attempt: job.attempts + 1 });
+    log.info('mail.wyslany', { jobId: job.id, recipients: (mail.to ?? settings.recipients).length, attempt: job.attempts + 1 });
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
     const delay = MAIL_BACKOFF_MS[job.attempts];

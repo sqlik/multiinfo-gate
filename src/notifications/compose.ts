@@ -12,7 +12,7 @@ export const GROUP_LINES = 100;
 /** Ekran panelu właściwy dla zdarzenia - odnośnik w mailu, gdy administrator podał adres panelu. */
 const PANEL_PATH: Record<NotificationEvent, string> = {
   integration_error: '/integracje', integration_throttled: '/integracje', webhook_undelivered: '/integracje',
-  certificate_expiring: '/konta', account_rejecting: '/konta', inbound_failure: '/odebrane', daily_summary: '/przeglad',
+  certificate_expiring: '/konta', account_rejecting: '/konta', inbound_failure: '/odebrane', mailbox_failure: '/integracje', daily_summary: '/przeglad',
   release_available: '/przeglad',
 };
 

@@ -14,6 +14,7 @@ import type { IntegrationEventsRepo } from '../store/integration-events.ts';
 import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
 import type { IntegrationsRepo } from '../store/integrations.ts';
 import type { NotificationsRepo } from '../store/notifications.ts';
+import type { MailInRepo } from '../store/mail-in.ts';
 import type { Mailer } from './mail.ts';
 import type { ClientPool } from './clients.ts';
 import { pauseForCertificate } from './certificate.ts';
@@ -56,6 +57,10 @@ export interface WorkerDeps {
   scanner?: { scan(now: Date): void };
   /** Strażnicy integracji - sprzątanie idempotencji w turze utrzymaniowej. */
   guards?: IntegrationGuardsRepo;
+  /** Tor skrzynek pocztowych: odpytania poza tabelą zadań, obok torów zadań. */
+  mailIn?: { tick(now: Date): Promise<void> };
+  /** Stan skrzynek - sprzątanie przetworzonych maili w turze utrzymaniowej. */
+  mailInRepo?: Pick<MailInRepo, 'pruneSeenBefore'>;
   log?: Logger;
 }
 
