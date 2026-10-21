@@ -306,7 +306,7 @@ describe('MailInPoller: powiadomienia i odpowiedzi', () => {
     await poller.tick(at(120_000));
     const sent = mails();
     expect(sent).toHaveLength(2);
-    expect(sent[0]).toEqual({ subject: 'Re: B', text: 'SMS wysłany do 1 odbiorcy (…009), 1 część.', to: ['tomek@przyklad.test'], inReplyTo: '<3@x>', references: '<3@x>' });
+    expect(sent[0]).toEqual({ subject: 'Re: B', text: 'SMS wysłany do 1 odbiorcy (…009), 1 część.', to: ['tomek@przyklad.test'], inReplyTo: '<3@x>', references: '<3@x>', autoReply: true });
     expect(sent[1]).toMatchObject({ subject: 'Re: D', text: 'SMS nie został wysłany: treść wymaga więcej niż 1 części.', to: ['tomek@przyklad.test'], inReplyTo: '<6@x>' });
   });
 });
@@ -359,10 +359,10 @@ describe('nextPollDelayMs, replyFor, checkMailbox', () => {
   });
 
   it('treść odpowiedzi według sekcji 10 specu', () => {
-    const m = { from: 'a@x', fromName: '', subject: 'Awaria', textFull: '', date: '', to: [], messageId: '<1@x>', authResults: [] } satisfies ParsedMail;
+    const m = { from: 'a@x', fromName: '', subject: 'Awaria', textFull: '', date: '', to: [], messageId: '<1@x>', authResults: [], auto: false } satisfies ParsedMail;
     const c = { ...defaultMailInConfig(), maxParts: 3, throttle: { limit: 10, windowMinutes: 10 } };
     expect(replyFor({ kind: 'sent', messageIds: ['a', 'b'], recipients: ['48601000200', '48601000201'], invalid: [], parts: 1 }, m, c))
-      .toEqual({ subject: 'Re: Awaria', text: 'SMS wysłany do 2 odbiorców (…200, …201), 1 część.', to: ['a@x'], inReplyTo: '<1@x>', references: '<1@x>' });
+      .toEqual({ subject: 'Re: Awaria', text: 'SMS wysłany do 2 odbiorców (…200, …201), 1 część.', to: ['a@x'], inReplyTo: '<1@x>', references: '<1@x>', autoReply: true });
     expect(replyFor({ kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: ['60010'], parts: 2 }, m, c)?.text)
       .toBe('SMS wysłany do 1 odbiorcy (…200), 2 części. Pominięto nieprawidłowy numer: 60010.');
     expect(replyFor({ kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: ['1', '2'], parts: 5 }, m, c)?.text)
@@ -372,11 +372,15 @@ describe('nextPollDelayMs, replyFor, checkMailbox', () => {
     expect(replyFor({ kind: 'error', code: 'empty_text', detail: 'x' }, m, c)?.text).toBe('SMS nie został wysłany: treść maila po usunięciu podpisu i cytatów jest pusta.');
     expect(replyFor({ kind: 'error', code: 'invalid_phone', detail: 'Wszystkie numery są złe: 1.' }, m, c)?.text).toBe('SMS nie został wysłany: Wszystkie numery są złe: 1.');
     expect(replyFor({ kind: 'throttled', notify: false }, m, c)?.text).toBe('SMS nie został wysłany: przekroczono limit integracji (10 w 10 min).');
-    expect(replyFor({ kind: 'unavailable', detail: 'x' }, m, c)?.text).toBe('SMS nie został wysłany: bramka nie mogła przyjąć wiadomości.');
+    // Wynik `unavailable` powstaje przed sprawdzeniem nadawcy, więc odpowiedź poszłaby także do obcego.
+    expect(replyFor({ kind: 'unavailable', detail: 'x' }, m, c)).toBeNull();
+    // Mail automatyczny (autoresponder, urządzenie, lista) nie dostaje odpowiedzi: inaczej pętla odpowiedzi.
+    expect(replyFor({ kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: [], parts: 1 }, { ...m, auto: true }, c)).toBeNull();
+    expect(replyFor({ kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: [], parts: 1 }, m, c)?.autoReply).toBe(true);
     expect(replyFor({ kind: 'skipped', reason: 'condition' }, m, c)).toBeNull();
     expect(replyFor({ kind: 'skipped', reason: 'sender_not_allowed' }, m, c)).toBeNull();
     expect(replyFor({ kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: [], parts: 1 }, { ...m, subject: 'Re: Awaria', messageId: null }, c))
-      .toEqual({ subject: 'Re: Awaria', text: 'SMS wysłany do 1 odbiorcy (…200), 1 część.', to: ['a@x'] });
+      .toEqual({ subject: 'Re: Awaria', text: 'SMS wysłany do 1 odbiorcy (…200), 1 część.', to: ['a@x'], autoReply: true });
   });
 
   it('checkMailbox: sukces z liczbą nieprzeczytanych i folderami; błąd logowania bez hasła w treści', async () => {

@@ -15,6 +15,8 @@ export interface ParsedMail {
   messageId: string | null;
   /** Każdy nagłówek `Authentication-Results` w całości, w kolejności z maila. */
   authResults: string[];
+  /** Mail automatyczny (RFC 3834): autoresponder, urządzenie, lista dyskusyjna; bramka na taki nie odpisuje. */
+  auto: boolean;
 }
 
 /** HTML na tekst: tabele jako wiersze, odnośniki bez adresów, obrazki pominięte, najwyżej dwie puste linie z rzędu. */
@@ -35,6 +37,18 @@ const addressesOf = (value: AddressObject | AddressObject[] | undefined): Array<
   return objects.flatMap((o) => o.value).filter((a) => typeof a.address === 'string' && a.address !== '').map((a) => ({ address: a.address!.toLowerCase(), name: a.name ?? '' }));
 };
 
+const headerText = (value: unknown): string => (Array.isArray(value) ? value.map(String).join(' ') : value === undefined ? '' : String(value)).trim().toLowerCase();
+
+/** Czy mail jest automatyczny: `Auto-Submitted` inne niż `no`, `Precedence` bulk/list/junk/auto_reply, `List-Id` albo `X-Auto-Response-Suppress`. */
+function isAutomatic(headers: Map<string, unknown>): boolean {
+  const auto = headerText(headers.get('auto-submitted'));
+  if (auto !== '' && auto !== 'no') return true;
+  if (/^(bulk|list|junk|auto_reply)\b/.test(headerText(headers.get('precedence')))) return true;
+  // mailparser składa nagłówki List-* pod jednym kluczem `list`.
+  if (headers.has('list-id') || headers.has('list')) return true;
+  return headers.has('x-auto-response-suppress');
+}
+
 export async function parseMail(source: Buffer, now: Date = new Date()): Promise<ParsedMail> {
   const mail = await simpleParser(source, { skipHtmlToText: true, skipImageLinks: true, skipTextToHtml: true, skipTextLinks: true });
   const from = addressesOf(mail.from);
@@ -52,5 +66,6 @@ export async function parseMail(source: Buffer, now: Date = new Date()): Promise
     to: addressesOf(mail.to).map((a) => a.address),
     messageId: mail.messageId ?? null,
     authResults,
+    auto: isAutomatic(mail.headers as Map<string, unknown>),
   };
 }

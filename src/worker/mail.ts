@@ -12,6 +12,8 @@ export interface MailContent {
   /** Nagłówki wątku, żeby odpowiedź wpadła pod mail nadawcy. */
   inReplyTo?: string;
   references?: string;
+  /** Odpowiedź automatyczna: nagłówki RFC 3834, żeby autoresponder nadawcy nie odpisał i nie zrobił pętli. */
+  autoReply?: boolean;
 }
 
 /** Wysyłka jednego maila; testy podstawiają atrapę. */
@@ -38,6 +40,7 @@ export const nodemailerMailer: Mailer = async (s, mail) => {
       subject: mail.subject, text: mail.text,
       ...(mail.inReplyTo ? { inReplyTo: mail.inReplyTo } : {}),
       ...(mail.references ? { references: mail.references } : {}),
+      ...(mail.autoReply ? { headers: { 'Auto-Submitted': 'auto-replied', 'X-Auto-Response-Suppress': 'All' } } : {}),
     });
   } finally {
     transport.close();
@@ -65,6 +68,7 @@ export async function handleMail(job: Job, deps: WorkerDeps, now: Date): Promise
   if (to.length > 0) mail.to = to;
   if (typeof job.payload.inReplyTo === 'string' && job.payload.inReplyTo !== '') mail.inReplyTo = job.payload.inReplyTo;
   if (typeof job.payload.references === 'string' && job.payload.references !== '') mail.references = job.payload.references;
+  if (job.payload.autoReply === true) mail.autoReply = true;
   try {
     await (deps.mailer ?? nodemailerMailer)({ ...settings, password: deps.notifications?.smtpPassword() ?? null }, mail);
     deps.jobs.complete(job.id);

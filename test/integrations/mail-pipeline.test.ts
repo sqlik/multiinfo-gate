@@ -39,7 +39,7 @@ beforeEach(() => {
 
 const mail = (over: Partial<ParsedMail> = {}): ParsedMail => ({
   from: 'tomek@przyklad.test', fromName: 'Tomek', subject: 'Awaria', textFull: 'Serwer padł\n\nPozdrawiam\nTomek', date: NOW.toISOString(),
-  to: ['bramka@przyklad.test'], messageId: '<m1@przyklad.test>', authResults: [], ...over,
+  to: ['bramka@przyklad.test'], messageId: '<m1@przyklad.test>', authResults: [], auto: false, ...over,
 });
 let seq = 0;
 const make = (config: Partial<MailInConfig>, storePayloads: 0 | 1 = 0) => {

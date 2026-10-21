@@ -57,6 +57,13 @@ describe('handleMail', () => {
     expect(jobs.depth()).toBe(0);
     expect(id).toBeGreaterThan(0);
   });
+  it('odpowiedź automatyczna niesie znacznik autoReply z ładunku', async () => {
+    smtp();
+    mailer.mockResolvedValue(undefined);
+    jobs.enqueue('mail', { subject: 'Re: a', text: 'b', to: ['x@przyklad.test'], autoReply: true }, NOW);
+    await handleMail(jobs.claim(NOW, 1)[0]!, deps, NOW);
+    expect(mailer.mock.calls[0]![1]).toEqual({ subject: 'Re: a', text: 'b', to: ['x@przyklad.test'], autoReply: true });
+  });
   it('adresat jako napis albo pusta lista: napis idzie jako jeden adresat, pusta lista znaczy administratora', async () => {
     smtp();
     mailer.mockResolvedValue(undefined);
