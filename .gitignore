@@ -31,3 +31,9 @@ examples/php/data/*
 .remember/
 .DS_Store
 .playwright-mcp/
+
+# dane kont testowych, nigdy do repozytorium
+konta-testowe.txt
+
+# dowiązanie do materiału wewnętrznego (spec, plany, konta testowe), nigdy do repozytorium
+wewnetrzne
