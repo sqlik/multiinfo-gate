@@ -1,0 +1,22 @@
+From: Jan Kowalski <jan@przyklad.test>
+To: bramka@przyklad.test
+Subject: Awaria drukarki
+Date: Mon, 20 Oct 2026 10:30:00 +0200
+Message-ID: <stopka-1@przyklad.test>
+Authentication-Results: mx.przyklad.test; spf=pass smtp.mailfrom=przyklad.test; dkim=pass header.d=przyklad.test
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Drukarka na drugim piętrze nie drukuje. Zacięcie papieru w podajniku. To jest trzecie zdanie.
+
+Pozdrawiam,
+Jan Kowalski
+Dział IT
+
+-- 
+Przyklad Sp. z o.o., ul. Testowa 1, 00-001 Warszawa
+tel. 48 601 000 100
+
+Niniejsza wiadomość jest przeznaczona wyłącznie dla adresata i może zawierać informacje poufne.
+Administratorem danych osobowych jest Przyklad Sp. z o.o.
