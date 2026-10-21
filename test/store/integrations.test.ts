@@ -29,6 +29,24 @@ const inbound = (over: Record<string, unknown> = {}) => repo.insert({
 });
 
 describe('IntegrationsRepo', () => {
+  it('copy tworzy wyłączoną kopię z tą samą konfiguracją i sekretami oraz nowym adresem wejściowym', () => {
+    const id = inbound({ secrets: { token: 't' } });
+    const copyId = repo.copy(id, 'Kuma (kopia)', new Date(NOW.getTime() + 1000));
+    const a = repo.get(id)!;
+    const b = repo.get(copyId)!;
+    expect([b.name, b.enabled, b.kind, b.preset, b.apiKeyId, b.storePayloads]).toEqual(['Kuma (kopia)', 0, a.kind, a.preset, a.apiKeyId, a.storePayloads]);
+    expect(b.config).toEqual(a.config);
+    expect(repo.secrets(copyId)).toEqual({ token: 't' });
+    expect(b.hookId).not.toBe(a.hookId);
+    expect(b.hookId).toHaveLength(32);
+    expect(b.createdAt).toBe(new Date(NOW.getTime() + 1000).toISOString());
+    const out = repo.insert({
+      name: 'Slack', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'slack', enabled: 1,
+      config: { ...defaultOutboundConfig(), url: 'https://hooks.slack.com/x' }, secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    expect(repo.get(repo.copy(out, 'Slack (kopia)', NOW))?.hookId).toBeNull();
+  });
+
   it('przychodząca dostaje adres wejściowy, wychodząca nie', () => {
     const id = inbound();
     const row = repo.get(id)!;

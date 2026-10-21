@@ -4,6 +4,7 @@ import { safeUrl } from '../../integrations/enrich.ts';
 import type { Preset } from '../../integrations/presets/index.ts';
 import type { EventResult, IntegrationEventRow } from '../../store/integration-events.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
+import type { MailInState } from '../../store/mail-in.ts';
 import { warsawStamp } from '../../time/warsaw.ts';
 import { esc } from './layout.ts';
 import { apiAddressPanel, fullUrl } from './settings.ts';
@@ -15,9 +16,13 @@ export interface IntegrationView {
   presetName: string;
   counts: { sent: number; errors: number };
   lastEvent: IntegrationEventRow | null;
+  /** Stan skrzynki pocztowej; null dla webhooków i skrzynki bez stanu. */
+  mailbox: MailInState | null;
+  /** Chwila rysowania: do słów „2 min temu”. */
+  now: Date;
 }
 
-export interface IntegrationsFilter { kind: 'in' | 'out' | null; keyId: number | null }
+export interface IntegrationsFilter { kind: 'in' | 'out' | 'mail' | null; keyId: number | null }
 
 /** Klucz do wyboru w formularzu: czynne klucze z usługami i nadpisami, po których wybiera się usługę i nadawcę. */
 export interface KeyOption { id: number; name: string; accountName: string; serviceIds: string[]; origs: string[] }
@@ -47,7 +52,28 @@ const EVENT_LABELS: Record<(typeof OUTBOUND_EVENTS)[number], string> = {
   'message.received': 'odebrany SMS', 'message.sent': 'przyjęty do wysyłki', 'message.delivered': 'doręczony', 'message.failed': 'niedoręczony',
 };
 
+/** „12 s temu”, „3 min temu”, „2 h temu”, „3 dni temu”. */
+export function agoWords(iso: string, now: Date): string {
+  const s = Math.max(0, Math.round((now.getTime() - Date.parse(iso)) / 1000));
+  if (s < 60) return `${s} s temu`;
+  if (s < 3600) return `${Math.round(s / 60)} min temu`;
+  if (s < 86_400) return `${Math.round(s / 3600)} h temu`;
+  return `${Math.round(s / 86_400)} dni temu`;
+}
+
+const MAILBOX_ERROR_WORDS = { auth: 'logowanie odrzucone', network: 'serwer nie odpowiada', folder: 'folder niedostępny', other: 'błąd odpytania' } as const;
+
+/** Stan skrzynki słowami: wyłączona, błąd od godziny, sprawdzono N temu, czeka na pierwsze sprawdzenie. */
+function mailboxStateCell(v: IntegrationView): string {
+  if (v.row.enabled === 0) return '<span class="st"><span class="dot dot-dim"></span>wyłączona</span>';
+  const m = v.mailbox;
+  if (m && m.error !== null) return `<span class="st"><span class="dot dot-fail"></span>błąd od ${esc(warsawStamp(m.errorSince ?? m.lastPollAt ?? v.now.toISOString()).slice(11, 16))}</span>`;
+  if (m && m.lastOkAt !== null) return `<span class="st"><span class="dot dot-ok"></span>sprawdzono ${esc(agoWords(m.lastOkAt, v.now))}</span>`;
+  return '<span class="st"><span class="dot dot-wait"></span>czeka na pierwsze sprawdzenie</span>';
+}
+
 function stateCell(v: IntegrationView): string {
+  if (v.row.kind === 'mail_in') return mailboxStateCell(v);
   if (v.row.enabled === 0) return '<span class="st"><span class="dot dot-dim"></span>wyłączona</span>';
   if (v.counts.errors > 0) return '<span class="st"><span class="dot dot-fail"></span>błąd</span>';
   return '<span class="st"><span class="dot dot-ok"></span>włączona</span>';
@@ -90,7 +116,7 @@ export function hookReveal(created: CreatedHook, apiUrl: string | null, appField
 export function integrationsPage(views: IntegrationView[], filter: IntegrationsFilter, keys: Array<{ id: number; name: string }>,
                                  created: CreatedHook | null = null, apiUrl: string | null = null): string {
   const kinds: Array<{ key: IntegrationsFilter['kind']; label: string }> = [
-    { key: null, label: 'Wszystkie' }, { key: 'in', label: 'Do SMS' }, { key: 'out', label: 'Z SMS-a' },
+    { key: null, label: 'Wszystkie' }, { key: 'in', label: 'Do SMS' }, { key: 'out', label: 'Z SMS-a' }, { key: 'mail', label: 'Z poczty' },
   ];
   const tabs = kinds.map((k) => `<a href="${filterLink(filter, { kind: k.key })}"${k.key === filter.kind ? ' class="on"' : ''}>${esc(k.label)}</a>`).join('');
   const keyOptions = ['<option value="">wszystkie klucze</option>', ...keys.map((k) =>
@@ -115,7 +141,7 @@ export function integrationsPage(views: IntegrationView[], filter: IntegrationsF
   return `<div class="head">
     <div>
       <h1 class="h1">Integracje</h1>
-      <p class="sub">Aplikacje, które wysyłają SMS-y własnym formatem i aplikacje, do których trafiają odebrane SMS-y i statusy</p>
+      <p class="sub">Aplikacje i skrzynki pocztowe, z których idą SMS-y, oraz aplikacje, do których trafiają odebrane SMS-y i statusy</p>
     </div>
     <a class="btn btn-p" href="/integracje/nowa">Dodaj integrację</a>
   </div>
@@ -887,6 +913,29 @@ function eventRow(integrationId: number, d: DetailEvent): string {
     </tr>`;
 }
 
+/** Stan skrzynki w szczegółach: ostatnie sprawdzenie, ostatnie udane, nieprzeczytane, błąd słowami, przycisk „Sprawdź teraz”. */
+function mailboxPanel(v: IntegrationView): string {
+  const m = v.mailbox;
+  const rows: string[] = [];
+  if (!m) {
+    rows.push(kvRow('Stan', '<span class="dim">czeka na pierwsze sprawdzenie</span>'));
+  } else {
+    rows.push(kvRow('Ostatnie sprawdzenie', m.lastPollAt ? `${esc(warsawStamp(m.lastPollAt))} <span class="dim">(${esc(agoWords(m.lastPollAt, v.now))})</span>` : '<span class="dim">jeszcze nie</span>'));
+    rows.push(kvRow('Ostatnie udane', m.lastOkAt ? `${esc(warsawStamp(m.lastOkAt))} <span class="dim">(${esc(agoWords(m.lastOkAt, v.now))})</span>` : '<span class="dim">jeszcze nie</span>'));
+    rows.push(kvRow('Nieprzeczytanych', m.unseen === null ? '<span class="dim">nieznane</span>' : esc(m.unseen)));
+    rows.push(kvRow('Następne sprawdzenie', esc(warsawStamp(m.nextPollAt))));
+    if (m.error !== null) {
+      rows.push(kvRow('Błąd', `<span class="fail">${esc(MAILBOX_ERROR_WORDS[m.errorKind ?? 'other'])}</span> od ${esc(warsawStamp(m.errorSince ?? m.lastPollAt ?? v.now.toISOString()))}, nieudanych prób: ${esc(m.failures)}<div class="m dim">${esc(m.error)}</div>`));
+    }
+  }
+  return `<div class="panel">
+    <div class="panel-h"><div class="lab">Skrzynka</div>
+      <form method="post" action="/integracje/${esc(v.row.id)}/sprawdz-teraz"><button class="btn btn-s" type="submit">Sprawdź teraz</button></form>
+    </div>
+    <div class="kv">${rows.join('')}</div>
+  </div>`;
+}
+
 export function integrationDetailPage(d: IntegrationDetail): string {
   const { row } = d.view;
   const toggle = row.enabled === 1
@@ -898,6 +947,8 @@ export function integrationDetailPage(d: IntegrationDetail): string {
   const events = d.events.length === 0
     ? '<tr><td class="dim" colspan="6">Dziennik jest pusty - integracja nie dostała jeszcze żadnego zdarzenia.</td></tr>'
     : d.events.map((e) => eventRow(row.id, e)).join('');
+  const copy = `<form method="post" action="/integracje/${esc(row.id)}/kopiuj" style="display: inline;"><button class="btn btn-s" type="submit">Utwórz kopię</button></form>`;
+  const mailbox = row.kind === 'mail_in' ? mailboxPanel(d.view) : '';
   return `<div class="head">
     <div>
       <div class="crumb"><a href="/integracje">Integracje</a> / szczegóły</div>
@@ -906,11 +957,13 @@ export function integrationDetailPage(d: IntegrationDetail): string {
     </div>
     <div class="bar">
       <a class="btn btn-s" href="/integracje/${esc(row.id)}/edytuj">Edytuj</a>
+      ${copy}
       ${toggle}
       ${remove}
     </div>
   </div>
   <div class="scroll">
+    ${mailbox}
     <div class="panel">
       <div class="panel-h"><div class="lab">Konfiguracja</div><div class="m dim">24 h: ${esc(d.view.counts.sent)} wysłane · ${esc(d.view.counts.errors)} błędy</div></div>
       <div class="kv">${configRows(row, d.apiUrl, d.simple ?? null)}</div>

@@ -83,6 +83,22 @@ describe('formularz skrzynki', () => {
     expect((await get(`/integracje/${row.id}`)).statusCode).toBe(200);
   });
 
+  it('zmiana serwera, portu, zabezpieczenia albo loginu przy zapisanym haśle wymaga podania hasła ponownie, także przy sprawdzaniu połączenia', async () => {
+    await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody() });
+    const row = h.integrations.list()[0]!;
+    for (const over of [{ host: 'imap.obcy.test' }, { port: '143' }, { security: 'none', port: '143' }, { user: 'inny' }]) {
+      const res = await post(`/integracje/${row.id}/edytuj`, formBody({ password: '', ...over }));
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toContain('podaj hasło ponownie');
+      const check = await post(`/integracje/${row.id}/edytuj`, formBody({ password: '', action: 'polaczenie', ...over }));
+      expect(check.statusCode).toBe(400);
+      expect(check.body).toContain('podaj hasło ponownie');
+    }
+    expect(h.integrations.get(row.id)?.config).toMatchObject({ imap: { host: 'imap.przyklad.test' } });
+    expect((await post(`/integracje/${row.id}/edytuj`, formBody({ password: 'NoweHaslo1', host: 'imap.obcy.test' }))).statusCode).toBe(302);
+    expect((await post(`/integracje/${row.id}/edytuj`, formBody({ password: '', folder: 'Inny', host: 'imap.obcy.test' }))).statusCode).toBe(302);
+  });
+
   it('Sprawdź połączenie przed zapisem: wynik z liczbą nieprzeczytanych i listą folderów na tej samej stronie', async () => {
     h.mailbox.add({ uid: 1, seen: false, source: 'Subject: a\r\n\r\nx' });
     const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody() });

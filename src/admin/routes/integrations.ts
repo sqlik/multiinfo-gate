@@ -53,13 +53,17 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       presetName: presetNames.get(row.preset) ?? row.preset,
       counts: deps.integrationEvents.countsSince(row.id, since),
       lastEvent: deps.integrationEvents.latest(row.id) ?? null,
+      mailbox: row.kind === 'mail_in' ? deps.mailIn?.state(row.id) ?? null : null,
+      now: now(),
     };
   };
+
+  const KIND_OF_FILTER: Record<'in' | 'out' | 'mail', IntegrationKind> = { in: 'webhook_in', out: 'webhook_out', mail: 'mail_in' };
 
   const listBody = (request: FastifyRequest, filter: IntegrationsFilter, created: CreatedHook | null = null) => {
     const since = new Date(now().getTime() - WINDOW_MS);
     const rows = deps.integrations.list()
-      .filter((r) => filter.kind === null || r.kind === (filter.kind === 'in' ? 'webhook_in' : 'webhook_out'))
+      .filter((r) => filter.kind === null || r.kind === KIND_OF_FILTER[filter.kind])
       .filter((r) => filter.keyId === null || r.apiKeyId === filter.keyId);
     return render.page(request, {
       title: 'Integracje', active: 'integracje',
@@ -283,6 +287,15 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     if (!key.ok) return fail(key.error);
     const built = mailFormToConfig(v, hasPassword, deps.engine);
     if (!built.ok) return fail(built.error);
+    // Zapisane hasło wolno użyć tylko wobec tego samego serwera i loginu: inaczej zmiana serwera w formularzu
+    // wysłałaby hasło, którego panel nigdy nie pokazuje, do obcego serwera.
+    if (row && built.password === null) {
+      const saved = (row.config as MailInConfig).imap;
+      const next = built.config.imap;
+      if (saved.host !== next.host || saved.port !== next.port || saved.security !== next.security || saved.user !== next.user) {
+        return fail('Zmieniono serwer, port, zabezpieczenie albo login: podaj hasło ponownie.');
+      }
+    }
     const warnings = mailWarnings(built.config);
     const action = String(body.action ?? '');
 
@@ -341,7 +354,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
 
   app.get<{ Querystring: { rodzaj?: string; klucz?: string } }>('/integracje', async (request, reply) => {
     reply.type('text/html; charset=utf-8');
-    const kind = request.query.rodzaj === 'in' || request.query.rodzaj === 'out' ? request.query.rodzaj : null;
+    const kind = request.query.rodzaj === 'in' || request.query.rodzaj === 'out' || request.query.rodzaj === 'mail' ? request.query.rodzaj : null;
     const keyId = Number.parseInt(request.query.klucz ?? '', 10) || null;
     return listBody(request, { kind, keyId });
   });
@@ -537,6 +550,40 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
   };
   app.post<{ Params: { id: string } }>('/integracje/:id/wlacz', async (request, reply) => setEnabled(request, reply, true));
   app.post<{ Params: { id: string } }>('/integracje/:id/wylacz', async (request, reply) => setEnabled(request, reply, false));
+
+  app.post<{ Params: { id: string } }>('/integracje/:id/sprawdz-teraz', async (request, reply) => {
+    const row = rowOr404(request.params.id, reply);
+    if (!row) return;
+    if (row.kind !== 'mail_in') return reply.callNotFound();
+    const at = now();
+    deps.mailIn?.ensureState(row.id, at);
+    deps.mailIn?.pollNow(row.id, at);
+    render.flash(request, 'ok', `Skrzynka ${row.name}: sprawdzenie za chwilę.`);
+    return reply.redirect(`/integracje/${row.id}`, 302);
+  });
+
+  /** Nazwa kopii wolna przy tym kluczu: „(kopia)”, potem „(kopia 2)”, „(kopia 3)”. */
+  const copyName = (row: IntegrationRow): string => {
+    const taken = new Set(deps.integrations.listForKey(row.apiKeyId).map((r) => r.name));
+    let candidate = `${row.name} (kopia)`;
+    for (let n = 2; taken.has(candidate); n += 1) candidate = `${row.name} (kopia ${n})`;
+    return candidate;
+  };
+
+  app.post<{ Params: { id: string } }>('/integracje/:id/kopiuj', async (request, reply) => {
+    const row = rowOr404(request.params.id, reply);
+    if (!row) return;
+    const at = now();
+    const name = copyName(row);
+    const copyId = deps.integrations.copy(row.id, name, at);
+    if (row.kind === 'mail_in') deps.mailIn?.ensureState(copyId, at);
+    deps.audit.record({
+      actor: actorOf(request.adminUserId), action: 'integracja.kopia', target: `integracja:${copyId}`,
+      meta: { z: row.id, nazwa: name }, ip: request.ip,
+    });
+    render.flash(request, 'ok', 'Kopia utworzona jako wyłączona: uzupełnij i włącz.');
+    return reply.redirect(`/integracje/${copyId}/edytuj`, 302);
+  });
 
   app.post<{ Params: { id: string } }>('/integracje/:id/usun', async (request, reply) => {
     const row = rowOr404(request.params.id, reply);
