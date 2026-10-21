@@ -230,6 +230,8 @@ export class MailInPoller {
         // Jeden nieczytelny mail nie zatrzymuje partii ani nie znika po cichu: wpis błędu, wynik failed, działanie jak dla odrzuconego.
         if (e instanceof MailboxError && e.kind !== 'other') throw e;
         mailIn.setOutcome(integration.id, key, 'failed');
+        // Nadawca nieczytelnego maila nie został sprawdzony, więc jego Message-ID nie może blokować późniejszego prawdziwego maila.
+        mailIn.forgetMessageId(integration.id, key);
         const message = scrubError(errorMessageOf(e), [config.imap.user]);
         this.deps.integrationEvents.record({ integrationId: integration.id, at: now, result: 'error', reason: `nieczytelny mail: ${message}`, logLimit: config.eventLogLimit });
         this.deps.notifier?.notify('integration_error', `integration:${integration.id}`, `${integration.name}: nieczytelny mail: ${message}`, now);
