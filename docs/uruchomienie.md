@@ -546,9 +546,9 @@ Ekran **Integracje** służy aplikacjom, których formatu nie da się zmienić. 
 Zapier) oraz powiadomienia push przez ntfy. Integracja „do SMS” daje aplikacji adres wejściowy
 `POST /hooks/<identyfikator>` na porcie API i tłumaczy jej ładunek na SMS według szablonu.
 Integracja „z SMS-a” wysyła odebrane SMS-y i statusy na adres aplikacji w jej formacie.
-Integracja „Mail2SMS” czyta skrzynkę pocztową przez IMAP i zamienia maile od dozwolonych nadawców
-na SMS-y. Potrzebuje tylko połączenia wychodzącego z maszyny bramki do serwera poczty na porcie
-993 (albo 143), więc w Dockerze ani w Traefiku nic nie trzeba otwierać. Integracja działa
+Integracja „Mail2SMS” odczytuje skrzynkę pocztową przez IMAP i zamienia wiadomości od dozwolonych
+nadawców na SMS-y. Wymaga wyłącznie połączenia wychodzącego z maszyny bramki do serwera poczty
+na porcie 993 (albo 143); w Dockerze ani w Traefiku nie trzeba otwierać żadnego portu. Integracja działa
 w imieniu klucza API z rozdziału 4.5. Załóż go najpierw.
 
 ![Lista integracji z kierunkiem, ustawieniem, kluczem, stanem i licznikami z ostatniej doby](obrazki/integracje.png)

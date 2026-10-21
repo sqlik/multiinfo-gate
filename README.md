@@ -32,10 +32,11 @@ fakturze, a Bitrix24 zakłada zadanie z odebranego SMS-a przy kartotece klienta.
 teraz dopytać aplikację o dane, których nie ma w powiadomieniu. Dzięki temu SMS trafia do
 nabywcy faktury, choć numeru telefonu w samym powiadomieniu nie ma.
 
-Wersja 1.8 dokłada Mail2SMS. Bramka czyta wskazaną skrzynkę IMAP i zamienia maile od dozwolonych
-nadawców na SMS-y: alarm z UPS-a, raport z NAS-a albo wiadomość pracownika trafiają na telefon
-bez żadnej zmiany po stronie urządzenia czy aplikacji. Z maila o stałej budowie bramka potrafi
-wyciąć wybrane pola i złożyć z nich krótki SMS.
+Wersja 1.8 wprowadza Mail2SMS. Bramka odczytuje wskazaną skrzynkę IMAP i zamienia wiadomości
+e-mail od dozwolonych nadawców na SMS-y: alarm z zasilacza UPS, raport z serwera NAS albo
+wiadomość pracownika docierają na telefon bez żadnych zmian po stronie urządzenia czy
+aplikacji. Z wiadomości o stałej budowie bramka potrafi wyodrębnić wybrane pola i złożyć z nich
+krótki SMS.
 
 ## Co trzeba mieć
 
