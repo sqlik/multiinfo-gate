@@ -51,9 +51,9 @@ describe('handleMail', () => {
   it('adresat z ładunku zadania zastępuje adresatów administratora, nagłówki wątku idą dalej', async () => {
     smtp();
     mailer.mockResolvedValue(undefined);
-    const id = jobs.enqueue('mail', { subject: 'Re: Awaria', text: 'SMS wysłany', to: ['tomek@przyklad.test'], inReplyTo: '<m1@x>', references: '<m1@x>' }, NOW);
+    const id = jobs.enqueue('mail', { subject: 'Re: Awaria', text: 'SMS wysłany', to: ['jan@przyklad.test'], inReplyTo: '<m1@x>', references: '<m1@x>' }, NOW);
     await handleMail(jobs.claim(NOW, 1)[0]!, deps, NOW);
-    expect(mailer.mock.calls[0]![1]).toEqual({ subject: 'Re: Awaria', text: 'SMS wysłany', to: ['tomek@przyklad.test'], inReplyTo: '<m1@x>', references: '<m1@x>' });
+    expect(mailer.mock.calls[0]![1]).toEqual({ subject: 'Re: Awaria', text: 'SMS wysłany', to: ['jan@przyklad.test'], inReplyTo: '<m1@x>', references: '<m1@x>' });
     expect(jobs.depth()).toBe(0);
     expect(id).toBeGreaterThan(0);
   });

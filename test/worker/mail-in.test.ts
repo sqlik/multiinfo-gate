@@ -79,12 +79,12 @@ afterEach(() => { vi.useRealTimers(); });
 
 describe('MailInPoller: próg i zaległe', () => {
   it('pierwsze odpytanie ustawia próg na UIDNEXT-1 i nie rusza zaległych; nowy mail po progu daje SMS', async () => {
-    box.add({ uid: 1, seen: false, source: eml('tomek@przyklad.test', 'Stare', 'x', '<1@x>') });
+    box.add({ uid: 1, seen: false, source: eml('jan@przyklad.test', 'Stare', 'x', '<1@x>') });
     await poller.tick(NOW);
     expect(mailIn.state(integ.id)).toMatchObject({ uidFloor: 1, uidvalidity: 7, unseen: 1, error: null, lastOkAt: NOW.toISOString(), nextPollAt: at(60_000).toISOString() });
     expect(smsCount()).toBe(0);
     expect(box.calls).not.toContain('source:1');
-    box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', 'Nowe', 'y', '<2@x>') });
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'Nowe', 'y', '<2@x>') });
     await poller.tick(at(30_000));
     expect(smsCount()).toBe(0);
     await poller.tick(at(60_000));
@@ -96,7 +96,7 @@ describe('MailInPoller: próg i zaległe', () => {
   });
 
   it('backlog: pole wyboru bierze zaległe i gaśnie po pierwszym odpytaniu', async () => {
-    box.add({ uid: 1, seen: false, source: eml('tomek@przyklad.test', 'Stare', 'x', '<1@x>') });
+    box.add({ uid: 1, seen: false, source: eml('jan@przyklad.test', 'Stare', 'x', '<1@x>') });
     mailIn.ensureState(integ.id, NOW);
     mailIn.setBacklog(integ.id, 1);
     await poller.tick(NOW);
@@ -106,7 +106,7 @@ describe('MailInPoller: próg i zaległe', () => {
 
   it('nie wysyła drugi raz: po ponownym oznaczeniu jako nieprzeczytany, po restarcie w połowie ani po zmianie UIDVALIDITY z tym samym Message-ID', async () => {
     await poller.tick(NOW);
-    box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', 'Nowe', 'y', '<2@x>') });
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'Nowe', 'y', '<2@x>') });
     await poller.tick(at(60_000));
     expect(smsCount()).toBe(1);
     // Ktoś celowo oznaczył mail jako nieprzeczytany: bramka go nie rusza i nie hałasuje w dzienniku.
@@ -125,7 +125,7 @@ describe('MailInPoller: próg i zaległe', () => {
     box.resetUidValidity(8);
     await poller.tick(at(240_000));
     expect(mailIn.state(integ.id)).toMatchObject({ uidvalidity: 8, uidFloor: box.uidNext - 1 });
-    box.add({ uid: 9, seen: false, source: eml('tomek@przyklad.test', 'Nowe', 'y', '<2@x>') });
+    box.add({ uid: 9, seen: false, source: eml('jan@przyklad.test', 'Nowe', 'y', '<2@x>') });
     await poller.tick(at(300_000));
     expect(smsCount()).toBe(1);
     expect(events(integ.id)[0]).toEqual(['skipped', 'wiadomość już przetworzona']);
@@ -160,7 +160,7 @@ describe('MailInPoller: próg i zaległe', () => {
 
   it('za duży mail jest pomijany bez pobierania treści, ale podlega działaniu po przetworzeniu', async () => {
     await poller.tick(NOW);
-    box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', 'Duży', 'x', '<2@x>'), size: MAX_MAIL_BYTES + 1 });
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'Duży', 'x', '<2@x>'), size: MAX_MAIL_BYTES + 1 });
     await poller.tick(at(60_000));
     expect(smsCount()).toBe(0);
     expect(events(integ.id)[0]).toEqual(['skipped', 'wiadomość zbyt duża (2.0 MB)']);
@@ -170,7 +170,7 @@ describe('MailInPoller: próg i zaległe', () => {
 
   it('bierze najwyżej 50 maili na odpytanie, od najstarszego; reszta czeka', async () => {
     await poller.tick(NOW);
-    for (let uid = 2; uid <= 62; uid += 1) box.add({ uid, seen: false, source: eml('tomek@przyklad.test', `M${uid}`, 'x', `<${uid}@x>`) });
+    for (let uid = 2; uid <= 62; uid += 1) box.add({ uid, seen: false, source: eml('jan@przyklad.test', `M${uid}`, 'x', `<${uid}@x>`) });
     await poller.tick(at(60_000));
     expect(smsCount()).toBe(10);
     expect(events(integ.id).filter((e) => e[0] === 'throttled')).toHaveLength(40);
@@ -188,19 +188,19 @@ describe('MailInPoller: działanie po przetworzeniu', () => {
     const only = (id: number) => { for (const i of [integ, move, del]) integrations.setEnabled(i.id, i.id === id, NOW); };
     await poller.tick(NOW);
     only(move.id);
-    box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', 'A', 'x', '<2@x>') });
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'A', 'x', '<2@x>') });
     box.add({ uid: 3, seen: false, source: eml('obcy@inna.pl', 'B', 'x', '<3@x>') });
     await poller.tick(at(60_000));
     expect(box.messages('Przetworzone').map((m) => [m.uid, m.seen])).toEqual([[2, true], [3, true]]);
     expect(box.messages('INBOX')).toHaveLength(0);
     expect(events(move.id).map((e) => e[0])).toEqual(['skipped', 'sent']);
     only(del.id);
-    box.add({ uid: 4, seen: false, source: eml('tomek@przyklad.test', 'C', 'x', '<4@x>') });
+    box.add({ uid: 4, seen: false, source: eml('jan@przyklad.test', 'C', 'x', '<4@x>') });
     await poller.tick(at(120_000));
     expect(box.messages('INBOX')).toHaveLength(0);
     expect(events(del.id)[0]![0]).toBe('sent');
     only(integ.id);
-    box.add({ uid: 5, seen: false, source: eml('tomek@przyklad.test', 'D', 'x', '<5@x>') });
+    box.add({ uid: 5, seen: false, source: eml('jan@przyklad.test', 'D', 'x', '<5@x>') });
     await poller.tick(at(180_000));
     expect(box.messages('INBOX').map((m) => [m.uid, m.seen])).toEqual([[5, true]]);
     expect(smsCount()).toBe(3);
@@ -211,8 +211,8 @@ describe('MailInPoller: działanie po przetworzeniu', () => {
     integrations.setEnabled(integ.id, false, NOW);
     await poller.tick(NOW);
     box.rejectMove = true;
-    box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', 'A', 'x', '<2@x>') });
-    box.add({ uid: 3, seen: false, source: eml('tomek@przyklad.test', 'B', 'x', '<3@x>') });
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'A', 'x', '<2@x>') });
+    box.add({ uid: 3, seen: false, source: eml('jan@przyklad.test', 'B', 'x', '<3@x>') });
     await poller.tick(at(60_000));
     expect(smsCount()).toBe(2);
     expect(events(move.id).map((e) => e[0])).toEqual(['sent', 'sent']);
@@ -306,7 +306,7 @@ describe('MailInPoller: awarie', () => {
   it('odpytanie przerwane w połowie kończy bieżący mail, zostawia resztę na następny raz i nie zgłasza „już przetworzony”', async () => {
     vi.useFakeTimers({ now: NOW });
     await poller.tick(NOW);
-    for (const uid of [2, 3, 4, 5]) box.add({ uid, seen: false, source: eml('tomek@przyklad.test', `M${uid}`, 'x', `<${uid}@x>`) });
+    for (const uid of [2, 3, 4, 5]) box.add({ uid, seen: false, source: eml('jan@przyklad.test', `M${uid}`, 'x', `<${uid}@x>`) });
     box.delaySourceMs = 25_000;
     const t = poller.tick(at(60_000));
     await vi.advanceTimersByTimeAsync(130_000);
@@ -327,7 +327,7 @@ describe('MailInPoller: powiadomienia i odpowiedzi', () => {
     const num = make({ recipientsFromMail: { enabled: true, where: 'subject' } });
     integrations.setEnabled(integ.id, false, NOW);
     await poller.tick(NOW);
-    box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', '48601000001, 4860100000: Awaria', 'x', '<2@x>') });
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', '48601000001, 4860100000: Awaria', 'x', '<2@x>') });
     await poller.tick(at(60_000));
     expect(smsCount()).toBe(1);
     expect(notified.map((n) => [n.event, n.summary])).toEqual([['integration_error', `${num.name}: pominięto 1 nieprawidłowy numer: 4860100000`]]);
@@ -335,7 +335,7 @@ describe('MailInPoller: powiadomienia i odpowiedzi', () => {
 
   it('nieczytelny mail dostaje wpis błąd i działanie po przetworzeniu, a reszta partii idzie dalej', async () => {
     await poller.tick(NOW);
-    for (const uid of [2, 3, 4]) box.add({ uid, seen: false, source: eml('tomek@przyklad.test', `M${uid}`, 'x', `<${uid}@x>`) });
+    for (const uid of [2, 3, 4]) box.add({ uid, seen: false, source: eml('jan@przyklad.test', `M${uid}`, 'x', `<${uid}@x>`) });
     box.failSource.set(3, new Error('boom'));
     await poller.tick(at(60_000));
     expect(smsCount()).toBe(2);
@@ -364,11 +364,11 @@ describe('MailInPoller: powiadomienia i odpowiedzi', () => {
     integrations.setEnabled(integ.id, false, NOW);
     await poller.tick(NOW);
     deps.notifier = { notify: () => { throw new Error('smtp down'); } };
-    box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', 'Bez numeru', 'x', '<bn@x>') });
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'Bez numeru', 'x', '<bn@x>') });
     await poller.tick(at(60_000));
     expect(mailIn.outcomes(bez.id).find((o) => o.uid === 2)?.outcome).toBe('failed');
     deps.notifier = { notify: () => undefined };
-    box.add({ uid: 3, seen: false, source: eml('tomek@przyklad.test', 'Bez numeru', 'x', '<bn@x>') });
+    box.add({ uid: 3, seen: false, source: eml('jan@przyklad.test', 'Bez numeru', 'x', '<bn@x>') });
     await poller.tick(at(120_000));
     expect(events(bez.id)[0]).toEqual(['skipped', 'wiadomość już przetworzona']);
   });
@@ -408,9 +408,9 @@ describe('MailInPoller: powiadomienia i odpowiedzi', () => {
     const pusta = make({ to: { fallback: [] }, throttle: { limit: 1, windowMinutes: 10 } });
     integrations.setEnabled(integ.id, false, NOW);
     await poller.tick(NOW);
-    box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', 'A', 'x', '<2@x>') });
-    box.add({ uid: 3, seen: false, source: eml('tomek@przyklad.test', 'B', 'x', '<3@x>') });
-    box.add({ uid: 4, seen: false, source: eml('tomek@przyklad.test', 'C', 'x', '<4@x>') });
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'A', 'x', '<2@x>') });
+    box.add({ uid: 3, seen: false, source: eml('jan@przyklad.test', 'B', 'x', '<3@x>') });
+    box.add({ uid: 4, seen: false, source: eml('jan@przyklad.test', 'C', 'x', '<4@x>') });
     await poller.tick(at(60_000));
     expect(notified.map((n) => [n.event, n.subjectKey])).toEqual([
       ['integration_error', `integration:${pusta.id}`], ['integration_throttled', `integration:${pusta.id}`],
@@ -422,20 +422,20 @@ describe('MailInPoller: powiadomienia i odpowiedzi', () => {
     const odp = make({ reply: { enabled: true }, condition: { mode: 'builder', rules: [{ path: 'subject', op: 'ne', value: 'cicho' }] } });
     integrations.setEnabled(integ.id, false, NOW);
     await poller.tick(NOW);
-    box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', 'A', 'x', '<2@x>') });
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'A', 'x', '<2@x>') });
     await poller.tick(at(60_000));
     expect(mails()).toEqual([]);
     notifications.saveSmtp({ host: 'smtp.przyklad.test', port: 465, security: 'tls', user: null, password: null, fromAddress: 'g@przyklad.test', fromName: 'G', recipients: ['admin@przyklad.test'], instanceName: 'mi', panelUrl: null }, NOW);
-    box.add({ uid: 3, seen: false, source: eml('tomek@przyklad.test', 'B', 'y', '<3@x>') });
+    box.add({ uid: 3, seen: false, source: eml('jan@przyklad.test', 'B', 'y', '<3@x>') });
     box.add({ uid: 4, seen: false, source: eml('obcy@inna.pl', 'C', 'y', '<4@x>') });
-    box.add({ uid: 5, seen: false, source: eml('tomek@przyklad.test', 'cicho', 'y', '<5@x>') });
-    box.add({ uid: 6, seen: false, source: eml('tomek@przyklad.test', 'D', 'x'.repeat(500), '<6@x>') });
+    box.add({ uid: 5, seen: false, source: eml('jan@przyklad.test', 'cicho', 'y', '<5@x>') });
+    box.add({ uid: 6, seen: false, source: eml('jan@przyklad.test', 'D', 'x'.repeat(500), '<6@x>') });
     integrations.update(odp.id, { ...odp, config: { ...odp.config, overflow: 'reject' } } as never, at(120_000));
     await poller.tick(at(120_000));
     const sent = mails();
     expect(sent).toHaveLength(2);
-    expect(sent[0]).toEqual({ subject: 'Re: B', text: 'SMS wysłany do 1 odbiorcy (…009), 1 część.', to: ['tomek@przyklad.test'], inReplyTo: '<3@x>', references: '<3@x>', autoReply: true });
-    expect(sent[1]).toMatchObject({ subject: 'Re: D', text: 'SMS nie został wysłany: treść wymaga więcej niż 1 części.', to: ['tomek@przyklad.test'], inReplyTo: '<6@x>' });
+    expect(sent[0]).toEqual({ subject: 'Re: B', text: 'SMS wysłany do 1 odbiorcy (…009), 1 część.', to: ['jan@przyklad.test'], inReplyTo: '<3@x>', references: '<3@x>', autoReply: true });
+    expect(sent[1]).toMatchObject({ subject: 'Re: D', text: 'SMS nie został wysłany: treść wymaga więcej niż 1 części.', to: ['jan@przyklad.test'], inReplyTo: '<6@x>' });
   });
 });
 
@@ -451,8 +451,8 @@ describe('MailInPoller: równoległość', () => {
     poller = new MailInPoller(deps);
     await poller.tick(NOW);
     box.delayMs = 5000;
-    box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', 'A', 'x', '<2@x>') });
-    box2.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', 'B', 'y', '<b2@x>') });
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'A', 'x', '<2@x>') });
+    box2.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'B', 'y', '<b2@x>') });
     const first = poller.tick(at(60_000));
     await vi.advanceTimersByTimeAsync(10);
     expect(smsCount()).toBe(1);

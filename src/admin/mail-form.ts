@@ -158,7 +158,7 @@ export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine
     const colon = line.indexOf(':');
     const pattern = (colon < 0 ? line : line.slice(0, colon)).trim().toLowerCase();
     const numbers = colon < 0 ? [] : line.slice(colon + 1).split(',').map((n) => n.trim()).filter((n) => n !== '');
-    if (!SENDER_PATTERN.test(pattern) || pattern.length > 254) return fail(`Nadawca „${pattern}”: podaj pełny adres albo domenę z małpą, np. @sqlik.com.`);
+    if (!SENDER_PATTERN.test(pattern) || pattern.length > 254) return fail(`Nadawca „${pattern}”: podaj pełny adres albo domenę z małpą, np. @przyklad.pl.`);
     if (numbers.length > 50) return fail(`Nadawca ${pattern}: najwyżej 50 numerów.`);
     senders.push({ pattern, recipients: numbers });
   }
