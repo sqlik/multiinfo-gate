@@ -6,8 +6,8 @@ SMS-y oraz statusy wysyłki w takim kształcie, jakiego oczekują. Służy do te
 obiekt konfigurowany w panelu i przypięty do klucza API. Ma adres wejściowy albo docelowy,
 szablon i warunek.
 
-Od wersji 1.8 integracją jest też skrzynka pocztowa: bramka czyta maile od dozwolonych nadawców
-i zamienia je na SMS-y (Mail2SMS, rozdział 5).
+Od wersji 1.8 integracją jest również skrzynka pocztowa: bramka odczytuje wiadomości od
+dozwolonych nadawców i zamienia je na SMS-y (Mail2SMS, rozdział 5).
 
 Ten rozdział opisuje trzy kierunki, język szablonów, gotowe ustawienia dla popularnych aplikacji,
 dziennik integracji oraz powiadomienia dla administratora wysyłane mailem. Wysyłkę przez pełne
@@ -22,7 +22,7 @@ Integracja działa w jednym z trzech kierunków:
 |---|---|---|
 | do SMS | „Aplikacja wysyła SMS” | aplikacja woła adres wejściowy bramki `POST /hooks/<identyfikator>` własnym ładunkiem; bramka wyciąga z niego numer i treść, składa SMS i wysyła |
 | z SMS-a | „SMS albo status trafia do aplikacji” | odebrany SMS albo status wysyłki bramka wysyła na adres aplikacji w formacie zapisanym w szablonie |
-| z poczty | „Mail2SMS” | bramka czyta skrzynkę IMAP i zamienia maile od dozwolonych nadawców na SMS-y; numery podaje nadawca, lista nadawców albo stała lista (rozdział 5) |
+| z poczty | „Mail2SMS” | bramka odczytuje skrzynkę IMAP i zamienia wiadomości od dozwolonych nadawców na SMS-y; numery wskazuje nadawca, lista nadawców albo stała lista (rozdział 5) |
 
 Każda integracja działa w imieniu jednego klucza API. Obowiązują więc konto Multiinfo tego
 klucza, jego dozwolone usługi, nadpisy i limity, dokładnie tak jak przy wysyłce przez API.
@@ -447,90 +447,99 @@ zdarzenia w formacie bramki, z podpisem.
 
 ## 5. Mail2SMS
 
-Od wersji 1.8 bramka czyta wskazaną skrzynkę pocztową i zamienia maile na SMS-y. Służy temu
-integracja „z poczty”, w panelu nazwana Mail2SMS. Jest dla nadawców, którzy umieją wysłać mail,
-a nie umieją wywołać API ani webhooka: UPS zgłasza utratę zasilania, NAS wysyła raport o dysku,
-stary system księgowy pisze o błędzie nocnego przetwarzania, a pracownik wysyła z Outlooka
-wiadomość, która ma dojść na trzy telefony. Po stronie urządzenia ani aplikacji nic nie trzeba
-zmieniać. Wystarczy, żeby mail trafił do skrzynki, którą czyta bramka.
+Od wersji 1.8 bramka odczytuje wskazaną skrzynkę pocztową i zamienia wiadomości e-mail na
+SMS-y. Służy do tego integracja „z poczty”, w panelu nazwana Mail2SMS. Jest przeznaczona dla
+nadawców, którzy potrafią wysłać wiadomość e-mail, ale nie potrafią wywołać API ani webhooka:
+zasilacz UPS zgłasza utratę zasilania, serwer NAS wysyła raport o stanie dysku, starszy system
+księgowy informuje o błędzie nocnego przetwarzania, a pracownik wysyła z Outlooka wiadomość,
+która ma dotrzeć na trzy telefony. Po stronie urządzenia ani aplikacji nie są potrzebne żadne
+zmiany. Wystarczy, aby wiadomość trafiła do skrzynki odczytywanej przez bramkę.
 
-Skrzynka powinna należeć do bramki. Bramka bierze wyłącznie maile nieprzeczytane. Gdy człowiek
-otworzy mail w programie pocztowym, zanim bramka go sprawdzi, mail staje się przeczytany i SMS
-nie pójdzie. Załóż więc osobną skrzynkę, na przykład `alarmy@firma.pl`, albo wskaż folder, do
-którego ludzie nie zaglądają, a serwer pocztowy kieruje do niego maile regułą sortowania.
+Skrzynka powinna być przeznaczona dla bramki. Bramka przetwarza wyłącznie wiadomości
+nieprzeczytane. Jeżeli użytkownik otworzy wiadomość w programie pocztowym, zanim bramka ją
+sprawdzi, wiadomość zostanie oznaczona jako przeczytana i SMS nie zostanie wysłany. Zalecane
+jest założenie osobnej skrzynki, na przykład `alarmy@firma.pl`, albo wskazanie folderu, do
+którego użytkownicy nie zaglądają, a serwer pocztowy kieruje do niego wiadomości regułą
+sortowania.
 
-Mail przechodzi przez ten sam potok, co zlecenie z aplikacji: warunek, ochronę przed burzą,
-szablon, wysyłkę w imieniu klucza API i wpis w dzienniku integracji. SMS-y z poczty widać na
-ekranie „Wiadomości” z nazwą klucza i nazwą integracji, tak jak każde inne.
+Wiadomość przechodzi przez ten sam potok co zlecenie z aplikacji: warunek, ochronę przed burzą,
+szablon, wysyłkę w imieniu klucza API i wpis w dzienniku integracji. SMS-y wysłane na podstawie
+wiadomości e-mail są widoczne na ekranie „Wiadomości” z nazwą klucza i nazwą integracji, tak jak
+pozostałe.
 
 ### 5.1. Skrzynka
 
-Przycisk **Dodaj integrację**, kierunek „Z poczty”, potem kafelek z nazwą dostawcy. Kafelek
-wypełnia serwer, port i zabezpieczenie, a obok formularza pokazuje instrukcję, skąd wziąć hasło.
+Przycisk **Dodaj integrację**, kierunek „Z poczty”, następnie kafelek z nazwą dostawcy. Kafelek
+uzupełnia serwer, port i zabezpieczenie, a obok formularza wyświetla instrukcję, gdzie uzyskać
+hasło.
 
 ![Wybór dostawcy poczty: kafelki Gmail, home.pl, OVH i Własny serwer](obrazki/poczta-katalog.png)
 
 | Kafelek | Serwer | Hasło |
 |---|---|---|
-| Gmail | `imap.gmail.com`, port 993, TLS | hasło aplikacji, dostępne po włączeniu weryfikacji dwuetapowej w koncie Google; hasło do konta nie zadziała |
+| Gmail | `imap.gmail.com`, port 993, TLS | hasło aplikacji, dostępne po włączeniu weryfikacji dwuetapowej w koncie Google; hasło do konta nie jest przyjmowane |
 | home.pl | nazwa z Panelu klienta w postaci `serwerNNNNNN.home.pl`, port 993, TLS | hasło skrzynki z Panelu klienta, nie hasło do Panelu |
 | OVH | `imap.mail.ovh.net`, port 993, TLS | hasło skrzynki z panelu OVHcloud; usługa Email Pro ma własną nazwę serwera |
 | Własny serwer | do wpisania | hasło skrzynki według dostawcy albo administratora serwera |
 
-Skrzynek Outlook.com i Microsoft 365 na liście nie ma. Microsoft od września 2024 roku nie
-przyjmuje do IMAP hasła ani hasła aplikacji, tylko logowanie OAuth2. Takie logowanie wejdzie
-w osobnym wydaniu. Do tego czasu mail z Outlooka wyślij na skrzynkę u innego dostawcy albo
-ustaw w Outlooku przekazywanie do takiej skrzynki.
+Skrzynek Outlook.com i Microsoft 365 nie ma na liście. Od września 2024 roku Microsoft nie
+przyjmuje do IMAP hasła ani hasła aplikacji, a wyłącznie logowanie OAuth2. Obsługa tego
+logowania wejdzie w osobnym wydaniu. Do tego czasu wiadomości z Outlooka można kierować na
+skrzynkę u innego dostawcy albo ustawić w Outlooku przekazywanie do takiej skrzynki.
 
-Formularz w trybie prostym ma sekcje w kolejności od najważniejszej. Sekcja **Skrzynka** to
+Formularz w trybie prostym ma sekcje ułożone od najważniejszej. Sekcja **Skrzynka** zawiera
 serwer, port, zabezpieczenie, login, hasło, folder i częstotliwość sprawdzania.
 
 ![Formularz Mail2SMS z kafelka Gmail w trybie prostym: skrzynka, kto może wysyłać, do kogo, co w SMS-ie, po przetworzeniu](obrazki/poczta-formularz.png)
 
-Zabezpieczenie ma trzy wartości. **TLS** to połączenie szyfrowane od początku, zwykle na porcie
-993. To wartość domyślna i właściwa dla każdego serwera w internecie. **STARTTLS** włącza
-szyfrowanie po powitaniu serwera, zwykle na porcie 143. Serwer, który szyfrowania nie zaoferuje,
-dostaje błąd, nie połączenie jawne. **Brak** to połączenie bez szyfrowania. Hasło i treść maili
-idą wtedy po sieci jawnym tekstem. Nadaje się tylko do serwera w sieci wewnętrznej. Formularz
-pokazuje przy tym wyborze ostrzeżenie, ale zapisu nie blokuje.
+Zabezpieczenie ma trzy wartości. **TLS** oznacza połączenie szyfrowane od początku, zwykle na
+porcie 993. Jest to wartość domyślna, właściwa dla każdego serwera dostępnego z internetu.
+**STARTTLS** włącza szyfrowanie po powitaniu serwera, zwykle na porcie 143. Jeżeli serwer nie
+zaoferuje szyfrowania, połączenie kończy się błędem, nie przesyłaniem danych bez szyfrowania.
+**Brak** oznacza połączenie bez szyfrowania. Hasło i treść wiadomości są wówczas przesyłane
+w postaci jawnej. Ta wartość jest dopuszczalna wyłącznie dla serwera w sieci wewnętrznej.
+Formularz wyświetla przy niej ostrzeżenie, ale nie blokuje zapisu.
 
-Tryb zaawansowany odsłania pole **Sprawdzaj certyfikat serwera**. Wyłącz je tylko dla serwera
-z własnym certyfikatem bez zaufanego urzędu, dostępnego wewnątrz sieci firmowej. Bez sprawdzania
-połączenie jest podatne na podsłuch.
+Tryb zaawansowany udostępnia pole **Sprawdzaj certyfikat serwera**. Należy je wyłączyć
+wyłącznie dla serwera z własnym certyfikatem bez zaufanego urzędu, dostępnego wewnątrz sieci
+firmowej. Połączenie bez sprawdzania certyfikatu jest podatne na podsłuch.
 
-Częstotliwość sprawdzania wybiera się z listy od 30 sekund do 60 minut. Domyślnie co minutę.
-Częściej niż co 30 sekund nie da się, bo dostawcy poczty odcinają klientów za zbyt częste
-logowania. Po odczytaniu maila SMS idzie natychmiast, więc częstotliwość decyduje tylko o tym,
-jak długo mail czeka w skrzynce.
+Częstotliwość sprawdzania wybiera się z listy od 30 sekund do 60 minut. Wartość domyślna to
+jedna minuta. Minimalna częstotliwość wynosi 30 sekund, ponieważ dostawcy poczty blokują
+konta logujące się częściej. SMS jest wysyłany natychmiast po odczytaniu wiadomości, więc
+częstotliwość decyduje wyłącznie o tym, jak długo wiadomość oczekuje w skrzynce.
 
-Bramka bierze maile, które przyjdą po zapisaniu integracji. Starsze nieprzeczytane zostają
-nietknięte. Gdy mają pójść także zaległe, zaznacz pole **Przetwórz też zaległe nieprzeczytane**.
-Działa raz, przy najbliższym sprawdzeniu, po 50 maili na jedno sprawdzenie. Przy 300 zaległych
-mailach ochrona przed burzą zatrzyma wysyłkę na limicie integracji, a reszta trafi do dziennika
-jako „limit”. Zmiana folderu w edycji działa jak nowe włączenie: bramka znów zaczyna od maili,
-które przyjdą po zapisaniu.
+Bramka przetwarza wiadomości, które nadejdą po zapisaniu integracji. Starsze wiadomości
+nieprzeczytane pozostają nietknięte. Jeżeli mają zostać przetworzone również zaległe, należy
+zaznaczyć pole **Przetwórz także zaległe wiadomości nieprzeczytane**. Działa ono jednorazowo,
+przy najbliższym sprawdzeniu, po 50 wiadomości na jedno sprawdzenie. Przy dużej zaległości
+ochrona przed burzą zatrzyma wysyłkę na limicie integracji, a pozostałe wiadomości otrzymają
+w dzienniku wynik „limit”. Zmiana folderu w edycji działa jak ponowne włączenie: bramka znów
+rozpoczyna od wiadomości, które nadejdą po zapisaniu. Tak samo działa włączenie wcześniej
+wyłączonej skrzynki: wiadomości z okresu wyłączenia nie są przetwarzane.
 
-Przed zapisaniem użyj przycisku **Sprawdź połączenie**. Bramka loguje się, otwiera folder,
-pokazuje liczbę nieprzeczytanych i listę folderów skrzynki. Kliknięcie w nazwę folderu wpisuje
-ją do pola. Nic nie przetwarza i niczego nie zapisuje. Przy skrzynce już zapisanej używa
-zapisanego hasła, dopóki serwer, port, zabezpieczenie i login się nie zmienią. Po zmianie
-któregoś z nich trzeba podać hasło ponownie.
+Przed zapisaniem warto użyć przycisku **Sprawdź połączenie**. Bramka loguje się, otwiera
+folder, wyświetla liczbę wiadomości nieprzeczytanych i listę folderów skrzynki. Kliknięcie
+nazwy folderu wpisuje ją do pola. Przycisk niczego nie przetwarza ani nie zapisuje. Dla
+zapisanej skrzynki używa zapisanego hasła, dopóki serwer, port, zabezpieczenie i login
+pozostają bez zmian. Po zmianie któregokolwiek z tych pól hasło należy podać ponownie.
 
 ![Wynik „Sprawdź połączenie”: połączenie działa, liczba nieprzeczytanych i lista folderów do kliknięcia](obrazki/poczta-polaczenie.png)
 
-Połączenie ze skrzynką jest wychodzące, z maszyny bramki do serwera poczty na porcie 993 albo
-143. W Dockerze ani w Traefiku nic nie trzeba otwierać. Zapora na serwerze albo w sieci firmowej
-musi przepuścić ten ruch na zewnątrz.
+Połączenie ze skrzynką jest wychodzące: z maszyny bramki do serwera poczty na porcie 993 albo
+143. W Dockerze ani w Traefiku nie trzeba otwierać żadnego portu. Zapora na serwerze albo
+w sieci firmowej musi przepuszczać ten ruch wychodzący.
 
 ### 5.2. Kto może wysyłać
 
-Sekcja **Kto może wysyłać** ma listę nadawców. Bramka sprawdza adres z nagłówka `From`. Mail od
-nadawcy spoza listy jest pomijany z wpisem w dzienniku. Pusta lista oznacza, że nie przejdzie
-żaden mail. Formularz mówi to zdaniem pod listą, a zapisu nie blokuje, bo skrzynkę można zapisać
-i sprawdzić połączenie, zanim wpisze się nadawców.
+Sekcja **Kto może wysyłać** zawiera listę nadawców. Bramka sprawdza adres z nagłówka `From`.
+Wiadomość od nadawcy spoza listy jest pomijana z wpisem w dzienniku. Pusta lista oznacza, że
+żadna wiadomość nie zostanie przetworzona. Formularz informuje o tym zdaniem pod listą, ale nie
+blokuje zapisu, ponieważ skrzynkę można zapisać i sprawdzić połączenie przed wpisaniem
+nadawców.
 
-Jedna pozycja w linii. Pozycja to pełny adres albo cała domena z małpą. Po dwukropku można
-dopisać numery, na które mają iść SMS-y od tego nadawcy, oddzielone przecinkiem:
+Jedna pozycja w wierszu. Pozycja to pełny adres albo domena poprzedzona znakiem @. Po dwukropku
+można podać numery, na które mają trafiać SMS-y od tego nadawcy, oddzielone przecinkiem:
 
 ```
 ups@firma.pl: 48601000001, 48601000002
@@ -538,94 +547,99 @@ nas@firma.pl: 48601000001
 @firma.pl
 ```
 
-Pierwsza linia przepuszcza maile z UPS-a i kieruje je na dwa numery. Druga przepuszcza NAS-a na
-jeden numer. Trzecia przepuszcza każdego pracownika z domeny `firma.pl` bez przypisanych
-numerów. Domena nie obejmuje poddomen: `@firma.pl` nie pasuje do `jan@mail.firma.pl`. Wielkość
-liter nie ma znaczenia. Gdy do adresu pasuje zarówno pełny adres, jak i domena, wygrywa pełny
-adres.
+Pierwsza linia dopuszcza wiadomości z zasilacza UPS i kieruje je na dwa numery. Druga dopuszcza
+serwer NAS z jednym numerem. Trzecia dopuszcza każdego pracownika z domeny `firma.pl` bez
+przypisanych numerów. Domena nie obejmuje poddomen: `@firma.pl` nie pasuje do
+`jan@mail.firma.pl`. Wielkość liter nie ma znaczenia. Jeżeli do adresu pasuje zarówno pełny
+adres, jak i domena, pierwszeństwo ma pełny adres.
 
-Przełącznik **Wymagaj potwierdzenia nadawcy przez serwer (SPF/DKIM)** każe bramce sprawdzić,
-czy serwer skrzynki potwierdził nadawcę. Serwer dopisuje na początku maila nagłówek z wynikiem
-sprawdzenia SPF i DKIM. Bramka czyta tylko ten pierwszy nagłówek od góry i przepuszcza mail,
-gdy mówi on `dkim=pass` albo `spf=pass` dla domeny nadawcy. Nagłówek dopisany przez samego
-nadawcę ląduje niżej i nie liczy się. Bez tego przełącznika ktoś, kto zna adres z listy, może
-go podrobić w nagłówku `From`.
-Przełącznik ma sens u dostawców publicznych: Gmail, home.pl, OVH. Serwery wewnętrzne zwykle
-tych nagłówków nie dopisują i wtedy każdy mail zostanie odrzucony. Domyślnie wyłączony.
+Przełącznik **Wymagaj potwierdzenia nadawcy przez serwer (SPF/DKIM)** nakazuje bramce
+sprawdzić, czy serwer skrzynki potwierdził nadawcę. Serwer dodaje na początku wiadomości
+nagłówek z wynikiem sprawdzenia SPF i DKIM. Bramka odczytuje wyłącznie ten pierwszy nagłówek
+i przepuszcza wiadomość, gdy zawiera on `dkim=pass` albo `spf=pass` dla domeny nadawcy.
+Nagłówek dodany przez samego nadawcę znajduje się niżej i nie jest brany pod uwagę. Bez tego
+przełącznika osoba znająca adres z listy może go podrobić w nagłówku `From`. Przełącznik jest
+zalecany u dostawców publicznych: Gmail, home.pl, OVH. Serwery wewnętrzne zwykle nie dodają
+tych nagłówków i wówczas każda wiadomość zostanie odrzucona. Domyślnie wyłączony.
 
 ### 5.3. Do kogo
 
-Bramka ustala odbiorców na trzech poziomach. Sprawdza je po kolei. Pierwszy, który da choć jeden
-numer, wygrywa.
+Bramka ustala odbiorców na trzech poziomach, sprawdzanych po kolei. Pierwszy poziom, który
+dostarczy choć jeden numer, decyduje.
 
-1. **Numery podane w mailu.** Działa tylko po włączeniu przełącznika **Nadawca może podać numery
-   w mailu**. Każdy nadawca z listy może wtedy wysłać SMS na dowolny numer na koszt konta.
-   Domyślnie wyłączony.
+1. **Numery wskazane w wiadomości.** Działają wyłącznie po włączeniu przełącznika **Nadawca
+   może wskazać numery w wiadomości**. Każdy nadawca z listy może wówczas wysłać SMS na dowolny
+   numer na koszt konta. Domyślnie wyłączony.
 2. **Numery przypisane do nadawcy** na liście z rozdziału 5.2.
-3. **Odbiorcy** w sekcji **Do kogo**, czyli stała lista integracji. Jeden numer w linii.
+3. **Odbiorcy** w sekcji **Do kogo**, czyli stała lista integracji. Jeden numer w wierszu.
 
-Przykład z UPS-em: nadawca `ups@firma.pl` ma na liście dwa numery, więc alarm idzie na oba. Nie
-trzeba niczego ustawiać w UPS-ie. Przykład z pracownikiem: `jan@firma.pl` pasuje do `@firma.pl`
-bez numerów. Gdy przełącznik numerów w mailu jest włączony, Jan pisze temat
-`48601000001, 48601000002: Awaria klimatyzacji w serwerowni` i SMS idzie na oba numery z tematem
-bez przedrostka. Gdy nie poda numerów, SMS idzie na stałą listę odbiorców. Gdy lista jest
-pusta, mail dostaje wpis „błąd” z powodem „brak numeru odbiorcy”, a administrator powiadomienie.
+Przykład z zasilaczem UPS: nadawca `ups@firma.pl` ma na liście dwa numery, więc alarm trafia na
+oba. Po stronie zasilacza nie są potrzebne żadne ustawienia. Przykład z pracownikiem:
+`jan@firma.pl` pasuje do pozycji `@firma.pl` bez numerów. Jeżeli przełącznik numerów
+w wiadomości jest włączony, pracownik wpisuje temat
+`48601000001, 48601000002: Awaria klimatyzacji w serwerowni` i SMS trafia na oba numery
+z tematem bez przedrostka. Jeżeli numerów nie poda, SMS trafia na stałą listę odbiorców. Jeżeli
+lista jest pusta, wiadomość otrzymuje wpis „błąd” z powodem „brak numeru odbiorcy”,
+a administrator powiadomienie.
 
-Numery z maila mogą stać w jednym z dwóch miejsc. **W temacie, przed dwukropkiem**: temat
-zaczyna się od numerów oddzielonych przecinkiem, średnikiem albo spacją i kończy dwukropkiem.
-**W pierwszej linii treści**: pierwsza niepusta linia zawiera same numery z separatorami. Linia
-znika z treści SMS-a. Temat zaczynający się od liczby, która numerem nie jest, na przykład
-`2 serwery padły: sprawdź`, zostaje w całości, a bramka schodzi na kolejny poziom.
+Numery w wiadomości mogą znajdować się w jednym z dwóch miejsc. **W temacie, przed
+dwukropkiem**: temat rozpoczyna się od numerów oddzielonych przecinkiem, średnikiem albo spacją
+i zakończonych dwukropkiem. **W pierwszej linii treści**: pierwsza niepusta linia zawiera
+wyłącznie numery z separatorami. Linia ta jest usuwana z treści SMS-a. Temat rozpoczynający
+się od liczby, która nie jest numerem telefonu, na przykład `2 serwery niedostępne: sprawdź`,
+pozostaje w całości, a bramka przechodzi na kolejny poziom.
 
-Numery przechodzą normalizację z rozdziału 3.3 z kodem kraju konta. Nieprawidłowy numer podany
-w mailu jest pomijany, a SMS idzie do pozostałych. Wpis w dzienniku dostaje dopisek o pominiętym
-numerze, administrator powiadomienie regułą „Błąd integracji”, a nadawca, gdy odpowiedzi są
-włączone, listę pominiętych numerów w potwierdzeniu. Gdy nieprawidłowe są wszystkie podane
-numery, mail jest odrzucany, bo nadawca wyraźnie wskazał odbiorców. Nieprawidłowy numer na
-liście nadawców albo na stałej liście to błąd konfiguracji: SMS nie idzie, a administrator
-dostaje powiadomienie, dopóki nie poprawi listy. Jeden mail może wskazać do 50 numerów.
+Numery są normalizowane zgodnie z rozdziałem 3.3, z kodem kraju konta. Nieprawidłowy numer
+podany w wiadomości jest pomijany, a SMS trafia do pozostałych odbiorców. Wpis w dzienniku
+otrzymuje informację o pominiętym numerze, administrator powiadomienie regułą „Błąd
+integracji”, a nadawca, jeżeli odpowiedzi są włączone, listę pominiętych numerów
+w potwierdzeniu. Jeżeli wszystkie podane numery są nieprawidłowe, wiadomość jest odrzucana,
+ponieważ nadawca wyraźnie wskazał odbiorców. Nieprawidłowy numer na liście nadawców albo na
+stałej liście to błąd konfiguracji: SMS nie jest wysyłany, a administrator otrzymuje
+powiadomienie do czasu poprawienia listy. Jedna wiadomość może wskazać do 50 numerów.
 
-### 5.4. Co trafia do SMS-a
+### 5.4. Treść SMS-a
 
-Bramka zamienia mail na tekst. Bierze część tekstową, a gdy mail ma tylko HTML, zamienia go na
-tekst: tabele jako wiersze z komórkami oddzielonymi dwiema spacjami, odnośniki bez adresów,
-obrazki pominięte. Załączniki nie są czytane ani zapisywane. Mail większy niż 2 MB jest pomijany bez
-pobierania.
+Bramka zamienia wiadomość na tekst. Odczytuje część tekstową, a jeżeli wiadomość zawiera
+wyłącznie HTML, zamienia go na tekst: tabele jako wiersze z komórkami oddzielonymi dwiema
+spacjami, odnośniki bez adresów, obrazki pominięte. Załączniki nie są odczytywane ani
+zapisywane. Wiadomość większa niż 2 MB jest pomijana bez pobierania.
 
-Z tekstu bramka usuwa to, czego w SMS-ie nie chcesz:
+Z tekstu bramka usuwa elementy zbędne w SMS-ie:
 
-- cytaty: linie zaczynające się od `>` i wszystko od nagłówka cytatu w dół (`W dniu … napisał:`,
-  `On … wrote:`, `-----Original Message-----`, `-----Wiadomość oryginalna-----`, blok
-  `Od: … Wysłano: …`),
-- podpis i stopkę: wszystko od separatora `-- ` w osobnej linii, od zwrotu zamykającego na
+- cytaty: linie rozpoczynające się od `>` oraz wszystko od nagłówka cytatu w dół
+  (`W dniu … napisał:`, `On … wrote:`, `-----Original Message-----`,
+  `-----Wiadomość oryginalna-----`, blok `Od: … Wysłano: …`),
+- podpis i stopkę: wszystko od separatora `-- ` w osobnej linii, od zwrotu kończącego na
   początku krótkiej linii (`Pozdrawiam`, `Z pozdrowieniami`, `Z poważaniem`, `Z wyrazami
   szacunku`, `Dziękuję`, `Best regards`, `Kind regards`, `Regards`, `Sincerely`, `Thanks`)
   oraz od początku klauzuli prawnej (`Ta wiadomość`, `Niniejsza wiadomość`, `This e-mail`,
   `This message`, `Administratorem danych`),
 - nadmiarowe białe znaki: spacje na końcach linii, podwójne puste linie.
 
-Zwrot zamykający ucina tylko linię krótszą niż 40 znaków, żeby zdanie „Dziękuję za zgłoszenie,
-jutro przerwa serwisowa” zostało. Mail, który składa się z samego „Pozdrawiam”, daje pustą treść
-i wpis „błąd”.
+Zwrot kończący jest rozpoznawany wyłącznie w linii krótszej niż 40 znaków, dzięki czemu zdanie
+„Dziękuję za zgłoszenie, jutro przerwa serwisowa” pozostaje w treści. Wiadomość składająca się
+z samego „Pozdrawiam” daje pustą treść i wpis „błąd”.
 
-Urządzenie albo aplikacja ma czasem własną stopkę, której lista nie zna, na przykład
-„Wygenerowano automatycznie przez system monitoringu”. Wpisz jej początek w polu **Ucinaj od
-tekstu**, jedna fraza w linii, do 10 fraz. Linia zaczynająca się od frazy i wszystko pod nią
-znika z treści. Wielkość liter nie ma znaczenia.
+Urządzenie albo aplikacja ma niekiedy własną stopkę, której lista nie rozpoznaje, na przykład
+„Wygenerowano automatycznie przez system monitoringu”. Jej początek należy wpisać w polu
+**Pomijaj treść od frazy**, jedna fraza w wierszu, do 10 fraz. Linia rozpoczynająca się od
+frazy i wszystko poniżej niej jest usuwane z treści. Wielkość liter nie ma znaczenia.
 
-Sekcja **Co w SMS-ie** ma listę wyboru treści: „temat i treść” (temat, nowa linia, oczyszczona
-treść), „tylko temat” albo „tylko treść”. Tryb zaawansowany pozwala zamiast tego napisać szablon
-Liquid ze zmiennymi z rozdziału 6.2, na przykład
+Sekcja **Co w SMS-ie** zawiera listę wyboru treści: „temat i treść” (temat, nowa linia,
+oczyszczona treść), „tylko temat” albo „tylko treść”. Tryb zaawansowany pozwala zamiast tego
+zapisać szablon Liquid ze zmiennymi z rozdziału 6.2, na przykład
 `{{ subject }} od {{ from_name }}: {{ text | sms_truncate: 120 }}`.
 
-**Limit części** i wybór „utnij i wyślij” albo „nie wysyłaj, zapisz błąd i powiadom” działają
-jak przy aplikacjach (rozdział 3.5). Mail od człowieka bywa długi, więc przy „utnij” SMS
-dostaje początek treści do zadanej liczby części, a przy „nie wysyłaj” mail dostaje wpis
-„błąd”, administrator powiadomienie, a nadawca odpowiedź, gdy odpowiedzi są włączone.
+**Limit części** oraz wybór „skróć i wyślij” albo „nie wysyłaj, zapisz błąd i powiadom”
+działają jak przy aplikacjach (rozdział 3.5). Wiadomość od człowieka bywa długa, więc przy
+„skróć” SMS zawiera początek treści do zadanej liczby części, a przy „nie wysyłaj” wiadomość
+otrzymuje wpis „błąd”, administrator powiadomienie, a nadawca odpowiedź, jeżeli odpowiedzi są
+włączone.
 
 ### 5.5. Wycinki
 
-Mail z urządzenia ma stałą budowę. UPS wysyła na przykład tabelę:
+Wiadomość z urządzenia ma stałą budowę. Zasilacz UPS wysyła na przykład tabelę:
 
 ```
 Device      UPS-01
@@ -633,146 +647,154 @@ Status      ON BATTERY
 Error code  E042
 ```
 
-Cały mail w SMS-ie to marnowanie części. **Wycinki** wycinają z treści wybrane pola i dają je
-do złożenia krótkiego SMS-a. Wycinek ma nazwę i sposób znalezienia. W trybie prostym sposób to
-„tekst po frazie do frazy”: wartość to tekst po frazie początkowej aż do frazy końcowej albo do
-końca linii. Wycinki czytają treść przed czyszczeniem, bo szukane pole bywa pod czymś, co
-czyszczenie bierze za stopkę. Brak frazy w mailu daje pustą wartość, nie błąd.
+Przesyłanie całej wiadomości w SMS-ie niepotrzebnie zużywa części. **Wycinki** wyodrębniają
+z treści wybrane pola, z których można złożyć krótki SMS. Wycinek ma nazwę i sposób
+odnalezienia wartości. W trybie prostym jest to „tekst od frazy początkowej do frazy końcowej”:
+wartością jest tekst po frazie początkowej aż do frazy końcowej albo do końca linii. Wycinki
+odczytują treść sprzed czyszczenia, ponieważ szukane pole bywa umieszczone poniżej fragmentu,
+który czyszczenie uznaje za stopkę. Brak frazy w wiadomości daje pustą wartość, nie błąd.
 
-Krok po kroku na mailu UPS-a:
+Krok po kroku na wiadomości z zasilacza UPS:
 
-1. W sekcji **Co w SMS-ie** dopisz trzy wycinki. Nazwa `urzadzenie`, tekst po `Device`. Nazwa
-   `stan`, tekst po `Status`. Nazwa `kod`, tekst po `Error code`. Pole „do” zostaw puste, czyli
-   do końca linii.
+1. W sekcji **Co w SMS-ie** dodaj trzy wycinki. Nazwa `urzadzenie`, tekst po `Device`. Nazwa
+   `stan`, tekst po `Status`. Nazwa `kod`, tekst po `Error code`. Pole „do frazy” pozostaw
+   puste, co oznacza koniec linii.
 2. Przełącz formularz na tryb **Zaawansowany** i w polu szablonu wpisz
    `{{ fields.urzadzenie }}: {{ fields.stan }}, kod {{ fields.kod }}`.
-3. W sekcji **Próbka do sprawdzenia** wklej cały mail z UPS-a. W programie pocztowym to „pokaż
-   oryginał” albo zapis do pliku `.eml`. Można też wypełnić trzy pola: nadawcę, temat i treść.
-4. Kliknij **Sprawdź szablon**. Podgląd pokazuje, czy nadawca przechodzi, odbiorców i poziom,
-   z którego pochodzą, wartości wycinków, oczyszczoną treść, gotowy SMS i liczbę części. Nic nie
-   wysyła i niczego nie zapisuje.
+3. W sekcji **Próbka do sprawdzenia** wklej całą wiadomość z zasilacza. W programie pocztowym
+   jest to funkcja „pokaż oryginał” albo zapis do pliku `.eml`. Można też wypełnić trzy pola:
+   nadawcę, temat i treść.
+4. Kliknij **Sprawdź szablon**. Podgląd pokazuje, czy nadawca jest na liście, odbiorców i poziom,
+   z którego pochodzą, wartości wycinków, oczyszczoną treść, gotowy SMS i liczbę części. Podgląd
+   niczego nie wysyła ani nie zapisuje.
 
-![Podgląd „Sprawdź szablon” dla maila z UPS-a: nadawca na liście, dwaj odbiorcy z listy nadawcy, trzy wycinki, oczyszczona treść i SMS „UPS-01: ON BATTERY, kod E042”](obrazki/poczta-wycinki.png)
+![Podgląd „Sprawdź szablon” dla wiadomości z zasilacza UPS: nadawca na liście, dwaj odbiorcy z listy nadawcy, trzy wycinki, oczyszczona treść i SMS „UPS-01: ON BATTERY, kod E042”](obrazki/poczta-wycinki.png)
 
-Po uruchomieniu skrzynki próbkę bierze się z dziennika. Przy włączonym przechowywaniu ładunków
-każdy wpis ma odnośnik **Użyj jako próbki**, który otwiera edycję z nadawcą, tematem i treścią
-tego maila.
+Po uruchomieniu skrzynki próbkę można pobrać z dziennika. Przy włączonym przechowywaniu
+ładunków każdy wpis ma odnośnik **Użyj jako próbki**, który otwiera edycję z nadawcą, tematem
+i treścią tej wiadomości.
 
 Tryb zaawansowany dodaje drugi sposób: wyrażenie regularne. Wartością jest pierwsza grupa albo
-całe dopasowanie. Dostępne są flagi `i` oraz `m`. Wzorzec ma do 200 znaków i 50 ms na
-dopasowanie. Wzorzec, który się nie kompiluje, jest odrzucany przy zapisie. Wycinek
+całe dopasowanie. Dostępne są flagi `i` oraz `m`. Wzorzec może mieć do 200 znaków i 50 ms na
+dopasowanie. Wzorzec, którego nie można skompilować, jest odrzucany przy zapisie. Wycinek
 `Error code\s+(E\d+)` daje `E042`.
 
 Wycinków może być do 20. W warunku z konstruktora działają jak ścieżki, na przykład
-„`fields.stan` równe `ON BATTERY`”. Dzięki temu SMS idzie tylko przy alarmie, a nie przy każdym
-raporcie z urządzenia.
+„`fields.stan` równe `ON BATTERY`”. Dzięki temu SMS jest wysyłany wyłącznie przy alarmie, a nie
+przy każdym raporcie z urządzenia.
 
 ### 5.6. Po przetworzeniu
 
-Sekcja **Po przetworzeniu** mówi, co bramka robi z mailem po wzięciu go pod uwagę:
+Sekcja **Po przetworzeniu** określa, co bramka robi z wiadomością po jej przetworzeniu:
 
 | Wybór | Działanie |
 |---|---|
-| zostaw w skrzynce | mail dostaje flagę „przeczytany” i zostaje w folderze |
-| przenieś do folderu | mail dostaje flagę „przeczytany” i trafia do wskazanego folderu; folder, którego nie ma, bramka zakłada przy pierwszym użyciu |
-| usuń | mail jest kasowany; u Gmaila to przeniesienie do kosza, nie skasowanie |
+| pozostaw w skrzynce | wiadomość otrzymuje oznaczenie „przeczytana” i pozostaje w folderze |
+| przenieś do folderu | wiadomość otrzymuje oznaczenie „przeczytana” i trafia do wskazanego folderu; folder, który nie istnieje, bramka tworzy przy pierwszym użyciu |
+| usuń | wiadomość jest usuwana; w Gmailu oznacza to przeniesienie do kosza, nie trwałe usunięcie |
 
-Domyślnie „zostaw w skrzynce”, bo to jedyny wybór, który niczego nie niszczy. Działanie dotyczy
-także maili pominiętych i odrzuconych: od nadawcy spoza listy, z pustą treścią, bez numeru.
-Inaczej skrzynka zarastałaby odrzutami. Nieudane przeniesienie nie cofa SMS-a. Wpis „wysłano”
-zostaje, a błąd folderu ląduje w stanie skrzynki.
+Domyślnie „pozostaw w skrzynce”, ponieważ jest to jedyny wybór, który niczego nie usuwa.
+Działanie dotyczy także wiadomości pominiętych i odrzuconych: od nadawcy spoza listy, z pustą
+treścią, bez numeru. W przeciwnym razie skrzynka zapełniałaby się odrzuconymi wiadomościami.
+Nieudane przeniesienie nie cofa SMS-a. Wpis „wysłano” pozostaje, a błąd folderu jest
+zapisywany w stanie skrzynki.
 
-Mail oznaczony ponownie jako nieprzeczytany bramka ignoruje. Pamięta każdy mail, który wzięła pod
-uwagę, po nagłówku `Message-ID` i po numerze w folderze. Dzięki temu restart w trakcie
-sprawdzania ani odtworzenie skrzynki u dostawcy nie dają drugiego SMS-a.
+Wiadomość ponownie oznaczoną jako nieprzeczytana bramka ignoruje. Zapamiętuje każdą
+przetworzoną wiadomość po nagłówku `Message-ID` i po numerze w folderze. Dzięki temu restart
+w trakcie sprawdzania ani odtworzenie skrzynki u dostawcy nie powodują wysłania drugiego SMS-a.
 
 ### 5.7. Odpowiedź do nadawcy
 
-Przełącznik **Odpowiadaj nadawcy mailem** każe bramce odpisać na każdy mail, który wzięła pod
-uwagę. Wymaga skonfigurowanego SMTP z rozdziału 9.1. Bez SMTP formularz mówi, że opcja jest
-nieczynna. Obok jest odnośnik do ustawień. Domyślnie wyłączony.
+Przełącznik **Odpowiadaj nadawcy wiadomością e-mail** nakazuje bramce odpowiedzieć na każdą
+przetworzoną wiadomość. Wymaga skonfigurowanego SMTP z rozdziału 9.1. Bez SMTP formularz
+informuje o tym i wyświetla odnośnik do ustawień. Domyślnie wyłączony.
 
-Odpowiedź jest zwykłym tekstem, w wątku maila nadawcy, z tematem `Re: <temat>`. Treść mówi, co
-się stało: `SMS wysłany do 2 odbiorców (…001, …002), 1 część.` z numerami jako ostatnie trzy
-cyfry, `SMS wysłany do 1 odbiorcy (…001), 1 część. Pominięto nieprawidłowy numer: 60010.`,
+Odpowiedź jest wysyłana zwykłym tekstem, w wątku wiadomości nadawcy, z tematem `Re: <temat>`.
+Nadawcą odpowiedzi jest adres i nazwa z ustawień SMTP na ekranie Powiadomienia. Treść opisuje
+wynik: `SMS wysłany do 2 odbiorców (…001, …002), 1 część.` z numerami skróconymi do ostatnich
+trzech cyfr, `SMS wysłany do 1 odbiorcy (…001), 1 część. Pominięto nieprawidłowy numer: 60010.`,
 `SMS nie został wysłany: treść wymaga więcej niż 1 części.`, `SMS nie został wysłany: nie udało
 się ustalić odbiorcy.` albo `SMS nie został wysłany: przekroczono limit integracji (10 w 10
 min).`
 
-Odpowiedź dostaje wyłącznie nadawca z listy. Do nadawcy spoza listy bramka nie odpisuje nigdy.
-Taka odpowiedź zdradzałaby, że skrzynka jest bramką, a to zaprasza spam. Nie odpisuje też na maile
-automatyczne (oznaczone jako wysłane przez system albo z listy dyskusyjnej), na maile pominięte
-jako zbyt duże albo już przetworzone ani na maile odrzucone warunkiem, bo te administrator
-filtruje celowo.
+Odpowiedź otrzymuje wyłącznie nadawca z listy. Do nadawcy spoza listy bramka nie odpowiada
+nigdy. Taka odpowiedź ujawniałaby, że skrzynka jest bramką, a to zachęca do wysyłania spamu.
+Bramka nie odpowiada również na wiadomości automatyczne (oznaczone jako wysłane przez system
+albo pochodzące z listy dyskusyjnej), na wiadomości pominięte jako zbyt duże albo już
+przetworzone ani na wiadomości odrzucone warunkiem, ponieważ te administrator filtruje celowo.
 
 ### 5.8. Lista, szczegóły i dziennik
 
-Na liście integracji skrzynka ma kierunek „z poczty”. Kolumna stanu pokazuje zieloną kropkę
+Na liście integracji skrzynka ma kierunek „z poczty”. Kolumna stanu wyświetla zieloną kropkę
 i „sprawdzono 2 min temu”, czerwoną i „błąd od 13:05” albo szarą i „wyłączona”. Przycisk
-**Z poczty** nad listą zostawia same skrzynki.
+**Z poczty** nad listą ogranicza ją do skrzynek.
 
 ![Lista integracji ze skrzynkami: kierunek „z poczty”, stan ze znacznikiem czasu ostatniego sprawdzenia, liczniki z doby](obrazki/poczta-lista.png)
 
-Szczegóły zaczynają się od stanu skrzynki: ostatnie sprawdzenie, ostatnie udane, liczba
-nieprzeczytanych przy ostatnim sprawdzeniu, następne sprawdzenie, a przy awarii błąd słowami.
-Przycisk **Sprawdź teraz** każe sprawdzić skrzynkę w najbliższej sekundzie zamiast czekać na
-termin. Przycisk **Utwórz kopię** kopiuje konfigurację razem z hasłem, nadaje nazwę z dopiskiem
-„(kopia)”, zapisuje kopię jako wyłączoną i otwiera do edycji. To sposób na drugi folder tej
-samej skrzynki bez wpisywania hasła ponownie. Kopię mają wszystkie integracje, nie tylko
-skrzynki.
+Szczegóły rozpoczynają się od stanu skrzynki: ostatnie sprawdzenie, ostatnie udane, liczba
+wiadomości nieprzeczytanych przy ostatnim sprawdzeniu, następne sprawdzenie, a przy awarii
+opis błędu. Przycisk **Sprawdź teraz** uruchamia sprawdzenie skrzynki w najbliższej sekundzie,
+bez oczekiwania na termin. Przycisk **Utwórz kopię** kopiuje konfigurację razem z hasłem, nadaje
+nazwę z dopiskiem „(kopia)”, zapisuje kopię jako wyłączoną i otwiera ją do edycji. W ten sposób
+można obsłużyć drugi folder tej samej skrzynki bez ponownego wpisywania hasła. Kopię mają
+wszystkie integracje, nie tylko skrzynki.
 
 ![Szczegóły skrzynki: stan z przyciskiem Sprawdź teraz, konfiguracja słowami i dziennik z wpisami „wysłano” i „pominięto”](obrazki/poczta-dziennik.png)
 
-Dziennik działa jak w rozdziale 8. Powody właściwe dla skrzynki:
+Dziennik działa jak w rozdziale 8. Kolumna „Nadawca” zawiera adres z nagłówka `From`, a powód
+rozpoczyna się od tematu wiadomości skróconego do 80 znaków. Powody właściwe dla skrzynki:
 
 | Wynik | Powód |
 |---|---|
-| pominięto | nadawca spoza listy, brak potwierdzenia SPF/DKIM od serwera, zbyt duży, już przetworzony, warunek niespełniony |
+| pominięto | nadawca spoza listy, brak potwierdzenia SPF/DKIM od serwera, wiadomość zbyt duża, wiadomość już przetworzona, warunek niespełniony |
 | limit | nadmiar ponad limit burzy |
-| błąd | brak numeru odbiorcy, nieprawidłowy numer, pusta treść, treść ponad limit części przy „nie wysyłaj”, błąd szablonu albo wycinka |
-| wysłano | SMS zakolejkowany; przy numerach z maila z dopiskiem o pominiętych nieprawidłowych |
+| błąd | brak numeru odbiorcy, nieprawidłowy numer, pusta treść, treść ponad limit części przy „nie wysyłaj”, błąd szablonu albo wycinka, nieczytelna wiadomość |
+| wysłano | SMS zakolejkowany; przy numerach z wiadomości z informacją o pominiętych nieprawidłowych |
 
-Przy włączonym przechowywaniu ładunków wpis zapisuje nadawcę, temat, treść po zamianie na tekst,
-datę i `Message-ID`. Załączników nie zapisuje nigdy. Ładunki są zaszyfrowane i znikają po
-siedmiu dniach, jak przy aplikacjach.
+Przy włączonym przechowywaniu ładunków wpis zawiera nadawcę, temat, treść po zamianie na tekst,
+datę i `Message-ID`. Załączniki nie są zapisywane. Ładunki są zaszyfrowane i usuwane po siedmiu
+dniach, tak jak przy aplikacjach.
 
 ### 5.9. Gdy skrzynka jest w błędzie
 
-Stan skrzynki na liście i w szczegółach mówi, co zawiodło. Hasło nigdy nie trafia do komunikatu.
+Stan skrzynki na liście i w szczegółach wskazuje przyczynę. Hasło nigdy nie trafia do
+komunikatu.
 
 | Rodzaj | Co sprawdzić |
 |---|---|
-| logowanie | hasło: u Gmaila musi to być hasło aplikacji, u home.pl i OVH hasło skrzynki; login to zwykle pełny adres; u Google Workspace administrator mógł wyłączyć IMAP |
-| sieć | czy z maszyny bramki da się połączyć z serwerem na porcie 993 albo 143, na przykład `nc -vz imap.firma.pl 993`; przy własnym certyfikacie bez zaufanego urzędu pomaga wyłączenie sprawdzania certyfikatu w trybie zaawansowanym |
+| logowanie | hasło: w Gmailu musi to być hasło aplikacji, w home.pl i OVH hasło skrzynki; login to zwykle pełny adres; w Google Workspace administrator mógł wyłączyć dostęp IMAP |
+| sieć | komunikat wskazuje przyczynę: odrzucone połączenie na porcie, nazwa nieznana w DNS, brak odpowiedzi, certyfikat bez zaufanego urzędu, wygasły albo wystawiony na inną nazwę; połączenie można sprawdzić z maszyny bramki, na przykład `nc -vz imap.firma.pl 993`; przy własnym certyfikacie bez zaufanego urzędu pomaga wyłączenie sprawdzania certyfikatu w trybie zaawansowanym |
 | folder | nazwa folderu musi być dokładnie taka, jak na liście ze „Sprawdź połączenie”; folder docelowy przeniesienia bywa tylko do odczytu |
 | inny | pełny komunikat serwera w stanie skrzynki |
 
-Po błędzie bramka ponawia z rosnącym odstępem, od ustawionej częstotliwości do 15 minut. Błąd
-logowania nie jest ponawiany częściej niż co 5 minut, żeby bramka nie zablokowała konta
-pocztowego kolejnymi nieudanymi próbami. Po udanym sprawdzeniu wraca ustawiona częstotliwość.
+Po błędzie bramka ponawia sprawdzenie z rosnącym odstępem, od ustawionej częstotliwości do
+15 minut. Błąd logowania nie jest ponawiany częściej niż co 5 minut, aby bramka nie
+zablokowała konta pocztowego kolejnymi nieudanymi próbami. Po udanym sprawdzeniu obowiązuje
+ustawiona częstotliwość.
 
-Reguła powiadomień **Awaria skrzynki pocztowej** (rozdział 9.2) wysyła mail do administratora.
-Błąd logowania zgłasza od razu, bo sam nie przejdzie. Błąd sieci, folderu albo inny zgłasza,
-gdy trwa dłużej niż zadane minuty, domyślnie 15. Jedna awaria to jeden mail. Powrót do pracy
-nie generuje maila, stan widać w panelu. Podsumowanie dzienne podaje liczbę skrzynek i liczbę
-w błędzie.
+Reguła powiadomień **Awaria skrzynki pocztowej** (rozdział 9.2) wysyła wiadomość do
+administratora. Błąd logowania zgłasza natychmiast, ponieważ nie ustąpi samoistnie. Błąd
+sieci, folderu albo inny zgłasza, gdy trwa dłużej niż zadana liczba minut, domyślnie 15. Jedna
+awaria to jedna wiadomość. Powrót do pracy nie generuje wiadomości; stan jest widoczny
+w panelu. Podsumowanie dzienne zawiera liczbę skrzynek i liczbę skrzynek w błędzie.
 
 ### 5.10. Bezpieczeństwo
 
-- Hasło skrzynki jest zaszyfrowane kluczem głównym. Odczytywane tylko w chwili logowania. Nie
-  trafia do logów, dziennika, powiadomień, podglądu ani do kontekstu szablonu. Komunikaty błędów
-  serwera przechodzą przez filtr, który usuwa hasło i login
-- Lista nadawców pusta oznacza brak wysyłki, nigdy „wszyscy”
-- Numery z maila i odpowiedzi do nadawcy są domyślnie wyłączone. Włączenie to świadome
-  kliknięcie z czytelnym skutkiem pod polem
-- Bramka odpowiada wyłącznie nadawcom z listy i nigdy na maile automatyczne
-- HTML jest zamieniany na tekst, nie wykonywany. Załączniki nie są czytane ani zapisywane. Mail większy niż
-  2 MB jest pomijany bez pobierania
+- Hasło skrzynki jest zaszyfrowane kluczem głównym i odczytywane wyłącznie w chwili logowania.
+  Nie trafia do logów, dziennika, powiadomień, podglądu ani do kontekstu szablonu. Komunikaty
+  błędów serwera przechodzą przez filtr usuwający hasło, login i inne adresy e-mail
+- Pusta lista nadawców oznacza brak wysyłki, nigdy „wszyscy”
+- Numery z wiadomości i odpowiedzi do nadawcy są domyślnie wyłączone. Włączenie wymaga
+  świadomego zaznaczenia pola z opisem skutku
+- Bramka odpowiada wyłącznie nadawcom z listy i nigdy na wiadomości automatyczne
+- HTML jest zamieniany na tekst, nie wykonywany. Załączniki nie są odczytywane ani zapisywane.
+  Wiadomość większa niż 2 MB jest pomijana bez pobierania
 - Wyrażenia regularne wycinków mają limit 200 znaków i 50 ms na dopasowanie
-- TLS i STARTTLS sprawdzają certyfikat serwera, a wyłączenie sprawdzania pokazuje ostrzeżenie.
-  STARTTLS bez oferty szyfrowania od serwera to błąd, nie ciche połączenie jawne
-- Przy zmianie serwera, portu, zabezpieczenia albo loginu bramka żąda hasła ponownie, żeby
-  zapisanego hasła nie dało się wysłać na inny serwer
+- TLS i STARTTLS sprawdzają certyfikat serwera, a wyłączenie sprawdzania jest oznaczone
+  ostrzeżeniem. STARTTLS bez oferty szyfrowania od serwera kończy się błędem, nie połączeniem
+  bez szyfrowania
+- Przy zmianie serwera, portu, zabezpieczenia albo loginu bramka wymaga ponownego podania
+  hasła, aby zapisanego hasła nie można było wysłać na inny serwer
 
 ## 6. Szablony Liquid
 
@@ -808,7 +830,7 @@ W szablonie dostępne są te zmienne:
 | `event`, `at`, `id` | z SMS-a | rodzaj zdarzenia, czas, identyfikator wiadomości |
 | `from`, `to`, `text` albo `hex`, `kind`, `receivedAt`, `serviceId`, `relatedMessageId` | `message.received` | jak w rozdziale 6.2 [API](api.md) |
 | `status`, `to`, `parts`, `error`, `miStatus`, `miSubstatus`, `providerCode`, `inReplyTo` | statusy | jak w rozdziale 6.2 API; pola zdarzenia leżą też na wierzchu, więc `{{ text }}` i `{{ p.text }}` to to samo |
-| `from`, `from_name`, `subject`, `text`, `text_full`, `date`, `to`, `message_id`, `fields.<nazwa>` | Mail2SMS | adres i nazwa nadawcy, temat bez przedrostka z numerami, treść oczyszczona, treść pełna, data w ISO 8601, lista adresatów, `Message-ID`, wycinki z rozdziału 5.5; `p` to cały kontekst |
+| `from`, `from_name`, `subject`, `text`, `text_full`, `date`, `to`, `message_id`, `fields.<nazwa>` | Mail2SMS | adres i nazwa nadawcy, temat bez przedrostka z numerami, treść oczyszczona, treść pełna, data w formacie ISO 8601, lista adresatów, `Message-ID`, wycinki z rozdziału 5.5; `p` to cały kontekst |
 
 ### 6.3. Filtry bramki
 
@@ -861,7 +883,7 @@ n8n), narzędzia do monitoringu (Uptime Kuma, Grafana, Zabbix), aplikacje eComme
 w dwóch wariantach), fakturowanie (Fakturownia w dwóch wariantach), zarządzanie inteligentnym
 domem (Home Assistant), systemy Help Desk (FreeScout, Freshdesk), CRM (Bitrix24), notyfikacje
 (Slack, ntfy) oraz skrzynki pocztowe (Gmail, home.pl, OVH, własny serwer). Ustawienia poczty
-wypełniają tylko serwer i zabezpieczenie, a resztę opisuje rozdział 5. Wartości przykładowe
+uzupełniają wyłącznie serwer i zabezpieczenie; pozostałe pola opisuje rozdział 5. Wartości przykładowe
 w tym rozdziale (adresy, numery, identyfikatory) są fikcyjne.
 
 | Ustawienie | Do SMS | Z SMS-a | Uwierzytelnienie do SMS |
@@ -1603,7 +1625,8 @@ wysyłkę z wpisem w logu bramki.
 Każdą regułę można wyłączyć, zmienić jej limit na godzinę i grupowanie. Limit burzy zgłasza się
 raz na okno na integrację (rozdział 3.7). Certyfikat, konto, odbiór i skrzynka zgłaszają się
 raz na przyczynę: ten sam próg dni albo ta sama trwająca awaria nie dają drugiego maila. Błąd
-logowania do skrzynki jest zgłaszany od razu, inne awarie skrzynki po zadanych minutach. Nowe wydanie
+logowania do skrzynki jest zgłaszany natychmiast, pozostałe awarie skrzynki po zadanej liczbie
+minut. Nowe wydanie
 zgłasza się raz na numer wydania. Mail zawiera numer nowego i zainstalowanego wydania,
 odnośnik do opisu zmian i do instrukcji aktualizacji (rozdział 7.4 [Uruchomienia](uruchomienie.md)).
 Gdy jest nowsze wydanie, wspomina o nim także podsumowanie dzienne.
@@ -1635,7 +1658,7 @@ telefonu.
   i znikają po siedmiu dniach
 - Sekrety integracji, hasło SMTP i hasło skrzynki pocztowej są zaszyfrowane kluczem głównym.
   Nie trafiają do dziennika, audytu, maili, logu ani odpowiedzi HTTP. Zasady właściwe dla
-  skrzynek zbiera rozdział 5.10
+  skrzynek zebrano w rozdziale 5.10
 - Adresy integracji z SMS-a w sieci wewnętrznej wymagają `MIG_WEBHOOK_ALLOW_PRIVATE=1`, tak samo
   jak adresy webhooków kluczy
 - Adres `/hooks/` ma limit 120 żądań na minutę na adres źródłowy, niezależny od limitów klucza.

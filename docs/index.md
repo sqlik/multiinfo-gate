@@ -9,9 +9,9 @@ i helpdesk wysyłają SMS-y własnym ładunkiem na adres wejściowy bramki, a od
 trafiają do helpdesku albo na telefon przez ntfy w ich formacie; administrator dostaje mailem
 powiadomienia o błędach i certyfikatach. Od wersji 1.7 bramka potrafi też dopytać aplikację
 o dane, których nie ma w powiadomieniu. Dzięki temu Fakturownia powiadamia SMS-em nabywcę
-faktury, choć numeru telefonu w samym powiadomieniu nie ma. Od wersji 1.8 bramka czyta też
-skrzynkę pocztową (Mail2SMS): alarm z UPS-a, raport z NAS-a albo mail pracownika trafiają na
-telefon jako SMS bez zmian po stronie urządzenia.
+faktury, choć numeru telefonu w samym powiadomieniu nie ma. Od wersji 1.8 bramka odczytuje
+również skrzynkę pocztową (Mail2SMS): alarm z zasilacza UPS, raport z serwera NAS albo wiadomość
+pracownika docierają na telefon jako SMS bez zmian po stronie urządzenia.
 
 ![Przegląd: liczniki wiadomości wychodzących i odebranych z ostatniej doby, stan połączeń z Multiinfo i ostatnie niepowodzenia](obrazki/przeglad.png)
 
