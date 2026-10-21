@@ -347,6 +347,18 @@ describe('MailInPoller: powiadomienia i odpowiedzi', () => {
     expect(events(integ.id).map((e) => e[1])).not.toContain('już przetworzony');
   });
 
+  it('nieczytelny mail nie zajmuje cudzego Message-ID: późniejszy czytelny mail z listy z tym samym identyfikatorem idzie normalnie', async () => {
+    await poller.tick(NOW);
+    box.add({ uid: 2, seen: false, source: eml('obcy@inna.test', 'Zepsuty', 'x', '<ups-19@ups.local>') });
+    box.failSource.set(2, new Error('boom'));
+    await poller.tick(at(60_000));
+    expect(smsCount()).toBe(0);
+    box.add({ uid: 3, seen: false, source: eml('ups@przyklad.test', 'Alarm', 'ON BATTERY', '<ups-19@ups.local>') });
+    await poller.tick(at(120_000));
+    expect(smsCount()).toBe(1);
+    expect(events(integ.id)[0]![0]).toBe('sent');
+  });
+
   it('limit pięciu skrzynek naraz obowiązuje między turami, nie tylko w jednej', async () => {
     vi.useFakeTimers({ now: NOW });
     const p = new MailInPoller(deps, { concurrency: 2 });
