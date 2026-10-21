@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultInboundConfig, defaultOutboundConfig, parseConfig, type InboundConfig } from '../../src/integrations/config.ts';
+import { defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig, parseConfig, type InboundConfig } from '../../src/integrations/config.ts';
 import { PRESETS, presetById, presetsFor } from '../../src/integrations/presets/index.ts';
 import { previewInbound } from '../../src/integrations/pipeline.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
@@ -24,6 +24,25 @@ describe('gotowe ustawienia', () => {
     expect(presetById('brak')).toBeUndefined();
     expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'fakturownia', 'fakturownia-klient', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
     expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'home-assistant', 'freescout', 'freshdesk', 'slack', 'ntfy', 'bitrix24', 'custom']);
+    expect(presetsFor('mail_in').map((p) => p.id)).toEqual(['poczta-gmail', 'poczta-home', 'poczta-ovh', 'poczta-wlasny']);
+  });
+  it('ustawienia poczty mają port 993, TLS i instrukcję o haśle; home.pl bez nazwy serwera (per konto); Własny serwer ma puste pola', () => {
+    for (const id of ['poczta-gmail', 'poczta-home', 'poczta-ovh']) {
+      const p = presetById(id)!;
+      expect(p.kinds).toEqual(['mail_in']);
+      expect(p.mailIn?.imap).toMatchObject({ port: 993, security: 'tls', verifyCert: true });
+      expect(p.guide.toLowerCase()).toContain('hasło');
+      expect(p.sampleSource).toMatch(/2026-/);
+      expect(() => parseConfig('mail_in', { ...defaultMailInConfig(), ...p.mailIn })).not.toThrow();
+    }
+    expect(presetById('poczta-gmail')?.mailIn?.imap?.host).toBe('imap.gmail.com');
+    expect(presetById('poczta-ovh')?.mailIn?.imap?.host).toBe('imap.mail.ovh.net');
+    expect(presetById('poczta-home')?.mailIn?.imap?.host).toBe('');
+    expect(presetById('poczta-home')?.guide).toContain('Panel');
+    expect(presetById('poczta-wlasny')?.mailIn?.imap?.host ?? '').toBe('');
+    expect(presetById('poczta-gmail')?.guide).toContain('kosz');
+    // Outlook.com i Microsoft 365 nie przyjmują hasła do IMAP od 2024-09-16: nie ma kafelka, dokumentacja mówi dlaczego.
+    expect(presetById('poczta-outlook')).toBeUndefined();
   });
   it('wartości z ładunku w adresie zapytania uzupełniającego są kodowane', () => {
     for (const preset of PRESETS) {
@@ -40,6 +59,7 @@ describe('gotowe ustawienia', () => {
     for (const p of PRESETS) {
       if (p.kinds.includes('webhook_in')) expect(p.inbound, p.id).toBeDefined();
       if (p.kinds.includes('webhook_out')) expect(p.outbound, p.id).toBeDefined();
+      if (p.kinds.includes('mail_in')) expect(p.mailIn, p.id).toBeDefined();
       expect(p.guide.length, p.id).toBeGreaterThan(40);
       for (const s of p.secrets ?? []) expect(s.hint.length, `${p.id}:${s.ref}`).toBeGreaterThan(5);
     }
