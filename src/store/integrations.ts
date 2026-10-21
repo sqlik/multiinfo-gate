@@ -127,6 +127,20 @@ export class IntegrationsRepo {
     this.db.prepare('DELETE FROM integrations WHERE id = ?').run(id);
   }
 
+  /**
+   * Kopia integracji pod nową nazwą: ta sama konfiguracja i sekrety (ten sam klucz główny), wyłączona,
+   * przychodząca dostaje nowy adres wejściowy. Zwraca identyfikator kopii.
+   */
+  copy(id: number, name: string, at: Date): number {
+    const source = this.get(id);
+    if (!source) throw new Error(`Integracja ${id} nie istnieje.`);
+    const info = this.db.prepare(
+      `INSERT INTO integrations (name, kind, api_key_id, service_id, orig, preset, enabled, hook_id, config, secrets_enc, store_payloads, created_at, updated_at)
+       SELECT ?, kind, api_key_id, service_id, orig, preset, 0, ?, config, secrets_enc, store_payloads, ?, ? FROM integrations WHERE id = ?`,
+    ).run(name, source.kind === 'webhook_in' ? newHookId() : null, at.toISOString(), at.toISOString(), id);
+    return Number(info.lastInsertRowid);
+  }
+
   regenerateHook(id: number, at: Date): string {
     const hookId = newHookId();
     this.db.prepare('UPDATE integrations SET hook_id = ?, updated_at = ? WHERE id = ?').run(hookId, at.toISOString(), id);

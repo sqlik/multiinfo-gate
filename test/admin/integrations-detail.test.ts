@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { defaultInboundConfig, defaultOutboundConfig } from '../../src/integrations/config.ts';
+import { defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig } from '../../src/integrations/config.ts';
 import { presetById } from '../../src/integrations/presets/index.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
@@ -32,6 +32,66 @@ function seedInbound(storePayloads: 0 | 1, name = 'Kuma produkcja'): number {
     secrets: { token: 'Bearer x' }, storePayloads, createdAt: NOW,
   });
 }
+
+const post = (url: string) => h.app.inject({ method: 'POST', url, headers: { cookie: h.cookie, 'content-type': 'application/x-www-form-urlencoded' }, payload: '' });
+
+function seedMailbox(name = 'Skrzynka'): number {
+  return h.integrations.insert({
+    name, kind: 'mail_in', apiKeyId, serviceId: null, orig: null, preset: 'poczta-wlasny', enabled: 1,
+    config: { ...defaultMailInConfig(), imap: { ...defaultMailInConfig().imap, host: 'imap.przyklad.test', user: 'u' }, senders: [{ pattern: '@przyklad.test', recipients: [] }] },
+    secrets: { imap_password: 'TajneHaslo9' }, storePayloads: 0, createdAt: NOW,
+  });
+}
+
+describe('GET /integracje/:id - skrzynka', () => {
+  it('szczegóły skrzynki pokazują stan i przyciski Sprawdź teraz oraz Utwórz kopię', async () => {
+    const id = seedMailbox();
+    h.mailIn.ensureState(id, NOW);
+    h.mailIn.recordPoll(id, { ok: true, uidvalidity: 7, unseen: 3, at: new Date(NOW.getTime() - 60_000), nextPollAt: NOW });
+    h.mailIn.recordPoll(id, { ok: false, error: 'connect ECONNREFUSED', errorKind: 'network', at: NOW, nextPollAt: NOW });
+    const res = await page(`/integracje/${id}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Ostatnie sprawdzenie');
+    expect(res.body).toContain('Nieprzeczytanych');
+    expect(res.body).toContain('serwer nie odpowiada');
+    expect(res.body).toContain('connect ECONNREFUSED');
+    expect(res.body).toContain('Sprawdź teraz');
+    expect(res.body).toContain('Utwórz kopię');
+    expect(res.body).toContain('imap.przyklad.test');
+    expect(res.body).not.toContain('TajneHaslo9');
+  });
+
+  it('Sprawdź teraz ustawia termin odpytania na teraz; dla webhooka to 404', async () => {
+    const id = seedMailbox();
+    h.mailIn.ensureState(id, new Date(NOW.getTime() - 3_600_000));
+    h.mailIn.recordPoll(id, { ok: true, uidvalidity: 7, unseen: 0, at: NOW, nextPollAt: new Date(NOW.getTime() + 3_600_000) });
+    const res = await post(`/integracje/${id}/sprawdz-teraz`);
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe(`/integracje/${id}`);
+    expect(h.mailIn.state(id)?.nextPollAt).toBe(NOW.toISOString());
+    expect((await post(`/integracje/${seedInbound(0)}/sprawdz-teraz`)).statusCode).toBe(404);
+  });
+
+  it('Utwórz kopię zakłada wyłączoną kopię z dopiskiem i otwiera edycję; dla skrzynki kopia dostaje własny stan; kolejna kopia dostaje numer', async () => {
+    const id = seedMailbox();
+    const res = await post(`/integracje/${id}/kopiuj`);
+    expect(res.statusCode).toBe(302);
+    const copyId = Number(/\/integracje\/(\d+)\/edytuj/.exec(res.headers.location as string)?.[1]);
+    const copy = h.integrations.get(copyId)!;
+    expect([copy.name, copy.enabled, copy.kind]).toEqual(['Skrzynka (kopia)', 0, 'mail_in']);
+    expect(h.integrations.secrets(copyId)).toEqual({ imap_password: 'TajneHaslo9' });
+    expect(h.mailIn.state(copyId)).toBeDefined();
+    expect(h.audit.list(10, 0)[0]).toMatchObject({ action: 'integracja.kopia', meta: { z: id, nazwa: 'Skrzynka (kopia)' } });
+    const second = await post(`/integracje/${id}/kopiuj`);
+    const secondId = Number(/\/integracje\/(\d+)\/edytuj/.exec(second.headers.location as string)?.[1]);
+    expect(h.integrations.get(secondId)?.name).toBe('Skrzynka (kopia 2)');
+    const hook = seedInbound(0);
+    const hookCopy = await post(`/integracje/${hook}/kopiuj`);
+    const hookCopyId = Number(/\/integracje\/(\d+)\/edytuj/.exec(hookCopy.headers.location as string)?.[1]);
+    expect(h.integrations.get(hookCopyId)?.hookId).not.toBe(h.integrations.get(hook)?.hookId);
+    expect((await page(`/integracje/${hookCopyId}/edytuj`)).statusCode).toBe(200);
+  });
+});
 
 describe('GET /integracje/:id', () => {
   it('pokazuje konfigurację w słowach, adres wejściowy i dziennik z plakietkami', async () => {
