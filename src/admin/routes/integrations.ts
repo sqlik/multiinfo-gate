@@ -292,8 +292,9 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     if (row && built.password === null) {
       const saved = (row.config as MailInConfig).imap;
       const next = built.config.imap;
-      if (saved.host !== next.host || saved.port !== next.port || saved.security !== next.security || saved.user !== next.user) {
-        return fail('Zmieniono serwer, port, zabezpieczenie albo login: podaj hasło ponownie.');
+      // Wyłączenie sprawdzania certyfikatu też się liczy: bez niego hasło da się podsłuchać w drodze.
+      if (saved.host !== next.host || saved.port !== next.port || saved.security !== next.security || saved.user !== next.user || (saved.verifyCert && !next.verifyCert)) {
+        return fail('Zmieniono serwer, port, zabezpieczenie, sprawdzanie certyfikatu albo login: podaj hasło ponownie.');
       }
     }
     const warnings = mailWarnings(built.config);

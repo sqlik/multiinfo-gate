@@ -86,7 +86,7 @@ describe('formularz skrzynki', () => {
   it('zmiana serwera, portu, zabezpieczenia albo loginu przy zapisanym haśle wymaga podania hasła ponownie, także przy sprawdzaniu połączenia', async () => {
     await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody() });
     const row = h.integrations.list()[0]!;
-    for (const over of [{ host: 'imap.obcy.test' }, { port: '143' }, { security: 'none', port: '143' }, { user: 'inny' }]) {
+    for (const over of [{ host: 'imap.obcy.test' }, { port: '143' }, { security: 'none', port: '143' }, { user: 'inny' }, { verifyCert: '0' }]) {
       const res = await post(`/integracje/${row.id}/edytuj`, formBody({ password: '', ...over }));
       expect(res.statusCode).toBe(400);
       expect(res.body).toContain('podaj hasło ponownie');
