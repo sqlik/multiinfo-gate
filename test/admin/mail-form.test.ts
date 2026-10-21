@@ -56,7 +56,7 @@ describe('mailConfigToValues i mailFormToConfig', () => {
     expect(mailFormToConfig({ ...v(), password: '' }, true, engine).ok).toBe(true);
     expect(mailFormToConfig({ ...v(), user: '' }, true, engine)).toEqual({ ok: false, error: 'Podaj login skrzynki.' });
     expect(mailFormToConfig({ ...v(), senders: 'sqlik.com' }, true, engine)).toEqual({ ok: false, error: 'Nadawca „sqlik.com”: podaj pełny adres albo domenę z małpą, np. @sqlik.com.' });
-    expect(mailFormToConfig({ ...v(), afterAction: 'move', afterFolder: '' }, true, engine)).toEqual({ ok: false, error: 'Podaj folder, do którego przenosić przetworzone maile.' });
+    expect(mailFormToConfig({ ...v(), afterAction: 'move', afterFolder: '' }, true, engine)).toEqual({ ok: false, error: 'Podaj folder, do którego przenosić przetworzone wiadomości.' });
     expect(mailFormToConfig({ ...v(), fields: [{ name: '', mode: 'between', after: 'x', until: '', pattern: '', flags: '' }] }, true, engine)).toEqual({ ok: false, error: 'Wycinek bez nazwy: podaj nazwę małymi literami, np. kod.' });
     expect(mailFormToConfig({ ...v(), fields: [{ name: 'Kod', mode: 'between', after: 'x', until: '', pattern: '', flags: '' }] }, true, engine).ok).toBe(false);
     expect(mailFormToConfig({ ...v(), fields: [{ name: 'kod', mode: 'regex', after: '', until: '', pattern: '(', flags: '' }] }, true, engine).ok).toBe(false);

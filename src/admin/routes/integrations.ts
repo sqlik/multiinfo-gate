@@ -318,7 +318,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }
     if (action === 'sprawdz') {
       const sample = await sampleMail(v, now());
-      if (sample === null) return fail('Podaj próbkę: wklej surowy mail albo wypełnij nadawcę, temat i treść.');
+      if (sample === null) return fail('Podaj próbkę: wklej surową wiadomość albo wypełnij nadawcę, temat i treść.');
       const preview = previewMailIn(deps.engine, built.config, sample, countryCodeOf(key.accountId), now());
       return mailPage(request, ctx, v, { mode, preview, warnings });
     }
@@ -339,6 +339,9 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const moved = reenabled || (before !== null && (before.folder !== after.folder || before.imap.host !== after.imap.host || before.imap.user !== after.imap.user));
     if (moved) {
       deps.mailIn?.setFloor(id, 0, 0);
+      deps.mailIn?.pollNow(id, at);
+    } else if (before !== null && before.intervalSec !== after.intervalSec) {
+      // Nowa częstotliwość działa od razu, a nie dopiero po terminie wyliczonym ze starej.
       deps.mailIn?.pollNow(id, at);
     }
   };

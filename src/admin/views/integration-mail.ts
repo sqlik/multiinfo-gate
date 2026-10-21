@@ -35,14 +35,14 @@ function modeSwitch(ctx: FormContext, mode: 'prosty' | 'zaawansowany'): string {
       <a href="${esc(`${base}${join}tryb=zaawansowany`)}"${mode === 'zaawansowany' ? ' class="on"' : ''}>Zaawansowany</a>
     </div>
     <span class="dim" style="font-size: 12px;">${mode === 'prosty'
-      ? 'Wybór z list, bez szablonów. Tryb zaawansowany dokłada szablon Liquid, wyrażenia regularne i sprawdzanie certyfikatu.'
+      ? 'Wybór z list, bez szablonów. Tryb zaawansowany udostępnia szablon Liquid, wyrażenia regularne i sprawdzanie certyfikatu.'
       : 'Szablon Liquid, wyrażenia regularne w wycinkach, warunek Liquid, sprawdzanie certyfikatu.'}</span>
   </div>`;
 }
 
 function sectionMailbox(v: MailFormValues, opts: MailFormOptions): string {
   const advanced = opts.mode === 'zaawansowany';
-  const securities: Array<[MailFormValues['security'], string]> = [['tls', 'TLS (szyfrowane od początku, port 993)'], ['starttls', 'STARTTLS (szyfrowanie po powitaniu, port 143)'], ['none', 'brak (jawnym tekstem, port 143)']];
+  const securities: Array<[MailFormValues['security'], string]> = [['tls', 'TLS (połączenie szyfrowane od początku, zwykle port 993)'], ['starttls', 'STARTTLS (szyfrowanie włączane po powitaniu serwera, zwykle port 143)'], ['none', 'brak (bez szyfrowania, port 143)']];
   return `<details open>
     <summary>Skrzynka</summary>
     <div class="field">
@@ -56,11 +56,11 @@ function sectionMailbox(v: MailFormValues, opts: MailFormOptions): string {
     <div class="field">
       <label for="security">Zabezpieczenie</label>
       <select id="security" name="security">${securities.map(([id, label]) => `<option value="${id}"${v.security === id ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>
-      ${hint('Przy „brak” hasło i treść maili idą po sieci jawnym tekstem. Tylko w sieci wewnętrznej')}
+      ${hint('Przy wyborze „brak” hasło i treść wiadomości są przesyłane bez szyfrowania. Dopuszczalne wyłącznie dla serwera w sieci wewnętrznej')}
     </div>
     ${advanced ? `<div class="field">
       ${checkbox('verifyCert', v.verifyCert, 'Sprawdzaj certyfikat serwera')}
-      ${hint('Wyłącz tylko dla serwera z własnym certyfikatem bez zaufanego urzędu. Bez sprawdzania połączenie jest podatne na podsłuch')}
+      ${hint('Wyłącz wyłącznie dla serwera z własnym certyfikatem bez zaufanego urzędu. Połączenie bez sprawdzania certyfikatu jest podatne na podsłuch')}
     </div>` : `<input type="hidden" name="verifyCert" value="${v.verifyCert ? '1' : '0'}">`}
     <div class="field">
       <label for="user">Login</label>
@@ -69,25 +69,25 @@ function sectionMailbox(v: MailFormValues, opts: MailFormOptions): string {
     <div class="field">
       <label for="password">Hasło</label>
       <input id="password" name="password" type="password" value="" autocomplete="new-password"${opts.hasPassword ? '' : ' required'}>
-      ${hint(opts.hasPassword ? 'Skrzynka ma hasło zapisane. Puste pole zostawia dotychczasowe' : 'Hasło zapisujemy zaszyfrowane; nie da się go potem odczytać w panelu. U Gmaila to hasło aplikacji')}
+      ${hint(opts.hasPassword ? 'Hasło jest zapisane. Puste pole zachowuje dotychczasowe' : 'Hasło jest przechowywane w postaci zaszyfrowanej i nie można go odczytać w panelu. W Gmailu jest to hasło aplikacji')}
     </div>
     <div class="field">
       <label for="folder">Folder</label>
       <input id="folder" name="folder" value="${esc(v.folder)}" placeholder="INBOX">
-      ${hint('Bramka bierze tylko maile nieprzeczytane. Skrzynka albo folder powinny należeć do bramki: mail otwarty przez człowieka w programie pocztowym staje się przeczytany i SMS nie pójdzie')}
+      ${hint('Bramka przetwarza wyłącznie wiadomości nieprzeczytane. Skrzynka albo folder powinny być przeznaczone dla bramki: wiadomość otwarta w programie pocztowym zostaje oznaczona jako przeczytana i nie zostanie przetworzona')}
     </div>
     <div class="field">
       <label for="intervalSec">Częstotliwość sprawdzania</label>
       <select id="intervalSec" name="intervalSec">${MAIL_IN_INTERVALS.map((sec) => `<option value="${sec}"${v.intervalSec === String(sec) ? ' selected' : ''}>co ${esc(intervalWords(sec))}</option>`).join('')}</select>
-      ${hint('Po odczytaniu maila SMS idzie natychmiast. Częściej niż co 30 s nie da się, bo dostawcy poczty odcinają zbyt częste logowania')}
+      ${hint('SMS jest wysyłany natychmiast po odczytaniu wiadomości. Minimalna częstotliwość to 30 sekund, ponieważ dostawcy poczty blokują konta logujące się częściej')}
     </div>
     <div class="field">
-      ${checkbox('backlog', v.backlog, 'Przetwórz też zaległe nieprzeczytane')}
-      ${hint('Domyślnie bramka bierze tylko maile, które przyjdą po zapisaniu. To pole każe jej wziąć także zaległe nieprzeczytane, przy najbliższym sprawdzeniu, po 50 na raz. Przy 300 zaległych mailach ochrona przed burzą zatrzyma wysyłkę na limicie integracji, a reszta trafi do dziennika jako „limit”')}
+      ${checkbox('backlog', v.backlog, 'Przetwórz także zaległe wiadomości nieprzeczytane')}
+      ${hint('Domyślnie bramka przetwarza wyłącznie wiadomości, które nadejdą po zapisaniu ustawień. Po zaznaczeniu przy najbliższym sprawdzeniu przetworzy także zaległe wiadomości nieprzeczytane, po 50 na jedno sprawdzenie. Przy dużej zaległości ochrona przed burzą zatrzyma wysyłkę na limicie integracji, a pozostałe wiadomości otrzymają w dzienniku wynik „limit”')}
     </div>
     <div class="field">
       <button class="btn btn-s" type="submit" name="action" value="polaczenie">Sprawdź połączenie</button>
-      ${hint('Bramka loguje się, otwiera folder i pokazuje liczbę nieprzeczytanych oraz listę folderów. Nic nie przetwarza i nic nie zapisuje')}
+      ${hint('Bramka loguje się, otwiera folder i wyświetla liczbę wiadomości nieprzeczytanych oraz listę folderów. Niczego nie przetwarza ani nie zapisuje')}
     </div>
   </details>`;
 }
@@ -98,11 +98,11 @@ function sectionSenders(v: MailFormValues): string {
     <div class="field">
       <label for="senders">Nadawcy</label>
       ${textarea('senders', v.senders, 5, ' placeholder="tomek@plus.pl: 601000001, 601000002\n@sqlik.com\nups@przyklad.pl"')}
-      ${hint('Jedna pozycja w linii: pełny adres albo cała domena z małpą. Po dwukropku można dopisać numery, na które mają iść SMS-y od tego nadawcy. Pusta lista oznacza, że żaden mail nie przejdzie')}
+      ${hint('Jedna pozycja w wierszu: pełny adres albo domena poprzedzona znakiem @. Po dwukropku można podać numery, na które mają trafiać SMS-y od tego nadawcy. Pusta lista oznacza, że żadna wiadomość nie zostanie przetworzona')}
     </div>
     <div class="field">
       ${checkbox('requireAuthResults', v.requireAuthResults, 'Wymagaj potwierdzenia nadawcy przez serwer (SPF/DKIM)')}
-      ${hint('Ma sens u dostawców publicznych (Gmail, home.pl, OVH). Serwery wewnętrzne zwykle nie dopisują tych nagłówków i wtedy każdy mail zostanie odrzucony')}
+      ${hint('Zalecane u dostawców publicznych (Gmail, home.pl, OVH). Serwery wewnętrzne zwykle nie dodają tych nagłówków i wówczas każda wiadomość zostanie odrzucona')}
     </div>
   </details>`;
 }
@@ -113,16 +113,16 @@ function sectionRecipients(v: MailFormValues): string {
     <div class="field">
       <label for="toFallback">Odbiorcy</label>
       ${textarea('toFallback', v.toFallback, 3, ' placeholder="601000001\n+48 602 000 002"')}
-      ${hint('Jeden numer w linii. Używane, gdy mail nie podaje numerów, a nadawca nie ma przypisanych')}
+      ${hint('Jeden numer w wierszu. Lista jest używana, gdy wiadomość nie zawiera numerów, a nadawca nie ma przypisanych')}
     </div>
     <div class="field">
-      ${checkbox('recipientsFromMail', v.recipientsFromMail, 'Nadawca może podać numery w mailu')}
-      ${hint('Każdy nadawca z listy może wtedy wysłać SMS na dowolny numer na koszt konta')}
+      ${checkbox('recipientsFromMail', v.recipientsFromMail, 'Nadawca może wskazać numery w wiadomości')}
+      ${hint('Każdy nadawca z listy może wówczas wysłać SMS na dowolny numer na koszt konta')}
     </div>
     <div class="field">
       <label>Gdzie szukać numerów</label>
       <div class="choices">${radio('recipientsWhere', 'subject', v.recipientsWhere, 'w temacie, przed dwukropkiem')}${radio('recipientsWhere', 'body', v.recipientsWhere, 'w pierwszej linii treści')}</div>
-      ${hint('Temat: „600100200, 600100201: Serwer padł”. Pierwsza linia: same numery oddzielone przecinkiem albo spacją; linia znika z treści SMS-a')}
+      ${hint('W temacie: „600100200, 600100201: Serwer niedostępny”. W pierwszej linii treści: wyłącznie numery oddzielone przecinkiem albo spacją; linia jest usuwana z treści SMS-a')}
     </div>
   </details>`;
 }
@@ -137,7 +137,7 @@ function fieldRows(fields: MailFieldValues[], advanced: boolean): string {
       : `<input type="hidden" name="${n('mode')}" value="between">`;
     const body = f.mode === 'regex' && advanced
       ? `<input name="${n('pattern')}" value="${esc(f.pattern)}" placeholder="wyrażenie, np. Status: (\\w+)" style="flex: 1;"><input name="${n('flags')}" value="${esc(f.flags)}" placeholder="flagi" style="width: 60px;">`
-      : `<input name="${n('after')}" value="${esc(f.after)}" placeholder="tekst po, np. Error code:" style="flex: 1;"><input name="${n('until')}" value="${esc(f.until)}" placeholder="do (koniec linii)" style="width: 150px;">`;
+      : `<input name="${n('after')}" value="${esc(f.after)}" placeholder="tekst po frazie, np. Error code:" style="flex: 1;"><input name="${n('until')}" value="${esc(f.until)}" placeholder="do frazy (domyślnie koniec linii)" style="width: 150px;">`;
     return `<div class="inline" style="margin-bottom: 6px;">
         <input name="${n('name')}" value="${esc(f.name)}" placeholder="nazwa, np. kod" style="width: 130px;">${modeField}${body}
       </div>`;
@@ -155,30 +155,30 @@ function sectionText(v: MailFormValues, opts: MailFormOptions): string {
     <div class="field">
       <label for="textVariant">Treść SMS-a</label>
       <select id="textVariant" name="textVariant">${variants.map(([id, label]) => `<option value="${id}"${v.textVariant === id ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>
-      ${hint('Treść maila bez podpisu, stopki i cytatów; HTML zamieniony na tekst')}
+      ${hint('Treść wiadomości bez podpisu, stopki i cytatów; HTML zamieniony na tekst')}
     </div>
     ${advanced ? `<div class="field">
       <label for="textTemplate">Szablon Liquid</label>
       ${textarea('textTemplate', v.textTemplate, 3, ' placeholder="UPS {{ fields.urzadzenie }}: {{ fields.stan }}, kod {{ fields.kod }}"')}
-      ${hint('Klucze: from, from_name, subject, text, text_full, date, to, message_id, fields.nazwa, now, integration.name. Filtr sms_truncate: n ucina do n znaków')}
+      ${hint('Zmienne: from, from_name, subject, text, text_full, date, to, message_id, fields.nazwa, now, integration.name. Filtr sms_truncate: n skraca do n znaków')}
     </div>` : ''}
     <div class="field">
-      <label for="cutFrom">Ucinaj od tekstu</label>
+      <label for="cutFrom">Pomijaj treść od frazy</label>
       ${textarea('cutFrom', v.cutFrom, 2, ' placeholder="Wygenerowano automatycznie"')}
-      ${hint('Jedna fraza w linii. Linia zaczynająca się od frazy i wszystko pod nią znika z treści, tak jak podpis i stopka')}
+      ${hint('Jedna fraza w wierszu. Linia rozpoczynająca się od frazy i wszystko poniżej niej jest usuwane z treści, tak jak podpis i stopka')}
     </div>
     <div class="field">
       <label>Wycinki</label>
       ${fieldRows(v.fields, advanced)}
       ${hint(advanced
-        ? 'Wartość to tekst po frazie do frazy końcowej albo końca linii, lub pierwsza grupa wyrażenia regularnego (flagi i, m). Wycinki czytają tekst przed czyszczeniem. W szablonie: {{ fields.nazwa }}'
-        : 'Wartość to tekst po frazie do frazy końcowej albo końca linii. Wycinki czytają tekst przed czyszczeniem; podgląd pokazuje, co wyszło')}
+        ? 'Wartość to tekst od frazy początkowej do frazy końcowej albo do końca linii, lub pierwsza grupa wyrażenia regularnego (flagi i, m). Wycinki odczytują tekst sprzed czyszczenia. W szablonie: {{ fields.nazwa }}'
+        : 'Wartość to tekst od frazy początkowej do frazy końcowej albo do końca linii. Wycinki odczytują tekst sprzed czyszczenia; podgląd pokazuje odczytane wartości')}
     </div>
     <div class="field">
       <label>Limit części</label>
       <div class="inline">
         <input name="maxParts" type="number" min="1" max="9" value="${esc(v.maxParts)}" style="width: 90px;">
-        <div class="choices">${radio('overflow', 'truncate', v.overflow, 'utnij i wyślij')}${radio('overflow', 'reject', v.overflow, 'nie wysyłaj, zapisz błąd i powiadom')}</div>
+        <div class="choices">${radio('overflow', 'truncate', v.overflow, 'skróć i wyślij')}${radio('overflow', 'reject', v.overflow, 'nie wysyłaj, zapisz błąd i powiadom')}</div>
       </div>
     </div>
   </details>`;
@@ -194,7 +194,7 @@ function sectionWhen(v: MailFormValues, opts: MailFormOptions): string {
     <div class="field">
       <label>Reguły</label>
       ${ruleRows(v.rules, 'pole, np. subject albo fields.stan')}
-      ${hint('Bez reguł każdy mail od nadawcy z listy idzie dalej. Wszystkie reguły muszą być spełnione. Pola: subject, text, from, from_name, fields.nazwa')}
+      ${hint('Bez reguł każda wiadomość od nadawcy z listy jest przetwarzana. Wszystkie reguły muszą być spełnione. Pola: subject, text, from, from_name, fields.nazwa')}
     </div>
     ${advanced ? `<div class="field">
       <label for="conditionExpr">Wyrażenie</label>
@@ -208,20 +208,20 @@ function sectionAfter(v: MailFormValues, opts: MailFormOptions): string {
   return `<details open>
     <summary>Po przetworzeniu</summary>
     <div class="field">
-      <label>Co zrobić z mailem</label>
-      <div class="choices">${radio('afterAction', 'keep', v.afterAction, 'zostaw w skrzynce')}${radio('afterAction', 'move', v.afterAction, 'przenieś do folderu')}${radio('afterAction', 'delete', v.afterAction, 'usuń')}</div>
-      ${hint('Dotyczy także maili odrzuconych (zły nadawca, pusta treść, brak numeru). Mail zostaje oznaczony jako przeczytany. U Gmaila „usuń” to przeniesienie do kosza')}
+      <label>Co zrobić z wiadomością</label>
+      <div class="choices">${radio('afterAction', 'keep', v.afterAction, 'pozostaw w skrzynce')}${radio('afterAction', 'move', v.afterAction, 'przenieś do folderu')}${radio('afterAction', 'delete', v.afterAction, 'usuń')}</div>
+      ${hint('Dotyczy także wiadomości odrzuconych (nadawca spoza listy, pusta treść, brak numeru). Wiadomość zostaje oznaczona jako przeczytana. W Gmailu „usuń” oznacza przeniesienie do kosza')}
     </div>
     <div class="field">
       <label for="afterFolder">Folder docelowy</label>
       <input id="afterFolder" name="afterFolder" value="${esc(v.afterFolder)}" placeholder="Przetworzone">
-      ${hint('Folder, którego nie ma, bramka założy przy pierwszym użyciu')}
+      ${hint('Folder, który nie istnieje, bramka utworzy przy pierwszym użyciu')}
     </div>
     <div class="field">
-      ${checkbox('replyEnabled', v.replyEnabled, 'Odpowiadaj nadawcy mailem')}
+      ${checkbox('replyEnabled', v.replyEnabled, 'Odpowiadaj nadawcy wiadomością e-mail')}
       ${opts.smtpConfigured
-        ? hint('Nadawca z listy dostaje w wątku krótkie potwierdzenie: do kogo poszedł SMS albo dlaczego nie poszedł')
-        : '<div class="hint">Nieczynne, bo SMTP nie jest skonfigurowane. <a href="/powiadomienia">Ustaw SMTP</a>, a bramka zacznie odpowiadać</div>'}
+        ? hint('Nadawca z listy otrzymuje w wątku krótkie potwierdzenie: do kogo został wysłany SMS albo z jakiego powodu nie został wysłany')
+        : '<div class="hint">Nieczynne: SMTP nie jest skonfigurowane. <a href="/powiadomienia">Skonfiguruj SMTP</a>, a bramka zacznie odpowiadać</div>'}
     </div>
   </details>`;
 }
@@ -230,8 +230,8 @@ function sectionSample(v: MailFormValues): string {
   return `<details open>
     <summary>Próbka do sprawdzenia</summary>
     <div class="field">
-      <label for="sampleRaw">Surowy mail</label>
-      ${textarea('sampleRaw', v.sampleRaw, 5, ' placeholder="Wklej cały mail z nagłówkami (plik .eml albo „pokaż oryginał” w programie pocztowym)"')}
+      <label for="sampleRaw">Surowa wiadomość</label>
+      ${textarea('sampleRaw', v.sampleRaw, 5, ' placeholder="Wklej całą wiadomość z nagłówkami (plik .eml albo „pokaż oryginał” w programie pocztowym)"')}
     </div>
     <div class="field">
       <label>Albo trzy pola</label>
@@ -239,8 +239,8 @@ function sectionSample(v: MailFormValues): string {
         <input name="sampleFrom" value="${esc(v.sampleFrom)}" placeholder="nadawca, np. ups@przyklad.pl" style="width: 40%;">
         <input name="sampleSubject" value="${esc(v.sampleSubject)}" placeholder="temat" style="flex: 1;">
       </div>
-      ${textarea('sampleText', v.sampleText, 4, ' placeholder="treść maila"')}
-      ${hint('Sprawdź szablon pokazuje, czy nadawca przechodzi, kto dostanie SMS, co dały wycinki i jak wygląda SMS. Nic nie wysyła i nic nie zapisuje')}
+      ${textarea('sampleText', v.sampleText, 4, ' placeholder="treść wiadomości"')}
+      ${hint('Sprawdź szablon pokazuje, czy nadawca jest na liście, kto otrzyma SMS, jakie wartości dały wycinki i jak będzie wyglądał SMS. Niczego nie wysyła ani nie zapisuje')}
     </div>
   </details>`;
 }
@@ -250,13 +250,13 @@ function connectionPanel(c: MailConnection): string {
   if (c.ok) {
     return `<div class="panel" style="max-width: 760px;">
       <div class="panel-h"><div class="lab">Połączenie działa</div><div class="m dim">nieprzeczytanych: ${esc(c.unseen)}</div></div>
-      <div class="kv"><div>Foldery</div><div>${folders || '<span class="dim">brak</span>'}<div class="hint">Kliknięcie wpisuje nazwę do pola folderu</div></div></div>
+      <div class="kv"><div>Foldery</div><div>${folders || '<span class="dim">brak</span>'}<div class="hint">Kliknięcie nazwy wpisuje ją do pola Folder</div></div></div>
     </div>`;
   }
-  const titles = { auth: ['Logowanie odrzucone', 'Sprawdź login i hasło. U Gmaila potrzebne jest hasło aplikacji, nie hasło do konta; w Google Workspace IMAP musi być włączony przez administratora'],
-    network: ['Serwer nie odpowiada', 'Sprawdź nazwę serwera, port i zabezpieczenie oraz czy z maszyny bramki da się połączyć z serwerem poczty'],
-    folder: ['Folder nie istnieje', 'Wpisz nazwę folderu dokładnie tak, jak podaje ją serwer; kliknięcie w nazwę z listy poniżej wpisuje ją do pola'],
-    other: ['Błąd połączenia', 'Serwer odpowiedział błędem; jego komunikat poniżej'] } as const;
+  const titles = { auth: ['Logowanie odrzucone', 'Sprawdź login i hasło. W Gmailu wymagane jest hasło aplikacji, nie hasło do konta; w Google Workspace dostęp IMAP musi być włączony przez administratora'],
+    network: ['Serwer nie odpowiada', 'Sprawdź nazwę serwera, port i zabezpieczenie oraz czy z maszyny bramki można nawiązać połączenie z serwerem poczty'],
+    folder: ['Folder nie istnieje', 'Wpisz nazwę folderu dokładnie tak, jak podaje ją serwer; kliknięcie nazwy na liście poniżej wpisuje ją do pola'],
+    other: ['Błąd połączenia', 'Serwer odpowiedział błędem; komunikat poniżej'] } as const;
   const [title, advice] = titles[c.kind];
   return `<div class="panel" style="max-width: 760px;">
     <div class="panel-h"><div class="lab">${esc(title)}</div></div>
@@ -266,11 +266,11 @@ function connectionPanel(c: MailConnection): string {
   </div>`;
 }
 
-const LEVEL_WORDS = { mail: 'numery z maila', sender: 'z listy nadawcy', fallback: 'ze stałej listy', none: 'brak' } as const;
+const LEVEL_WORDS = { mail: 'numery z wiadomości', sender: 'z listy nadawcy', fallback: 'ze stałej listy', none: 'brak' } as const;
 
 function previewPanel(p: MailInPreview): string {
   const rows: string[] = [];
-  rows.push(`<div>Nadawca</div><div>${p.senderAllowed ? '<span class="st"><span class="dot dot-ok"></span>Nadawca na liście</span>' : '<span class="st"><span class="dot dot-fail"></span>Nadawca spoza listy: mail zostałby pominięty</span>'}</div>`);
+  rows.push(`<div>Nadawca</div><div>${p.senderAllowed ? '<span class="st"><span class="dot dot-ok"></span>Nadawca na liście</span>' : '<span class="st"><span class="dot dot-fail"></span>Nadawca spoza listy: wiadomość zostałaby pominięta</span>'}</div>`);
   rows.push(`<div>Odbiorcy</div><div class="m">${p.recipients.length > 0 ? `${esc(p.recipients.join(', '))} <span class="dim">(${esc(LEVEL_WORDS[p.recipientsLevel])})</span>` : '<span class="fail">brak</span>'}${p.invalid.length > 0 ? `<div class="fail">pominięte nieprawidłowe: ${esc(p.invalid.join(', '))}</div>` : ''}</div>`);
   const fields = Object.entries(p.fields);
   if (fields.length > 0) rows.push(`<div>Wycinki</div><div class="m">${fields.map(([k, val]) => `${esc(k)}: ${val === '' ? '<span class="dim">pusto</span>' : esc(val)}`).join('<br>')}</div>`);

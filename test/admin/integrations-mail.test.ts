@@ -34,7 +34,7 @@ describe('formularz skrzynki', () => {
     expect((await get('/integracje/nowa')).body).toContain('rodzaj=mail_in');
     const choose = await get('/integracje/nowa?rodzaj=mail_in');
     expect(choose.body).toContain('Własny serwer');
-    expect(choose.body).toContain('Gdzie jest skrzynka?');
+    expect(choose.body).toContain('Gdzie znajduje się skrzynka?');
     const form = (await get('/integracje/nowa?rodzaj=mail_in&ustawienie=poczta-wlasny')).body;
     expect(form).toContain('Serwer IMAP');
     expect(form).toContain('Kto może wysyłać');
@@ -71,7 +71,7 @@ describe('formularz skrzynki', () => {
     const row = h.integrations.list()[0]!;
     h.mailIn.setFloor(row.id, 5, 7);
     const edit = await get(`/integracje/${row.id}/edytuj`);
-    expect(edit.body).toContain('hasło zapisane');
+    expect(edit.body).toContain('Hasło jest zapisane');
     expect(edit.body).not.toContain('TajneHaslo9');
     expect((await post(`/integracje/${row.id}/edytuj`, formBody({ password: '', name: 'Inna nazwa' }))).statusCode).toBe(302);
     expect(h.integrations.secrets(row.id)).toEqual({ imap_password: 'TajneHaslo9' });
@@ -115,6 +115,15 @@ describe('formularz skrzynki', () => {
     expect(res.body).toContain('Folder nie istnieje');
     expect(res.body).toContain('data-fill="#folder"');
     expect(res.body).toContain('data-value="INBOX"');
+  });
+
+  it('zmiana częstotliwości w edycji przestawia najbliższe sprawdzenie na teraz', async () => {
+    await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody() });
+    const row = h.integrations.list()[0]!;
+    const far = new Date(NOW.getTime() + 3_600_000);
+    h.mailIn.recordPoll(row.id, { ok: true, uidvalidity: 1, unseen: 0, at: NOW, nextPollAt: far });
+    await post(`/integracje/${row.id}/edytuj`, formBody({ password: '', intervalSec: '30' }));
+    expect(Date.parse(h.mailIn.state(row.id)!.nextPollAt)).toBeLessThan(far.getTime());
   });
 
   it('włączenie skrzynki przez formularz edycji ustawia próg od nowa', async () => {

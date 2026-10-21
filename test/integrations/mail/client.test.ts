@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MailboxError, errorKindOf, errorMessageOf, scrubError } from '../../../src/integrations/mail/client.ts';
+import { MailboxError, errorKindOf, errorMessageOf, scrubError, selectableFolders } from '../../../src/integrations/mail/client.ts';
 import { FakeMailbox, fakeConnect } from '../../helpers/fake-mailbox.ts';
 
 const settings = { host: 'h', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', password: 'p' };
@@ -8,6 +8,9 @@ describe('scrubError', () => {
   it('usuwa hasło i login z komunikatu serwera', () => {
     expect(scrubError('LOGIN failed for bramka@x.pl with Tajne123', ['Tajne123', 'bramka@x.pl'])).toBe('LOGIN failed for *** with ***');
   });
+  it('usuwa też każdy inny adres e-mail z komunikatu serwera', () => {
+    expect(scrubError('LOGIN x@y.pl failed; mail admin@host.pl or see https://help', ['pass', 'x@y.pl'])).toBe('LOGIN *** failed; mail *** or see https://help');
+  });
   it('pomija puste sekrety, ucina długie komunikaty i znaki sterujące', () => {
     expect(scrubError('x', ['', 'x'])).toBe('***');
     expect(scrubError(`a\r\nb${'c'.repeat(400)}`, []).length).toBeLessThanOrEqual(300);
@@ -15,7 +18,25 @@ describe('scrubError', () => {
   });
 });
 
+describe('selectableFolders', () => {
+  it('pomija foldery \\Noselect, których nie da się otworzyć', () => {
+    expect(selectableFolders([
+      { path: 'INBOX', flags: new Set() }, { path: '[Gmail]', flags: new Set(['\\Noselect', '\\HasChildren']) }, { path: '[Gmail]/Kosz', flags: new Set(['\\Trash']) },
+    ])).toEqual(['INBOX', '[Gmail]/Kosz']);
+  });
+});
+
 describe('errorMessageOf', () => {
+  it('tłumaczy typowe kody błędów sieci i certyfikatu na polski, z kodem w nawiasie', () => {
+    expect(errorMessageOf(Object.assign(new Error('self-signed certificate'), { code: 'DEPTH_ZERO_SELF_SIGNED_CERT' })))
+      .toBe('certyfikat serwera nie pochodzi od zaufanego urzędu (własny certyfikat); dla serwera w sieci wewnętrznej wyłącz sprawdzanie certyfikatu w trybie zaawansowanym (DEPTH_ZERO_SELF_SIGNED_CERT)');
+    expect(errorMessageOf(Object.assign(new Error('x'), { code: 'CERT_HAS_EXPIRED' }))).toBe('certyfikat serwera wygasł (CERT_HAS_EXPIRED)');
+    expect(errorMessageOf(Object.assign(new Error('x'), { code: 'ERR_TLS_CERT_ALTNAME_INVALID' }))).toBe('certyfikat serwera jest wystawiony na inną nazwę niż wpisana (ERR_TLS_CERT_ALTNAME_INVALID)');
+    expect(errorMessageOf(Object.assign(new Error('connect ECONNREFUSED 10.0.0.1:993'), { code: 'ECONNREFUSED' }))).toBe('serwer odrzucił połączenie na tym porcie (ECONNREFUSED)');
+    expect(errorMessageOf(Object.assign(new Error('x'), { code: 'ENOTFOUND' }))).toBe('nazwa serwera nie istnieje w DNS (ENOTFOUND)');
+    expect(errorMessageOf(Object.assign(new Error('x'), { code: 'ETIMEDOUT' }))).toBe('serwer nie odpowiada w zadanym czasie (ETIMEDOUT)');
+  });
+
   it('dokłada odpowiedź serwera do ogólnego komunikatu imapflow, a zwykły błąd zostawia bez zmian', () => {
     expect(errorMessageOf(Object.assign(new Error('Command failed'), { responseText: '[AUTHENTICATIONFAILED] Niepoprawny login albo hasło' })))
       .toBe('Command failed: [AUTHENTICATIONFAILED] Niepoprawny login albo hasło');

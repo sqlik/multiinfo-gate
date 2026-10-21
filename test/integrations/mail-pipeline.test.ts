@@ -65,7 +65,7 @@ describe('runMailIn', () => {
     expect(msg.body).toBe('Awaria\nSerwer padł');
     expect(msg.integrationId).toBe(integ.id);
     expect([out.recipients, out.invalid, out.parts]).toEqual([['48601000009'], [], 1]);
-    expect(events(integ.id)).toEqual([['sent', null]]);
+    expect(events(integ.id)).toEqual([['sent', 'temat „Awaria”']]);
   });
 
   it('warianty trybu prostego: tylko temat, tylko treść; pusta część pomijana', async () => {
@@ -78,7 +78,7 @@ describe('runMailIn', () => {
     const integ = make({});
     const out = await runMailIn(deps, integ, mail({ from: 'ktos@inna.pl' }), NOW);
     expect(out).toEqual({ kind: 'skipped', reason: 'sender_not_allowed' });
-    expect(events(integ.id)).toEqual([['skipped', 'nadawca spoza listy: ktos@inna.pl']]);
+    expect(events(integ.id)).toEqual([['skipped', 'nadawca spoza listy: ktos@inna.pl · temat „Awaria”']]);
     expect(await runMailIn(deps, make({ senders: [] }), mail(), NOW)).toEqual({ kind: 'skipped', reason: 'sender_not_allowed' });
   });
 
@@ -110,7 +110,7 @@ describe('runMailIn', () => {
     const integ = make({ recipientsFromMail: { enabled: true, where: 'subject' } });
     const a = await runMailIn(deps, integ, mail({ subject: '601000001, 4860100000: Awaria' }), NOW);
     expect(a.kind === 'sent' && [a.recipients, a.invalid]).toEqual([['48601000001'], ['4860100000']]);
-    expect(events(integ.id)[0]).toEqual(['sent', 'pominięto nieprawidłowe numery: 4860100000']);
+    expect(events(integ.id)[0]![1]).toContain('pominięto nieprawidłowe numery: 4860100000');
     const b = await runMailIn(deps, integ, mail({ messageId: '<m2@x>', subject: '4860100000: Awaria' }), NOW);
     expect(b.kind === 'error' && b.code).toBe('invalid_phone');
     expect(deps.messages.list({ limit: 10, offset: 0 })).toHaveLength(1);
@@ -158,6 +158,24 @@ describe('runMailIn', () => {
     const integ = make({ fields: [{ name: 'x', mode: 'regex', pattern: '(a+)+$' }] });
     const out = await runMailIn(deps, integ, mail({ textFull: `${'a'.repeat(40)}!` }), NOW);
     expect(out.kind === 'error' && out.code).toBe('template');
+  });
+
+  it('szablon liczy się dopiero po warunku: mail odrzucony warunkiem nie daje błędu szablonu', async () => {
+    const integ = make({ condition: { mode: 'builder', rules: [{ path: 'subject', op: 'contains', value: 'Awaria' }] }, text: { mode: 'liquid', template: '{{ subject | nieznany_filtr }}' } });
+    expect(await runMailIn(deps, integ, mail({ subject: 'Dzień dobry' }), NOW)).toEqual({ kind: 'skipped', reason: 'condition' });
+    const out = await runMailIn(deps, integ, mail({ subject: 'Awaria', messageId: '<m2@x>' }), NOW);
+    expect(out.kind === 'error' && out.code).toBe('template');
+  });
+
+  it('wpis dziennika ma nadawcę w polu źródła i temat w powodzie (spec 4.5)', async () => {
+    const integ = make({});
+    await runMailIn(deps, integ, mail({ subject: 'Awaria klimatyzacji' }), NOW);
+    await runMailIn(deps, integ, mail({ from: 'obcy@inna.test', subject: '', messageId: '<m2@x>' }), NOW);
+    const rows = deps.integrationEvents.list(integ.id, 10);
+    expect(rows.map((r) => [r.result, r.sourceIp, r.reason])).toEqual([
+      ['skipped', 'obcy@inna.test', 'nadawca spoza listy: obcy@inna.test · temat (bez tematu)'],
+      ['sent', 'tomek@przyklad.test', 'temat „Awaria klimatyzacji”'],
+    ]);
   });
 
   it('warunek na temacie odsiewa; burza dławi', async () => {

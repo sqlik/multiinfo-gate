@@ -48,7 +48,23 @@ export function errorKindOf(e: unknown): MailboxErrorKind {
 }
 
 /** Komunikat błędu z odpowiedzią serwera, gdy imapflow ją ma (jego własny tekst to zwykle ogólne „Command failed”). */
+const CODE_WORDS: Record<string, string> = {
+  DEPTH_ZERO_SELF_SIGNED_CERT: 'certyfikat serwera nie pochodzi od zaufanego urzędu (własny certyfikat); dla serwera w sieci wewnętrznej wyłącz sprawdzanie certyfikatu w trybie zaawansowanym',
+  SELF_SIGNED_CERT_IN_CHAIN: 'certyfikat serwera nie pochodzi od zaufanego urzędu (własny certyfikat); dla serwera w sieci wewnętrznej wyłącz sprawdzanie certyfikatu w trybie zaawansowanym',
+  UNABLE_TO_VERIFY_LEAF_SIGNATURE: 'certyfikat serwera nie pochodzi od zaufanego urzędu (własny certyfikat); dla serwera w sieci wewnętrznej wyłącz sprawdzanie certyfikatu w trybie zaawansowanym',
+  CERT_HAS_EXPIRED: 'certyfikat serwera wygasł',
+  ERR_TLS_CERT_ALTNAME_INVALID: 'certyfikat serwera jest wystawiony na inną nazwę niż wpisana',
+  ECONNREFUSED: 'serwer odrzucił połączenie na tym porcie',
+  ENOTFOUND: 'nazwa serwera nie istnieje w DNS',
+  EAI_AGAIN: 'nazwa serwera nie istnieje w DNS',
+  ETIMEDOUT: 'serwer nie odpowiada w zadanym czasie',
+  EHOSTUNREACH: 'serwer jest nieosiągalny z maszyny bramki',
+  ECONNRESET: 'serwer zerwał połączenie',
+};
+
 export function errorMessageOf(e: unknown): string {
+  const code = typeof e === 'object' && e !== null && typeof (e as { code?: unknown }).code === 'string' ? (e as { code: string }).code : '';
+  if (CODE_WORDS[code]) return `${CODE_WORDS[code]} (${code})`;
   const message = e instanceof Error ? e.message : String(e);
   const response = typeof e === 'object' && e !== null && typeof (e as { responseText?: unknown }).responseText === 'string' ? (e as { responseText: string }).responseText.trim() : '';
   return response === '' ? message : `${message}: ${response}`;
@@ -60,10 +76,17 @@ const ERROR_CHARS = 300;
 export function scrubError(message: string, secrets: string[]): string {
   let out = message.replace(/[\r\n\t]+/g, ' ').replace(/[\u0000-\u001f]/g, '');
   for (const s of secrets) if (s !== '') out = out.split(s).join('***');
+  // Spec 12: komunikat serwera bez żadnych adresów e-mail (login już zdjęty wyżej, inne adresy też nie są potrzebne).
+  out = out.replace(/[^\s@<>"'()]+@[^\s@<>"'()]+/g, '***');
   return out.length > ERROR_CHARS ? `${out.slice(0, ERROR_CHARS - 1)}…` : out;
 }
 
 const WATCHDOG_MS = 60_000;
+
+/** Foldery, które da się otworzyć: bez `\Noselect` (u Gmaila kontener `[Gmail]`). */
+export function selectableFolders(list: Array<{ path: string; flags: Set<string> }>): string[] {
+  return list.filter((m) => !m.flags.has('\\Noselect')).map((m) => m.path);
+}
 
 /** Połączenie z prawdziwym serwerem przez imapflow; po `connect()` sesja jest zalogowana. */
 export const imapConnect: MailboxConnect = async (settings, timeoutMs) => {
@@ -84,7 +107,7 @@ export const imapConnect: MailboxConnect = async (settings, timeoutMs) => {
   return {
     async folders() {
       const list = await client.list();
-      return list.map((m) => m.path);
+      return selectableFolders(list);
     },
     async open(folder) {
       const box = await client.mailboxOpen(folder);
