@@ -38,7 +38,7 @@ beforeEach(() => {
 });
 
 const mail = (over: Partial<ParsedMail> = {}): ParsedMail => ({
-  from: 'tomek@przyklad.test', fromName: 'Tomek', subject: 'Awaria', textFull: 'Serwer padł\n\nPozdrawiam\nTomek', date: NOW.toISOString(),
+  from: 'jan@przyklad.test', fromName: 'Jan', subject: 'Awaria', textFull: 'Serwer padł\n\nPozdrawiam\nJan', date: NOW.toISOString(),
   to: ['bramka@przyklad.test'], messageId: '<m1@przyklad.test>', authResults: [], auto: false, ...over,
 });
 let seq = 0;
@@ -145,13 +145,13 @@ describe('runMailIn', () => {
     });
     const out = await runMailIn(deps, integ, mail({ textFull: 'Status: ON BATTERY\nPozdrawiam\nError code: E042' }), NOW);
     expect(out.kind).toBe('sent');
-    expect(lastBody(out)).toBe('UPS ON BATTERY, kod E042, od tomek@przyklad.test');
+    expect(lastBody(out)).toBe('UPS ON BATTERY, kod E042, od jan@przyklad.test');
   });
 
   it('kontekst szablonu ma klucze z sekcji 8.4: from_name, text_full, date, to, message_id, now, integration.name, p', async () => {
     const integ = make({ text: { mode: 'liquid', template: '{{ from_name }}|{{ text_full | size }}|{{ date }}|{{ to[0] }}|{{ message_id }}|{{ now }}|{{ integration.name }}|{{ p.subject }}' } });
     const out = await runMailIn(deps, integ, mail(), NOW);
-    expect(lastBody(out)).toBe(`Tomek|29|${NOW.toISOString()}|bramka@przyklad.test|<m1@przyklad.test>|${NOW.toISOString()}|Skrzynka|Awaria`);
+    expect(lastBody(out)).toBe(`Jan|27|${NOW.toISOString()}|bramka@przyklad.test|<m1@przyklad.test>|${NOW.toISOString()}|Skrzynka|Awaria`);
   });
 
   it('błąd wycinka (wyrażenie ponad limit czasu) to error template', async () => {
@@ -174,7 +174,7 @@ describe('runMailIn', () => {
     const rows = deps.integrationEvents.list(integ.id, 10);
     expect(rows.map((r) => [r.result, r.sourceIp, r.reason])).toEqual([
       ['skipped', 'obcy@inna.test', 'nadawca spoza listy: obcy@inna.test · temat (bez tematu)'],
-      ['sent', 'tomek@przyklad.test', 'temat „Awaria klimatyzacji”'],
+      ['sent', 'jan@przyklad.test', 'temat „Awaria klimatyzacji”'],
     ]);
   });
 
@@ -187,7 +187,7 @@ describe('runMailIn', () => {
   });
 
   it('pusta treść po czyszczeniu to empty_text; za długa z „odrzuć” to too_many_parts', async () => {
-    const empty = await runMailIn(deps, make({ text: { mode: 'simple', variant: 'text' } }), mail({ textFull: 'Pozdrawiam\nTomek' }), NOW);
+    const empty = await runMailIn(deps, make({ text: { mode: 'simple', variant: 'text' } }), mail({ textFull: 'Pozdrawiam\nJan' }), NOW);
     expect(empty.kind === 'error' && empty.code).toBe('empty_text');
     const long = await runMailIn(deps, make({ overflow: 'reject' }), mail({ textFull: 'x'.repeat(400) }), NOW);
     expect(long.kind === 'error' && long.code).toBe('too_many_parts');
@@ -206,7 +206,7 @@ describe('runMailIn', () => {
     const integ = make({}, 1);
     await runMailIn(deps, integ, mail(), NOW);
     const payload = deps.integrationEvents.list(integ.id, 1)[0]!.payload!;
-    expect(JSON.parse(payload)).toEqual({ from: 'tomek@przyklad.test', subject: 'Awaria', text_full: 'Serwer padł\n\nPozdrawiam\nTomek', date: NOW.toISOString(), message_id: '<m1@przyklad.test>' });
+    expect(JSON.parse(payload)).toEqual({ from: 'jan@przyklad.test', subject: 'Awaria', text_full: 'Serwer padł\n\nPozdrawiam\nJan', date: NOW.toISOString(), message_id: '<m1@przyklad.test>' });
     expect(payload).not.toContain('imap_password');
     const bez = make({}, 0);
     await runMailIn(deps, bez, mail({ messageId: '<m2@x>' }), NOW);

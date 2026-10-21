@@ -46,13 +46,13 @@ describe('mail_in', () => {
     const base = defaultMailInConfig();
     expect(() => parseConfig('mail_in', { ...base, intervalSec: 45 })).toThrow();
     expect(() => parseConfig('mail_in', { ...base, imap: { ...base.imap, port: 70000 } })).toThrow();
-    expect(() => parseConfig('mail_in', { ...base, senders: [{ pattern: 'sqlik.com', recipients: [] }] })).toThrow();
+    expect(() => parseConfig('mail_in', { ...base, senders: [{ pattern: 'przyklad.pl', recipients: [] }] })).toThrow();
   });
   it('przyjmuje adres oraz domenę nadawcy, wycinki obu rodzajów i przeniesienie do folderu', () => {
     const base = defaultMailInConfig();
     const c = parseConfig('mail_in', {
       ...base,
-      senders: [{ pattern: 'tomek@plus.pl', recipients: ['48601000001'] }, { pattern: '@sqlik.com', recipients: [] }],
+      senders: [{ pattern: 'jan@przyklad.pl', recipients: ['48601000001'] }, { pattern: '@przyklad.pl', recipients: [] }],
       fields: [{ name: 'kod', mode: 'between', after: 'Error code:' }, { name: 'stan', mode: 'regex', pattern: 'Status: (\\w+)', flags: 'i' }],
       after: { action: 'move', folder: 'Przetworzone' },
     });
