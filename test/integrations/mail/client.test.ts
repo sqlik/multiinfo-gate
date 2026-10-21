@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MailboxError, errorKindOf, scrubError } from '../../../src/integrations/mail/client.ts';
+import { MailboxError, errorKindOf, errorMessageOf, scrubError } from '../../../src/integrations/mail/client.ts';
 import { FakeMailbox, fakeConnect } from '../../helpers/fake-mailbox.ts';
 
 const settings = { host: 'h', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', password: 'p' };
@@ -12,6 +12,16 @@ describe('scrubError', () => {
     expect(scrubError('x', ['', 'x'])).toBe('***');
     expect(scrubError(`a\r\nb${'c'.repeat(400)}`, []).length).toBeLessThanOrEqual(300);
     expect(scrubError('a\r\nb', [])).toBe('a b');
+  });
+});
+
+describe('errorMessageOf', () => {
+  it('dokłada odpowiedź serwera do ogólnego komunikatu imapflow, a zwykły błąd zostawia bez zmian', () => {
+    expect(errorMessageOf(Object.assign(new Error('Command failed'), { responseText: '[AUTHENTICATIONFAILED] Niepoprawny login albo hasło' })))
+      .toBe('Command failed: [AUTHENTICATIONFAILED] Niepoprawny login albo hasło');
+    expect(errorMessageOf(Object.assign(new Error('x'), { responseText: '' }))).toBe('x');
+    expect(errorMessageOf(new Error('connect ECONNREFUSED'))).toBe('connect ECONNREFUSED');
+    expect(errorMessageOf('tekst')).toBe('tekst');
   });
 });
 

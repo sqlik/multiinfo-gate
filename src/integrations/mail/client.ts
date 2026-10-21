@@ -47,6 +47,13 @@ export function errorKindOf(e: unknown): MailboxErrorKind {
   return 'other';
 }
 
+/** Komunikat błędu z odpowiedzią serwera, gdy imapflow ją ma (jego własny tekst to zwykle ogólne „Command failed”). */
+export function errorMessageOf(e: unknown): string {
+  const message = e instanceof Error ? e.message : String(e);
+  const response = typeof e === 'object' && e !== null && typeof (e as { responseText?: unknown }).responseText === 'string' ? (e as { responseText: string }).responseText.trim() : '';
+  return response === '' ? message : `${message}: ${response}`;
+}
+
 const ERROR_CHARS = 300;
 
 /** Komunikat błędu bez sekretów (hasło, login), bez znaków sterujących, ucięty do 300 znaków. */

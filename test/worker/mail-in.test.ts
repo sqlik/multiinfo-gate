@@ -202,7 +202,7 @@ describe('MailInPoller: awarie', () => {
     expect(s1.errorKind).toBe('auth');
     expect(s1.error).toBe('LOGIN failed: Authentication failed.');
     expect(Date.parse(s1.nextPollAt) - NOW.getTime()).toBe(AUTH_RETRY_MS);
-    expect(notified).toEqual([{ event: 'mailbox_failure', subjectKey: `mailbox:${integ.id}`, summary: `Skrzynka Skrzynka 1: logowanie odrzucone od 10:00 (LOGIN failed: Authentication failed.)`, dedupKey: `mailbox:${integ.id}:${NOW.toISOString()}` }]);
+    expect(notified).toEqual([{ event: 'mailbox_failure', subjectKey: `mailbox:${integ.id}`, summary: `Skrzynka Skrzynka 1: logowanie odrzucone od 12:00 (LOGIN failed: Authentication failed.)`, dedupKey: `mailbox:${integ.id}:${NOW.toISOString()}` }]);
     expect(s1.notifiedAt).toBe(NOW.toISOString());
     await poller.tick(at(AUTH_RETRY_MS));
     expect(notified).toHaveLength(1);
@@ -233,7 +233,7 @@ describe('MailInPoller: awarie', () => {
       t += delay;
     }
     expect(notified).toHaveLength(1);
-    expect(notified[0]!.summary).toBe(`Skrzynka Skrzynka 1: serwer nie odpowiada od 10:00 (connect ECONNREFUSED 203.0.113.9:993)`);
+    expect(notified[0]!.summary).toBe(`Skrzynka Skrzynka 1: serwer nie odpowiada od 12:00 (connect ECONNREFUSED 203.0.113.9:993)`);
     box.failConnect = null;
     await poller.tick(at(t));
     expect(mailIn.state(integ.id)?.error).toBeNull();
