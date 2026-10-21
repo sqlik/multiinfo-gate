@@ -8,15 +8,17 @@ export function domainOf(address: string): string {
 const within = (candidate: string, domain: string): boolean => candidate === domain || candidate.endsWith(`.${domain}`);
 
 /**
- * Sprawdzenie SPF/DKIM po nagłówkach `Authentication-Results` dopisanych przez serwer skrzynki.
+ * Sprawdzenie SPF/DKIM po nagłówku `Authentication-Results` dopisanym przez serwer skrzynki.
  * Przepuszcza `dkim=pass` z `header.d` równym domenie `From` albo jej domenie nadrzędnej
- * oraz `spf=pass` z `smtp.mailfrom` w domenie `From`. Liczy się każdy nagłówek; bramka nie
- * sprawdza, który serwer go dopisał (świadome uproszczenie ze specyfikacji).
+ * oraz `spf=pass` z `smtp.mailfrom` w domenie `From`. Liczy się wyłącznie pierwszy nagłówek
+ * od góry: serwer odbierający dopisuje swój nad wszystkimi, które przyszły z mailem, więc
+ * nagłówek podrobiony przez nadawcę ląduje niżej i nie jest czytany (RFC 8601, sekcja 5).
+ * Bramka nie zna nazwy serwera (authserv-id), dlatego nie porównuje jej z treścią nagłówka.
  */
 export function authResultsPass(headers: string[], fromDomain: string): boolean {
   const domain = fromDomain.trim().toLowerCase();
   if (domain === '') return false;
-  for (const header of headers) {
+  for (const header of headers.slice(0, 1)) {
     const h = header.toLowerCase();
     for (const m of h.matchAll(/dkim=pass\b[^;]*?header\.d=([^\s;()]+)/g)) {
       const d = m[1]!;

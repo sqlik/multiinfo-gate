@@ -545,9 +545,11 @@ liter nie ma znaczenia. Gdy do adresu pasuje zarówno pełny adres, jak i domena
 adres.
 
 Przełącznik **Wymagaj potwierdzenia nadawcy przez serwer (SPF/DKIM)** każe bramce sprawdzić,
-czy serwer skrzynki potwierdził nadawcę. Serwer dopisuje do maila nagłówek z wynikiem
-sprawdzenia SPF i DKIM. Bramka przepuszcza mail, gdy nagłówek mówi `dkim=pass` albo `spf=pass`
-dla domeny nadawcy. Bez tego ktoś, kto zna adres z listy, może go podrobić w nagłówku `From`.
+czy serwer skrzynki potwierdził nadawcę. Serwer dopisuje na początku maila nagłówek z wynikiem
+sprawdzenia SPF i DKIM. Bramka czyta tylko ten pierwszy nagłówek od góry i przepuszcza mail,
+gdy mówi on `dkim=pass` albo `spf=pass` dla domeny nadawcy. Nagłówek dopisany przez samego
+nadawcę ląduje niżej i nie liczy się. Bez tego przełącznika ktoś, kto zna adres z listy, może
+go podrobić w nagłówku `From`.
 Przełącznik ma sens u dostawców publicznych: Gmail, home.pl, OVH. Serwery wewnętrzne zwykle
 tych nagłówków nie dopisują i wtedy każdy mail zostanie odrzucony. Domyślnie wyłączony.
 

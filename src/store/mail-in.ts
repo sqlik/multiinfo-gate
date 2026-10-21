@@ -136,6 +136,14 @@ export class MailInRepo {
       .run(integrationId, key.messageId, key.uidvalidity, key.uid, at.toISOString(), outcome);
   }
 
+  /**
+   * Mail od nadawcy spoza listy nie może zająć cudzego Message-ID: para UID zostaje (ten egzemplarz nie
+   * wraca), ale sam identyfikator przestaje liczyć się jako przetworzony, żeby obcy nie wyciszył alarmu.
+   */
+  forgetMessageId(integrationId: number, key: SeenKey): void {
+    this.db.prepare('UPDATE mail_in_seen SET message_id = NULL WHERE integration_id = ? AND uidvalidity = ? AND uid = ?').run(integrationId, key.uidvalidity, key.uid);
+  }
+
   /** Wynik po przetworzeniu: wiersz powstaje przed wysyłką jako `skipped`, tu dostaje właściwy wynik. */
   setOutcome(integrationId: number, key: SeenKey, outcome: SeenOutcome): void {
     this.db.prepare('UPDATE mail_in_seen SET outcome = ? WHERE integration_id = ? AND uidvalidity = ? AND uid = ?').run(outcome, integrationId, key.uidvalidity, key.uid);

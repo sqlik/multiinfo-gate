@@ -110,6 +110,13 @@ describe('MailInRepo: przetworzone maile', () => {
     expect(repo.seen(id, { messageId: '<b@x>', uidvalidity: 7, uid: 11 })).toBe(false);
   });
 
+  it('forgetMessageId zostawia parę UID, ale Message-ID przestaje liczyć się jako przetworzony', () => {
+    repo.remember(id, { messageId: '<a@x>', uidvalidity: 7, uid: 10 }, 'skipped', NOW);
+    repo.forgetMessageId(id, { messageId: '<a@x>', uidvalidity: 7, uid: 10 });
+    expect(repo.seen(id, { messageId: '<a@x>', uidvalidity: 8, uid: 1 })).toBe(false);
+    expect(repo.seen(id, { messageId: null, uidvalidity: 7, uid: 10 })).toBe(true);
+  });
+
   it('setOutcome zmienia wynik zapamiętanego maila', () => {
     repo.remember(id, { messageId: '<a@x>', uidvalidity: 7, uid: 10 }, 'skipped', NOW);
     repo.setOutcome(id, { messageId: '<a@x>', uidvalidity: 7, uid: 10 }, 'sent');

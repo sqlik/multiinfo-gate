@@ -208,6 +208,7 @@ export class MailInPoller {
       const mail = await parseMail(await session.source(meta.uid), now);
       const outcome = await runMailIn(this.deps, integration, mail, now);
       mailIn.setOutcome(integration.id, key, seenOutcomeOf(outcome));
+      if (outcome.kind === 'skipped' && outcome.reason === 'sender_not_allowed') mailIn.forgetMessageId(integration.id, key);
       this.notifyOutcome(integration, outcome, now);
       actionError = (await this.afterAction(session, config, meta.uid)) ?? actionError;
       this.reply(integration, outcome, mail, now);
