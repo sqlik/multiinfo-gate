@@ -75,7 +75,7 @@ export function replyFor(outcome: MailInOutcome, mail: ParsedMail, config: MailI
     default:
       return null;
   }
-  const subject = /^re:/i.test(mail.subject.trim()) ? mail.subject.trim() : `Re: ${mail.subject}`;
+  const subject = /^re:/i.test(mail.subject.trim()) ? mail.subject.trim() : `Re: ${mail.subject.trim() === '' ? '(bez tematu)' : mail.subject}`;
   return {
     subject, text, to: [mail.from],
     ...(mail.messageId ? { inReplyTo: mail.messageId, references: mail.messageId } : {}),
@@ -113,6 +113,7 @@ export class MailInPoller {
   constructor(private readonly deps: MailInDeps, private readonly opts: { concurrency?: number } = {}) {}
 
   async tick(now: Date): Promise<void> {
+    const startedAt = Date.now();
     this.deps.mailIn.ensureAll(now);
     const queue = this.deps.mailIn.due(now).filter((id) => !this.active.has(id));
     // Limit liczy trwające odpytania z poprzednich tur: nowa tura dostaje tylko wolne miejsca.
@@ -125,7 +126,8 @@ export class MailInPoller {
         if (!row || !isMailIn(row) || row.enabled === 0) continue;
         this.active.add(id);
         try {
-          await this.poll(row, now);
+          // Kolejne skrzynki w torze dostają bieżący czas, żeby harmonogram nie dryfował przy krótkich odpytaniach.
+          await this.poll(row, new Date(now.getTime() + Math.floor((Date.now() - startedAt) / 1000) * 1000));
         } finally {
           this.active.delete(id);
         }
@@ -206,19 +208,41 @@ export class MailInPoller {
       if (mailIn.seen(integration.id, key)) {
         // Ktoś celowo oznaczył mail jako nieprzeczytany albo folder odtworzono: bez działania na mailu.
         mailIn.remember(integration.id, key, 'skipped', now);
-        note('skipped', 'już przetworzony');
+        note('skipped', 'wiadomość już przetworzona');
         continue;
       }
       if (meta.size > MAX_MAIL_BYTES) {
         mailIn.remember(integration.id, key, 'skipped', now);
-        note('skipped', `zbyt duży (${(meta.size / (1024 * 1024)).toFixed(1)} MB)`);
+        note('skipped', `wiadomość zbyt duża (${(meta.size / (1024 * 1024)).toFixed(1)} MB)`);
         actionError = (await this.afterAction(session, config, meta.uid)) ?? actionError;
         continue;
       }
       // Zapis przed pobraniem i wysyłką: awaria w połowie kosztuje jeden niedosłany SMS, nie dubel.
       mailIn.remember(integration.id, key, 'skipped', now);
+      // Jeden zepsuty mail nie zatrzymuje partii ani nie znika po cichu: wpis błędu, wynik failed, działanie jak dla odrzuconego.
+      const failMail = async (e: unknown, label: string, forgetMessageId: boolean): Promise<void> => {
+        if (e instanceof MailboxError && e.kind !== 'other') throw e;
+        mailIn.setOutcome(integration.id, key, 'failed');
+        // Nadawca maila, którego nie dało się odczytać, nie został sprawdzony: jego Message-ID nie może blokować późniejszego prawdziwego maila.
+        // Po sprawdzeniu nadawcy identyfikator zostaje, bo SMS mógł już pójść i powtórka tego maila nie może dać dubla.
+        if (forgetMessageId) mailIn.forgetMessageId(integration.id, key);
+        const message = scrubError(errorMessageOf(e), [config.imap.user]);
+        this.deps.integrationEvents.record({ integrationId: integration.id, at: now, result: 'error', reason: `${label}: ${message}`, logLimit: config.eventLogLimit });
+        try {
+          this.deps.notifier?.notify('integration_error', `integration:${integration.id}`, `${integration.name}: ${label}: ${message}`, now);
+        } catch {
+          // Powiadomienie to dodatek; jego awaria nie może zatrzymać partii.
+        }
+        actionError = (await this.afterAction(session, config, meta.uid)) ?? actionError;
+      };
+      let mail: ParsedMail;
       try {
-        const mail = await parseMail(await session.source(meta.uid), now);
+        mail = await parseMail(await session.source(meta.uid), now);
+      } catch (e) {
+        await failMail(e, 'nieczytelna wiadomość', true);
+        continue;
+      }
+      try {
         const outcome = await runMailIn(this.deps, integration, mail, now);
         mailIn.setOutcome(integration.id, key, seenOutcomeOf(outcome));
         // Mail odrzucony przed potwierdzeniem nadawcy (spoza listy albo bez SPF/DKIM) nie zajmuje cudzego Message-ID.
@@ -227,15 +251,7 @@ export class MailInPoller {
         actionError = (await this.afterAction(session, config, meta.uid)) ?? actionError;
         this.reply(integration, outcome, mail, now);
       } catch (e) {
-        // Jeden nieczytelny mail nie zatrzymuje partii ani nie znika po cichu: wpis błędu, wynik failed, działanie jak dla odrzuconego.
-        if (e instanceof MailboxError && e.kind !== 'other') throw e;
-        mailIn.setOutcome(integration.id, key, 'failed');
-        // Nadawca nieczytelnego maila nie został sprawdzony, więc jego Message-ID nie może blokować późniejszego prawdziwego maila.
-        mailIn.forgetMessageId(integration.id, key);
-        const message = scrubError(errorMessageOf(e), [config.imap.user]);
-        this.deps.integrationEvents.record({ integrationId: integration.id, at: now, result: 'error', reason: `nieczytelny mail: ${message}`, logLimit: config.eventLogLimit });
-        this.deps.notifier?.notify('integration_error', `integration:${integration.id}`, `${integration.name}: nieczytelny mail: ${message}`, now);
-        actionError = (await this.afterAction(session, config, meta.uid)) ?? actionError;
+        await failMail(e, 'błąd przetwarzania wiadomości', false);
       }
     }
     // Próg przesuwa się na najwyższy obejrzany UID: mail oznaczony ponownie jako nieprzeczytany

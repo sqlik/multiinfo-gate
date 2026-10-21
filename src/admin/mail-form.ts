@@ -167,8 +167,8 @@ export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine
   const fallback = lines(v.toFallback);
   if (fallback.length > 50) return fail('Odbiorcy: najwyżej 50 numerów.');
   const cutFrom = lines(v.cutFrom);
-  if (cutFrom.length > 10) return fail('Ucinaj od tekstu: najwyżej 10 fraz.');
-  if (cutFrom.some((c) => c.length > 200)) return fail('Ucinaj od tekstu: fraza do 200 znaków.');
+  if (cutFrom.length > 10) return fail('Pomijaj treść od frazy: najwyżej 10 fraz.');
+  if (cutFrom.some((c) => c.length > 200)) return fail('Pomijaj treść od frazy: fraza do 200 znaków.');
 
   const fields: MailField[] = [];
   for (const f of v.fields) {
@@ -196,7 +196,7 @@ export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine
 
   let after: MailInConfig['after'];
   if (v.afterAction === 'move') {
-    if (v.afterFolder === '') return fail('Podaj folder, do którego przenosić przetworzone maile.');
+    if (v.afterFolder === '') return fail('Podaj folder, do którego przenosić przetworzone wiadomości.');
     if (v.afterFolder.length > 200) return fail('Folder docelowy: nazwa do 200 znaków.');
     after = { action: 'move', folder: v.afterFolder };
   } else {

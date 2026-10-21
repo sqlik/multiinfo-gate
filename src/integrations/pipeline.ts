@@ -408,7 +408,7 @@ export function renderMailText(engine: TemplateEngine, config: MailInConfig, con
  */
 function prepareMail(engine: TemplateEngine, config: MailInConfig, mail: ParsedMail, sender: { recipients: string[] } | null, countryCode: string, integration: { name: string }, now: Date): {
   context: Record<string, unknown>; cleaned: string; fields: Record<string, string>;
-  level: RecipientsLevel; raw: string[]; recipients: string[]; invalid: string[]; text: string;
+  level: RecipientsLevel; raw: string[]; recipients: string[]; invalid: string[]; render: () => string;
 } {
   const cleaned = cleanText(mail.textFull, config.clean.cutFrom);
   const pulled = config.recipientsFromMail.enabled ? pullRecipients(mail.subject, cleaned, config.recipientsFromMail.where) : { numbers: [], subject: mail.subject, text: cleaned };
@@ -428,7 +428,8 @@ function prepareMail(engine: TemplateEngine, config: MailInConfig, mail: ParsedM
       invalid.push(r.trim());
     }
   }
-  return { context, cleaned, fields, level, raw, recipients: [...new Set(recipients)], invalid, text: renderMailText(engine, config, context) };
+  // Szablon liczy się dopiero po warunku i burzy (spec 3.2), żeby mail odrzucony warunkiem nie dawał błędu szablonu.
+  return { context, cleaned, fields, level, raw, recipients: [...new Set(recipients)], invalid, render: () => renderMailText(engine, config, context) };
 }
 
 /**
@@ -442,8 +443,13 @@ export async function runMailIn(deps: PipelineDeps, integration: MailInIntegrati
   const stored = integration.storePayloads === 1
     ? JSON.stringify({ from: mail.from, subject: mail.subject, text_full: mail.textFull, date: mail.date, message_id: mail.messageId })
     : null;
+  // Spec 4.5: podsumowanie wpisu to nadawca (w polu źródła) oraz temat ucięty do 80 znaków, dopisany po właściwym powodzie.
+  const subject = mail.subject.trim() === '' ? 'temat (bez tematu)' : `temat „${mail.subject.trim().slice(0, 80)}”`;
   const note: Noter = (result, extra = {}) =>
-    deps.integrationEvents.record({ integrationId: integration.id, at: now, result, payload: stored, logLimit: config.eventLogLimit, ...extra });
+    deps.integrationEvents.record({
+      integrationId: integration.id, at: now, result, payload: stored, logLimit: config.eventLogLimit, ...(mail.from ? { sourceIp: mail.from } : {}), ...extra,
+      reason: [extra.reason, subject].filter((r) => r !== undefined && r !== '').join(' · '),
+    });
   const fail = (code: InboundErrorCode, detail: string): MailInOutcome => {
     note('error', { reason: detail });
     log.warn('integracja.blad', { integrationId: integration.id, code });
@@ -481,18 +487,25 @@ export async function runMailIn(deps: PipelineDeps, integration: MailInIntegrati
   if (guard.kind === 'skipped') return { kind: 'skipped', reason: 'condition' };
   if (guard.kind === 'throttled') return guard;
 
-  if (prepared.level === 'none') return fail('no_recipient', 'Brak numeru odbiorcy: mail go nie podaje, nadawca nie ma przypisanych numerów, a stała lista jest pusta.');
+  if (prepared.level === 'none') return fail('no_recipient', 'Brak numeru odbiorcy: wiadomość go nie zawiera, nadawca nie ma przypisanych numerów, a stała lista jest pusta.');
   if (prepared.recipients.length === 0) {
     return fail('invalid_phone', prepared.level === 'mail'
-      ? `Wszystkie numery podane w mailu są nieprawidłowe: ${prepared.invalid.join(', ')}.`
+      ? `Wszystkie numery podane w wiadomości są nieprawidłowe: ${prepared.invalid.join(', ')}.`
       : `Numer odbiorcy jest nieprawidłowy: ${prepared.invalid.join(', ')}.`);
   }
   // Na poziomie nadawcy i stałej listy numer wpisał administrator: pomyłka nie może zapaść w ciszę.
   if (prepared.level !== 'mail' && prepared.invalid.length > 0) return fail('invalid_phone', `Numer odbiorcy jest nieprawidłowy: ${prepared.invalid.join(', ')}.`);
-  if (prepared.text === '') return fail('empty_text', 'Treść SMS-a jest pusta: mail po usunięciu podpisu i cytatów nic nie zawiera.');
+  let text: string;
+  try {
+    text = prepared.render();
+  } catch (e) {
+    if (e instanceof TemplateError) return fail('template', e.message);
+    throw e;
+  }
+  if (text === '') return fail('empty_text', 'Treść SMS-a jest pusta: wiadomość po usunięciu podpisu i cytatów nie zawiera treści.');
 
   const sentReason = prepared.invalid.length > 0 ? `pominięto nieprawidłowe numery: ${prepared.invalid.join(', ')}` : undefined;
-  const sent = dispatch(deps, integration, key, prepared.text, prepared.recipients, config, note, now, sentReason ? { sentReason } : {});
+  const sent = dispatch(deps, integration, key, text, prepared.recipients, config, note, now, sentReason ? { sentReason } : {});
   if (sent.kind === 'error') {
     log.warn('integracja.blad', { integrationId: integration.id, code: sent.code });
     return sent;
@@ -505,10 +518,11 @@ export function previewMailIn(engine: TemplateEngine, config: MailInConfig, mail
   const sender = matchSender(mail.from, config.senders);
   try {
     const p = prepareMail(engine, config, mail, sender, countryCode, { name: 'podgląd' }, now);
-    const fitted = p.text === '' ? { text: '', parts: 0 } : fitToParts(p.text, config.overflow === 'truncate' ? config.maxParts : 9);
+    const text = p.render();
+    const fitted = text === '' ? { text: '', parts: 0 } : fitToParts(text, config.overflow === 'truncate' ? config.maxParts : 9);
     return {
       senderAllowed: sender !== null, recipients: p.recipients, recipientsLevel: p.level, invalid: p.invalid, fields: p.fields, cleaned: p.cleaned,
-      text: fitted.text, parts: fitted.parts, error: p.text === '' ? 'Treść SMS-a jest pusta.' : null,
+      text: fitted.text, parts: fitted.parts, error: text === '' ? 'Treść SMS-a jest pusta.' : null,
     };
   } catch (e) {
     return { senderAllowed: sender !== null, recipients: [], recipientsLevel: 'none', invalid: [], fields: {}, cleaned: '', text: '', parts: 0, error: e instanceof Error ? e.message : String(e) };

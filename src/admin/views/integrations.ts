@@ -141,7 +141,7 @@ export function integrationsPage(views: IntegrationView[], filter: IntegrationsF
   return `<div class="head">
     <div>
       <h1 class="h1">Integracje</h1>
-      <p class="sub">Aplikacje i skrzynki pocztowe, z których idą SMS-y, oraz aplikacje, do których trafiają odebrane SMS-y i statusy</p>
+      <p class="sub">Aplikacje i skrzynki pocztowe, z których pochodzą SMS-y, oraz aplikacje, do których trafiają odebrane SMS-y i statusy</p>
     </div>
     <a class="btn btn-p" href="/integracje/nowa">Dodaj integrację</a>
   </div>
@@ -199,7 +199,7 @@ export function chooseKindPage(): string {
       <a class="tile" href="/integracje/nowa?rodzaj=mail_in">
         <div class="lab">Z poczty</div>
         <div style="font-size: 15px; font-weight: 600; margin-top: 6px;">Mail trafia na telefon jako SMS</div>
-        <div class="d">Bramka czyta skrzynkę IMAP i wysyła SMS-y z maili od dozwolonych nadawców, np. alarm z UPS-a, raport z NAS-a, wiadomość pracownika</div>
+        <div class="d">Bramka odczytuje skrzynkę IMAP i wysyła SMS-y na podstawie wiadomości od dozwolonych nadawców: alarm z UPS-a, raport z NAS-a, wiadomość pracownika</div>
       </a>
     </div>
   </div>`;
@@ -215,8 +215,8 @@ export function choosePresetPage(kind: IntegrationKind, presets: Preset[]): stri
   return `<div class="head">
     <div>
       <div class="crumb"><a href="/integracje">Integracje</a> / <a href="/integracje/nowa">nowa</a> / ${esc(kindLabel(kind))}</div>
-      <h1 class="h1">${mail ? 'Gdzie jest skrzynka?' : 'Z jaką aplikacją?'}</h1>
-      <p class="sub">${mail ? 'Ustawienie wypełnia serwer i port; hasło i nadawców podasz w formularzu' : 'Ustawienie wypełnia formularz; wszystko da się potem zmienić'}</p>
+      <h1 class="h1">${mail ? 'Gdzie znajduje się skrzynka?' : 'Z jaką aplikacją?'}</h1>
+      <p class="sub">${mail ? 'Ustawienie uzupełnia serwer i port; hasło i listę nadawców podaje się w formularzu' : 'Ustawienie wypełnia formularz; wszystko da się potem zmienić'}</p>
     </div>
   </div>
   <div class="scroll">
@@ -863,12 +863,12 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     const sec = cfg.imap.security === 'tls' ? 'TLS' : cfg.imap.security === 'starttls' ? 'STARTTLS' : 'bez szyfrowania';
     rows.push(kvRow('Skrzynka', `${esc(cfg.imap.user)} · ${esc(cfg.imap.host)}:${esc(cfg.imap.port)} ${esc(sec)}${cfg.imap.verifyCert ? '' : ' · bez sprawdzania certyfikatu'} · folder ${esc(cfg.folder)} · co ${esc(intervalWords(cfg.intervalSec))}`, true));
     rows.push(kvRow('Nadawcy', cfg.senders.length === 0 ? '<span class="fail">pusta lista: żaden mail nie przejdzie</span>' : esc(cfg.senders.map((s) => s.pattern).join(', ')) + (cfg.requireAuthResults ? ' · wymagane SPF/DKIM' : '')));
-    const levels = [cfg.recipientsFromMail.enabled ? `numery z maila (${cfg.recipientsFromMail.where === 'subject' ? 'temat' : 'pierwsza linia'})` : '', cfg.senders.some((s) => s.recipients.length > 0) ? 'numery nadawców' : '', cfg.to.fallback.length > 0 ? `stała lista: ${cfg.to.fallback.join(', ')}` : ''];
+    const levels = [cfg.recipientsFromMail.enabled ? `numery z wiadomości (${cfg.recipientsFromMail.where === 'subject' ? 'temat' : 'pierwsza linia'})` : '', cfg.senders.some((s) => s.recipients.length > 0) ? 'numery nadawców' : '', cfg.to.fallback.length > 0 ? `stała lista: ${cfg.to.fallback.join(', ')}` : ''];
     rows.push(kvRow('Odbiorcy', dimOr(levels.filter((x) => x !== '').join(' · '))));
     const text = cfg.text.mode === 'liquid' ? 'szablon Liquid' : cfg.text.variant === 'subject_text' ? 'temat i treść' : cfg.text.variant === 'subject' ? 'tylko temat' : 'tylko treść';
     rows.push(kvRow('Treść', `${esc(text)} · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}${cfg.fields.length > 0 ? ` · wycinki: ${esc(cfg.fields.map((f) => f.name).join(', '))}` : ''}`));
     const after = cfg.after.action === 'keep' ? 'zostaje w skrzynce, oznaczony jako przeczytany' : cfg.after.action === 'delete' ? 'usunięcie' : `przeniesienie do folderu ${cfg.after.folder}`;
-    rows.push(kvRow('Po przetworzeniu', `${esc(after)}${cfg.reply.enabled ? ' · odpowiedź mailem do nadawcy' : ''}`));
+    rows.push(kvRow('Po przetworzeniu', `${esc(after)}${cfg.reply.enabled ? ' · odpowiedź e-mail do nadawcy' : ''}`));
   } else {
     const cfg = c as OutboundConfig;
     rows.push(kvRow('Adres docelowy', `${esc(cfg.method)} ${esc(cfg.url)}`, true));
@@ -977,7 +977,7 @@ export function integrationDetailPage(d: IntegrationDetail): string {
           <th style="width: 120px;">Wynik</th>
           <th>Powód</th>
           <th style="width: 180px;">Powiązanie</th>
-          <th style="width: 130px;">Adres źródłowy</th>
+          <th style="width: 130px;">${row.kind === 'mail_in' ? 'Nadawca' : 'Adres źródłowy'}</th>
           <th style="width: 76px;"></th>
         </tr>
         ${events}

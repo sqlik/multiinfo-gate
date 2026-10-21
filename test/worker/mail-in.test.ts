@@ -119,7 +119,7 @@ describe('MailInPoller: próg i zaległe', () => {
     mailIn.setFloor(integ.id, 1, 7);
     await poller.tick(at(180_000));
     expect(smsCount()).toBe(1);
-    expect(events(integ.id)[0]).toEqual(['skipped', 'już przetworzony']);
+    expect(events(integ.id)[0]).toEqual(['skipped', 'wiadomość już przetworzona']);
     expect(box.messages('INBOX').find((m) => m.uid === 2)?.seen).toBe(false);
     // Odtworzenie folderu u dostawcy: nowa UIDVALIDITY unieważnia UID-y, próg od nowa, Message-ID dalej chroni.
     box.resetUidValidity(8);
@@ -128,7 +128,7 @@ describe('MailInPoller: próg i zaległe', () => {
     box.add({ uid: 9, seen: false, source: eml('tomek@przyklad.test', 'Nowe', 'y', '<2@x>') });
     await poller.tick(at(300_000));
     expect(smsCount()).toBe(1);
-    expect(events(integ.id)[0]).toEqual(['skipped', 'już przetworzony']);
+    expect(events(integ.id)[0]).toEqual(['skipped', 'wiadomość już przetworzona']);
   });
 
   it('nadawca spoza listy nie zatruwa deduplikacji: późniejszy mail z listy z tym samym Message-ID idzie normalnie', async () => {
@@ -150,7 +150,7 @@ describe('MailInPoller: próg i zaległe', () => {
     box.add({ uid: 2, seen: false, source: eml('ups@przyklad.test', 'Podszycie', 'x', '<ups-18@ups.local>') });
     await poller.tick(at(60_000));
     expect(smsCount()).toBe(0);
-    expect(events(integ.id)[0]).toEqual(['skipped', 'brak potwierdzenia SPF/DKIM od serwera']);
+    expect(events(integ.id)[0]).toEqual(['skipped', 'brak potwierdzenia SPF/DKIM od serwera · temat „Podszycie”']);
     const auth = 'Authentication-Results: mx.przyklad.test; dkim=pass header.d=przyklad.test\r\n';
     box.add({ uid: 3, seen: false, source: eml('ups@przyklad.test', 'Alarm', 'ON BATTERY', '<ups-18@ups.local>').replace('From:', `${auth}From:`) });
     await poller.tick(at(120_000));
@@ -163,7 +163,7 @@ describe('MailInPoller: próg i zaległe', () => {
     box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', 'Duży', 'x', '<2@x>'), size: MAX_MAIL_BYTES + 1 });
     await poller.tick(at(60_000));
     expect(smsCount()).toBe(0);
-    expect(events(integ.id)[0]).toEqual(['skipped', 'zbyt duży (2.0 MB)']);
+    expect(events(integ.id)[0]).toEqual(['skipped', 'wiadomość zbyt duża (2.0 MB)']);
     expect(box.calls).not.toContain('source:2');
     expect(box.messages('INBOX').find((m) => m.uid === 2)?.seen).toBe(true);
   });
@@ -260,7 +260,7 @@ describe('MailInPoller: awarie', () => {
       t += delay;
     }
     expect(notified).toHaveLength(1);
-    expect(notified[0]!.summary).toBe(`Skrzynka Skrzynka 1: serwer nie odpowiada od 12:00 (connect ECONNREFUSED 203.0.113.9:993)`);
+    expect(notified[0]!.summary).toBe(`Skrzynka Skrzynka 1: serwer nie odpowiada od 12:00 (serwer odrzucił połączenie na tym porcie (ECONNREFUSED))`);
     box.failConnect = null;
     await poller.tick(at(t));
     expect(mailIn.state(integ.id)?.error).toBeNull();
@@ -318,7 +318,7 @@ describe('MailInPoller: awarie', () => {
     await vi.advanceTimersByTimeAsync(1_000);
     await t2;
     expect(smsCount()).toBe(4);
-    expect(events(integ.id).map((e) => e[1])).not.toContain('już przetworzony');
+    expect(events(integ.id).map((e) => e[1])).not.toContain('wiadomość już przetworzona');
   });
 });
 
@@ -339,12 +339,12 @@ describe('MailInPoller: powiadomienia i odpowiedzi', () => {
     box.failSource.set(3, new Error('boom'));
     await poller.tick(at(60_000));
     expect(smsCount()).toBe(2);
-    expect(events(integ.id)).toContainEqual(['error', 'nieczytelny mail: boom']);
+    expect(events(integ.id)).toContainEqual(['error', 'nieczytelna wiadomość: boom']);
     expect(mailIn.outcomes(integ.id).find((o) => o.uid === 3)?.outcome).toBe('failed');
     expect(box.calls).toContain('markSeen:3');
     expect(mailIn.state(integ.id)).toMatchObject({ errorKind: null, uidFloor: 4 });
     await poller.tick(at(120_000));
-    expect(events(integ.id).map((e) => e[1])).not.toContain('już przetworzony');
+    expect(events(integ.id).map((e) => e[1])).not.toContain('wiadomość już przetworzona');
   });
 
   it('nieczytelny mail nie zajmuje cudzego Message-ID: późniejszy czytelny mail z listy z tym samym identyfikatorem idzie normalnie', async () => {
@@ -357,6 +357,32 @@ describe('MailInPoller: powiadomienia i odpowiedzi', () => {
     await poller.tick(at(120_000));
     expect(smsCount()).toBe(1);
     expect(events(integ.id)[0]![0]).toBe('sent');
+  });
+
+  it('wyjątek po sprawdzeniu nadawcy (np. powiadomienie) zostawia Message-ID, więc ponowna dostawa tego maila jest już przetworzona', async () => {
+    const bez = make({ to: { fallback: [] } });
+    integrations.setEnabled(integ.id, false, NOW);
+    await poller.tick(NOW);
+    deps.notifier = { notify: () => { throw new Error('smtp down'); } };
+    box.add({ uid: 2, seen: false, source: eml('tomek@przyklad.test', 'Bez numeru', 'x', '<bn@x>') });
+    await poller.tick(at(60_000));
+    expect(mailIn.outcomes(bez.id).find((o) => o.uid === 2)?.outcome).toBe('failed');
+    deps.notifier = { notify: () => undefined };
+    box.add({ uid: 3, seen: false, source: eml('tomek@przyklad.test', 'Bez numeru', 'x', '<bn@x>') });
+    await poller.tick(at(120_000));
+    expect(events(bez.id)[0]).toEqual(['skipped', 'wiadomość już przetworzona']);
+  });
+
+  it('kolejne odpytania w jednym torze dostają bieżący czas, nie czas początku tury', async () => {
+    vi.useFakeTimers({ now: NOW });
+    const p = new MailInPoller(deps, { concurrency: 1 });
+    const b = make();
+    const c = make();
+    box.delayMs = 10_000;
+    const t = p.tick(NOW);
+    await vi.advanceTimersByTimeAsync(35_000);
+    await t;
+    expect([integ, b, c].map((i) => mailIn.state(i.id)!.lastPollAt)).toEqual([NOW.toISOString(), at(10_000).toISOString(), at(20_000).toISOString()]);
   });
 
   it('limit pięciu skrzynek naraz obowiązuje między turami, nie tylko w jednej', async () => {
@@ -463,6 +489,7 @@ describe('nextPollDelayMs, replyFor, checkMailbox', () => {
   it('treść odpowiedzi według sekcji 10 specu', () => {
     const m = { from: 'a@x', fromName: '', subject: 'Awaria', textFull: '', date: '', to: [], messageId: '<1@x>', authResults: [], auto: false } satisfies ParsedMail;
     const c = { ...defaultMailInConfig(), maxParts: 3, throttle: { limit: 10, windowMinutes: 10 } };
+    expect(replyFor({ kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: [], parts: 1 }, { ...m, subject: '' }, c)?.subject).toBe('Re: (bez tematu)');
     expect(replyFor({ kind: 'sent', messageIds: ['a', 'b'], recipients: ['48601000200', '48601000201'], invalid: [], parts: 1 }, m, c))
       .toEqual({ subject: 'Re: Awaria', text: 'SMS wysłany do 2 odbiorców (…200, …201), 1 część.', to: ['a@x'], inReplyTo: '<1@x>', references: '<1@x>', autoReply: true });
     expect(replyFor({ kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: ['60010'], parts: 2 }, m, c)?.text)

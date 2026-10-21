@@ -160,6 +160,13 @@ describe('GET /integracje/:id', () => {
     expect(foreign.body).not.toContain('Z dziennika');
   });
 
+  it('dziennik skrzynki ma kolumnę Nadawca zamiast adresu źródłowego', async () => {
+    const id = seedMailbox();
+    const res = await page(`/integracje/${id}`);
+    expect(res.body).toContain('>Nadawca</th>');
+    expect(res.body).not.toContain('Adres źródłowy');
+  });
+
   it('włączenie wyłączonej skrzynki ustawia próg od nowa i odpytanie natychmiast', async () => {
     const id = seedMailbox();
     h.mailIn.ensureState(id, NOW);

@@ -8,15 +8,15 @@ export const pocztaWlasny: Preset = {
   kinds: ['mail_in'],
   fields: [],
   mailIn: {},
-  guide: `Wpisz serwer IMAP, port, login i hasło skrzynki. Dane znajdziesz w ustawieniach poczty u swojego dostawcy, zwykle pod hasłem „konfiguracja programu pocztowego” albo „IMAP”.
+  guide: `Wpisz serwer IMAP, port, login i hasło skrzynki. Dane te znajdziesz w ustawieniach poczty u dostawcy, zwykle w sekcji „konfiguracja programu pocztowego” albo „IMAP”.
 
 **Zabezpieczenie**
 
-- **TLS**: połączenie szyfrowane od początku, zwykle port 993. To ustawienie domyślne i właściwe dla każdego serwera w internecie.
-- **STARTTLS**: szyfrowanie włączane po powitaniu serwera, zwykle port 143. Serwer, który go nie zaoferuje, dostaje błąd, nie połączenie jawne.
-- **Brak**: bez szyfrowania, port 143. Hasło i treść maili idą po sieci jawnym tekstem. Tylko dla serwera w sieci wewnętrznej.
+- **TLS**: połączenie szyfrowane od początku, zwykle port 993. Ustawienie domyślne, właściwe dla każdego serwera dostępnego z internetu.
+- **STARTTLS**: szyfrowanie włączane po powitaniu serwera, zwykle port 143. Jeżeli serwer nie zaoferuje szyfrowania, połączenie kończy się błędem, nie przesyłaniem danych bez szyfrowania.
+- **Brak**: bez szyfrowania, port 143. Hasło i treść wiadomości są przesyłane w postaci jawnej. Wyłącznie dla serwera w sieci wewnętrznej.
 
-**Sprawdzanie certyfikatu** (tryb zaawansowany) wyłącz tylko wtedy, gdy serwer ma własny certyfikat bez zaufanego urzędu, a połączenie idzie wewnątrz sieci firmowej.
+**Sprawdzanie certyfikatu** (tryb zaawansowany) wyłącz wyłącznie wtedy, gdy serwer ma własny certyfikat bez zaufanego urzędu, a połączenie przebiega wewnątrz sieci firmowej.
 
-Po wpisaniu danych kliknij **Sprawdź połączenie**: bramka zaloguje się, policzy nieprzeczytane maile i pokaże listę folderów skrzynki.`,
+Po wpisaniu danych kliknij **Sprawdź połączenie**: bramka zaloguje się, policzy wiadomości nieprzeczytane i wyświetli listę folderów skrzynki.`,
 };
