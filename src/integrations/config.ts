@@ -99,12 +99,13 @@ export type MailSecurity = (typeof MAIL_SECURITIES)[number];
 /** Pozycja listy nadawców: pełny adres albo cała domena z wiodącą małpą. */
 const senderPattern = z.string().min(3).max(254).regex(/^(@[^@\s]+\.[^@\s]+|[^@\s]+@[^@\s]+\.[^@\s]+)$/, 'adres albo @domena');
 const fieldName = z.string().regex(/^[a-z][a-z0-9_]{0,39}$/);
+const compiles = (pattern: string): boolean => { try { new RegExp(pattern); return true; } catch { return false; } };
 const phrase = z.string().min(1).max(200);
 
 /** Wycinek z treści maila: tekst po frazie do frazy albo końca linii, albo wyrażenie regularne (do 200 znaków). */
 export const mailFieldSchema = z.discriminatedUnion('mode', [
   z.object({ name: fieldName, mode: z.literal('between'), after: phrase, until: phrase.optional() }),
-  z.object({ name: fieldName, mode: z.literal('regex'), pattern: z.string().min(1).max(200), flags: z.string().regex(/^[im]{0,2}$/).optional() }),
+  z.object({ name: fieldName, mode: z.literal('regex'), pattern: z.string().min(1).max(200).refine(compiles, 'wzorzec się nie kompiluje'), flags: z.string().regex(/^[im]{0,2}$/).optional() }),
 ]);
 export type MailField = z.infer<typeof mailFieldSchema>;
 
