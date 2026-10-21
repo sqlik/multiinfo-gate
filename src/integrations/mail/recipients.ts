@@ -6,6 +6,8 @@ export type RecipientsWhere = MailInConfig['recipientsFromMail']['where'];
 export const PHONE_CANDIDATE = /^\+?[\d\s-]{9,20}$/;
 const MIN_DIGITS = 9;
 const MAX_DIGITS = 15;
+/** Najdłuższy fragment brany za listę numerów (temat przed dwukropkiem albo pierwsza linia treści). */
+const MAX_FRAGMENT = 400;
 
 const digits = (s: string): number => s.replace(/\D/g, '').length;
 
@@ -50,7 +52,8 @@ export function pullRecipients(subject: string, text: string, where: RecipientsW
   const lines = text.split('\n');
   const index = lines.findIndex((l) => l.trim() !== '');
   if (index < 0) return { numbers: [], subject, text };
-  const numbers = numbersOf(lines[index]!);
+  const line = lines[index]!;
+  const numbers = line.length > MAX_FRAGMENT ? null : numbersOf(line);
   if (!numbers) return { numbers: [], subject, text };
   return { numbers, subject, text: lines.slice(index + 1).join('\n').replace(/^\n+/, '') };
 }

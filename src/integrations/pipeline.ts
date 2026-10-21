@@ -6,7 +6,7 @@ import type { IntegrationEventInput, IntegrationEventsRepo } from '../store/inte
 import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
 import type { IntegrationRow, IntegrationsRepo } from '../store/integrations.ts';
 import { measureText } from '../text/measure.ts';
-import { InvalidPhoneError, normalizeRecipient, splitRecipients, TooManyRecipientsError } from '../text/phone.ts';
+import { InvalidPhoneError, MAX_RECIPIENTS_PER_HOOK, normalizeRecipient, splitRecipients, TooManyRecipientsError } from '../text/phone.ts';
 import { segmentText, TooManyPartsError } from '../text/segment.ts';
 import type { InboundConfig, MailInConfig } from './config.ts';
 import { matches } from './conditions.ts';
@@ -412,6 +412,8 @@ function prepareMail(engine: TemplateEngine, config: MailInConfig, mail: ParsedM
 } {
   const cleaned = cleanText(mail.textFull, config.clean.cutFrom);
   const pulled = config.recipientsFromMail.enabled ? pullRecipients(mail.subject, cleaned, config.recipientsFromMail.where) : { numbers: [], subject: mail.subject, text: cleaned };
+  // Nadawca z listy może wskazać odbiorców, ale nie więcej, niż przyjmuje API w jednym żądaniu (spec 7.1: do 50).
+  if (pulled.numbers.length > MAX_RECIPIENTS_PER_HOOK) throw new TooManyRecipientsError(pulled.numbers.length);
   const fields = extractFields(mail.textFull, config.fields);
   const context = buildMailContext(mail, pulled.subject, pulled.text, fields, integration, now);
   const level: RecipientsLevel = pulled.numbers.length > 0 ? 'mail' : (sender?.recipients.length ?? 0) > 0 ? 'sender' : config.to.fallback.length > 0 ? 'fallback' : 'none';
@@ -471,6 +473,7 @@ export async function runMailIn(deps: PipelineDeps, integration: MailInIntegrati
     prepared = prepareMail(deps.engine, config, mail, sender, account.defaultCountryCode, integration, now);
   } catch (e) {
     if (e instanceof FieldError || e instanceof TemplateError) return fail('template', e.message);
+    if (e instanceof TooManyRecipientsError) return fail('too_many_recipients', e.message);
     throw e;
   }
 

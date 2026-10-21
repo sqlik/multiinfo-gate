@@ -123,6 +123,14 @@ describe('runMailIn', () => {
     expect(b.kind === 'error' && b.code).toBe('invalid_phone');
   });
 
+  it('51 numerów w temacie nie daje 51 SMS-ów: przedrostek ponad 400 znaków nie jest listą numerów, SMS idzie na stałą listę', async () => {
+    const integ = make({ recipientsFromMail: { enabled: true, where: 'subject' } });
+    const numbers = Array.from({ length: 51 }, (_, i) => `6010${String(i).padStart(5, '0')}`).join(',');
+    const out = await runMailIn(deps, integ, mail({ subject: `${numbers}: Awaria` }), NOW);
+    expect(out.kind === 'sent' && out.recipients).toEqual(['48601000009']);
+    expect(deps.messages.list({ limit: 100, offset: 0 })).toHaveLength(1);
+  });
+
   it('brak numeru na każdym poziomie: error no_recipient', async () => {
     const integ = make({ to: { fallback: [] } });
     const out = await runMailIn(deps, integ, mail(), NOW);
