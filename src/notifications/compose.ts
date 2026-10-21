@@ -52,6 +52,8 @@ export interface DailyData {
   messages: { total: number; delivered: number; failed: number; cancelled: number; transit: number };
   inbound: number;
   integrationsTroubled: number;
+  /** Skrzynki pocztowe: liczba włączonych i w błędzie; bez tego pola podsumowanie o nich milczy. */
+  mailboxes?: { total: number; failing: number };
   deliveries: { pending: number; failed: number };
   accounts: Array<{ name: string; paused: string | null; certificateDaysLeft: number }>;
   /** Nowsze wydanie bramki, jeżeli jest do pokazania. */
@@ -69,6 +71,7 @@ export function composeDaily(s: Settings, d: DailyData): Mail {
     `- w toku: ${d.messages.transit}`,
     `Odebrane: ${d.inbound}`, '',
     `Integracje z błędami: ${d.integrationsTroubled}`,
+    ...(d.mailboxes ? [`Skrzynki pocztowe: ${d.mailboxes.total}, w błędzie ${d.mailboxes.failing}`] : []),
     `Webhooki: w toku ${d.deliveries.pending}, nieudane ${d.deliveries.failed}`, '',
     'Konta:',
   ];

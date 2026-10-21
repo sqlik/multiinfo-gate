@@ -141,6 +141,21 @@ describe('NotificationScanner - podsumowanie dzienne', () => {
     expect(mails()).toHaveLength(1);
   });
 
+  it('podsumowanie dzienne wymienia skrzynki pocztowe i te w błędzie', () => {
+    enable(12);
+    smtp();
+    const withMail = new NotificationScanner({
+      accounts, inboundServices: services, messages: new MessagesRepo(db), inbound: new InboundMessagesRepo(db),
+      integrations: new IntegrationsRepo(db, randomBytes(32)), deliveries: new WebhookDeliveriesRepo(db, randomBytes(32)), notifications,
+      notifier: new Notifier({ notifications, jobs }), jobs,
+      mailIn: { counts: () => ({ total: 2, failing: 1 }) },
+    });
+    withMail.scan(T0);
+    const sent = mails();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain('Skrzynki pocztowe: 2, w błędzie 1');
+  });
+
   it('wspomina o nowszym wydaniu, gdy jest do pokazania', () => {
     enable(12);
     smtp();
