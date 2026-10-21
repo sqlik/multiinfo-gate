@@ -57,10 +57,23 @@ describe('parseMail', () => {
     expect(m.fromName).toBe('');
   });
 
+  it('mail automatyczny: Auto-Submitted inne niż no, Precedence bulk/list/junk albo List-Id', async () => {
+    const base = 'From: a@przyklad.test\r\nSubject: x\r\n';
+    expect((await parseMail(Buffer.from(`${base}\r\nt`))).auto).toBe(false);
+    expect((await parseMail(Buffer.from(`${base}Auto-Submitted: no\r\n\r\nt`))).auto).toBe(false);
+    expect((await parseMail(Buffer.from(`${base}Auto-Submitted: auto-replied\r\n\r\nt`))).auto).toBe(true);
+    expect((await parseMail(Buffer.from(`${base}Auto-Submitted: auto-generated\r\n\r\nt`))).auto).toBe(true);
+    expect((await parseMail(Buffer.from(`${base}Precedence: bulk\r\n\r\nt`))).auto).toBe(true);
+    expect((await parseMail(Buffer.from(`${base}Precedence: list\r\n\r\nt`))).auto).toBe(true);
+    expect((await parseMail(Buffer.from(`${base}Precedence: normal\r\n\r\nt`))).auto).toBe(false);
+    expect((await parseMail(Buffer.from(`${base}List-Id: <lista.przyklad.test>\r\n\r\nt`))).auto).toBe(true);
+    expect((await parseMail(Buffer.from(`${base}X-Auto-Response-Suppress: All\r\n\r\nt`))).auto).toBe(true);
+  });
+
   it('brak nagłówków daje puste pola i datę rozbioru', async () => {
     const now = new Date('2026-10-21T10:00:00Z');
     const m = await parseMail(Buffer.from('\r\nsama treść\r\n'), now);
-    expect([m.from, m.subject, m.messageId, m.to, m.date]).toEqual(['', '', null, [], now.toISOString()]);
+    expect([m.from, m.subject, m.messageId, m.to, m.date, m.auto]).toEqual(['', '', null, [], now.toISOString(), false]);
     expect(m.textFull).toBe('sama treść');
   });
 });

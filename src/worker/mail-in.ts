@@ -45,8 +45,13 @@ const tail = (number: string): string => `…${number.slice(-3)}`;
 const recipientsWord = (n: number): string => (n === 1 ? 'odbiorcy' : 'odbiorców');
 const partsWord = (n: number): string => (n === 1 ? 'część' : 'części');
 
-/** Treść odpowiedzi do nadawcy według sekcji 10 specu albo null, gdy odpowiedź nie przysługuje. */
+/**
+ * Treść odpowiedzi do nadawcy według sekcji 10 specu albo null, gdy odpowiedź nie przysługuje.
+ * Bez odpowiedzi na mail automatyczny (RFC 3834) i przy `unavailable`, bo ten wynik powstaje przed
+ * sprawdzeniem nadawcy, a do obcych bramka nie odpisuje nigdy.
+ */
 export function replyFor(outcome: MailInOutcome, mail: ParsedMail, config: MailInConfig): MailContent | null {
+  if (mail.auto) return null;
   let text: string;
   switch (outcome.kind) {
     case 'sent': {
@@ -66,9 +71,6 @@ export function replyFor(outcome: MailInOutcome, mail: ParsedMail, config: MailI
     case 'throttled':
       text = `SMS nie został wysłany: przekroczono limit integracji (${config.throttle.limit} w ${config.throttle.windowMinutes} min).`;
       break;
-    case 'unavailable':
-      text = 'SMS nie został wysłany: bramka nie mogła przyjąć wiadomości.';
-      break;
     default:
       return null;
   }
@@ -76,6 +78,7 @@ export function replyFor(outcome: MailInOutcome, mail: ParsedMail, config: MailI
   return {
     subject, text, to: [mail.from],
     ...(mail.messageId ? { inReplyTo: mail.messageId, references: mail.messageId } : {}),
+    autoReply: true,
   };
 }
 
