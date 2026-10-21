@@ -1,5 +1,6 @@
 import { MAIL_IN_PASSWORD_REF, type MailInConfig } from '../integrations/config.ts';
-import { MailboxError, errorKindOf, scrubError, type MailboxConnect, type MailboxSession, type MailboxSettings } from '../integrations/mail/client.ts';
+import { warsawTime } from '../time/warsaw.ts';
+import { MailboxError, errorKindOf, errorMessageOf, scrubError, type MailboxConnect, type MailboxSession, type MailboxSettings } from '../integrations/mail/client.ts';
 import { parseMail, type ParsedMail } from '../integrations/mail/parse.ts';
 import { runMailIn, type MailInIntegration, type MailInOutcome, type PipelineDeps } from '../integrations/pipeline.ts';
 import { silentLogger, type Logger } from '../log.ts';
@@ -92,7 +93,7 @@ export async function checkMailbox(connect: MailboxConnect, settings: MailboxSet
     const box = await session.open(folder);
     return { ok: true, unseen: box.unseen, folders };
   } catch (e) {
-    return { ok: false, kind: errorKindOf(e), error: scrubError(e instanceof Error ? e.message : String(e), [settings.password, settings.user]) };
+    return { ok: false, kind: errorKindOf(e), error: scrubError(errorMessageOf(e), [settings.password, settings.user]) };
   } finally {
     await session?.close();
   }
@@ -101,7 +102,7 @@ export async function checkMailbox(connect: MailboxConnect, settings: MailboxSet
 const seenOutcomeOf = (outcome: MailInOutcome): SeenOutcome =>
   outcome.kind === 'sent' ? 'sent' : outcome.kind === 'throttled' ? 'throttled' : outcome.kind === 'skipped' ? 'skipped' : 'failed';
 
-const hhmm = (iso: string): string => iso.slice(11, 16);
+const hhmm = (iso: string): string => warsawTime(iso).slice(0, 5);
 
 /** Odpytywanie skrzynek: które są na czas, do pięciu naraz, każda najwyżej raz w danej chwili. */
 export class MailInPoller {
@@ -151,7 +152,7 @@ export class MailInPoller {
       mailIn.recordPoll(integration.id, { ok: true, uidvalidity: result.uidValidity, unseen: result.unseen, at: now, nextPollAt: new Date(now.getTime() + config.intervalSec * 1000) });
     } catch (e) {
       const kind = errorKindOf(e);
-      const error = scrubError(e instanceof Error ? e.message : String(e), [password, config.imap.user]);
+      const error = scrubError(errorMessageOf(e), [password, config.imap.user]);
       const failures = (mailIn.state(integration.id)?.failures ?? 0) + 1;
       mailIn.recordPoll(integration.id, { ok: false, error, errorKind: kind, at: now, nextPollAt: new Date(now.getTime() + nextPollDelayMs(config.intervalSec, failures, kind)) });
       log.warn('skrzynka.blad', { integrationId: integration.id, kind, failures });
