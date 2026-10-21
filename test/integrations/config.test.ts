@@ -66,6 +66,11 @@ describe('mail_in', () => {
     expect(() => parseConfig('mail_in', { ...base, fields: [{ name: 'Kod', mode: 'between', after: 'x' }] })).toThrow();
     expect(() => parseConfig('mail_in', { ...base, fields: [{ name: 'kod', mode: 'regex', pattern: 'a'.repeat(201) }] })).toThrow();
   });
+  it('odrzuca wzorzec, który się nie kompiluje', () => {
+    const base = defaultMailInConfig();
+    expect(() => parseConfig('mail_in', { ...base, fields: [{ name: 'kod', mode: 'regex', pattern: '(' }] })).toThrow();
+    expect(() => parseConfig('mail_in', { ...base, fields: [{ name: 'kod', mode: 'regex', pattern: '[a-' }] })).toThrow();
+  });
   it('isMailIn rozpoznaje rodzaj po wierszu', () => {
     expect(isMailIn({ kind: 'mail_in' } as never)).toBe(true);
     expect(isMailIn({ kind: 'webhook_in' } as never)).toBe(false);
