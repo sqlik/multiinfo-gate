@@ -219,3 +219,39 @@ describe('formularz skrzynki', () => {
     expect(edit).toContain('trybie zaawansowanym');
   });
 });
+
+describe('serwer IMAP w sieci wewnętrznej', () => {
+  beforeEach(() => { h.resolve.value = async () => ['10.0.0.5']; });
+
+  it('zapis skrzynki wraca błędem z komunikatem o MIG_MAIL_ALLOW_PRIVATE i bez zapisu', async () => {
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody({ host: 'imap.firma.lan' }) });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('MIG_MAIL_ALLOW_PRIVATE=1');
+    expect(res.body).toContain('(10.0.0.5)');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
+  it('z allowPrivateMail zapis przechodzi', async () => {
+    h = await startAdminHarness(NOW, { allowPrivateMail: true });
+    h.resolve.value = async () => ['10.0.0.5'];
+    const accountId = seedAccount(h);
+    const keyId = h.apiKeys.insert({ accountId, name: 'k', keyHash: 'argon2:aaa', keyPrefix: 'a1b2c3d4', defaultServiceId: '24138', defaultOrig: null, maxParts: 5, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'] });
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody({ host: 'imap.firma.lan', apiKeyId: String(keyId) }) });
+    expect(res.statusCode).toBe(302);
+    expect(h.integrations.list()).toHaveLength(1);
+  });
+
+  it('Sprawdź połączenie pokazuje ten sam komunikat jako błąd formularza, bez próby połączenia', async () => {
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody({ host: 'imap.firma.lan' }) });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('MIG_MAIL_ALLOW_PRIVATE=1');
+    expect(h.mailbox.calls).not.toContain('connect');
+  });
+
+  it('nazwa bez adresu w DNS wraca błędem formularza z powodem', async () => {
+    h.resolve.value = async () => [];
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody({ host: 'brak.przyklad.test' }) });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('Nazwa serwera IMAP nie rozwiązuje się na adres IP: nazwa nie ma żadnego adresu.');
+  });
+});

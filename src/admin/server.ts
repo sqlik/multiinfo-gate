@@ -95,6 +95,8 @@ export interface AdminDeps {
   resolve?: Resolver;
   /** MIG_WEBHOOK_ALLOW_PRIVATE: zgoda na adresy webhooków w sieci wewnętrznej. */
   allowPrivateWebhooks?: boolean;
+  /** MIG_MAIL_ALLOW_PRIVATE: zgoda na serwer IMAP w sieci wewnętrznej. */
+  allowPrivateMail?: boolean;
 }
 
 declare module 'fastify' {

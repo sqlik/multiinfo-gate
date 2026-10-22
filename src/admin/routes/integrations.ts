@@ -6,7 +6,8 @@ import { checkMailbox } from '../../worker/mail-in.ts';
 import { mailConfigToValues, mailFormToConfig, mailFormValues, mailWarnings, needsAdvanced, sampleMail, type MailFormValues } from '../mail-form.ts';
 import { mailFormPage, type MailConnection, type MailFormOptions } from '../views/integration-mail.ts';
 import { presetById, presetsFor, type Preset } from '../../integrations/presets/index.ts';
-import { PRIVATE_TARGET_MESSAGE, systemResolver, webhookTarget } from '../../net/private-address.ts';
+import { PRIVATE_MAIL_MESSAGE, PRIVATE_TARGET_MESSAGE, hostTarget, systemResolver, webhookTarget } from '../../net/private-address.ts';
+import { guardedConnect } from '../../integrations/mail/client.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
 import { buildOutboundContext, previewOutbound } from '../../worker/integrations.ts';
 import { formToConfig, formValues, type ExistingSecrets } from '../integration-form.ts';
@@ -284,6 +285,16 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
 
   interface SavedMailForm { config: MailInConfig; password: string | null; keyId: number; v: MailFormValues }
 
+  // „Sprawdź połączenie” łączy się tak jak poller: po sprawdzeniu sieci i pod przypięty adres.
+  const mailboxConnect = deps.resolve ? guardedConnect(deps.mailboxConnect, deps.resolve, deps.allowPrivateMail === true) : deps.mailboxConnect;
+  /** Błąd formularza, gdy serwer IMAP leży w sieci wewnętrznej bez zgody albo nazwa nie ma adresu; `null`, gdy wolno się łączyć. */
+  const mailHostError = async (host: string): Promise<string | null> => {
+    const target = await hostTarget(host, deps.resolve ?? systemResolver);
+    if (target.kind === 'private' && !deps.allowPrivateMail) return `${PRIVATE_MAIL_MESSAGE} (${target.address}).`;
+    if (target.kind === 'unresolved') return `Nazwa serwera IMAP nie rozwiązuje się na adres IP: ${target.reason}.`;
+    return null;
+  };
+
   /** Droga POST skrzynki: walidacja, „Sprawdź połączenie”, „Sprawdź szablon”, zapis przez `save`. */
   const handleMailForm = async (request: FastifyRequest, reply: FastifyReply, preset: Preset, row: IntegrationRow | undefined, save: (saved: SavedMailForm) => string) => {
     reply.type('text/html; charset=utf-8');
@@ -312,10 +323,14 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }
     const warnings = mailWarnings(built.config);
     const action = String(body.action ?? '');
+    if (action !== 'sprawdz') {
+      const hostError = await mailHostError(built.config.imap.host);
+      if (hostError !== null) return fail(hostError);
+    }
 
     if (action === 'polaczenie') {
       const password = built.password ?? (row ? deps.integrations.secrets(row.id)[MAIL_IN_PASSWORD_REF] ?? '' : '');
-      const connection: MailConnection = await checkMailbox(deps.mailboxConnect, { ...built.config.imap, password }, built.config.folder);
+      const connection: MailConnection = await checkMailbox(mailboxConnect, { ...built.config.imap, password }, built.config.folder);
       return mailPage(request, ctx, v, { mode, connection, warnings });
     }
     if (action === 'sprawdz') {
