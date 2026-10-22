@@ -39,6 +39,18 @@ describe('JobsRepo', () => {
     expect(again[0]!.lastError).toBe('timeout');
   });
 
+  it('transakcja: wyjątek cofa wszystkie zmiany w kolejce', () => {
+    const repo = new JobsRepo(openDatabase(':memory:'));
+    const id = repo.enqueue('mail', { subject: 'a' }, at(0));
+    expect(() => repo.transaction(() => {
+      repo.enqueue('mail', { subject: 'b' }, at(0));
+      repo.complete(id);
+      throw new Error('awaria');
+    })).toThrow('awaria');
+    expect(repo.claim(at(1000), 10).map((j) => j.payload)).toEqual([{ subject: 'a' }]);
+    expect(repo.transaction(() => repo.depth())).toBe(1);
+  });
+
   it('odkłada zadanie bez zużycia ponowienia', () => {
     const repo = new JobsRepo(openDatabase(':memory:'));
     repo.enqueue('send', { messageId: 'msg_1' }, at(0));

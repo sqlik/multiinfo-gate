@@ -206,7 +206,7 @@ export function dispatch(
   deps: PipelineDeps, integration: IntegrationRow, key: ApiKeyRow, text: string, recipients: string[],
   config: { maxParts: number; overflow: 'truncate' | 'reject' }, note: Noter, now: Date,
   extra: { inReplyTo?: string; sentReason?: string } = {},
-): { kind: 'sent'; messageIds: string[]; parts: number } | { kind: 'error'; code: InboundErrorCode; detail: string } {
+): { kind: 'sent'; messageIds: string[]; parts: number; text: string } | { kind: 'error'; code: InboundErrorCode; detail: string } {
   const fitted = fitToParts(text, config.maxParts);
   if (fitted.over && config.overflow === 'reject') {
     const detail = `Treść wymaga więcej niż ${config.maxParts} części.`;
@@ -227,7 +227,7 @@ export function dispatch(
       ...(extra.inReplyTo ? { inboundId: extra.inReplyTo } : {}),
       ...(reason !== '' ? { reason } : {}),
     });
-    return { kind: 'sent', messageIds, parts: fitted.parts };
+    return { kind: 'sent', messageIds, parts: fitted.parts, text: fitted.text };
   } catch (e) {
     if (e instanceof ApiError) {
       const code: InboundErrorCode = e.code === 'invalid_phone' ? 'invalid_phone' : e.code === 'too_many_parts' ? 'too_many_parts' : 'service';
@@ -370,7 +370,7 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
 export type MailInIntegration = IntegrationRow & { config: MailInConfig };
 export type MailInSkipReason = 'sender_not_allowed' | 'auth_failed' | 'condition';
 export type MailInOutcome =
-  | { kind: 'sent'; messageIds: string[]; recipients: string[]; invalid: string[]; parts: number }
+  | { kind: 'sent'; messageIds: string[]; recipients: string[]; invalid: string[]; parts: number; text: string }
   | { kind: 'skipped'; reason: MailInSkipReason }
   | { kind: 'throttled'; notify: boolean }
   | { kind: 'error'; code: InboundErrorCode; detail: string }
@@ -410,7 +410,7 @@ function prepareMail(engine: TemplateEngine, config: MailInConfig, mail: ParsedM
   context: Record<string, unknown>; cleaned: string; fields: Record<string, string>;
   level: RecipientsLevel; raw: string[]; recipients: string[]; invalid: string[]; render: () => string;
 } {
-  const cleaned = cleanText(mail.textFull, config.clean.cutFrom);
+  const cleaned = cleanText(mail.textFull, config.clean.cutFrom, mail.fromName);
   const pulled = config.recipientsFromMail.enabled ? pullRecipients(mail.subject, cleaned, config.recipientsFromMail.where) : { numbers: [], subject: mail.subject, text: cleaned };
   // Nadawca z listy może wskazać odbiorców, ale nie więcej, niż przyjmuje API w jednym żądaniu (spec 7.1: do 50).
   if (pulled.numbers.length > MAX_RECIPIENTS_PER_HOOK) throw new TooManyRecipientsError(pulled.numbers.length);
@@ -441,7 +441,7 @@ export async function runMailIn(deps: PipelineDeps, integration: MailInIntegrati
   const log = deps.log ?? silentLogger;
   const config = integration.config;
   const stored = integration.storePayloads === 1
-    ? JSON.stringify({ from: mail.from, subject: mail.subject, text_full: mail.textFull, date: mail.date, message_id: mail.messageId })
+    ? JSON.stringify({ from: mail.from, from_name: mail.fromName, subject: mail.subject, text_full: mail.textFull, date: mail.date, message_id: mail.messageId })
     : null;
   // Spec 4.5: podsumowanie wpisu to nadawca (w polu źródła) oraz temat ucięty do 80 znaków, dopisany po właściwym powodzie.
   const subject = mail.subject.trim() === '' ? 'temat (bez tematu)' : `temat „${mail.subject.trim().slice(0, 80)}”`;
@@ -510,7 +510,7 @@ export async function runMailIn(deps: PipelineDeps, integration: MailInIntegrati
     log.warn('integracja.blad', { integrationId: integration.id, code: sent.code });
     return sent;
   }
-  return { kind: 'sent', messageIds: sent.messageIds, recipients: prepared.recipients, invalid: prepared.invalid, parts: sent.parts };
+  return { kind: 'sent', messageIds: sent.messageIds, recipients: prepared.recipients, invalid: prepared.invalid, parts: sent.parts, text: sent.text };
 }
 
 /** Podgląd do „Sprawdź szablon” dla skrzynki: nic nie wysyła, nic nie zapisuje. */

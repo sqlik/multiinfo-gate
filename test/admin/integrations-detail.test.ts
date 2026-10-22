@@ -184,6 +184,10 @@ describe('GET /integracje/:id', () => {
     const res = await page(`/integracje/${id}/edytuj?probka=${eventId}`);
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('name="sampleFrom" value="ups@przyklad.test"');
+    // Nazwa nadawcy z ładunku wraca do próbki, bo od niej zależy ucięcie podpisu.
+    h.integrationEvents.record({ integrationId: id, at: NOW, result: 'sent', payload: '{"from":"jan@przyklad.test","from_name":"Jan Kowalski","subject":"A","text_full":"b"}', logLimit: 200 });
+    const named = await page(`/integracje/${id}/edytuj?probka=${h.integrationEvents.list(id, 1)[0]!.id}`);
+    expect(named.body).toContain('name="sampleFrom" value="Jan Kowalski &lt;jan@przyklad.test&gt;"');
     expect(res.body).toContain('name="sampleSubject" value="UPS-01 alarm"');
     expect(res.body).toContain('Device UPS-01\nStatus ON BATTERY');
     expect(res.body).toContain('tryb=zaawansowany" class="on"');

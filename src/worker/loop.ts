@@ -2,6 +2,7 @@ import { silentLogger } from '../log.ts';
 import type { Job } from '../store/jobs.ts';
 import { handleSend, notify, type WorkerDeps } from './send.ts';
 import { handleMail } from './mail.ts';
+import { handleMailReport } from './mail-report.ts';
 import { handlePoll } from './poll.ts';
 import { handleWebhook } from './webhook.ts';
 import { handlePackageCreate, handlePackagePoll, handlePackageReport } from './packages.ts';
@@ -106,6 +107,7 @@ export class Worker {
       else if (job.type === 'package.poll') await handlePackagePoll(job, this.deps, now);
       else if (job.type === 'package.report') await handlePackageReport(job, this.deps, now);
       else if (job.type === 'mail') await handleMail(job, this.deps, now);
+      else if (job.type === 'mail.report') await handleMailReport(job, this.deps, now);
       else this.deps.jobs.fail(job.id, `Nieznany typ zadania: ${job.type}`);
     } catch (error) {
       // Wyjątek poza obsługą zadania nie może zatrzymać całej pętli.

@@ -218,6 +218,8 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
     const path = request.url.split('?')[0] ?? '';
     if (isPublicPath(path)) return;
 
+    // Strony panelu niosą dane konta, a formularz skrzynki po akcji także wpisane hasło: nic do pamięci podręcznej.
+    reply.header('Cache-Control', 'no-store');
     const token = request.cookies[SESSION_COOKIE];
     const userId = token ? deps.sessions.get(token) : null;
     if (userId === null) {

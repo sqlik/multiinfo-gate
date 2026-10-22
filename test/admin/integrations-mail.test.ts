@@ -58,11 +58,11 @@ describe('formularz skrzynki', () => {
     expect(JSON.stringify(h.audit.list(10, 0))).not.toContain('TajneHaslo9');
   });
 
-  it('błąd formularza wraca stroną z komunikatem i bez zapisu; hasło nie wraca do formularza', async () => {
+  it('błąd formularza wraca stroną z komunikatem i bez zapisu; hasło zostaje w polu, nie w komunikacie', async () => {
     const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody({ host: '' }) });
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain('Podaj serwer IMAP.');
-    expect(res.body).not.toContain('TajneHaslo9');
+    expect(res.body.split('value="TajneHaslo9"').join('')).not.toContain('TajneHaslo9');
     expect(h.integrations.list()).toHaveLength(0);
   });
 
@@ -137,13 +137,44 @@ describe('formularz skrzynki', () => {
   it('Sprawdź połączenie przy złym haśle pokazuje błąd logowania bez hasła w treści; dla zapisanej skrzynki używa zapisanego hasła', async () => {
     const bad = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody({ password: 'Inne' }) });
     expect(bad.body).toContain('Logowanie odrzucone');
-    expect(bad.body).not.toContain('Inne');
+    // Hasło wraca tylko w polu formularza, nie w komunikacie.
+    expect(bad.body.split('value="Inne"').join('')).not.toContain('Inne');
     await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody() });
     const row = h.integrations.list()[0]!;
     const ok = await post(`/integracje/${row.id}/edytuj`, formBody({ password: '', action: 'polaczenie' }));
     expect(ok.body).toContain('Połączenie działa');
     h.mailbox.failConnect = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
     expect((await post(`/integracje/${row.id}/edytuj`, formBody({ password: '', action: 'polaczenie' }))).body).toContain('Serwer nie odpowiada');
+  });
+
+  it('wpisane hasło zostaje w polu po „Sprawdź połączenie” i po błędzie walidacji, zakodowane; edycja zapisanej skrzynki ma pole puste', async () => {
+    const check = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody() });
+    expect(check.statusCode).toBe(200);
+    expect(check.body).toMatch(/name="password" type="password" value="TajneHaslo9"/);
+    const invalid = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody({ password: 'Ta"jne<', folder: '' }) });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.body).toContain('value="Ta&quot;jne&lt;"');
+    await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody() });
+    const row = h.integrations.list()[0]!;
+    expect((await get(`/integracje/${row.id}/edytuj`)).body).toMatch(/name="password" type="password" value=""/);
+  });
+
+  it('Sprawdź szablon z nadawcą „Nazwa <adres>” ucina podpis od nazwy jak w wysyłce', async () => {
+    const res = await post('/integracje', {
+      kind: 'mail_in', preset: 'poczta-wlasny', action: 'sprawdz',
+      ...formBody({ senders: 'jan@przyklad.test', sampleFrom: 'Jan Kowalski <jan@przyklad.test>', sampleSubject: 'Awaria', sampleText: 'Pompa stoi\n\nJan Kowalski\nSpecjalista ds. IT' }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Nadawca na liście');
+    const sms = /<div class="ruler"[^>]*>([^<]*)<\/div>/.exec(res.body)?.[1];
+    expect(sms).toBe('Awaria\nPompa stoi');
+  });
+
+  it('strony formularza skrzynki nie są zapisywane w pamięci podręcznej przeglądarki', async () => {
+    const form = await get('/integracje/nowa?rodzaj=mail_in&ustawienie=poczta-wlasny');
+    expect(form.headers['cache-control']).toBe('no-store');
+    const check = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody() });
+    expect(check.headers['cache-control']).toBe('no-store');
   });
 
   it('Sprawdź szablon z trzech pól pokazuje nadawcę, poziom odbiorców, wycinki, treść i części, nic nie zapisuje', async () => {

@@ -259,7 +259,9 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     try {
       const p = JSON.parse(payload) as Record<string, unknown>;
       const str = (k: string): string => (typeof p[k] === 'string' ? (p[k] as string) : '');
-      return { sampleFrom: str('from'), sampleSubject: str('subject'), sampleText: str('text_full') };
+      // Nazwa nadawcy wraca do próbki w postaci „Nazwa <adres>”, bo od niej zależy ucięcie podpisu.
+      const sampleFrom = str('from_name') !== '' ? `${str('from_name')} <${str('from')}>` : str('from');
+      return { sampleFrom, sampleSubject: str('subject'), sampleText: str('text_full') };
     } catch {
       return null;
     }

@@ -104,5 +104,13 @@ describe('mailFormValues i sampleMail', () => {
     const fields = await sampleMail({ ...v(), sampleFrom: 'ups@przyklad.test', sampleSubject: 'Alarm', sampleText: 'Error code: E042' }, NOW);
     expect(fields).toEqual({ from: 'ups@przyklad.test', fromName: '', subject: 'Alarm', textFull: 'Error code: E042', date: NOW.toISOString(), to: [], messageId: null, authResults: [], auto: false });
     expect(await sampleMail(v(), NOW)).toBeNull();
+    const named = await sampleMail({ ...v(), sampleFrom: 'Jan Kowalski <Jan@przyklad.test>', sampleSubject: 'A', sampleText: 'b' }, NOW);
+    expect(named).toMatchObject({ from: 'jan@przyklad.test', fromName: 'Jan Kowalski' });
+    const quoted = await sampleMail({ ...v(), sampleFrom: '"Kowalski, Jan" <jan@przyklad.test>', sampleSubject: 'A', sampleText: 'b' }, NOW);
+    expect(quoted).toMatchObject({ from: 'jan@przyklad.test', fromName: 'Kowalski, Jan' });
+    const started = Date.now();
+    const long = await sampleMail({ ...v(), sampleFrom: `${' '.repeat(30_000)}a`, sampleSubject: 'A', sampleText: 'b' }, NOW);
+    expect(long).toMatchObject({ from: 'a', fromName: '' });
+    expect(Date.now() - started).toBeLessThan(500);
   });
 });
