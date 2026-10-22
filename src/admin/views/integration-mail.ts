@@ -68,7 +68,7 @@ function sectionMailbox(v: MailFormValues, opts: MailFormOptions): string {
     </div>
     <div class="field">
       <label for="password">Hasło</label>
-      <input id="password" name="password" type="password" value="" autocomplete="new-password"${opts.hasPassword ? '' : ' required'}>
+      <input id="password" name="password" type="password" value="${esc(v.password)}" autocomplete="new-password"${opts.hasPassword ? '' : ' required'}>
       ${hint(opts.hasPassword ? 'Hasło jest zapisane. Puste pole zachowuje dotychczasowe' : 'Hasło jest przechowywane w postaci zaszyfrowanej i nie można go odczytać w panelu. W Gmailu jest to hasło aplikacji')}
     </div>
     <div class="field">
@@ -220,7 +220,7 @@ function sectionAfter(v: MailFormValues, opts: MailFormOptions): string {
     <div class="field">
       ${checkbox('replyEnabled', v.replyEnabled, 'Odpowiadaj nadawcy wiadomością e-mail')}
       ${opts.smtpConfigured
-        ? hint('Nadawca z listy otrzymuje w wątku krótkie potwierdzenie: do kogo został wysłany SMS albo z jakiego powodu nie został wysłany')
+        ? hint('Nadawca z listy otrzymuje w wątku raport minutę po wysyłce: treść SMS-a, nadpis, czas i status doręczenia przy każdym numerze. Gdy któryś numer jest w drodze, nadawca otrzymuje drugą wiadomość z wynikiem końcowym, najpóźniej po 24 godzinach. Nieudana wysyłka jest zgłaszana od razu z powodem')
         : '<div class="hint">Nieczynne: SMTP nie jest skonfigurowane. <a href="/powiadomienia">Skonfiguruj SMTP</a>, a bramka zacznie odpowiadać</div>'}
     </div>
   </details>`;
@@ -236,7 +236,7 @@ function sectionSample(v: MailFormValues): string {
     <div class="field">
       <label>Albo trzy pola</label>
       <div class="inline" style="margin-bottom: 6px;">
-        <input name="sampleFrom" value="${esc(v.sampleFrom)}" placeholder="nadawca, np. ups@przyklad.pl" style="width: 40%;">
+        <input name="sampleFrom" value="${esc(v.sampleFrom)}" placeholder="nadawca, np. ups@przyklad.pl albo Jan Kowalski <jan@przyklad.pl>" style="width: 40%;">
         <input name="sampleSubject" value="${esc(v.sampleSubject)}" placeholder="temat" style="flex: 1;">
       </div>
       ${textarea('sampleText', v.sampleText, 4, ' placeholder="treść wiadomości"')}

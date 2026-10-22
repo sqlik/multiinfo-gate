@@ -233,12 +233,22 @@ export function needsAdvanced(config: MailInConfig): boolean {
   return config.text.mode === 'liquid' || config.condition.mode === 'liquid' || config.fields.some((f) => f.mode === 'regex') || !config.imap.verifyCert;
 }
 
+/** Pole nadawcy próbki: sam adres albo „Nazwa <adres>” (nazwa może być w cudzysłowie); nazwa decyduje o ucięciu podpisu. */
+export function sampleSender(field: string): { from: string; fromName: string } {
+  const text = field.trim();
+  const open = text.lastIndexOf('<');
+  if (open < 0 || !text.endsWith('>') || open > text.length - 3) return { from: text.toLowerCase(), fromName: '' };
+  let name = text.slice(0, open).trim();
+  if (name.length >= 2 && name.startsWith('"') && name.endsWith('"')) name = name.slice(1, -1).trim();
+  return { from: text.slice(open + 1, -1).trim().toLowerCase(), fromName: name };
+}
+
 /** Próbka z formularza na ParsedMail: surowy mail przez parseMail, inaczej trzy pola; bez niczego null. */
 export async function sampleMail(v: MailFormValues, now: Date): Promise<ParsedMail | null> {
   if (v.sampleRaw.trim() !== '') return parseMail(Buffer.from(v.sampleRaw.replace(/^\s+/, ''), 'utf8'), now);
   if (v.sampleFrom === '' && v.sampleSubject === '' && v.sampleText.trim() === '') return null;
   return {
-    from: v.sampleFrom.toLowerCase(), fromName: '', subject: v.sampleSubject, textFull: v.sampleText.trim(), date: now.toISOString(),
+    ...sampleSender(v.sampleFrom), subject: v.sampleSubject, textFull: v.sampleText.trim(), date: now.toISOString(),
     to: [], messageId: null, authResults: [], auto: false,
   };
 }
