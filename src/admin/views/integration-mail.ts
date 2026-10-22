@@ -107,7 +107,7 @@ function sectionSenders(v: MailFormValues, advanced: boolean): string {
     ${advanced ? `<div class="field">
       <label for="authservId">Nazwa serwera w nagłówku Authentication-Results</label>
       <input id="authservId" name="authservId" value="${esc(v.authservId)}" placeholder="mx.google.com" maxlength="253">
-      ${hint('Identyfikator serwera (authserv-id, RFC 8601), którym serwer skrzynki podpisuje wynik sprawdzenia SPF i DKIM. Gdy pole jest wypełnione, bramka uznaje wyłącznie nagłówki Authentication-Results rozpoczynające się od tej nazwy i odrzuca wiadomość, gdy żaden nagłówek jej nie ma. Puste pole oznacza odczyt pierwszego nagłówka od góry. Przycisk „Sprawdź połączenie” podpowiada nazwę z ostatniej wiadomości w folderze')}
+      ${hint('Identyfikator serwera (authserv-id, RFC 8601), którym serwer skrzynki podpisuje wynik sprawdzenia SPF i DKIM. Bramka odczytuje pierwszy nagłówek Authentication-Results od góry, czyli ten dopisany przez serwer skrzynki. Gdy pole jest wypełnione, nagłówek musi rozpoczynać się od tej nazwy, inaczej wiadomość jest odrzucana. Puste pole oznacza odczyt pierwszego nagłówka bez sprawdzania nazwy. Przycisk „Sprawdź połączenie” podpowiada nazwę z ostatniej wiadomości w folderze')}
     </div>` : `<input type="hidden" name="authservId" value="${esc(v.authservId)}">`}
   </details>`;
 }

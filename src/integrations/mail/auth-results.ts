@@ -36,19 +36,18 @@ export function authservIdOf(header: string): string | null {
  * Bez `authservId` liczy się wyłącznie pierwszy nagłówek od góry: serwer odbierający dopisuje
  * swój nad wszystkimi, które przyszły z mailem, więc nagłówek podrobiony przez nadawcę ląduje
  * niżej i nie jest czytany (RFC 8601, sekcja 5). Z `authservId` (nazwa podana przez
- * administratora) liczy się ciągły blok nagłówków od góry z tą nazwą: serwer skrzynki może
- * dopisać kilka, ale wszystkie leżą nad cudzymi. Nagłówek z tą nazwą pod cudzym nie pochodzi
- * od serwera skrzynki, więc nie jest czytany; gdy blok jest pusty, wynik to odmowa.
+ * administratora) ten pierwszy nagłówek musi nosić tę nazwę, inaczej wynik to odmowa: chroni to
+ * przed mailem, do którego serwer nie dopisał własnego nagłówka, a nadawca podrobił cudzy.
+ * Nagłówki niżej nie są czytane nigdy, także z nazwą serwera: nadawca może je wpisać sam.
  */
 export function authResultsPass(headers: string[], fromDomain: string, authservId = ''): boolean {
   const domain = fromDomain.trim().toLowerCase();
   if (domain === '') return false;
   const wanted = authservId.trim().toLowerCase();
-  const considered: string[] = [];
-  for (const h of wanted === '' ? headers.slice(0, 1) : headers) {
-    if (wanted !== '' && authservIdOf(h) !== wanted) break;
-    considered.push(h);
-  }
+  const first = headers[0];
+  if (first === undefined) return false;
+  if (wanted !== '' && authservIdOf(first) !== wanted) return false;
+  const considered = [first];
   for (const header of considered) {
     const h = stripComments(header).toLowerCase();
     for (const m of h.matchAll(/dkim=pass\b[^;]*?header\.d=([^\s;()]+)/g)) {

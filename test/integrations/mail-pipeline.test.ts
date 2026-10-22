@@ -60,7 +60,7 @@ describe('runMailIn', () => {
     const out = await runMailIn(deps, integ, mail({ authResults: ['atakujacy.test; dkim=pass header.d=przyklad.test'] }), NOW);
     expect(out).toEqual({ kind: 'skipped', reason: 'auth_failed' });
     expect(events(integ.id)[0]![1]).toContain('brak potwierdzenia SPF/DKIM od serwera mx.google.com');
-    const ok = await runMailIn(deps, integ, mail({ authResults: ['mx.google.com; arc=none', 'mx.google.com; dkim=pass header.d=przyklad.test', 'atakujacy.test; dkim=fail'], messageId: '<m2@przyklad.test>' }), NOW);
+    const ok = await runMailIn(deps, integ, mail({ authResults: ['mx.google.com; dkim=pass header.d=przyklad.test', 'atakujacy.test; dkim=fail'], messageId: '<m2@przyklad.test>' }), NOW);
     expect(ok.kind).toBe('sent');
   });
   it('tryb prosty: temat i oczyszczona treść idą na stałą listę', async () => {

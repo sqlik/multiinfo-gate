@@ -23,13 +23,12 @@ describe('authResultsPass', () => {
     expect(authResultsPass([...AR('spf=fail smtp.mailfrom=x.pl; dkim=none'), 'atakujacy.test; dkim=pass header.d=przyklad.pl'], 'przyklad.pl')).toBe(false);
     expect(authResultsPass([...AR('dkim=pass header.d=przyklad.pl'), 'atakujacy.test; spf=fail smtp.mailfrom=x.pl'], 'przyklad.pl')).toBe(true);
   });
-  it('z nazwą serwera liczy się ciągły blok nagłówków od góry z tą nazwą; nagłówek z tą nazwą pod cudzym jest podrobiony', () => {
-    const forgedBelow = ['atakujacy.test; dkim=pass header.d=przyklad.test', 'mx.google.com; dkim=pass header.d=przyklad.test'];
-    expect(authResultsPass(forgedBelow, 'przyklad.test', 'mx.google.com')).toBe(false);
-    const twoFromServer = ['mx.google.com; arc=none', 'mx.google.com; dkim=pass header.d=przyklad.test', 'atakujacy.test; dkim=pass header.d=przyklad.test'];
-    expect(authResultsPass(twoFromServer, 'przyklad.test', 'mx.google.com')).toBe(true);
-    const gapped = ['mx.google.com; dkim=none', 'atakujacy.test; spf=none', 'mx.google.com; dkim=pass header.d=przyklad.test'];
-    expect(authResultsPass(gapped, 'przyklad.test', 'mx.google.com')).toBe(false);
+  it('z nazwą serwera czytany jest tylko pierwszy nagłówek od góry i musi nosić tę nazwę', () => {
+    const forgedBelowForeign = ['atakujacy.test; dkim=pass header.d=przyklad.test', 'mx.google.com; dkim=pass header.d=przyklad.test'];
+    expect(authResultsPass(forgedBelowForeign, 'przyklad.test', 'mx.google.com')).toBe(false);
+    const forgedBelowGenuine = ['mx.google.com; dkim=fail header.d=przyklad.test', 'mx.google.com; dkim=pass header.d=przyklad.test'];
+    expect(authResultsPass(forgedBelowGenuine, 'przyklad.test', 'mx.google.com')).toBe(false);
+    expect(authResultsPass(['mx.google.com; dkim=pass header.d=przyklad.test', 'atakujacy.test; dkim=fail'], 'przyklad.test', 'mx.google.com')).toBe(true);
   });
   it('z nazwą serwera brak nagłówka oznacza odmowę; wielkość liter i wersja nie mają znaczenia', () => {
     expect(authResultsPass([], 'przyklad.test', 'mx.google.com')).toBe(false);
