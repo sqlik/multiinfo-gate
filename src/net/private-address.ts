@@ -47,16 +47,10 @@ function isLocalName(hostname: string): boolean {
 }
 
 /**
- * Werdykt o celu webhooka: adres literalny sprawdzany od razu, nazwa po rozwiązaniu -
- * wszystkie adresy muszą być publiczne, bo klient HTTP użyje dowolnego z nich.
+ * Werdykt o nazwie hosta: adres literalny i `localhost` sprawdzane od razu, nazwa po
+ * rozwiązaniu - wszystkie adresy muszą być publiczne, bo klient użyje dowolnego z nich.
  */
-export async function webhookTarget(url: string, resolve: Resolver): Promise<WebhookTargetVerdict> {
-  let hostname: string;
-  try {
-    hostname = new URL(url).hostname;
-  } catch {
-    return { kind: 'unresolved', reason: 'adres nie jest poprawnym URL' };
-  }
+export async function hostTarget(hostname: string, resolve: Resolver): Promise<WebhookTargetVerdict> {
   const literal = hostname.startsWith('[') ? hostname.slice(1, -1) : hostname;
   if (isLocalName(literal)) return { kind: 'private', address: literal };
   if (isIPv4(literal) || isIPv6(literal)) {
@@ -73,6 +67,21 @@ export async function webhookTarget(url: string, resolve: Resolver): Promise<Web
   return inside === undefined ? { kind: 'public' } : { kind: 'private', address: inside };
 }
 
+/** Werdykt o celu webhooka: nazwa hosta z URL sprawdzana przez `hostTarget`. */
+export async function webhookTarget(url: string, resolve: Resolver): Promise<WebhookTargetVerdict> {
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    return { kind: 'unresolved', reason: 'adres nie jest poprawnym URL' };
+  }
+  return hostTarget(hostname, resolve);
+}
+
 /** Wspólny komunikat panelu i workera, gdy cel webhooka leży w sieci wewnętrznej. */
 export const PRIVATE_TARGET_MESSAGE = 'Adres webhooka wskazuje sieć wewnętrzną; bramka nie woła takich adresów, '
   + 'chyba że w środowisku ustawiono MIG_WEBHOOK_ALLOW_PRIVATE=1';
+
+/** Komunikat panelu i pollera, gdy serwer IMAP leży w sieci wewnętrznej. */
+export const PRIVATE_MAIL_MESSAGE = 'Serwer IMAP ma adres w sieci wewnętrznej. Bramka łączy się z takim serwerem wyłącznie '
+  + 'przy ustawionej zmiennej MIG_MAIL_ALLOW_PRIVATE=1 w środowisku bramki';

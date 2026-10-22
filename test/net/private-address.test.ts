@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPrivateAddress, webhookTarget } from '../../src/net/private-address.ts';
+import { hostTarget, isPrivateAddress, webhookTarget } from '../../src/net/private-address.ts';
 
 describe('isPrivateAddress', () => {
   it.each([
@@ -45,5 +45,18 @@ describe('webhookTarget', () => {
 
   it('adres, którego nie da się sparsować, też jest nierozwiązany', async () => {
     expect((await webhookTarget('nie-adres', publicOnly)).kind).toBe('unresolved');
+  });
+});
+
+describe('hostTarget', () => {
+  it('adres literalny prywatny bez DNS', async () => {
+    expect(await hostTarget('10.0.0.5', async () => { throw new Error('nie pytać'); })).toEqual({ kind: 'private', address: '10.0.0.5' });
+  });
+  it('nazwa z jednym adresem prywatnym wśród publicznych jest prywatna', async () => {
+    expect(await hostTarget('imap.przyklad.test', async () => ['93.184.216.34', '192.168.1.5'])).toEqual({ kind: 'private', address: '192.168.1.5' });
+  });
+  it('nazwa publiczna przechodzi, nierozwiązana zgłasza powód', async () => {
+    expect((await hostTarget('imap.przyklad.test', async () => ['93.184.216.34'])).kind).toBe('public');
+    expect(await hostTarget('brak.przyklad.test', async () => [])).toEqual({ kind: 'unresolved', reason: 'nazwa nie ma żadnego adresu' });
   });
 });
