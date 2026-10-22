@@ -286,7 +286,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
   interface SavedMailForm { config: MailInConfig; password: string | null; keyId: number; v: MailFormValues }
 
   // „Sprawdź połączenie” łączy się tak jak poller: po sprawdzeniu sieci i pod przypięty adres.
-  const mailboxConnect = deps.resolve ? guardedConnect(deps.mailboxConnect, deps.resolve, deps.allowPrivateMail === true) : deps.mailboxConnect;
+  const mailboxConnect = guardedConnect(deps.mailboxConnect, deps.resolve ?? systemResolver, deps.allowPrivateMail === true);
   /** Błąd formularza, gdy serwer IMAP leży w sieci wewnętrznej bez zgody albo nazwa nie ma adresu; `null`, gdy wolno się łączyć. */
   const mailHostError = async (host: string): Promise<string | null> => {
     const target = await hostTarget(host, deps.resolve ?? systemResolver);
