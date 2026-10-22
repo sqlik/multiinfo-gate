@@ -190,7 +190,7 @@ describe('tryb prosty: wychodząca', () => {
   it('Fakturownia dla klienta: prosty formularz pyta o konto i kod API, zapis składa adres zapytania', async () => {
     const formularz = await page('/integracje/nowa?rodzaj=webhook_in&ustawienie=fakturownia-klient');
     expect(formularz.statusCode).toBe(200);
-    expect(formularz.body).toContain('Nazwa Twojego konta w Fakturowni');
+    expect(formularz.body).toContain('Nazwa konta w Fakturowni');
     expect(formularz.body).toContain('Kod autoryzacyjny API');
     expect(formularz.body).toContain('Token, który Fakturownia wyśle w treści');
     // Znacznik nazwy konta pojawia się wyłącznie w instrukcji, przy zdaniu o trybie zaawansowanym.
@@ -214,7 +214,7 @@ describe('tryb prosty: wychodząca', () => {
     // Edycja wraca do trybu prostego z nazwą konta wyjętą z zapisanego adresu.
     const edycja = await page(`/integracje/${row.id}/edytuj`);
     expect(edycja.body).toContain('value="firma"');
-    expect(edycja.body).toContain('Nazwa Twojego konta w Fakturowni');
+    expect(edycja.body).toContain('Nazwa konta w Fakturowni');
     expect(edycja.body).toContain('zapisany, puste pole zachowuje dotychczasowy');
   });
 
@@ -225,7 +225,7 @@ describe('tryb prosty: wychodząca', () => {
     };
     const bez = await post('/integracje', { ...pola, account: '' });
     expect(bez.statusCode).toBe(400);
-    expect(bez.body).toContain('nazwa twojego konta w fakturowni');
+    expect(bez.body).toContain('nazwa konta w fakturowni');
     const zla = await post('/integracje', { ...pola, account: 'firma.fakturownia.pl/klienci' });
     expect(zla.statusCode).toBe(400);
     expect(zla.body).toContain('małe litery');

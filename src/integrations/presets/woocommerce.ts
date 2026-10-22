@@ -47,7 +47,7 @@ export const woocommerce: Preset = {
   simple: {
     inbound: {
       addressField: 'w sklepie w polu Adres dostarczenia webhooka',
-      recipients: { source: 'list', note: 'SMS o nowym zamówieniu idzie do obsługi sklepu, więc numery wpisujesz tutaj.' },
+      recipients: { source: 'list', note: 'SMS o nowym zamówieniu jest wysyłany do obsługi sklepu na numery wpisane tutaj.' },
       when: [
         { id: 'kazde', label: 'przy każdym nowym zamówieniu', condition: { mode: 'builder', rules: [MA_ZAMOWIENIE] } },
         { id: 'poza-czekajacymi', label: 'bez zamówień czekających na płatność', condition: { mode: 'builder', rules: [MA_ZAMOWIENIE, { path: 'status', op: 'ne', value: 'pending' }] } },
@@ -57,18 +57,18 @@ export const woocommerce: Preset = {
         { id: 'z-platnoscia', label: 'numer, kwota, kupujący, sposób płatności', text: { mode: 'liquid', template: 'Nowe zamowienie #{{ p.number }} na {{ p.total }} {{ p.currency }} od {{ p.billing.first_name | gsm }} {{ p.billing.last_name | gsm }}, {{ p.payment_method_title | gsm }}' } },
         { id: 'z-pozycjami', label: 'numer, kwota, liczba pozycji', text: { mode: 'liquid', template: 'Nowe zamowienie #{{ p.number }} na {{ p.total }} {{ p.currency }}, pozycji: {{ p.line_items.size }}' } },
       ],
-      auth: { kind: 'none', note: 'WooCommerce nie pozwala dodać własnego nagłówka ani hasła, więc integracji broni sam adres wejściowy. Trzymaj go w tajemnicy, a gdy wycieknie, wymień go przyciskiem obok adresu.' },
+      auth: { kind: 'none', note: 'WooCommerce nie pozwala dodać własnego nagłówka ani hasła, więc integracji broni sam adres wejściowy. Adres należy chronić. Po wycieku wymień go przyciskiem obok adresu.' },
     },
   },
   guide: [
     'W sklepie wybierz **WooCommerce → Ustawienia → Zaawansowane → Webhooki → Dodaj webhook**. **Status** ustaw na `Aktywny`, **Temat** na `Order created`, a **Adres dostarczenia** to adres wejściowy integracji. **Wersję API** zostaw najnowszą z listy.',
     '',
-    'WooCommerce wysyła całe zamówienie jako JSON. Pole **Klucz** służy do podpisywania żądań; bramka będzie go sprawdzać od wersji 1.8, na razie zostaw wygenerowaną wartość.',
+    'WooCommerce wysyła całe zamówienie jako JSON. Pole **Klucz** służy do podpisywania żądań. Bramka obecnie nie sprawdza podpisu, wygenerowaną wartość należy pozostawić bez zmian.',
     '',
-    'Adres bramki musi kończyć się portem 443, 80 albo 8080. WordPress nie dostarcza webhooków na inne porty i w dzienniku sklepu zapisuje wtedy „Podano nieprawidłowy adres URL”. Przy zwykłym adresie z certyfikatem nie musisz nic robić, bo to jest port 443.',
+    'Adres bramki musi kończyć się portem 443, 80 albo 8080. WordPress nie dostarcza webhooków na inne porty i w dzienniku sklepu zapisuje wtedy „Podano nieprawidłowy adres URL”. Adres HTTPS bez podanego portu używa portu 443, więc spełnia ten warunek.',
     '',
     'Zaraz po zapisaniu webhooka sklep wysyła pod ten adres żądanie próbne. Bramka odpowiada na nie kodem 200 i nie wysyła z niego SMS-a, więc zapis kończy się bez błędu.',
     '',
-    'Jeśli bramka będzie długo nieosiągalna, sklep sam wyłączy webhook po siódmej nieudanej próbie z rzędu. Wtedy trzeba wrócić do listy webhooków i przestawić **Status** z powrotem na `Aktywny`.',
+    'Gdy bramka jest długo nieosiągalna, sklep wyłącza webhook po siódmej nieudanej próbie z rzędu. Należy wówczas wrócić do listy webhooków i ustawić **Status** ponownie na `Aktywny`.',
   ].join('\n'),
 };

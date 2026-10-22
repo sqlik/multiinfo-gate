@@ -37,7 +37,7 @@ export function registerCancelRoute(app: FastifyInstance, deps: ApiDeps): void {
           }
           if (e.code === -41) {
             throw new ApiError(409, 'already_passed',
-              'Wiadomość została już przekazana do abonenta i nie da się jej anulować.', e.code);
+              'Wiadomość została już przekazana do abonenta i nie można jej anulować.', e.code);
           }
           if (e.kind === 'certificate') {
             throw new ApiError(503, 'account_certificate', 'Multiinfo odrzuciło certyfikat bramki.', e.code);

@@ -29,16 +29,16 @@ export const n8n: Preset = {
     outbound: {
       address: { label: 'Adres webhooka n8n', hint: 'Adres produkcyjny z węzła Webhook w przepływie', placeholder: 'https://n8n.firma.pl/webhook/sms' },
       secrets: [], params: [],
-      note: 'Bramka wysyła całe zdarzenie jako JSON. Węzeł Webhook wkłada je do pola body, więc w przepływie czytasz je wyrażeniem $json.body.text.',
+      note: 'Bramka wysyła całe zdarzenie jako JSON. Węzeł Webhook wkłada je do pola body, więc w przepływie odczytuje się je wyrażeniem $json.body.text.',
     },
   },
   guide: [
-    '**Do SMS.** W przepływie dodaj węzeł **HTTP Request**. **Method** ustaw na `POST`, **URL** to adres wejściowy integracji, **Send Body** włącz, **Body Content Type** ustaw na `JSON`. W ciele podaj dwa pola: `to` z numerem oraz `text` z treścią. Wartości z poprzedniego węzła wstawisz wyrażeniem, na przykład `{{ $json.telefon }}`.',
+    '**Do SMS.** W przepływie dodaj węzeł **HTTP Request**. **Method** ustaw na `POST`, **URL** to adres wejściowy integracji, **Send Body** włącz, **Body Content Type** ustaw na `JSON`. W ciele podaj dwa pola: `to` z numerem oraz `text` z treścią. Wartości z poprzedniego węzła wstawia się wyrażeniem, na przykład `{{ $json.telefon }}`.',
     '',
     'Hasło ustaw w **Authentication → Generic Credential Type → Header Auth**: nazwa `Authorization`, wartość `Bearer <hasło z bramki>`.',
     '',
-    '**Z SMS-a.** W przepływie dodaj węzeł **Webhook**, **HTTP Method** ustaw na `POST`, skopiuj adres produkcyjny i wklej go jako adres integracji wychodzącej. Węzeł Webhook wkłada całe zdarzenie do pola `body`, więc pola odczytasz wyrażeniami `{{ $json.body.from }}` oraz `{{ $json.body.text }}`. Przepływ musi być zapisany oraz aktywny, bo adres testowy działa tylko przy otwartym oknie.',
+    '**Z SMS-a.** W przepływie dodaj węzeł **Webhook**, **HTTP Method** ustaw na `POST`, skopiuj adres produkcyjny i wklej go jako adres integracji wychodzącej. Węzeł Webhook wkłada całe zdarzenie do pola `body`, więc pola odczytuje się wyrażeniami `{{ $json.body.from }}` oraz `{{ $json.body.text }}`. Przepływ musi być zapisany oraz aktywny, bo adres testowy działa tylko przy otwartym oknie.',
     '',
-    'n8n stoi zwykle w sieci prywatnej. Bramka domyślnie nie woła adresów prywatnych. Ustaw `MIG_WEBHOOK_ALLOW_PRIVATE=1` albo wystaw n8n pod adresem publicznym.',
+    'n8n zwykle działa w sieci prywatnej. Bramka domyślnie nie wysyła żądań na adresy prywatne. Ustaw `MIG_WEBHOOK_ALLOW_PRIVATE=1` albo wystaw n8n pod adresem publicznym.',
   ].join('\n'),
 };

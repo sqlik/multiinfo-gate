@@ -101,7 +101,7 @@ const BLAD_KLUCZA = blad(
  */
 const POLA_WIADOMOSCI: Record<string, JsonSchema> = {
   to: {
-    description: 'Numer odbiorcy albo lista numerów, najwyżej 500. Numer bez kodu kraju dostaje kod domyślny konta,'
+    description: 'Numer odbiorcy albo lista numerów, najwyżej 500. Numer bez kodu kraju otrzymuje kod domyślny konta,'
       + ' dla Polski 48. Lista jest przyjmowana w całości albo wcale.',
     oneOf: [
       { type: 'string', example: '48601000001' },
@@ -150,7 +150,7 @@ const POLA_WIADOMOSCI: Record<string, JsonSchema> = {
     type: 'string',
     format: 'date-time',
     description: 'Czas ważności w formacie ISO 8601, najwyżej 72 godziny od przyjęcia. Wiadomość niedoręczona do tego'
-      + ' czasu dostaje stan expired.',
+      + ' czasu otrzymuje stan expired.',
     example: '2026-08-26T12:00:00.000Z',
   },
   costCenter: {
@@ -342,7 +342,7 @@ const WIADOMOSC: JsonSchema = {
     parts: { type: 'integer', description: 'Liczba części, na które wiadomość została podzielona' },
     slots: { type: 'integer', description: 'Liczba zajętych miejsc' },
     orig: { type: 'string', nullable: true, description: 'Nadpis nadawcy użyty przy wysyłce' },
-    serviceId: { type: 'string', description: 'Usługa Multiinfo, z której poszła wiadomość', example: '24138' },
+    serviceId: { type: 'string', description: 'Usługa Multiinfo, z której wysłano wiadomość', example: '24138' },
     inReplyTo: {
       type: 'string',
       nullable: true,
@@ -423,7 +423,7 @@ const ROZSYLKA: JsonSchema = {
     remaining: { type: 'integer', nullable: true, description: 'Liczba odbiorców, do których wysyłka jeszcze nie doszła' },
     encoding: { type: 'string', enum: ['gsm', 'ucs2'], description: 'Kodowanie całej rozsyłki' },
     multipart: { type: 'boolean', description: 'Czy którakolwiek treść jest dzielona na części' },
-    serviceId: { type: 'string', description: 'Usługa Multiinfo, z której idzie rozsyłka', example: '24138' },
+    serviceId: { type: 'string', description: 'Usługa Multiinfo, z której wysyłana jest rozsyłka', example: '24138' },
     orig: { type: 'string', nullable: true, description: 'Nadpis nadawcy użyty w rozsyłce' },
     startAt: { type: 'string', format: 'date-time', nullable: true, description: 'Zamówiony termin rozpoczęcia' },
     createdAt: { type: 'string', format: 'date-time', description: 'Chwila przyjęcia przez bramkę' },
@@ -788,7 +788,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
           operationId: 'zamowRaportRozsylki',
           summary: 'Zamówienie raportu rozsyłki',
           description: 'Zamawia raport rozsyłki jeszcze raz. Bramka zamawia go sama po zakończeniu rozsyłki, więc to'
-            + ' wywołanie przydaje się, gdy poprzedni raport ma stan failed. Gotowy raport odczytuje się wywołaniem'
+            + ' wywołanie służy do ponowienia zamówienia, gdy poprzedni raport ma stan failed. Gotowy raport odczytuje się wywołaniem'
             + ' GET pod tym samym adresem.',
           security: KLUCZ,
           parameters: [PARAMETR_ID_ROZSYLKI],

@@ -28,7 +28,7 @@ export const PROBKA_FAKTURY = {
 export const fakturownia: Preset = {
   id: 'fakturownia',
   name: 'Fakturownia: powiadomienie obsługi',
-  blurb: 'SMS na Twój numer, gdy w Fakturowni powstaje nowa faktura',
+  blurb: 'SMS do obsługi o każdej nowej fakturze w Fakturowni',
   kinds: ['webhook_in'],
   sample: PROBKA_FAKTURY,
   fields: [
@@ -49,13 +49,13 @@ export const fakturownia: Preset = {
     throttle: { limit: 60, windowMinutes: 10 },
     maxParts: 1, overflow: 'truncate',
   },
-  secrets: [{ ref: 'payloadToken', label: 'Token z webhooka', hint: 'Ta sama wartość, którą wpisujesz w Fakturowni w polu „Api token”' }],
+  secrets: [{ ref: 'payloadToken', label: 'Token z webhooka', hint: 'Ta sama wartość, która jest wpisana w Fakturowni w polu „Api token”' }],
   expect: { recipients: [], text: 'Faktura 1/09/2026 na 123.0 PLN dla Anna Kowalska' },
   sampleSource: 'Fakturownia 6.152.8, konto próbne, 2026-09-15: webhook invoice:create po wystawieniu faktury w panelu',
   simple: {
     inbound: {
       addressField: 'w Fakturowni w Ustawieniach konta, w zakładce Integracja, w sekcji Webhooki, w polu Adres',
-      recipients: { source: 'list', note: 'SMS idzie na numery wpisane tutaj, czyli do Ciebie albo do Twojej obsługi. Faktura nie niesie numeru klienta.' },
+      recipients: { source: 'list', note: 'SMS jest wysyłany na numery wpisane tutaj, do obsługi. Webhook faktury nie zawiera numeru klienta.' },
       when: [
         { id: 'wystawienie', label: 'przy wystawieniu faktury', condition: { mode: 'builder', rules: [MA_FAKTURE] } },
         { id: 'tylko-nieoplacone', label: 'tylko przy fakturach jeszcze nieopłaconych', condition: { mode: 'builder', rules: [MA_FAKTURE, { path: 'deal.paid', op: 'ne', value: 'true' }] } },
@@ -67,18 +67,18 @@ export const fakturownia: Preset = {
       auth: {
         kind: 'payload', path: 'api_token',
         label: 'Token, który Fakturownia wyśle w treści',
-        where: 'w Fakturowni w tym samym wierszu webhooka, w polu „Api token” - wpisz tam dowolne długie hasło i powtórz je tutaj',
+        where: 'w Fakturowni, w tym samym wierszu webhooka, w polu „Api token”',
       },
     },
   },
-  warning: 'Zdarzenie wybierz na invoice:create. Inne rodzaje webhooka mają inny kształt i zostaną pominięte.',
+  warning: 'Rodzaj webhooka w Fakturowni: invoice:create. Inne rodzaje mają inną budowę ładunku i zostaną pominięte.',
   guide: [
     '**Gdzie to ustawić.** W Fakturowni wejdź w **Ustawienia**, potem **Ustawienia konta**, zakładka **Integracja**. Na dole strony znajdziesz sekcję **Webhooki**.',
     '',
-    'W pierwszym wolnym wierszu ustaw **Rodzaj** na `invoice:create`. W polu **Adres** wklej adres wejściowy integracji. W polu **Api token** wpisz to samo hasło, które podałeś w bramce. Zaznacz **Aktywny** i zapisz stronę.',
+    'W pierwszym wolnym wierszu ustaw **Rodzaj** na `invoice:create`. W polu **Adres** wklej adres wejściowy integracji. W polu **Api token** wpisz to samo hasło, które zostało wpisane w bramce. Zaznacz **Aktywny** i zapisz stronę.',
     '',
     '**Czego się spodziewać.** Fakturownia wysyła webhooka z opóźnieniem do minuty od zapisania faktury. Ładunek zawiera numer dokumentu, kwotę oraz nazwę nabywcy, ale nie zawiera jego numeru telefonu. Dlatego to ustawienie wysyła SMS na numery wpisane w bramce.',
     '',
-    'Jeśli chcesz powiadamiać klienta, użyj ustawienia **Fakturownia: powiadomienie klienta**. Ono dopytuje Fakturownię o kartotekę nabywcy.',
+    'Do powiadamiania klienta służy ustawienie **Fakturownia: powiadomienie klienta**. Odpytuje ono Fakturownię o kartotekę nabywcy.',
   ].join('\n'),
 };
