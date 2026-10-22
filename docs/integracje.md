@@ -593,7 +593,7 @@ Numery są normalizowane zgodnie z rozdziałem 3.3, z kodem kraju konta. Niepraw
 podany w wiadomości jest pomijany, a SMS trafia do pozostałych odbiorców. Wpis w dzienniku
 otrzymuje informację o pominiętym numerze, administrator powiadomienie regułą „Błąd
 integracji”, a nadawca, jeżeli odpowiedzi są włączone, listę pominiętych numerów
-w potwierdzeniu. Jeżeli wszystkie podane numery są nieprawidłowe, wiadomość jest odrzucana,
+w raporcie. Jeżeli wszystkie podane numery są nieprawidłowe, wiadomość jest odrzucana,
 ponieważ nadawca wyraźnie wskazał odbiorców. Nieprawidłowy numer na liście nadawców albo na
 stałej liście to błąd konfiguracji: SMS nie jest wysyłany, a administrator otrzymuje
 powiadomienie do czasu poprawienia listy. Jedna wiadomość może wskazać do 50 numerów.
@@ -610,16 +610,32 @@ Z tekstu bramka usuwa elementy zbędne w SMS-ie:
 - cytaty: linie rozpoczynające się od `>` oraz wszystko od nagłówka cytatu w dół
   (`W dniu … napisał:`, `On … wrote:`, `-----Original Message-----`,
   `-----Wiadomość oryginalna-----`, blok `Od: … Wysłano: …`),
-- podpis i stopkę: wszystko od separatora `-- ` w osobnej linii, od zwrotu kończącego na
-  początku krótkiej linii (`Pozdrawiam`, `Z pozdrowieniami`, `Z poważaniem`, `Z wyrazami
-  szacunku`, `Dziękuję`, `Best regards`, `Kind regards`, `Regards`, `Sincerely`, `Thanks`)
-  oraz od początku klauzuli prawnej (`Ta wiadomość`, `Niniejsza wiadomość`, `This e-mail`,
-  `This message`, `Administratorem danych`),
+- podpis: wszystko od linii zawierającej wyłącznie nazwę nadawcy z nagłówka `From`, stojącej
+  po pustej linii (kolejność słów i wielkość liter nie mają znaczenia, „Kowalski, Jan” pasuje
+  do „Jan Kowalski”), od separatora `-- ` w osobnej linii, od zwrotu kończącego na początku
+  krótkiej linii (`Pozdrawiam`, `Z pozdrowieniami`, `Z poważaniem`, `Z wyrazami szacunku`,
+  `Dziękuję`, `Best regards`, `Kind regards`, `Regards`, `Sincerely`, `Thanks`) oraz od
+  podpisu telefonu albo programu pocztowego na początku linii krótszej niż 60 znaków
+  (`Wysłane z iPhone’a`, `Wysłane z iPada`, `Wysłane z urządzenia …`, `Wysłane z aplikacji …`,
+  `Wysłano z aplikacji …`, `Sent from my …`, `Get Outlook for …`, `Pobierz aplikację
+  Outlook …`),
+- stopkę: wszystko od początku klauzuli prawnej (`Ta wiadomość`, `Niniejsza wiadomość`,
+  `This e-mail`, `This message`, `Administratorem danych`), od linii zawierającej zwrot
+  rejestrowy (`z siedzibą w`, `zarejestrowana w rejestrze`, `zarejestrowany w rejestrze`,
+  `registered office`, `registered in England`) oraz od linii zawierającej `kapitał
+  zakładowy` albo `Sąd Rejonowy` razem z oznaczeniem spółki albo rejestru (`sp. z o.o.`,
+  `S.A.`, `KRS`, `NIP`, `REGON`),
+- linie zawierające wyłącznie znacznik obrazka osadzonego `[cid:…]`, który program pocztowy
+  zostawia w części tekstowej,
 - nadmiarowe białe znaki: spacje na końcach linii, podwójne puste linie.
 
 Zwrot kończący jest rozpoznawany wyłącznie w linii krótszej niż 40 znaków, dzięki czemu zdanie
-„Dziękuję za zgłoszenie, jutro przerwa serwisowa” pozostaje w treści. Wiadomość składająca się
-z samego „Pozdrawiam” daje pustą treść i wpis „błąd”.
+„Dziękuję za zgłoszenie, jutro przerwa serwisowa” pozostaje w treści. Nazwa nadawcy
+jednowyrazowa (na przykład „Biuro”) nie rozpoczyna podpisu, a nazwa w pierwszej linii albo
+bezpośrednio pod inną linią (na przykład pod „Zgłaszający:”) jest treścią. Zwrot rejestrowy
+`z siedzibą w` kończy treść także w zdaniu nadawcy, dlatego zdanie „Firma z siedzibą w
+Warszawie zamawia 3 sztuki” należy sformułować inaczej. Wiadomość składająca się z samego
+„Pozdrawiam” albo z samej nazwy nadawcy daje pustą treść i wpis „błąd”.
 
 Urządzenie albo aplikacja ma niekiedy własną stopkę, której lista nie rozpoznaje, na przykład
 „Wygenerowano automatycznie przez system monitoringu”. Jej początek należy wpisać w polu
@@ -664,15 +680,17 @@ Krok po kroku na wiadomości z zasilacza UPS:
 3. W sekcji **Próbka do sprawdzenia** wklej całą wiadomość z zasilacza. W programie pocztowym
    jest to funkcja „pokaż oryginał” albo zapis do pliku `.eml`. Można też wypełnić trzy pola:
    nadawcę, temat i treść.
-4. Kliknij **Sprawdź szablon**. Podgląd pokazuje, czy nadawca jest na liście, odbiorców i poziom,
+4. Kliknij **Sprawdź szablon**. Nadawcę można podać z nazwą, na przykład
+   `Jan Kowalski <jan@przyklad.pl>`, wtedy podgląd ucina podpis od nazwy tak jak wysyłka.
+   Podgląd pokazuje, czy nadawca jest na liście, odbiorców i poziom,
    z którego pochodzą, wartości wycinków, oczyszczoną treść, gotowy SMS i liczbę części. Podgląd
    niczego nie wysyła ani nie zapisuje.
 
 ![Podgląd „Sprawdź szablon” dla wiadomości z zasilacza UPS: nadawca na liście, dwaj odbiorcy z listy nadawcy, trzy wycinki, oczyszczona treść i SMS „UPS-01: ON BATTERY, kod E042”](obrazki/poczta-wycinki.png)
 
 Po uruchomieniu skrzynki próbkę można pobrać z dziennika. Przy włączonym przechowywaniu
-ładunków każdy wpis ma odnośnik **Użyj jako próbki**, który otwiera edycję z nadawcą, tematem
-i treścią tej wiadomości.
+ładunków każdy wpis ma odnośnik **Użyj jako próbki**, który otwiera edycję z nadawcą (z nazwą,
+jeżeli była w wiadomości), tematem i treścią tej wiadomości.
 
 Tryb zaawansowany dodaje drugi sposób: wyrażenie regularne. Wartością jest pierwsza grupa albo
 całe dopasowanie. Dostępne są flagi `i` oraz `m`. Wzorzec może mieć do 200 znaków i 50 ms na
@@ -710,12 +728,54 @@ przetworzoną wiadomość. Wymaga skonfigurowanego SMTP z rozdziału 9.1. Bez SM
 informuje o tym i wyświetla odnośnik do ustawień. Domyślnie wyłączony.
 
 Odpowiedź jest wysyłana zwykłym tekstem, w wątku wiadomości nadawcy, z tematem `Re: <temat>`.
-Nadawcą odpowiedzi jest adres i nazwa z ustawień SMTP na ekranie Powiadomienia. Treść opisuje
-wynik: `SMS wysłany do 2 odbiorców (…001, …002), 1 część.` z numerami skróconymi do ostatnich
-trzech cyfr, `SMS wysłany do 1 odbiorcy (…001), 1 część. Pominięto nieprawidłowy numer: 60010.`,
-`SMS nie został wysłany: treść wymaga więcej niż 1 części.`, `SMS nie został wysłany: nie udało
-się ustalić odbiorcy.` albo `SMS nie został wysłany: przekroczono limit integracji (10 w 10
-min).`
+Nadawcą odpowiedzi jest adres i nazwa z ustawień SMTP na ekranie Powiadomienia.
+
+Po udanej wysyłce nadawca otrzymuje raport minutę po przetworzeniu wiadomości. Minuta
+wystarcza, aby raport doręczenia zdążył dotrzeć do bramki. Raport zawiera czas przekazania do
+Multiinfo, nadpis, treść SMS-a z liczbą części oraz status przy każdym numerze:
+
+```
+SMS z wiadomości „Awaria pompy” wysłany 2026-10-22 o 11:40:05.
+Nadpis: Firma Info
+Treść (2 części):
+Awaria pompy. Proszę o pilny kontakt z serwisem.
+
+Odbiorcy:
+48601000001 - doręczona 11:40:14
+48601000002 - w drodze
+
+Potwierdzenie doręczenia dla numerów w drodze zostanie dostarczone w kolejnej wiadomości.
+```
+
+Status przy numerze to „doręczona” z godziną doręczenia, „w drodze”, „w kolejce”, „błąd” albo
+„zablokowana” z godziną i opisem przyczyny, „przedawniona” albo „anulowana” z godziną,
+„wysłana, bez potwierdzenia doręczenia” z godziną (Multiinfo zakończyło wiadomość bez raportu
+doręczenia), „wstrzymana limitem” albo „brak danych” (wiadomość usunięta z bazy przed
+raportem). Status z innego dnia niż wysyłka ma przed godziną datę. Numer nieprawidłowy,
+pominięty przy wysyłce, jest wymieniony w osobnym zdaniu. Gdy po minucie każdy numer ma status
+ostateczny, raport jest jedyną odpowiedzią. Gdy konto jest wstrzymane i SMS czeka w kolejce
+bramki, nagłówek raportu brzmi „przyjęty do wysyłki” zamiast „wysłany”.
+
+Jeżeli któryś numer jest wtedy jeszcze w drodze, bramka sprawdza statusy ponownie: do dwóch
+minut od wysyłki co minutę, do pięciu minut co dwie, do kwadransa co pięć, do pół godziny co
+dziesięć, do dwóch godzin co trzydzieści, a następnie co godzinę. Gdy wszystkie numery mają
+status ostateczny, nadawca otrzymuje drugą wiadomość z wynikiem końcowym:
+
+```
+Wynik końcowy SMS-a z wiadomości „Awaria pompy” wysłanego 2026-10-22 o 11:40:05.
+
+Odbiorcy:
+48601000001 - doręczona 11:40:14
+48601000002 - błąd 12:01:00: numer nie istnieje
+```
+
+Sprawdzanie trwa najwyżej 24 godziny od wysyłki. Po tym czasie nadawca otrzymuje wiadomość
+z informacją, że doręczenia nie udało się potwierdzić w ciągu 24 godzin i dalsze odpytania
+o status nie będą realizowane, wraz z ostatnim znanym statusem każdego numeru.
+
+Po nieudanej wysyłce odpowiedź jest wysyłana od razu: `SMS nie został wysłany: treść wymaga
+więcej niż 1 części.`, `SMS nie został wysłany: nie udało się ustalić odbiorcy.` albo `SMS nie
+został wysłany: przekroczono limit integracji (10 w 10 min).`
 
 Odpowiedź otrzymuje wyłącznie nadawca z listy. Do nadawcy spoza listy bramka nie odpowiada
 nigdy. Taka odpowiedź ujawniałaby, że skrzynka jest bramką, a to zachęca do wysyłania spamu.
