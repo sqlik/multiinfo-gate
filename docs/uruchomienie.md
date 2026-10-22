@@ -1391,4 +1391,6 @@ aplikacja:
 
 W drugą stronę, gdy to bramka wywołuje aplikację (integracja „z SMS-a” albo webhook klucza), adres
 aplikacji w sieci firmowej wymaga `MIG_WEBHOOK_ALLOW_PRIVATE=1` w `/etc/multiinfo-gate/env`
-i `systemctl restart multiinfo-gate`. Bez tego panel odrzuca taki adres przy zapisie.
+i `systemctl restart multiinfo-gate`. Bez tego panel odrzuca taki adres przy zapisie. Serwer
+poczty Mail2SMS w sieci firmowej wymaga analogicznie `MIG_MAIL_ALLOW_PRIVATE=1` w tym samym
+pliku (docs/integracje.md, rozdział 5.1).

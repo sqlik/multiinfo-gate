@@ -250,14 +250,15 @@ function sectionSample(v: MailFormValues): string {
   </details>`;
 }
 
-function connectionPanel(c: MailConnection): string {
+function connectionPanel(c: MailConnection, advanced: boolean): string {
   const folders = c.folders.map((f) => `<button class="btn btn-s" type="button" data-fill="#folder" data-value="${esc(f)}" style="padding: 3px 9px; font-size: 12px;">${esc(f)}</button>`).join(' ');
   if (c.ok) {
     return `<div class="panel" style="max-width: 760px;">
       <div class="panel-h"><div class="lab">Połączenie nawiązane</div><div class="m dim">nieprzeczytanych: ${esc(c.unseen)}</div></div>
       <div class="kv"><div>Foldery</div><div>${folders || '<span class="dim">brak</span>'}<div class="hint">Kliknięcie nazwy wpisuje ją do pola Folder</div></div></div>
       <div class="kv"><div>Authentication-Results</div><div>${c.authservId === null ? '<span class="dim">brak nagłówka w ostatniej wiadomości</span>'
-    : `<button class="btn btn-s" type="button" data-fill="#authservId" data-value="${esc(c.authservId)}" style="padding: 3px 9px; font-size: 12px;">${esc(c.authservId)}</button><div class="hint">Kliknięcie wpisuje nazwę do pola w sekcji „Kto może wysyłać” (tryb zaawansowany)</div>`}</div></div>
+    : advanced ? `<button class="btn btn-s" type="button" data-fill="#authservId" data-value="${esc(c.authservId)}" style="padding: 3px 9px; font-size: 12px;">${esc(c.authservId)}</button><div class="hint">Kliknięcie wpisuje nazwę do pola w sekcji „Kto może wysyłać”</div>`
+      : `<span class="m">${esc(c.authservId)}</span><div class="hint">Pole jest w trybie zaawansowanym</div>`}</div></div>
     </div>`;
   }
   const titles = { auth: ['Logowanie odrzucone', 'Sprawdź login i hasło. W Gmailu wymagane jest hasło aplikacji, nie hasło do konta. W Google Workspace dostęp IMAP musi być włączony przez administratora'],
@@ -312,7 +313,7 @@ export function mailFormPage(ctx: FormContext, v: MailFormValues, opts: MailForm
     ${opts.note ? `<div class="warn">${esc(opts.note)}</div>` : ''}
     ${opts.error ? `<div class="warn">${esc(opts.error)}</div>` : ''}
     ${guide}
-    ${opts.connection ? connectionPanel(opts.connection) : ''}
+    ${opts.connection ? connectionPanel(opts.connection, opts.mode === 'zaawansowany') : ''}
     ${opts.preview ? previewPanel(opts.preview) : ''}
     <div class="panel" style="max-width: 760px;">
       <form class="form" method="post" action="${action}" autocomplete="off">

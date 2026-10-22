@@ -47,18 +47,14 @@ export function authResultsPass(headers: string[], fromDomain: string, authservI
   const first = headers[0];
   if (first === undefined) return false;
   if (wanted !== '' && authservIdOf(first) !== wanted) return false;
-  const considered = [first];
-  for (const header of considered) {
-    const h = stripComments(header).toLowerCase();
-    for (const m of h.matchAll(/dkim=pass\b[^;]*?header\.d=([^\s;()]+)/g)) {
-      const d = m[1]!;
-      if (within(domain, d)) return true;
-    }
-    for (const m of h.matchAll(/spf=pass\b[^;]*?smtp\.mailfrom=([^\s;()]+)/g)) {
-      const mailfrom = m[1]!;
-      const mfDomain = mailfrom.includes('@') ? domainOf(mailfrom) : mailfrom;
-      if (within(mfDomain, domain)) return true;
-    }
+  const h = stripComments(first).toLowerCase();
+  for (const m of h.matchAll(/dkim=pass\b[^;]*?header\.d=([^\s;()]+)/g)) {
+    if (within(domain, m[1]!)) return true;
+  }
+  for (const m of h.matchAll(/spf=pass\b[^;]*?smtp\.mailfrom=([^\s;()]+)/g)) {
+    const mailfrom = m[1]!;
+    const mfDomain = mailfrom.includes('@') ? domainOf(mailfrom) : mailfrom;
+    if (within(mfDomain, domain)) return true;
   }
   return false;
 }

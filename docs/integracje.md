@@ -586,7 +586,8 @@ połączenie”: odczytuje ją z ostatniej wiadomości w folderze i wyświetla z
 ją do pola. Nazwę można też odczytać z nagłówków dowolnej wiadomości w skrzynce, z pierwszego
 nagłówka `Authentication-Results`. Puste pole oznacza odczyt pierwszego nagłówka bez sprawdzania
 nazwy. Skrzynka za wewnętrznym przekaźnikiem, który dopisuje własny nagłówek nad nagłówkiem
-serwera MX, wymaga nazwy tego przekaźnika albo pustego pola.
+serwera MX, działa tylko wtedy, gdy ten przekaźnik sam sprawdza SPF i DKIM. W polu podaje się
+wówczas nazwę przekaźnika.
 
 ### 5.3. Do kogo
 

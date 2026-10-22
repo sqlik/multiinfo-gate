@@ -74,6 +74,8 @@ MIG_LOG_LEVEL=info
 MIG_BACKUP_RETENTION_DAYS=14
 # 1 pozwala na webhooki pod adresy w sieci wewnętrznej.
 MIG_WEBHOOK_ALLOW_PRIVATE=0
+# 1 pozwala na serwer poczty (Mail2SMS) w sieci wewnętrznej.
+MIG_MAIL_ALLOW_PRIVATE=0
 # Odbiór wiadomości przychodzących: oczekiwanie na odpowiedź Multiinfo (60000 to maksimum,
 # ale opóźnia odbiór nawet o minutę - patrz docs 7.7) i przerwa po pustej odpowiedzi.
 MIG_INBOUND_TIMEOUT_MS=10000

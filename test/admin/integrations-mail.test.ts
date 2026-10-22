@@ -279,11 +279,15 @@ describe('nazwa serwera w nagłówku Authentication-Results', () => {
 });
 
 describe('Sprawdź połączenie i authserv-id', () => {
-  it('pokazuje nazwę serwera z ostatniej wiadomości z przyciskiem wpisującym do pola', async () => {
+  it('w trybie zaawansowanym pokazuje nazwę serwera z przyciskiem wpisującym do pola, w prostym samą nazwę z podpowiedzią', async () => {
     h.mailbox.authservId = 'mx.google.com';
-    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody() });
-    expect(res.body).toContain('data-fill="#authservId" data-value="mx.google.com"');
-    expect(res.body).toContain('Authentication-Results');
+    const adv = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody({ tryb: 'zaawansowany' }) });
+    expect(adv.body).toContain('data-fill="#authservId" data-value="mx.google.com"');
+    expect(adv.body).toContain('Authentication-Results');
+    const simple = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody() });
+    expect(simple.body).not.toContain('data-fill="#authservId"');
+    expect(simple.body).toContain('mx.google.com');
+    expect(simple.body).toContain('Pole jest w trybie zaawansowanym');
   });
   it('bez nagłówka w ostatniej wiadomości pokazuje informację zamiast przycisku', async () => {
     const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody() });
