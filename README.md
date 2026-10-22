@@ -41,7 +41,7 @@ krótki SMS.
 ## Co trzeba mieć
 
 - Konto Multiinfo z użytkownikiem API i certyfikatem (`.pfx` z hasłem)
-- ID usługi (z panelu Multiinfo albo od opiekuna technicznego Polkomtela) i, jeżeli mają być
+- ID usługi (z panelu Multiinfo albo od opiekuna technicznego Polkomtel) i, jeżeli mają być
   używane, nadpisy nadawcy uruchomione przez Polkomtel na wniosek z panelu Multiinfo
 - Serwer Linux (Ubuntu 24.04) z Dockerem albo własny Proxmox VE. Wystarczy najmniejsza maszyna
   w chmurze, x86-64 albo ARM64. Na Proxmoxie skrypt tworzy gotowy kontener LXC bez Dockera

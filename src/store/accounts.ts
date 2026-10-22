@@ -21,7 +21,7 @@ export interface AccountInput {
   certNotBefore: string; certNotAfter: string;
   defaultCountryCode: string; defaultOrig: string | null;
   storeContent: 0 | 1; serviceIds: string[];
-  /** Nadpisy uzgodnione z Polkomtelem. Pominięcie oznacza pusty słownik. */
+  /** Nadpisy uzgodnione z Polkomtel. Pominięcie oznacza pusty słownik. */
   origs?: string[];
 }
 

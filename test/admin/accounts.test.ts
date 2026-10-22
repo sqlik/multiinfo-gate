@@ -245,7 +245,7 @@ describe('POST /konta/:id/nadpisy', () => {
     payload: new URLSearchParams({ origs, defaultOrig }).toString(),
   });
 
-  it('zapisuje słownik nadpisów uzgodnionych z Polkomtelem', async () => {
+  it('zapisuje słownik nadpisów uzgodnionych z Polkomtel', async () => {
     const res = await save('Firma Info\nFirma Wind\nFirma Alert');
     expect(res.statusCode).toBe(302);
     expect(h.accounts.origs(accountId).sort()).toEqual(['Firma Alert', 'Firma Info', 'Firma Wind']);

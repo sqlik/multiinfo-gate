@@ -25,7 +25,7 @@ i uruchomienie nadpisów przez Polkomtel, od kilku godzin do kilku dni.
 
 Bramka korzysta z konta Multiinfo jak każda inna aplikacja kliencka. Potrzebuje użytkownika API
 z certyfikatem i identyfikatora usługi. Opcjonalnie potrzebuje także nadpisów nadawcy. Wszystko
-to załatwia się w panelu Multiinfo i z opiekunem technicznym Polkomtela, zanim bramka zostanie
+to załatwia się w panelu Multiinfo i z opiekunem technicznym Polkomtel, zanim bramka zostanie
 zainstalowana. Bez podpisanego certyfikatu nie da się sprawdzić połączenia. Obieg certyfikatu
 warto więc rozpocząć jako pierwszy.
 
@@ -45,7 +45,7 @@ Multiinfo uwierzytelnia aplikację certyfikatem klienckim, który wystawia Polko
 wygląda tak:
 
 1. **Pobranie instrukcji.** W panelu bramki, na formularzu dodawania konta Multiinfo, jest
-   odnośnik do archiwum ZIP z instrukcjami Polkomtela (adres:
+   odnośnik do archiwum ZIP z instrukcjami Polkomtel (adres:
    `https://plk-assets.s3.pl-waw.scw.cloud/certyfikaty-multiinfo.zip`). Archiwum zawiera trzy
    równoważne instrukcje generowania certyfikatu. Wystarczy jedna, dobrana do własnego
    środowiska:
@@ -57,12 +57,12 @@ wygląda tak:
 2. **Wygenerowanie certyfikatu.** Zgodnie z wybraną instrukcją generujesz klucz prywatny
    i certyfikat. W polu CN wpisz login użytkownika API z punktu 1.1. W polu adresu e-mail wpisz
    adres, na który Polkomtel ma odesłać podpisany certyfikat.
-3. **Wysłanie do Polkomtela.** Wygenerowany certyfikat wysyłasz pocztą elektroniczną na adres
+3. **Wysłanie do Polkomtel.** Wygenerowany certyfikat wysyłasz pocztą elektroniczną na adres
    podany w instrukcji. Polkomtel podpisuje go swoim urzędem certyfikacji i odsyła na adres
    e-mail wpisany w certyfikacie.
 4. **Utworzenie pliku `.p12` / `.pfx`.** Po otrzymaniu podpisanego certyfikatu łączysz go
    z kluczem prywatnym w jeden plik chroniony hasłem. Jak to zrobić, mówi dalsza część tej samej
-   instrukcji. Instrukcje Polkomtela kończą się plikiem z rozszerzeniem `.p12`. Jest to ten sam
+   instrukcji. Instrukcje Polkomtel kończą się plikiem z rozszerzeniem `.p12`. Jest to ten sam
    format co `.pfx` (PKCS#12). Różni się wyłącznie rozszerzeniem, więc żadna konwersja nie jest
    potrzebna. Bramka przyjmuje plik z obydwoma rozszerzeniami. Ten plik i hasło do niego
    wgrywasz do bramki (rozdział 4.2). Bramka odczytuje z pliku podmiot (CN), wystawcę, odcisk
@@ -93,7 +93,7 @@ Wymiana przebiega tym samym obiegiem (rozdział 7).
 
 Każda wysyłka jest przypisana do usługi (`serviceId`). Jest to liczba nadana przez Polkomtel.
 Identyfikator usługi odczytasz w panelu Multiinfo albo dostaniesz od opiekuna technicznego
-Polkomtela. Jedno konto może mieć kilka usług. Bramka pozwala wpisać wszystkie i ogranicza każdy
+Polkomtel. Jedno konto może mieć kilka usług. Bramka pozwala wpisać wszystkie i ogranicza każdy
 klucz API do wybranych. Wysyłka z nieznanym identyfikatorem kończy się kodem `-24`.
 
 ### 1.4. Nadpisy nadawcy
@@ -441,7 +441,7 @@ certyfikat i hasło, a odrzuciło jedynie treść zapytania. Inne kody:
 | `-85` | CN certyfikatu nie zgadza się z loginem | wystawić certyfikat z CN równym loginowi |
 
 Sprawdzenie wysyła jeszcze drugie zapytanie, na stronę diagnostyczną Multiinfo `test.aspx`.
-Strona odpowiada tym, co serwer Polkomtela odczytał z przedstawionego certyfikatu: podmiotem,
+Strona odpowiada tym, co serwer Polkomtel odczytał z przedstawionego certyfikatu: podmiotem,
 wystawcą i datą ważności. Karta pokazuje te dane pod wynikiem sprawdzenia jako **Certyfikat
 widziany przez Multiinfo** i porównuje CN z loginem konta. Różnica między tym, co bramka
 odczytała z pliku `.pfx` (punkt 4.2), a tym, co widzi Multiinfo, wskazuje przyczynę kodów `-80`
@@ -1020,7 +1020,7 @@ i ponowne budowanie.
 ### 7.5. Certyfikat Multiinfo
 
 Panel ostrzega na ekranie przeglądu 30 dni przed upływem ważności certyfikatu konta. Wymiana
-przebiega obiegiem z punktu 1.2. Generujesz nowy certyfikat według instrukcji Polkomtela, z tym
+przebiega obiegiem z punktu 1.2. Generujesz nowy certyfikat według instrukcji Polkomtel, z tym
 samym CN. Wysyłasz go do podpisu i tworzysz plik `.p12`/`.pfx`. Wgrywasz go na karcie konta
 w sekcji **Wymiana certyfikatu**. Wpisujesz nowe dane w zakładce Uwierzytelnianie w panelu
 Multiinfo. Na koniec sprawdzasz połączenie.

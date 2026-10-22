@@ -106,7 +106,7 @@ export interface ProtocolTrace {
 
 /**
  * Strefa, w której Multiinfo czyta daty. Dokumentacja podaje tylko format
- * `yyyyMMddhhmmss`, bez strefy - system Polkomtela pracuje w czasie polskim.
+ * `yyyyMMddhhmmss`, bez strefy - system Polkomtel pracuje w czasie polskim.
  * Nie polegamy na strefie procesu: kontener działa zwykle w UTC.
  */
 export const OPERATOR_TIME_ZONE = 'Europe/Warsaw';

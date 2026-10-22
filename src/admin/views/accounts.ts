@@ -47,7 +47,7 @@ const ZDANIE_O_NADPISACH =
   'zakładka Nadpisy). Żądanie z nadpisem spoza listy bramka odrzuca kodem 403, zanim trafi do Multiinfo. ' +
   'Nadpis wpisany, lecz nieuruchomiony, Multiinfo odrzuca kodem -14';
 
-/** Instrukcja Polkomtela do wygenerowania certyfikatu użytkownika API. Adres stały, nie z danych. */
+/** Instrukcja Polkomtel do wygenerowania certyfikatu użytkownika API. Adres stały, nie z danych. */
 const CERT_INSTRUCTION_URL = 'https://plk-assets.s3.pl-waw.scw.cloud/certyfikaty-multiinfo.zip';
 
 export const BASE_URLS = [

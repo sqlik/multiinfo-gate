@@ -36,7 +36,7 @@ zamiast certyfikatów, oraz panel do zarządzania kontami, kluczami i podglądu 
 ## Co trzeba mieć
 
 - Konto Multiinfo z użytkownikiem API i certyfikatem (`.pfx` z hasłem)
-- ID usługi (z panelu Multiinfo albo od opiekuna technicznego Polkomtela) i, jeżeli mają być
+- ID usługi (z panelu Multiinfo albo od opiekuna technicznego Polkomtel) i, jeżeli mają być
   używane, nadpisy nadawcy uruchomione przez Polkomtel na wniosek z panelu Multiinfo
 - Serwer Linux (Ubuntu 24.04) z Dockerem (wystarczy najmniejsza maszyna w chmurze, x86-64 albo
   ARM64) albo własny Proxmox VE, na którym skrypt tworzy gotowy kontener LXC bez Dockera
