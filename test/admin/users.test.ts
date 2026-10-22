@@ -38,7 +38,7 @@ describe('GET /uzytkownicy', () => {
     const res = await get('/uzytkownicy');
     expect(res.body).toContain('włączony');
     expect(res.body).toContain('czeka na pierwsze logowanie');
-    expect(res.body).toContain('jeszcze bez logowania');
+    expect(res.body).toContain('bez logowania');
   });
 });
 
@@ -64,7 +64,7 @@ describe('POST /uzytkownicy/nowy', () => {
     expect(kasia?.passwordHash.startsWith('$argon2')).toBe(true);
     const list = await get('/uzytkownicy');
     expect(list.body).toContain('class="flash flash-ok"');
-    expect(list.body).toContain('Użytkownik kasia dodany. Przekaż mu hasło startowe');
+    expect(list.body).toContain('Użytkownik kasia dodany. Hasło startowe należy przekazać użytkownikowi');
     const entry = h.audit.list(1, 0)[0]!;
     expect(entry.action).toBe('uzytkownik.utworzenie');
     expect(entry.actor).toBe('janek');
@@ -194,7 +194,7 @@ describe('/haslo', () => {
   it('odrzuca złe obecne hasło, różne nowe i za krótkie nowe - hasło bez zmian', async () => {
     const before = h.users.findById(h.userId)!.passwordHash;
     const cases: Array<[Record<string, string>, string]> = [
-      [{ obecne: 'nie-to-haslo' }, 'Obecne hasło nie pasuje.'],
+      [{ obecne: 'nie-to-haslo' }, 'Obecne hasło jest nieprawidłowe.'],
       [{ nowe2: 'inne-nowe-haslo-xx' }, 'Nowe hasła różnią się.'],
       [{ nowe: 'krotkie', nowe2: 'krotkie' }, 'dwanaście'],
     ];

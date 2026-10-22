@@ -45,7 +45,7 @@ export function scrubbed(d: DeliveryRow): boolean {
 function action(d: DeliveryRow): string {
   if (d.status !== 'failed') return '';
   if (scrubbed(d)) {
-    return '<span class="dim" style="font-size: 11px;">treść nieprzechowywana - aplikacja dociąga przez GET /v1/inbound</span>';
+    return '<span class="dim" style="font-size: 11px;">treść nieprzechowywana, aplikacja pobiera ją przez GET /v1/inbound</span>';
   }
   return `<form method="post" action="/dostawy/${esc(d.id)}/ponow"><button class="btn btn-s" type="submit" style="padding: 4px 9px; font-size: 12px;">Ponów</button></form>`;
 }

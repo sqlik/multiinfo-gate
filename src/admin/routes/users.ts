@@ -53,8 +53,8 @@ export function registerUserRoutes(app: FastifyInstance, deps: AdminDeps, render
       actor: actorOf(request.adminUserId), action: 'uzytkownik.utworzenie',
       target: `uzytkownik:${id}`, meta: { login }, ip: request.ip,
     });
-    render.flash(request, 'ok', `Użytkownik ${login} dodany. Przekaż mu hasło startowe - przy pierwszym logowaniu `
-      + 'panel poprosi o włączenie drugiego składnika i pokaże kody zapasowe.');
+    render.flash(request, 'ok', `Użytkownik ${login} dodany. Hasło startowe należy przekazać użytkownikowi. Przy pierwszym logowaniu `
+      + 'panel poprosi o włączenie drugiego składnika i wyświetli kody zapasowe.');
     return reply.redirect('/uzytkownicy', 302);
   });
 
@@ -80,7 +80,7 @@ export function registerUserRoutes(app: FastifyInstance, deps: AdminDeps, render
       actor: actorOf(request.adminUserId), action: 'uzytkownik.usuniecie',
       target: `uzytkownik:${id}`, meta: { login: user.login }, ip: request.ip,
     });
-    render.flash(request, 'ok', `Użytkownik ${user.login} usunięty. Jego sesje zostały zamknięte.`);
+    render.flash(request, 'ok', `Użytkownik ${user.login} usunięty. Sesje użytkownika zostały zamknięte.`);
     return reply.redirect('/uzytkownicy', 302);
   });
 
@@ -98,7 +98,7 @@ export function registerUserRoutes(app: FastifyInstance, deps: AdminDeps, render
     // Reset własnego konta zamknął też tę sesję - komunikat nie ma już gdzie trafić.
     if (id === request.adminUserId) return reply.redirect('/zaloguj', 302);
     render.flash(request, 'ok', `Drugi składnik użytkownika ${user.login} wyłączony. `
-      + 'Przy następnym logowaniu panel poprosi o włączenie go od nowa.');
+      + 'Przy następnym logowaniu panel poprosi o ponowne włączenie.');
     return reply.redirect('/uzytkownicy', 302);
   });
 
@@ -121,7 +121,7 @@ export function registerUserRoutes(app: FastifyInstance, deps: AdminDeps, render
 
     const current = request.body?.obecne ?? '';
     const next = request.body?.nowe ?? '';
-    if (!(await verifyPassword(user.passwordHash, current))) return fail('Obecne hasło nie pasuje.');
+    if (!(await verifyPassword(user.passwordHash, current))) return fail('Obecne hasło jest nieprawidłowe.');
     if (next !== (request.body?.nowe2 ?? '')) return fail('Nowe hasła różnią się.');
     try {
       validatePassword(next);

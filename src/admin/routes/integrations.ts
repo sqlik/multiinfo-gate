@@ -106,7 +106,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     if (kind !== 'webhook_out') return null;
     const target = await webhookTarget((config as OutboundConfig).url, deps.resolve ?? systemResolver);
     if (target.kind === 'private' && !deps.allowPrivateWebhooks) return `${PRIVATE_TARGET_MESSAGE} (${target.address}).`;
-    if (target.kind === 'unresolved') return `Nazwa z adresu nie rozwiązuje się: ${target.reason}.`;
+    if (target.kind === 'unresolved') return `Nazwa serwera z adresu nie rozwiązuje się na adres IP: ${target.reason}.`;
     return null;
   };
 
@@ -430,7 +430,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
           meta: { nazwa: v.name, rodzaj: kind, ustawienie: preset.id, klucz: keyId, wlaczona: v.enabled, sekrety: [MAIL_IN_PASSWORD_REF] },
           ip: request.ip,
         });
-        render.flash(request, 'ok', `Skrzynka ${v.name} utworzona. Pierwsze sprawdzenie za chwilę.`);
+        render.flash(request, 'ok', `Skrzynka ${v.name} utworzona. Pierwsze sprawdzenie nastąpi w ciągu chwili.`);
         reply.redirect('/integracje', 302);
         return '';
       });
@@ -598,7 +598,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const at = now();
     deps.mailIn?.ensureState(row.id, at);
     deps.mailIn?.pollNow(row.id, at);
-    render.flash(request, 'ok', `Skrzynka ${row.name}: sprawdzenie za chwilę.`);
+    render.flash(request, 'ok', `Skrzynka ${row.name}: sprawdzenie nastąpi w ciągu chwili.`);
     return reply.redirect(`/integracje/${row.id}`, 302);
   });
 
@@ -621,7 +621,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       actor: actorOf(request.adminUserId), action: 'integracja.kopia', target: `integracja:${copyId}`,
       meta: { z: row.id, nazwa: name }, ip: request.ip,
     });
-    render.flash(request, 'ok', 'Kopia utworzona jako wyłączona: uzupełnij i włącz.');
+    render.flash(request, 'ok', 'Kopia utworzona jako wyłączona. Po uzupełnieniu ustawień należy ją włączyć.');
     return reply.redirect(`/integracje/${copyId}/edytuj`, 302);
   });
 

@@ -47,12 +47,12 @@ export function valuesOf(row: ApiKeyRow): KeyFormValues {
 }
 
 const OSTRZEZENIE =
-  'Pokazujemy go wyłącznie teraz. W bazie zostaje sam skrót, więc nie da się go odczytać ' +
-  'później - jeśli zginie, wygeneruj nowy i odwołaj ten.';
+  'Klucz jest wyświetlany wyłącznie teraz. W bazie pozostaje jedynie jego skrót, więc nie można go odczytać ' +
+  'później. W razie utraty należy wygenerować nowy klucz i odwołać ten.';
 
 const OSTRZEZENIE_SEKRET =
-  'Sekret podpisuje każde wywołanie webhooka nagłówkiem X-MIG-Signature. Pokazujemy go tylko teraz - ' +
-  'zmiana adresu wydaje nowy sekret.';
+  'Sekret podpisuje każde wywołanie webhooka w nagłówku X-MIG-Signature. Jest wyświetlany wyłącznie teraz. ' +
+  'Zmiana adresu webhooka wydaje nowy sekret.';
 
 /** Gotowe wywołanie do wklejenia w terminalu - aplikacja dostaje adres i klucz w jednym miejscu. */
 function keyExample(apiUrl: string | null, key: string): string {
@@ -62,11 +62,11 @@ function keyExample(apiUrl: string | null, key: string): string {
   -H "Content-Type: application/json" \\
   -d '{"to":"48601000001","text":"Test z bramki"}'`;
   const address = apiUrl === null
-    ? '<span class="dim">Adres bramki nie jest jeszcze znany - podaj go w panelu niżej, a przykład dostanie pełny adres.</span>'
-    : `Adres API dla aplikacji: <span class="m">${esc(apiUrl)}</span>. Ten sam adres z <span class="m">/hooks/…</span> dostają integracje.`;
+    ? '<span class="dim">Adres bramki nie został jeszcze podany. Po jego wpisaniu w panelu poniżej przykład otrzyma pełny adres.</span>'
+    : `Adres API dla aplikacji: <span class="m">${esc(apiUrl)}</span>. Integracje używają tego samego adresu ze ścieżką <span class="m">/hooks/…</span>.`;
   return `<div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">
         <div style="margin-bottom: 6px;">${address}</div>
-        <div class="dim" style="margin-bottom: 4px;">Sprawdzenie z terminala (wysyła prawdziwy SMS na podany numer):</div>
+        <div class="dim" style="margin-bottom: 4px;">Sprawdzenie z terminala. Polecenie wysyła rzeczywisty SMS na podany numer:</div>
         <pre class="m" id="key-example" style="white-space: pre-wrap; margin: 0; font-size: 11.5px;">${esc(example)}</pre>
         <button class="btn btn-s" type="button" data-copy="#key-example" style="margin-top: 6px;">Kopiuj polecenie</button>
       </div>`;
@@ -238,8 +238,8 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
     `<option value="${esc(id)}"${v.defaultServiceId === id ? ' selected' : ''}>${esc(id)}</option>`).join('');
 
   const origs = choice.origs.length === 0
-    ? `<div class="hint">Konto nie ma jeszcze słownika nadpisów. Nadpis uruchamia Polkomtel na wniosek
-         złożony w panelu Multiinfo - uruchomione nadpisy wpisz na ekranie kont.</div>`
+    ? `<div class="hint">Konto nie ma jeszcze listy nadpisów. Nadpis uruchamia administrator Polkomtel na wniosek
+         złożony w panelu Multiinfo. Uruchomione nadpisy należy wpisać na ekranie konta</div>`
     : choice.origs.map((o) => `<label class="choice">
         <input type="checkbox" name="origs" value="${esc(o)}"${v.origs.includes(o) ? ' checked' : ''}> <span class="m">${esc(o)}</span>
       </label>`).join('');
@@ -247,13 +247,13 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
     `<option value="${esc(o)}"${v.defaultOrig === o ? ' selected' : ''}>${esc(o)}</option>`).join('');
 
   const webhookHint = mode === 'new'
-    ? 'Opcjonalny. Bramka będzie tam wysyłać zdarzenia doręczeń i niepowodzeń, podpisane sekretem, który pokażemy raz po utworzeniu klucza.'
-    : 'Zmiana adresu bez podania sekretu wydaje nowy sekret i pokazuje go raz. Pusty adres wyłącza webhook.';
+    ? 'Opcjonalny. Bramka wysyła na ten adres zdarzenia doręczeń i niepowodzeń, podpisane sekretem wyświetlanym jednorazowo po utworzeniu klucza'
+    : 'Zmiana adresu bez podania sekretu wydaje nowy sekret i wyświetla go jednorazowo. Puste pole wyłącza webhook';
 
   return `<div class="field">
       <label for="name">Nazwa klucza</label>
       <input id="name" name="name" value="${esc(v.name)}" required>
-      <div class="hint">Widoczna tylko w panelu - po niej rozpoznasz, która aplikacja go używa</div>
+      <div class="hint">Widoczna tylko w panelu. Wskazuje, która aplikacja używa klucza</div>
     </div>
     <div class="field">
       <label>ID usług</label>
@@ -267,8 +267,8 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
     <div class="field">
       <label>Nadpisy nadawcy</label>
       <div class="choices">${origs}</div>
-      <div class="hint">Zaznacz nadpisy, których ta aplikacja może używać.
-        Gdy w żądaniu nie pojawi się żadna ze zdefiniowanych pozycji, bramka użyje domyślnego nadpisu konta</div>
+      <div class="hint">Nadpisy, których ta aplikacja może używać.
+        Gdy żądanie nie wskazuje nadpisu, bramka użyje nadpisu domyślnego</div>
     </div>
     <div class="field">
       <label for="defaultOrig">Domyślny nadpis klucza</label>
@@ -304,8 +304,8 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
     <div class="field">
       <label for="expiresOn">Ważny do</label>
       <input id="expiresOn" name="expiresOn" type="date" value="${esc(v.expiresOn)}">
-      <label class="choice"><input type="checkbox" name="noExpiry" value="1"${v.noExpiry ? ' checked' : ''}> Nie wygasa (nie rekomendowane)</label>
-      <div class="hint">Po tej dacie żądania z kluczem dostają 401. Przedłużenie to zmiana daty - bez nowego klucza.</div>
+      <label class="choice"><input type="checkbox" name="noExpiry" value="1"${v.noExpiry ? ' checked' : ''}> Nie wygasa (niezalecane)</label>
+      <div class="hint">Po tej dacie żądania z tym kluczem otrzymują odpowiedź 401. Przedłużenie polega na zmianie daty, bez generowania nowego klucza</div>
     </div>`;
 }
 

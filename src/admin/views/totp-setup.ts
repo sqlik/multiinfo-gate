@@ -9,7 +9,7 @@ function grouped(secret: string): string {
 export function totpSetupPage(opts: { secret: string; otpauth: string; qr: string; error?: string | null }): string {
   const warning = opts.error ? `<div class="warn">${esc(opts.error)}</div>` : '';
   return gate('Drugi składnik', `${warning}
-    <p class="sub setup-lead">Panel wpuszcza dopiero po włączeniu kodów jednorazowych.
+    <p class="sub setup-lead">Dostęp do panelu wymaga włączenia kodów jednorazowych.
        Zeskanuj kod aplikacją uwierzytelniającą albo przepisz sekret.</p>
     <div class="qr">${opts.qr}</div>
     <div class="secret" data-sekret="${esc(opts.secret)}">${esc(grouped(opts.secret))}</div>
@@ -29,7 +29,7 @@ export function recoveryCodesPage(codes: string[]): string {
   const items = codes.map((code) => `<li class="code">${esc(code)}</li>`).join('');
   return gate('Kody zapasowe', `
     <p class="sub setup-lead">Drugi składnik jest włączony. Poniższe kody zastępują aplikację,
-       gdy telefon jest niedostępny - każdy działa jeden raz. Panel nie pokaże ich ponownie.</p>
+       gdy telefon jest niedostępny. Każdy kod działa jednorazowo. Panel nie wyświetli ich ponownie.</p>
     <ul class="codes">${items}</ul>
     <a class="btn btn-p" href="/przeglad">Przejdź do panelu</a>`, true);
 }

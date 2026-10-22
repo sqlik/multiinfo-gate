@@ -44,7 +44,7 @@ export function auditPage(data: AuditData): string {
   return `<div class="head">
     <div>
       <h1 class="h1">Dziennik zdarzeń</h1>
-      <p class="sub">Kto, co i kiedy zmienił w panelu. Czas polski. Wpisów nie da się edytować ani usunąć.</p>
+      <p class="sub">Kto, co i kiedy zmienił w panelu. Czas polski. Wpisy są trwałe: nie podlegają edycji ani usunięciu.</p>
     </div>
   </div>
   <div class="scroll">

@@ -108,7 +108,7 @@ describe('GET /rozsylki/:id', () => {
     const res = await page('/rozsylki/pkg_1');
     expect(res.body).toContain('Podsumowanie pojawi się po wczytaniu raportu');
     expect(res.body).toContain('brak raportu');
-    expect(res.body).toContain('jeszcze nie utworzono');
+    expect(res.body).toContain('nieutworzony');
   });
 
   it('pokazuje błąd z kodem operatora', async () => {

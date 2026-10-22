@@ -43,9 +43,9 @@ export function daysUntil(iso: string, now: Date): number {
  *  z Multiinfo - stąd na początku przyczyna, dopiero potem co wpisać. */
 const ZDANIE_O_NADPISACH =
   'Multiinfo nie udostępnia listy nadpisów przez API, więc bramka nie może jej pobrać. ' +
-  'Wpisz nadpisy uruchomione przez Polkomtel dla tego użytkownika API (panel Multiinfo, edycja użytkownika API, ' +
-  'zakładka Nadpisy). Żądanie z nadpisem spoza listy bramka odrzuci kodem 403, zanim trafi do Multiinfo; ' +
-  'nadpis wpisany, lecz nieuruchomiony, Multiinfo odrzuci kodem -14';
+  'Należy wpisać nadpisy uruchomione przez administratora Polkomtel dla tego użytkownika API (panel Multiinfo, edycja użytkownika API, ' +
+  'zakładka Nadpisy). Żądanie z nadpisem spoza listy bramka odrzuca kodem 403, zanim trafi do Multiinfo. ' +
+  'Nadpis wpisany, lecz nieuruchomiony, Multiinfo odrzuca kodem -14';
 
 /** Instrukcja Polkomtela do wygenerowania certyfikatu użytkownika API. Adres stały, nie z danych. */
 const CERT_INSTRUCTION_URL = 'https://plk-assets.s3.pl-waw.scw.cloud/certyfikaty-multiinfo.zip';
@@ -77,7 +77,7 @@ export function newAccountPage(error: string | null = null, values: Record<strin
   return `<div class="head">
     <div>
       <h1 class="h1">Nowe konto Multiinfo</h1>
-      <p class="sub">Dane użytkownika API należy utworzyć w panelu Multiinfo. Instrukcje generowania certyfikatu dla użytkownika API znajdziesz <a href="${CERT_INSTRUCTION_URL}">tutaj</a>.</p>
+      <p class="sub">Użytkownika API należy utworzyć w panelu Multiinfo. Instrukcja generowania certyfikatu dla użytkownika API: <a href="${CERT_INSTRUCTION_URL}">Polkomtel</a>.</p>
     </div>
   </div>
   <div class="scroll">
@@ -93,12 +93,12 @@ export function newAccountPage(error: string | null = null, values: Record<strin
           <select id="baseUrl" name="baseUrl">
             ${BASE_URLS.map((u) => `<option value="${esc(u)}"${(values.baseUrl ?? BASE_URLS[1]) === u ? ' selected' : ''}>${esc(u)}</option>`).join('')}
           </select>
-          <div class="hint">api1 lub api2 - informacje o właściwej instancji otrzymasz od przedstawiciela Polkomtel</div>
+          <div class="hint">api1 albo api2. Właściwą instancję wskazuje przedstawiciel Polkomtel</div>
         </div>
         <div class="field">
           <label for="login">Login</label>
           <input id="login" name="login" value="${val('login')}" required>
-          <div class="hint">Musi być zgodny z polem CN certyfikatu, inaczej Multiinfo odrzuci wysyłkę błędem -85</div>
+          <div class="hint">Musi być zgodny z polem CN certyfikatu. W przeciwnym razie Multiinfo odrzuca wysyłkę błędem -85</div>
         </div>
         <div class="field">
           <label for="password">Hasło konta Multiinfo</label>
@@ -115,8 +115,8 @@ export function newAccountPage(error: string | null = null, values: Record<strin
         <div class="field">
           <label for="storeContent">Przechowywanie treści wiadomości</label>
           <select id="storeContent" name="storeContent">
-            <option value="0"${values.storeContent === '1' ? '' : ' selected'}>nie przechowuj treści</option>
-            <option value="1"${values.storeContent === '1' ? ' selected' : ''}>przechowuj treść w bazie</option>
+            <option value="0"${values.storeContent === '1' ? '' : ' selected'}>bez przechowywania treści</option>
+            <option value="1"${values.storeContent === '1' ? ' selected' : ''}>treść przechowywana w bazie</option>
           </select>
         </div>
         <div class="field">
@@ -156,7 +156,7 @@ export function accountsPage(views: AccountView[], now: Date, notice: string | n
   return `<div class="head">
     <div>
       <h1 class="h1">Konta Multiinfo</h1>
-      <p class="sub">Adres bazowy, dane logowania i certyfikat kliencki - po jednym zestawie na konto</p>
+      <p class="sub">Adres bazowy, dane logowania i certyfikat kliencki, po jednym zestawie na konto</p>
     </div>
     <a class="btn btn-p" href="/konta/nowe">Dodaj konto</a>
   </div>
@@ -218,7 +218,7 @@ function baseUrlSelect(current: string): string {
   const options = [...new Set<string>([...BASE_URLS, current])].filter((u) => u !== '').map((u) =>
     `<option value="${esc(u)}"${u === current ? ' selected' : ''}>${esc(u)}</option>`).join('');
   return `<select id="baseUrl" name="baseUrl">${options}</select>
-    <div class="hint">api1 lub api2 - informacje o właściwej instancji otrzymasz od przedstawiciela Polkomtel</div>`;
+    <div class="hint">api1 albo api2. Właściwą instancję wskazuje przedstawiciel Polkomtel</div>`;
 }
 
 export function editAccountPage(v: AccountView, error: string | null = null,
@@ -227,7 +227,7 @@ export function editAccountPage(v: AccountView, error: string | null = null,
     <div>
       <div class="crumb"><a href="/konta">Konta Multiinfo</a> / <a href="/konta/${esc(v.row.id)}">${esc(v.row.name)}</a> / edycja</div>
       <h1 class="h1">${esc(v.row.name)}</h1>
-      <p class="sub">Certyfikat wymienia się na ekranie konta; nadpisy na liście kont.</p>
+      <p class="sub">Certyfikat wymienia się na ekranie konta, nadpisy na liście kont.</p>
     </div>
   </div>
   <div class="scroll">
@@ -255,7 +255,7 @@ export function editAccountPage(v: AccountView, error: string | null = null,
         <div class="field">
           <label for="serviceIds">ID usług, jedno w wierszu</label>
           <textarea id="serviceIds" name="serviceIds" rows="3" required>${esc(values.serviceIds)}</textarea>
-          <div class="hint">ID usługi używanego przez czynny klucz API nie da się usunąć - najpierw zmień klucz</div>
+          <div class="hint">ID usługi używane przez czynny klucz API nie może zostać usunięte. Najpierw należy zmienić klucz</div>
         </div>
         <div class="field">
           <label for="defaultCountryCode">Domyślny kraj numerów</label>
@@ -264,8 +264,8 @@ export function editAccountPage(v: AccountView, error: string | null = null,
         <div class="field">
           <label for="storeContent">Przechowywanie treści wiadomości</label>
           <select id="storeContent" name="storeContent">
-            <option value="0"${values.storeContent === '1' ? '' : ' selected'}>nie przechowuj treści</option>
-            <option value="1"${values.storeContent === '1' ? ' selected' : ''}>przechowuj treść w bazie</option>
+            <option value="0"${values.storeContent === '1' ? '' : ' selected'}>bez przechowywania treści</option>
+            <option value="1"${values.storeContent === '1' ? ' selected' : ''}>treść przechowywana w bazie</option>
           </select>
         </div>
         <div><button class="btn btn-p" type="submit">Zapisz konto</button></div>
@@ -302,7 +302,7 @@ export function accountPage(
         <form class="form" method="post" action="/konta/${esc(v.row.id)}/certyfikat" enctype="multipart/form-data">
           <div class="drop">
             <div class="field" style="gap: 3px;">
-              <label for="pfx">Plik .pfx albo .p12 od Polkomtela</label>
+              <label for="pfx">Plik .pfx albo .p12 od Polkomtel</label>
               <input id="pfx" name="pfx" type="file" accept=".pfx,.p12" required>
             </div>
           </div>
@@ -334,8 +334,8 @@ function pausedBanner(row: AccountRow): string {
       <div style="display: flex; align-items: center; gap: 10px;">
         <div class="sq"></div>
         <div>Konto jest <strong>wstrzymane</strong>: ${esc(row.pausedReason)}.
-          Wiadomości czekają w kolejce. Wgraj poprawny certyfikat albo - po naprawie
-          po stronie Polkomtela - użyj sprawdzenia połączenia; wynik pozytywny wznowi wysyłkę.</div>
+          Wiadomości czekają w kolejce. Wysyłkę wznawia wczytanie poprawnego certyfikatu albo,
+          po naprawie po stronie Polkomtel, pozytywny wynik sprawdzenia połączenia.</div>
       </div>
     </div>`;
 }
@@ -364,14 +364,14 @@ function certificatePanel(v: AccountView, now: Date, bundle: CertBundle | null):
         <div class="check">
           <div class="sq ${cnMatches ? 'sq-ok' : 'sq-fail'}"></div>
           <div>${cnMatches
-            ? 'Pole CN zgadza się z loginem konta - bez tego Multiinfo zwróci błąd -85.'
-            : `Pole CN certyfikatu (${esc(v.row.certCn)}) nie zgadza się z loginem konta ` +
-              `(${esc(v.row.login)}). Multiinfo odrzuci każdą wysyłkę błędem -85.`}</div>
+            ? 'Pole CN jest zgodne z loginem konta. Niezgodność oznacza błąd -85 z Multiinfo.'
+            : `Pole CN certyfikatu (${esc(v.row.certCn)}) nie jest zgodne z loginem konta ` +
+              `(${esc(v.row.login)}). Multiinfo odrzuca każdą wysyłkę błędem -85.`}</div>
         </div>
         <div class="check">
           <div class="sq sq-wait"></div>
-          <div>Przed pierwszym użyciem uzupełnij wystawcę, podmiot i odcisk palca w panelu Multiinfo (edycja użytkownika API, zakładka Uwierzytelnianie).
-            Do tego czasu wysyłka będzie odrzucana błędem -84.</div>
+          <div>Przed pierwszym użyciem należy uzupełnić wystawcę, podmiot i odcisk palca w panelu Multiinfo (edycja użytkownika API, zakładka Uwierzytelnianie).
+            Do tego czasu wysyłka jest odrzucana błędem -84.</div>
         </div>
       </div>
     </div>`;
@@ -386,11 +386,11 @@ function explainProbe(code: number, message: string): string {
     case -1:
       return `Logowanie odrzucone. Sprawdź login i hasło konta Multiinfo - ${message}.`;
     case -80:
-      return 'Połączenie stanęło, ale certyfikat nie został przedstawiony. Sprawdź, czy konto ma wgrany plik .pfx.';
+      return 'Połączenie zostało nawiązane, ale certyfikat nie został przedstawiony. Sprawdź, czy konto ma wczytany plik .pfx.';
     case -84:
-      return 'Certyfikat nie jest jeszcze uzgodniony po stronie Polkomtela. Prześlij wystawcę, podmiot i odcisk palca.';
+      return 'Certyfikat nie został jeszcze zarejestrowany po stronie Polkomtel. Prześlij wystawcę, podmiot i odcisk palca.';
     case -85:
-      return 'Pole CN certyfikatu nie zgadza się z loginem konta.';
+      return 'Pole CN certyfikatu nie jest zgodne z loginem konta.';
     default:
       return message;
   }
@@ -410,8 +410,8 @@ function probePanel(v: AccountView, probe: ProbeView): string {
 
   const verdict = probe.ok
     ? 'Certyfikat przyjęty, logowanie poprawne. Błąd -31 jest oczekiwany: sprawdzenie celowo ' +
-      'pyta o nieistniejącą wiadomość, żeby nie wysyłać SMS-a.' +
-      (probe.resumed ? ' Konto zostało wznowione - wiadomości z kolejki ruszą w ciągu minuty.' : '')
+      'odpytuje o nieistniejącą wiadomość, aby nie wysyłać SMS-a.' +
+      (probe.resumed ? ' Konto zostało wznowione, wysyłka wiadomości z kolejki rozpocznie się w ciągu minuty.' : '')
     : explainProbe(probe.code ?? 0, probe.message);
 
   return `<div class="panel">
@@ -450,24 +450,24 @@ function certificateCheck(v: AccountView, certificate: CertificateView | null): 
   if (certificate === null) {
     return `<div class="check" style="padding: 0;">
           <div class="sq sq-wait"></div>
-          <div>Strona test.aspx nie odpowiedziała. Wynik powyżej pozostaje w mocy - ta strona
-            tylko pokazuje, co Multiinfo odczytało z certyfikatu.</div>
+          <div>Strona test.aspx nie odpowiedziała. Wynik powyżej pozostaje w mocy. Ta strona
+            jedynie pokazuje, co Multiinfo odczytało z certyfikatu.</div>
         </div>`;
   }
   if (!certificate.seen) {
     return `<div class="check" style="padding: 0;">
           <div class="sq sq-fail"></div>
-          <div>Multiinfo nie zobaczyło certyfikatu w uzgodnieniu TLS. Bramka wysłała plik wczytany
-            na tej karcie - jeżeli był wgrany ponownie, sprawdź, czy wczytanie się powiodło.</div>
+          <div>Multiinfo nie otrzymało certyfikatu w uzgodnieniu TLS. Bramka przedstawiła plik wczytany
+            na tej karcie. Jeżeli plik był wczytywany ponownie, sprawdź, czy operacja się powiodła.</div>
         </div>`;
   }
   const cnMatches = certificate.subjectCn === v.row.login;
   return `<div class="check" style="padding: 0;">
           <div class="sq ${cnMatches ? 'sq-ok' : 'sq-fail'}"></div>
           <div>${cnMatches
-            ? `CN widziane przez Multiinfo zgadza się z loginem konta (${esc(v.row.login)}).`
-            : `CN widziane przez Multiinfo (${esc(certificate.subjectCn ?? '-')}) nie zgadza się z loginem konta ` +
-              `(${esc(v.row.login)}). Wystaw certyfikat z CN równym loginowi.`}
+            ? `CN widziane przez Multiinfo jest zgodne z loginem konta (${esc(v.row.login)}).`
+            : `CN widziane przez Multiinfo (${esc(certificate.subjectCn ?? '-')}) nie jest zgodne z loginem konta ` +
+              `(${esc(v.row.login)}). Wymagany jest certyfikat z CN równym loginowi.`}
             Wystawca ${esc(certificate.issuerCn ?? certificate.issuer)}, ważny do ${esc(certificate.validTo)}.</div>
         </div>`;
 }
@@ -492,8 +492,8 @@ function inboundPanel(v: AccountView, now: Date): string {
     else if (state.error !== null) status = `<span class="st"><span class="dot dot-fail"></span>zatrzymany: ${esc(state.error)}</span>`;
     else if (subscribers.length === 0) status = '<span class="dim">nieaktywny (brak subskrybujących kluczy)</span>';
     else {
-      const polled = state.lastPollAt === null ? 'jeszcze nie pytano' : `ostatnio pytano ${ago(state.lastPollAt, now)}`;
-      const received = state.lastReceivedAt === null ? 'nic jeszcze nie odebrano' : `ostatnia odebrana ${warsawStamp(state.lastReceivedAt)}`;
+      const polled = state.lastPollAt === null ? 'bez odpytania' : `ostatnie odpytanie ${ago(state.lastPollAt, now)}`;
+      const received = state.lastReceivedAt === null ? 'bez odebranych wiadomości' : `ostatnia odebrana ${warsawStamp(state.lastReceivedAt)}`;
       status = `<span class="st"><span class="dot dot-ok"></span>aktywny</span>
         <div class="dim" style="font-size: 11.5px; margin-top: 2px;">${esc(polled)} · ${esc(received)}</div>`;
     }
@@ -509,7 +509,7 @@ function inboundPanel(v: AccountView, now: Date): string {
       <tr><th style="width: 70px;">ID usługi</th><th style="width: 140px;">Odbierają klucze</th><th>Stan odbiornika</th></tr>
       ${rows}
     </table>
-    <div class="hint" style="padding: 10px 16px;">Odebrane SMS-y trafiają do API Multiinfo tylko wtedy, gdy administrator Polkomtel ustawi
-      na koncie kierowanie do API - domyślnie lądują w panelu WWW Multiinfo</div>
+    <div class="hint" style="padding: 10px 16px;">Odebrane SMS-y trafiają do API Multiinfo wyłącznie wtedy, gdy administrator Polkomtel ustawi
+      na koncie kierowanie do API. Domyślnie są dostępne tylko w panelu WWW Multiinfo</div>
   </div>`;
 }

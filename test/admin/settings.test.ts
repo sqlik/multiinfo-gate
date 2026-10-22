@@ -25,14 +25,14 @@ describe('adres bramki', () => {
 
   it('bez adresu ekran kluczy prosi o niego, po zapisie pokazuje go z kopiowaniem i wraca na wskazaną stronę', async () => {
     const before = await page('/klucze');
-    expect(before.body).toContain('Panel nie wie, pod jakim adresem aplikacje docierają do bramki');
+    expect(before.body).toContain('Panel nie zna adresu, pod którym aplikacje docierają do bramki');
     const res = await post('/adres-bramki', { apiUrl: 'https://sms.firma.pl/', wroc: '/klucze' });
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe('/klucze');
     expect(h.settings.apiUrl()).toBe('https://sms.firma.pl');
     const after = await page('/klucze');
     expect(after.body).toContain('id="api-url">https://sms.firma.pl<');
-    expect(after.body).not.toContain('Panel nie wie, pod jakim adresem');
+    expect(after.body).not.toContain('Panel nie zna adresu, pod którym');
     expect(h.audit.list(50, 0).some((a) => a.action === 'ustawienia.adres_bramki')).toBe(true);
   });
 

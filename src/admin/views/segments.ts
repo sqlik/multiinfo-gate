@@ -71,19 +71,19 @@ function notes(text: string, m: Measurement, s: Segmentation): string[] {
     const extended = [...text].filter((ch) => gsmSlotsFor(ch) === 2).length;
     if (extended > 0) {
       out.push(note('signal', `${esc(extended)} ${extended === 1 ? 'znak jest' : 'znaki są'} w alfabecie GSM-7 `
-        + `liczone podwójnie - ${extended === 1 ? 'zajmuje' : 'zajmują'} ${esc(extended * 2)} miejsc zamiast ${esc(extended)}.`));
+        + `liczone podwójnie i ${extended === 1 ? 'zajmuje' : 'zajmują'} ${esc(extended * 2)} miejsc zamiast ${esc(extended)}.`));
     }
   }
 
   const split = s.boundaries.map((b) => wordAt(text, b)).filter((w): w is string => w !== null);
   if (split.length > 0) {
-    out.push(note('wait', `Granica segmentu wypada wewnątrz słowa „${esc(split[0]!)}”. Telefony sklejają części `
-      + 'poprawnie, ale jeśli któraś część nie dotrze, odbiorca zobaczy urwane zdanie.'));
+    out.push(note('wait', `Granica segmentu wypada wewnątrz słowa „${esc(split[0]!)}”. Telefon łączy części `
+      + 'poprawnie, lecz jeśli jedna z nich nie dotrze, odbiorca zobaczy niepełne zdanie.'));
   }
 
   if (s.slotsRemaining > 0) {
     out.push(note('muted', `${s.parts === 1 ? 'Zostało' : 'W ostatnim segmencie zostało'} `
-      + `<strong>${esc(freeSlotsWord(s.slotsRemaining))}</strong> - dopisanie tekstu nic tu nie kosztuje.`));
+      + `<strong>${esc(freeSlotsWord(s.slotsRemaining))}</strong> - Dopisanie tekstu w tym zakresie nie zwiększy liczby segmentów.`));
   }
 
   if (m.encoding === 'gsm') {
@@ -94,8 +94,8 @@ function notes(text: string, m: Measurement, s: Segmentation): string[] {
     } catch {
       after = 'ponad 9 segmentów';
     }
-    out.push(note('fail', 'Jeden polski znak diakrytyczny przełączy kodowanie na UCS-2, gdzie limit to 70 znaków '
-      + `w jednej części i 67 w każdej z wielu - ta sama treść zajmie wtedy <strong>${esc(after)}</strong>.`));
+    out.push(note('fail', 'Jeden polski znak diakrytyczny przełącza kodowanie na UCS-2 z limitem 70 znaków '
+      + `w jednej części i 67 w każdej z wielu. Ta sama treść zajmie wtedy <strong>${esc(after)}</strong>.`));
   }
 
   return out;

@@ -13,7 +13,7 @@ export function apiAddressPanel(current: string | null, back: string, opts: { er
         <input id="apiUrl" name="apiUrl" value="${esc(current ?? '')}" placeholder="https://sms.firma.pl">
         <div class="hint">Bez ścieżki na końcu. Bramka pod domeną (Docker z Caddy, nginx albo Traefikiem): <code>https://sms.firma.pl</code>.
           Kontener na Proxmoxie dostępny w sieci firmowej: <code>http://10.10.10.159:8080</code> (adres kontenera i port API).
-          Ten sam adres aplikacje wpisują przed <code>/v1/messages</code> i przed adresami wejściowymi integracji.</div>
+          Ten sam adres poprzedza ścieżkę <code>/v1/messages</code> i adresy wejściowe integracji</div>
       </div>
       <div class="bar">
         <button class="btn btn-p" type="submit">Zapisz adres</button>
@@ -31,8 +31,8 @@ export function apiAddressPanel(current: string | null, back: string, opts: { er
   return `<div class="panel" style="max-width: 760px;">
       <div class="panel-h"><div class="lab">Adres bramki dla aplikacji</div></div>
       ${opts.error ? `<div class="warn" style="margin: 0 16px 12px;">${esc(opts.error)}</div>` : ''}
-      <div style="padding: 0 16px 10px; font-size: 12.5px; line-height: 1.5;">Panel nie wie, pod jakim adresem aplikacje docierają do bramki
-        - podaj go raz, a przy każdym kluczu i integracji zobaczysz gotowy adres do wklejenia zamiast samej ścieżki.</div>
+      <div style="padding: 0 16px 10px; font-size: 12.5px; line-height: 1.5;">Panel nie zna adresu, pod którym aplikacje docierają do bramki.
+        Po jego podaniu przy każdym kluczu i integracji wyświetlany jest pełny adres do wklejenia zamiast samej ścieżki.</div>
       ${form}
     </div>`;
 }

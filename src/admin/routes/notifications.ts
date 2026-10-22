@@ -29,7 +29,7 @@ function checkSmtp(v: SmtpFormValues): SmtpChecked {
   const port = Number.parseInt(v.port, 10);
   if (!Number.isFinite(port) || port < 1 || port > 65535) return { ok: false, error: 'Port: liczba od 1 do 65535.' };
   if (v.security === 'none' && !v.plainOk) {
-    return { ok: false, error: 'Tryb bez szyfrowania wymaga potwierdzenia, że hasło pójdzie jawnie - zaznacz pole pod wyborem szyfrowania.' };
+    return { ok: false, error: 'Tryb bez szyfrowania wymaga potwierdzenia, że hasło będzie przesyłane jawnie. Zaznacz pole pod wyborem szyfrowania.' };
   }
   if (!EMAIL.test(v.fromAddress)) return { ok: false, error: 'Adres nadawcy musi być adresem e-mail.' };
   const recipients = v.recipients.split(/[\n,;]/).map((r) => r.trim()).filter((r) => r !== '');
@@ -104,7 +104,7 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps
       meta: { host: v.host, port: checked.port, tryb: checked.security, nadawca: v.fromAddress, odbiorcy: checked.recipients, haslo_zmienione: password !== '' },
       ip: request.ip,
     });
-    render.flash(request, 'ok', 'Ustawienia SMTP zapisane. Wyślij mail testowy, żeby sprawdzić połączenie.');
+    render.flash(request, 'ok', 'Ustawienia SMTP zapisane. Połączenie można sprawdzić mailem testowym.');
     return reply.redirect('/powiadomienia', 302);
   });
 
@@ -115,12 +115,12 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps
       return reply.redirect('/powiadomienia', 302);
     }
     if (!deps.mailer) {
-      render.flash(request, 'warn', 'Ta instancja nie ma wysyłki maili.');
+      render.flash(request, 'warn', 'Ta instancja nie obsługuje wysyłki maili.');
       return reply.redirect('/powiadomienia', 302);
     }
     const subject = `Mail testowy z Multiinfo Gate ${settings.instanceName}`.trim();
-    const text = `To jest mail testowy z bramki Multiinfo Gate (${settings.instanceName || 'bez nazwy instancji'}).\n`
-      + 'Jeśli go czytasz, ustawienia SMTP działają. Powiadomienia według reguł z panelu będą przychodzić na ten adres.\n';
+    const text = `Mail testowy z bramki Multiinfo Gate (${settings.instanceName || 'bez nazwy instancji'}).\n`
+      + 'Otrzymanie tej wiadomości potwierdza poprawność ustawień SMTP. Powiadomienia według reguł z panelu będą wysyłane na ten adres.\n';
     try {
       await deps.mailer({ ...settings, password: deps.notifications.smtpPassword() }, { subject, text });
       deps.audit.record({ actor: actorOf(request.adminUserId), action: 'powiadomienia.test', target: 'smtp', meta: { wynik: 'ok' }, ip: request.ip });
