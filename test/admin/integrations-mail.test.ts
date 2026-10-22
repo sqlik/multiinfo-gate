@@ -277,3 +277,17 @@ describe('nazwa serwera w nagłówku Authentication-Results', () => {
     expect((await get(`/integracje/${id}`)).body).toContain('· wymagane SPF/DKIM od mx.google.com');
   });
 });
+
+describe('Sprawdź połączenie i authserv-id', () => {
+  it('pokazuje nazwę serwera z ostatniej wiadomości z przyciskiem wpisującym do pola', async () => {
+    h.mailbox.authservId = 'mx.google.com';
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody() });
+    expect(res.body).toContain('data-fill="#authservId" data-value="mx.google.com"');
+    expect(res.body).toContain('Authentication-Results');
+  });
+  it('bez nagłówka w ostatniej wiadomości pokazuje informację zamiast przycisku', async () => {
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody() });
+    expect(res.body).toContain('brak nagłówka w ostatniej wiadomości');
+    expect(res.body).not.toContain('data-fill="#authservId"');
+  });
+});

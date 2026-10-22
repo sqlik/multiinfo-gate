@@ -1,6 +1,7 @@
 import { ImapFlow } from 'imapflow';
 import { isIP, isIPv4 } from 'node:net';
 import { PRIVATE_MAIL_MESSAGE, hostTarget, type Resolver } from '../../net/private-address.ts';
+import { authservIdOf } from './auth-results.ts';
 import type { MailboxErrorKind } from '../../store/mail-in.ts';
 import type { MailSecurity } from '../config.ts';
 
@@ -24,6 +25,8 @@ export interface MailboxSession {
   move(uid: number, folder: string): Promise<void>;
   /** \Deleted plus EXPUNGE tego jednego UID. */
   remove(uid: number): Promise<void>;
+  /** Nazwa serwera (authserv-id) z nagłówka Authentication-Results ostatniej wiadomości otwartego folderu; `null`, gdy go nie ma. */
+  authservId?(): Promise<string | null>;
   close(): Promise<void>;
 }
 export type MailboxConnect = (settings: MailboxSettings, timeoutMs: number) => Promise<MailboxSession>;
@@ -174,6 +177,18 @@ export const imapConnect: MailboxConnect = async (settings, timeoutMs) => {
     },
     async remove(uid) {
       await client.messageDelete(uidOf(uid), { uid: true });
+    },
+    async authservId() {
+      try {
+        const last = await client.fetchOne('*', { headers: ['authentication-results'] });
+        if (!last || !last.headers) return null;
+        // Nagłówek wielolinijkowy: kontynuacje zaczynają się od białego znaku; liczy się tylko pierwszy nagłówek.
+        const text = last.headers.toString('utf8').replace(/\r?\n[ \t]+/g, ' ');
+        const m = /^authentication-results:[ \t]*(.*)$/im.exec(text);
+        return m ? authservIdOf(m[1]!) : null;
+      } catch {
+        return null;
+      }
     },
     async close() {
       try {

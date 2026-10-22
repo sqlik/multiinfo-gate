@@ -81,14 +81,15 @@ export function replyFor(outcome: MailInOutcome, mail: ParsedMail, config: MailI
 
 /** „Sprawdź połączenie”: logowanie, otwarcie folderu, lista folderów; nic nie przetwarza, nic nie zapisuje. */
 export async function checkMailbox(connect: MailboxConnect, settings: MailboxSettings, folder: string):
-  Promise<{ ok: true; unseen: number; folders: string[] } | { ok: false; kind: MailboxErrorKind; error: string; folders: string[] }> {
+  Promise<{ ok: true; unseen: number; folders: string[]; authservId: string | null } | { ok: false; kind: MailboxErrorKind; error: string; folders: string[] }> {
   let session: MailboxSession | null = null;
   let folders: string[] = [];
   try {
     session = await connect(settings, CONNECT_TIMEOUT_MS);
     folders = await session.folders();
     const box = await session.open(folder);
-    return { ok: true, unseen: box.unseen, folders };
+    const authservId = (await session.authservId?.()) ?? null;
+    return { ok: true, unseen: box.unseen, folders, authservId };
   } catch (e) {
     // Lista folderów zostaje, gdy logowanie się udało, a zawiodła nazwa folderu: użytkownik od razu widzi właściwą.
     return { ok: false, kind: errorKindOf(e), error: scrubError(errorMessageOf(e), [settings.password, settings.user]), folders };

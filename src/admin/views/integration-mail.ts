@@ -256,6 +256,8 @@ function connectionPanel(c: MailConnection): string {
     return `<div class="panel" style="max-width: 760px;">
       <div class="panel-h"><div class="lab">Połączenie działa</div><div class="m dim">nieprzeczytanych: ${esc(c.unseen)}</div></div>
       <div class="kv"><div>Foldery</div><div>${folders || '<span class="dim">brak</span>'}<div class="hint">Kliknięcie nazwy wpisuje ją do pola Folder</div></div></div>
+      <div class="kv"><div>Authentication-Results</div><div>${c.authservId === null ? '<span class="dim">brak nagłówka w ostatniej wiadomości</span>'
+    : `<button class="btn btn-s" type="button" data-fill="#authservId" data-value="${esc(c.authservId)}" style="padding: 3px 9px; font-size: 12px;">${esc(c.authservId)}</button><div class="hint">Kliknięcie wpisuje nazwę do pola w sekcji „Kto może wysyłać” (tryb zaawansowany)</div>`}</div></div>
     </div>`;
   }
   const titles = { auth: ['Logowanie odrzucone', 'Sprawdź login i hasło. W Gmailu wymagane jest hasło aplikacji, nie hasło do konta; w Google Workspace dostęp IMAP musi być włączony przez administratora'],
