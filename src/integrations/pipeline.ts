@@ -469,8 +469,8 @@ export async function runMailIn(deps: PipelineDeps, integration: MailInIntegrati
     note('skipped', { reason: `nadawca spoza listy: ${mail.from || 'brak adresu'}` });
     return { kind: 'skipped', reason: 'sender_not_allowed' };
   }
-  if (config.requireAuthResults && !authResultsPass(mail.authResults, domainOf(mail.from))) {
-    note('skipped', { reason: 'brak potwierdzenia SPF/DKIM od serwera' });
+  if (config.requireAuthResults && !authResultsPass(mail.authResults, domainOf(mail.from), config.authservId)) {
+    note('skipped', { reason: config.authservId === '' ? 'brak potwierdzenia SPF/DKIM od serwera' : `brak potwierdzenia SPF/DKIM od serwera ${config.authservId}` });
     return { kind: 'skipped', reason: 'auth_failed' };
   }
 

@@ -272,7 +272,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
   const mailModeOf = (tryb: string | undefined, config: MailInConfig | null): { mode: MailFormOptions['mode']; note?: string } => {
     if (tryb === 'zaawansowany') return { mode: 'zaawansowany' };
     if (config !== null && needsAdvanced(config)) {
-      return { mode: 'zaawansowany', note: 'Ta skrzynka ma ustawienia spoza trybu prostego (szablon Liquid, wyrażenie regularne, warunek Liquid albo wyłączone sprawdzanie certyfikatu), dlatego otwiera się w trybie zaawansowanym.' };
+      return { mode: 'zaawansowany', note: 'Ta skrzynka ma ustawienia spoza trybu prostego (szablon Liquid, wyrażenie regularne, warunek Liquid, wyłączone sprawdzanie certyfikatu albo nazwa serwera w nagłówku Authentication-Results), dlatego otwiera się w trybie zaawansowanym.' };
     }
     return { mode: 'prosty' };
   };

@@ -55,6 +55,14 @@ const events = (id: number) => deps.integrationEvents.list(id, 10).map((e) => [e
 const lastBody = (out: { kind: string; messageIds?: string[] }) => deps.messages.get((out as { messageIds: string[] }).messageIds[0]!)!.body;
 
 describe('runMailIn', () => {
+  it('z authservId wiadomość z nagłówkiem innego serwera jest pomijana z powodem z nazwą', async () => {
+    const integ = make({ requireAuthResults: true, authservId: 'mx.google.com' });
+    const out = await runMailIn(deps, integ, mail({ authResults: ['atakujacy.test; dkim=pass header.d=przyklad.test'] }), NOW);
+    expect(out).toEqual({ kind: 'skipped', reason: 'auth_failed' });
+    expect(events(integ.id)[0]![1]).toContain('brak potwierdzenia SPF/DKIM od serwera mx.google.com');
+    const ok = await runMailIn(deps, integ, mail({ authResults: ['atakujacy.test; dkim=fail', 'mx.google.com; dkim=pass header.d=przyklad.test'], messageId: '<m2@przyklad.test>' }), NOW);
+    expect(ok.kind).toBe('sent');
+  });
   it('tryb prosty: temat i oczyszczona treść idą na stałą listę', async () => {
     const integ = make({});
     const out = await runMailIn(deps, integ, mail(), NOW);

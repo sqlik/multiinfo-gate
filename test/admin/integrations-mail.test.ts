@@ -255,3 +255,25 @@ describe('serwer IMAP w sieci wewnętrznej', () => {
     expect(res.body).toContain('Nazwa serwera IMAP nie rozwiązuje się na adres IP: nazwa nie ma żadnego adresu.');
   });
 });
+
+describe('nazwa serwera w nagłówku Authentication-Results', () => {
+  it('pole jest w trybie zaawansowanym, w prostym jako pole ukryte z zachowaną wartością', async () => {
+    await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody() });
+    const id = h.integrations.list()[0]!.id;
+    const adv = await get(`/integracje/${id}/edytuj?tryb=zaawansowany`);
+    expect(adv.body).toContain('Nazwa serwera w nagłówku Authentication-Results');
+    expect(adv.body).toContain('placeholder="mx.google.com"');
+    const simple = await get(`/integracje/${id}/edytuj?tryb=prosty`);
+    expect(simple.body).toContain('name="authservId"');
+    expect(simple.body).not.toContain('Nazwa serwera w nagłówku Authentication-Results');
+  });
+  it('skrzynka z nazwą serwera otwiera się w trybie zaawansowanym z notatką, a szczegóły pokazują nazwę', async () => {
+    await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody({ tryb: 'zaawansowany', authservId: 'mx.google.com', requireAuthResults: 'on' }) });
+    const id = h.integrations.list()[0]!.id;
+    expect(h.integrations.get(id)!.config).toMatchObject({ authservId: 'mx.google.com' });
+    const edit = await get(`/integracje/${id}/edytuj`);
+    expect(edit.body).toContain('albo nazwa serwera w nagłówku Authentication-Results), dlatego otwiera się w trybie zaawansowanym.');
+    expect(edit.body).toContain('value="mx.google.com"');
+    expect((await get(`/integracje/${id}`)).body).toContain('· wymagane SPF/DKIM od mx.google.com');
+  });
+});

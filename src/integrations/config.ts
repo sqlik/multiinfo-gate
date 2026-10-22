@@ -127,6 +127,8 @@ export const mailInConfigSchema = z.object({
   intervalSec: z.number().int().refine((n): n is MailInInterval => (MAIL_IN_INTERVALS as readonly number[]).includes(n), 'częstotliwość spoza listy'),
   senders: z.array(z.object({ pattern: senderPattern, recipients: z.array(z.string().min(1)).max(50) })).max(100),
   requireAuthResults: z.boolean(),
+  /** Nazwa serwera (authserv-id) w nagłówku Authentication-Results; pusta = pierwszy nagłówek od góry. */
+  authservId: z.string().max(253).regex(/^[A-Za-z0-9.-]*$/).default(''),
   recipientsFromMail: z.object({ enabled: z.boolean(), where: z.enum(['subject', 'body']) }),
   to: z.object({ fallback: z.array(z.string().min(1)).max(50) }),
   clean: z.object({ cutFrom: z.array(phrase).max(10) }),
@@ -175,7 +177,7 @@ export const defaultOutboundConfig = (): OutboundConfig => ({
 export const defaultMailInConfig = (): MailInConfig => ({
   condition: { mode: 'builder', rules: [] }, throttle: { limit: 10, windowMinutes: 10 }, eventLogLimit: 200,
   imap: { host: '', port: 993, security: 'tls', verifyCert: true, user: '', passRef: MAIL_IN_PASSWORD_REF },
-  folder: 'INBOX', intervalSec: 60, senders: [], requireAuthResults: false,
+  folder: 'INBOX', intervalSec: 60, senders: [], requireAuthResults: false, authservId: '',
   recipientsFromMail: { enabled: false, where: 'subject' }, to: { fallback: [] }, clean: { cutFrom: [] }, fields: [],
   text: { mode: 'simple', variant: 'subject_text' }, maxParts: 1, overflow: 'truncate', after: { action: 'keep' }, reply: { enabled: false },
 });

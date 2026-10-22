@@ -5,6 +5,10 @@ import { isMailIn } from '../../src/store/integrations.ts';
 const outbound = () => ({ ...defaultOutboundConfig(), url: 'https://example.invalid/hook' });
 
 describe('parseConfig', () => {
+  it('konfiguracja skrzynki bez authservId (zapis sprzed 1.8.3) wczytuje się z pustą nazwą', () => {
+    const { authservId: _x, ...stara } = defaultMailInConfig() as Record<string, unknown>;
+    expect((parseConfig('mail_in', stara) as { authservId: string }).authservId).toBe('');
+  });
   it('domyślne konfiguracje przechodzą', () => {
     expect(() => parseConfig('webhook_in', defaultInboundConfig())).not.toThrow();
     expect(() => parseConfig('webhook_out', outbound())).not.toThrow();

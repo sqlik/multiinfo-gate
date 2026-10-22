@@ -9,6 +9,15 @@ const v = (): MailFormValues => ({ ...mailConfigToValues(defaultMailInConfig(), 
 const NOW = new Date('2026-10-21T10:00:00Z');
 
 describe('mailConfigToValues i mailFormToConfig', () => {
+  it('authservId przechodzi w obie strony małymi literami, a niedozwolone znaki są odrzucane', () => {
+    const ok = mailFormToConfig({ ...v(), authservId: 'MX.Google.com' }, false, engine);
+    expect(ok.ok && ok.config.authservId).toBe('mx.google.com');
+    expect(mailConfigToValues({ ...defaultMailInConfig(), authservId: 'mx.google.com' }, base).authservId).toBe('mx.google.com');
+    const bad = mailFormToConfig({ ...v(), authservId: 'mx google' }, false, engine);
+    expect(!bad.ok && bad.error).toBe('Nazwa serwera w nagłówku Authentication-Results: dozwolone litery, cyfry, kropki i myślniki, do 253 znaków.');
+    expect(needsAdvanced({ ...defaultMailInConfig(), authservId: 'mx.google.com' })).toBe(true);
+    expect(needsAdvanced(defaultMailInConfig())).toBe(false);
+  });
   it('wartości domyślne z konfiguracji i z powrotem dają tę samą konfigurację', () => {
     const back = mailFormToConfig(v(), false, engine);
     expect(back.ok && back.config.imap.host).toBe('imap.przyklad.test');

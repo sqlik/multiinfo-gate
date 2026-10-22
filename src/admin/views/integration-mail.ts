@@ -92,7 +92,7 @@ function sectionMailbox(v: MailFormValues, opts: MailFormOptions): string {
   </details>`;
 }
 
-function sectionSenders(v: MailFormValues): string {
+function sectionSenders(v: MailFormValues, advanced: boolean): string {
   return `<details open>
     <summary>Kto może wysyłać</summary>
     <div class="field">
@@ -104,6 +104,11 @@ function sectionSenders(v: MailFormValues): string {
       ${checkbox('requireAuthResults', v.requireAuthResults, 'Wymagaj potwierdzenia nadawcy przez serwer (SPF/DKIM)')}
       ${hint('Zalecane u dostawców publicznych (Gmail, home.pl, OVH). Serwery wewnętrzne zwykle nie dodają tych nagłówków i wówczas każda wiadomość zostanie odrzucona')}
     </div>
+    ${advanced ? `<div class="field">
+      <label for="authservId">Nazwa serwera w nagłówku Authentication-Results</label>
+      <input id="authservId" name="authservId" value="${esc(v.authservId)}" placeholder="mx.google.com" maxlength="253">
+      ${hint('Identyfikator serwera (authserv-id, RFC 8601), którym serwer skrzynki podpisuje wynik sprawdzenia SPF i DKIM. Gdy pole jest wypełnione, bramka uznaje wyłącznie nagłówki Authentication-Results rozpoczynające się od tej nazwy i odrzuca wiadomość, gdy żaden nagłówek jej nie ma. Puste pole oznacza odczyt pierwszego nagłówka od góry. Przycisk „Sprawdź połączenie” podpowiada nazwę z ostatniej wiadomości w folderze')}
+    </div>` : `<input type="hidden" name="authservId" value="${esc(v.authservId)}">`}
   </details>`;
 }
 
@@ -314,7 +319,7 @@ export function mailFormPage(ctx: FormContext, v: MailFormValues, opts: MailForm
         <input type="hidden" name="tryb" value="${opts.mode}">
         ${sectionBasics(ctx, v)}
         ${sectionMailbox(v, opts)}
-        ${sectionSenders(v)}
+        ${sectionSenders(v, opts.mode === 'zaawansowany')}
         ${sectionRecipients(v)}
         ${sectionText(v, opts)}
         ${sectionWhen(v, opts)}

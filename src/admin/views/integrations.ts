@@ -862,7 +862,7 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     const cfg = c as MailInConfig;
     const sec = cfg.imap.security === 'tls' ? 'TLS' : cfg.imap.security === 'starttls' ? 'STARTTLS' : 'bez szyfrowania';
     rows.push(kvRow('Skrzynka', `${esc(cfg.imap.user)} · ${esc(cfg.imap.host)}:${esc(cfg.imap.port)} ${esc(sec)}${cfg.imap.verifyCert ? '' : ' · bez sprawdzania certyfikatu'} · folder ${esc(cfg.folder)} · co ${esc(intervalWords(cfg.intervalSec))}`, true));
-    rows.push(kvRow('Nadawcy', cfg.senders.length === 0 ? '<span class="fail">pusta lista: żaden mail nie przejdzie</span>' : esc(cfg.senders.map((s) => s.pattern).join(', ')) + (cfg.requireAuthResults ? ' · wymagane SPF/DKIM' : '')));
+    rows.push(kvRow('Nadawcy', cfg.senders.length === 0 ? '<span class="fail">pusta lista: żaden mail nie przejdzie</span>' : esc(cfg.senders.map((s) => s.pattern).join(', ')) + (cfg.requireAuthResults ? (cfg.authservId === '' ? ' · wymagane SPF/DKIM' : ` · wymagane SPF/DKIM od ${esc(cfg.authservId)}`) : '')));
     const levels = [cfg.recipientsFromMail.enabled ? `numery z wiadomości (${cfg.recipientsFromMail.where === 'subject' ? 'temat' : 'pierwsza linia'})` : '', cfg.senders.some((s) => s.recipients.length > 0) ? 'numery nadawców' : '', cfg.to.fallback.length > 0 ? `stała lista: ${cfg.to.fallback.join(', ')}` : ''];
     rows.push(kvRow('Odbiorcy', dimOr(levels.filter((x) => x !== '').join(' · '))));
     const text = cfg.text.mode === 'liquid' ? 'szablon Liquid' : cfg.text.variant === 'subject_text' ? 'temat i treść' : cfg.text.variant === 'subject' ? 'tylko temat' : 'tylko treść';

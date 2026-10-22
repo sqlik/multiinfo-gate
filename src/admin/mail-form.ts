@@ -18,6 +18,7 @@ export interface MailFormValues {
   /** Linia na pozycję: wzorzec, po dwukropku numery po przecinku. */
   senders: string;
   requireAuthResults: boolean;
+  authservId: string;
   recipientsFromMail: boolean; recipientsWhere: 'subject' | 'body'; toFallback: string;
   /** Linia na frazę. */
   cutFrom: string;
@@ -33,6 +34,7 @@ export interface MailFormValues {
 const EMPTY_FIELD: MailFieldValues = { name: '', mode: 'between', after: '', until: '', pattern: '', flags: '' };
 const SENDER_PATTERN = /^(@[^@\s]+\.[^@\s]+|[^@\s]+@[^@\s]+\.[^@\s]+)$/;
 const FIELD_NAME = /^[a-z][a-z0-9_]{0,39}$/;
+const AUTHSERV_ID = /^[a-z0-9.-]*$/;
 const FIELD_KEY = /^fields\[(\d+)\]\[(name|mode|after|until|pattern|flags)\]$/;
 
 const list = (field: string | string[] | undefined): string[] => (field === undefined ? [] : (Array.isArray(field) ? field : [field]).map(String));
@@ -67,7 +69,7 @@ export function mailFormValues(body: Body): MailFormValues {
     host: s('host'), port: s('port'), security: (MAIL_SECURITIES as readonly string[]).includes(security) ? security as MailSecurity : 'tls',
     verifyCert: on(body.verifyCert), user: s('user'), password: first(body.password),
     folder: s('folder'), intervalSec: s('intervalSec'), backlog: on(body.backlog),
-    senders: first(body.senders), requireAuthResults: on(body.requireAuthResults),
+    senders: first(body.senders), requireAuthResults: on(body.requireAuthResults), authservId: s('authservId'),
     recipientsFromMail: on(body.recipientsFromMail), recipientsWhere: s('recipientsWhere') === 'body' ? 'body' : 'subject', toFallback: first(body.toFallback),
     cutFrom: first(body.cutFrom),
     fields: [...fields.entries()].sort((a, b) => a[0] - b[0]).map(([, row]) => row),
@@ -93,7 +95,7 @@ export function mailConfigToValues(config: MailInConfig, base: MailFormBase): Ma
     host: config.imap.host, port: String(config.imap.port), security: config.imap.security, verifyCert: config.imap.verifyCert, user: config.imap.user, password: '',
     folder: config.folder, intervalSec: String(config.intervalSec), backlog: false,
     senders: config.senders.map((s) => (s.recipients.length > 0 ? `${s.pattern}: ${s.recipients.join(', ')}` : s.pattern)).join('\n'),
-    requireAuthResults: config.requireAuthResults,
+    requireAuthResults: config.requireAuthResults, authservId: config.authservId,
     recipientsFromMail: config.recipientsFromMail.enabled, recipientsWhere: config.recipientsFromMail.where, toFallback: config.to.fallback.join('\n'),
     cutFrom: config.clean.cutFrom.join('\n'),
     fields: config.fields.map((f) => (f.mode === 'between'
@@ -163,6 +165,8 @@ export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine
     senders.push({ pattern, recipients: numbers });
   }
   if (senders.length > 100) return fail('Lista nadawców: najwyżej 100 pozycji.');
+  const authservId = v.authservId.toLowerCase();
+  if (!AUTHSERV_ID.test(authservId) || authservId.length > 253) return fail('Nazwa serwera w nagłówku Authentication-Results: dozwolone litery, cyfry, kropki i myślniki, do 253 znaków.');
 
   const fallback = lines(v.toFallback);
   if (fallback.length > 50) return fail('Odbiorcy: najwyżej 50 numerów.');
@@ -206,7 +210,7 @@ export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine
   let config: MailInConfig = {
     ...common,
     imap: { host: v.host, port, security: v.security, verifyCert: v.verifyCert, user: v.user, passRef: MAIL_IN_PASSWORD_REF },
-    folder: v.folder, intervalSec: interval as MailInInterval, senders, requireAuthResults: v.requireAuthResults,
+    folder: v.folder, intervalSec: interval as MailInInterval, senders, requireAuthResults: v.requireAuthResults, authservId,
     recipientsFromMail: { enabled: v.recipientsFromMail, where: v.recipientsWhere }, to: { fallback }, clean: { cutFrom }, fields, text,
     maxParts, overflow: v.overflow, after, reply: { enabled: v.replyEnabled },
   };
@@ -228,9 +232,9 @@ export function mailWarnings(config: MailInConfig): string[] {
   return out;
 }
 
-/** Czy konfiguracja używa pól widocznych tylko w trybie zaawansowanym: Liquid, wyrażenia regularne, wyłączone sprawdzanie certyfikatu. */
+/** Czy konfiguracja używa pól widocznych tylko w trybie zaawansowanym: Liquid, wyrażenia regularne, wyłączone sprawdzanie certyfikatu, nazwa serwera Authentication-Results. */
 export function needsAdvanced(config: MailInConfig): boolean {
-  return config.text.mode === 'liquid' || config.condition.mode === 'liquid' || config.fields.some((f) => f.mode === 'regex') || !config.imap.verifyCert;
+  return config.text.mode === 'liquid' || config.condition.mode === 'liquid' || config.fields.some((f) => f.mode === 'regex') || !config.imap.verifyCert || config.authservId !== '';
 }
 
 /** Pole nadawcy próbki: sam adres albo „Nazwa <adres>” (nazwa może być w cudzysłowie); nazwa decyduje o ucięciu podpisu. */
