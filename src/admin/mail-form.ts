@@ -120,7 +120,7 @@ function int(raw: string, min: number, max: number, what: string): number | stri
 
 function fieldFrom(f: MailFieldValues): MailField | string {
   if (f.name === '') return 'Wycinek bez nazwy: podaj nazwę małymi literami, np. kod.';
-  if (!FIELD_NAME.test(f.name)) return `Wycinek „${f.name}”: nazwa małymi literami, cyframi i podkreśleniem, od litery, do 40 znaków.`;
+  if (!FIELD_NAME.test(f.name)) return `Wycinek „${f.name}”: nazwa z małych liter, cyfr i podkreślenia, rozpoczynająca się literą, do 40 znaków.`;
   if (f.mode === 'between') {
     if (f.after === '') return `Wycinek ${f.name}: podaj tekst, po którym zaczyna się wartość.`;
     if (f.after.length > 200 || f.until.length > 200) return `Wycinek ${f.name}: frazy do 200 znaków.`;
@@ -128,7 +128,7 @@ function fieldFrom(f: MailFieldValues): MailField | string {
   }
   if (f.pattern === '') return `Wycinek ${f.name}: podaj wyrażenie regularne.`;
   if (f.pattern.length > 200) return `Wycinek ${f.name}: wyrażenie do 200 znaków.`;
-  if (!/^[im]{0,2}$/.test(f.flags)) return `Wycinek ${f.name}: flagi to tylko i oraz m.`;
+  if (!/^[im]{0,2}$/.test(f.flags)) return `Wycinek ${f.name}: dozwolone flagi to i oraz m.`;
   try {
     new RegExp(f.pattern, f.flags);
   } catch (e) {
@@ -160,7 +160,7 @@ export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine
     const colon = line.indexOf(':');
     const pattern = (colon < 0 ? line : line.slice(0, colon)).trim().toLowerCase();
     const numbers = colon < 0 ? [] : line.slice(colon + 1).split(',').map((n) => n.trim()).filter((n) => n !== '');
-    if (!SENDER_PATTERN.test(pattern) || pattern.length > 254) return fail(`Nadawca „${pattern}”: podaj pełny adres albo domenę z małpą, np. @przyklad.pl.`);
+    if (!SENDER_PATTERN.test(pattern) || pattern.length > 254) return fail(`Nadawca „${pattern}”: podaj pełny adres albo domenę poprzedzoną znakiem @, np. @przyklad.pl.`);
     if (numbers.length > 50) return fail(`Nadawca ${pattern}: najwyżej 50 numerów.`);
     senders.push({ pattern, recipients: numbers });
   }
@@ -180,7 +180,7 @@ export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine
     if (f.name === '' && f.after === '' && f.until === '' && f.pattern === '') continue;
     const built = fieldFrom(f);
     if (typeof built === 'string') return fail(built);
-    if (fields.some((x) => x.name === built.name)) return fail(`Wycinek ${built.name}: nazwa się powtarza.`);
+    if (fields.some((x) => x.name === built.name)) return fail(`Wycinek ${built.name}: nazwa powtarza się.`);
     fields.push(built);
   }
   if (fields.length > 20) return fail('Wycinki: najwyżej 20.');
@@ -226,9 +226,9 @@ export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine
 /** Zdania ostrzeżeń dla konfiguracji, która przechodzi, ale wymaga świadomości administratora. */
 export function mailWarnings(config: MailInConfig): string[] {
   const out: string[] = [];
-  if (config.imap.security === 'none') out.push('Połączenie bez szyfrowania: hasło i treść maili idą po sieci jawnym tekstem. Tylko w sieci wewnętrznej');
-  else if (!config.imap.verifyCert) out.push('Sprawdzanie certyfikatu wyłączone: połączenie podatne na podsłuch. Tylko dla serwera z własnym certyfikatem bez zaufanego urzędu');
-  if (config.recipientsFromMail.enabled) out.push('Numery z maila włączone: każdy nadawca z listy może wysłać SMS na dowolny numer na koszt konta');
+  if (config.imap.security === 'none') out.push('Połączenie bez szyfrowania: hasło i treść wiadomości są przesyłane jawnym tekstem. Dopuszczalne wyłącznie w sieci wewnętrznej');
+  else if (!config.imap.verifyCert) out.push('Sprawdzanie certyfikatu wyłączone: połączenie podatne na podsłuch. Dopuszczalne wyłącznie dla serwera z własnym certyfikatem bez zaufanego urzędu');
+  if (config.recipientsFromMail.enabled) out.push('Numery z wiadomości włączone: każdy nadawca z listy może wysłać SMS na dowolny numer na koszt konta');
   return out;
 }
 

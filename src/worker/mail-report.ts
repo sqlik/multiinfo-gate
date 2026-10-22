@@ -85,7 +85,7 @@ export function composeReport(payload: MailReportPayload, rows: Array<MessageRow
     const invalid = payload.invalid ?? [];
     lines = [
       `SMS z wiadomości „${subject}” ${verb} ${when}.`,
-      `Nadpis: ${orig ?? 'nie ustawiono'}`,
+      `Nadpis: ${orig ?? 'brak'}`,
       `Treść (${parts} ${partsWord(parts)}):`,
       payload.text ?? '',
       '',

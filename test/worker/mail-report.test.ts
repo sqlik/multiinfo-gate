@@ -101,7 +101,7 @@ describe('composeReport', () => {
     expect(one.text).toContain('Pominięto nieprawidłowy numer: 60010.');
     expect(one.text).not.toContain('w kolejnej wiadomości');
     const two = composeReport(payload({ invalid: ['1', '2'] }), [row({ dest: '48601000001', orig: null, status: 'delivered', finalAt: NOW.toISOString() }), delivered('48601000002')], 'first');
-    expect(two.text).toContain('Nadpis: nie ustawiono');
+    expect(two.text).toContain('Nadpis: brak');
     expect(two.text).toContain('Pominięto nieprawidłowe numery: 1, 2.');
     expect(two.text).not.toContain('w kolejnej wiadomości');
   });

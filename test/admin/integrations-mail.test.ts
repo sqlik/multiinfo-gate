@@ -103,7 +103,7 @@ describe('formularz skrzynki', () => {
     h.mailbox.add({ uid: 1, seen: false, source: 'Subject: a\r\n\r\nx' });
     const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody() });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Połączenie działa');
+    expect(res.body).toContain('Połączenie nawiązane');
     expect(res.body).toContain('nieprzeczytanych: 1');
     expect(res.body).toContain('data-fill="#folder"');
     expect(res.body).toContain('INBOX');
@@ -142,7 +142,7 @@ describe('formularz skrzynki', () => {
     await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody() });
     const row = h.integrations.list()[0]!;
     const ok = await post(`/integracje/${row.id}/edytuj`, formBody({ password: '', action: 'polaczenie' }));
-    expect(ok.body).toContain('Połączenie działa');
+    expect(ok.body).toContain('Połączenie nawiązane');
     h.mailbox.failConnect = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
     expect((await post(`/integracje/${row.id}/edytuj`, formBody({ password: '', action: 'polaczenie' }))).body).toContain('Serwer nie odpowiada');
   });

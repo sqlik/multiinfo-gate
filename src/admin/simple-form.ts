@@ -87,7 +87,7 @@ export function simpleToValues(kind: IntegrationKind, preset: Preset, sv: Simple
     const when = simple.when.find((w) => w.id === sv.whenId);
     if (!when) return fail('Wybierz, kiedy wysyłać SMS.');
     const text = simple.text.find((t) => t.id === sv.textId);
-    if (!text) return fail('Wybierz, co ma być w SMS-ie.');
+    if (!text) return fail('Wybierz treść SMS-a.');
     v.conditionMode = when.condition.mode;
     v.rules = when.condition.mode === 'builder' ? when.condition.rules.map((r) => ({ path: r.path, op: r.op, value: r.value })) : [];
     v.conditionExpr = when.condition.mode === 'liquid' ? when.condition.expr : '';
@@ -95,7 +95,7 @@ export function simpleToValues(kind: IntegrationKind, preset: Preset, sv: Simple
     v.textTemplate = text.text.mode === 'liquid' ? text.text.template : '';
     v.textPath = text.text.mode === 'path' ? text.text.path : '';
     v.toFallback = sv.numbers;
-    if (simple.recipients.source === 'list' && sv.numbers.trim() === '') return fail('Podaj przynajmniej jeden numer telefonu, na który ma iść SMS.');
+    if (simple.recipients.source === 'list' && sv.numbers.trim() === '') return fail('Podaj przynajmniej jeden numer telefonu odbiorcy SMS-a.');
     const auth = simple.auth;
     v.authHeaderName = '';
     v.authHeaderValue = '';
@@ -122,7 +122,7 @@ export function simpleToValues(kind: IntegrationKind, preset: Preset, sv: Simple
       const konto = sv.account.trim();
       if (konto === '') return fail(`Podaj: ${simple.enrich.account.label.toLowerCase()}.`);
       if (!ACCOUNT_NAME.test(konto)) return fail(`${simple.enrich.account.label}: dozwolone są małe litery, cyfry oraz myślnik.`);
-      if (!url.includes(marker)) return fail('Adres zapytania nie ma miejsca na nazwę konta - zmień je w trybie zaawansowanym.');
+      if (!url.includes(marker)) return fail('Adres zapytania nie zawiera miejsca na nazwę konta. Zmień go w trybie zaawansowanym.');
       v.enrichUrl = url.replaceAll(marker, konto);
       v.enrichToken = sv.enrichSecret;
       v.enrichOnError = preset.inbound?.enrich?.onError ?? 'error';
@@ -133,7 +133,7 @@ export function simpleToValues(kind: IntegrationKind, preset: Preset, sv: Simple
   if (!simple) return fail('To ustawienie nie ma trybu prostego.');
   v.url = sv.url;
   if (simple.address.mustEndWith !== undefined && !sv.url.endsWith(simple.address.mustEndWith)) {
-    return fail(`${simple.address.label} musi kończyć się na ${simple.address.mustEndWith} - dopisz to na końcu adresu z aplikacji.`);
+    return fail(`${simple.address.label} musi kończyć się na ${simple.address.mustEndWith}. Dopisz tę końcówkę do adresu z aplikacji.`);
   }
   v.headers = base.headers.map((h) => ({ ...h }));
   for (const sec of simple.secrets) {
@@ -150,7 +150,7 @@ export function simpleToValues(kind: IntegrationKind, preset: Preset, sv: Simple
     if (raw === '') return fail(`Podaj: ${p.label.toLowerCase()}.`);
     if (p.digits && !/^\d{1,12}$/.test(raw)) return fail(`${p.label}: podaj liczbę.`);
     const wzor = paramPatternFor(p);
-    if (!wzor.test(template)) return fail(`Szablon nie ma pola ${p.key} - zmień je w trybie zaawansowanym.`);
+    if (!wzor.test(template)) return fail(`Szablon nie zawiera pola ${p.key}. Zmień go w trybie zaawansowanym.`);
     // W ciągu zapytania wartość idzie bez cudzysłowów; w JSON-ie z cudzysłowami, gdy nie jest liczbą.
     const podstaw = p.where === 'query' ? `${p.key}=${raw}` : `"${p.key}": ${p.digits ? raw : JSON.stringify(raw)}`;
     template = template.replace(wzor, () => podstaw);
