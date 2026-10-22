@@ -59,14 +59,14 @@ export const bitrix24: Preset = {
       secrets: [],
       params: [{
         key: 'fields[RESPONSIBLE_ID]',
-        label: 'Numer pracownika, na którego idą zadania',
+        label: 'Numer pracownika przypisywanego do zadań',
         hint: 'Widoczny w adresie profilu w Bitrixie: /company/personal/user/1/ to numer 1',
         digits: true, where: 'query',
       }],
       note: 'Każdy odebrany SMS zakłada w Bitrixie zadanie z treścią wiadomości, powiązane z kontaktem o tym numerze.',
     },
   },
-  warning: 'Adres webhooka jest hasłem do Twojego portalu. Nie wklejaj go do zgłoszeń ani na zrzuty ekranu.',
+  warning: 'Adres webhooka pełni rolę hasła do portalu. Nie należy wklejać go do zgłoszeń ani umieszczać na zrzutach ekranu.',
   guide: [
     '**Webhook.** W Bitrixie wejdź w **Aplikacje**, potem **Zasoby dla programistów** i wybierz kafelek **Webhook przychodzący**.',
     '',
@@ -84,8 +84,8 @@ export const bitrix24: Preset = {
     '',
     '**Numery w kartotekach muszą mieć kod kraju.** Bitrix szuka kontaktu po numerze w takim zapisie, w jakim go dostaje, czyli u nas `+48601000001`. Kontakt z numerem `+48 601 000 001` zostanie znaleziony, bo Bitrix pomija spacje. Kontakt z samym `601 000 001`, bez kodu kraju, nie zostanie znaleziony i zadanie powstanie bez powiązania.',
     '',
-    'Adres webhooka jest hasłem: kto go ma, ten czyta CRM i zakłada zadania. Trzymaj go wyłącznie w bramce. Gdy wyciekł, skasuj webhook w Bitrixie oraz zrób nowy.',
+    'Adres webhooka pełni rolę hasła: jego posiadacz odczytuje CRM i zakłada zadania. Należy przechowywać go wyłącznie w bramce. Po wycieku usuń webhook w Bitrixie i utwórz nowy.',
     '',
-    'Powiadomienia wychodzące z Bitrixa, w tym przypomnienia o rezerwacjach, przyjdą w późniejszym wydaniu bramki.',
+    'Powiadomienia wychodzące z Bitrixa, w tym przypomnienia o rezerwacjach, pojawią się w późniejszym wydaniu bramki.',
   ].join('\n'),
 };

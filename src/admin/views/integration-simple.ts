@@ -28,7 +28,7 @@ export function modeSwitch(ctx: FormContext, mode: 'prosty' | 'zaawansowany'): s
     </div>
     <span class="dim" style="font-size: 12px;">${mode === 'prosty'
       ? 'Wybór z list, bez szablonów. Tryb zaawansowany pokazuje te same ustawienia w polach silnika.'
-      : 'Pola silnika: ścieżki w ładunku, szablony Liquid, reguły. Tryb prosty pokazuje je jako listy wyboru, jeśli się w nich mieszczą.'}</span>
+      : 'Pola silnika: ścieżki w ładunku, szablony Liquid, reguły. Tryb prosty pokazuje je jako listy wyboru, o ile dają się w nich wyrazić.'}</span>
   </div>`;
 }
 
@@ -42,7 +42,7 @@ function keyField(ctx: FormContext, sv: SimpleValues): string {
       <select id="apiKeyId" name="apiKeyId">
         ${ctx.keys.map((k) => `<option value="${esc(k.id)}"${sv.apiKeyId === String(k.id) ? ' selected' : ''}>${esc(k.name)} · ${esc(k.accountName)}</option>`).join('')}
       </select>
-      <div class="hint">SMS-y pójdą z konta Multiinfo tego klucza, z jego domyślnej usługi i nadpisu nadawcy</div>
+      <div class="hint">SMS-y są wysyłane z konta Multiinfo tego klucza, z jego domyślnej usługi i domyślnego nadpisu nadawcy</div>
     </div>`;
 }
 
@@ -51,10 +51,10 @@ function secretField(ctx: FormContext, label: string, where: string): string {
   return `<div class="field">
       <label for="secret">${esc(label)}</label>
       <div class="inline">
-        <input id="secret" name="secret" type="password" autocomplete="off" placeholder="${saved ? 'zapisane - puste pole zostawia dotychczasowe' : 'wpisz albo wygeneruj'}" style="flex: 1;">
+        <input id="secret" name="secret" type="password" autocomplete="off" placeholder="${saved ? 'zapisane, puste pole zachowuje dotychczasowe' : 'wpisz albo wygeneruj'}" style="flex: 1;">
         <button class="btn btn-s" type="button" data-generate="#secret">Wygeneruj</button>
       </div>
-      <div class="hint">To samo hasło wpisz ${esc(where)}. Bramka odrzuca żądania bez niego. Zapisujemy je zaszyfrowane; potem da się tylko ustawić nowe.</div>
+      <div class="hint">To samo hasło należy wpisać ${esc(where)}. Bramka odrzuca żądania bez niego. Hasło jest przechowywane w postaci zaszyfrowanej i nie można go odczytać, można jedynie ustawić nowe</div>
     </div>`;
 }
 
@@ -74,8 +74,8 @@ function enrichFields(ctx: FormContext, sv: SimpleValues): string {
     </div>
     <div class="field">
       <label for="enrichSecret">${esc(enrich.secretLabel)}</label>
-      <input id="enrichSecret" name="enrichSecret" type="password" autocomplete="off" placeholder="${zapisany ? 'zapisany - puste pole zostawia dotychczasowy' : 'wklej z aplikacji'}">
-      <div class="hint">Znajdziesz go ${esc(enrich.where)}. Bramka pyta nim o dane klienta. Zapisujemy go zaszyfrowanego; potem da się tylko ustawić nowy.</div>
+      <input id="enrichSecret" name="enrichSecret" type="password" autocomplete="off" placeholder="${zapisany ? 'zapisany, puste pole zachowuje dotychczasowy' : 'wklej z aplikacji'}">
+      <div class="hint">Kod znajduje się ${esc(enrich.where)}. Bramka używa go do odczytu danych klienta. Jest przechowywany w postaci zaszyfrowanej, można jedynie ustawić nowy</div>
     </div>
   </details>`;
 }
@@ -85,7 +85,7 @@ function inboundSections(ctx: FormContext, sv: SimpleValues, opts: SimplePageOpt
   const numbers = `<div class="field">
       <label for="numbers">${simple.recipients.source === 'list' ? 'Numery telefonów' : 'Numery zapasowe'}</label>
       <textarea id="numbers" name="numbers" rows="3" placeholder="601 000 001&#10;+48 602 000 002">${esc(sv.numbers)}</textarea>
-      <div class="hint">${esc(simple.recipients.note)} Jeden numer na linię; dziewięć cyfr dostaje kod kraju konta</div>
+      <div class="hint">${esc(simple.recipients.note)} Jeden numer w wierszu. Numer dziewięciocyfrowy otrzymuje kod kraju konta</div>
     </div>`;
   const when = simple.when.map((w) => radio('whenId', w.id, sv.whenId, w.label)).join('');
   const texts = simple.text.map((t) => radio('textId', t.id, sv.textId, t.label, opts.textPreviews[t.id] ?? '')).join('');
@@ -97,13 +97,13 @@ function inboundSections(ctx: FormContext, sv: SimpleValues, opts: SimplePageOpt
       ${keyField(ctx, sv)}
       ${ctx.row ? `<div class="field"><label class="choice"><input type="checkbox" name="enabled" value="1"${sv.enabled ? ' checked' : ''}> Włączona</label></div>` : '<input type="hidden" name="enabled" value="1">'}
     </details>
-    <details open><summary>2. Kto ma dostać SMS</summary>${numbers}</details>
+    <details open><summary>2. Kto otrzyma SMS</summary>${numbers}</details>
     <details open><summary>3. Kiedy wysyłać SMS</summary>
       <div class="field"><div class="choices" style="flex-direction: column; gap: 8px;">${when}</div></div>
     </details>
-    <details open><summary>4. Co ma być w SMS-ie</summary>
+    <details open><summary>4. Treść SMS-a</summary>
       <div class="field"><div class="choices" style="flex-direction: column; gap: 10px;">${texts}</div>
-      <div class="hint">Przykłady policzone z prawdziwego zdarzenia z aplikacji ${esc(ctx.preset.name.split(':')[0]!)}; inną treść ustawisz w trybie zaawansowanym</div></div>
+      <div class="hint">Przykłady obliczone z rzeczywistego zdarzenia aplikacji ${esc(ctx.preset.name.split(':')[0]!)}. Inną treść można ustawić w trybie zaawansowanym</div></div>
     </details>
     <details open><summary>5. Zabezpieczenie</summary>${auth}</details>
     ${simple.enrich ? enrichFields(ctx, sv) : ''}`;
@@ -115,8 +115,8 @@ function outboundSections(ctx: FormContext, sv: SimpleValues): string {
     const saved = ctx.secretNames.length > 0;
     return `<div class="field">
       <label for="secret_${esc(s.ref)}">${esc(s.label)}</label>
-      <input id="secret_${esc(s.ref)}" name="secret_${esc(s.ref)}" type="password" autocomplete="off" placeholder="${saved ? 'zapisany - puste pole zostawia dotychczasowy' : ''}">
-      <div class="hint">${esc(s.hint)}. Zapisujemy zaszyfrowany; potem da się tylko ustawić nowy.</div>
+      <input id="secret_${esc(s.ref)}" name="secret_${esc(s.ref)}" type="password" autocomplete="off" placeholder="${saved ? 'zapisany, puste pole zachowuje dotychczasowy' : ''}">
+      <div class="hint">${esc(s.hint)}. Przechowywany w postaci zaszyfrowanej, można jedynie ustawić nowy</div>
     </div>`;
   }).join('');
   const params = simple.params.map((p) => `<div class="field">
@@ -148,7 +148,7 @@ export function simpleFormPage(ctx: FormContext, sv: SimpleValues, opts: SimpleP
   const addressField = ctx.preset.simple?.inbound?.addressField;
   const address = edit && inbound && ctx.row!.hookId !== null && !opts.created ? `<div class="panel" style="max-width: 760px;">
       <div class="panel-h"><div class="lab">Adres do wklejenia ${esc(addressField ?? 'w aplikacji')}</div>
-        <form method="post" action="/integracje/${esc(ctx.row!.id)}/nowy-adres" data-confirm="Wygenerować nowy adres? Stary przestanie działać natychmiast - trzeba go podmienić w aplikacji." data-confirm-ok="Wygeneruj">
+        <form method="post" action="/integracje/${esc(ctx.row!.id)}/nowy-adres" data-confirm="Wygenerować nowy adres? Dotychczasowy przestanie działać natychmiast i wymaga zastąpienia w aplikacji." data-confirm-ok="Wygeneruj">
           <button class="btn btn-s" type="submit">Wygeneruj nowy</button>
         </form>
       </div>
@@ -156,7 +156,7 @@ export function simpleFormPage(ctx: FormContext, sv: SimpleValues, opts: SimpleP
         <div class="keybox" id="hook-path">${esc(fullUrl(ctx.apiUrl, hookPath(ctx.row!.hookId)))}</div>
         <button class="btn btn-s" type="button" data-copy="#hook-path">Kopiuj</button>
       </div>
-      ${ctx.apiUrl === null ? '<div class="hint" style="padding: 0 16px 12px;">To sama ścieżka - panel nie zna jeszcze adresu bramki. Podaj go na ekranie Klucze API, a tu pojawi się pełny adres.</div>' : ''}
+      ${ctx.apiUrl === null ? '<div class="hint" style="padding: 0 16px 12px;">Wyświetlana jest sama ścieżka, ponieważ adres bramki nie został jeszcze podany. Po jego podaniu na ekranie Klucze API w tym miejscu pojawi się pełny adres</div>' : ''}
     </div>` : '';
   const guide = ctx.preset.guide === '' ? '' : `<details class="panel" style="max-width: 760px; padding: 0;">
       <summary style="padding: 12px 16px;">Co ustawić po stronie ${esc(ctx.preset.name)}</summary>
@@ -176,7 +176,7 @@ export function simpleFormPage(ctx: FormContext, sv: SimpleValues, opts: SimpleP
     ${opts.created ? hookReveal(opts.created, ctx.apiUrl, addressField) : ''}
     ${address}
     ${guide}
-    ${inbound && !edit ? `<div class="dim" style="max-width: 760px; margin-bottom: 12px; font-size: 12.5px;">Po zapisaniu dostaniesz adres do wklejenia ${esc(addressField ?? 'w aplikacji')} i instrukcję krok po kroku</div>` : ''}
+    ${inbound && !edit ? `<div class="dim" style="max-width: 760px; margin-bottom: 12px; font-size: 12.5px;">Po zapisaniu panel wyświetli adres do wklejenia ${esc(addressField ?? 'w aplikacji')} oraz instrukcję krok po kroku</div>` : ''}
     <div class="panel" style="max-width: 760px;">
       <form class="form" method="post" action="${action}">
         <input type="hidden" name="kind" value="${esc(ctx.kind)}">

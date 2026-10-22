@@ -34,6 +34,8 @@ export interface AppConfig {
    * posłużyć do stukania w usługi, które z internetu nie są widoczne.
    */
   webhookAllowPrivate: boolean;
+  /** Zgoda na serwer IMAP w sieci wewnętrznej (MIG_MAIL_ALLOW_PRIVATE=1). */
+  mailAllowPrivate: boolean;
   /** Ile ms Multiinfo może trzymać getsms.aspx bez odpowiedzi (1..60000). Domyślnie 10000:
    *  pełne 60000 opóźnia wiadomość nadeszłą między pytaniami nawet o minutę. */
   inboundTimeoutMs: number;
@@ -121,6 +123,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env, interfaces: Int
     logLevel: logLevelOr(source.MIG_LOG_LEVEL, 'info'),
     backupRetentionDays: intOr(source.MIG_BACKUP_RETENTION_DAYS, 14),
     webhookAllowPrivate: flag(source.MIG_WEBHOOK_ALLOW_PRIVATE),
+    mailAllowPrivate: flag(source.MIG_MAIL_ALLOW_PRIVATE),
     inboundTimeoutMs: boundedInt('MIG_INBOUND_TIMEOUT_MS', source.MIG_INBOUND_TIMEOUT_MS, 10_000, 1, 60_000),
     inboundIdleMs: boundedInt('MIG_INBOUND_IDLE_MS', source.MIG_INBOUND_IDLE_MS, 0, 0, 3_600_000),
     trustedProxies: proxyList(source.MIG_TRUSTED_PROXIES),

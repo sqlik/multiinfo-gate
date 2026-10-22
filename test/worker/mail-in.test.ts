@@ -530,15 +530,43 @@ describe('nextPollDelayMs, replyFor, checkMailbox', () => {
       .toEqual({ subject: 'Re: Awaria', text: 'SMS nie został wysłany: nie udało się ustalić odbiorcy.', to: ['a@x'], autoReply: true });
   });
 
+  it('checkMailbox podaje authserv-id z ostatniej wiadomości, a null bez nagłówka', async () => {
+    const settings = { host: 'h', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', password: PASSWORD };
+    box.authservId = 'mx.google.com';
+    expect(await checkMailbox(fakeConnect(box), settings, 'INBOX')).toMatchObject({ ok: true, authservId: 'mx.google.com' });
+    box.authservId = null;
+    expect(await checkMailbox(fakeConnect(box), settings, 'INBOX')).toMatchObject({ ok: true, authservId: null });
+  });
+  it('checkMailbox z sesją bez metody authservId (starsza atrapa) daje null', async () => {
+    const connect: typeof fakeConnect = (b) => async (s) => { const session = await fakeConnect(b)(s, 1000); const { authservId: _x, ...rest } = session; return rest as typeof session; };
+    expect(await checkMailbox(connect(box), { host: 'h', port: 993, security: 'tls', verifyCert: true, user: 'u', password: PASSWORD }, 'INBOX')).toMatchObject({ ok: true, authservId: null });
+  });
   it('checkMailbox: sukces z liczbą nieprzeczytanych i folderami; błąd logowania bez hasła w treści', async () => {
     box.add({ uid: 1, seen: false, source: 'Subject: a\r\n\r\nx' });
     const settings = { host: 'h', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', password: PASSWORD };
-    expect(await checkMailbox(fakeConnect(box), settings, 'INBOX')).toEqual({ ok: true, unseen: 1, folders: ['INBOX'] });
+    expect(await checkMailbox(fakeConnect(box), settings, 'INBOX')).toEqual({ ok: true, unseen: 1, folders: ['INBOX'], authservId: null });
     expect(box.calls).toContain('close');
     box.failConnect = new Error(`LOGIN ${PASSWORD} rejected`);
     expect(await checkMailbox(fakeConnect(box), settings, 'INBOX')).toEqual({ ok: false, kind: 'other', error: 'LOGIN *** rejected', folders: [] });
     box.failConnect = null;
     expect(await checkMailbox(fakeConnect(box), { ...settings, password: 'x' }, 'INBOX')).toMatchObject({ ok: false, kind: 'auth' });
     expect(await checkMailbox(fakeConnect(box), settings, 'Niema')).toMatchObject({ ok: false, kind: 'folder' });
+  });
+});
+
+describe('MailInPoller - serwer w sieci wewnętrznej', () => {
+  it('bez MIG_MAIL_ALLOW_PRIVATE: stan „sieć” z komunikatem o zmiennej, bez połączenia', async () => {
+    const p = new MailInPoller({ ...deps, resolve: async () => ['192.168.1.10'], allowPrivateMail: false });
+    await p.poll(integ, NOW);
+    const state = mailIn.state(integ.id)!;
+    expect(state.errorKind).toBe('network');
+    expect(state.error).toContain('MIG_MAIL_ALLOW_PRIVATE=1');
+    expect(box.calls).not.toContain('connect');
+  });
+  it('ze zgodą łączy się jak dotąd', async () => {
+    const p = new MailInPoller({ ...deps, resolve: async () => ['192.168.1.10'], allowPrivateMail: true });
+    await p.poll(integ, NOW);
+    expect(box.calls).toContain('connect');
+    expect(mailIn.state(integ.id)!.errorKind).toBeNull();
   });
 });

@@ -52,9 +52,9 @@ function paramsCell(rule: RuleRow, raw: Record<string, string> | null | undefine
     case 'certificate_expiring':
       return cell(`<input class="cell" name="days_certificate_expiring" value="${val('days_certificate_expiring', numbersText(rule.params.days))}"${disabled}>`, 'dni przed wygaśnięciem, mail raz na każdy próg');
     case 'inbound_failure':
-      return cell(`<input class="cell" name="afterMinutes_inbound_failure" type="number" min="1" max="1440" value="${val('afterMinutes_inbound_failure', String(rule.params.afterMinutes ?? 15))}"${disabled}>`, 'po ilu minutach');
+      return cell(`<input class="cell" name="afterMinutes_inbound_failure" type="number" min="1" max="1440" value="${val('afterMinutes_inbound_failure', String(rule.params.afterMinutes ?? 15))}"${disabled}>`, 'po ilu minutach niepowodzeń');
     case 'mailbox_failure':
-      return cell(`<input class="cell" name="afterMinutes_mailbox_failure" type="number" min="1" max="1440" value="${val('afterMinutes_mailbox_failure', String(rule.params.afterMinutes ?? 15))}"${disabled}>`, 'po ilu minutach; logowanie odrzucone od razu');
+      return cell(`<input class="cell" name="afterMinutes_mailbox_failure" type="number" min="1" max="1440" value="${val('afterMinutes_mailbox_failure', String(rule.params.afterMinutes ?? 15))}"${disabled}>`, 'po ilu minutach niepowodzeń, odrzucone logowanie natychmiast');
     case 'daily_summary':
       return cell(`<input class="cell" name="hour_daily_summary" type="number" min="0" max="23" value="${val('hour_daily_summary', String(rule.params.hour ?? 8))}"${disabled}>`, 'o której godzinie');
     default:
@@ -108,7 +108,7 @@ export function notificationsPage(d: NotificationsPageData): string {
         <a href="/powiadomienia"${d.tab === 'konfiguracja' ? ' class="on"' : ''}>Konfiguracja</a>
         <a href="/powiadomienia?zakladka=reguly"${d.tab === 'reguly' ? ' class="on"' : ''}>Reguły</a>
       </div>
-      <span class="dim" style="font-size: 12px;">${d.tab === 'konfiguracja' ? 'Serwer SMTP, nadawca i odbiorcy maili' : 'Które zdarzenia mają iść mailem, jak często i z jakimi progami'}</span>
+      <span class="dim" style="font-size: 12px;">${d.tab === 'konfiguracja' ? 'Serwer SMTP, nadawca i odbiorcy maili' : 'Które zdarzenia są zgłaszane mailem, jak często i z jakimi progami'}</span>
     </div>
 ${d.tab === 'konfiguracja' ? `      <div class="panel" style="max-width: 760px;">
         <div class="panel-h"><div class="lab">Serwer SMTP</div>
@@ -128,8 +128,8 @@ ${d.tab === 'konfiguracja' ? `      <div class="panel" style="max-width: 760px;"
             <select id="security" name="security">
               ${SECURITY.map((s) => `<option value="${s.value}"${v.security === s.value ? ' selected' : ''}>${esc(s.label)}</option>`).join('')}
             </select>
-            <label class="choice"><input type="checkbox" name="plainOk" value="1"${v.plainOk ? ' checked' : ''}> Rozumiem, że bez szyfrowania hasło pójdzie jawnie</label>
-            <div class="hint">Bez szyfrowania tylko do serwera w tej samej sieci wewnętrznej</div>
+            <label class="choice"><input type="checkbox" name="plainOk" value="1"${v.plainOk ? ' checked' : ''}> Rozumiem, że bez szyfrowania hasło jest przesyłane jawnie</label>
+            <div class="hint">Połączenie bez szyfrowania jest dopuszczalne wyłącznie do serwera w tej samej sieci wewnętrznej</div>
           </div>
           <div class="field">
             <label for="user">Login</label>
@@ -139,7 +139,7 @@ ${d.tab === 'konfiguracja' ? `      <div class="panel" style="max-width: 760px;"
           <div class="field">
             <label for="password">Hasło</label>
             <input id="password" name="password" type="password" autocomplete="off">
-            <div class="hint">${configured ? 'Puste pole zostawia dotychczasowe hasło' : 'Zapisywane zaszyfrowane kluczem głównym'}</div>
+            <div class="hint">${configured ? 'Puste pole zostawia dotychczasowe hasło' : 'Przechowywane w postaci zaszyfrowanej kluczem głównym'}</div>
           </div>
           <div class="field">
             <label for="fromAddress">Adres nadawcy</label>
@@ -152,17 +152,17 @@ ${d.tab === 'konfiguracja' ? `      <div class="panel" style="max-width: 760px;"
           <div class="field">
             <label for="recipients">Odbiorcy</label>
             <textarea id="recipients" name="recipients" rows="3">${esc(v.recipients)}</textarea>
-            <div class="hint">Jeden adres na linię, do 20</div>
+            <div class="hint">Jeden adres w wierszu, najwyżej 20</div>
           </div>
           <div class="field">
             <label for="instanceName">Nazwa instancji</label>
             <input id="instanceName" name="instanceName" value="${esc(v.instanceName)}" placeholder="np. Firma - produkcja">
-            <div class="hint">W temacie każdego maila, żeby odróżnić bramki</div>
+            <div class="hint">Umieszczana w temacie każdego maila. Pozwala odróżnić powiadomienia z kilku bramek</div>
           </div>
           <div class="field">
             <label for="panelUrl">Adres panelu</label>
             <input id="panelUrl" name="panelUrl" value="${esc(v.panelUrl)}" placeholder="https://sms.firma.example:8081">
-            <div class="hint">Opcjonalny: ten adres będzie zaszyty w powiadomieniach jako odnośnik do panelu</div>
+            <div class="hint">Opcjonalny. Powiadomienia zawierają ten adres jako odnośnik do panelu</div>
           </div>
           <div class="bar">
             <button class="btn btn-p" type="submit">Zapisz SMTP</button>
@@ -171,13 +171,13 @@ ${d.tab === 'konfiguracja' ? `      <div class="panel" style="max-width: 760px;"
         </form>
         <form id="smtp-test" method="post" action="/powiadomienia/smtp/test"></form>
       </div>` : `      <div class="panel${configured ? '' : ' dim'}" style="max-width: 1180px;">
-        ${configured ? '' : '<div class="warn">Najpierw skonfiguruj SMTP - bez niego reguły nie mają dokąd wysyłać.</div>'}
+        ${configured ? '' : '<div class="warn">Reguły wymagają skonfigurowanego serwera SMTP. Konfiguracja znajduje się w zakładce Konfiguracja.</div>'}
         ${rulesError}
         <form method="post" action="/powiadomienia/reguly">
           ${rulesTable(d.rules, configured, d.ruleValues)}
           <div class="bar" style="padding: 12px 16px;">
             <button class="btn btn-p" type="submit"${configured ? '' : ' disabled'}>Zapisz reguły</button>
-            <span class="hint dim" style="font-size: 11.5px;">Grupowanie 0 = każde zdarzenie osobno, do limitu na godzinę; nadmiar trafia do następnego maila jako liczba</span>
+            <span class="hint dim" style="font-size: 11.5px;">Grupowanie 0 oznacza osobny mail dla każdego zdarzenia, do limitu na godzinę. Zdarzenia ponad limit są zliczane i podawane w następnym mailu</span>
           </div>
         </form>
       </div>`}

@@ -18,7 +18,7 @@ export const freshdeskZgloszenie: Preset = {
     { path: 'text', label: 'opis zgłoszenia (HTML)' },
     { path: 'mobile', label: 'telefon komórkowy zgłaszającego; często tylko to pole jest wypełnione' },
     { path: 'phone', label: 'telefon stacjonarny zgłaszającego' },
-    { path: 'subject', label: 'temat - gdy dodasz do reguły pole "subject": "{{ticket.subject}}"' },
+    { path: 'subject', label: 'temat, gdy reguła zawiera pole "subject": "{{ticket.subject}}"' },
   ],
   inbound: {
     to: { fallback: [] },
@@ -30,7 +30,7 @@ export const freshdeskZgloszenie: Preset = {
   simple: {
     inbound: {
       addressField: 'we Freshdesku w obu regułach automatyzacji jako adres elementu webhook',
-      recipients: { source: 'list', note: 'Freshdesk nie przesyła numerów agentów, więc SMS idzie zawsze na numery wpisane tutaj.' },
+      recipients: { source: 'list', note: 'Freshdesk nie przesyła numerów agentów, więc SMS jest zawsze wysyłany na numery wpisane tutaj.' },
       when: [
         { id: 'nowe-i-odpowiedzi', label: 'przy nowym zgłoszeniu i przy odpowiedzi klienta', condition: { mode: 'builder', rules: [] } },
         { id: 'tylko-nowe', label: 'tylko przy nowym zgłoszeniu', condition: { mode: 'builder', rules: [{ path: 'event', op: 'eq', value: 'nowe' }] } },
@@ -57,6 +57,6 @@ export const freshdeskZgloszenie: Preset = {
     '{ "event": "odpowiedz", "ticket_id": "{{ticket.id}}", "subject": "{{ticket.subject}}", "phone": "{{ticket.contact.phone}}", "mobile": "{{ticket.contact.mobile}}", "text": "{{ticket.latest_public_comment}}" }',
     '```',
     '',
-    'Freshdesk nie ma pola na hasło ani nagłówki, a żądania przychodzą z różnych adresów chmury - chroni sekret w adresie wejściowym i limit burzy.',
+    'Freshdesk nie ma pola na hasło ani nagłówki, a żądania przychodzą z różnych adresów chmury. Zabezpieczeniem jest sekret w adresie wejściowym i limit burzy.',
   ].join('\n'),
 };

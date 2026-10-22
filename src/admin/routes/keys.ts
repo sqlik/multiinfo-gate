@@ -62,8 +62,8 @@ function check(choice: AccountChoice, v: KeyFormValues, today: Date): Checked {
   if (!v.serviceIds.includes(defaultServiceId)) return { ok: false, error: 'Domyślne ID usługi musi być jednym z zaznaczonych.' };
   const spozaSlownika = v.origs.filter((o) => !choice.origs.includes(o));
   if (spozaSlownika.length > 0) {
-    return { ok: false, error: `Nadpis spoza słownika konta: ${spozaSlownika.join(', ')}. `
-      + 'Najpierw dopisz go na ekranie kont - po uruchomieniu przez Polkomtel na wniosek z panelu Multiinfo.' };
+    return { ok: false, error: `Nadpis spoza listy konta: ${spozaSlownika.join(', ')}. `
+      + 'Najpierw należy dopisać go na ekranie kont, po uruchomieniu przez administratora Polkomtel na wniosek z panelu Multiinfo.' };
   }
   if (v.defaultOrig !== '' && !v.origs.includes(v.defaultOrig)) {
     return { ok: false, error: 'Domyślny nadpis klucza musi być jednym z zaznaczonych.' };
@@ -80,7 +80,7 @@ function check(choice: AccountChoice, v: KeyFormValues, today: Date): Checked {
     try {
       expiresAt = endOfWarsawDay(v.expiresOn);
     } catch {
-      return { ok: false, error: 'Data ważności ma zły format.' };
+      return { ok: false, error: 'Data ważności ma nieprawidłowy format.' };
     }
     if (Date.parse(expiresAt) <= today.getTime()) return { ok: false, error: 'Data ważności nie może być w przeszłości.' };
   }
@@ -109,7 +109,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
     if (target.kind === 'private' && !deps.allowPrivateWebhooks) {
       return `${PRIVATE_TARGET_MESSAGE} (${target.address}).`;
     }
-    if (target.kind === 'unresolved') return `Nazwa z adresu webhooka nie rozwiązuje się: ${target.reason}.`;
+    if (target.kind === 'unresolved') return `Nazwa serwera z adresu webhooka nie rozwiązuje się na adres IP: ${target.reason}.`;
     return null;
   };
 
@@ -292,8 +292,8 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
     // Włączona integracja na odwołanym kluczu psułaby się po cichu przy pierwszym zdarzeniu.
     const live = deps.integrations.listForKey(id).filter((i) => i.enabled === 1);
     if (live.length > 0) {
-      render.flash(request, 'warn', `Klucz ${key.name} ma włączone integracje (${live.map((i) => i.name).join(', ')}) - `
-        + 'najpierw wyłącz albo przepnij integracje, potem odwołaj klucz.');
+      render.flash(request, 'warn', `Klucz ${key.name} ma włączone integracje (${live.map((i) => i.name).join(', ')}). `
+        + 'Najpierw wyłącz te integracje albo przenieś je na inny klucz, potem odwołaj klucz.');
       return reply.redirect('/klucze', 302);
     }
 
@@ -307,7 +307,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       meta: { nazwa: key.name, prefiks: key.keyPrefix },
       ip: request.ip,
     });
-    render.flash(request, 'ok', `Klucz ${key.name} odwołany. Żądania z tym kluczem dostają od teraz 401.`);
+    render.flash(request, 'ok', `Klucz ${key.name} odwołany. Żądania z tym kluczem otrzymują od teraz odpowiedź 401.`);
     return reply.redirect('/klucze', 302);
   });
 }

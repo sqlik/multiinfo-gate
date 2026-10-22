@@ -43,3 +43,10 @@ describe('loadEnv - sprawdzanie wydań', () => {
     expect(loadEnv({ ...base, MIG_UPDATE_CHECK: 'nie' }, {}).updateCheck).toBe(false);
   });
 });
+
+describe('loadEnv - serwer IMAP w sieci wewnętrznej', () => {
+  it('MIG_MAIL_ALLOW_PRIVATE domyślnie wyłączone, 1 włącza', () => {
+    expect(loadEnv(base, {}).mailAllowPrivate).toBe(false);
+    expect(loadEnv({ ...base, MIG_MAIL_ALLOW_PRIVATE: '1' }, {}).mailAllowPrivate).toBe(true);
+  });
+});

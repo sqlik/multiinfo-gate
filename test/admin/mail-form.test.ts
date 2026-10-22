@@ -9,6 +9,15 @@ const v = (): MailFormValues => ({ ...mailConfigToValues(defaultMailInConfig(), 
 const NOW = new Date('2026-10-21T10:00:00Z');
 
 describe('mailConfigToValues i mailFormToConfig', () => {
+  it('authservId przechodzi w obie strony małymi literami, a niedozwolone znaki są odrzucane', () => {
+    const ok = mailFormToConfig({ ...v(), authservId: 'MX.Google.com' }, false, engine);
+    expect(ok.ok && ok.config.authservId).toBe('mx.google.com');
+    expect(mailConfigToValues({ ...defaultMailInConfig(), authservId: 'mx.google.com' }, base).authservId).toBe('mx.google.com');
+    const bad = mailFormToConfig({ ...v(), authservId: 'mx google' }, false, engine);
+    expect(!bad.ok && bad.error).toBe('Nazwa serwera w nagłówku Authentication-Results: dozwolone litery, cyfry, kropki i myślniki, do 253 znaków.');
+    expect(needsAdvanced({ ...defaultMailInConfig(), authservId: 'mx.google.com' })).toBe(true);
+    expect(needsAdvanced(defaultMailInConfig())).toBe(false);
+  });
   it('wartości domyślne z konfiguracji i z powrotem dają tę samą konfigurację', () => {
     const back = mailFormToConfig(v(), false, engine);
     expect(back.ok && back.config.imap.host).toBe('imap.przyklad.test');
@@ -55,7 +64,7 @@ describe('mailConfigToValues i mailFormToConfig', () => {
     expect(mailFormToConfig({ ...v(), password: '' }, false, engine)).toEqual({ ok: false, error: 'Podaj hasło skrzynki.' });
     expect(mailFormToConfig({ ...v(), password: '' }, true, engine).ok).toBe(true);
     expect(mailFormToConfig({ ...v(), user: '' }, true, engine)).toEqual({ ok: false, error: 'Podaj login skrzynki.' });
-    expect(mailFormToConfig({ ...v(), senders: 'przyklad.pl' }, true, engine)).toEqual({ ok: false, error: 'Nadawca „przyklad.pl”: podaj pełny adres albo domenę z małpą, np. @przyklad.pl.' });
+    expect(mailFormToConfig({ ...v(), senders: 'przyklad.pl' }, true, engine)).toEqual({ ok: false, error: 'Nadawca „przyklad.pl”: podaj pełny adres albo domenę poprzedzoną znakiem @, np. @przyklad.pl.' });
     expect(mailFormToConfig({ ...v(), afterAction: 'move', afterFolder: '' }, true, engine)).toEqual({ ok: false, error: 'Podaj folder, do którego przenosić przetworzone wiadomości.' });
     expect(mailFormToConfig({ ...v(), fields: [{ name: '', mode: 'between', after: 'x', until: '', pattern: '', flags: '' }] }, true, engine)).toEqual({ ok: false, error: 'Wycinek bez nazwy: podaj nazwę małymi literami, np. kod.' });
     expect(mailFormToConfig({ ...v(), fields: [{ name: 'Kod', mode: 'between', after: 'x', until: '', pattern: '', flags: '' }] }, true, engine).ok).toBe(false);
@@ -71,11 +80,11 @@ describe('mailConfigToValues i mailFormToConfig', () => {
   it('zabezpieczenie „brak” i wyłączone sprawdzanie certyfikatu przechodzą, ale są oznaczone ostrzeżeniem', () => {
     const r = mailFormToConfig({ ...v(), security: 'none', port: '143' }, true, engine);
     expect(r.ok && r.config.imap).toMatchObject({ security: 'none', port: 143 });
-    expect(mailWarnings(r.ok ? r.config : defaultMailInConfig())).toEqual(['Połączenie bez szyfrowania: hasło i treść maili idą po sieci jawnym tekstem. Tylko w sieci wewnętrznej']);
+    expect(mailWarnings(r.ok ? r.config : defaultMailInConfig())).toEqual(['Połączenie bez szyfrowania: hasło i treść wiadomości są przesyłane jawnym tekstem. Dopuszczalne wyłącznie w sieci wewnętrznej']);
     const c = mailFormToConfig({ ...v(), verifyCert: false, recipientsFromMail: true }, true, engine);
     expect(mailWarnings(c.ok ? c.config : defaultMailInConfig())).toEqual([
-      'Sprawdzanie certyfikatu wyłączone: połączenie podatne na podsłuch. Tylko dla serwera z własnym certyfikatem bez zaufanego urzędu',
-      'Numery z maila włączone: każdy nadawca z listy może wysłać SMS na dowolny numer na koszt konta',
+      'Sprawdzanie certyfikatu wyłączone: połączenie podatne na podsłuch. Dopuszczalne wyłącznie dla serwera z własnym certyfikatem bez zaufanego urzędu',
+      'Numery z wiadomości włączone: każdy nadawca z listy może wysłać SMS na dowolny numer na koszt konta',
     ]);
     expect(mailWarnings(defaultMailInConfig())).toEqual([]);
   });

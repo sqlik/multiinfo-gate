@@ -252,7 +252,7 @@ describe('POST /integracje', () => {
     const res = await page('/integracje/nowa?rodzaj=webhook_in&ustawienie=fakturownia-klient&tryb=zaawansowany');
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('{{ e.mobile_phone }}');
-    expect(res.body).toContain('tylko zamiast <code>p</code> piszesz <code>e</code>');
+    expect(res.body).toContain('z przedrostkiem <code>e</code> zamiast <code>p</code>');
     // Lista pól ustawienia: pole z kartoteki bez „p.”, pole z faktury z „p.”
     expect(res.body).toContain('{{ e.name }}');
     expect(res.body).toContain('{{ p.deal.invoice_no }}');

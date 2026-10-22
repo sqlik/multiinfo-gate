@@ -36,7 +36,7 @@ describe('POST /klucze', () => {
     const res = await create();
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatch(KEY_PATTERN);
-    expect(res.body).toContain('Pokazujemy go wyłącznie teraz');
+    expect(res.body).toContain('Klucz jest wyświetlany wyłącznie teraz');
   });
 
   it('nie pokazuje pełnego klucza przy kolejnym wejściu na listę', async () => {
@@ -163,7 +163,7 @@ describe('edycja klucza', () => {
     const res = await h.app.inject({ method: 'GET', url: `/klucze/${key.id}/edytuj`, headers: { cookie: h.cookie } });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('value="Powiadomienia magazyn"');
-    expect(res.body).toContain('Nie wygasa (nie rekomendowane)');
+    expect(res.body).toContain('Nie wygasa (niezalecane)');
     expect(res.body).toContain('type="date"');
   });
 
@@ -355,7 +355,7 @@ describe('POST /klucze/:id/odwolaj', () => {
     expect(res.statusCode).toBe(302);
     const list = await h.app.inject({ method: 'GET', url: '/klucze', headers: { cookie: h.cookie } });
     expect(list.body).toContain('class="flash flash-ok"');
-    expect(list.body).toContain(`Klucz ${key.name} odwołany. Żądania z tym kluczem dostają od teraz 401.`);
+    expect(list.body).toContain(`Klucz ${key.name} odwołany. Żądania z tym kluczem otrzymują od teraz odpowiedź 401.`);
     const again = await h.app.inject({ method: 'GET', url: '/klucze', headers: { cookie: h.cookie } });
     expect(again.body).not.toContain('class="flash');
   });
@@ -410,7 +410,7 @@ describe('GET /klucze/nowy - teksty', () => {
     expect(res.body).toContain('ID usług');
     expect(res.body).toContain('Limit części jednej wiadomości (1-9)');
     expect(res.body).toContain('Dłuższa treść zostanie odrzucona, nie przycięta');
-    expect(res.body).toContain('Gdy w żądaniu nie pojawi się żadna ze zdefiniowanych pozycji');
+    expect(res.body).toContain('Gdy żądanie nie wskazuje nadpisu, bramka użyje nadpisu domyślnego');
     expect(res.body).not.toContain('Najwięcej części');
   });
 });
@@ -494,7 +494,7 @@ describe('klucz z integracjami', () => {
     expect(res.statusCode).toBe(302);
     expect(h.apiKeys.get(key.id)!.revokedAt).toBeNull();
     const list = await h.app.inject({ method: 'GET', url: '/klucze', headers: { cookie: h.cookie } });
-    expect(list.body).toContain('najpierw wyłącz albo przepnij');
+    expect(list.body).toContain('Najpierw wyłącz te integracje albo przenieś je na inny klucz');
     expect(h.audit.list(10, 0).some((e) => e.action === 'klucz.odwolanie')).toBe(false);
 
     h.integrations.setEnabled(id, false, new Date());

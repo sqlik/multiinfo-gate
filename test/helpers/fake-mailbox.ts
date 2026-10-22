@@ -15,6 +15,8 @@ export class FakeMailbox {
   /** Błąd rzucany przy pobraniu treści danego UID; do testu nieczytelnego maila. */
   readonly failSource = new Map<number, Error>();
   readonly calls: string[] = [];
+  /** Nazwa serwera z nagłówka Authentication-Results ostatniej wiadomości, jaką zwraca sesja. */
+  authservId: string | null = null;
   private readonly folderSet: Set<string>;
   private readonly items: FakeMessage[] = [];
 
@@ -89,6 +91,7 @@ export class FakeMailbox {
         const i = this.items.findIndex((m) => m.uid === uid);
         if (i >= 0) this.items.splice(i, 1);
       },
+      authservId: async () => this.authservId,
       close: async () => { this.calls.push('close'); },
     };
   }

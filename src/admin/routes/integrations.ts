@@ -6,7 +6,8 @@ import { checkMailbox } from '../../worker/mail-in.ts';
 import { mailConfigToValues, mailFormToConfig, mailFormValues, mailWarnings, needsAdvanced, sampleMail, type MailFormValues } from '../mail-form.ts';
 import { mailFormPage, type MailConnection, type MailFormOptions } from '../views/integration-mail.ts';
 import { presetById, presetsFor, type Preset } from '../../integrations/presets/index.ts';
-import { PRIVATE_TARGET_MESSAGE, systemResolver, webhookTarget } from '../../net/private-address.ts';
+import { PRIVATE_MAIL_MESSAGE, PRIVATE_TARGET_MESSAGE, hostTarget, systemResolver, webhookTarget } from '../../net/private-address.ts';
+import { guardedConnect } from '../../integrations/mail/client.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
 import { buildOutboundContext, previewOutbound } from '../../worker/integrations.ts';
 import { formToConfig, formValues, type ExistingSecrets } from '../integration-form.ts';
@@ -105,7 +106,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     if (kind !== 'webhook_out') return null;
     const target = await webhookTarget((config as OutboundConfig).url, deps.resolve ?? systemResolver);
     if (target.kind === 'private' && !deps.allowPrivateWebhooks) return `${PRIVATE_TARGET_MESSAGE} (${target.address}).`;
-    if (target.kind === 'unresolved') return `Nazwa z adresu nie rozwiązuje się: ${target.reason}.`;
+    if (target.kind === 'unresolved') return `Nazwa serwera z adresu nie rozwiązuje się na adres IP: ${target.reason}.`;
     return null;
   };
 
@@ -271,7 +272,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
   const mailModeOf = (tryb: string | undefined, config: MailInConfig | null): { mode: MailFormOptions['mode']; note?: string } => {
     if (tryb === 'zaawansowany') return { mode: 'zaawansowany' };
     if (config !== null && needsAdvanced(config)) {
-      return { mode: 'zaawansowany', note: 'Ta skrzynka ma ustawienia spoza trybu prostego (szablon Liquid, wyrażenie regularne, warunek Liquid albo wyłączone sprawdzanie certyfikatu), dlatego otwiera się w trybie zaawansowanym.' };
+      return { mode: 'zaawansowany', note: 'Ta skrzynka ma ustawienia spoza trybu prostego (szablon Liquid, wyrażenie regularne, warunek Liquid, wyłączone sprawdzanie certyfikatu albo nazwa serwera w nagłówku Authentication-Results), dlatego otwiera się w trybie zaawansowanym.' };
     }
     return { mode: 'prosty' };
   };
@@ -283,6 +284,16 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     });
 
   interface SavedMailForm { config: MailInConfig; password: string | null; keyId: number; v: MailFormValues }
+
+  // „Sprawdź połączenie” łączy się tak jak poller: po sprawdzeniu sieci i pod przypięty adres.
+  const mailboxConnect = guardedConnect(deps.mailboxConnect, deps.resolve ?? systemResolver, deps.allowPrivateMail === true);
+  /** Błąd formularza, gdy serwer IMAP leży w sieci wewnętrznej bez zgody albo nazwa nie ma adresu; `null`, gdy wolno się łączyć. */
+  const mailHostError = async (host: string): Promise<string | null> => {
+    const target = await hostTarget(host, deps.resolve ?? systemResolver);
+    if (target.kind === 'private' && !deps.allowPrivateMail) return `${PRIVATE_MAIL_MESSAGE} (${target.address}).`;
+    if (target.kind === 'unresolved') return `Nazwa serwera IMAP nie rozwiązuje się na adres IP: ${target.reason}.`;
+    return null;
+  };
 
   /** Droga POST skrzynki: walidacja, „Sprawdź połączenie”, „Sprawdź szablon”, zapis przez `save`. */
   const handleMailForm = async (request: FastifyRequest, reply: FastifyReply, preset: Preset, row: IntegrationRow | undefined, save: (saved: SavedMailForm) => string) => {
@@ -312,10 +323,14 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }
     const warnings = mailWarnings(built.config);
     const action = String(body.action ?? '');
+    if (action !== 'sprawdz') {
+      const hostError = await mailHostError(built.config.imap.host);
+      if (hostError !== null) return fail(hostError);
+    }
 
     if (action === 'polaczenie') {
       const password = built.password ?? (row ? deps.integrations.secrets(row.id)[MAIL_IN_PASSWORD_REF] ?? '' : '');
-      const connection: MailConnection = await checkMailbox(deps.mailboxConnect, { ...built.config.imap, password }, built.config.folder);
+      const connection: MailConnection = await checkMailbox(mailboxConnect, { ...built.config.imap, password }, built.config.folder);
       return mailPage(request, ctx, v, { mode, connection, warnings });
     }
     if (action === 'sprawdz') {
@@ -415,7 +430,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
           meta: { nazwa: v.name, rodzaj: kind, ustawienie: preset.id, klucz: keyId, wlaczona: v.enabled, sekrety: [MAIL_IN_PASSWORD_REF] },
           ip: request.ip,
         });
-        render.flash(request, 'ok', `Skrzynka ${v.name} utworzona. Pierwsze sprawdzenie za chwilę.`);
+        render.flash(request, 'ok', `Skrzynka ${v.name} utworzona. Pierwsze sprawdzenie nastąpi w ciągu chwili.`);
         reply.redirect('/integracje', 302);
         return '';
       });
@@ -583,7 +598,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const at = now();
     deps.mailIn?.ensureState(row.id, at);
     deps.mailIn?.pollNow(row.id, at);
-    render.flash(request, 'ok', `Skrzynka ${row.name}: sprawdzenie za chwilę.`);
+    render.flash(request, 'ok', `Skrzynka ${row.name}: sprawdzenie nastąpi w ciągu chwili.`);
     return reply.redirect(`/integracje/${row.id}`, 302);
   });
 
@@ -606,7 +621,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       actor: actorOf(request.adminUserId), action: 'integracja.kopia', target: `integracja:${copyId}`,
       meta: { z: row.id, nazwa: name }, ip: request.ip,
     });
-    render.flash(request, 'ok', 'Kopia utworzona jako wyłączona: uzupełnij i włącz.');
+    render.flash(request, 'ok', 'Kopia utworzona jako wyłączona. Po uzupełnieniu ustawień należy ją włączyć.');
     return reply.redirect(`/integracje/${copyId}/edytuj`, 302);
   });
 

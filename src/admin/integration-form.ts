@@ -81,7 +81,7 @@ function pathOr(raw: string, what: string): { path?: string } | string {
 
 function condition(v: CommonValues, engine: TemplateEngine): InboundConfig['condition'] | string {
   if (v.conditionMode === 'liquid') {
-    if (v.conditionExpr.trim() === '') return 'Warunek w trybie Liquid wymaga wyrażenia - albo przełącz na reguły.';
+    if (v.conditionExpr.trim() === '') return 'Warunek w trybie Liquid wymaga wyrażenia. Alternatywnie przełącz na reguły.';
     const problem = engine.validate(v.conditionExpr);
     return problem === null ? { mode: 'liquid', expr: v.conditionExpr } : `Wyrażenie warunku: ${problem}`;
   }
@@ -171,7 +171,7 @@ export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, en
         return fail('Adres zapytania uzupełniającego: musi zaczynać się od https:// albo http://.');
       }
       if (urlShape(v.enrichUrl) === null) {
-        return fail('Adres zapytania uzupełniającego: nazwę serwera wpisz wprost. Pola z ładunku wstawiaj dopiero dalej, w ścieżce, bo inaczej to nadawca ładunku decyduje, dokąd bramka wyśle kod autoryzacyjny.');
+        return fail('Adres zapytania uzupełniającego: nazwa serwera musi być wpisana wprost. Pola z ładunku są dozwolone dopiero w ścieżce. W przeciwnym razie nadawca ładunku decydowałby, dokąd bramka wyśle kod autoryzacyjny.');
       }
       if (v.enrichToken !== '') secrets[INBOUND_ENRICH_REF] = v.enrichToken;
       else if (existing.names.includes(INBOUND_ENRICH_REF)) carried[INBOUND_ENRICH_REF] = INBOUND_ENRICH_REF;
@@ -215,7 +215,7 @@ export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, en
     if (events.length === 0) return fail('Zaznacz przynajmniej jedno zdarzenie.');
     if (!/^https?:\/\/\S+$/.test(v.url)) return fail('Adres musi zaczynać się od https:// (albo http:// w sieci wewnętrznej).');
     // Gotowe ustawienia wstawiają wielokropek tam, gdzie administrator ma wkleić swój klucz webhooka.
-    if (v.url.includes('…')) return fail('Adres ma jeszcze wielokropek w miejscu do uzupełnienia - wklej w to miejsce swój adres z aplikacji.');
+    if (v.url.includes('…')) return fail('Adres zawiera wielokropek w miejscu do uzupełnienia. Wklej w to miejsce adres z aplikacji.');
     if (!['POST', 'PUT', 'PATCH'].includes(v.method)) return fail('Metoda: POST, PUT albo PATCH.');
     if (v.headers.length > 20) return fail('Nagłówki: najwyżej 20.');
     const headers: OutboundConfig['headers'] = [];
@@ -238,7 +238,7 @@ export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, en
 
     let body: OutboundConfig['body'];
     if (v.bodyMode === 'form') {
-      if (v.formFields.length === 0) return fail('Body formularza wymaga przynajmniej jednego pola.');
+      if (v.formFields.length === 0) return fail('Treść w formacie formularza wymaga przynajmniej jednego pola.');
       if (v.formFields.length > 30) return fail('Pola formularza: najwyżej 30.');
       for (const f of v.formFields) {
         const problem = engine.validate(f.template);

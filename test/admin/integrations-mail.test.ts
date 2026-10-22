@@ -103,7 +103,7 @@ describe('formularz skrzynki', () => {
     h.mailbox.add({ uid: 1, seen: false, source: 'Subject: a\r\n\r\nx' });
     const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody() });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Połączenie działa');
+    expect(res.body).toContain('Połączenie nawiązane');
     expect(res.body).toContain('nieprzeczytanych: 1');
     expect(res.body).toContain('data-fill="#folder"');
     expect(res.body).toContain('INBOX');
@@ -142,7 +142,7 @@ describe('formularz skrzynki', () => {
     await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody() });
     const row = h.integrations.list()[0]!;
     const ok = await post(`/integracje/${row.id}/edytuj`, formBody({ password: '', action: 'polaczenie' }));
-    expect(ok.body).toContain('Połączenie działa');
+    expect(ok.body).toContain('Połączenie nawiązane');
     h.mailbox.failConnect = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
     expect((await post(`/integracje/${row.id}/edytuj`, formBody({ password: '', action: 'polaczenie' }))).body).toContain('Serwer nie odpowiada');
   });
@@ -217,5 +217,81 @@ describe('formularz skrzynki', () => {
     const edit = (await get(`/integracje/${row.id}/edytuj`)).body;
     expect(edit).toContain('Szablon Liquid');
     expect(edit).toContain('trybie zaawansowanym');
+  });
+});
+
+describe('serwer IMAP w sieci wewnętrznej', () => {
+  beforeEach(() => { h.resolve.value = async () => ['10.0.0.5']; });
+
+  it('zapis skrzynki wraca błędem z komunikatem o MIG_MAIL_ALLOW_PRIVATE i bez zapisu', async () => {
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody({ host: 'imap.firma.lan' }) });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('MIG_MAIL_ALLOW_PRIVATE=1');
+    expect(res.body).toContain('(10.0.0.5)');
+    expect(h.integrations.list()).toHaveLength(0);
+  });
+
+  it('z allowPrivateMail zapis przechodzi', async () => {
+    h = await startAdminHarness(NOW, { allowPrivateMail: true });
+    h.resolve.value = async () => ['10.0.0.5'];
+    const accountId = seedAccount(h);
+    const keyId = h.apiKeys.insert({ accountId, name: 'k', keyHash: 'argon2:aaa', keyPrefix: 'a1b2c3d4', defaultServiceId: '24138', defaultOrig: null, maxParts: 5, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'] });
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody({ host: 'imap.firma.lan', apiKeyId: String(keyId) }) });
+    expect(res.statusCode).toBe(302);
+    expect(h.integrations.list()).toHaveLength(1);
+  });
+
+  it('Sprawdź połączenie pokazuje ten sam komunikat jako błąd formularza, bez próby połączenia', async () => {
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody({ host: 'imap.firma.lan' }) });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('MIG_MAIL_ALLOW_PRIVATE=1');
+    expect(h.mailbox.calls).not.toContain('connect');
+  });
+
+  it('nazwa bez adresu w DNS wraca błędem formularza z powodem', async () => {
+    h.resolve.value = async () => [];
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody({ host: 'brak.przyklad.test' }) });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('Nazwa serwera IMAP nie rozwiązuje się na adres IP: nazwa nie ma żadnego adresu.');
+  });
+});
+
+describe('nazwa serwera w nagłówku Authentication-Results', () => {
+  it('pole jest w trybie zaawansowanym, w prostym jako pole ukryte z zachowaną wartością', async () => {
+    await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody() });
+    const id = h.integrations.list()[0]!.id;
+    const adv = await get(`/integracje/${id}/edytuj?tryb=zaawansowany`);
+    expect(adv.body).toContain('Nazwa serwera w nagłówku Authentication-Results');
+    expect(adv.body).toContain('placeholder="mx.google.com"');
+    const simple = await get(`/integracje/${id}/edytuj?tryb=prosty`);
+    expect(simple.body).toContain('name="authservId"');
+    expect(simple.body).not.toContain('Nazwa serwera w nagłówku Authentication-Results');
+  });
+  it('skrzynka z nazwą serwera otwiera się w trybie zaawansowanym z notatką, a szczegóły pokazują nazwę', async () => {
+    await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody({ tryb: 'zaawansowany', authservId: 'mx.google.com', requireAuthResults: 'on' }) });
+    const id = h.integrations.list()[0]!.id;
+    expect(h.integrations.get(id)!.config).toMatchObject({ authservId: 'mx.google.com' });
+    const edit = await get(`/integracje/${id}/edytuj`);
+    expect(edit.body).toContain('albo nazwa serwera w nagłówku Authentication-Results), dlatego otwiera się w trybie zaawansowanym.');
+    expect(edit.body).toContain('value="mx.google.com"');
+    expect((await get(`/integracje/${id}`)).body).toContain('· wymagane SPF/DKIM od mx.google.com');
+  });
+});
+
+describe('Sprawdź połączenie i authserv-id', () => {
+  it('w trybie zaawansowanym pokazuje nazwę serwera z przyciskiem wpisującym do pola, w prostym samą nazwę z podpowiedzią', async () => {
+    h.mailbox.authservId = 'mx.google.com';
+    const adv = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody({ tryb: 'zaawansowany' }) });
+    expect(adv.body).toContain('data-fill="#authservId" data-value="mx.google.com"');
+    expect(adv.body).toContain('Authentication-Results');
+    const simple = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody() });
+    expect(simple.body).not.toContain('data-fill="#authservId"');
+    expect(simple.body).toContain('mx.google.com');
+    expect(simple.body).toContain('Pole jest w trybie zaawansowanym');
+  });
+  it('bez nagłówka w ostatniej wiadomości pokazuje informację zamiast przycisku', async () => {
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody() });
+    expect(res.body).toContain('brak nagłówka w ostatniej wiadomości');
+    expect(res.body).not.toContain('data-fill="#authservId"');
   });
 });

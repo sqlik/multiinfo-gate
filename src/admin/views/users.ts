@@ -5,14 +5,14 @@ import { esc } from './layout.ts';
 
 function actions(u: AdminUserRow, self: boolean): string {
   const reset = `<form method="post" action="/uzytkownicy/${esc(u.id)}/reset-2fa" style="display: inline;"
-        data-confirm="Wyłączyć drugi składnik użytkownika ${esc(u.login)}? Przy następnym logowaniu włączy go od nowa, a otwarte sesje zostaną zamknięte."
+        data-confirm="Wyłączyć drugi składnik użytkownika ${esc(u.login)}? Przy następnym logowaniu użytkownik skonfiguruje go ponownie, a otwarte sesje zostaną zamknięte."
         data-confirm-ok="Wyłącz">
         <button class="btn btn-s" type="submit">Reset 2FA</button>
       </form>`;
   if (self) return reset;
   return `${reset}
       <form method="post" action="/uzytkownicy/${esc(u.id)}/usun" style="display: inline;"
-        data-confirm="Usunąć użytkownika ${esc(u.login)}? Jego sesje zostaną zamknięte, wpisy w dzienniku zostaną."
+        data-confirm="Usunąć użytkownika ${esc(u.login)}? Sesje użytkownika zostaną zamknięte, wpisy w dzienniku pozostaną."
         data-confirm-ok="Usuń">
         <button class="btn btn-s" type="submit">Usuń</button>
       </form>`;
@@ -26,7 +26,7 @@ export function usersPage(rows: AdminUserRow[], currentUserId: number): string {
       <td>${u.totpEnabled === 1 ? 'włączony' : '<span class="dim">czeka na pierwsze logowanie</span>'}</td>
       <td class="m">${esc(warsawStamp(u.createdAt))}</td>
       <td class="m">${u.lastLoginAt === null
-        ? '<span class="dim" style="font-size: 12px;">jeszcze bez logowania</span>'
+        ? '<span class="dim" style="font-size: 12px;">bez logowania</span>'
         : esc(warsawStamp(u.lastLoginAt))}</td>
       <td class="row-actions">${actions(u, self)}</td>
     </tr>`;
@@ -35,7 +35,7 @@ export function usersPage(rows: AdminUserRow[], currentUserId: number): string {
   return `<div class="head">
     <div>
       <h1 class="h1">Użytkownicy panelu</h1>
-      <p class="sub">Każdy użytkownik może wszystko - ról nie ma. Czas polski</p>
+      <p class="sub">Wszyscy użytkownicy mają pełne uprawnienia, panel nie rozróżnia ról. Czas polski</p>
     </div>
     <a class="btn btn-p" href="/uzytkownicy/nowy">Dodaj użytkownika</a>
   </div>
@@ -64,7 +64,7 @@ export function newUserPage(error: string | null = null, values: { login: string
     <div>
       <div class="crumb"><a href="/uzytkownicy">Użytkownicy</a> / nowy</div>
       <h1 class="h1">Nowy użytkownik panelu</h1>
-      <p class="sub">Hasło startowe przekaż tej osobie osobiście - panel nie pokaże go ponownie</p>
+      <p class="sub">Hasło startowe należy przekazać użytkownikowi bezpośrednio. Panel nie wyświetli go ponownie</p>
     </div>
   </div>
   <div class="scroll">
@@ -79,7 +79,7 @@ export function newUserPage(error: string | null = null, values: { login: string
         <div class="field">
           <label for="haslo">Hasło startowe</label>
           <input id="haslo" name="haslo" type="password" autocomplete="new-password" required>
-          <div class="hint">${esc(PASSWORD_RULE)}; przy pierwszym logowaniu panel poprosi o włączenie drugiego składnika</div>
+          <div class="hint">${esc(PASSWORD_RULE)}. Przy pierwszym logowaniu panel poprosi o włączenie drugiego składnika</div>
         </div>
         <div class="field">
           <label for="haslo2">Hasło startowe ponownie</label>
@@ -95,7 +95,7 @@ export function passwordPage(error: string | null = null): string {
   return `<div class="head">
     <div>
       <h1 class="h1">Zmiana hasła</h1>
-      <p class="sub">Po zapisie pozostałe sesje tego konta zostaną zamknięte, ta zostaje</p>
+      <p class="sub">Po zapisie pozostałe sesje tego konta zostaną zamknięte. Bieżąca sesja pozostaje aktywna</p>
     </div>
   </div>
   <div class="scroll">

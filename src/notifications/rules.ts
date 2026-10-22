@@ -20,12 +20,12 @@ const LABELS: Record<NotificationEvent, [string, string]> = {
   integration_error: ['Błąd integracji', 'pusta treść, brak numeru, błąd szablonu, odrzucone uwierzytelnienie, błąd ładunku'],
   integration_throttled: ['Limit burzy przekroczony', 'integracja odrzuca nadmiar zdarzeń w oknie czasu'],
   webhook_undelivered: ['Webhook niedostarczony', 'dostawa do aplikacji nieudana po wszystkich ponowieniach'],
-  certificate_expiring: ['Certyfikat konta wygasa', 'na progach dni z parametrów'],
+  certificate_expiring: ['Certyfikat konta wygasa', 'według progów dni z parametrów'],
   account_rejecting: ['Konto Multiinfo odrzuca wysyłkę', 'certyfikat, uwierzytelnienie, wstrzymanie'],
   inbound_failure: ['Awaria odbioru', 'odpytywanie usługi kończy się błędem dłużej niż podany czas'],
   mailbox_failure: ['Awaria skrzynki pocztowej', 'logowanie do IMAP nieudane albo serwer poczty niedostępny dłużej niż podany czas'],
   daily_summary: ['Podsumowanie dzienne', 'SMS-y, błędy, stan integracji i kont z ostatniej doby'],
-  release_available: ['Nowe wydanie bramki', 'na GitHubie jest nowsze wydanie niż zainstalowane; jeden mail na wydanie'],
+  release_available: ['Nowe wydanie bramki', 'w serwisie GitHub dostępne jest nowsze wydanie niż zainstalowane, jeden mail na wydanie'],
 };
 export const eventLabel = (e: NotificationEvent): string => LABELS[e][0];
 export const eventDescription = (e: NotificationEvent): string => LABELS[e][1];

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MailboxError, errorKindOf, errorMessageOf, scrubError, selectableFolders } from '../../../src/integrations/mail/client.ts';
+import { MailboxError, errorKindOf, errorMessageOf, guardedConnect, scrubError, selectableFolders, type MailboxSession, type MailboxSettings } from '../../../src/integrations/mail/client.ts';
+import { PRIVATE_MAIL_MESSAGE } from '../../../src/net/private-address.ts';
 import { FakeMailbox, fakeConnect } from '../../helpers/fake-mailbox.ts';
 
 const settings = { host: 'h', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', password: 'p' };
@@ -106,5 +107,25 @@ describe('FakeMailbox', () => {
     await expect(s.move(5, 'X')).rejects.toMatchObject({ kind: 'folder' });
     box.resetUidValidity(8);
     expect(await s.open('INBOX')).toMatchObject({ uidValidity: 8 });
+  });
+});
+
+describe('guardedConnect', () => {
+  const settings = { host: 'imap.przyklad.test', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', password: 'p' };
+  it('odrzuca serwer w sieci wewnętrznej z komunikatem o zmiennej, nie łącząc się', async () => {
+    let connected = false;
+    const connect = guardedConnect(async () => { connected = true; return {} as MailboxSession; }, async () => ['10.0.0.5'], false);
+    await expect(connect(settings, 1000)).rejects.toMatchObject({ kind: 'network', message: `${PRIVATE_MAIL_MESSAGE} (10.0.0.5)` });
+    expect(connected).toBe(false);
+  });
+  it('z zgodą łączy się i przypina rozwiązany adres IPv4, zostawiając host do TLS', async () => {
+    let seen: MailboxSettings | null = null;
+    const connect = guardedConnect(async (s) => { seen = s; return {} as MailboxSession; }, async () => ['fd00::5', '10.0.0.5'], true);
+    await connect(settings, 1000);
+    expect(seen).toMatchObject({ host: 'imap.przyklad.test', connectAddress: '10.0.0.5' });
+  });
+  it('nazwa bez adresu daje błąd sieci z powodem', async () => {
+    const connect = guardedConnect(async () => ({} as MailboxSession), async () => [], false);
+    await expect(connect(settings, 1000)).rejects.toMatchObject({ kind: 'network', message: 'nazwa serwera IMAP nie rozwiązuje się na adres IP: nazwa nie ma żadnego adresu' });
   });
 });

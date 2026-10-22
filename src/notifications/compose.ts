@@ -42,7 +42,7 @@ export function composeGroup(s: Settings, event: NotificationEvent, rows: Array<
   const shown = rows.slice(0, GROUP_LINES);
   const lines = [`${eventLabel(event)}: ${rows.length}`, ''];
   for (const r of shown) lines.push(`- ${warsawStamp(r.at)}  ${r.summary}`);
-  if (rows.length > shown.length) lines.push(`...i ${rows.length - shown.length} więcej`);
+  if (rows.length > shown.length) lines.push(`oraz ${rows.length - shown.length} kolejnych`);
   if (suppressed > 0) lines.push('', `Pominięto ${suppressed} podobnych powiadomień (limit reguły).`);
   return { subject: subjectOf(s, `${eventLabel(event)}: ${rows.length}`), text: [...lines, ...footer(s, event)].join('\n') };
 }
@@ -88,6 +88,6 @@ export function composeTest(s: Settings, now: Date): Mail {
   return {
     subject: subjectOf(s, 'Mail testowy'),
     text: [`Mail testowy z Multiinfo Gate (instancja ${s.instanceName}).`, `Wysłany ${warsawDay(now.toISOString())} o ${warsawTime(now.toISOString())}.`,
-      'Jeśli go czytasz, ustawienia SMTP są poprawne.', ...footer(s, 'daily_summary')].join('\n'),
+      'Otrzymanie tej wiadomości potwierdza poprawność ustawień SMTP.', ...footer(s, 'daily_summary')].join('\n'),
   };
 }

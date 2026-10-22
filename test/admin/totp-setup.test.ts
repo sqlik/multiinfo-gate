@@ -66,7 +66,7 @@ describe('ekran włączania', () => {
     await get('/drugi-skladnik');
     const res = await post('/drugi-skladnik', { kod: '000000' });
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('Kod nie pasuje');
+    expect(res.body).toContain('Kod jest nieprawidłowy');
     expect(h.users.findById(h.userId)?.totpEnabled).toBe(0);
   });
 

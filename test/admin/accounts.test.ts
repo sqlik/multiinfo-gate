@@ -78,7 +78,7 @@ describe('POST /konta/:id/certyfikat', () => {
     const inny = seedAccount(h, { name: 'Windykacja', login: 'firma_wind' });
     const res = await h.app.inject({ method: 'POST', url: `/konta/${inny}/certyfikat`, ...multipart(pfx, 'tajne123') });
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('nie zgadza się z loginem');
+    expect(res.body).toContain('nie jest zgodne z loginem');
     expect(res.body).toContain('-85');
   });
 
@@ -147,7 +147,7 @@ describe('POST /konta/:id/sprawdz', () => {
     expect(res.body).toContain('Certyfikat widziany przez Multiinfo');
     expect(res.body).toContain('GCP Signing CA');
     expect(res.body).toContain('2028-04-19 13:01:04');
-    expect(res.body).toContain('CN widziane przez Multiinfo zgadza się z loginem');
+    expect(res.body).toContain('CN widziane przez Multiinfo jest zgodne z loginem');
   });
 
   it('ostrzega, gdy CN widziane przez Multiinfo różni się od loginu konta', async () => {
@@ -158,14 +158,14 @@ describe('POST /konta/:id/sprawdz', () => {
     };
     const res = await check();
     expect(res.body).toContain('inna_firma');
-    expect(res.body).toContain('nie zgadza się z loginem konta');
+    expect(res.body).toContain('nie jest zgodne z loginem konta');
   });
 
   it('przy -80 mówi wprost, że Multiinfo nie zobaczyło certyfikatu', async () => {
     h.probe.result = { ok: false, code: -80, message: 'Brak certyfikatu' };
     h.probe.certificate = { seen: false, message: 'Brak certyfikatu.' };
     const res = await check();
-    expect(res.body).toContain('Multiinfo nie zobaczyło certyfikatu');
+    expect(res.body).toContain('Multiinfo nie otrzymało certyfikatu');
   });
 
   it('błąd sieci przy test.aspx nie psuje wyniku sprawdzenia', async () => {
@@ -234,7 +234,7 @@ describe('POST /konta/:id/sprawdz', () => {
     expect((await check()).body).toContain('certyfikat nie został przedstawiony');
 
     h.probe.result = { ok: false, code: -85, message: 'Pole CN podmiotu nie jest zgodne z loginem' };
-    expect((await check()).body).toContain('nie zgadza się z loginem');
+    expect((await check()).body).toContain('nie jest zgodne z loginem');
   });
 });
 
@@ -245,7 +245,7 @@ describe('POST /konta/:id/nadpisy', () => {
     payload: new URLSearchParams({ origs, defaultOrig }).toString(),
   });
 
-  it('zapisuje słownik nadpisów uzgodnionych z Polkomtelem', async () => {
+  it('zapisuje słownik nadpisów uzgodnionych z Polkomtel', async () => {
     const res = await save('Firma Info\nFirma Wind\nFirma Alert');
     expect(res.statusCode).toBe(302);
     expect(h.accounts.origs(accountId).sort()).toEqual(['Firma Alert', 'Firma Info', 'Firma Wind']);
@@ -261,7 +261,7 @@ describe('POST /konta/:id/nadpisy', () => {
   it('nie pozwala ustawić wartości domyślnej spoza słownika', async () => {
     const res = await save('Firma Info\nFirma Wind', 'Inna Firma');
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('spoza słownika');
+    expect(res.body).toContain('nie znajduje się na liście nadpisów');
   });
 
   it('usunięcie nadpisu ze słownika kasuje go też z kluczy', async () => {
@@ -379,7 +379,7 @@ describe('zakładanie konta', () => {
   it.runIf(havePfx)('nie zakłada konta, gdy CN certyfikatu nie zgadza się z loginem', async () => {
     const res = await create({ login: 'ktos_inny' });
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('nie zgadza się z podanym loginem');
+    expect(res.body).toContain('nie jest zgodne z podanym loginem');
     expect(h.accounts.list().some((a) => a.name === 'Windykacja')).toBe(false);
   });
 
@@ -410,7 +410,7 @@ describe('zakładanie konta', () => {
     const res = await create();
     expect(res.statusCode).toBe(302);
     const detail = await h.app.inject({ method: 'GET', url: res.headers.location as string, headers: { cookie: h.cookie } });
-    expect(detail.body).toContain('Nadpisy nadawcy wpisuje się na liście kont - bramka nie pobiera ich z Multiinfo.');
+    expect(detail.body).toContain('Nadpisy nadawcy wpisuje się na liście kont, ponieważ bramka nie pobiera ich z Multiinfo.');
   });
 });
 
@@ -448,7 +448,7 @@ describe('edycja konta', () => {
       defaultOrig: null, maxParts: 5, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'] });
     const res = await edit(accountId, { name: 'Firma 2', serviceIds: '99001' });
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('ID usługi 24138 jest używane przez klucze: Sklep. Najpierw zmień lub odwołaj te klucze.');
+    expect(res.body).toContain('ID usługi 24138 jest używane przez klucze: Sklep. Najpierw zmień albo odwołaj te klucze.');
     expect(h.accounts.get(accountId)!.name).toBe('Firma Info');
     expect(h.accounts.serviceIds(accountId)).toEqual(['24138']);
   });
@@ -502,7 +502,7 @@ describe('GET /konta', () => {
   it('przypomina, skąd biorą się nadpisy, gdy lista jest pusta', async () => {
     seedAccount(h, { name: 'Nowe', login: 'nowe', origs: [] });
     const res = await h.app.inject({ method: 'GET', url: '/konta', headers: { cookie: h.cookie } });
-    expect(res.body).toContain('Wpisz nadpisy uruchomione przez Polkomtel dla tego użytkownika API');
+    expect(res.body).toContain('Należy wpisać nadpisy uruchomione przez administratora Polkomtel dla tego użytkownika API');
   });
 
   it('nie ujawnia hasła ani klucza prywatnego w treści strony', async () => {
@@ -530,16 +530,16 @@ describe('GET /konta', () => {
 describe('teksty ekranów kont', () => {
   it('mówi, gdzie w panelu Multiinfo wpisać dane certyfikatu', async () => {
     const res = await h.app.inject({ method: 'GET', url: `/konta/${accountId}`, headers: { cookie: h.cookie } });
-    expect(res.body).toContain('Przed pierwszym użyciem uzupełnij wystawcę, podmiot i odcisk palca w panelu Multiinfo '
+    expect(res.body).toContain('Przed pierwszym użyciem należy uzupełnić wystawcę, podmiot i odcisk palca w panelu Multiinfo '
       + '(edycja użytkownika API, zakładka Uwierzytelnianie).');
     expect(res.body).not.toContain('prześlij do Polkomtel');
   });
 
   it('formularz nowego konta prowadzi do panelu Multiinfo i instrukcji certyfikatu', async () => {
     const res = await h.app.inject({ method: 'GET', url: '/konta/nowe', headers: { cookie: h.cookie } });
-    expect(res.body).toContain('Dane użytkownika API należy utworzyć w panelu Multiinfo.');
+    expect(res.body).toContain('Użytkownika API należy utworzyć w panelu Multiinfo.');
     expect(res.body).toContain('href="https://plk-assets.s3.pl-waw.scw.cloud/certyfikaty-multiinfo.zip"');
-    expect(res.body).toContain('api1 lub api2 - informacje o właściwej instancji otrzymasz od przedstawiciela Polkomtel');
+    expect(res.body).toContain('api1 albo api2. Właściwą instancję wskazuje przedstawiciel Polkomtel');
     expect(res.body).toContain('ID usług, jedno w wierszu');
   });
 
@@ -571,7 +571,7 @@ describe('karta konta - odbiór wiadomości', () => {
     const res = await card();
     expect(res.body).toContain('aktywny');
     expect(res.body).toContain('CRM');
-    expect(res.body).toContain('ostatnio pytano 12 s temu');
+    expect(res.body).toContain('ostatnie odpytanie 12 s temu');
     expect(res.body).toContain('ostatnia odebrana 2026-08-25 11:00:00');
   });
 
@@ -579,8 +579,8 @@ describe('karta konta - odbiór wiadomości', () => {
     h.apiKeys.insert({ accountId, name: 'CRM', keyHash: 'h', keyPrefix: 'p', defaultServiceId: '24138', defaultOrig: null,
       maxParts: 5, ratePerMin: 60, webhookUrl: 'https://crm.example/hook', webhookSecret: 's', serviceIds: ['24138'], inboundSubscribed: 1 });
     const res = await card();
-    expect(res.body).toContain('jeszcze nie pytano');
-    expect(res.body).toContain('nic jeszcze nie odebrano');
+    expect(res.body).toContain('bez odpytania');
+    expect(res.body).toContain('bez odebranych wiadomości');
   });
 
   it('błąd usługi: zatrzymany z przyczyną', async () => {

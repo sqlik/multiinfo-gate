@@ -93,14 +93,14 @@ function filterLink(f: IntegrationsFilter, patch: Partial<IntegrationsFilter>): 
 export interface CreatedHook { name: string; hookId: string; appField?: string; guide?: string; presetName?: string }
 
 export function hookReveal(created: CreatedHook, apiUrl: string | null, appField = created.appField): string {
-  const where = appField ? `Wklej go ${esc(appField)}.` : 'Wklej go w aplikacji jako adres, na który ma wysyłać żądania POST.';
+  const where = appField ? `Adres należy wkleić ${esc(appField)}.` : 'Adres należy wkleić w aplikacji jako cel żądań POST.';
   const guide = created.guide === undefined || created.guide === '' ? '' : `<div style="padding: 0 16px 16px;">
         <div class="lab" style="margin-bottom: 6px;">Krok po kroku: ${esc(created.presetName ?? 'aplikacja')}</div>
         <div class="guide" style="font-size: 12.5px; line-height: 1.55;">${guideHtml(created.guide)}</div>
       </div>`;
   const note = apiUrl === null
-    ? `To sama ścieżka: panel nie zna jeszcze adresu bramki. Podaj go w panelu „Adres bramki dla aplikacji” (ekran Klucze API), a tu pojawi się pełny adres.
-        Do tego czasu doklej ścieżkę do adresu, pod którym aplikacja widzi API bramki, np. https://sms.firma.pl${esc(hookPath(created.hookId))}.`
+    ? `Wyświetlana jest sama ścieżka, ponieważ adres bramki nie został jeszcze podany. Po jego wpisaniu w panelu „Adres bramki dla aplikacji” (ekran Klucze API) w tym miejscu pojawi się pełny adres.
+        Do tego czasu ścieżkę należy dopisać do adresu, pod którym aplikacja widzi API bramki, np. https://sms.firma.pl${esc(hookPath(created.hookId))}.`
     : where;
   return `<div class="reveal">
       <div class="reveal-h"><div class="lab" style="color: var(--signal);">Adres wejściowy - „${esc(created.name)}”</div></div>
@@ -132,7 +132,7 @@ export function integrationsPage(views: IntegrationView[], filter: IntegrationsF
       <td><span class="tag">${esc(kindLabel(v.row.kind))}</span></td>
       <td>${esc(v.keyName)} <span class="dim">· ${esc(v.accountName)}</span></td>
       <td>${stateCell(v)}</td>
-      <td class="nw">${v.lastEvent === null ? '<span class="dim">jeszcze nic</span>'
+      <td class="nw">${v.lastEvent === null ? '<span class="dim">brak zdarzeń</span>'
         : `<span class="m dim">${esc(warsawStamp(v.lastEvent.at))}</span> ${resultBadge(v.lastEvent.result)}`}</td>
       <td class="m">${esc(v.counts.sent)} / <span class="${v.counts.errors > 0 ? 'fail' : 'dim'}">${esc(v.counts.errors)}</span></td>
       <td class="row-actions"><a href="/integracje/${esc(v.row.id)}">Otwórz</a> <a href="/integracje/${esc(v.row.id)}/edytuj">Edytuj</a></td>
@@ -181,7 +181,7 @@ export function chooseKindPage(): string {
     <div>
       <div class="crumb"><a href="/integracje">Integracje</a> / nowa</div>
       <h1 class="h1">Nowa integracja</h1>
-      <p class="sub">W którą stronę mają iść wiadomości?</p>
+      <p class="sub">Kierunek przepływu wiadomości</p>
     </div>
   </div>
   <div class="scroll">
@@ -189,12 +189,12 @@ export function chooseKindPage(): string {
       <a class="tile" href="/integracje/nowa?rodzaj=webhook_in">
         <div class="lab">Do SMS</div>
         <div style="font-size: 15px; font-weight: 600; margin-top: 6px;">Aplikacja wysyła SMS</div>
-        <div class="d">Aplikacja woła adres wejściowy bramki własnym formatem, np. Uptime Kuma, Grafana, Zabbix, helpdesk, automat</div>
+        <div class="d">Aplikacja wywołuje adres wejściowy bramki we własnym formacie, np. Uptime Kuma, Grafana, Zabbix, helpdesk, automat</div>
       </a>
       <a class="tile" href="/integracje/nowa?rodzaj=webhook_out">
         <div class="lab">Z SMS-a</div>
         <div style="font-size: 15px; font-weight: 600; margin-top: 6px;">SMS albo status trafia do aplikacji</div>
-        <div class="d">Odebrany SMS albo status wysyłki idzie do aplikacji w jej formacie, np. helpdesk, ntfy, własny skrypt</div>
+        <div class="d">Odebrany SMS albo status wysyłki jest przekazywany do aplikacji w jej formacie, np. helpdesk, ntfy, własny skrypt</div>
       </a>
       <a class="tile" href="/integracje/nowa?rodzaj=mail_in">
         <div class="lab">Z poczty</div>
@@ -216,7 +216,7 @@ export function choosePresetPage(kind: IntegrationKind, presets: Preset[]): stri
     <div>
       <div class="crumb"><a href="/integracje">Integracje</a> / <a href="/integracje/nowa">nowa</a> / ${esc(kindLabel(kind))}</div>
       <h1 class="h1">${mail ? 'Gdzie znajduje się skrzynka?' : 'Z jaką aplikacją?'}</h1>
-      <p class="sub">${mail ? 'Ustawienie uzupełnia serwer i port; hasło i listę nadawców podaje się w formularzu' : 'Ustawienie wypełnia formularz; wszystko da się potem zmienić'}</p>
+      <p class="sub">${mail ? 'Ustawienie uzupełnia serwer i port. Hasło i listę nadawców podaje się w formularzu' : 'Ustawienie wypełnia formularz. Każdą wartość można później zmienić'}</p>
     </div>
   </div>
   <div class="scroll">
@@ -400,7 +400,7 @@ export function sectionBasics(ctx: FormContext, v: Pick<IntegrationFormValues, '
     ? `<div class="field">
       <label>Klucz API</label>
       <div class="box">${esc(ctx.keys.find((k) => k.id === ctx.row!.apiKeyId)?.name ?? `klucz ${ctx.row.apiKeyId}`)}</div>
-      <div class="hint">Klucz jest przypisany na stałe - integracja pod innym kluczem to nowa integracja</div>
+      <div class="hint">Klucz jest przypisany na stałe. Integracja pod innym kluczem wymaga utworzenia nowej</div>
     </div>`
     : `<div class="field">
       <label for="apiKeyId">Klucz API</label>
@@ -437,8 +437,8 @@ export function sectionBasics(ctx: FormContext, v: Pick<IntegrationFormValues, '
 
 function sectionInput(ctx: FormContext, v: IntegrationFormValues): string {
   const secretHint = (ref: string, what: string) => ctx.secretNames.includes(ref)
-    ? `${what} jest zapisany. Puste pole zostawia dotychczasowy.`
-    : `${what} zapisujemy zaszyfrowany; nie da się go potem odczytać w panelu.`;
+    ? `${what} jest zapisany. Puste pole zachowuje dotychczasowy.`
+    : `${what} jest przechowywany w postaci zaszyfrowanej i nie można go odczytać w panelu.`;
   return `<details open>
     <summary>Wejście</summary>
     ${ctx.row ? '' : '<div class="field"><label>Adres wejściowy</label><div class="box ph">pojawi się po zapisie</div></div>'}
@@ -448,7 +448,7 @@ function sectionInput(ctx: FormContext, v: IntegrationFormValues): string {
         <input id="authHeaderName" name="authHeaderName" value="${esc(v.authHeaderName)}" placeholder="nazwa, np. Authorization" style="width: 40%;">
         <input id="authHeaderValue" name="authHeaderValue" type="password" autocomplete="off" placeholder="wartość, np. Bearer …" style="flex: 1;">
       </div>
-      <div class="hint">Opcjonalny. ${esc(secretHint(INBOUND_TOKEN_REF, 'Token'))} Pusta nazwa nagłówka zdejmuje tę warstwę i kasuje token.</div>
+      <div class="hint">Opcjonalny. ${esc(secretHint(INBOUND_TOKEN_REF, 'Token'))} Pusta nazwa nagłówka wyłącza tę warstwę i usuwa token.</div>
     </div>
     <div class="field">
       <label for="authPayloadPath">Pole ładunku z tokenem</label>
@@ -456,7 +456,7 @@ function sectionInput(ctx: FormContext, v: IntegrationFormValues): string {
         <input id="authPayloadPath" name="authPayloadPath" value="${esc(v.authPayloadPath)}" placeholder="ścieżka, np. api_token" style="width: 40%;">
         <input id="authPayloadValue" name="authPayloadValue" type="password" autocomplete="off" placeholder="wartość tokenu" style="flex: 1;">
       </div>
-      <div class="hint">Opcjonalne. Dla aplikacji, które wysyłają token w treści żądania, nie w nagłówku. ${esc(secretHint(INBOUND_PAYLOAD_REF, 'Token z ładunku'))} Pusta ścieżka zdejmuje tę warstwę i kasuje token.</div>
+      <div class="hint">Opcjonalne. Dla aplikacji, które wysyłają token w treści żądania, nie w nagłówku. ${esc(secretHint(INBOUND_PAYLOAD_REF, 'Token z ładunku'))} Pusta ścieżka wyłącza tę warstwę i usuwa token.</div>
     </div>
     <div class="field">
       <label for="authBasicUser">Basic auth</label>
@@ -464,12 +464,12 @@ function sectionInput(ctx: FormContext, v: IntegrationFormValues): string {
         <input id="authBasicUser" name="authBasicUser" value="${esc(v.authBasicUser)}" placeholder="login" style="width: 40%;">
         <input id="authBasicPass" name="authBasicPass" type="password" autocomplete="off" placeholder="hasło" style="flex: 1;">
       </div>
-      <div class="hint">Opcjonalny. ${esc(secretHint(INBOUND_BASIC_REF, 'Hasło'))} Pusty login zdejmuje tę warstwę i kasuje hasło.</div>
+      <div class="hint">Opcjonalny. ${esc(secretHint(INBOUND_BASIC_REF, 'Hasło'))} Pusty login wyłącza tę warstwę i usuwa hasło.</div>
     </div>
     <div class="field">
       <label for="sources">Dozwolone źródła</label>
       ${textarea('sources', v.sources, 3, ' placeholder="203.0.113.7&#10;203.0.113.0/24&#10;nas.firma.example"')}
-      <div class="hint">Jedna pozycja na linię: adres IP, zakres CIDR albo nazwa (rozwiązywana przy żądaniu). Pusta lista wpuszcza każdy adres.</div>
+      <div class="hint">Jedna pozycja w wierszu: adres IP, zakres CIDR albo nazwa (rozwiązywana przy żądaniu). Pusta lista dopuszcza każdy adres.</div>
     </div>
   </details>`;
 }
@@ -479,7 +479,7 @@ function sectionOutput(ctx: FormContext, v: IntegrationFormValues): string {
   const headerRows = headers.map((h, i) => `<div class="inline" style="margin-bottom: 6px;">
         <input name="headerName" value="${esc(h.name)}" placeholder="nazwa" style="width: 32%;">
         <input name="headerValue" value="${esc(h.secret ? '' : h.value)}" type="${h.secret ? 'password' : 'text'}" autocomplete="off"
-          placeholder="${h.secret && ctx.secretNames.includes(`h${i}`) ? 'zapisany - puste zostawia' : 'wartość albo szablon'}" style="flex: 1;">
+          placeholder="${h.secret && ctx.secretNames.includes(`h${i}`) ? 'zapisany, puste zachowuje' : 'wartość albo szablon'}" style="flex: 1;">
         <select name="headerSecret" style="width: 110px;">
           <option value="0"${h.secret ? '' : ' selected'}>jawny</option>
           <option value="1"${h.secret ? ' selected' : ''}>sekret</option>
@@ -502,7 +502,7 @@ function sectionOutput(ctx: FormContext, v: IntegrationFormValues): string {
     <div class="field">
       <label>Nagłówki</label>
       ${headerRows}
-      <div class="hint">Wartość jawna może być szablonem Liquid. Sekret zapisujemy zaszyfrowany i podstawiamy poza szablonem; pusta nazwa usuwa wiersz.</div>
+      <div class="hint">Wartość jawna może być szablonem Liquid. Sekret jest przechowywany w postaci zaszyfrowanej i podstawiany poza szablonem. Pusta nazwa usuwa wiersz.</div>
     </div>
     <div class="field">
       <label>Zdarzenia</label>
@@ -510,7 +510,7 @@ function sectionOutput(ctx: FormContext, v: IntegrationFormValues): string {
     </div>
     <div class="field">
       ${checkbox('sign', v.sign, 'Podpisuj żądania nagłówkiem X-MIG-Signature (sekret webhooka klucza)')}
-      <div class="hint">Włącz, gdy odbiorcą jest własna aplikacja sprawdzająca podpis; gotowe aplikacje go nie znają</div>
+      <div class="hint">Dla własnej aplikacji sprawdzającej podpis. Gotowe aplikacje nie obsługują tego nagłówka</div>
     </div>
   </details>`;
 }
@@ -532,7 +532,7 @@ function sectionCondition(v: IntegrationFormValues): string {
     <summary>Warunek</summary>
     <div class="field">
       <div class="choices">${radio('conditionMode', 'builder', v.conditionMode, 'Reguły')}${radio('conditionMode', 'liquid', v.conditionMode, 'Wyrażenie Liquid')}</div>
-      <div class="hint">Bez reguł każde zdarzenie idzie dalej. Wszystkie reguły muszą być spełnione; pusta ścieżka pomija wiersz.</div>
+      <div class="hint">Bez reguł każde zdarzenie jest przetwarzane. Wszystkie reguły muszą być spełnione. Wiersz z pustą ścieżką jest pomijany.</div>
     </div>
     <div class="field">
       <label>Reguły</label>
@@ -550,19 +550,19 @@ function sectionEnrich(ctx: FormContext, v: IntegrationFormValues): string {
   const zapisany = ctx.secretNames.includes(INBOUND_ENRICH_REF);
   return `<details${v.enrichUrl === '' ? '' : ' open'}>
     <summary>Zapytanie uzupełniające</summary>
-    <div class="hint" style="margin: 0 0 10px;">Bramka zapyta aplikację o dane, których nie ma w ładunku, na przykład o numer telefonu klienta.
-      Pola z odpowiedzi wstawiasz tak samo jak pola ładunku, tylko zamiast <code>p</code> piszesz <code>e</code>:
+    <div class="hint" style="margin: 0 0 10px;">Bramka odpytuje aplikację o dane, których nie ma w ładunku, na przykład o numer telefonu klienta.
+      Pola z odpowiedzi wstawia się tak samo jak pola ładunku, z przedrostkiem <code>e</code> zamiast <code>p</code>:
       numer komórki z kartoteki to <code>{{ e.mobile_phone }}</code>, a nazwa klienta to <code>{{ e.name }}</code></div>
     <div class="field">
       <label for="enrichUrl">Adres zapytania</label>
       <input id="enrichUrl" name="enrichUrl" value="${esc(v.enrichUrl)}" placeholder="https://firma.aplikacja.pl/clients/{{ p.client_id | url_encode }}.json">
-      <div class="hint">Szablon Liquid, tak jak treść. Wartość z ładunku wstawiaj przez <code>{{ p.pole | url_encode }}</code>,
-        żeby ukośnik albo znak zapytania w niej nie przestawił adresu na inną końcówkę aplikacji. Puste pole wyłącza dopytanie</div>
+      <div class="hint">Szablon Liquid, tak jak treść. Wartość z ładunku należy wstawiać przez <code>{{ p.pole | url_encode }}</code>,
+        aby ukośnik albo znak zapytania w wartości nie zmienił adresu docelowego. Puste pole wyłącza zapytanie</div>
     </div>
     <div class="field">
       <label for="enrichToken">Kod autoryzacyjny API</label>
-      <input id="enrichToken" name="enrichToken" type="password" autocomplete="off" placeholder="${zapisany ? 'zapisany - puste zostawia dotychczasowy' : 'wartość z aplikacji'}">
-      <div class="hint">Bramka doda go do adresu jako parametr <code>api_token</code>. Zapisujemy zaszyfrowany; nie trafia ani do szablonu, ani do dziennika</div>
+      <input id="enrichToken" name="enrichToken" type="password" autocomplete="off" placeholder="${zapisany ? 'zapisany, puste zachowuje dotychczasowy' : 'wartość z aplikacji'}">
+      <div class="hint">Bramka dodaje go do adresu jako parametr <code>api_token</code>. Jest przechowywany w postaci zaszyfrowanej i nie trafia do szablonu ani do dziennika</div>
     </div>
     <div class="field">
       <label for="enrichOnError">Gdy aplikacja nie odpowie</label>
@@ -570,7 +570,7 @@ function sectionEnrich(ctx: FormContext, v: IntegrationFormValues): string {
         <option value="error"${v.enrichOnError === 'error' ? ' selected' : ''}>zgłoś błąd</option>
         <option value="skip"${v.enrichOnError === 'skip' ? ' selected' : ''}>pomiń wiadomość</option>
       </select>
-      <div class="hint">Pominięcie chroni webhooka przed wyłączeniem po stronie aplikacji, która liczy błędy dostarczenia</div>
+      <div class="hint">Pominięcie chroni webhook przed wyłączeniem przez aplikację zliczającą błędy dostarczenia</div>
     </div>
   </details>`;
 }
@@ -581,36 +581,36 @@ function sectionRecipient(v: IntegrationFormValues): string {
     <div class="field">
       <label for="toPath">Ścieżka numeru w ładunku</label>
       <input id="toPath" name="toPath" value="${esc(v.toPath)}" placeholder="np. customer.phones[0].value">
-      <div class="hint">Pole z numerem albo listą numerów. Bez numeru w ładunku bramka bierze nadawcę odebranego SMS-a dopasowanego po identyfikatorze zgłoszenia, a na końcu listę zapasową.</div>
+      <div class="hint">Pole z numerem albo listą numerów. Gdy ładunek nie zawiera numeru, bramka używa nadawcy odebranego SMS-a dopasowanego po identyfikatorze zgłoszenia, a w ostateczności listy zapasowej.</div>
     </div>
     <div class="field">
       <label for="toFallback">Lista zapasowa</label>
       ${textarea('toFallback', v.toFallback, 3, ' placeholder="601000001&#10;+48 602 000 002"')}
-      <div class="hint">Jeden numer na linię. Dziewięć cyfr dostaje kod kraju konta.</div>
+      <div class="hint">Jeden numer w wierszu. Numer dziewięciocyfrowy otrzymuje kod kraju konta.</div>
     </div>
     <div class="field">
-      <label for="invalidRecipient">Gdy numeru z ładunku nie da się odczytać</label>
+      <label for="invalidRecipient">Numer z ładunku nieprawidłowy albo nieobecny</label>
       <select id="invalidRecipient" name="invalidRecipient">
         <option value="error"${v.invalidRecipient === 'error' ? ' selected' : ''}>zgłoś błąd aplikacji źródłowej</option>
         <option value="skip"${v.invalidRecipient === 'skip' ? ' selected' : ''}>pomiń zdarzenie</option>
       </select>
-      <div class="hint">Błąd to kod 422 oraz mail do administratora. Pominięcie to kod 200 i sam wpis w dzienniku - dla sklepów, które po kilku błędach z rzędu same wyłączają webhook</div>
+      <div class="hint">Błąd oznacza odpowiedź 422 i mail do administratora. Pominięcie oznacza odpowiedź 200 i wpis w dzienniku. Przeznaczone dla sklepów, które po kilku kolejnych błędach wyłączają webhook</div>
     </div>
     <div class="field">
       <label for="ticketRefPath">Ścieżka identyfikatora zgłoszenia</label>
       <input id="ticketRefPath" name="ticketRefPath" value="${esc(v.ticketRefPath)}" placeholder="np. id">
-      <div class="hint">Gdy identyfikator pasuje do odebranego SMS-a, odpowiedź idzie w jego wątku</div>
+      <div class="hint">Gdy identyfikator pasuje do odebranego SMS-a, odpowiedź jest wysyłana w jego wątku</div>
     </div>
     <div class="field">
       <label for="eventIdPath">Ścieżka identyfikatora zdarzenia</label>
       <input id="eventIdPath" name="eventIdPath" value="${esc(v.eventIdPath)}" placeholder="np. alert.id">
-      <div class="hint">To samo zdarzenie w ciągu doby przychodzi raz - powtórka dostaje odpowiedź „duplikat” bez SMS-a</div>
+      <div class="hint">To samo zdarzenie jest przetwarzane raz na dobę. Powtórzenie otrzymuje odpowiedź „duplikat” bez wysyłki SMS-a</div>
     </div>
   </details>`;
 }
 
 function fieldsHint(preset: Preset): string {
-  if (preset.fields.length === 0) return '<div class="hint">Ładunek dostępny pod <code>p</code>, np. <code>{{ p.message }}</code>; do tego <code>now</code> i <code>integration.name</code>.</div>';
+  if (preset.fields.length === 0) return '<div class="hint">Ładunek jest dostępny pod <code>p</code>, np. <code>{{ p.message }}</code>. Dodatkowo <code>now</code> i <code>integration.name</code>.</div>';
   // Pola z zapytania uzupełniającego mają własny przedrostek, więc przedrostek ładunku by tu mylił.
   const zDopytania = preset.inbound?.enrich === undefined ? null : `${preset.inbound.enrich.as}.`;
   const items = preset.fields.map((f) => {
@@ -643,7 +643,7 @@ function sectionTextInbound(ctx: FormContext, v: IntegrationFormValues): string 
     <div class="field">
       <label for="overflow">Gdy treść nie mieści się w limicie</label>
       <select id="overflow" name="overflow">
-        <option value="truncate"${v.overflow === 'truncate' ? ' selected' : ''}>przytnij z wielokropkiem</option>
+        <option value="truncate"${v.overflow === 'truncate' ? ' selected' : ''}>skróć z wielokropkiem</option>
         <option value="reject"${v.overflow === 'reject' ? ' selected' : ''}>odrzuć zdarzenie</option>
       </select>
     </div>
@@ -669,8 +669,8 @@ function sectionBodyOutbound(v: IntegrationFormValues): string {
     <div class="field">
       <label for="bodyTemplate">Szablon body</label>
       ${textarea('bodyTemplate', v.bodyTemplate, 6)}
-      <div class="hint">Zmienne: <code>from</code>, <code>to</code>, <code>text</code>, <code>receivedAt</code>, <code>serviceId</code>, <code>id</code>, <code>event</code>;
-        przy statusach <code>status</code>, <code>error</code>, <code>miStatus</code>. W JSON-ie pola tekstowe przez filtr <code>json</code>, np. <code>{{ text | json }}</code>.</div>
+      <div class="hint">Zmienne: <code>from</code>, <code>to</code>, <code>text</code>, <code>receivedAt</code>, <code>serviceId</code>, <code>id</code>, <code>event</code>.
+        Przy statusach dodatkowo <code>status</code>, <code>error</code>, <code>miStatus</code>. W JSON-ie pola tekstowe należy przepuszczać przez filtr <code>json</code>, np. <code>{{ text | json }}</code>.</div>
     </div>
     <div class="field">
       <label>Pola formularza</label>
@@ -679,7 +679,7 @@ function sectionBodyOutbound(v: IntegrationFormValues): string {
     <div class="field">
       <label for="responseRefPath">Ścieżka identyfikatora w odpowiedzi</label>
       <input id="responseRefPath" name="responseRefPath" value="${esc(v.responseRefPath)}" placeholder="np. id">
-      <div class="hint">Identyfikator zgłoszenia z odpowiedzi aplikacji trafia do odebranego SMS-a - odpowiedź agenta wróci wtedy w wątku</div>
+      <div class="hint">Identyfikator zgłoszenia z odpowiedzi aplikacji jest zapisywany przy odebranym SMS-ie. Odpowiedź agenta trafia wówczas do tego samego wątku</div>
     </div>
   </details>`;
 }
@@ -693,7 +693,7 @@ export function sectionGuard(v: Pick<IntegrationFormValues, 'throttleLimit' | 't
         <input name="throttleLimit" type="number" min="1" max="1000" value="${esc(v.throttleLimit)}" style="width: 110px;"> <span class="dim">zdarzeń na</span>
         <input name="throttleWindow" type="number" min="1" max="1440" value="${esc(v.throttleWindow)}" style="width: 110px;"> <span class="dim">minut</span>
       </div>
-      <div class="hint">Nadmiar w oknie dostaje wpis „limit” bez SMS-a; pierwszy raz w oknie idzie mail do administratora</div>
+      <div class="hint">Zdarzenia ponad limit w oknie otrzymują wpis „limit” bez SMS-a. Pierwsze przekroczenie w oknie jest zgłaszane mailem do administratora</div>
     </div>
     <div class="field">
       <label for="eventLogLimit">Wpisów w dzienniku</label>
@@ -701,14 +701,14 @@ export function sectionGuard(v: Pick<IntegrationFormValues, 'throttleLimit' | 't
     </div>
     <div class="field">
       ${checkbox('storePayloads', v.storePayloads, 'Przechowuj ładunki w dzienniku (7 dni, zaszyfrowane)')}
-      <div class="hint">Przydatne przy uruchamianiu: ładunek z dziennika da się użyć jako próbki. Ładunki bywają wrażliwe - włącz na czas strojenia.</div>
+      <div class="hint">Przydatne podczas uruchamiania: ładunek z dziennika można użyć jako próbki. Ładunki mogą zawierać dane wrażliwe, dlatego opcję zaleca się włączać tylko na czas konfiguracji.</div>
     </div>
   </details>`;
 }
 
 function previewPanel(kind: IntegrationKind, p: FormPreview): string {
   const rows: string[] = [];
-  rows.push(`<div>Warunek</div><div>${p.matches ? '<span class="st"><span class="dot dot-ok"></span>spełniony</span>' : '<span class="st"><span class="dot dot-wait"></span>niespełniony - zdarzenie zostałoby pominięte</span>'}</div>`);
+  rows.push(`<div>Warunek</div><div>${p.matches ? '<span class="st"><span class="dot dot-ok"></span>spełniony</span>' : '<span class="st"><span class="dot dot-wait"></span>niespełniony, zdarzenie zostałoby pominięte</span>'}</div>`);
   if (kind === 'webhook_in') {
     const recipients = p.recipients ?? [];
     rows.push(`<div>Odbiorcy</div><div class="m">${recipients.length > 0 ? esc(recipients.join(', '))
@@ -750,7 +750,7 @@ export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, 
 
   const address = edit && inbound && ctx.row!.hookId !== null && !opts.created ? `<div class="panel" style="max-width: 760px;">
       <div class="panel-h"><div class="lab">Adres wejściowy</div>
-        <form method="post" action="/integracje/${esc(ctx.row!.id)}/nowy-adres" data-confirm="Wygenerować nowy adres? Stary przestanie działać natychmiast - trzeba go podmienić w aplikacji." data-confirm-ok="Wygeneruj">
+        <form method="post" action="/integracje/${esc(ctx.row!.id)}/nowy-adres" data-confirm="Wygenerować nowy adres? Dotychczasowy przestanie działać natychmiast i wymaga zastąpienia w aplikacji." data-confirm-ok="Wygeneruj">
           <button class="btn btn-s" type="submit">Wygeneruj nowy</button>
         </form>
       </div>
@@ -792,7 +792,7 @@ export function integrationFormPage(ctx: FormContext, v: IntegrationFormValues, 
             <label for="sample">Przykładowy ładunek (JSON)</label>
             ${textarea('sample', v.sample, 8)}
             <div class="hint">${inbound
-              ? 'To, co aplikacja wyśle na adres wejściowy. Przy włączonym przechowywaniu ładunków dziennik podpowie prawdziwy.'
+              ? 'Ładunek, który aplikacja wysyła na adres wejściowy. Przy włączonym przechowywaniu ładunków rzeczywisty ładunek można pobrać z dziennika.'
               : 'Zdarzenie bramki w takiej postaci, w jakiej trafia do szablonu.'}</div>
           </div>
         </details>
@@ -819,7 +819,7 @@ export interface IntegrationDetail {
 /** Warunek w słowach: „heartbeat.status równe 0; monitor.name zawiera prod” albo wyrażenie Liquid. */
 export function conditionWords(condition: IntegrationConfig['condition']): string {
   if (condition.mode === 'liquid') return `Liquid: ${condition.expr}`;
-  if (condition.rules.length === 0) return 'brak - każde zdarzenie idzie dalej';
+  if (condition.rules.length === 0) return 'brak, każde zdarzenie jest przetwarzane';
   return condition.rules.map((r) => {
     const op = ruleOpLabel(r.op as RuleOp);
     return r.op === 'exists' || r.op === 'missing' ? `${r.path} ${op}` : `${r.path} ${op} ${r.value}`;
@@ -848,7 +848,7 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     const to = cfg.to.path ? `ścieżka ${cfg.to.path}` : '';
     const fallback = cfg.to.fallback.length > 0 ? `lista zapasowa: ${cfg.to.fallback.join(', ')}` : '';
     // Wiersz tylko przy „pomiń”: to odstępstwo od zwykłego zachowania i ma być widoczne.
-    const zlyNumer = cfg.invalidRecipient === 'skip' ? 'numer nie do odczytania: pominięcie' : '';
+    const zlyNumer = cfg.invalidRecipient === 'skip' ? 'numer nieprawidłowy: pominięcie' : '';
     rows.push(kvRow('Odbiorcy', dimOr([to, fallback, zlyNumer].filter((x) => x !== '').join(' · '))));
     // Dopytanie widać na ekranie szczegółu, bo to jedyne miejsce, z którego bramka sama dzwoni po dane.
     if (cfg.enrich) {
@@ -862,12 +862,12 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     const cfg = c as MailInConfig;
     const sec = cfg.imap.security === 'tls' ? 'TLS' : cfg.imap.security === 'starttls' ? 'STARTTLS' : 'bez szyfrowania';
     rows.push(kvRow('Skrzynka', `${esc(cfg.imap.user)} · ${esc(cfg.imap.host)}:${esc(cfg.imap.port)} ${esc(sec)}${cfg.imap.verifyCert ? '' : ' · bez sprawdzania certyfikatu'} · folder ${esc(cfg.folder)} · co ${esc(intervalWords(cfg.intervalSec))}`, true));
-    rows.push(kvRow('Nadawcy', cfg.senders.length === 0 ? '<span class="fail">pusta lista: żaden mail nie przejdzie</span>' : esc(cfg.senders.map((s) => s.pattern).join(', ')) + (cfg.requireAuthResults ? ' · wymagane SPF/DKIM' : '')));
+    rows.push(kvRow('Nadawcy', cfg.senders.length === 0 ? '<span class="fail">pusta lista: żadna wiadomość nie zostanie przetworzona</span>' : esc(cfg.senders.map((s) => s.pattern).join(', ')) + (cfg.requireAuthResults ? (cfg.authservId === '' ? ' · wymagane SPF/DKIM' : ` · wymagane SPF/DKIM od ${esc(cfg.authservId)}`) : '')));
     const levels = [cfg.recipientsFromMail.enabled ? `numery z wiadomości (${cfg.recipientsFromMail.where === 'subject' ? 'temat' : 'pierwsza linia'})` : '', cfg.senders.some((s) => s.recipients.length > 0) ? 'numery nadawców' : '', cfg.to.fallback.length > 0 ? `stała lista: ${cfg.to.fallback.join(', ')}` : ''];
     rows.push(kvRow('Odbiorcy', dimOr(levels.filter((x) => x !== '').join(' · '))));
     const text = cfg.text.mode === 'liquid' ? 'szablon Liquid' : cfg.text.variant === 'subject_text' ? 'temat i treść' : cfg.text.variant === 'subject' ? 'tylko temat' : 'tylko treść';
     rows.push(kvRow('Treść', `${esc(text)} · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}${cfg.fields.length > 0 ? ` · wycinki: ${esc(cfg.fields.map((f) => f.name).join(', '))}` : ''}`));
-    const after = cfg.after.action === 'keep' ? 'zostaje w skrzynce, oznaczony jako przeczytany' : cfg.after.action === 'delete' ? 'usunięcie' : `przeniesienie do folderu ${cfg.after.folder}`;
+    const after = cfg.after.action === 'keep' ? 'pozostaje w skrzynce, oznaczona jako przeczytana' : cfg.after.action === 'delete' ? 'usunięcie' : `przeniesienie do folderu ${cfg.after.folder}`;
     rows.push(kvRow('Po przetworzeniu', `${esc(after)}${cfg.reply.enabled ? ' · odpowiedź e-mail do nadawcy' : ''}`));
   } else {
     const cfg = c as OutboundConfig;
@@ -879,7 +879,7 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     if (cfg.responseRefPath) rows.push(kvRow('Identyfikator z odpowiedzi', esc(cfg.responseRefPath), true));
     rows.push(kvRow('Podpis X-MIG-Signature', cfg.sign ? 'tak' : 'nie'));
   }
-  rows.push(kvRow(simple ? 'Kiedy SMS' : 'Warunek', esc(simple ? simple.when : conditionWords(c.condition))));
+  rows.push(kvRow(simple ? 'Warunek wysyłki' : 'Warunek', esc(simple ? simple.when : conditionWords(c.condition))));
   rows.push(kvRow('Limit burzy', `${esc(c.throttle.limit)} zdarzeń na ${esc(c.throttle.windowMinutes)} minut`));
   rows.push(kvRow('Ładunki', row.storePayloads === 1 ? 'przechowywane 7 dni, zaszyfrowane' : 'nieprzechowywane'));
   rows.push(kvRow('Dziennik', `do ${esc(c.eventLogLimit)} wpisów`));
@@ -920,8 +920,8 @@ function mailboxPanel(v: IntegrationView): string {
   if (!m) {
     rows.push(kvRow('Stan', '<span class="dim">czeka na pierwsze sprawdzenie</span>'));
   } else {
-    rows.push(kvRow('Ostatnie sprawdzenie', m.lastPollAt ? `${esc(warsawStamp(m.lastPollAt))} <span class="dim">(${esc(agoWords(m.lastPollAt, v.now))})</span>` : '<span class="dim">jeszcze nie</span>'));
-    rows.push(kvRow('Ostatnie udane', m.lastOkAt ? `${esc(warsawStamp(m.lastOkAt))} <span class="dim">(${esc(agoWords(m.lastOkAt, v.now))})</span>` : '<span class="dim">jeszcze nie</span>'));
+    rows.push(kvRow('Ostatnie sprawdzenie', m.lastPollAt ? `${esc(warsawStamp(m.lastPollAt))} <span class="dim">(${esc(agoWords(m.lastPollAt, v.now))})</span>` : '<span class="dim">brak</span>'));
+    rows.push(kvRow('Ostatnie udane', m.lastOkAt ? `${esc(warsawStamp(m.lastOkAt))} <span class="dim">(${esc(agoWords(m.lastOkAt, v.now))})</span>` : '<span class="dim">brak</span>'));
     rows.push(kvRow('Nieprzeczytanych', m.unseen === null ? '<span class="dim">nieznane</span>' : esc(m.unseen)));
     rows.push(kvRow('Następne sprawdzenie', esc(warsawStamp(m.nextPollAt))));
     if (m.error !== null) {
@@ -942,10 +942,10 @@ export function integrationDetailPage(d: IntegrationDetail): string {
     ? `<form method="post" action="/integracje/${esc(row.id)}/wylacz" style="display: inline;"><button class="btn btn-s" type="submit">Wyłącz</button></form>`
     : `<form method="post" action="/integracje/${esc(row.id)}/wlacz" style="display: inline;"><button class="btn btn-s" type="submit">Włącz</button></form>`;
   const remove = `<form method="post" action="/integracje/${esc(row.id)}/usun" style="display: inline;"
-      data-confirm="Usunąć integrację „${esc(row.name)}”? Dziennik zniknie razem z nią; aplikacja przestanie mieć dokąd wysyłać." data-confirm-ok="Usuń">
+      data-confirm="Usunąć integrację „${esc(row.name)}”? Dziennik zostanie usunięty razem z nią, a adres wejściowy przestanie działać." data-confirm-ok="Usuń">
       <button class="btn btn-s" type="submit">Usuń</button></form>`;
   const events = d.events.length === 0
-    ? '<tr><td class="dim" colspan="6">Dziennik jest pusty - integracja nie dostała jeszcze żadnego zdarzenia.</td></tr>'
+    ? '<tr><td class="dim" colspan="6">Dziennik jest pusty. Integracja nie otrzymała jeszcze żadnego zdarzenia.</td></tr>'
     : d.events.map((e) => eventRow(row.id, e)).join('');
   const copy = `<form method="post" action="/integracje/${esc(row.id)}/kopiuj" style="display: inline;"><button class="btn btn-s" type="submit">Utwórz kopię</button></form>`;
   const mailbox = row.kind === 'mail_in' ? mailboxPanel(d.view) : '';
@@ -970,7 +970,7 @@ export function integrationDetailPage(d: IntegrationDetail): string {
     </div>
     <div class="panel">
       <div class="panel-h"><div class="lab">Dziennik</div>
-        <div class="m dim">${row.storePayloads === 1 ? 'ładunki przechowywane 7 dni' : 'Ładunki nieprzechowywane - włącz w edycji na czas strojenia'}</div></div>
+        <div class="m dim">${row.storePayloads === 1 ? 'ładunki przechowywane 7 dni' : 'Ładunki nieprzechowywane. Przechowywanie można włączyć w edycji na czas konfiguracji'}</div></div>
       <table style="table-layout: fixed;">
         <tr>
           <th class="nw" style="width: 134px;">Czas</th>

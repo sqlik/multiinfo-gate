@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Multiinfo Gate",
-    "version": "1.8.2",
+    "version": "1.8.3",
     "description": "Bramka SMS między aplikacjami a platformą Multiinfo operatora Plus. Opis obejmuje każde wywołanie API bramki: wysyłkę, odczyt wysłanych wiadomości, anulowanie, rozsyłkę wraz z raportem, odczyt wiadomości przychodzących oraz stan bramki. Powiadomienia webhook idą w drugą stronę, więc opisuje je dokumentacja bramki. Przyjęcie wiadomości i rozsyłki jest asynchroniczne: bramka odpowiada kodem 202 po zapisaniu żądania w kolejce, a wysyłka do Multiinfo następuje później.",
     "license": {
       "name": "MIT",
@@ -61,7 +61,7 @@
                 ],
                 "properties": {
                   "to": {
-                    "description": "Numer odbiorcy albo lista numerów, najwyżej 500. Numer bez kodu kraju dostaje kod domyślny konta, dla Polski 48. Lista jest przyjmowana w całości albo wcale.",
+                    "description": "Numer odbiorcy albo lista numerów, najwyżej 500. Numer bez kodu kraju otrzymuje kod domyślny konta, dla Polski 48. Lista jest przyjmowana w całości albo wcale.",
                     "oneOf": [
                       {
                         "type": "string",
@@ -124,7 +124,7 @@
                   "validTo": {
                     "type": "string",
                     "format": "date-time",
-                    "description": "Czas ważności w formacie ISO 8601, najwyżej 72 godziny od przyjęcia. Wiadomość niedoręczona do tego czasu dostaje stan expired.",
+                    "description": "Czas ważności w formacie ISO 8601, najwyżej 72 godziny od przyjęcia. Wiadomość niedoręczona do tego czasu otrzymuje stan expired.",
                     "example": "2026-08-26T12:00:00.000Z"
                   },
                   "costCenter": {
@@ -1000,7 +1000,7 @@
       "post": {
         "operationId": "zamowRaportRozsylki",
         "summary": "Zamówienie raportu rozsyłki",
-        "description": "Zamawia raport rozsyłki jeszcze raz. Bramka zamawia go sama po zakończeniu rozsyłki, więc to wywołanie przydaje się, gdy poprzedni raport ma stan failed. Gotowy raport odczytuje się wywołaniem GET pod tym samym adresem.",
+        "description": "Zamawia raport rozsyłki jeszcze raz. Bramka zamawia go sama po zakończeniu rozsyłki, więc to wywołanie służy do ponowienia zamówienia, gdy poprzedni raport ma stan failed. Gotowy raport odczytuje się wywołaniem GET pod tym samym adresem.",
         "security": [
           {
             "bearerAuth": []
@@ -1630,7 +1630,7 @@
           },
           "serviceId": {
             "type": "string",
-            "description": "Usługa Multiinfo, z której poszła wiadomość",
+            "description": "Usługa Multiinfo, z której wysłano wiadomość",
             "example": "24138"
           },
           "inReplyTo": {
@@ -1813,7 +1813,7 @@
           },
           "serviceId": {
             "type": "string",
-            "description": "Usługa Multiinfo, z której idzie rozsyłka",
+            "description": "Usługa Multiinfo, z której wysyłana jest rozsyłka",
             "example": "24138"
           },
           "orig": {

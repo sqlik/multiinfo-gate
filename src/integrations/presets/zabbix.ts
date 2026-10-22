@@ -44,7 +44,7 @@ export const zabbix: Preset = {
         { id: 'temat', label: 'temat z szablonu wiadomości Zabbiksa', text: TEKST },
         { id: 'temat-i-tresc', label: 'temat i początek treści', text: { mode: 'liquid', template: '{{ p.subject }} - {{ p.message | sms_truncate: 100 }}' } },
       ],
-      auth: { kind: 'header', name: 'Authorization', prefix: 'Bearer ', label: 'Hasło, które wpiszesz też w Zabbiksie', where: 'w Zabbiksie w parametrze token typu mediów jako Bearer <hasło>' },
+      auth: { kind: 'header', name: 'Authorization', prefix: 'Bearer ', label: 'Hasło wpisywane także w Zabbiksie', where: 'w Zabbiksie w parametrze token typu mediów jako Bearer <hasło>' },
     },
   },
   guide: [

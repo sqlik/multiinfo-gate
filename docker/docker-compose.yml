@@ -17,6 +17,9 @@ services:
       # Webhooki tylko pod adresy publiczne. Aplikacja na tym samym serwerze (np. przykład PHP
       # pod adresem hosta widzianym z kontenera) wymaga MIG_WEBHOOK_ALLOW_PRIVATE=1 w docker/.env.
       MIG_WEBHOOK_ALLOW_PRIVATE: ${MIG_WEBHOOK_ALLOW_PRIVATE:-0}
+      # Serwer poczty (Mail2SMS) tylko pod adresem publicznym. Serwer w sieci wewnętrznej wymaga
+      # MIG_MAIL_ALLOW_PRIVATE=1 w docker/.env (docs/integracje.md, rozdział 5.1).
+      MIG_MAIL_ALLOW_PRIVATE: ${MIG_MAIL_ALLOW_PRIVATE:-0}
       # Odbiór wiadomości przychodzących: oczekiwanie na odpowiedź Multiinfo (zalecane 10000 -
       # docs/uruchomienie.md, rozdział 7.7; domyślne 60 s opóźnia odbiór nawet o minutę) i przerwa po pustej
       # odpowiedzi; zmiana tylko przy odpytywaniu okresowym (docs/uruchomienie.md, rozdział 7.7).

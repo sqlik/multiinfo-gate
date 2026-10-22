@@ -27,7 +27,7 @@ describe('GET /powiadomienia', () => {
     expect(res.body).toContain('href="/powiadomienia?zakladka=reguly"');
     expect(res.body).not.toContain('Błąd integracji');
     const rules = await page('reguly');
-    expect(rules.body).toContain('Najpierw skonfiguruj SMTP');
+    expect(rules.body).toContain('Reguły wymagają skonfigurowanego serwera SMTP');
     expect(rules.body).toMatch(/name="enabled_integration_error"[^>]*disabled/);
     expect(rules.body).toContain('Błąd integracji');
     expect(rules.body).toContain('Podsumowanie dzienne');
@@ -61,14 +61,14 @@ describe('POST /powiadomienia/smtp', () => {
     expect(shown.body).toContain('value="smtp2.example"');
     expect(shown.body).not.toContain('tajne-smtp');
     const rules = await page('reguly');
-    expect(rules.body).not.toContain('Najpierw skonfiguruj SMTP');
+    expect(rules.body).not.toContain('Reguły wymagają skonfigurowanego serwera SMTP');
     expect(rules.body).not.toMatch(/name="enabled_integration_error"[^>]*disabled/);
   });
 
   it('tryb bez szyfrowania wymaga potwierdzenia', async () => {
     const res = await post('/powiadomienia/smtp', smtpFields({ security: 'none', port: '25' }));
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('hasło pójdzie jawnie');
+    expect(res.body).toContain('hasło będzie przesyłane jawnie');
     expect(h.notifications.smtp()).toBeNull();
     const ok = await post('/powiadomienia/smtp', smtpFields({ security: 'none', port: '25', plainOk: '1' }));
     expect(ok.statusCode).toBe(302);

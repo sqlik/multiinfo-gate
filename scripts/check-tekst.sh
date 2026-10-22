@@ -16,4 +16,10 @@ if grep -rsn -e "Proxmo$ks" -e "Bitri$ks" $KATALOGI; then
   echo "check:tekst: nazwa z x odmieniona przez ks (wyżej)"
   exit 1
 fi
+# Nazwa Polkomtel jest nieodmienna: "od Polkomtel", "po stronie Polkomtel". Wzorzec sklejany jak wyżej.
+odmiana="[aeuo]"
+if grep -rsn -e "Polkomtel$odmiana" $KATALOGI; then
+  echo "check:tekst: odmieniona nazwa Polkomtel (wyżej); obowiązuje nieodmienne „Polkomtel”"
+  exit 1
+fi
 echo "check:tekst: czysto"

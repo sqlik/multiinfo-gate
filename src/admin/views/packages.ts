@@ -36,7 +36,7 @@ function reportCell(p: PackageRow): string {
 
 export function packagesPage(data: PackagesData): string {
   const rows = data.rows.length === 0
-    ? '<tr><td class="dim" colspan="8">Nie było jeszcze żadnej rozsyłki.</td></tr>'
+    ? '<tr><td class="dim" colspan="8">Brak rozsyłek.</td></tr>'
     : data.rows.map((p) => `<tr>
         <td class="m dim">${esc(stamp(p.createdAt))}</td>
         <td class="m"><a href="/rozsylki/${esc(p.id)}">${esc(p.id)}</a></td>
@@ -152,9 +152,9 @@ export function packagePage(d: PackageDetail): string {
           <div>Nadpis</div><div class="m">${esc(p.orig ?? '-')}</div>
           <div>Kodowanie</div><div class="m">${esc(p.encoding === 'gsm' ? 'GSM-7' : 'UCS-2')}${p.multipart === 1 ? ' · wieloczęściowa' : ''}</div>
           <div>Raport doręczenia</div><div class="m">${esc(yes(p.deliveryReport))}</div>
-          <div>Start</div><div class="m">${p.startAt === null ? 'od razu' : esc(stamp(p.startAt))}</div>
+          <div>Start</div><div class="m">${p.startAt === null ? 'natychmiast' : esc(stamp(p.startAt))}</div>
           <div>Centrum kosztów</div><div class="m">${esc(p.costCenter ?? '-')}</div>
-          <div>Identyfikator w Multiinfo</div><div class="m">${p.miPackageId === null ? '<span class="dim">jeszcze nie utworzono</span>' : esc(p.miPackageId)}</div>
+          <div>Identyfikator w Multiinfo</div><div class="m">${p.miPackageId === null ? '<span class="dim">nieutworzony</span>' : esc(p.miPackageId)}</div>
           <div>Status Multiinfo</div><div class="m">${p.miStatus === null ? '<span class="dim">brak</span>' : esc(p.miStatus)}</div>
           <div>Zakończono</div><div class="m">${esc(stamp(p.completedAt))}</div>
           <div${p.error === null ? ' style="border-bottom: none;"' : ''}>Raport</div>

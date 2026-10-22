@@ -8,7 +8,7 @@ const TEKST: InboundConfig['text'] = { mode: 'liquid', template: '{% if p.heartb
 export const uptimeKuma: Preset = {
   id: 'uptime-kuma',
   name: 'Uptime Kuma',
-  blurb: 'SMS przy awarii monitora - powiadomienie typu Webhook',
+  blurb: 'SMS przy awarii monitora, powiadomienie typu Webhook',
   kinds: ['webhook_in'],
   // Ładunek DOWN z Uptime Kumy 2.5.3 przycięty do pól, które coś znaczą (pełny ma ~90 pól monitora).
   sample: {
@@ -42,17 +42,17 @@ export const uptimeKuma: Preset = {
   simple: {
     inbound: {
       addressField: 'w Uptime Kumie w polu Post URL powiadomienia typu Webhook',
-      recipients: { source: 'list', note: 'Uptime Kuma nie przesyła numerów telefonów, więc SMS idzie zawsze na numery wpisane tutaj.' },
+      recipients: { source: 'list', note: 'Uptime Kuma nie przesyła numerów telefonów, więc SMS jest zawsze wysyłany na numery wpisane tutaj.' },
       when: [
         { id: 'awaria', label: 'tylko gdy monitor przestanie działać', condition: { mode: 'builder', rules: [{ path: 'heartbeat.status', op: 'eq', value: '0' }] } },
-        { id: 'awaria-i-powrot', label: 'gdy przestanie działać i gdy wróci', condition: { mode: 'builder', rules: [{ path: 'heartbeat', op: 'exists', value: '' }] } },
+        { id: 'awaria-i-powrot', label: 'gdy przestanie działać i gdy zacznie działać ponownie', condition: { mode: 'builder', rules: [{ path: 'heartbeat', op: 'exists', value: '' }] } },
         { id: 'zawsze', label: 'zawsze, także przy przycisku „Test” w Uptime Kumie', condition: { mode: 'builder', rules: [] } },
       ],
       text: [
         { id: 'z-komunikatem', label: 'stan, nazwa monitora i komunikat błędu', text: TEKST },
         { id: 'krotko', label: 'tylko stan i nazwa monitora', text: { mode: 'liquid', template: '{% if p.heartbeat %}{% if p.heartbeat.status == 0 %}AWARIA{% else %}OK{% endif %}: {{ p.monitor.name }}{% else %}{{ p.msg | sms_truncate: 140 }}{% endif %}' } },
       ],
-      auth: { kind: 'header', name: 'Authorization', prefix: 'Bearer ', label: 'Hasło, które wpiszesz też w Uptime Kumie', where: 'w Uptime Kumie w polu Additional Headers jako { "Authorization": "Bearer <hasło>" }' },
+      auth: { kind: 'header', name: 'Authorization', prefix: 'Bearer ', label: 'Hasło wpisywane także w Uptime Kumie', where: 'w Uptime Kumie w polu Additional Headers jako { "Authorization": "Bearer <hasło>" }' },
     },
   },
   guide: [
@@ -60,8 +60,8 @@ export const uptimeKuma: Preset = {
     '',
     '- **Post URL**: adres wejściowy integracji z panelu bramki',
     '- **Request Body**: `application/json`',
-    '- **Additional Headers**: `{ "Authorization": "Bearer <token>" }` z tokenem, który wpisałeś w bramce',
+    '- **Additional Headers**: `{ "Authorization": "Bearer <token>" }` z tokenem wpisanym w bramce',
     '',
-    'Zapisz powiadomienie i włącz je przy monitorach, które mają budzić SMS-em (edycja monitora, sekcja Powiadomienia), albo zaznacz „Domyślnie włączone” dla nowych monitorów. Przycisk „Test” w Uptime Kumie wysyła próbny ładunek bez danych monitora - bramka przyjmuje go tylko przy wariancie „zawsze”.',
+    'Zapisz powiadomienie i włącz je przy monitorach, które mają wysyłać SMS (edycja monitora, sekcja Powiadomienia), albo zaznacz „Domyślnie włączone” dla nowych monitorów. Przycisk „Test” w Uptime Kumie wysyła próbny ładunek bez danych monitora - bramka przyjmuje go tylko przy wariancie „zawsze”.',
   ].join('\n'),
 };

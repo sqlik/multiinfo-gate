@@ -60,7 +60,7 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: AdminDeps, re
     deps.audit.record({
       actor: actorOf(request.adminUserId), action: 'ustawienia.wydanie_odlozone', target: 'ustawienia', meta: { wydanie: version }, ip: request.ip,
     });
-    render.flash(request, 'ok', `Wydanie ${version} odłożone. Panel przypomni przy następnym.`);
+    render.flash(request, 'ok', `Wydanie ${version} odłożone. Panel przypomni o kolejnym wydaniu.`);
     return reply.redirect('/przeglad', 302);
   });
 }

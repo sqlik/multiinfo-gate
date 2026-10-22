@@ -39,12 +39,12 @@ export function registerDeliveryRoutes(app: FastifyInstance, deps: AdminDeps, re
     if (delivery.status !== 'failed') {
       render.flash(request, 'warn', 'Ponowić można tylko dostawę nieudaną.');
     } else if (scrubbed(delivery)) {
-      render.flash(request, 'warn', 'Treść tej wiadomości nie jest przechowywana - aplikacja może ją dociągnąć przez GET /v1/inbound.');
+      render.flash(request, 'warn', 'Treść tej wiadomości nie jest przechowywana. Aplikacja może pobrać ją przez GET /v1/inbound.');
     } else if (delivery.integrationId !== null && (!integration || integration.enabled === 0)) {
       // Dostawa integracji nie potrzebuje adresu webhooka klucza; potrzebuje włączonej integracji.
-      render.flash(request, 'warn', 'Integracja jest usunięta albo wyłączona - najpierw ją włącz.');
+      render.flash(request, 'warn', 'Integracja jest usunięta albo wyłączona. Najpierw należy ją włączyć.');
     } else if (!key || key.revokedAt !== null || (delivery.integrationId === null && key.webhookUrl === null)) {
-      render.flash(request, 'warn', 'Klucz jest odwołany albo nie ma adresu webhooka - nie ma dokąd dostarczyć.');
+      render.flash(request, 'warn', 'Klucz jest odwołany albo nie ma adresu webhooka. Brak adresu docelowego dostawy.');
     } else {
       const at = now();
       deps.deliveries.requeue(id);

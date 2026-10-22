@@ -42,7 +42,7 @@ export const prostyJson: Preset = {
     '{ "to": "48601000001", "text": "Treść wiadomości" }',
     '```',
     '',
-    'Pole `to` może być tekstem z numerami po przecinku albo tablicą (do 50 numerów). Numery w formacie ludzkim (`+48 601 000 001`) są normalizowane. Pole `inReplyTo` z identyfikatorem zgłoszenia wysyła SMS jako odpowiedź w wątku, a `eventId` chroni przed podwójną wysyłką przy ponowieniu żądania.',
+    'Pole `to` może być tekstem z numerami po przecinku albo tablicą (do 50 numerów). Numery w zapisie z plusem i spacjami (`+48 601 000 001`) są normalizowane. Pole `inReplyTo` z identyfikatorem zgłoszenia wysyła SMS jako odpowiedź w wątku, a `eventId` chroni przed podwójną wysyłką przy ponowieniu żądania.',
     '',
     '**Z SMS-a.** Bramka wysyła pełne zdarzenie w formacie z rozdziału o webhookach API: `event`, `at`, `id`, `serviceId`, `from`, `to`, `kind`, `text`, `receivedAt`, `relatedMessageId`.',
   ].join('\n'),

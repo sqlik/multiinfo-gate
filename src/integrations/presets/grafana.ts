@@ -45,22 +45,22 @@ export const grafana: Preset = {
     text: TEKST,
     maxParts: 1, overflow: 'truncate',
   },
-  secrets: [{ ref: 'basic', label: 'Hasło basic auth', hint: 'Login grafana i to hasło wpisz w punkcie kontaktu Grafany' }],
+  secrets: [{ ref: 'basic', label: 'Hasło basic auth', hint: 'Login grafana i to hasło należy wpisać w punkcie kontaktu Grafany' }],
   expect: { text: 'ALARM: CPU high' },
   sampleSource: 'Grafana 13.2.0, żywa instancja, 2026-09-02: ładunki firing i resolved z punktu kontaktu Webhook z basic auth',
   simple: {
     inbound: {
       addressField: 'w Grafanie w polu URL punktu kontaktu typu Webhook',
-      recipients: { source: 'list', note: 'Grafana nie przesyła numerów telefonów, więc SMS idzie zawsze na numery wpisane tutaj.' },
+      recipients: { source: 'list', note: 'Grafana nie przesyła numerów telefonów, więc SMS jest zawsze wysyłany na numery wpisane tutaj.' },
       when: [
-        { id: 'alarm', label: 'tylko gdy alert się zapali', condition: { mode: 'builder', rules: [{ path: 'status', op: 'eq', value: 'firing' }] } },
-        { id: 'alarm-i-powrot', label: 'gdy się zapali i gdy zgaśnie', condition: { mode: 'builder', rules: [] } },
+        { id: 'alarm', label: 'tylko gdy alert staje się aktywny', condition: { mode: 'builder', rules: [{ path: 'status', op: 'eq', value: 'firing' }] } },
+        { id: 'alarm-i-powrot', label: 'gdy alert staje się aktywny i gdy ustaje', condition: { mode: 'builder', rules: [] } },
       ],
       text: [
         { id: 'nazwy', label: 'stan i nazwy alertów (do trzech)', text: TEKST },
         { id: 'z-opisem', label: 'stan, pierwszy alert z opisem z reguły', text: { mode: 'liquid', template: '{% if p.status == "firing" %}ALARM{% else %}OK{% endif %}: {{ p.alerts[0].labels.alertname }}{% if p.alerts[0].labels.instance %} ({{ p.alerts[0].labels.instance }}){% endif %}{% if p.alerts[0].annotations.summary %} - {{ p.alerts[0].annotations.summary | sms_truncate: 100 }}{% endif %}{% if p.alerts.size > 1 %} (+{{ p.alerts.size | minus: 1 }}){% endif %}' } },
       ],
-      auth: { kind: 'basic', user: 'grafana', label: 'Hasło, które wpiszesz też w Grafanie', where: 'w Grafanie w punkcie kontaktu: Basic Authentication, login grafana i to hasło' },
+      auth: { kind: 'basic', user: 'grafana', label: 'Hasło wpisywane także w Grafanie', where: 'w Grafanie w punkcie kontaktu: Basic Authentication, login grafana i to hasło' },
     },
   },
   guide: [

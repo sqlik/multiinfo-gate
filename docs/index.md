@@ -1,12 +1,12 @@
 # Multiinfo Gate
 
-Bramka SMS między Twoimi aplikacjami a API Multiinfo (Plus, Polkomtel). Trzyma certyfikat
+Bramka SMS między Twoimi aplikacjami a API Multiinfo (Plus, Polkomtel). Przechowuje certyfikat
 kliencki, login i hasło do Multiinfo w jednym miejscu, a aplikacjom wystawia proste HTTP API
 z kluczem w nagłówku. Aplikacja wysyłająca SMS-y nie instaluje certyfikatów i nie zna ASPX.
 Od wersji 1.3 bramka odbiera też SMS-y od abonentów i przekazuje je aplikacji powiadomieniem
-webhook. Od wersji 1.5 integruje się z aplikacjami, których formatu nie da się zmienić: monitoring
+webhook. Od wersji 1.5 integruje się z aplikacjami, których formatu nie można zmienić: monitoring
 i helpdesk wysyłają SMS-y własnym ładunkiem na adres wejściowy bramki, a odebrane SMS-y i statusy
-trafiają do helpdesku albo na telefon przez ntfy w ich formacie; administrator dostaje mailem
+trafiają do helpdesku albo na telefon przez ntfy w ich formacie; administrator otrzymuje mailem
 powiadomienia o błędach i certyfikatach. Od wersji 1.7 bramka potrafi też dopytać aplikację
 o dane, których nie ma w powiadomieniu. Dzięki temu Fakturownia powiadamia SMS-em nabywcę
 faktury, choć numeru telefonu w samym powiadomieniu nie ma. Od wersji 1.8 bramka odczytuje
@@ -36,7 +36,7 @@ zamiast certyfikatów, oraz panel do zarządzania kontami, kluczami i podglądu 
 ## Co trzeba mieć
 
 - Konto Multiinfo z użytkownikiem API i certyfikatem (`.pfx` z hasłem)
-- ID usługi (z panelu Multiinfo albo od opiekuna technicznego Polkomtela) i, jeżeli mają być
+- ID usługi (z panelu Multiinfo albo od opiekuna technicznego Polkomtel) i, jeżeli mają być
   używane, nadpisy nadawcy uruchomione przez Polkomtel na wniosek z panelu Multiinfo
 - Serwer Linux (Ubuntu 24.04) z Dockerem (wystarczy najmniejsza maszyna w chmurze, x86-64 albo
   ARM64) albo własny Proxmox VE, na którym skrypt tworzy gotowy kontener LXC bez Dockera

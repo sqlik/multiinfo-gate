@@ -85,7 +85,7 @@ describe('Notifier', () => {
     notifier.flush(T0);
     const [mail] = mails();
     expect(mail!.subject).toContain(': 130');
-    expect(mail!.text).toContain('...i 30 więcej');
+    expect(mail!.text).toContain('oraz 30 kolejnych');
     expect(mail!.text.split('\n').filter((l) => l.startsWith('- ')).length).toBe(100);
   });
   it('dedupKey trzyma jedno powiadomienie na temat', () => {

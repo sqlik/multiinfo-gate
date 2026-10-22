@@ -12,7 +12,7 @@ import {
 /** Największy przyjmowany plik .pfx. Certyfikaty Plusa mieszczą się w kilku kilobajtach. */
 const MAX_PFX_BYTES = 512 * 1024;
 
-const TOO_LARGE = 'Plik jest większy niż pół megabajta - to na pewno nie certyfikat.';
+const TOO_LARGE = 'Plik jest większy niż pół megabajta. Certyfikat użytkownika API ma kilka kilobajtów.';
 
 interface PfxForm { values: Record<string, string>; file: Buffer | null }
 
@@ -135,8 +135,8 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
     }
 
     if (bundle.cn !== login) {
-      return fail(`Pole CN certyfikatu (${bundle.cn}) nie zgadza się z podanym loginem (${login}). `
-        + 'Multiinfo odrzuciłoby każdą wysyłkę błędem -85.');
+      return fail(`Pole CN certyfikatu (${bundle.cn}) nie jest zgodne z podanym loginem (${login}). `
+        + 'Multiinfo odrzucałoby każdą wysyłkę błędem -85.');
     }
 
     const id = deps.accounts.insert({
@@ -157,7 +157,7 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
       ip: request.ip,
     });
     render.flash(request, 'ok',
-      `Konto ${name} zapisane. Nadpisy nadawcy wpisuje się na liście kont - bramka nie pobiera ich z Multiinfo.`);
+      `Konto ${name} zapisane. Nadpisy nadawcy wpisuje się na liście kont, ponieważ bramka nie pobiera ich z Multiinfo.`);
     return reply.redirect(`/konta/${id}`, 302);
   });
 
@@ -205,7 +205,7 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
     if (blocked.length > 0) {
       const first = blocked[0]!;
       return fail(`ID usługi ${first} jest używane przez klucze: ${inUse.get(first)!.join(', ')}. `
-        + 'Najpierw zmień lub odwołaj te klucze.');
+        + 'Najpierw zmień albo odwołaj te klucze.');
     }
 
     const before = accountValuesOf(view);
@@ -240,8 +240,8 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
     });
     if (result.ok) {
       const resumed = resumeIfPaused(view.row, request.adminUserId, request.ip, 'udane sprawdzenie po edycji');
-      render.flash(request, 'ok', `Konto ${values.name} zapisane. Połączenie z Multiinfo działa (-31).`
-        + (resumed ? ' Konto zostało wznowione - wiadomości z kolejki ruszą w ciągu minuty.' : ''));
+      render.flash(request, 'ok', `Konto ${values.name} zapisane. Połączenie z Multiinfo nawiązane (odpowiedź -31).`
+        + (resumed ? ' Konto zostało wznowione, wysyłka z kolejki rozpocznie się w ciągu minuty.' : ''));
     } else {
       render.flash(request, 'warn', `Konto ${values.name} zapisane, ale sprawdzenie połączenia nie powiodło się: `
         + `${result.message} (${result.code}). Konto nie zostało wstrzymane.`);
@@ -286,8 +286,8 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
       reply.code(400);
       return detailPage(request, view, {
         bundle,
-        error: `Pole CN certyfikatu (${bundle.cn}) nie zgadza się z loginem konta (${view.row.login}). `
-          + 'Multiinfo odrzuciłoby każdą wysyłkę błędem -85, więc certyfikat nie został zapisany.',
+        error: `Pole CN certyfikatu (${bundle.cn}) nie jest zgodne z loginem konta (${view.row.login}). `
+          + 'Multiinfo odrzucałoby każdą wysyłkę błędem -85, dlatego certyfikat nie został zapisany.',
       });
     }
 
@@ -309,7 +309,7 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
     const resumed = resumeIfPaused(view.row, request.adminUserId, request.ip, 'wymiana certyfikatu');
     render.flash(request, 'ok',
       `Certyfikat wczytany. CN ${bundle.cn}, ważny do ${warsawDay(bundle.notAfter.toISOString())}.`
-      + (resumed ? ' Konto zostało wznowione - wiadomości z kolejki ruszą w ciągu minuty.' : ''));
+      + (resumed ? ' Konto zostało wznowione, wysyłka z kolejki rozpocznie się w ciągu minuty.' : ''));
     return reply.redirect(`/konta/${view.row.id}`, 302);
   });
 
@@ -388,7 +388,7 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
       const defaultOrig = (request.body?.defaultOrig ?? '').trim();
       if (defaultOrig !== '' && !unikalne.includes(defaultOrig)) {
         reply.code(400);
-        return listPage(request, `Wartość domyślna „${defaultOrig}” jest spoza słownika nadpisów tego konta.`);
+        return listPage(request, `Wartość domyślna „${defaultOrig}” jest nie znajduje się na liście nadpisów tego konta.`);
       }
 
       deps.accounts.setOrigs(view.row.id, unikalne.map((orig) => ({ orig, label: null })));

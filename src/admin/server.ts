@@ -95,6 +95,8 @@ export interface AdminDeps {
   resolve?: Resolver;
   /** MIG_WEBHOOK_ALLOW_PRIVATE: zgoda na adresy webhooków w sieci wewnętrznej. */
   allowPrivateWebhooks?: boolean;
+  /** MIG_MAIL_ALLOW_PRIVATE: zgoda na serwer IMAP w sieci wewnętrznej. */
+  allowPrivateMail?: boolean;
 }
 
 declare module 'fastify' {
@@ -138,17 +140,17 @@ function isSetupPath(path: string): boolean {
  */
 const BAD_CREDENTIALS = 'Nieprawidłowy login lub hasło.';
 
-const TOO_MANY_ATTEMPTS = 'Zbyt wiele nieudanych prób logowania z tego adresu. Spróbuj ponownie za kwadrans.';
+const TOO_MANY_ATTEMPTS = 'Zbyt wiele nieudanych prób logowania z tego adresu. Spróbuj ponownie za 15 minut.';
 
 /**
  * Ciasteczko sesji ma znacznik Secure, więc przeglądarka odrzuci je bez HTTPS - poza adresami
  * lokalnymi, które traktuje jako bezpieczne. Logowanie po zwykłym HTTP pod adresem sieciowym
  * kończyłoby się po cichu pętlą do ekranu logowania; lepiej powiedzieć to wprost i nie próbować.
  */
-const INSECURE_CONTEXT = 'Panel bez HTTPS działa tylko pod adresem 127.0.0.1 albo localhost (tunel SSH). '
-  + 'Ciasteczko sesji wymaga HTTPS albo adresu lokalnego, więc logowanie z tego adresu nie powiodłoby się.';
+const INSECURE_CONTEXT = 'Panel bez HTTPS działa wyłącznie pod adresem 127.0.0.1 albo localhost (tunel SSH). '
+  + 'Ciasteczko sesji wymaga HTTPS albo adresu lokalnego, dlatego logowanie z tego adresu nie jest możliwe.';
 
-const TOO_MANY_CODES = 'Zbyt wiele błędnych kodów. Zaloguj się od nowa.';
+const TOO_MANY_CODES = 'Zbyt wiele błędnych kodów. Zaloguj się ponownie.';
 
 const publicPath = fileURLToPath(new URL('./public', import.meta.url));
 
@@ -290,7 +292,7 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
     const found = readStage(request);
     if (!found) {
       reply.code(401);
-      return (loginPage('Logowanie trwało zbyt długo. Zacznij od nowa.'));
+      return (loginPage('Logowanie trwało zbyt długo. Zaloguj się ponownie.'));
     }
     const { token, stage } = found;
 
@@ -307,7 +309,7 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
       stage.failures += 1;
       deps.audit.record({ actor, action: 'drugi_skladnik_nieudany', ip: request.ip });
       reply.code(401);
-      if (stage.failures < STAGE_MAX_FAILURES) return (totpPage('Kod nie pasuje. Spróbuj ponownie.'));
+      if (stage.failures < STAGE_MAX_FAILURES) return (totpPage('Kod jest nieprawidłowy. Spróbuj ponownie.'));
       // Etap pośredni przepada: kolejne kody wymagają ponownego podania hasła.
       stages.delete(token);
       reply.clearCookie(STAGE_COOKIE, cookieOptions);
@@ -352,13 +354,13 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
     const secret = proposals.get(userId);
     if (!secret) {
       reply.code(400);
-      return (setupPage(user.login, proposedSecret(userId), 'Ekran wygasł. Zeskanuj kod jeszcze raz.'));
+      return (setupPage(user.login, proposedSecret(userId), 'Ekran wygasł. Zeskanuj kod ponownie.'));
     }
 
     if (!verifyTotp(secret, request.body?.kod ?? '')) {
       deps.audit.record({ actor: user.login, action: 'drugi_skladnik_nieudany', ip: request.ip });
       reply.code(400);
-      return (setupPage(user.login, secret, 'Kod nie pasuje. Sprawdź zegar w telefonie i spróbuj ponownie.'));
+      return (setupPage(user.login, secret, 'Kod jest nieprawidłowy. Sprawdź zegar w telefonie i spróbuj ponownie.'));
     }
 
     const codes = generateRecoveryCodes();

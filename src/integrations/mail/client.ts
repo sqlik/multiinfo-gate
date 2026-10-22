@@ -1,8 +1,15 @@
 import { ImapFlow } from 'imapflow';
+import { isIP, isIPv4 } from 'node:net';
+import { PRIVATE_MAIL_MESSAGE, hostTarget, type Resolver } from '../../net/private-address.ts';
+import { authservIdOf } from './auth-results.ts';
 import type { MailboxErrorKind } from '../../store/mail-in.ts';
 import type { MailSecurity } from '../config.ts';
 
-export interface MailboxSettings { host: string; port: number; security: MailSecurity; verifyCert: boolean; user: string; password: string }
+export interface MailboxSettings {
+  host: string; port: number; security: MailSecurity; verifyCert: boolean; user: string; password: string;
+  /** Rozwiązany adres IP, pod który idzie połączenie; `host` zostaje nazwą do TLS (SNI i certyfikat). */
+  connectAddress?: string;
+}
 export interface MailMeta { uid: number; size: number; messageId: string | null }
 
 /** Sesja ze skrzynką: wszystko, czego poller i „Sprawdź połączenie” potrzebują od IMAP. Testy podstawiają podróbkę. */
@@ -18,6 +25,8 @@ export interface MailboxSession {
   move(uid: number, folder: string): Promise<void>;
   /** \Deleted plus EXPUNGE tego jednego UID. */
   remove(uid: number): Promise<void>;
+  /** Nazwa serwera (authserv-id) z nagłówka Authentication-Results ostatniej wiadomości otwartego folderu; `null`, gdy go nie ma. */
+  authservId?(): Promise<string | null>;
   close(): Promise<void>;
 }
 export type MailboxConnect = (settings: MailboxSettings, timeoutMs: number) => Promise<MailboxSession>;
@@ -88,10 +97,29 @@ export function selectableFolders(list: Array<{ path: string; flags: Set<string>
   return list.filter((m) => !m.flags.has('\\Noselect')).map((m) => m.path);
 }
 
+/**
+ * Opakowanie połączenia: nazwa serwera jest rozwiązywana przed połączeniem, serwer w sieci wewnętrznej
+ * jest odrzucany bez `allowPrivate`, a rozwiązany adres (IPv4, gdy jest) zostaje przypięty do połączenia,
+ * żeby klient łączył się z tym samym adresem, który przeszedł sprawdzenie.
+ */
+export function guardedConnect(inner: MailboxConnect, resolve: Resolver, allowPrivate: boolean): MailboxConnect {
+  return async (settings, timeoutMs) => {
+    // Jedno rozwiązanie nazwy: ten sam wynik służy do werdyktu i do przypięcia adresu.
+    let addresses: string[] = [];
+    const target = await hostTarget(settings.host, async (hostname) => { addresses = await resolve(hostname); return addresses; });
+    if (target.kind === 'unresolved') throw new MailboxError('network', `nazwa serwera IMAP nie rozwiązuje się na adres IP: ${target.reason}`);
+    if (target.kind === 'private' && !allowPrivate) throw new MailboxError('network', `${PRIVATE_MAIL_MESSAGE} (${target.address})`);
+    const connectAddress = addresses.find(isIPv4) ?? addresses[0];
+    return inner(connectAddress === undefined ? settings : { ...settings, connectAddress }, timeoutMs);
+  };
+}
+
 /** Połączenie z prawdziwym serwerem przez imapflow; po `connect()` sesja jest zalogowana. */
 export const imapConnect: MailboxConnect = async (settings, timeoutMs) => {
   const client = new ImapFlow({
-    host: settings.host,
+    host: settings.connectAddress ?? settings.host,
+    // Nazwa do SNI i sprawdzenia certyfikatu, gdy połączenie idzie pod przypięty adres; dla adresu literalnego bez SNI.
+    ...(isIP(settings.host) ? {} : { servername: settings.host }),
     port: settings.port,
     secure: settings.security === 'tls',
     doSTARTTLS: settings.security === 'starttls',
@@ -149,6 +177,18 @@ export const imapConnect: MailboxConnect = async (settings, timeoutMs) => {
     },
     async remove(uid) {
       await client.messageDelete(uidOf(uid), { uid: true });
+    },
+    async authservId() {
+      try {
+        const last = await client.fetchOne('*', { headers: ['authentication-results'] });
+        if (!last || !last.headers) return null;
+        // Nagłówek wielolinijkowy: kontynuacje zaczynają się od białego znaku; liczy się tylko pierwszy nagłówek.
+        const text = last.headers.toString('utf8').replace(/\r?\n[ \t]+/g, ' ');
+        const m = /^authentication-results:[ \t]*(.*)$/im.exec(text);
+        return m ? authservIdOf(m[1]!) : null;
+      } catch {
+        return null;
+      }
     },
     async close() {
       try {

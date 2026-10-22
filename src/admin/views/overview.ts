@@ -86,7 +86,7 @@ function alerts(data: OverviewData, now: Date): string {
       <div style="display: flex; align-items: center; gap: 10px;">
         <div class="sq"></div>
         <div>${esc(undeliveredWebhooks(data.webhooks.failed))} do odbiorcy mimo ponowień w ostatniej dobie.
-          Aplikacja kliencka nie wie o tych zdarzeniach - sprawdź adres webhooka przy kluczu.</div>
+          Aplikacja kliencka nie otrzymała tych zdarzeń. Sprawdź adres webhooka przy kluczu.</div>
       </div>
       <a href="/klucze">Zobacz klucze</a>
     </div>`);
@@ -109,7 +109,7 @@ function alerts(data: OverviewData, now: Date): string {
         <div style="display: flex; align-items: center; gap: 10px;">
           <div class="sq"></div>
           <div>Konto <strong>${esc(row.name)}</strong> jest wstrzymane: ${esc(row.pausedReason)}.
-            Wiadomości czekają w kolejce i pójdą po usunięciu przyczyny.</div>
+            Wiadomości czekają w kolejce i zostaną wysłane po usunięciu przyczyny.</div>
         </div>
         <a href="/konta/${esc(row.id)}">Otwórz konto</a>
       </div>`);
@@ -173,7 +173,7 @@ function failureRow(m: MessageRow, keyNames: Map<number, string>): string {
 
 export function overviewPage(data: OverviewData, now: Date): string {
   const failures = data.failures.length === 0
-    ? '<tr><td class="dim" colspan="5">Brak niepowodzeń w ostatnich godzinach.</td></tr>'
+    ? '<tr><td class="dim" colspan="5">Brak niepowodzeń w ostatnich 24 godzinach.</td></tr>'
     : data.failures.map((m) => failureRow(m, data.keyNames)).join('');
 
   return `<div class="head">

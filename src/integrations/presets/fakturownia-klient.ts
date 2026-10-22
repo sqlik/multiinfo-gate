@@ -49,7 +49,7 @@ export const fakturowniaKlient: Preset = {
     maxParts: 2, overflow: 'truncate',
   },
   secrets: [
-    { ref: 'payloadToken', label: 'Token z webhooka', hint: 'Ta sama wartość, którą wpisujesz w Fakturowni w polu „Api token”' },
+    { ref: 'payloadToken', label: 'Token z webhooka', hint: 'Ta sama wartość, która jest wpisana w Fakturowni w polu „Api token”' },
     { ref: 'enrichToken', label: 'Kod autoryzacyjny API', hint: 'W Fakturowni: Ustawienia, Ustawienia konta, zakładka Integracja, przycisk „Zobacz ApiTokeny”' },
   ],
   expect: {
@@ -57,13 +57,13 @@ export const fakturowniaKlient: Preset = {
     text: 'Anna Kowalska, faktura 1/09/2026 na 123.0 PLN: https://firma.fakturownia.net/f/1-09-2026/przykladowyodnosnik',
   },
   sampleSource: 'Fakturownia 6.152.8, konto próbne, 2026-09-15: webhook invoice:create oraz odpowiedź GET /clients/<id>.json z kartoteką nabywcy',
-  warning: 'SMS pójdzie do Twojego klienta. Upewnij się, że nazwa nadawcy jest zarejestrowana oraz że masz podstawę do wysyłki na jego numer.',
+  warning: 'SMS trafia do klienta. Nazwa nadawcy musi być zarejestrowana, a wysyłka na numer klienta musi mieć podstawę prawną.',
   simple: {
     inbound: {
       addressField: 'w Fakturowni w Ustawieniach konta, w zakładce Integracja, w sekcji Webhooki, w polu Adres',
       recipients: {
         source: 'payload',
-        note: 'Numer bierzemy z kartoteki nabywcy w Fakturowni, z pola „Telefon komórkowy”. Lista zapasowa zostaje pusta: gdy kartoteka nie ma komórki, SMS nie ma iść do nikogo innego.',
+        note: 'Numer pochodzi z kartoteki nabywcy w Fakturowni, z pola „Telefon komórkowy”. Lista zapasowa pozostaje pusta: gdy kartoteka nie zawiera numeru komórkowego, SMS nie jest wysyłany.',
       },
       when: [
         { id: 'wystawienie', label: 'przy wystawieniu faktury', condition: { mode: 'builder', rules: [MA_FAKTURE] } },
@@ -76,14 +76,14 @@ export const fakturowniaKlient: Preset = {
       auth: {
         kind: 'payload', path: 'api_token',
         label: 'Token, który Fakturownia wyśle w treści',
-        where: 'w Fakturowni w tym samym wierszu webhooka, w polu „Api token” - wpisz tam dowolne długie hasło i powtórz je tutaj',
+        where: 'w Fakturowni, w tym samym wierszu webhooka, w polu „Api token”',
       },
       enrich: {
         secretLabel: 'Kod autoryzacyjny API',
         where: 'w Fakturowni: Ustawienia, Ustawienia konta, zakładka Integracja, przycisk „Zobacz ApiTokeny”',
         account: {
-          label: 'Nazwa Twojego konta w Fakturowni',
-          hint: 'Pierwszy człon adresu panelu: gdy logujesz się na firma.fakturownia.pl, wpisz firma',
+          label: 'Nazwa konta w Fakturowni',
+          hint: 'Pierwszy człon adresu panelu: dla firma.fakturownia.pl jest to firma',
           placeholder: 'firma', marker: ZNACZNIK_KONTA,
         },
       },
@@ -92,16 +92,16 @@ export const fakturowniaKlient: Preset = {
   guide: [
     '**Gdzie to ustawić.** W Fakturowni wejdź w **Ustawienia**, potem **Ustawienia konta**, zakładka **Integracja**. Na dole strony znajdziesz sekcję **Webhooki**.',
     '',
-    'W pierwszym wolnym wierszu ustaw **Rodzaj** na `invoice:create`. W polu **Adres** wklej adres wejściowy integracji. W polu **Api token** wpisz to samo hasło, które podałeś w bramce. Zaznacz **Aktywny** i zapisz stronę.',
+    'W pierwszym wolnym wierszu ustaw **Rodzaj** na `invoice:create`. W polu **Adres** wklej adres wejściowy integracji. W polu **Api token** wpisz to samo hasło, które zostało wpisane w bramce. Zaznacz **Aktywny** i zapisz stronę.',
     '',
-    '**Skąd bramka weźmie numer klienta.** Webhook faktury nie niesie numeru telefonu nabywcy, tylko jego identyfikator. Dlatego bramka pyta Fakturownię o kartotekę tego nabywcy i bierze z niej pole **Telefon komórkowy**. Do zapytania potrzebuje dwóch rzeczy: nazwy Twojego konta oraz kodu autoryzacyjnego API.',
+    '**Źródło numeru klienta.** Webhook faktury nie niesie numeru telefonu nabywcy, tylko jego identyfikator. Dlatego bramka pyta Fakturownię o kartotekę tego nabywcy i odczytuje z niej pole **Telefon komórkowy**. Do zapytania potrzebuje dwóch rzeczy: nazwy konta oraz kodu autoryzacyjnego API.',
     '',
-    'Kod autoryzacyjny znajdziesz w tym samym miejscu: **Ustawienia**, **Ustawienia konta**, zakładka **Integracja**, przycisk **Zobacz ApiTokeny**. Wklej go do bramki; zapiszemy go zaszyfrowany.',
+    'Kod autoryzacyjny znajdziesz w tym samym miejscu: **Ustawienia**, **Ustawienia konta**, zakładka **Integracja**, przycisk **Zobacz ApiTokeny**. Wklej go do bramki. Bramka przechowuje go w postaci zaszyfrowanej.',
     '',
-    `W trybie zaawansowanym adres zapytania trzyma znacznik \`${ZNACZNIK_KONTA}\`. Podmień go na nazwę swojego konta, tę samą, którą widzisz w adresie panelu Fakturowni. Tryb prosty robi to za Ciebie.`,
+    `W trybie zaawansowanym adres zapytania trzyma znacznik \`${ZNACZNIK_KONTA}\`. Zastąp go nazwą konta, tą samą, która występuje w adresie panelu Fakturowni. Tryb prosty wykonuje tę podmianę automatycznie.`,
     '',
-    '**Czego się spodziewać.** Klient dostanie SMS w minutę od wystawienia faktury. Kartoteka bez numeru komórkowego oznacza pominięcie faktury: bramka zapisze wpis w dzienniku i odpowie Fakturowni kodem 200, żeby ta nie wyłączyła webhooka. Numer stacjonarny z pola **Telefon** nie jest brany pod uwagę, bo SMS na niego nie dojdzie.',
+    '**Czego się spodziewać.** Klient otrzyma SMS w ciągu minuty od wystawienia faktury. Kartoteka bez numeru komórkowego oznacza pominięcie faktury: bramka zapisze wpis w dzienniku i odpowie Fakturowni kodem 200, żeby ta nie wyłączyła webhooka. Numer stacjonarny z pola **Telefon** nie jest brany pod uwagę, ponieważ SMS nie zostanie na niego doręczony.',
     '',
-    'Jeśli wolisz powiadamiać siebie zamiast klienta, użyj ustawienia **Fakturownia: powiadomienie obsługi**.',
+    'Do powiadamiania obsługi zamiast klienta służy ustawienie **Fakturownia: powiadomienie obsługi**.',
   ].join('\n'),
 };

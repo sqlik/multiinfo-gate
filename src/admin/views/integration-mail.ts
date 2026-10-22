@@ -92,7 +92,7 @@ function sectionMailbox(v: MailFormValues, opts: MailFormOptions): string {
   </details>`;
 }
 
-function sectionSenders(v: MailFormValues): string {
+function sectionSenders(v: MailFormValues, advanced: boolean): string {
   return `<details open>
     <summary>Kto może wysyłać</summary>
     <div class="field">
@@ -104,6 +104,11 @@ function sectionSenders(v: MailFormValues): string {
       ${checkbox('requireAuthResults', v.requireAuthResults, 'Wymagaj potwierdzenia nadawcy przez serwer (SPF/DKIM)')}
       ${hint('Zalecane u dostawców publicznych (Gmail, home.pl, OVH). Serwery wewnętrzne zwykle nie dodają tych nagłówków i wówczas każda wiadomość zostanie odrzucona')}
     </div>
+    ${advanced ? `<div class="field">
+      <label for="authservId">Nazwa serwera w nagłówku Authentication-Results</label>
+      <input id="authservId" name="authservId" value="${esc(v.authservId)}" placeholder="mx.google.com" maxlength="253">
+      ${hint('Identyfikator serwera (authserv-id, RFC 8601), którym serwer skrzynki podpisuje wynik sprawdzenia SPF i DKIM. Bramka odczytuje pierwszy nagłówek Authentication-Results od góry, czyli ten dopisany przez serwer skrzynki. Gdy pole jest wypełnione, nagłówek musi rozpoczynać się od tej nazwy, inaczej wiadomość jest odrzucana. Puste pole oznacza odczyt pierwszego nagłówka bez sprawdzania nazwy. Przycisk „Sprawdź połączenie” podpowiada nazwę z ostatniej wiadomości w folderze')}
+    </div>` : `<input type="hidden" name="authservId" value="${esc(v.authservId)}">`}
   </details>`;
 }
 
@@ -221,7 +226,7 @@ function sectionAfter(v: MailFormValues, opts: MailFormOptions): string {
       ${checkbox('replyEnabled', v.replyEnabled, 'Odpowiadaj nadawcy wiadomością e-mail')}
       ${opts.smtpConfigured
         ? hint('Nadawca z listy otrzymuje w wątku raport minutę po wysyłce: treść SMS-a, nadpis, czas i status doręczenia przy każdym numerze. Gdy któryś numer jest w drodze, nadawca otrzymuje drugą wiadomość z wynikiem końcowym, najpóźniej po 24 godzinach. Nieudana wysyłka jest zgłaszana od razu z powodem')
-        : '<div class="hint">Nieczynne: SMTP nie jest skonfigurowane. <a href="/powiadomienia">Skonfiguruj SMTP</a>, a bramka zacznie odpowiadać</div>'}
+        : '<div class="hint">Niedostępne: serwer SMTP nie jest skonfigurowany. Po <a href="/powiadomienia">konfiguracji SMTP</a> bramka będzie odpowiadać nadawcom</div>'}
     </div>
   </details>`;
 }
@@ -240,23 +245,26 @@ function sectionSample(v: MailFormValues): string {
         <input name="sampleSubject" value="${esc(v.sampleSubject)}" placeholder="temat" style="flex: 1;">
       </div>
       ${textarea('sampleText', v.sampleText, 4, ' placeholder="treść wiadomości"')}
-      ${hint('Sprawdź szablon pokazuje, czy nadawca jest na liście, kto otrzyma SMS, jakie wartości dały wycinki i jak będzie wyglądał SMS. Niczego nie wysyła ani nie zapisuje')}
+      ${hint('Przycisk „Sprawdź szablon” pokazuje, czy nadawca jest na liście, kto otrzyma SMS, jakie wartości dały wycinki i jak będzie wyglądał SMS. Niczego nie wysyła ani nie zapisuje')}
     </div>
   </details>`;
 }
 
-function connectionPanel(c: MailConnection): string {
+function connectionPanel(c: MailConnection, advanced: boolean): string {
   const folders = c.folders.map((f) => `<button class="btn btn-s" type="button" data-fill="#folder" data-value="${esc(f)}" style="padding: 3px 9px; font-size: 12px;">${esc(f)}</button>`).join(' ');
   if (c.ok) {
     return `<div class="panel" style="max-width: 760px;">
-      <div class="panel-h"><div class="lab">Połączenie działa</div><div class="m dim">nieprzeczytanych: ${esc(c.unseen)}</div></div>
+      <div class="panel-h"><div class="lab">Połączenie nawiązane</div><div class="m dim">nieprzeczytanych: ${esc(c.unseen)}</div></div>
       <div class="kv"><div>Foldery</div><div>${folders || '<span class="dim">brak</span>'}<div class="hint">Kliknięcie nazwy wpisuje ją do pola Folder</div></div></div>
+      <div class="kv"><div>Authentication-Results</div><div>${c.authservId === null ? '<span class="dim">brak nagłówka w ostatniej wiadomości</span>'
+    : advanced ? `<button class="btn btn-s" type="button" data-fill="#authservId" data-value="${esc(c.authservId)}" style="padding: 3px 9px; font-size: 12px;">${esc(c.authservId)}</button><div class="hint">Kliknięcie wpisuje nazwę do pola w sekcji „Kto może wysyłać”</div>`
+      : `<span class="m">${esc(c.authservId)}</span><div class="hint">Pole jest w trybie zaawansowanym</div>`}</div></div>
     </div>`;
   }
-  const titles = { auth: ['Logowanie odrzucone', 'Sprawdź login i hasło. W Gmailu wymagane jest hasło aplikacji, nie hasło do konta; w Google Workspace dostęp IMAP musi być włączony przez administratora'],
+  const titles = { auth: ['Logowanie odrzucone', 'Sprawdź login i hasło. W Gmailu wymagane jest hasło aplikacji, nie hasło do konta. W Google Workspace dostęp IMAP musi być włączony przez administratora'],
     network: ['Serwer nie odpowiada', 'Sprawdź nazwę serwera, port i zabezpieczenie oraz czy z maszyny bramki można nawiązać połączenie z serwerem poczty'],
-    folder: ['Folder nie istnieje', 'Wpisz nazwę folderu dokładnie tak, jak podaje ją serwer; kliknięcie nazwy na liście poniżej wpisuje ją do pola'],
-    other: ['Błąd połączenia', 'Serwer odpowiedział błędem; komunikat poniżej'] } as const;
+    folder: ['Folder nie istnieje', 'Wpisz nazwę folderu dokładnie tak, jak podaje ją serwer. Kliknięcie nazwy na liście poniżej wpisuje ją do pola'],
+    other: ['Błąd połączenia', 'Serwer odpowiedział błędem. Komunikat poniżej'] } as const;
   const [title, advice] = titles[c.kind];
   return `<div class="panel" style="max-width: 760px;">
     <div class="panel-h"><div class="lab">${esc(title)}</div></div>
@@ -273,7 +281,7 @@ function previewPanel(p: MailInPreview): string {
   rows.push(`<div>Nadawca</div><div>${p.senderAllowed ? '<span class="st"><span class="dot dot-ok"></span>Nadawca na liście</span>' : '<span class="st"><span class="dot dot-fail"></span>Nadawca spoza listy: wiadomość zostałaby pominięta</span>'}</div>`);
   rows.push(`<div>Odbiorcy</div><div class="m">${p.recipients.length > 0 ? `${esc(p.recipients.join(', '))} <span class="dim">(${esc(LEVEL_WORDS[p.recipientsLevel])})</span>` : '<span class="fail">brak</span>'}${p.invalid.length > 0 ? `<div class="fail">pominięte nieprawidłowe: ${esc(p.invalid.join(', '))}</div>` : ''}</div>`);
   const fields = Object.entries(p.fields);
-  if (fields.length > 0) rows.push(`<div>Wycinki</div><div class="m">${fields.map(([k, val]) => `${esc(k)}: ${val === '' ? '<span class="dim">pusto</span>' : esc(val)}`).join('<br>')}</div>`);
+  if (fields.length > 0) rows.push(`<div>Wycinki</div><div class="m">${fields.map(([k, val]) => `${esc(k)}: ${val === '' ? '<span class="dim">brak wartości</span>' : esc(val)}`).join('<br>')}</div>`);
   rows.push(`<div>Treść po czyszczeniu</div><div>${p.cleaned === '' ? '<span class="dim">pusta</span>' : `<pre class="m" style="white-space: pre-wrap; margin: 0;">${esc(p.cleaned)}</pre>`}</div>`);
   rows.push(`<div>SMS</div><div>${p.text ? `<div class="ruler" style="padding: 0 0 4px;">${esc(p.text)}</div>` : '<span class="dim">pusty</span>'}</div>`);
   rows.push(`<div>Części</div><div class="m">${esc(p.parts)}</div>`);
@@ -305,7 +313,7 @@ export function mailFormPage(ctx: FormContext, v: MailFormValues, opts: MailForm
     ${opts.note ? `<div class="warn">${esc(opts.note)}</div>` : ''}
     ${opts.error ? `<div class="warn">${esc(opts.error)}</div>` : ''}
     ${guide}
-    ${opts.connection ? connectionPanel(opts.connection) : ''}
+    ${opts.connection ? connectionPanel(opts.connection, opts.mode === 'zaawansowany') : ''}
     ${opts.preview ? previewPanel(opts.preview) : ''}
     <div class="panel" style="max-width: 760px;">
       <form class="form" method="post" action="${action}" autocomplete="off">
@@ -314,7 +322,7 @@ export function mailFormPage(ctx: FormContext, v: MailFormValues, opts: MailForm
         <input type="hidden" name="tryb" value="${opts.mode}">
         ${sectionBasics(ctx, v)}
         ${sectionMailbox(v, opts)}
-        ${sectionSenders(v)}
+        ${sectionSenders(v, opts.mode === 'zaawansowany')}
         ${sectionRecipients(v)}
         ${sectionText(v, opts)}
         ${sectionWhen(v, opts)}

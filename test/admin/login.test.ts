@@ -92,7 +92,7 @@ describe('ochrona przed zgadywaniem', () => {
     for (let i = 0; i < 4; i += 1) {
       const res = await post('/zaloguj/kod', { kod: '000000' }, cookie);
       expect(res.statusCode).toBe(401);
-      expect(res.body).toContain('Kod nie pasuje');
+      expect(res.body).toContain('Kod jest nieprawidłowy');
     }
     const piata = await post('/zaloguj/kod', { kod: '000000' }, cookie);
     expect(piata.statusCode).toBe(401);
@@ -242,7 +242,7 @@ describe('drugi etap', () => {
     h.users.enableTotp(h.userId, SECRET, []);
     const res = await post('/zaloguj/kod', { kod: authenticator.generate(SECRET) }, 'mig_stage=zmyslony-token');
     expect(res.statusCode).toBe(401);
-    expect(res.body).toContain('Zacznij od nowa');
+    expect(res.body).toContain('Zaloguj się ponownie');
   });
 });
 

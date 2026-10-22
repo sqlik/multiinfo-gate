@@ -192,7 +192,7 @@ describe('POST /dostawy/:id/ponow', () => {
     integrations.setEnabled(integrationId, false, NOW);
     await post(id);
     expect(h.deliveries.get(id)!.status).toBe('failed');
-    expect((await page('/odebrane/in_1')).body).toContain('najpierw ją włącz');
+    expect((await page('/odebrane/in_1')).body).toContain('Najpierw należy ją włączyć');
     integrations.setEnabled(integrationId, true, NOW);
     const res = await post(id);
     expect(res.headers.location).toBe('/odebrane/in_1');

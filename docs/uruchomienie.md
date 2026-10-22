@@ -25,8 +25,8 @@ i uruchomienie nadpisów przez Polkomtel, od kilku godzin do kilku dni.
 
 Bramka korzysta z konta Multiinfo jak każda inna aplikacja kliencka. Potrzebuje użytkownika API
 z certyfikatem i identyfikatora usługi. Opcjonalnie potrzebuje także nadpisów nadawcy. Wszystko
-to załatwia się w panelu Multiinfo i z opiekunem technicznym Polkomtela, zanim bramka zostanie
-zainstalowana. Bez podpisanego certyfikatu nie da się sprawdzić połączenia. Obieg certyfikatu
+to ustala się w panelu Multiinfo i z opiekunem technicznym Polkomtel, zanim bramka zostanie
+zainstalowana. Bez podpisanego certyfikatu nie można sprawdzić połączenia. Obieg certyfikatu
 warto więc rozpocząć jako pierwszy.
 
 ### 1.1. Użytkownik API
@@ -45,7 +45,7 @@ Multiinfo uwierzytelnia aplikację certyfikatem klienckim, który wystawia Polko
 wygląda tak:
 
 1. **Pobranie instrukcji.** W panelu bramki, na formularzu dodawania konta Multiinfo, jest
-   odnośnik do archiwum ZIP z instrukcjami Polkomtela (adres:
+   odnośnik do archiwum ZIP z instrukcjami Polkomtel (adres:
    `https://plk-assets.s3.pl-waw.scw.cloud/certyfikaty-multiinfo.zip`). Archiwum zawiera trzy
    równoważne instrukcje generowania certyfikatu. Wystarczy jedna, dobrana do własnego
    środowiska:
@@ -57,12 +57,12 @@ wygląda tak:
 2. **Wygenerowanie certyfikatu.** Zgodnie z wybraną instrukcją generujesz klucz prywatny
    i certyfikat. W polu CN wpisz login użytkownika API z punktu 1.1. W polu adresu e-mail wpisz
    adres, na który Polkomtel ma odesłać podpisany certyfikat.
-3. **Wysłanie do Polkomtela.** Wygenerowany certyfikat wysyłasz pocztą elektroniczną na adres
+3. **Wysłanie do Polkomtel.** Wygenerowany certyfikat wysyłasz pocztą elektroniczną na adres
    podany w instrukcji. Polkomtel podpisuje go swoim urzędem certyfikacji i odsyła na adres
    e-mail wpisany w certyfikacie.
 4. **Utworzenie pliku `.p12` / `.pfx`.** Po otrzymaniu podpisanego certyfikatu łączysz go
-   z kluczem prywatnym w jeden plik chroniony hasłem. Jak to zrobić, mówi dalsza część tej samej
-   instrukcji. Instrukcje Polkomtela kończą się plikiem z rozszerzeniem `.p12`. Jest to ten sam
+   z kluczem prywatnym w jeden plik chroniony hasłem. Sposób opisuje dalsza część tej samej
+   instrukcji. Instrukcje Polkomtel kończą się plikiem z rozszerzeniem `.p12`. Jest to ten sam
    format co `.pfx` (PKCS#12). Różni się wyłącznie rozszerzeniem, więc żadna konwersja nie jest
    potrzebna. Bramka przyjmuje plik z obydwoma rozszerzeniami. Ten plik i hasło do niego
    wgrywasz do bramki (rozdział 4.2). Bramka odczytuje z pliku podmiot (CN), wystawcę, odcisk
@@ -92,8 +92,8 @@ Wymiana przebiega tym samym obiegiem (rozdział 7).
 ### 1.3. Identyfikator usługi
 
 Każda wysyłka jest przypisana do usługi (`serviceId`). Jest to liczba nadana przez Polkomtel.
-Identyfikator usługi odczytasz w panelu Multiinfo albo dostaniesz od opiekuna technicznego
-Polkomtela. Jedno konto może mieć kilka usług. Bramka pozwala wpisać wszystkie i ogranicza każdy
+Identyfikator usługi odczytasz w panelu Multiinfo albo otrzymasz od opiekuna technicznego
+Polkomtel. Jedno konto może mieć kilka usług. Bramka pozwala wpisać wszystkie i ogranicza każdy
 klucz API do wybranych. Wysyłka z nieznanym identyfikatorem kończy się kodem `-24`.
 
 ### 1.4. Nadpisy nadawcy
@@ -101,7 +101,7 @@ klucz API do wybranych. Wysyłka z nieznanym identyfikatorem kończy się kodem 
 Nadpis nadawcy to tekst wyświetlany na telefonie odbiorcy w miejscu numeru, na przykład
 `Firma Info`. Nadpis jest opcjonalny. Wiadomość wysłana bez nadpisu ma jako nadawcę numer
 przydzielony do konta w Multiinfo, w postaci `486610xxxxx`. Taki numer jest w standardzie
-każdego planu Multiinfo, więc masz go od początku. Nadpis to usługa dodatkowa o nazwie
+każdego planu Multiinfo, więc jest dostępny od początku. Nadpis to usługa dodatkowa o nazwie
 **Dynamiczny Nadpis**. Polkomtel włącza ją na wniosek, opisany niżej. Bramka obsługuje oba
 przypadki. Pole `orig` w żądaniu można pominąć, a konto i klucz mogą nie mieć nadpisu
 domyślnego. Bramka nie przekazuje wtedy parametru `orig` do Multiinfo.
@@ -130,16 +130,16 @@ do Multiinfo.
 ### 1.5. Adres API: `api1` czy `api2`
 
 Konta Multiinfo są obsługiwane pod jednym z dwóch adresów: `https://api1.multiinfo.plus.pl/Api61/`
-albo `https://api2.multiinfo.plus.pl/Api61/`. Który dotyczy Twojego konta, mówi umowa albo
+albo `https://api2.multiinfo.plus.pl/Api61/`. Właściwy adres wskazuje umowa albo
 opiekun techniczny. Adres wpisujesz w bramce jako adres bazowy konta (rozdział 4.2).
 
 ### 1.6. Wiadomości przychodzące
 
 Każde konto Multiinfo ma numer (krótki albo długi), na który abonenci mogą odpisywać. Domyślnie
-odebrane SMS-y są widoczne wyłącznie w panelu WWW Multiinfo. Jeżeli aplikacja ma je dostawać
+odebrane SMS-y są widoczne wyłącznie w panelu WWW Multiinfo. Jeżeli aplikacja ma je otrzymywać
 przez bramkę, administrator Polkomtel musi ustawić na koncie kierowanie odebranych wiadomości do
 API. Może skierować wszystkie wiadomości albo tylko te zaczynające się od określonego prefiksu.
-Bez tego ustawienia bramka pyta Multiinfo i zawsze dostaje pustą odpowiedź. Jak bramka odbiera
+Bez tego ustawienia bramka odpytuje Multiinfo i zawsze otrzymuje pustą odpowiedź. Jak bramka odbiera
 i przekazuje wiadomości, opisują punkt 4.5 (włączenie przy kluczu) i punkt 5.5 (pierwsza próba).
 
 Polskie znaki w odebranych wiadomościach zależą od tego, jak telefon nadawcy zakodował SMS-a.
@@ -166,7 +166,7 @@ do bramki. To bramka odczytuje i pokazuje potrzebne wartości.
 ## 2. Serwer
 
 Jeżeli zamiast serwera z Dockerem masz własny Proxmox VE, przejdź do rozdziału 9. Rozdziały 2
-i 3 Ciebie nie dotyczą.
+i 3 nie mają wtedy zastosowania.
 
 ### 2.1. Wymagania
 
@@ -202,7 +202,7 @@ sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
 Oczekiwany wynik: instalacja kończy się bez komunikatu o błędzie, a `sudo docker --version`
 wypisuje `Docker version 2x.x.x`. Dokładny numer zależy od wersji pakietu w Ubuntu.
 
-Domyślnie polecenia `docker` może wydawać tylko administrator. Żeby nie poprzedzać każdego
+Domyślnie polecenia `docker` może wydawać tylko administrator. Aby nie poprzedzać każdego
 polecenia słowem `sudo`, dodaj swojego użytkownika do grupy `docker`:
 
 ```bash
@@ -238,7 +238,7 @@ Gdy wynik jest inny:
 - `docker: command not found` - instalacja pakietów nie doszła do końca. Powtórz
   `sudo apt install -y docker.io docker-compose-v2 git` i przeczytaj komunikat błędu.
   Najczęściej brakuje połączenia z internetem albo `apt` jest zablokowany przez inny proces
-  aktualizacji, który trzeba odczekać
+  aktualizacji, na którego zakończenie należy poczekać
 
 ## 3. Instalacja bramki
 
@@ -258,7 +258,7 @@ cd multiinfo-gate/docker
 Po wykonaniu poleceń pliki leżą w katalogu `~/multiinfo-gate`. Bieżącym katalogiem jest
 `~/multiinfo-gate/docker`. Stąd wydaje się wszystkie polecenia `docker compose`.
 
-Kto woli uruchomić obraz zbudowany z kodu, który ma przed sobą (na przykład po własnych
+Kto woli uruchomić obraz zbudowany z lokalnego kodu (na przykład po własnych
 zmianach), dopisuje w `docker/.env` wiersz `COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml`.
 Zamiast `docker compose up -d` używa potem w dalszych krokach `docker compose up -d --build`.
 Budowanie trwa od dwóch do czterech minut.
@@ -269,8 +269,8 @@ Bramka szyfruje wszystkie sekrety w swojej bazie danych: hasła do Multiinfo, kl
 certyfikatów, sekrety drugiego składnika, skróty kluczy API. Używa do tego jednego klucza
 głównego, którego w bazie nie ma. Wynikają z tego trzy konsekwencje:
 
-- utrata klucza głównego oznacza, że bazy nie da się odczytać. Wszystkie konta, certyfikaty
-  i klucze API trzeba wtedy wpisać od nowa
+- utrata klucza głównego oznacza, że bazy nie można odczytać. Wszystkie konta, certyfikaty
+  i klucze API należy wtedy wpisać ponownie
 - zmiana klucza głównego przy istniejącej bazie sprawia, że bramka odmawia startu
 - kopia bazy razem z kluczem głównym jest równoważna kopii bez szyfrowania. Klucz przechowuje
   się osobno od kopii, na przykład w menedżerze haseł. Nigdy w repozytorium ani w tym samym
@@ -303,7 +303,7 @@ docker compose up -d
 ```
 
 Polecenie pobiera obraz bramki (około minuty) i uruchamia ją w tle. Bez dodatkowych ustawień
-pobiera najnowszy obraz z serii `1`. Wersję da się przypiąć zmienną `MIG_WERSJA` w `docker/.env`
+pobiera najnowszy obraz z serii `1`. Wersję można przypiąć zmienną `MIG_WERSJA` w `docker/.env`
 (rozdział 7.4). Sprawdzenie:
 
 ```bash
@@ -351,9 +351,9 @@ włączenie drugiego składnika przy pierwszym wejściu. Pokazuje wtedy dziesię
 zapasowych, wyłącznie ten jeden raz. Kody zapasowe zastępują aplikację, gdy telefon jest
 niedostępny. Przechowuj je w menedżerze haseł albo w wydruku poza serwerem.
 
-Panel ogranicza zgadywanie. Pięć błędnych kodów z rzędu unieważnia trwające logowanie: panel
+Panel ogranicza próby zgadywania. Pięć błędnych kodów z rzędu unieważnia trwające logowanie: panel
 wraca do ekranu hasła i wymaga podania go ponownie. Dziesięć nieudanych prób (hasła albo kodu)
-z jednego adresu w ciągu kwadransa blokuje ten adres na kwadrans od ostatniej próby. Panel
+z jednego adresu w ciągu 15 minut blokuje ten adres na 15 minut od ostatniej próby. Panel
 odpowiada wtedy komunikatem o zbyt wielu próbach (kod 429), także na poprawne hasło. Obie
 sytuacje trafiają do dziennika zdarzeń jako `drugi_skladnik_zablokowany`
 i `logowanie_zablokowane`.
@@ -423,7 +423,7 @@ w edycji użytkownika API, w zakładce Uwierzytelnianie (punkt 1.2, krok 5). Je�
 od loginu konta, karta pokazuje ostrzeżenie. Oznacza to, że certyfikat został wygenerowany
 z innym CN i trzeba go wystawić ponownie.
 
-Konto nie pobiera z Multiinfo listy nadpisów nadawcy, bo Multiinfo takiej listy przez API nie
+Konto nie pobiera z Multiinfo listy nadpisów nadawcy, ponieważ Multiinfo takiej listy przez API nie
 udostępnia. Nadpisy wpisujesz ręcznie, na liście kont, według punktu 4.4. Komunikat po zapisaniu
 konta o tym przypomina.
 
@@ -435,13 +435,13 @@ certyfikat i hasło, a odrzuciło jedynie treść zapytania. Inne kody:
 
 | Kod | Znaczenie | Postępowanie |
 |---|---|---|
-| `-1` | złe hasło użytkownika API | poprawić hasło na karcie konta |
+| `-1` | nieprawidłowe hasło użytkownika API | poprawić hasło na karcie konta |
 | `-80` | certyfikat nie został przedstawiony | plik `.pfx` nie został wgrany albo jest uszkodzony; wgrać ponownie |
 | `-81` do `-84`, `-86` | certyfikat nierozpoznany przez Multiinfo | dane z zakładki Uwierzytelnianie w panelu Multiinfo nie zostały jeszcze wpisane albo różnią się od odczytanych przez bramkę |
-| `-85` | CN certyfikatu nie zgadza się z loginem | wystawić certyfikat z CN równym loginowi |
+| `-85` | CN certyfikatu nie jest zgodne z loginem | wystawić certyfikat z CN równym loginowi |
 
 Sprawdzenie wysyła jeszcze drugie zapytanie, na stronę diagnostyczną Multiinfo `test.aspx`.
-Strona odpowiada tym, co serwer Polkomtela odczytał z przedstawionego certyfikatu: podmiotem,
+Strona odpowiada tym, co serwer Polkomtel odczytał z przedstawionego certyfikatu: podmiotem,
 wystawcą i datą ważności. Karta pokazuje te dane pod wynikiem sprawdzenia jako **Certyfikat
 widziany przez Multiinfo** i porównuje CN z loginem konta. Różnica między tym, co bramka
 odczytała z pliku `.pfx` (punkt 4.2), a tym, co widzi Multiinfo, wskazuje przyczynę kodów `-80`
@@ -457,19 +457,19 @@ zamaskowanym.
 ### 4.4. Nadpisy dozwolone dla konta
 
 Listę nadpisów, z których wolno korzystać przy wysyłce z danego konta, prowadzisz w bramce
-ręcznie. Powód jest prosty. Multiinfo nie udostępnia przez API listy nadpisów uruchomionych dla
-użytkownika API. Bramka nie ma więc skąd jej pobrać ani jak sprawdzić, czy podany w żądaniu
+ręcznie. Multiinfo nie udostępnia przez API listy nadpisów uruchomionych dla
+użytkownika API. Bramka nie może więc jej pobrać ani jak sprawdzić, czy podany w żądaniu
 nadpis jest uruchomiony. Dowiedziałaby się o tym dopiero z odmowy `-14` przy wysyłce, a wiadomość
 byłaby już stracona. Zamiast tego administrator bramki przepisuje do niej nadpisy widoczne
 w panelu Multiinfo w edycji użytkownika API, w zakładce Nadpisy (punkt 1.4). Żądanie z nadpisem
 spoza tej listy bramka odrzuca kodem `403 orig_not_allowed`, zanim trafi ono do Multiinfo,
-z jasnym komunikatem dla aplikacji.
+z czytelnym komunikatem dla aplikacji.
 
 Na liście kont, pod tabelą kont, przy każdym koncie jest formularz **Nadpisy dozwolone dla
 konta, jeden w wierszu** oraz pole wartości domyślnej konta. Wpisuj wyłącznie nadpisy
 uruchomione przez Polkomtel i przypisane do tego użytkownika API. Nadpis wpisany na listę, ale
 nieuruchomiony przez Polkomtel, przejdzie przez bramkę i zostanie odrzucony przez Multiinfo
-kodem `-14`. Wiadomość dostanie wtedy stan `failed` z tym kodem. Po uruchomieniu kolejnego
+kodem `-14`. Wiadomość otrzyma wtedy stan `failed` z tym kodem. Po uruchomieniu kolejnego
 nadpisu przez Polkomtel dopisz go tutaj. Inaczej bramka będzie go odrzucać.
 
 Wartość domyślna konta jest używana, gdy żądanie nie podaje pola `orig`, a klucz API nie ma
@@ -490,16 +490,16 @@ wiadomości (1-9), limit żądań na minutę i datę ważności. Pozwala też po
 aplikacja ma otrzymywać powiadomienia o doręczeniu (opis w `docs/api.md`, rozdział 6).
 
 Pole **Odbiera wiadomości przychodzące** włącza dla klucza odbiór SMS-ów od abonentów. Bramka
-zaczyna wtedy pytać Multiinfo o wiadomości z usług klucza i przekazuje każdą powiadomieniem
+zaczyna wtedy odpytywać Multiinfo o wiadomości z usług klucza i przekazuje każdą powiadomieniem
 `message.received` na adres webhooka. Pole wymaga adresu webhooka. Kilka kluczy z dostępem do tej
 samej usługi może odbierać naraz. Gdy ostatni odbierający klucz zostanie odwołany, wygaśnie albo
-straci zaznaczenie, bramka przestaje pytać o tę usługę.
+straci zaznaczenie, bramka przestaje odpytywać o tę usługę.
 
-Stan odbioru widać na karcie konta w sekcji „Odbiór wiadomości”: czy jest aktywny, kiedy bramka
-ostatnio pytała i kiedy ostatnio coś przyszło. Usługa zatrzymana błędem Multiinfo (na przykład
-nieaktywna) pokazuje przyczynę. Bramka sama ponawia pytanie co kwadrans. Gdy administrator
-Polkomtel aktywuje usługę, odbiór rusza bez ingerencji. Zapis klucza albo tego konta w panelu
-ponawia pytanie od razu.
+Stan odbioru widać na karcie konta w sekcji „Odbiór wiadomości”: czy jest aktywny, czas ostatniego
+odpytania i ostatniej odebranej wiadomości. Usługa zatrzymana błędem Multiinfo (na przykład
+nieaktywna) pokazuje przyczynę. Bramka ponawia odpytanie co 15 minut. Gdy administrator
+Polkomtel aktywuje usługę, odbiór wznawia się bez ingerencji. Zapis klucza albo tego konta w panelu
+wymusza natychmiastowe odpytanie.
 
 ![Karta konta, sekcja Odbiór wiadomości: usługa z odbierającym kluczem, stan aktywny z czasem ostatniego pytania i ostatniej odebranej](obrazki/konto-odbior.png)
 
@@ -520,8 +520,8 @@ adresu webhooka.
 
 ### 4.6. Użytkownicy panelu
 
-Kolejne osoby dostają konta z ekranu **Użytkownicy → Dodaj użytkownika**. Formularz przyjmuje
-login i hasło startowe. Hasło przekazujesz tej osobie bezpośrednio, bo panel nie wyświetla go
+Kolejne konta zakłada się na ekranie **Użytkownicy → Dodaj użytkownika**. Formularz przyjmuje
+login i hasło startowe. Hasło przekazujesz tej osobie bezpośrednio, ponieważ panel nie wyświetla go
 ponownie. Przy pierwszym logowaniu panel wymusza włączenie drugiego składnika, tak jak dla
 pierwszego konta.
 
@@ -530,36 +530,37 @@ pierwszego konta.
 Na liście użytkowników są akcje:
 
 - **Reset 2FA** - usuwa drugi składnik i kody zapasowe danego użytkownika. Przy następnym
-  logowaniu panel zażąda włączenia drugiego składnika od nowa. Przydaje się po utracie telefonu
+  logowaniu panel zażąda ponownego włączenia drugiego składnika. Akcja służy do obsługi utraty telefonu
 - **Usuń** - usuwa konto i natychmiast zamyka jego otwarte sesje. Ostatniego konta nie można
   usunąć
 - **Zmień hasło** (odnośnik w prawym górnym rogu) - zmiana hasła własnego konta. Po zapisaniu
-  pozostałe sesje tego konta zostają zamknięte, bieżąca pozostaje
+  pozostałe sesje tego konta zostają zamknięte, bieżąca pozostaje aktywna
 
 Panel nie ma ról. Każdy użytkownik ma pełne uprawnienia. Pierwsze konto zakłada się zawsze
 poleceniem z rozdziału 3.4, kolejne z tego ekranu.
 
 ### 4.7. Integracje i powiadomienia
 
-Ekran **Integracje** służy aplikacjom, których formatu nie da się zmienić. To monitoring
+Ekran **Integracje** służy aplikacjom, których formatu nie można zmienić. To monitoring
 (Uptime Kuma, Grafana, Zabbix), helpdesk (FreeScout, Freshdesk), automatyzacje (n8n, Make,
 Zapier) oraz powiadomienia push przez ntfy. Integracja „do SMS” daje aplikacji adres wejściowy
 `POST /hooks/<identyfikator>` na porcie API i tłumaczy jej ładunek na SMS według szablonu.
 Integracja „z SMS-a” wysyła odebrane SMS-y i statusy na adres aplikacji w jej formacie.
 Integracja „Mail2SMS” odczytuje skrzynkę pocztową przez IMAP i zamienia wiadomości od dozwolonych
 nadawców na SMS-y. Wymaga wyłącznie połączenia wychodzącego z maszyny bramki do serwera poczty
-na porcie 993 (albo 143); w Dockerze ani w Traefiku nie trzeba otwierać żadnego portu. Integracja działa
+na porcie 993 (albo 143). W Dockerze ani w Traefiku nie trzeba otwierać żadnego portu. Serwer
+poczty w sieci wewnętrznej wymaga `MIG_MAIL_ALLOW_PRIVATE=1` (rozdział 7.7). Integracja działa
 w imieniu klucza API z rozdziału 4.5. Załóż go najpierw.
 
 ![Lista integracji z kierunkiem, ustawieniem, kluczem, stanem i licznikami z ostatniej doby](obrazki/integracje.png)
 
 Dodanie integracji to wybór kierunku, wybór gotowego ustawienia (kafelek z nazwą aplikacji)
 i formularz w **trybie prostym**. W formularzu podajesz numery telefonów, wybierasz z list
-przygotowanych dla tej aplikacji, kiedy wysyłać SMS i co ma w nim być, a hasło generujesz
+przygotowanych dla tej aplikacji, kiedy wysyłać SMS i jaka ma być jego treść, a hasło generujesz
 przyciskiem **Wygeneruj**. Po zapisaniu panel pokazuje pełny adres do wklejenia w aplikacji.
 Obok jest zdanie, w którym polu go wkleić, oraz instrukcja krok po kroku. Przełącznik **Zaawansowany** nad
-formularzem odsłania pola silnika (ścieżki w ładunku, szablony, reguły) dla tych, którzy chcą
-więcej. Ustawienie „Własne” otwiera je od razu. Aplikacja w sieci lokalnej jako cel integracji
+formularzem odsłania pola silnika (ścieżki w ładunku, szablony, reguły) dla zaawansowanych
+zastosowań. Ustawienie „Własne” otwiera je natychmiast. Aplikacja w sieci lokalnej jako cel integracji
 „z SMS-a” wymaga `MIG_WEBHOOK_ALLOW_PRIVATE=1` w środowisku bramki (rozdział 7.7), tak samo jak
 adres webhooka klucza.
 
@@ -653,28 +654,28 @@ uruchomienia jest w `examples/php/README.md`.
 
 Po ustawieniu kierowania do API w Multiinfo (punkt 1.6) i zaznaczeniu odbioru przy kluczu
 (punkt 4.5) wyślij z telefonu SMS-a na numer usługi. W ciągu kilku sekund wiadomość pojawi się
-w panelu w zakładce **Odebrane** (ekran poniżej), a aplikacja dostanie powiadomienie
-`message.received`. Szczegóły wiadomości pokazują, do których kluczy poszło powiadomienie
+w panelu w zakładce **Odebrane** (ekran poniżej), a aplikacja otrzyma powiadomienie
+`message.received`. Szczegóły wiadomości pokazują, do których kluczy zostało wysłane powiadomienie
 i z jakim skutkiem.
 
 Jeżeli lista pozostaje pusta, sprawdź na karcie konta sekcję „Odbiór wiadomości”. Stan
 „nieaktywny” oznacza brak odbierającego klucza. Stan „zatrzymany” podaje kod błędu Multiinfo.
-Stan „aktywny” z bieżącym czasem pytania oznacza, że bramka pyta, ale Multiinfo nic nie wydaje.
-Wtedy wiadomości najpewniej trafiają do panelu WWW Multiinfo zamiast do API.
+Stan „aktywny” z bieżącym czasem pytania oznacza, że bramka odpytuje, ale Multiinfo nie zwraca wiadomości.
+Wtedy wiadomości prawdopodobnie trafiają do panelu WWW Multiinfo zamiast do API.
 
 ![Zakładka Odebrane z trzema wiadomościami od abonentów, jedna powiązana z wysłaną wiadomością](obrazki/odebrane.png)
 
 Szczegóły odebranej wiadomości (odnośnik w kolumnie identyfikatora) pokazują dane z Multiinfo:
 numer nadawcy, numer usługi, identyfikator w Multiinfo, protokół. Pokazuje też ostatnią
-wiadomość wysłaną do nadawcy w ciągu 48 godzin. To podpowiedź kontekstu, bo Multiinfo nie mówi,
-na co abonent odpowiada. Dalej są odpowiedzi wysłane w wątku oraz ślad dostaw do aplikacji:
-który klucz dostał powiadomienie, ile było prób i jaka była odpowiedź aplikacji.
+wiadomość wysłaną do nadawcy w ciągu 48 godzin. To podpowiedź kontekstu, ponieważ Multiinfo nie przekazuje informacji,
+na którą wiadomość abonent odpowiada. Dalej są odpowiedzi wysłane w wątku oraz ślad dostaw do aplikacji:
+który klucz otrzymał powiadomienie, ile było prób i jaka była odpowiedź aplikacji.
 
 Dostawę nieudaną (aplikacja odpowiedziała `4xx` albo wyczerpała ponowienia) można ponowić
 przyciskiem „Ponów” w tym samym wierszu. Wraca ona do kolejki jak nowa, z podpisem bieżącym
 sekretem klucza. Ten sam przycisk jest w szczególe wiadomości wysłanej, w sekcji „Dostawy do
 aplikacji”. Wyjątkiem jest konto bez przechowywania treści. Po zakończeniu dostawy bramka nie ma
-już treści SMS-a, więc zamiast przycisku jest podpis, a aplikacja dociąga wiadomość przez
+już treści SMS-a, więc zamiast przycisku jest podpis, a aplikacja pobiera wiadomość przez
 `GET /v1/inbound`.
 
 ![Szczegóły odebranej wiadomości: treść, dane, powiązana wysłana wiadomość i dostawa do aplikacji ze stanem doręczony](obrazki/odebrana.png)
@@ -687,7 +688,7 @@ odebranej.
 ## 6. Wystawienie API pod własną domeną
 
 Ten rozdział dotyczy sytuacji, w której aplikacja kliencka działa poza serwerem bramki. Może to
-być agencja obsługująca wysyłki albo system hostowany u innego dostawcy. Aplikacja dostaje klucz
+być agencja obsługująca wysyłki albo system hostowany u innego dostawcy. Aplikacja otrzymuje klucz
 API i łączy się z bramką przez internet. Panel pozostaje dostępny wyłącznie przez tunel SSH. Na
 zewnątrz wystawia się tylko API.
 
@@ -780,11 +781,11 @@ Typowe przyczyny: domena nie wskazuje jeszcze na serwer (sprawdź `dig` z rozdzi
 w `MIG_DOMENA`.
 
 Adres klienta w dzienniku integracji wymaga jeszcze jednego kroku. Caddy dopisuje nagłówek
-`X-Forwarded-For`, ale bramka wierzy mu tylko od adresów z `MIG_TRUSTED_PROXIES`. Kontener
+`X-Forwarded-For`, ale bramka ufa mu tylko od adresów z `MIG_TRUSTED_PROXIES`. Kontener
 Caddy ma adres z sieci Dockera. W `docker/.env` dopisz więc `MIG_TRUSTED_PROXIES=172.16.0.0/12`
 (zakres, z którego Docker przydziela adresy swoim sieciom) i wykonaj `docker compose up -d`.
 Bez tego dziennik integracji pokazuje adres Caddy zamiast adresu aplikacji, a lista dozwolonych
-źródeł nie przepuści nikogo.
+źródeł odrzuca wszystkie żądania.
 
 ### 6.6. Wariant B: nginx na serwerze
 
@@ -803,7 +804,7 @@ sudo nginx -t && sudo systemctl reload nginx
 sudo certbot --nginx -d twoja.domena.pl
 ```
 
-Polecenia robią kolejno: instalują nginx i certbota, kopiują plik konfiguracji, wpisują domenę
+Polecenia wykonują kolejno: instalują nginx i certbota, kopiują plik konfiguracji, wpisują domenę
 w miejsce `<TWOJA-DOMENA>`, włączają konfigurację, sprawdzają składnię (`nginx -t`)
 i przeładowują nginx, uzyskują certyfikat. Certbot pyta o adres e-mail (na powiadomienia
 o wygasaniu certyfikatu) i o zgodę na warunki usługi. Potem sam dopisuje obsługę HTTPS do pliku
@@ -860,15 +861,15 @@ Sprawdzenie jak w wariancie A: `curl https://<TWOJA-DOMENA>/healthz` odpowiada
 Gdy nie działa:
 
 - `network <nazwa> declared as external, but could not be found` przy `docker compose up` -
-  zła nazwa sieci w `MIG_TRAEFIK_SIEC`. Listę sieci daje `docker network ls`
-- `404 page not found` z Traefika - trasa nie powstała. Najczęściej przez zły punkt wejścia albo
+  nieprawidłowa nazwa sieci w `MIG_TRAEFIK_SIEC`. Listę sieci daje `docker network ls`
+- `404 page not found` z Traefika - trasa nie powstała. Najczęściej przez nieprawidłowy punkt wejścia albo
   domenę, którą Traefik obsługuje już dla innego kontenera
-- ostrzeżenie o certyfikacie w przeglądarce (certyfikat `TRAEFIK DEFAULT CERT`) - zła nazwa
+- ostrzeżenie o certyfikacie w przeglądarce (certyfikat `TRAEFIK DEFAULT CERT`) - nieprawidłowa nazwa
   resolvera albo port 80 zamknięty
 
 W każdym z tych przypadków przyczynę podaje dziennik Traefika:
 `docker logs <kontener-traefika> --tail 30`. Porty `127.0.0.1:8080` i `:8081`
-z `docker-compose.yml` pozostają na pętli zwrotnej hosta. Traefik dochodzi do bramki przez
+z `docker-compose.yml` pozostają na pętli zwrotnej hosta. Traefik łączy się z bramką przez
 wspólną sieć, nie przez nie.
 
 Sieć Traefika jest wspólna dla wszystkich obsługiwanych przez niego kontenerów. Dlatego w tym
@@ -895,9 +896,9 @@ Aplikacja (albo obsługująca ją agencja) potrzebuje:
 Czego nie udostępniaj: dostępu do panelu (port 8081), portu 8080, konta w panelu bramki.
 
 Limit żądań na minutę ustawiony przy kluczu zabezpiecza przed błędem w cudzej aplikacji, na
-przykład wysyłką w pętli. Odwołanie klucza w panelu odcina aplikację natychmiast, bez restartu
+przykład wysyłką w pętli. Odwołanie klucza w panelu blokuje aplikację natychmiast, bez restartu
 bramki. Limity klucza bramka liczy na klucz, nie na adres nadawcy, więc proxy nie wpływa na ich
-działanie. Adres klienta z nagłówka `X-Forwarded-For` bramka bierze wyłącznie od proxy
+działanie. Adres klienta z nagłówka `X-Forwarded-For` bramka przyjmuje wyłącznie od proxy
 wymienionych w `MIG_TRUSTED_PROXIES` (uwagi przy wariantach wyżej i rozdział 7.7). Ma to
 znaczenie dla listy dozwolonych źródeł i dziennika integracji (rozdział 3.2 w [Integracjach
 z aplikacjami](integracje.md)).
@@ -933,7 +934,7 @@ docker compose start
 ```
 
 `<SCIEZKA-WOLUMENU>` to wynik `docker volume inspect` z punktu 7.1. Pliki `-wal` i `-shm` to
-dziennik transakcji SQLite należący do poprzedniej bazy. Po podmianie pliku muszą zniknąć.
+dziennik transakcji SQLite należący do poprzedniej bazy. Po zastąpieniu pliku muszą zostać usunięte.
 
 ### 7.3. Dziennik
 
@@ -958,7 +959,7 @@ zawiera treści wiadomości, haseł ani pełnych kluczy. Zdarzenia warte uwagi:
 | `odbior.start`, `odbior.stop` | bramka zaczęła albo przestała pytać Multiinfo o wiadomości z usługi (zmiana subskrypcji przy kluczach) |
 | `odbior.wiadomosc`, `odbior.duplikat` | odebrano wiadomość od abonenta; duplikat to ta sama wiadomość wydana przez Multiinfo ponownie, pominięta |
 | `odbior.blad` | błąd sieci albo Multiinfo przy pytaniu o wiadomości; bramka ponowi z rosnącym odstępem |
-| `odbior.zatrzymany`, `odbior.nadal_zatrzymany` | Multiinfo odrzuciło pytanie kodem `-23` albo `-24` (usługa nieznana albo nieaktywna); bramka ponawia co kwadrans (kolejne odmowy jako `nadal_zatrzymany` na poziomie `info`) i od razu po zapisie klucza albo tego konta w panelu |
+| `odbior.zatrzymany`, `odbior.nadal_zatrzymany` | Multiinfo odrzuciło zapytanie kodem `-23` albo `-24` (usługa nieznana albo nieaktywna); bramka ponawia co kwadrans (kolejne odmowy jako `nadal_zatrzymany` na poziomie `info`) i od razu po zapisie klucza albo tego konta w panelu |
 | `odbior.potwierdzenie_nieudane`, `odbior.wyjatek` | wiadomość zapisana, ale nie potwierdzona w Multiinfo (wróci i zostanie pominięta jako duplikat) albo błąd wewnętrzny przy odbiorze (wiadomość wróci z Multiinfo po kilku minutach; bramka pyta dalej z rosnącym odstępem) |
 | `odbior.data_nieczytelna` | Multiinfo podało datę odbioru w nieoczekiwanej postaci; wiadomość jest zapisana z czasem zapisu w bramce zamiast czasu odbioru |
 | `kopia.zapisana`, `kopia.blad` | wynik nocnej kopii; brak `kopia.zapisana` przez dwie doby oznacza, że proces nie działa albo nie ma prawa zapisu do wolumenu |
@@ -972,29 +973,29 @@ niezgodnych wstecz, druga przy nowych możliwościach, trzecia przy poprawkach. 
 wersji pokazuje maszt panelu oraz `/healthz` na porcie panelu. Lista wydań z opisem zmian jest
 pod adresem `https://github.com/sqlik/multiinfo-gate/releases`.
 
-O nowym wydaniu nie trzeba pamiętać samemu. Bramka raz na dobę pyta GitHub o najnowsze wydanie
+O nowym wydaniu bramka informuje sama. Raz na dobę odpytuje serwis GitHub o najnowsze wydanie
 i porównuje je z zainstalowanym. Gdy jest nowsze, na ekranie przeglądu pojawia się pasek
 z numerem, datą, odnośnikiem „Co nowego” i odnośnikami do instrukcji aktualizacji. W maszcie,
 obok bieżącego numeru, widać wtedy znacznik nowego wydania na każdym ekranie. Przycisk
-**Przypomnij przy następnym wydaniu** chowa pasek dla tego numeru. Wraca on dopiero przy
-kolejnym wydaniu. Administrator dostaje też mail, jeden na wydanie, według reguły „Nowe wydanie
+**Przypomnij przy następnym wydaniu** ukrywa pasek dla tego numeru. Wraca on dopiero przy
+kolejnym wydaniu. Administrator otrzymuje też mail, jeden na wydanie, według reguły „Nowe wydanie
 bramki” na ekranie Powiadomienia (rozdział 9.2 w [Integracjach z aplikacjami](integracje.md)).
 Bez ustawionego SMTP zostaje sam pasek.
 
 ![Ekran przeglądu z paskiem o nowym wydaniu: numer, data, odnośniki Co nowego i do instrukcji, przycisk odłożenia](obrazki/przeglad-wydanie.png)
 
-Do GitHuba idzie wyłącznie to jedno zapytanie, bez żadnych danych o instalacji. Bramka
+Do serwisu GitHub wysyłane jest wyłącznie to jedno zapytanie, bez żadnych danych o instalacji. Bramka
 sprawdza tylko wydania stabilne. Brak dostępu do internetu nie jest błędem: bramka próbuje
 ponownie po godzinie, a w dzienniku zostaje wpis na poziomie `info`. Sprawdzanie wyłącza
-zmienna `MIG_UPDATE_CHECK=0` w `docker/.env` (rozdział 7.7), na przykład w sieci bez wyjścia
-na świat.
+zmienna `MIG_UPDATE_CHECK=0` w `docker/.env` (rozdział 7.7), na przykład w sieci bez dostępu
+do internetu.
 
 Obraz jest oznaczony trzema tagami: `1.2.3` (dokładnie ta wersja), `1.2` (najnowsza poprawka
 tej serii) i `1` (najnowsze wydanie zgodne wstecz). Zmienna `MIG_WERSJA` w `docker/.env` wybiera,
 który z nich śledzi bramka. Domyślnie jest to `1`, czyli każda aktualizacja w obrębie pierwszej
 liczby.
 
-Przed aktualizacją zrób kopię bazy. Migracje schematu bazy uruchamiają się same przy starcie
+Przed aktualizacją wykonaj kopię bazy. Migracje schematu bazy uruchamiają się same przy starcie
 nowej wersji.
 
 ```bash
@@ -1005,7 +1006,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Polecenia robią kolejno: kopię bazy, pobranie nowych plików uruchomieniowych i dokumentacji,
+Polecenia wykonują kolejno: kopię bazy, pobranie nowych plików uruchomieniowych i dokumentacji,
 pobranie nowego obrazu, uruchomienie. Oczekiwany wynik: `curl http://127.0.0.1:8080/healthz`
 odpowiada `{"status":"ok"}`, a `curl http://127.0.0.1:8081/healthz` pokazuje w polu `version`
 nowy numer.
@@ -1020,7 +1021,7 @@ i ponowne budowanie.
 ### 7.5. Certyfikat Multiinfo
 
 Panel ostrzega na ekranie przeglądu 30 dni przed upływem ważności certyfikatu konta. Wymiana
-przebiega obiegiem z punktu 1.2. Generujesz nowy certyfikat według instrukcji Polkomtela, z tym
+przebiega obiegiem z punktu 1.2. Generujesz nowy certyfikat według instrukcji Polkomtel, z tym
 samym CN. Wysyłasz go do podpisu i tworzysz plik `.p12`/`.pfx`. Wgrywasz go na karcie konta
 w sekcji **Wymiana certyfikatu**. Wpisujesz nowe dane w zakładce Uwierzytelnianie w panelu
 Multiinfo. Na koniec sprawdzasz połączenie.
@@ -1028,7 +1029,7 @@ Multiinfo. Na koniec sprawdzasz połączenie.
 Gdy Multiinfo odrzuci certyfikat (kody `-80` do `-86`), bramka **wstrzymuje konto**. Wiadomości
 pozostają w kolejce i nie są ponawiane w pętli. Ekran przeglądu i karta konta pokazują powód.
 Wstrzymanie znosi wgranie nowego pliku `.pfx`. Znosi je także udane sprawdzenie połączenia
-z karty konta, po uzupełnieniu danych po stronie Multiinfo. Kolejka rusza w ciągu minuty.
+z karty konta, po uzupełnieniu danych po stronie Multiinfo. Wysyłka z kolejki wznawia się w ciągu minuty.
 
 ### 7.6. Klucze API
 
@@ -1052,11 +1053,12 @@ Zmienne ustawia się w `docker/.env` (klucz główny, domena) albo w sekcji `env
 | `MIG_DATA_DIR` | `/data` | Katalog bazy, raportów i kopii |
 | `MIG_LOG_LEVEL` | `info` | Jeden z `silent`, `error`, `warn`, `info`, `debug` |
 | `MIG_BACKUP_RETENTION_DAYS` | `14` | Ile dni trzymać kopie bazy |
-| `MIG_WEBHOOK_ALLOW_PRIVATE` | `0` | `1` pozwala na adresy webhooków w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów); domyślnie bramka woła wyłącznie adresy publiczne i takie tylko przyjmuje w panelu. Potrzebne, gdy aplikacja odbierająca webhooki stoi na tym samym serwerze, np. przykład PHP z rozdziału 5 |
-| `MIG_INBOUND_TIMEOUT_MS` | `10000` | Ile milisekund Multiinfo może trzymać pytanie o wiadomości przychodzące bez odpowiedzi (1-60000). Przy wartości domyślnej odbiór trwa zwykle poniżej sekundy, najwyżej ok. 10 s, kosztem sześciu pytań na minutę na usługę. Maksimum `60000` (long polling z dokumentacji Multiinfo) zmniejsza liczbę pytań, ale wiadomość, która nadejdzie między dwoma pytaniami, czeka do końca następnego - opóźnienie odbioru sięga wtedy minuty. Mała wartość razem z `MIG_INBOUND_IDLE_MS` daje odpytywanie okresowe |
-| `MIG_INBOUND_IDLE_MS` | `0` | Przerwa po pustej odpowiedzi, zanim bramka zapyta ponownie; `0` to pytanie od razu |
-| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku), od których API wierzy nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Ustawiana w `docker/.env`: `172.16.0.0/12` dla Caddy i Traefika w Dockerze, `127.0.0.1` dla nginx na serwerze (rozdział 6). Potrzebna, gdy integracje mają listę dozwolonych źródeł albo dziennik ma pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)) |
-| `MIG_UPDATE_CHECK` | `1` | Raz na dobę pytać GitHub o nowsze wydanie i pokazać je na przeglądzie (rozdział 7.4); `0` wyłącza, np. w sieci bez dostępu do internetu |
+| `MIG_WEBHOOK_ALLOW_PRIVATE` | `0` | `1` pozwala na adresy webhooków w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów); domyślnie bramka wysyła żądania wyłącznie na adresy publiczne i takie tylko przyjmuje w panelu. Potrzebne, gdy aplikacja odbierająca webhooki działa na tym samym serwerze, np. przykład PHP z rozdziału 5 |
+| `MIG_MAIL_ALLOW_PRIVATE` | `0` | `1` pozwala na serwer IMAP w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów). Zmienna osobna od `MIG_WEBHOOK_ALLOW_PRIVATE`, ponieważ serwer poczty w sieci firmowej to częstszy przypadek niż aplikacja odbierająca webhooki |
+| `MIG_INBOUND_TIMEOUT_MS` | `10000` | Ile milisekund Multiinfo może wstrzymywać odpowiedź na zapytanie o wiadomości przychodzące (1-60000). Przy wartości domyślnej odbiór trwa zwykle poniżej sekundy, najwyżej ok. 10 s, kosztem sześciu pytań na minutę na usługę. Maksimum `60000` (long polling z dokumentacji Multiinfo) zmniejsza liczbę pytań, ale wiadomość, która nadejdzie między dwoma pytaniami, czeka do końca następnego - opóźnienie odbioru sięga wtedy minuty. Mała wartość razem z `MIG_INBOUND_IDLE_MS` daje odpytywanie okresowe |
+| `MIG_INBOUND_IDLE_MS` | `0` | Przerwa po pustej odpowiedzi, zanim bramka wyśle kolejne zapytanie, `0` oznacza zapytanie natychmiastowe |
+| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku), od których API ufa nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Ustawiana w `docker/.env`: `172.16.0.0/12` dla Caddy i Traefika w Dockerze, `127.0.0.1` dla nginx na serwerze (rozdział 6). Potrzebna, gdy integracje mają listę dozwolonych źródeł albo dziennik ma pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)) |
+| `MIG_UPDATE_CHECK` | `1` | Raz na dobę sprawdzać w serwisie GitHub, czy jest nowsze wydanie, i pokazywać je na przeglądzie (rozdział 7.4); `0` wyłącza, np. w sieci bez dostępu do internetu |
 | `MIG_WERSJA` | `1` | Tag obrazu do pobrania: `1`, `1.1` albo `1.1.0` (rozdział 7.4) |
 | `MIG_DOMENA` | - | Domena bramki dla wariantu Caddy i Traefik |
 | `COMPOSE_FILE` | - | Dodatkowe pliki Compose oddzielone dwukropkiem: `docker-compose.caddy.yml` włącza Caddy, `docker-compose.traefik.yml` Traefik, `docker-compose.build.yml` budowanie ze źródeł; zawsze po `docker-compose.yml` |
@@ -1075,8 +1077,8 @@ Do sprawdzenia na docelowym serwerze, na koncie produkcyjnym i numerze testowym:
 - [ ] Wiadomość z nadpisem dociera z tym nadpisem jako nadawcą
 - [ ] Rozsyłka na dwa numery testowe dociera, raport CSV pobiera się z panelu
 - [ ] Webhook `message.delivered` dociera do przykładowej aplikacji z poprawnym podpisem
-- [ ] SMS wysłany z telefonu na numer usługi jest w zakładce Odebrane, a przykładowa aplikacja dostała `message.received`
-- [ ] Odwołany klucz dostaje `401`
+- [ ] SMS wysłany z telefonu na numer usługi jest w zakładce Odebrane, a przykładowa aplikacja otrzymała `message.received`
+- [ ] Odwołany klucz otrzymuje `401`
 - [ ] Konto panelu ma drugi składnik, kody zapasowe są przechowywane poza serwerem
 - [ ] Drugi użytkownik panelu zalogował się hasłem startowym i włączył drugi składnik
 - [ ] Po nocy w `backups/` leży plik z datą
@@ -1099,7 +1101,7 @@ z rozdziału 3 (punkt 9.5).
 
 Skrypt `proxmox/ct/multiinfogate.sh` z repozytorium bramki jest napisany w formacie skryptów
 [community-scripts](https://github.com/community-scripts/ProxmoxVE) i korzysta z ich silnika
-kreatora. Leży jednak w repozytorium bramki i nie wymaga niczego z ich katalogu. Skrypt robi
+kreatora. Leży jednak w repozytorium bramki i nie wymaga niczego z ich katalogu. Skrypt wykonuje
 kolejno: pobiera szablon Debiana 13, tworzy nieuprzywilejowany kontener (1 rdzeń, 1 GB pamięci,
 4 GB dysku, adres z DHCP), instaluje Node.js 22, pobiera źródła najnowszego wydania bramki
 z GitHuba i buduje je, tworzy konto systemowe `multiinfo-gate`, generuje klucz główny,
@@ -1120,7 +1122,7 @@ nie wysyła niezależnie od odpowiedzi. Instalacja trwa od trzech do pięciu min
 czasu zajmuje pobranie zależności i budowa.
 
 Oczekiwany wynik: komunikat `Zakończono pomyślnie`, numer kontenera oraz dwa adresy, panel na
-porcie 8081 i API na porcie 8080, pod adresem, który kontener dostał z DHCP.
+porcie 8081 i API na porcie 8080, pod adresem, który kontener otrzymał z DHCP.
 
 Instalacja bez pytań, na przykład w skrypcie automatyzującym, przyjmuje ustawienia w zmiennych
 przed poleceniem:
@@ -1164,7 +1166,7 @@ pct exec <NUMER-KONTENERA> -- cat /root/multiinfo-gate.creds
 Proxmox. Po zalogowaniu i włączeniu drugiego składnika plik można usunąć.
 
 Panel nasłuchuje na adresie kontenera (`MIG_ADMIN_HOST=eth0`), a nie tylko na pętli zwrotnej
-jak w rozdziale 4. Powód: w kontenerze LXC nie ma domyślnie serwera SSH, przez który dałoby się
+jak w rozdziale 4. Powód: w kontenerze LXC nie ma domyślnie serwera SSH, przez który można byłoby
 zestawić tunel z punktu 4.1. Nie oznacza to logowania zwykłym HTTP z sieci. Panel wymaga HTTPS
 albo adresu lokalnego. Pod `http://<ADRES-KONTENERA>:8081` pokazuje ekran logowania z tą
 informacją, a próbę zalogowania odrzuca. Do panelu prowadzą dwie drogi:
@@ -1189,8 +1191,8 @@ informacją, a próbę zalogowania odrzuca. Do panelu prowadzą dwie drogi:
 
 Bez logowania z sieci widać jedynie ekran logowania i `http://<ADRES-KONTENERA>:8081/healthz`
 z samym polem `status`. Szczegóły (wersja, kolejka, konta Multiinfo z dniami do końca
-certyfikatu) panel podaje wyłącznie tam, gdzie da się zalogować, czyli tunelem albo przez
-HTTPS. Może być tak, że nawet ekran logowania w sieci jest niepożądany, bo kontener stoi
+certyfikatu) panel podaje wyłącznie tam, gdzie możliwe jest logowanie, czyli tunelem albo przez
+HTTPS. Gdy nawet ekran logowania w sieci jest niepożądany, ponieważ kontener działa
 w sieci z obcymi urządzeniami. Wtedy w pliku `/etc/multiinfo-gate/env` wpisz
 `MIG_ADMIN_HOST=127.0.0.1` i wykonaj `systemctl restart multiinfo-gate`. Do panelu wchodzisz
 wtedy tunelem do samego kontenera według punktu 4.1. Wymaga to włączenia w nim serwera SSH:
@@ -1204,7 +1206,7 @@ Dalej obowiązuje rozdział 4 od punktu 4.2: konto Multiinfo, sprawdzenie połą
 Punkt 5.1 zakłada serwer z SSH, na którym port 8080 słucha tylko na pętli zwrotnej. W kontenerze
 z punktu 9.1 jest inaczej. Serwera SSH nie ma, a API słucha na adresie kontenera
 (`MIG_API_HOST=0.0.0.0` w `/etc/multiinfo-gate/env`), tak samo jak panel. Do API prowadzą więc
-dwie drogi. Wybór zależy od tego, gdzie stoi komputer, z którego wykonujesz test:
+dwie drogi. Wybór zależy od tego, gdzie znajduje się komputer, z którego wykonujesz test:
 
 - **Komputer w tej samej sieci co kontener** (na przykład Proxmox w biurze, test z biurowego
   laptopa). API jest dostępne bez tunelu, wprost pod adresem kontenera. Sprawdzenie:
@@ -1245,9 +1247,9 @@ Gdy nie działa:
 
 - `curl` na własnym komputerze zgłasza `Connection refused` pod `127.0.0.1:8080` - okno
   z tunelem zostało zamknięte albo tunel nie został zestawiony. Wykonaj ponownie polecenie
-  `ssh` i przyjrzyj się jego komunikatom
+  `ssh` i przeczytaj jego komunikaty
 - `ssh` wypisuje `bind: Address already in use` - port 8080 na własnym komputerze zajmuje inny
-  program, często inna instancja bramki albo poprzedni tunel. Wyjściem jest inny port lokalny,
+  program, często inna instancja bramki albo poprzedni tunel. Rozwiązaniem jest inny port lokalny,
   na przykład `-L 18080:<ADRES-KONTENERA>:8080`. W poleceniach wpisujesz wtedy
   `http://127.0.0.1:18080`
 - `curl` zgłasza `Connection refused` pod adresem kontenera (wprost albo przez tunel, w którym
@@ -1257,7 +1259,7 @@ Gdy nie działa:
   działają, a problem jest w nagłówku `Authorization`. Sprawdź, czy klucz z punktu 4.5 został
   skopiowany w całości
 
-API pod adresem kontenera jest dostępne w sieci bez HTTPS. Klucz API wędruje w niej jawnym
+API pod adresem kontenera jest dostępne w sieci bez HTTPS. Klucz API jest w niej przesyłany jawnym
 tekstem. Do testów w zaufanej sieci firmowej to wystarcza. Aplikacjom, zwłaszcza spoza tej
 sieci, API udostępnia się przez odwrotne proxy z HTTPS według rozdziału 6, kierowane na
 `http://<ADRES-KONTENERA>:8080`.
@@ -1303,7 +1305,7 @@ Aktualizacja do najnowszego wydania to jedno polecenie w kontenerze:
 update
 ```
 
-Polecenie sprawdza na GitHubie, czy jest nowsze wydanie. Jeżeli jest, zatrzymuje usługę,
+Polecenie sprawdza w serwisie GitHub, czy jest nowsze wydanie. Jeżeli jest, zatrzymuje usługę,
 zapisuje kopię bazy jako `backups/przed-aktualizacja-<WERSJA>.sqlite`, pobiera i buduje nowe
 wydanie, po czym uruchamia usługę. Migracje bazy wykonują się same przy starcie. Oczekiwany
 wynik: `Zaktualizowano do wydania <WERSJA>`, a po zalogowaniu maszt panelu pokazuje nowy numer.
@@ -1340,13 +1342,13 @@ systemctl start multiinfo-gate
 
 `<WERSJA>` to numer sprzed aktualizacji, na przykład `1.1.2`. Wpis w `.npmrc` wyraża zgodę na
 skrypt instalacyjny `better-sqlite3` w wydaniach sprzed 1.4.1, które nie mają pola
-`allowScripts`. Nowszemu npm bez tej zgody powstałaby instalacja bez części natywnej.
+`allowScripts`. Nowszy npm bez tej zgody utworzyłby instalację bez części natywnej.
 W nowszych wydaniach wpis niczemu nie szkodzi. Usunięcie pliku `~/.multiinfo-gate` sprawia, że
 kolejne `update` znów zaproponuje najnowsze wydanie.
 
 ### 9.5. Kontener z Dockerem
 
-Możesz woleć mieć w kontenerze dokładnie ten układ, który opisują rozdziały 3 i 7: obraz
+Jeżeli w kontenerze ma działać dokładnie ten układ, który opisują rozdziały 3 i 7: obraz
 z GHCR, `docker compose`, warianty Caddy i Traefik. Wtedy utwórz kontener LXC z Dockerem
 skryptem z katalogu community-scripts, w powłoce hosta Proxmox:
 
@@ -1356,24 +1358,24 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/Proxmo
 
 Skrypt tworzy kontener Debiana z zainstalowanym Dockerem. W kreatorze warto podnieść dysk do
 8 GB. Dalej, już w kontenerze (`pct enter <NUMER-KONTENERA>`), obowiązuje rozdział 3 od punktu
-3.1. Pomijasz `sudo`, bo sesja jest sesją `root`, oraz punkt 2.2, bo Docker już jest. Panel
+3.1. Pomijasz `sudo`, ponieważ sesja jest sesją `root`, oraz punkt 2.2, bo Docker już jest. Panel
 jest wtedy dostępny wyłącznie przez tunel SSH do kontenera, jak w punkcie 4.1.
 
-### 9.6. Integracje: skąd aplikacja woła kontener
+### 9.6. Integracje: skąd aplikacja wywołuje kontener
 
 Integracje z rozdziału [Integracje z aplikacjami](integracje.md) dają aplikacjom adres
 `POST /hooks/<identyfikator>` na porcie API. Panel pokazuje samą ścieżkę. W kontenerze z tego
-rozdziału API słucha na adresie kontenera, więc pełny adres zależy od tego, gdzie stoi
+rozdziału API słucha na adresie kontenera, więc pełny adres zależy od tego, gdzie działa
 aplikacja:
 
 - **Aplikacja w tej samej sieci co kontener** (Uptime Kuma, Zabbix, Grafana, FreeScout
   w firmie). Adres to `http://<ADRES-KONTENERA>:8080/hooks/<identyfikator>`, bez tunelu i bez
   proxy, jak w punkcie 9.3. Warunek: kontener ma adres z sieci firmowej, czyli mostek `vmbr0`
   hosta jest spięty z kartą sieciową, a nie z prywatną siecią NAT. Sprawdzenie z komputera, na
-  którym stoi aplikacja: `curl http://<ADRES-KONTENERA>:8080/healthz` odpowiada
+  którym działa aplikacja: `curl http://<ADRES-KONTENERA>:8080/healthz` odpowiada
   `{"status":"ok"}`
 - **Aplikacja w internecie** (Grafana Cloud, Freshdesk, FreeScout u hostingodawcy, Zapier,
-  Make). Kontener nie ma publicznego adresu, więc aplikacja go nie dosięgnie. Potrzebne jest
+  Make). Kontener nie ma publicznego adresu, więc aplikacja nie nawiąże z nim połączenia. Potrzebne jest
   odwrotne proxy z HTTPS pod publiczną domeną, tak jak w rozdziale 6, tylko kierowane na
   `http://<ADRES-KONTENERA>:8080`. Może to być nginx z wariantu B na hoście Proxmox albo na
   innym serwerze w sieci, z otwartymi portami 80 i 443 i rekordem `A` domeny wskazującym na ten
@@ -1382,11 +1384,13 @@ aplikacja:
   `MIG_TRUSTED_PROXIES=<ADRES-SERWERA-Z-NGINX>` i wykonujesz `systemctl restart multiinfo-gate`,
   żeby dziennik integracji pokazywał adres aplikacji
 - **Host Proxmox w chmurze z siecią NAT** (kontener z adresem w rodzaju `10.10.10.x`, widoczny
-  tylko z hosta). To szczególny przypadek poprzedniego. Proxy musi stać na samym hoście, bo
+  tylko z hosta). To szczególny przypadek poprzedniego. Proxy musi działać na samym hoście, bo
   tylko on widzi kontener. Porty 80 i 443 otwiera się w regułach sieciowych maszyny (w Azure
   „Network security group”). Do testów bez domeny wystarcza tunel SSH z punktu 9.3 i wywołanie
   adresu wejściowego z własnego komputera przez `http://127.0.0.1:8080`
 
-W drugą stronę, gdy to bramka woła aplikację (integracja „z SMS-a” albo webhook klucza), adres
+W drugą stronę, gdy to bramka wywołuje aplikację (integracja „z SMS-a” albo webhook klucza), adres
 aplikacji w sieci firmowej wymaga `MIG_WEBHOOK_ALLOW_PRIVATE=1` w `/etc/multiinfo-gate/env`
-i `systemctl restart multiinfo-gate`. Bez tego panel odrzuca taki adres przy zapisie.
+i `systemctl restart multiinfo-gate`. Bez tego panel odrzuca taki adres przy zapisie. Serwer
+poczty Mail2SMS w sieci firmowej wymaga analogicznie `MIG_MAIL_ALLOW_PRIVATE=1` w tym samym
+pliku (docs/integracje.md, rozdział 5.1).

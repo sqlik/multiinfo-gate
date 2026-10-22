@@ -328,7 +328,7 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
     // Dlatego przy numerze spod dopytania przełącznik „pomiń” obejmuje także brak numeru.
     const zDopytania = config.enrich !== undefined && config.to.path?.startsWith(`${config.enrich.as}.`) === true;
     if (zDopytania && config.invalidRecipient === 'skip') {
-      note('skipped', { reason: 'odpowiedź dopytania nie ma numeru odbiorcy' });
+      note('skipped', { reason: 'odpowiedź zapytania uzupełniającego nie zawiera numeru odbiorcy' });
       return { kind: 'skipped', reason: 'invalid_recipient' };
     }
     return fail('no_recipient', ref !== null
@@ -344,7 +344,7 @@ export async function runInbound(deps: PipelineDeps, integration: InboundIntegra
       // Ustawienie „pomiń” dotyczy wyłącznie numeru z ładunku. Numer z listy zapasowej wpisuje
       // administrator, więc jego błąd zostaje błędem, inaczej pomyłka w formularzu zapadłaby w ciszę.
       if (config.invalidRecipient === 'skip' && recipients.fromPayload) {
-        note('skipped', { reason: 'numer odbiorcy w ładunku nie do odczytania' });
+        note('skipped', { reason: 'nieprawidłowy numer odbiorcy w ładunku' });
         return { kind: 'skipped', reason: 'invalid_recipient' };
       }
       return fail('invalid_phone', e.message);
@@ -469,8 +469,8 @@ export async function runMailIn(deps: PipelineDeps, integration: MailInIntegrati
     note('skipped', { reason: `nadawca spoza listy: ${mail.from || 'brak adresu'}` });
     return { kind: 'skipped', reason: 'sender_not_allowed' };
   }
-  if (config.requireAuthResults && !authResultsPass(mail.authResults, domainOf(mail.from))) {
-    note('skipped', { reason: 'brak potwierdzenia SPF/DKIM od serwera' });
+  if (config.requireAuthResults && !authResultsPass(mail.authResults, domainOf(mail.from), config.authservId)) {
+    note('skipped', { reason: config.authservId === '' ? 'brak potwierdzenia SPF/DKIM od serwera' : `brak potwierdzenia SPF/DKIM od serwera ${config.authservId}` });
     return { kind: 'skipped', reason: 'auth_failed' };
   }
 

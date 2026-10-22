@@ -14,7 +14,7 @@ Udostępnia je też do odczytu (`GET /v1/inbound`) i pozwala na nie odpowiedzie�
 ustawia na koncie Multiinfo kierowanie odebranych wiadomości do API. Administrator bramki
 zaznacza odbiór przy kluczu API w panelu.
 
-Aplikacje, których formatu nie da się zmienić (monitoring, helpdesk, automatyzacje), zamiast
+Aplikacje, których formatu nie można zmienić (monitoring, helpdesk, automatyzacje), zamiast
 tego API używają integracji. Adres `POST /hooks/<identyfikator>` przyjmuje ładunek aplikacji,
 a integracje wychodzące przekazują odebrane SMS-y i statusy do aplikacji w jej formacie. Opis
 jest w rozdziale [Integracje z aplikacjami](integracje.md).
@@ -215,8 +215,8 @@ dwa miejsca. `slotsRemaining` to liczba wolnych miejsc w ostatniej części.
 
 ### 3.1. Klucz idempotencji
 
-Aplikacja może wysłać żądanie i nie dostać odpowiedzi, bo zerwało się połączenie albo minął
-czas oczekiwania. Nie wie wtedy, czy wiadomość została przyjęta. Ponowienie żądania bez
+Aplikacja może wysłać żądanie i nie otrzymać odpowiedzi, ponieważ połączenie zostało przerwane albo
+minął czas oczekiwania. Nie wie wtedy, czy wiadomość została przyjęta. Ponowienie żądania bez
 zabezpieczenia może wysłać wiadomość dwukrotnie. Zabezpieczeniem jest nagłówek
 `Idempotency-Key`. Jego wartość jednoznacznie identyfikuje operację po stronie aplikacji, na
 przykład identyfikator zamówienia:
@@ -325,7 +325,7 @@ bramka rozszerza klucz o przyrostek `#<indeks>` dla każdego numeru.
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
 | 400 | `invalid_body` | body żądania nie przechodzi walidacji; `message` wymienia pola | poprawić wskazane pola |
-| 400 | `invalid_phone` | numer nie daje się znormalizować: znaki inne niż cyfry, zła liczba cyfr, podwojony kod kraju (`4848…`); `message` podaje powód | podać numer w postaci `48601000001` |
+| 400 | `invalid_phone` | numer nie daje się znormalizować: znaki inne niż cyfry, nieprawidłowa liczba cyfr, podwojony kod kraju (`4848…`); `message` podaje powód | podać numer w postaci `48601000001` |
 | 400 | `invalid_orig` | nadpis pusty, dłuższy niż 11 znaków albo ze znakami sterującymi | użyć nadpisu ze słownika konta |
 | 400 | `too_many_parts` | treść przekracza limit części; `message` podaje, ile miejsc należy usunąć | skrócić treść albo uzgodnić wyższy limit klucza |
 | 400 | `service_required` | klucz nie ma usługi domyślnej, a `serviceId` nie podano | podać `serviceId` |
@@ -644,19 +644,19 @@ anulowana po stronie operatora, o ile nie została jeszcze doręczona.
 | 502 | `provider_error` | inny błąd Multiinfo; `providerCode` w body odpowiedzi | ponowić po chwili; przy powtarzaniu przekazać `providerCode` administratorowi |
 | 503 | `account_certificate` | Multiinfo odrzuciło certyfikat bramki | przekazać administratorowi; wymaga interwencji po stronie certyfikatu |
 
-Wiadomość wieloczęściowa jest anulowana część po części. Jeżeli którejś części nie da się
+Wiadomość wieloczęściowa jest anulowana część po części. Jeżeli której części nie można
 cofnąć, bramka przerywa operację. Części już anulowane pozostają anulowane, a odpowiedź ma kod
 `409`.
 
 Anulowanie może trafić do bramki w chwili, w której wiadomość jest właśnie przekazywana do
 Multiinfo. Bramka odpowiada wtedy `cancelled`, a po zakończeniu przekazania cofa części
-u operatora. Operator może odmówić, bo wiadomość poszła już do sieci. Wiadomość wraca wtedy do
+u operatora. Operator może odmówić, ponieważ wiadomość została już przekazana do sieci. Wiadomość wraca wtedy do
 stanu `sent`, a w jej przebiegu w panelu pojawia się wpis „Anulowanie nieskuteczne”. Aplikacja,
 dla której to rozróżnienie ma znaczenie, sprawdza stan wiadomości (4.1) po kilku sekundach.
 
 ## 5. Rozsyłki
 
-Rozsyłka to jedno zlecenie z listą do 5000 odbiorców. Większość z nich dostaje tę samą treść.
+Rozsyłka to jedno zlecenie z listą do 5000 odbiorców. Większość z nich otrzymuje tę samą treść.
 Każdy odbiorca może jednak mieć treść własną oraz identyfikator (`clientId`) zwracany
 w raporcie. Identyfikator ułatwia dopasowanie wyników do rekordów aplikacji. Rozsyłka jest
 przetwarzana asynchronicznie. Bramka odpowiada natychmiast, a stan i raport odczytuje się
@@ -784,7 +784,7 @@ kolejnymi wywołaniami.
 | `startAt` | nie | ISO 8601 w przyszłości; Multiinfo rozpoczyna wysyłkę o tej godzinie |
 
 Kodowanie jest wspólne dla całej rozsyłki. Jeżeli którakolwiek treść wymaga UCS-2, wszystkie
-wiadomości idą w UCS-2, czyli po 70 znaków na część zamiast 160. Każda treść musi mieścić się
+wiadomości są wysyłane w UCS-2, czyli po 70 znaków na część zamiast 160. Każda treść musi mieścić się
 w limicie części klucza.
 
 **Odpowiedź `202`:**
@@ -796,7 +796,7 @@ w limicie części klucza.
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
 | 400 | `invalid_body` | body nie przechodzi walidacji; `message` wymienia pola | poprawić wskazane pola |
-| 400 | `invalid_phone` | numer odbiorcy nie daje się znormalizować (znaki inne niż cyfry, zła liczba cyfr, podwojony kod kraju); `message` wskazuje pozycję i powód | poprawić numer |
+| 400 | `invalid_phone` | numer odbiorcy nie daje się znormalizować (znaki inne niż cyfry, nieprawidłowa liczba cyfr, podwojony kod kraju); `message` wskazuje pozycję i powód | poprawić numer |
 | 400 | `text_required` | odbiorca bez treści własnej i bez `defaultText` | dodać `defaultText` albo `text` odbiorcy |
 | 400 | `invalid_client_id` | `clientId` poza dozwolonym wzorcem | użyć wyłącznie liter, cyfr, kropki, podkreślenia i myślnika, do 20 znaków |
 | 400 | `too_many_parts` | treść przekracza limit części | skrócić treść |
@@ -1198,7 +1198,7 @@ Pierwszy to powiadomienie `message.received` (rozdział 6) do każdego klucza, k
 odbiór. Drugi to odczyt opisany niżej. Odczyt nie wymaga włączonego odbioru. Wystarczy, że klucz
 ma dostęp do usługi.
 
-Bramka pyta Multiinfo o wiadomości tylko z tych usług, dla których odbiór ma włączony choć jeden
+Bramka odpytuje Multiinfo o wiadomości tylko z tych usług, dla których odbiór ma włączony choć jeden
 czynny klucz z adresem webhooka. Dopóki żaden klucz nie odbiera, wiadomości czekają po stronie
 Multiinfo.
 
@@ -1210,8 +1210,8 @@ wieloczęściowe docierają sklejone.
 
 ### 5a.1. Lista: `GET /v1/inbound`
 
-**Przeznaczenie.** Odczyt odebranych wiadomości z usług klucza. Przydaje się do pierwszego
-zasilenia aplikacji, do dociągnięcia zaległości po awarii odbiornika webhooków i do sprawdzenia,
+**Przeznaczenie.** Odczyt odebranych wiadomości z usług klucza. Służy do pierwszego
+zasilenia aplikacji, do pobrania zaległości po awarii odbiornika webhooków i do sprawdzenia,
 czy webhook niczego nie pominął.
 
 === "curl"
@@ -1297,7 +1297,7 @@ Parametry zapytania (wszystkie opcjonalne):
 |---|---|
 | `serviceId` | jedna z usług klucza; inna daje `403 service_not_allowed` |
 | `from` | numer nadawcy w dowolnym zapisie (`+48 601 000 001`, `601000001`); bramka sprowadza go do postaci, w jakiej zapisała nadawcę |
-| `since`, `until` | zakres czasu odbioru przez Multiinfo, ISO 8601; zła data daje `400 invalid_query` |
+| `since`, `until` | zakres czasu odbioru przez Multiinfo, ISO 8601; nieprawidłowa data daje `400 invalid_query` |
 | `limit` | liczba wyników, domyślnie 25, najwyżej 200 |
 | `offset` | liczba pominiętych wyników od początku listy |
 
@@ -1417,7 +1417,7 @@ Parametry zapytania (wszystkie opcjonalne):
 `POST /v1/messages` z polem `inReplyTo` wysyła odpowiedź powiązaną z wiadomością przychodzącą.
 Bramka przekazuje Multiinfo identyfikator tej wiadomości (`smsInId`). Odczyt
 `GET /v1/messages/{id}` i powiadomienia o tej wysyłce zwracają `inReplyTo`. Wiadomość
-przychodząca musi pochodzić z tej samej usługi, z której idzie odpowiedź. Odpowiedź ma jednego
+przychodząca musi pochodzić z tej samej usługi, z której wysyłana jest odpowiedź. Odpowiedź ma jednego
 odbiorcę: nadawcę tej wiadomości (pole `from` z `message.received`).
 
 === "curl"
@@ -1646,9 +1646,9 @@ Przykład `message.received`:
 ```
 
 Powiadomienie `message.received` zawiera treść zawsze, także gdy konto nie przechowuje treści.
-To jedyna chwila, w której aplikacja może ją dostać. Odbiór włącza się dla klucza w panelu, polem
+To jedyna chwila, w której aplikacja może ją otrzymać. Odbiór włącza się dla klucza w panelu, polem
 „Odbiera wiadomości przychodzące”. Kilka kluczy z dostępem do tej samej usługi może odbierać
-jednocześnie. Każdy dostaje własne powiadomienie.
+jednocześnie. Każdy otrzymuje własne powiadomienie.
 
 ### 6.3. Ponowienia i kolejność
 
@@ -1666,7 +1666,7 @@ Kolejność dostarczania nie jest gwarantowana. Przy ponowieniach `message.deliv
 dotrzeć przed `message.sent`. O kolejności zdarzeń rozstrzyga pole `at`.
 
 Dla `message.received` obowiązuje ta sama zasada co dla statusów. Wiadomość jest zapisana
-w bramce przed pierwszą próbą dostawy. Po awarii aplikacja dociąga więc zaległość
+w bramce przed pierwszą próbą dostawy. Po awarii aplikacja pobiera więc zaległość
 z `GET /v1/inbound?since=` (5a.1).
 
 Adres webhooka musi wskazywać adres publiczny. Bramka sprawdza cel przy zapisie adresu w panelu
@@ -1675,7 +1675,7 @@ prywatną (`10/8`, `172.16/12`, `192.168/16`), link-local albo sieć kontenerów
 ponowień. W panelu nie pozwala takiego adresu zapisać. Aplikacja działająca na tym samym
 serwerze co bramka (choćby przykład PHP z `examples/php`) wymaga jawnej zgody
 administratora: zmiennej `MIG_WEBHOOK_ALLOW_PRIVATE=1` w środowisku bramki
-(`docs/uruchomienie.md`, rozdział 7.7). Nazwa, której nie da się rozwiązać, jest przy zapisie
+(`docs/uruchomienie.md`, rozdział 7.7). Nazwa, której nie można rozwiązać, jest przy zapisie
 błędem formularza. Przy dostawie jest traktowana jak awaria sieci, z ponowieniami według
 harmonogramu wyżej.
 
@@ -1715,7 +1715,7 @@ użytkownikowi końcowemu.
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
 | 400 | `invalid_body` | body nie przechodzi walidacji; `message` wymienia pola | poprawić wskazane pola |
-| 400 | `invalid_phone` | numer nie daje się znormalizować: znaki inne niż cyfry, zła liczba cyfr, podwojony kod kraju (`4848…`); `message` podaje powód | podać numer w postaci `48601000001` |
+| 400 | `invalid_phone` | numer nie daje się znormalizować: znaki inne niż cyfry, nieprawidłowa liczba cyfr, podwojony kod kraju (`4848…`); `message` podaje powód | podać numer w postaci `48601000001` |
 | 400 | `invalid_orig` | nadpis pusty, dłuższy niż 11 znaków albo ze znakami sterującymi | użyć nadpisu ze słownika konta |
 | 400 | `invalid_client_id` | `clientId` odbiorcy rozsyłki poza wzorcem | do 20 znaków: litery, cyfry, `.`, `_`, `-` |
 | 400 | `text_required` | odbiorca rozsyłki bez treści własnej i domyślnej | dodać `defaultText` albo `text` |
@@ -1757,7 +1757,7 @@ Ten sam adres na porcie panelu (przez tunel SSH albo HTTPS za proxy) odpowiada s
 wersją, głębokością kolejki, kontami z dniami do wygaśnięcia certyfikatu, stanem odbiornika
 i polem `integrations`. To ostatnie zawiera liczbę włączonych integracji (`enabled`)
 i integracji z błędem w ostatniej dobie (`troubled24h`). Błędy integracji nie zmieniają statusu,
-bo dotyczą aplikacji, nie bramki. Gdy na GitHubie jest nowsze wydanie bramki, odpowiedź ma też
+bo dotyczą aplikacji, nie bramki. Gdy w serwisie GitHub dostępne jest nowsze wydanie bramki, odpowiedź ma też
 pole `release` z numerem (`version`) i odnośnikiem do opisu zmian (`url`). Pole znika po
 aktualizacji albo po odłożeniu wydania w panelu.
 
@@ -1829,8 +1829,8 @@ aktualizacji albo po odłożeniu wydania w panelu.
 
 Opis API to jeden plik JSON w formacie OpenAPI 3.0. Wypisuje wszystkie wywołania z tego
 dokumentu: ścieżki, metody, nagłówek z kluczem, pola żądania, pola odpowiedzi oraz kody błędów.
-Człowiekowi nie zastąpi tego dokumentu, bo nie tłumaczy, kiedy czego użyć. Narzędzia czytają go
-za to same, więc nie musisz przepisywać pól z dokumentacji ręcznie.
+Czytelnikowi nie zastąpi tego dokumentu, ponieważ nie wyjaśnia, kiedy czego użyć. Narzędzia odczytują
+go automatycznie, co eliminuje ręczne przepisywanie pól z dokumentacji.
 
 Plik leży w repozytorium pod ścieżką `docs/openapi.json`, a strona dokumentacji wystawia go pod
 adresem [sqlik.github.io/multiinfo-gate/openapi.json](https://sqlik.github.io/multiinfo-gate/openapi.json).
@@ -1841,7 +1841,7 @@ curl -O https://sqlik.github.io/multiinfo-gate/openapi.json
 ```
 
 Adres bazowy jest w pliku zmienną `domena`. Narzędzie zapyta o nią przy imporcie. Podaj domenę,
-pod którą wystawiłeś bramkę, bez `https://` na początku.
+pod którą bramka jest wystawiona, bez `https://` na początku.
 
 Trzy typowe zastosowania:
 
@@ -1852,13 +1852,13 @@ Trzy typowe zastosowania:
 - **Aplikacja w Make.** W [make.com](https://make.com) otwórz **Custom apps → Create a new app**
   i użyj opcji importu opisu OpenAPI. Powstaną z niego moduły aplikacji, które wstawisz do
   scenariusza obok pozostałych
-- **Wygenerowana biblioteka kliencka.** Generator taki jak OpenAPI Generator zrobi z pliku
-  bibliotekę w wybranym języku, na przykład w Javie, w Go albo w C#. Wtedy w kodzie wołasz metody
+- **Wygenerowana biblioteka kliencka.** Generator taki jak OpenAPI Generator utworzy z pliku
+  bibliotekę w wybranym języku, na przykład w Javie, w Go albo w C#. W kodzie wywołuje się wtedy metody
   obiektu zamiast składać żądania HTTP samodzielnie
 
-Plik powstaje z tych samych schematów, na których bramka sprawdza żądania. Opis nie może się
-więc rozjechać z zachowaniem API. Pilnuje tego test: po zmianie pola w kodzie plik trzeba
-przeliczyć poleceniem `npm run openapi`, inaczej testy padają.
+Plik powstaje z tych samych schematów, na których bramka sprawdza żądania. Opis nie może więc
+odbiegać od zachowania API. Sprawdza to test: po zmianie pola w kodzie plik należy
+przeliczyć poleceniem `npm run openapi`, w przeciwnym razie testy kończą się niepowodzeniem.
 
 Wersja 3.0 zamiast nowszej 3.1 jest wyborem świadomym. Konektory własne Power Platformu czytają
 wyłącznie formaty 2.0 oraz 3.0. Dokument nie używa niczego, czego nie ma w wersji 3.0, więc

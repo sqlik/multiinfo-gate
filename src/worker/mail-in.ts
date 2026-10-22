@@ -1,6 +1,7 @@
 import { MAIL_IN_PASSWORD_REF, type MailInConfig } from '../integrations/config.ts';
 import { warsawTime } from '../time/warsaw.ts';
-import { MailboxError, errorKindOf, errorMessageOf, scrubError, type MailboxConnect, type MailboxSession, type MailboxSettings } from '../integrations/mail/client.ts';
+import { MailboxError, errorKindOf, errorMessageOf, guardedConnect, scrubError, type MailboxConnect, type MailboxSession, type MailboxSettings } from '../integrations/mail/client.ts';
+import { systemResolver, type Resolver } from '../net/private-address.ts';
 import { parseMail, type ParsedMail } from '../integrations/mail/parse.ts';
 import { runMailIn, type MailInIntegration, type MailInOutcome, type PipelineDeps } from '../integrations/pipeline.ts';
 import { silentLogger, type Logger } from '../log.ts';
@@ -24,6 +25,9 @@ const DEFAULT_AFTER_MINUTES = 15;
 export interface MailInDeps extends PipelineDeps {
   mailIn: MailInRepo;
   connect: MailboxConnect;
+  /** Rozwiązywanie nazwy serwera przed połączeniem; bez niego `connect` idzie bez sprawdzenia sieci (testy z atrapą). */
+  resolve?: Resolver;
+  allowPrivateMail?: boolean;
   notifier?: AdminNotifier;
   notifications?: Pick<NotificationsRepo, 'rule' | 'smtp'>;
   log?: Logger;
@@ -77,14 +81,15 @@ export function replyFor(outcome: MailInOutcome, mail: ParsedMail, config: MailI
 
 /** „Sprawdź połączenie”: logowanie, otwarcie folderu, lista folderów; nic nie przetwarza, nic nie zapisuje. */
 export async function checkMailbox(connect: MailboxConnect, settings: MailboxSettings, folder: string):
-  Promise<{ ok: true; unseen: number; folders: string[] } | { ok: false; kind: MailboxErrorKind; error: string; folders: string[] }> {
+  Promise<{ ok: true; unseen: number; folders: string[]; authservId: string | null } | { ok: false; kind: MailboxErrorKind; error: string; folders: string[] }> {
   let session: MailboxSession | null = null;
   let folders: string[] = [];
   try {
     session = await connect(settings, CONNECT_TIMEOUT_MS);
     folders = await session.folders();
     const box = await session.open(folder);
-    return { ok: true, unseen: box.unseen, folders };
+    const authservId = (await session.authservId?.()) ?? null;
+    return { ok: true, unseen: box.unseen, folders, authservId };
   } catch (e) {
     // Lista folderów zostaje, gdy logowanie się udało, a zawiodła nazwa folderu: użytkownik od razu widzi właściwą.
     return { ok: false, kind: errorKindOf(e), error: scrubError(errorMessageOf(e), [settings.password, settings.user]), folders };
@@ -102,7 +107,11 @@ const hhmm = (iso: string): string => warsawTime(iso).slice(0, 5);
 export class MailInPoller {
   private readonly active = new Set<number>();
 
-  constructor(private readonly deps: MailInDeps, private readonly opts: { concurrency?: number } = {}) {}
+  private readonly deps: MailInDeps;
+
+  constructor(deps: MailInDeps, private readonly opts: { concurrency?: number } = {}) {
+    this.deps = deps.resolve ? { ...deps, connect: guardedConnect(deps.connect, deps.resolve ?? systemResolver, deps.allowPrivateMail === true) } : deps;
+  }
 
   async tick(now: Date): Promise<void> {
     const startedAt = Date.now();

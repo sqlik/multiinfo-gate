@@ -23,7 +23,7 @@ export const freescout: Preset = {
   secrets: [{ ref: 'apiKey', label: 'Klucz API FreeScouta', hint: 'Moduł API & Webhooks, zakładka API Keys' }],
   simple: {
     outbound: {
-      address: { label: 'Adres FreeScouta', hint: 'Adres Twojego FreeScouta z końcówką /api/conversations', placeholder: 'https://pomoc.firma.pl/api/conversations' },
+      address: { label: 'Adres FreeScouta', hint: 'Adres FreeScouta z końcówką /api/conversations', placeholder: 'https://pomoc.firma.pl/api/conversations' },
       secrets: [{ ref: 'apiKey', label: 'Klucz API FreeScouta', hint: 'We FreeScoucie: Zarządzaj → API & Webhooks → API Keys', transform: 'raw' }],
       params: [{ key: 'mailboxId', label: 'Numer skrzynki', hint: 'Numer widoczny w adresie ustawień skrzynki we FreeScoucie, np. 1', digits: true }],
       note: 'Każdy odebrany SMS zakłada rozmowę typu „phone” w tej skrzynce; agent widzi numer i treść.',
@@ -36,6 +36,6 @@ export const freescout: Preset = {
   guide: [
     'Wymaga modułu **API & Webhooks**. W bramce podaj adres `https://<freescout>/api/conversations`, klucz API (zakładka API Keys) jako sekret i w body numer skrzynki (`mailboxId`) zamiast `1`. Bramka zakłada rozmowę typu „phone” z klientem „SMS <numer>” - FreeScout wymaga imienia albo e-maila, a numeru nie dopasowuje do istniejących kontaktów. Identyfikator rozmowy z odpowiedzi (`id`) widać przy odebranej wiadomości w panelu.',
     '',
-    'Agent widzi rozmowę w skrzynce i oddzwania albo odpisuje własnym kanałem; bramka nie wysyła odpowiedzi z FreeScouta SMS-em. Żeby agenci dostawali SMS o nowych rozmowach, dodaj osobno ustawienie „FreeScout: nowe zgłoszenie”.',
+    'Agent widzi rozmowę w skrzynce i oddzwania albo odpisuje własnym kanałem; bramka nie wysyła odpowiedzi z FreeScouta SMS-em. Aby agenci otrzymywali SMS o nowych rozmowach, dodaj osobno ustawienie „FreeScout: nowe zgłoszenie”.',
   ].join('\n'),
 };

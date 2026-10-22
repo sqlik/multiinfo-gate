@@ -1,6 +1,6 @@
 # Multiinfo Gate
 
-Bramka SMS między Twoimi aplikacjami a API Multiinfo (Plus, Polkomtel). Trzyma certyfikat
+Bramka SMS między Twoimi aplikacjami a API Multiinfo (Plus, Polkomtel). Przechowuje certyfikat
 kliencki, login i hasło do Multiinfo w jednym miejscu. Aplikacjom wystawia proste HTTP API
 z kluczem w nagłówku. Aplikacja wysyłająca SMS-y nie instaluje certyfikatów i nie zna ASPX.
 
@@ -11,7 +11,7 @@ z kluczem w nagłówku. Aplikacja wysyłająca SMS-y nie instaluje certyfikatów
 ## Dla kogo
 
 Dla firmy z kontem Multiinfo, która chce dać własnym systemom albo agencji zewnętrznej jedno
-API zamiast certyfikatów. Do tego dostaje panel do zarządzania kontami i kluczami oraz do
+API zamiast certyfikatów. Do tego otrzymuje panel do zarządzania kontami i kluczami oraz do
 podglądu doręczeń.
 
 Od wersji 1.3 bramka odbiera też SMS-y od abonentów. Przekazuje je aplikacji powiadomieniem
@@ -24,7 +24,7 @@ Wersja 1.6 dokłada do katalogu pięć gotowych ustawień: n8n, WooCommerce w wa
 zamówienie” oraz w wariancie „status do klienta”, Home Assistanta i Slacka. Sklep zawiadamia
 SMS-em obsługę o nowym zamówieniu albo kupującego o zmianie statusu. Do tego dochodzi opis API
 w formacie OpenAPI, plik `docs/openapi.json`. Plik jest czytany przez Power Automate, Make oraz
-generatory bibliotek klienckich, co niweluje przepisywanie ręczne pól z dokumentacji.
+generatory bibliotek klienckich, co eliminuje ręczne przepisywanie pól z dokumentacji.
 
 Wersja 1.7 dokłada trzy gotowe ustawienia: Fakturownię w wariancie „powiadomienie obsługi” oraz
 w wariancie „powiadomienie klienta”, a także Bitrix24. Fakturownia zawiadamia SMS-em o nowej
@@ -41,7 +41,7 @@ krótki SMS.
 ## Co trzeba mieć
 
 - Konto Multiinfo z użytkownikiem API i certyfikatem (`.pfx` z hasłem)
-- ID usługi (z panelu Multiinfo albo od opiekuna technicznego Polkomtela) i, jeżeli mają być
+- ID usługi (z panelu Multiinfo albo od opiekuna technicznego Polkomtel) i, jeżeli mają być
   używane, nadpisy nadawcy uruchomione przez Polkomtel na wniosek z panelu Multiinfo
 - Serwer Linux (Ubuntu 24.04) z Dockerem albo własny Proxmox VE. Wystarczy najmniejsza maszyna
   w chmurze, x86-64 albo ARM64. Na Proxmoxie skrypt tworzy gotowy kontener LXC bez Dockera
@@ -66,7 +66,7 @@ Strona dokumentacji: [sqlik.github.io/multiinfo-gate](https://sqlik.github.io/mu
 - [Przykład w PHP](examples/php/) - strona testowa i kod do skopiowania
 
 Źródłem strony są pliki w katalogu [`docs/`](docs/). Przykłady z zakładkami czytają się w nich
-gorzej niż na stronie, bo GitHub nie wyświetla zakładek.
+gorzej niż na stronie, ponieważ GitHub nie wyświetla zakładek.
 
 ## Licencja
 

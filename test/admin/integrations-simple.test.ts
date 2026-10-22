@@ -34,7 +34,7 @@ describe('tryb prosty: przychodząca', () => {
   it('formularz Uptime Kumy pokazuje listy w języku użytkownika, podgląd każdej treści i ani jednej ścieżki', async () => {
     const res = await page('/integracje/nowa?rodzaj=webhook_in&ustawienie=uptime-kuma');
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Kto ma dostać SMS');
+    expect(res.body).toContain('Kto otrzyma SMS');
     expect(res.body).toContain('tylko gdy monitor przestanie działać');
     expect(res.body).toContain('AWARIA: Strona firmowa - Request failed with status code 403');
     expect(res.body).toContain('AWARIA: Strona firmowa<');
@@ -89,7 +89,7 @@ describe('tryb prosty: przychodząca', () => {
     const edit = await page(`/integracje/${row.id}/edytuj`);
     expect(edit.body).toContain('value="awaria-i-powrot" checked');
     expect(edit.body).toContain('value="krotko" checked');
-    expect(edit.body).toContain('zapisane - puste pole zostawia dotychczasowe');
+    expect(edit.body).toContain('zapisane, puste pole zachowuje dotychczasowe');
     const saved = await post(`/integracje/${row.id}/edytuj`, kuma({ whenId: 'zawsze', textId: 'krotko', secret: '', numbers: '603000003' }));
     expect(saved.statusCode).toBe(302);
     const after = h.integrations.get(row.id)!;
@@ -97,7 +97,7 @@ describe('tryb prosty: przychodząca', () => {
     expect((after.config as InboundConfig).to.fallback).toEqual(['603000003']);
     expect(h.integrations.secrets(row.id)).toEqual({ token: 'Bearer tajne-haslo' });
     const detail = await page(`/integracje/${row.id}`);
-    expect(detail.body).toContain('Kiedy SMS');
+    expect(detail.body).toContain('Warunek wysyłki');
     expect(detail.body).toContain('zawsze, także przy przycisku „Test” w Uptime Kumie');
     expect(detail.body).toContain('tylko stan i nazwa monitora');
   });
@@ -190,7 +190,7 @@ describe('tryb prosty: wychodząca', () => {
   it('Fakturownia dla klienta: prosty formularz pyta o konto i kod API, zapis składa adres zapytania', async () => {
     const formularz = await page('/integracje/nowa?rodzaj=webhook_in&ustawienie=fakturownia-klient');
     expect(formularz.statusCode).toBe(200);
-    expect(formularz.body).toContain('Nazwa Twojego konta w Fakturowni');
+    expect(formularz.body).toContain('Nazwa konta w Fakturowni');
     expect(formularz.body).toContain('Kod autoryzacyjny API');
     expect(formularz.body).toContain('Token, który Fakturownia wyśle w treści');
     // Znacznik nazwy konta pojawia się wyłącznie w instrukcji, przy zdaniu o trybie zaawansowanym.
@@ -214,8 +214,8 @@ describe('tryb prosty: wychodząca', () => {
     // Edycja wraca do trybu prostego z nazwą konta wyjętą z zapisanego adresu.
     const edycja = await page(`/integracje/${row.id}/edytuj`);
     expect(edycja.body).toContain('value="firma"');
-    expect(edycja.body).toContain('Nazwa Twojego konta w Fakturowni');
-    expect(edycja.body).toContain('zapisany - puste pole zostawia dotychczasowy');
+    expect(edycja.body).toContain('Nazwa konta w Fakturowni');
+    expect(edycja.body).toContain('zapisany, puste pole zachowuje dotychczasowy');
   });
 
   it('Fakturownia dla klienta: brak nazwy konta oraz nazwa z ukośnikiem to błędy prostego formularza', async () => {
@@ -225,7 +225,7 @@ describe('tryb prosty: wychodząca', () => {
     };
     const bez = await post('/integracje', { ...pola, account: '' });
     expect(bez.statusCode).toBe(400);
-    expect(bez.body).toContain('nazwa twojego konta w fakturowni');
+    expect(bez.body).toContain('nazwa konta w fakturowni');
     const zla = await post('/integracje', { ...pola, account: 'firma.fakturownia.pl/klienci' });
     expect(zla.statusCode).toBe(400);
     expect(zla.body).toContain('małe litery');
