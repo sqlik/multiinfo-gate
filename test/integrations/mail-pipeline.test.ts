@@ -68,6 +68,18 @@ describe('runMailIn', () => {
     expect(events(integ.id)).toEqual([['sent', 'temat „Awaria”']]);
   });
 
+  it('stopka firmowa od nazwy nadawcy znika bez frazy administratora, w wysyłce i w podglądzie', async () => {
+    const stopka = 'To jest test\n\nJan Kowalski\nSpecjalista ds. IT\n\nPrzyklad Sp. z o.o.\ntel. +48 601000999\n\n[cid:image001.png@01DA0000.11111111]\n\nPrzyklad sp. z o.o. z siedzibą w Warszawie, zarejestrowana w rejestrze';
+    const integ = make({});
+    const out = await runMailIn(deps, integ, mail({ fromName: 'Kowalski, Jan', textFull: stopka }), NOW);
+    expect(out.kind).toBe('sent');
+    if (out.kind !== 'sent') return;
+    expect(deps.messages.get(out.messageIds[0]!)!.body).toBe('Awaria\nTo jest test');
+    expect(out.parts).toBe(1);
+    const p = previewMailIn(deps.engine, integ.config, mail({ fromName: 'Jan Kowalski', textFull: stopka }), '48', NOW);
+    expect(p.text).toBe('Awaria\nTo jest test');
+  });
+
   it('warianty trybu prostego: tylko temat, tylko treść; pusta część pomijana', async () => {
     expect(lastBody(await runMailIn(deps, make({ text: { mode: 'simple', variant: 'subject' } }), mail(), NOW))).toBe('Awaria');
     expect(lastBody(await runMailIn(deps, make({ text: { mode: 'simple', variant: 'text' } }), mail({ messageId: '<m2@x>' }), NOW))).toBe('Serwer padł');
@@ -206,7 +218,7 @@ describe('runMailIn', () => {
     const integ = make({}, 1);
     await runMailIn(deps, integ, mail(), NOW);
     const payload = deps.integrationEvents.list(integ.id, 1)[0]!.payload!;
-    expect(JSON.parse(payload)).toEqual({ from: 'jan@przyklad.test', subject: 'Awaria', text_full: 'Serwer padł\n\nPozdrawiam\nJan', date: NOW.toISOString(), message_id: '<m1@przyklad.test>' });
+    expect(JSON.parse(payload)).toEqual({ from: 'jan@przyklad.test', from_name: 'Jan', subject: 'Awaria', text_full: 'Serwer padł\n\nPozdrawiam\nJan', date: NOW.toISOString(), message_id: '<m1@przyklad.test>' });
     expect(payload).not.toContain('imap_password');
     const bez = make({}, 0);
     await runMailIn(deps, bez, mail({ messageId: '<m2@x>' }), NOW);
