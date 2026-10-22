@@ -87,7 +87,7 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
 
   const mailInPoller = new MailInPoller({
     accounts, apiKeys, messages, events, jobs, inbound, integrations, integrationEvents, guards, engine,
-    mailIn, connect: imapConnect, notifier, notifications, log,
+    mailIn, connect: imapConnect, resolve: systemResolver, allowPrivateMail: config.mailAllowPrivate, notifier, notifications, log,
   });
   const worker = new Worker({
     accounts, apiKeys, messages, events, deliveries, packages, jobs, clients, inbound,

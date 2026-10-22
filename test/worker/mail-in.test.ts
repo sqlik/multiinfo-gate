@@ -542,3 +542,20 @@ describe('nextPollDelayMs, replyFor, checkMailbox', () => {
     expect(await checkMailbox(fakeConnect(box), settings, 'Niema')).toMatchObject({ ok: false, kind: 'folder' });
   });
 });
+
+describe('MailInPoller - serwer w sieci wewnętrznej', () => {
+  it('bez MIG_MAIL_ALLOW_PRIVATE: stan „sieć” z komunikatem o zmiennej, bez połączenia', async () => {
+    const p = new MailInPoller({ ...deps, resolve: async () => ['192.168.1.10'], allowPrivateMail: false });
+    await p.poll(integ, NOW);
+    const state = mailIn.state(integ.id)!;
+    expect(state.errorKind).toBe('network');
+    expect(state.error).toContain('MIG_MAIL_ALLOW_PRIVATE=1');
+    expect(box.calls).not.toContain('connect');
+  });
+  it('ze zgodą łączy się jak dotąd', async () => {
+    const p = new MailInPoller({ ...deps, resolve: async () => ['192.168.1.10'], allowPrivateMail: true });
+    await p.poll(integ, NOW);
+    expect(box.calls).toContain('connect');
+    expect(mailIn.state(integ.id)!.errorKind).toBeNull();
+  });
+});
