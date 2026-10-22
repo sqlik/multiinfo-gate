@@ -1,6 +1,6 @@
 import type { Database } from 'better-sqlite3';
 
-export type JobType = 'send' | 'poll' | 'webhook' | 'package.create' | 'package.poll' | 'package.report' | 'mail';
+export type JobType = 'send' | 'poll' | 'webhook' | 'package.create' | 'package.poll' | 'package.report' | 'mail' | 'mail.report';
 
 export interface Job {
   id: number;
@@ -53,6 +53,11 @@ export class JobsRepo {
       }));
     });
     return take();
+  }
+
+  /** Kilka zmian w kolejce razem albo wcale (np. raport, zadanie końcowe i zakończenie bieżącego). */
+  transaction<T>(fn: () => T): T {
+    return this.db.transaction(fn)();
   }
 
   complete(id: number): void {

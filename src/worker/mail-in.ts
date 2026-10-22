@@ -9,6 +9,7 @@ import { isMailIn } from '../store/integrations.ts';
 import type { MailInRepo, MailboxErrorKind, SeenKey, SeenOutcome } from '../store/mail-in.ts';
 import type { NotificationsRepo } from '../store/notifications.ts';
 import type { MailContent } from './mail.ts';
+import { REPORT_FIRST_DELAY_MS, reportPayload } from './mail-report.ts';
 
 export const MAX_PER_POLL = 50;
 export const MAX_MAIL_BYTES = 2 * 1024 * 1024;
@@ -42,12 +43,10 @@ const KIND_WORDS: Record<MailboxErrorKind, string> = {
   auth: 'logowanie odrzucone', network: 'serwer nie odpowiada', folder: 'folder niedostępny', other: 'błąd odpytania',
 };
 
-const tail = (number: string): string => `…${number.slice(-3)}`;
-const recipientsWord = (n: number): string => (n === 1 ? 'odbiorcy' : 'odbiorców');
-const partsWord = (n: number): string => (n === 1 ? 'część' : 'części');
 
 /**
- * Treść odpowiedzi do nadawcy według sekcji 10 specu albo null, gdy odpowiedź nie przysługuje.
+ * Treść odpowiedzi do nadawcy o nieudanej wysyłce albo null, gdy odpowiedź nie przysługuje.
+ * Wysyłka udana dostaje raport z zadania `mail.report` minutę później (ze statusem doręczenia).
  * Bez odpowiedzi na mail automatyczny (RFC 3834) i przy `unavailable`, bo ten wynik powstaje przed
  * sprawdzeniem nadawcy, a do obcych bramka nie odpisuje nigdy.
  */
@@ -55,13 +54,6 @@ export function replyFor(outcome: MailInOutcome, mail: ParsedMail, config: MailI
   if (mail.auto) return null;
   let text: string;
   switch (outcome.kind) {
-    case 'sent': {
-      const n = outcome.recipients.length;
-      text = `SMS wysłany do ${n} ${recipientsWord(n)} (${outcome.recipients.map(tail).join(', ')}), ${outcome.parts} ${partsWord(outcome.parts)}.`;
-      if (outcome.invalid.length === 1) text += ` Pominięto nieprawidłowy numer: ${outcome.invalid[0]}.`;
-      else if (outcome.invalid.length > 1) text += ` Pominięto nieprawidłowe numery: ${outcome.invalid.join(', ')}.`;
-      break;
-    }
     case 'error':
       // Po „więcej niż” stoi dopełniacz: „1 części”, „3 części”.
       text = `SMS nie został wysłany: ${outcome.code === 'too_many_parts' ? `treść wymaga więcej niż ${config.maxParts} części.`
@@ -293,8 +285,13 @@ export class MailInPoller {
     }
   }
 
+  /** Odpowiedź do nadawcy: raport minutę po udanej wysyłce, mail od ręki o nieudanej. */
   private reply(integration: MailInIntegration, outcome: MailInOutcome, mail: ParsedMail, now: Date): void {
     if (!integration.config.reply.enabled || !this.deps.notifications?.smtp()) return;
+    if (outcome.kind === 'sent') {
+      if (!mail.auto) this.deps.jobs.enqueue('mail.report', { ...reportPayload(outcome, mail, integration.id, now) }, new Date(now.getTime() + REPORT_FIRST_DELAY_MS));
+      return;
+    }
     const content = replyFor(outcome, mail, integration.config);
     if (content) this.deps.jobs.enqueue('mail', { ...content }, now);
   }

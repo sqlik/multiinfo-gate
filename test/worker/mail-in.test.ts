@@ -19,6 +19,7 @@ import { MessageEventsRepo } from '../../src/store/message-events.ts';
 import { MessagesRepo } from '../../src/store/messages.ts';
 import { NotificationsRepo } from '../../src/store/notifications.ts';
 import { AUTH_RETRY_MS, BACKOFF_CAP_MS, MAX_MAIL_BYTES, MailInPoller, checkMailbox, nextPollDelayMs, replyFor, type MailInDeps } from '../../src/worker/mail-in.ts';
+import { REPORT_FIRST_DELAY_MS } from '../../src/worker/mail-report.ts';
 import { FakeMailbox, fakeConnect } from '../helpers/fake-mailbox.ts';
 import { accountInput } from '../store/helpers.ts';
 
@@ -26,6 +27,7 @@ const NOW = new Date('2026-10-21T10:00:00Z');
 const at = (ms: number) => new Date(NOW.getTime() + ms);
 const PASSWORD = 'TajneHaslo9';
 let deps: MailInDeps;
+let db: ReturnType<typeof openDatabase>;
 let integrations: IntegrationsRepo;
 let mailIn: MailInRepo;
 let notifications: NotificationsRepo;
@@ -51,10 +53,12 @@ const make = (config: Partial<MailInConfig> = {}, over: { password?: string; nam
 const smsCount = () => deps.messages.list({ limit: 100, offset: 0 }).length;
 const events = (id: number) => deps.integrationEvents.list(id, 100).map((e) => [e.result, e.reason]);
 const mails = () => deps.jobs.claim(at(86_400_000), 20).filter((j) => j.type === 'mail').map((j) => j.payload);
+const pendingJobs = () => (db.prepare('SELECT type, payload, run_at FROM jobs ORDER BY id').all() as Array<{ type: string; payload: string; run_at: string }>)
+  .map((j) => ({ type: j.type, payload: JSON.parse(j.payload) as Record<string, unknown>, runAt: j.run_at }));
 
 beforeEach(() => {
   seq = 0;
-  const db = openDatabase(':memory:');
+  db = openDatabase(':memory:');
   const key = randomBytes(32);
   const accounts = new AccountsRepo(db, key);
   const accountId = accounts.insert(accountInput({ storeContent: 1 }));
@@ -418,7 +422,7 @@ describe('MailInPoller: powiadomienia i odpowiedzi', () => {
     expect(notified[0]!.summary).toContain('Skrzynka 2: ');
   });
 
-  it('odpowiedź do nadawcy: zadanie mail z adresatem i In-Reply-To przy sent oraz error; brak przy sender_not_allowed, condition i bez SMTP', async () => {
+  it('odpowiedź do nadawcy: raport minutę po wysyłce przy sent, mail od ręki przy error; brak przy sender_not_allowed, condition i bez SMTP', async () => {
     const odp = make({ reply: { enabled: true }, condition: { mode: 'builder', rules: [{ path: 'subject', op: 'ne', value: 'cicho' }] } });
     integrations.setEnabled(integ.id, false, NOW);
     await poller.tick(NOW);
@@ -433,9 +437,27 @@ describe('MailInPoller: powiadomienia i odpowiedzi', () => {
     integrations.update(odp.id, { ...odp, config: { ...odp.config, overflow: 'reject' } } as never, at(120_000));
     await poller.tick(at(120_000));
     const sent = mails();
-    expect(sent).toHaveLength(2);
-    expect(sent[0]).toEqual({ subject: 'Re: B', text: 'SMS wysłany do 1 odbiorcy (…009), 1 część.', to: ['jan@przyklad.test'], inReplyTo: '<3@x>', references: '<3@x>', autoReply: true });
-    expect(sent[1]).toMatchObject({ subject: 'Re: D', text: 'SMS nie został wysłany: treść wymaga więcej niż 1 części.', to: ['jan@przyklad.test'], inReplyTo: '<6@x>' });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ subject: 'Re: D', text: 'SMS nie został wysłany: treść wymaga więcej niż 1 części.', to: ['jan@przyklad.test'], inReplyTo: '<6@x>' });
+    const reports = pendingJobs().filter((j) => j.type === 'mail.report');
+    expect(reports).toHaveLength(1);
+    expect(reports[0]!.payload).toEqual({
+      stage: 'first', integrationId: odp.id, to: ['jan@przyklad.test'], subject: 'B', inReplyTo: '<3@x>', references: '<3@x>',
+      messageIds: [expect.stringMatching(/^msg_/)], recipients: ['48601000009'], invalid: [], text: 'B\ny', parts: 1, sentAt: at(120_000).toISOString(),
+    });
+    expect(reports[0]!.runAt).toBe(at(120_000 + REPORT_FIRST_DELAY_MS).toISOString());
+  });
+
+  it('mail automatyczny (Auto-Submitted) z udaną wysyłką nie dostaje raportu ani odpowiedzi', async () => {
+    const odp = make({ reply: { enabled: true } });
+    integrations.setEnabled(integ.id, false, NOW);
+    notifications.saveSmtp({ host: 'smtp.przyklad.test', port: 465, security: 'tls', user: null, password: null, fromAddress: 'g@przyklad.test', fromName: 'G', recipients: ['admin@przyklad.test'], instanceName: 'mi', panelUrl: null }, NOW);
+    await poller.tick(NOW);
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'Alarm', 'x', '<2@x>').replace('MIME-Version', 'Auto-Submitted: auto-generated\r\nMIME-Version') });
+    await poller.tick(at(60_000));
+    expect(deps.messages.list({ limit: 10, offset: 0 }).map((m) => m.dest)).toEqual(['48601000009']);
+    expect(pendingJobs().filter((j) => j.type === 'mail' || j.type === 'mail.report')).toEqual([]);
+    expect(odp.id).toBeGreaterThan(0);
   });
 });
 
@@ -486,17 +508,14 @@ describe('nextPollDelayMs, replyFor, checkMailbox', () => {
     expect(nextPollDelayMs(900, 3, 'other')).toBe(BACKOFF_CAP_MS);
   });
 
-  it('treść odpowiedzi według sekcji 10 specu', () => {
+  it('treść odpowiedzi o błędzie; wysyłka udana nie dostaje odpowiedzi od ręki, tylko raport', () => {
     const m = { from: 'a@x', fromName: '', subject: 'Awaria', textFull: '', date: '', to: [], messageId: '<1@x>', authResults: [], auto: false } satisfies ParsedMail;
     const c = { ...defaultMailInConfig(), maxParts: 3, throttle: { limit: 10, windowMinutes: 10 } };
-    expect(replyFor({ kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: [], parts: 1 }, { ...m, subject: '' }, c)?.subject).toBe('Re: (bez tematu)');
-    expect(replyFor({ kind: 'sent', messageIds: ['a', 'b'], recipients: ['48601000200', '48601000201'], invalid: [], parts: 1 }, m, c))
-      .toEqual({ subject: 'Re: Awaria', text: 'SMS wysłany do 2 odbiorców (…200, …201), 1 część.', to: ['a@x'], inReplyTo: '<1@x>', references: '<1@x>', autoReply: true });
-    expect(replyFor({ kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: ['60010'], parts: 2 }, m, c)?.text)
-      .toBe('SMS wysłany do 1 odbiorcy (…200), 2 części. Pominięto nieprawidłowy numer: 60010.');
-    expect(replyFor({ kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: ['1', '2'], parts: 5 }, m, c)?.text)
-      .toBe('SMS wysłany do 1 odbiorcy (…200), 5 części. Pominięto nieprawidłowe numery: 1, 2.');
-    expect(replyFor({ kind: 'error', code: 'too_many_parts', detail: 'x' }, m, c)?.text).toBe('SMS nie został wysłany: treść wymaga więcej niż 3 części.');
+    const sent = { kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: [], parts: 1, text: 'x' } as const;
+    expect(replyFor(sent, m, c)).toBeNull();
+    expect(replyFor({ kind: 'error', code: 'too_many_parts', detail: 'x' }, { ...m, subject: '' }, c)?.subject).toBe('Re: (bez tematu)');
+    expect(replyFor({ kind: 'error', code: 'too_many_parts', detail: 'x' }, m, c))
+      .toEqual({ subject: 'Re: Awaria', text: 'SMS nie został wysłany: treść wymaga więcej niż 3 części.', to: ['a@x'], inReplyTo: '<1@x>', references: '<1@x>', autoReply: true });
     expect(replyFor({ kind: 'error', code: 'no_recipient', detail: 'x' }, m, c)?.text).toBe('SMS nie został wysłany: nie udało się ustalić odbiorcy.');
     expect(replyFor({ kind: 'error', code: 'empty_text', detail: 'x' }, m, c)?.text).toBe('SMS nie został wysłany: treść maila po usunięciu podpisu i cytatów jest pusta.');
     expect(replyFor({ kind: 'error', code: 'invalid_phone', detail: 'Wszystkie numery są złe: 1.' }, m, c)?.text).toBe('SMS nie został wysłany: Wszystkie numery są złe: 1.');
@@ -504,12 +523,11 @@ describe('nextPollDelayMs, replyFor, checkMailbox', () => {
     // Wynik `unavailable` powstaje przed sprawdzeniem nadawcy, więc odpowiedź poszłaby także do obcego.
     expect(replyFor({ kind: 'unavailable', detail: 'x' }, m, c)).toBeNull();
     // Mail automatyczny (autoresponder, urządzenie, lista) nie dostaje odpowiedzi: inaczej pętla odpowiedzi.
-    expect(replyFor({ kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: [], parts: 1 }, { ...m, auto: true }, c)).toBeNull();
-    expect(replyFor({ kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: [], parts: 1 }, m, c)?.autoReply).toBe(true);
+    expect(replyFor({ kind: 'error', code: 'no_recipient', detail: 'x' }, { ...m, auto: true }, c)).toBeNull();
     expect(replyFor({ kind: 'skipped', reason: 'condition' }, m, c)).toBeNull();
     expect(replyFor({ kind: 'skipped', reason: 'sender_not_allowed' }, m, c)).toBeNull();
-    expect(replyFor({ kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: [], parts: 1 }, { ...m, subject: 'Re: Awaria', messageId: null }, c))
-      .toEqual({ subject: 'Re: Awaria', text: 'SMS wysłany do 1 odbiorcy (…200), 1 część.', to: ['a@x'], autoReply: true });
+    expect(replyFor({ kind: 'error', code: 'no_recipient', detail: 'x' }, { ...m, subject: 'Re: Awaria', messageId: null }, c))
+      .toEqual({ subject: 'Re: Awaria', text: 'SMS nie został wysłany: nie udało się ustalić odbiorcy.', to: ['a@x'], autoReply: true });
   });
 
   it('checkMailbox: sukces z liczbą nieprzeczytanych i folderami; błąd logowania bez hasła w treści', async () => {
