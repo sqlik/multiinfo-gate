@@ -26,6 +26,8 @@ export interface SubmitInput {
   idempotencyKey?: string;
   /** Integracja, która zleciła wysyłkę; brak dla żądań z API. */
   integrationId?: number;
+  /** Adres e-mail nadawcy wiadomości z Mail2SMS; brak dla pozostałych źródeł. */
+  mailFrom?: string;
 }
 
 export interface SubmitResult {
@@ -154,6 +156,7 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
       idempotencyKey: perRecipientIdem ?? null,
       inReplyTo,
       integrationId: input.integrationId ?? null,
+      mailFrom: input.mailFrom ?? null,
       createdAt: now.toISOString(),
     });
     deps.jobs.enqueue('send', { messageId: id, text: input.text, deliveryReport }, now);

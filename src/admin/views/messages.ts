@@ -128,7 +128,7 @@ export interface MessageDetail {
   events: MessageEvent[];
   /** Dostawy webhooków o tej wiadomości; pusta lista, gdy klucz nie ma adresu webhooka. */
   deliveries: DeliveryView[];
-  /** Integracja, z której wiadomość przyszła (webhook przychodzący); brak dla wysyłki przez API. */
+  /** Integracja, z której wiadomość przyszła (webhook przychodzący albo skrzynka); brak dla wysyłki przez API. */
   integration?: { id: number; name: string } | null;
 }
 
@@ -271,6 +271,7 @@ export function messagePage(d: MessageDetail): string {
           <div>ID usługi</div><div class="m">${esc(m.serviceId)}</div>
           ${m.inReplyTo === null ? '' : `<div>Odpowiedź na</div><div class="m"><a href="/odebrane/${esc(m.inReplyTo)}">${esc(m.inReplyTo)}</a></div>`}
           ${!d.integration ? '' : `<div>Integracja</div><div><a href="/integracje/${esc(d.integration.id)}">${esc(d.integration.name)}</a></div>`}
+          ${m.mailFrom === null ? '' : `<div>E-mail nadawcy</div><div class="m">${esc(m.mailFrom)}</div>`}
           <div>Części w Multiinfo</div><div>${parts}</div>
           <div>Status Multiinfo</div><div class="m">${substatus === null
             ? '<span class="dim">brak</span>'

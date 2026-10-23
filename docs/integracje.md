@@ -465,7 +465,8 @@ sortowania.
 Wiadomość przechodzi przez ten sam potok co zlecenie z aplikacji: warunek, ochronę przed burzą,
 szablon, wysyłkę w imieniu klucza API i wpis w dzienniku integracji. SMS-y wysłane na podstawie
 wiadomości e-mail są widoczne na ekranie „Wiadomości” z nazwą klucza i nazwą integracji, tak jak
-pozostałe.
+pozostałe. Szczegóły takiej wiadomości mają dodatkowo wiersz „E-mail nadawcy” z adresem, z którego
+przyszła wiadomość.
 
 ### 5.1. Skrzynka
 

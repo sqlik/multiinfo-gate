@@ -205,7 +205,7 @@ export function passGuards(
 export function dispatch(
   deps: PipelineDeps, integration: IntegrationRow, key: ApiKeyRow, text: string, recipients: string[],
   config: { maxParts: number; overflow: 'truncate' | 'reject' }, note: Noter, now: Date,
-  extra: { inReplyTo?: string; sentReason?: string } = {},
+  extra: { inReplyTo?: string; sentReason?: string; mailFrom?: string } = {},
 ): { kind: 'sent'; messageIds: string[]; parts: number; text: string } | { kind: 'error'; code: InboundErrorCode; detail: string } {
   const fitted = fitToParts(text, config.maxParts);
   if (fitted.over && config.overflow === 'reject') {
@@ -219,6 +219,7 @@ export function dispatch(
       ...(integration.serviceId ? { serviceId: integration.serviceId } : {}),
       ...(integration.orig ? { orig: integration.orig } : {}),
       ...(extra.inReplyTo ? { inReplyTo: extra.inReplyTo } : {}),
+      ...(extra.mailFrom ? { mailFrom: extra.mailFrom } : {}),
     }, now);
     const messageIds = results.map((r) => r.id);
     const reason = [messageIds.length > 1 ? `${messageIds.length} odbiorców` : null, extra.sentReason ?? null].filter((r) => r !== null).join('; ');
@@ -505,7 +506,7 @@ export async function runMailIn(deps: PipelineDeps, integration: MailInIntegrati
   if (text === '') return fail('empty_text', 'Treść SMS-a jest pusta: wiadomość po usunięciu podpisu i cytatów nie zawiera treści.');
 
   const sentReason = prepared.invalid.length > 0 ? `pominięto nieprawidłowe numery: ${prepared.invalid.join(', ')}` : undefined;
-  const sent = dispatch(deps, integration, key, text, prepared.recipients, config, note, now, sentReason ? { sentReason } : {});
+  const sent = dispatch(deps, integration, key, text, prepared.recipients, config, note, now, { ...(sentReason ? { sentReason } : {}), ...(mail.from ? { mailFrom: mail.from } : {}) });
   if (sent.kind === 'error') {
     log.warn('integracja.blad', { integrationId: integration.id, code: sent.code });
     return sent;
