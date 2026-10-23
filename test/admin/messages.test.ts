@@ -333,4 +333,16 @@ describe('ślady integracji', () => {
     seed('m_plain');
     expect((await page('/wiadomosci/m_plain')).body).not.toContain('>Integracja<');
   });
+
+  it('szczegół wiadomości z Mail2SMS pokazuje adres e-mail nadawcy; wiadomość z API nie ma tego wiersza', async () => {
+    h.messages.insert({
+      id: 'm_mail', apiKeyId, accountId, serviceId: '24138', dest: '48601135134', body: 'Awaria', bodyHash: 'h', encoding: 'gsm', parts: 1, slots: 22,
+      orig: null, costCenter: null, validTo: null, idempotencyKey: null, createdAt: NOW.toISOString(), mailFrom: 'jan.kowalski@przyklad.test',
+    });
+    const res = await page('/wiadomosci/m_mail');
+    expect(res.body).toContain('>E-mail nadawcy<');
+    expect(res.body).toContain('jan.kowalski@przyklad.test');
+    seed('m_api');
+    expect((await page('/wiadomosci/m_api')).body).not.toContain('E-mail nadawcy');
+  });
 });

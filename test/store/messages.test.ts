@@ -213,4 +213,12 @@ describe('MessagesRepo - wątek z wiadomością przychodzącą', () => {
     expect(repo.get('msg_n')!.inReplyTo).toBeNull();
     expect(repo.repliesTo('in_1').map((m) => m.id)).toEqual(['msg_r']);
   });
+
+  it('zapisuje adres e-mail nadawcy z Mail2SMS; bez niego kolumna jest pusta', () => {
+    const { messages: repo, accountId, apiKeyId } = setup();
+    repo.insert(messageInput({ accountId, apiKeyId, id: 'msg_m', mailFrom: 'jan@przyklad.test' }));
+    repo.insert(messageInput({ accountId, apiKeyId, id: 'msg_n' }));
+    expect(repo.get('msg_m')!.mailFrom).toBe('jan@przyklad.test');
+    expect(repo.get('msg_n')!.mailFrom).toBeNull();
+  });
 });

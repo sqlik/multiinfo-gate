@@ -465,7 +465,8 @@ sortowania.
 Wiadomość przechodzi przez ten sam potok co zlecenie z aplikacji: warunek, ochronę przed burzą,
 szablon, wysyłkę w imieniu klucza API i wpis w dzienniku integracji. SMS-y wysłane na podstawie
 wiadomości e-mail są widoczne na ekranie „Wiadomości” z nazwą klucza i nazwą integracji, tak jak
-pozostałe.
+pozostałe. Szczegóły takiej wiadomości mają dodatkowo wiersz „E-mail nadawcy” z adresem, z którego
+przyszła wiadomość.
 
 ### 5.1. Skrzynka
 
@@ -771,7 +772,7 @@ Odbiorcy:
 48601000001 - doręczona 11:40:14
 48601000002 - w drodze
 
-Potwierdzenie doręczenia dla numerów w drodze zostanie dostarczone w kolejnej wiadomości.
+Informacja o statusie doręczenia SMS dla numerów w kolejce zostanie dostarczona w kolejnej wiadomości e-mail.
 ```
 
 Status przy numerze to „doręczona” z godziną doręczenia, „w drodze”, „w kolejce”, „błąd” albo

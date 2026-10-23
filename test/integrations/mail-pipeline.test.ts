@@ -72,6 +72,7 @@ describe('runMailIn', () => {
     expect(msg.dest).toBe('48601000009');
     expect(msg.body).toBe('Awaria\nSerwer padł');
     expect(msg.integrationId).toBe(integ.id);
+    expect(msg.mailFrom).toBe('jan@przyklad.test');
     expect([out.recipients, out.invalid, out.parts]).toEqual([['48601000009'], [], 1]);
     expect(events(integ.id)).toEqual([['sent', 'temat „Awaria”']]);
   });

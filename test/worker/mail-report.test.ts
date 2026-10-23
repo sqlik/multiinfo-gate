@@ -89,7 +89,7 @@ describe('composeReport', () => {
         '48601000001 - doręczona 11:40:14',
         '48601000002 - w drodze',
         '',
-        'Potwierdzenie doręczenia dla numerów w drodze zostanie dostarczone w kolejnej wiadomości.',
+        'Informacja o statusie doręczenia SMS dla numerów w kolejce zostanie dostarczona w kolejnej wiadomości e-mail.',
       ].join('\n'),
     });
   });

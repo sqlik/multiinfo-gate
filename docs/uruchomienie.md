@@ -628,7 +628,9 @@ pokazuje panel na ekranie **Wiadomości**.
 
 Szczegóły wiadomości (odnośnik w kolumnie identyfikatora) pokazują podgląd segmentów, przebieg
 z czasami kolejnych zdarzeń oraz ślad protokołu. Ślad to pełne żądanie do Multiinfo
-z zamaskowanym hasłem i odpowiedź linia po linii.
+z zamaskowanym hasłem i odpowiedź linia po linii. Wiadomość zlecona przez integrację ma wiersz
+z nazwą integracji, a wiadomość z Mail2SMS dodatkowo wiersz „E-mail nadawcy” z adresem,
+z którego przyszła wiadomość e-mail.
 
 ![Szczegóły doręczonej wiadomości: podgląd segmentów, dane, przebieg i ślad protokołu](obrazki/wiadomosc.png)
 
