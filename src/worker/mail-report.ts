@@ -93,7 +93,7 @@ export function composeReport(payload: MailReportPayload, rows: Array<MessageRow
     ];
     if (invalid.length === 1) lines.push('', `Pominięto nieprawidłowy numer: ${invalid[0]}.`);
     else if (invalid.length > 1) lines.push('', `Pominięto nieprawidłowe numery: ${invalid.join(', ')}.`);
-    if (!rows.every(isFinalRow)) lines.push('', 'Potwierdzenie doręczenia dla numerów w drodze zostanie dostarczone w kolejnej wiadomości.');
+    if (!rows.every(isFinalRow)) lines.push('', 'Informacja o statusie doręczenia SMS dla numerów w kolejce zostanie dostarczona w kolejnej wiadomości e-mail.');
   } else if (kind === 'final') {
     lines = [`Wynik końcowy SMS-a z wiadomości „${subject}” ${verbGen} ${when}.`, '', ...recipients];
   } else {
