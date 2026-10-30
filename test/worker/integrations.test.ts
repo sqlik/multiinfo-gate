@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { defaultOutboundConfig, type OutboundConfig } from '../../src/integrations/config.ts';
+import { defaultOutboundConfig, defaultSmsGroupConfig, type OutboundConfig, type SmsGroupConfig } from '../../src/integrations/config.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
 import { buildOutboundContext, emitIntegrations, previewOutbound, renderOutbound } from '../../src/worker/integrations.ts';
 import { openDatabase } from '../../src/store/db.ts';
@@ -11,6 +11,8 @@ import { IntegrationGuardsRepo } from '../../src/store/integration-guards.ts';
 import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { IntegrationsRepo } from '../../src/store/integrations.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
+import { MessageEventsRepo } from '../../src/store/message-events.ts';
+import { MessagesRepo } from '../../src/store/messages.ts';
 import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
 import { accountInput } from '../store/helpers.ts';
 
@@ -24,16 +26,24 @@ beforeEach(() => {
   notify.mockReset();
   const db = openDatabase(':memory:');
   const key = randomBytes(32);
-  const accountId = new AccountsRepo(db, key).insert(accountInput());
-  apiKeyId = new ApiKeysRepo(db, key).insert({ accountId, name: 'k', keyHash: 'h', keyPrefix: 'p', defaultServiceId: '24138', defaultOrig: null, maxParts: 9, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'] });
+  const accounts = new AccountsRepo(db, key);
+  // Treść wiadomości zostaje w bazie: testy grupy sprawdzają, co dokładnie poszło.
+  const accountId = accounts.insert(accountInput({ storeContent: 1 }));
+  const apiKeys = new ApiKeysRepo(db, key);
+  apiKeyId = apiKeys.insert({ accountId, name: 'k', keyHash: 'h', keyPrefix: 'p', defaultServiceId: '24138', defaultOrig: null, maxParts: 9, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'] });
   integrations = new IntegrationsRepo(db, key);
+  const inbound = new InboundMessagesRepo(db);
   // Dostawa odebranej wskazuje wiadomość kluczem obcym - musi istnieć.
-  new InboundMessagesRepo(db).insertIfNew({ id: 'in_1', accountId, serviceId: '24138', miId: '1', sender: '48601000001', dest: '7968', kind: 'text', body: 'Pomocy', bodyHash: 'h', protocolId: 0, codingScheme: 0, connectorId: null, relatedMessageId: null, receivedAt: NOW.toISOString(), createdAt: NOW.toISOString() });
+  inbound.insertIfNew({ id: 'in_1', accountId, serviceId: '24138', miId: '1', sender: '48601000001', dest: '7968', kind: 'text', body: 'Pomocy', bodyHash: 'h', protocolId: 0, codingScheme: 0, connectorId: null, relatedMessageId: null, receivedAt: NOW.toISOString(), createdAt: NOW.toISOString() });
+  const jobs = new JobsRepo(db);
   deps = {
     integrations, integrationEvents: new IntegrationEventsRepo(db, key), guards: new IntegrationGuardsRepo(db),
-    deliveries: new WebhookDeliveriesRepo(db, key), jobs: new JobsRepo(db), engine: new TemplateEngine(), notifier: { notify },
+    deliveries: new WebhookDeliveriesRepo(db, key), jobs, engine: new TemplateEngine(), notifier: { notify },
+    group: { accounts, apiKeys, messages: new MessagesRepo(db), events: new MessageEventsRepo(db), jobs, inbound },
   };
 });
+const group = (config: Partial<SmsGroupConfig>, name = 'Grupa') => integrations.insert({ name, kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1, config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], prefix: 'pomoc', ...config }, secrets: {}, storePayloads: 0, createdAt: NOW });
+const sentMessages = () => deps.group!.messages.list({ limit: 10, offset: 0 }).map((m) => [m.dest, m.body]);
 
 const make = (config: Partial<OutboundConfig>, secrets: Record<string, string> = {}, name = 'HA') => integrations.insert({
   name, kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1,
@@ -100,6 +110,49 @@ describe('emitIntegrations', () => {
     const id = integrations.insert({ name: 'Z', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1, config: { ...defaultOutboundConfig(), url: 'https://x.example', body: { mode: 'json', template: '{}' } }, secrets: {}, storePayloads: 1, createdAt: NOW });
     emitIntegrations(deps, apiKeyId, 'message.received', received, NOW);
     expect(deps.integrationEvents.latestPayload(id)).toContain('"text":"Pomocy"');
+  });
+});
+
+describe('emitIntegrations: grupa SMS', () => {
+  it('odebrany SMS z prefiksem daje wiadomości do listy, bez dostawy HTTP; webhook obok działa niezależnie', () => {
+    const g = group({});
+    make({});
+    const ids = emitIntegrations(deps, apiKeyId, 'message.received', { ...received, text: 'Pomoc: nie działa' }, NOW, { inboundId: 'in_1' });
+    expect(ids).toHaveLength(1);
+    expect(deps.deliveries.get(ids[0]!)!.integrationId).not.toBe(g);
+    expect(sentMessages()).toEqual([['48601000002', 'nie działa']]);
+    expect(deps.integrationEvents.list(g, 5)[0]).toMatchObject({ result: 'sent', inboundId: 'in_1' });
+    expect(notify).not.toHaveBeenCalled();
+  });
+  it('bez zależności wysyłki zapisuje błąd i powiadamia, nie rzuca', () => {
+    const g = group({});
+    const { group: _omit, ...bez } = deps;
+    expect(() => emitIntegrations(bez, apiKeyId, 'message.received', { ...received, text: 'Pomoc: x' }, NOW)).not.toThrow();
+    expect(deps.integrationEvents.list(g, 5)[0]).toMatchObject({ result: 'error', reason: 'wysyłka SMS niedostępna w tym procesie' });
+    expect(notify).toHaveBeenCalledWith('integration_error', `integration:${g}`, expect.stringContaining('niedostępna'), NOW);
+  });
+  it('nie reaguje na statusy wysyłki', () => {
+    const g = group({});
+    emitIntegrations(deps, apiKeyId, 'message.delivered', { id: 'msg_1', status: 'delivered', to: '48601000002' }, NOW);
+    expect(sentMessages()).toEqual([]);
+    expect(deps.integrationEvents.list(g, 5)).toHaveLength(0);
+  });
+  it('limit burzy powiadamia raz, błąd szablonu powiadamia administratora', () => {
+    const storm = group({ throttle: { limit: 1, windowMinutes: 10 } }, 'Burza');
+    emitIntegrations(deps, apiKeyId, 'message.received', { ...received, text: 'Pomoc: a' }, NOW);
+    emitIntegrations(deps, apiKeyId, 'message.received', { ...received, text: 'Pomoc: b' }, NOW);
+    expect(notify).toHaveBeenCalledWith('integration_throttled', `integration:${storm}`, expect.stringContaining('limit 1 w 10 min'), NOW);
+    const broken = group({ text: { mode: 'liquid', template: '{{ body | nieznany }}' } }, 'Zły');
+    emitIntegrations(deps, apiKeyId, 'message.received', { ...received, text: 'Pomoc: c' }, NOW);
+    expect(notify).toHaveBeenCalledWith('integration_error', `integration:${broken}`, expect.stringContaining('Zły:'), NOW);
+    expect(sentMessages()).toEqual([['48601000002', 'a']]);
+  });
+  it('SMS bez prefiksu zapisuje pominięcie bez powiadomienia i bez wiadomości', () => {
+    const g = group({});
+    emitIntegrations(deps, apiKeyId, 'message.received', received, NOW);
+    expect(deps.integrationEvents.list(g, 5)[0]).toMatchObject({ result: 'skipped', reason: 'bez prefiksu' });
+    expect(sentMessages()).toEqual([]);
+    expect(notify).not.toHaveBeenCalled();
   });
 });
 
