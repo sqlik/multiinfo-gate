@@ -897,9 +897,10 @@ w panelu. Podsumowanie dzienne zawiera liczbę skrzynek i liczbę skrzynek w bł
 Od wersji 1.8.5 bramka rozsyła jednego SMS-a do stałej listy numerów. Służy do tego integracja
 „do grupy”, w panelu nazwana SMS do grupy. Uprawniona osoba wysyła SMS na numer bramki. Bramka
 sprawdza, czy numer nadawcy jest na liście, zdejmuje z treści słowo wybierające grupę i rozsyła
-resztę do każdego numeru z listy osobną wiadomością. Rodzic pisze „dzieci jutro zbiórka 8:00”
-i wiadomość trafia do wszystkich dzieci z klasy. Pisze „rodzice zebranie w środę” i wiadomość
-trafia do rodziców. Po stronie telefonu nie trzeba niczego instalować. Wystarczy zwykły SMS.
+resztę do każdego numeru z listy osobną wiadomością. Dyspozytor pisze „serwis awaria pompy
+w hali B” i wiadomość trafia do całej ekipy serwisowej. Pisze „biuro klient czeka na ofertę”
+i wiadomość trafia do zespołu handlowego. Po stronie telefonu nie trzeba niczego instalować.
+Wystarczy zwykły SMS.
 
 Grupa działa w imieniu klucza API, tak jak pozostałe integracje. SMS-y do odbiorców są widoczne
 na ekranie „Wiadomości” z nazwą klucza i nazwą grupy. Każdy odbiorca otrzymuje osobną wiadomość.
@@ -915,9 +916,10 @@ czyli prefiks, treść, potwierdzenie i dziennik, działa tak samo.
 | osobne listy | „Osobne listy” | numery z listy uprawnionych, do 100 | numery z listy odbiorców, do 500 |
 | grupa zamknięta | „Grupa zamknięta” | każdy członek grupy | pozostali członkowie, bez nadawcy; od 2 do 500 numerów |
 
-Osobne listy pasują do klasy, drużyny albo zespołu, w którym pisze kilka osób, a odbiera wiele.
-Nadawca nie musi być odbiorcą. Grupa zamknięta pasuje do kilku osób, które mają jeden wspólny
-numer i piszą do siebie nawzajem: rodzina, dyżur, zarząd.
+Osobne listy pasują do ekipy serwisowej, brygady albo zespołu handlowego, w którym pisze
+dyspozytor albo kierownik, a odbiera wielu. Nadawca nie musi być odbiorcą. Grupa zamknięta
+pasuje do kilku osób, które mają jeden wspólny numer i piszą do siebie nawzajem: dyżur IT,
+zarząd, wspólnicy.
 
 ### 5a.2. Dodanie grupy krok po kroku
 
@@ -929,7 +931,7 @@ ustawienia. Formularz w trybie prostym ma pięć sekcji.
 2. **Kto i do kogo.** Wybór trybu dwoma polami opcji. Dla osobnych list są dwa pola:
    „Numery uprawnione do pisania” i „Numery odbiorców”. Dla grupy zamkniętej jedno pole:
    „Numery członków”. W każdym polu jeden numer w wierszu. Po numerze można dopisać nazwę,
-   na przykład `601 000 001 Ania`. Nazwa zaczyna się od pierwszej litery i sięga końca wiersza.
+   na przykład `601 000 001 Anna Nowak`. Nazwa zaczyna się od pierwszej litery i sięga końca wiersza.
    Numer można zapisać ze spacjami, plusem, myślnikami albo nawiasami. Bramka sprowadza go do
    postaci z kodem kraju konta, tak jak odbiorców z rozdziału 3.3. Numer powtórzony w dwóch
    wierszach zostaje zapisany raz. Numer nieprawidłowy zatrzymuje zapis zdaniem z tym numerem.
@@ -955,7 +957,7 @@ Tryb zaawansowany dodaje warunek z rozdziału 3.6, szablon Liquid jako trzeci wa
 ochronę przed burzą, rozmiar dziennika i przechowywanie ładunków. Grupa zapisana z warunkiem
 albo szablonem Liquid otwiera się do edycji od razu w trybie zaawansowanym.
 
-Druga grupa na tym samym numerze, na przykład rodzice obok dzieci, to druga integracja na tym
+Druga grupa na tym samym numerze, na przykład biuro obok ekipy serwisowej, to druga integracja na tym
 samym kluczu i tej samej usłudze, z innym prefiksem. Jedna grupa ma jeden prefiks.
 
 ### 5a.3. Prefiks
@@ -963,31 +965,31 @@ samym kluczu i tej samej usłudze, z innym prefiksem. Jedna grupa ma jeden prefi
 Prefiks to jedno słowo bez spacji, do 20 znaków. Bramka porównuje je z początkiem treści SMS-a.
 Wielkość liter nie ma znaczenia. Polskie znaki są sprowadzane do łacińskich, więc „Żłobek”
 i „zlobek” to ten sam prefiks. Po słowie może stać spacja, dwukropek albo oba. Każdy z poniższych
-zapisów daje SMS o treści `jutro zbiórka`:
+zapisów daje SMS o treści `awaria pompy`:
 
 ```
-dzieci jutro zbiórka
-Dzieci jutro zbiórka
-DZIECI: jutro zbiórka
-dzieci : jutro zbiórka
-Dzieci:jutro zbiórka
+serwis awaria pompy
+Serwis awaria pompy
+SERWIS: awaria pompy
+serwis : awaria pompy
+Serwis:awaria pompy
 ```
 
-Bezpośrednio po prefiksie musi stać koniec tekstu, spacja albo dwukropek. SMS „dzieciak jutro”
-nie uruchamia grupy „dzieci”. Treść do rozesłania to reszta po prefiksie, bez dwukropka
+Bezpośrednio po prefiksie musi stać koniec tekstu, spacja albo dwukropek. SMS „serwisant awaria”
+nie uruchamia grupy „serwis”. Treść do rozesłania to reszta po prefiksie, bez dwukropka
 i spacji z początku, z zachowaniem wielkości liter i znaków.
 
 SMS bez prefiksu albo z nieznanym prefiksem jest pomijany. Bramka nie odpowiada na niego
 i niczego nie wysyła. Tak samo pomijany jest SMS składający się z samego prefiksu, na przykład
-„dzieci” albo „Dzieci:”. Puste pole prefiksu wyłącza ten krok: każdy SMS od uprawnionego
+„serwis” albo „Serwis:”. Puste pole prefiksu wyłącza ten krok: każdy SMS od uprawnionego
 numeru idzie do grupy w całości.
 
 ### 5a.4. Treść
 
 | Wariant | Co dostają odbiorcy | Przykład |
 |---|---|---|
-| Sama treść | reszta SMS-a po prefiksie | `jutro zbiórka 8:00` |
-| Nadawca i treść | nazwa nadawcy z listy, dwukropek i reszta; bez nazwy numer nadawcy | `Ania: jutro zbiórka 8:00` |
+| Sama treść | reszta SMS-a po prefiksie | `awaria pompy w hali B` |
+| Nadawca i treść | nazwa nadawcy z listy, dwukropek i reszta; bez nazwy numer nadawcy | `Anna Nowak: awaria pompy w hali B` |
 | Szablon Liquid | wynik szablonu na zmiennych z rozdziału 6.2, tylko tryb zaawansowany | `{{ sender }} do {{ recipients.size }}: {{ body }}` |
 
 Limit części i przepełnienie działają jak w rozdziale 3.5 i są dostępne w obu trybach

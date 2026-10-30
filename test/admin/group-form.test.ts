@@ -45,7 +45,7 @@ describe('groupConfigToValues i próbka', () => {
     const config = (groupFormToConfig(groupFormValues(base), '48', engine) as { config: SmsGroupConfig }).config;
     const v = groupConfigToValues(config, { name: 'Dzieci', apiKeyId: '1', serviceId: '', orig: '', enabled: true, preset: 'sms-grupa', storePayloads: false });
     expect(v).toMatchObject({ senders: '48601000001 Ania', recipients: '48601000002\n48601000003', members: '', prefix: 'Dzieci', mode: 'lists', textMode: 'body', textTemplate: '', confirmEnabled: false, maxParts: '1', overflow: 'truncate', sampleFrom: '', sampleText: '' });
-    expect(groupSampleEvent(v, config, NOW)).toMatchObject({ from: '48601000001', text: 'Dzieci Jutro zbiórka o 8:00', kind: 'text', serviceId: '', receivedAt: NOW.toISOString() });
+    expect(groupSampleEvent(v, config, NOW)).toMatchObject({ from: '48601000001', text: 'Dzieci Awaria pompy w hali B, proszę o kontakt', kind: 'text', serviceId: '', receivedAt: NOW.toISOString() });
     expect(groupSampleEvent({ ...v, sampleFrom: '+48 601 000 009', sampleText: 'dzieci: halo' }, config, NOW)).toMatchObject({ from: '48601000009', text: 'dzieci: halo' });
     expect(groupSampleEvent({ ...v, sampleFrom: 'INFO' }, config, NOW).from).toBe('INFO');
   });
@@ -53,7 +53,7 @@ describe('groupConfigToValues i próbka', () => {
     const config: SmsGroupConfig = { ...defaultSmsGroupConfig(), mode: 'closed', members: [{ phone: '48601000005', name: '' }, { phone: '48601000006', name: '' }] };
     const v = groupConfigToValues(config, { name: 'Z', apiKeyId: '1', serviceId: '', orig: '', enabled: true, preset: 'sms-grupa', storePayloads: false });
     expect(v.members).toBe('48601000005\n48601000006');
-    expect(groupSampleEvent(v, config, NOW)).toMatchObject({ from: '48601000005', text: 'Jutro zbiórka o 8:00' });
+    expect(groupSampleEvent(v, config, NOW)).toMatchObject({ from: '48601000005', text: 'Awaria pompy w hali B, proszę o kontakt' });
   });
   it('pełna konfiguracja przechodzi w obie strony bez strat', () => {
     const config: SmsGroupConfig = {

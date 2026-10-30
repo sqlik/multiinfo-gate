@@ -8,7 +8,7 @@ export type PrefixMatch = { ok: true; body: string } | { ok: false; reason: 'no_
 /**
  * Dopasowanie prefiksu do treści SMS-a. Białe znaki z początku są zdjęte, porównanie idzie po
  * `foldText`, a bezpośrednio po prefiksie musi stać koniec tekstu, biały znak albo dwukropek:
- * „dzieciak jutro” nie uruchamia grupy „dzieci”. Pusty prefiks przepuszcza każdą treść.
+ * „serwisant awaria” nie uruchamia grupy „serwis”. Pusty prefiks przepuszcza każdą treść.
  * Treść wraca z oryginalnymi znakami i wielkością liter, bez dwukropka i białych znaków po prefiksie.
  */
 export function matchPrefix(text: string, prefix: string): PrefixMatch {

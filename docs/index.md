@@ -12,8 +12,8 @@ o dane, których nie ma w powiadomieniu. Dzięki temu Fakturownia powiadamia SMS
 faktury, choć numeru telefonu w samym powiadomieniu nie ma. Od wersji 1.8 bramka odczytuje
 również skrzynkę pocztową (Mail2SMS): alarm z zasilacza UPS, raport z serwera NAS albo wiadomość
 pracownika docierają na telefon jako SMS bez zmian po stronie urządzenia. Od wersji 1.8.5 jeden
-SMS wysłany na numer bramki trafia do stałej grupy numerów (SMS do grupy): klasy, zespołu albo
-rodziny.
+SMS wysłany na numer bramki trafia do stałej grupy numerów (SMS do grupy): ekipy serwisowej, brygady
+albo zespołu handlowego.
 
 ![Przegląd: liczniki wiadomości wychodzących i odebranych z ostatniej doby, stan połączeń z Multiinfo i ostatnie niepowodzenia](obrazki/przeglad.png)
 

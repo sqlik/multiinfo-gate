@@ -12,7 +12,7 @@ export interface GroupFormOptions {
 }
 
 const hint = (text: string) => `<div class="hint">${esc(text)}</div>`;
-const MEMBER_HINT = 'Jeden numer w wierszu, po numerze opcjonalna nazwa, np. 601 000 001 Ania';
+const MEMBER_HINT = 'Jeden numer w wierszu, po numerze opcjonalna nazwa, np. 601 000 001 Anna Nowak';
 
 function modeSwitch(ctx: FormContext, mode: 'prosty' | 'zaawansowany'): string {
   const base = ctx.row ? `/integracje/${ctx.row.id}/edytuj` : `/integracje/nowa?rodzaj=sms_group&ustawienie=${ctx.preset.id}`;
@@ -40,19 +40,19 @@ function sectionWho(v: GroupFormValues): string {
     <div data-show="mode=lists">
       <div class="field">
         <label for="senders">Numery uprawnione do pisania</label>
-        ${textarea('senders', v.senders, 4, ' placeholder="601 000 001 Ania\n601 000 002"')}
+        ${textarea('senders', v.senders, 4, ' placeholder="601 000 001 Anna Nowak\n601 000 002 Piotr Zieliński"')}
         ${hint(`${MEMBER_HINT}. Do 100 numerów`)}
       </div>
       <div class="field">
         <label for="recipients">Numery odbiorców</label>
-        ${textarea('recipients', v.recipients, 6, ' placeholder="601 000 003 Basia\n601 000 004\n601 000 005"')}
+        ${textarea('recipients', v.recipients, 6, ' placeholder="601 000 011 Marek Kowalski\n601 000 012\n601 000 013 Jan Wiśniewski"')}
         ${hint(`${MEMBER_HINT}. Do 500 numerów`)}
       </div>
     </div>
     <div data-show="mode=closed">
       <div class="field">
         <label for="members">Numery członków</label>
-        ${textarea('members', v.members, 6, ' placeholder="601 000 001 Ania\n601 000 002 Basia\n601 000 003"')}
+        ${textarea('members', v.members, 6, ' placeholder="601 000 001 Anna Nowak\n601 000 002 Piotr Zieliński\n601 000 003"')}
         ${hint(`${MEMBER_HINT}. Od 2 do 500 numerów`)}
       </div>
     </div>
@@ -64,7 +64,7 @@ function sectionPrefix(v: GroupFormValues): string {
     <summary>Prefiks</summary>
     <div class="field">
       <label for="prefix">Słowo wybierające grupę</label>
-      <input id="prefix" name="prefix" value="${esc(v.prefix)}" placeholder="dzieci" maxlength="20" style="max-width: 240px;">
+      <input id="prefix" name="prefix" value="${esc(v.prefix)}" placeholder="serwis" maxlength="20" style="max-width: 240px;">
       ${hint('Słowo na początku SMS-a, które wybiera tę grupę. Wielkość liter bez znaczenia, po słowie spacja albo dwukropek. Puste pole oznacza każdy SMS od uprawnionego numeru')}
     </div>
   </details>`;
@@ -76,8 +76,8 @@ function sectionText(v: GroupFormValues, advanced: boolean): string {
     <div class="field">
       <label>Co otrzymują odbiorcy</label>
       <div class="choices">
-        ${radio('textMode', 'body', v.textMode, 'Sama treść')}<span class="dim m" style="font-size: 12px;">jutro zbiórka 8:00</span>
-        ${radio('textMode', 'sender_body', v.textMode, 'Nadawca i treść')}<span class="dim m" style="font-size: 12px;">Ania: jutro zbiórka 8:00</span>
+        ${radio('textMode', 'body', v.textMode, 'Sama treść')}<span class="dim m" style="font-size: 12px;">awaria pompy w hali B</span>
+        ${radio('textMode', 'sender_body', v.textMode, 'Nadawca i treść')}<span class="dim m" style="font-size: 12px;">Anna Nowak: awaria pompy w hali B</span>
         ${advanced ? radio('textMode', 'liquid', v.textMode, 'Szablon Liquid') : ''}
       </div>
       ${hint('Nadawca to nazwa przy numerze na liście, a bez nazwy sam numer')}
@@ -136,7 +136,7 @@ function sectionSample(v: GroupFormValues): string {
     </div>
     <div class="field">
       <label for="sampleText">Treść SMS-a</label>
-      ${textarea('sampleText', v.sampleText, 2, ' placeholder="dzieci Jutro zbiórka o 8:00"')}
+      ${textarea('sampleText', v.sampleText, 2, ' placeholder="serwis Awaria pompy w hali B, proszę o kontakt"')}
       ${hint('Przycisk „Sprawdź” pokazuje, czy nadawca jest na liście, czy prefiks pasuje, kto otrzyma SMS i jak będzie wyglądał. Niczego nie wysyła ani nie zapisuje. Puste pola oznaczają pierwszy numer z listy i przykładową treść z prefiksem')}
     </div>
   </details>`;

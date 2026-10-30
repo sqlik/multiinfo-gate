@@ -82,7 +82,7 @@ describe('formularz SMS do grupy', () => {
     expect(foreign.body).toContain('Nadawca spoza listy: wiadomość zostałaby pominięta');
     expect(foreign.body).toContain('Prefiks nie pasuje: wiadomość zostałaby pominięta');
     const blank = await create({ action: 'sprawdz' });
-    expect(blank.body).toContain('Jutro zbiórka o 8:00');
+    expect(blank.body).toContain('Awaria pompy w hali B, proszę o kontakt');
   });
   it('szczegół pokazuje tryb, prefiks, listy i potwierdzenie; edycja odtwarza linie; próbka z dziennika wchodzi w pola', async () => {
     await create({ confirmEnabled: 'on' });
