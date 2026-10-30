@@ -1,4 +1,4 @@
-import { OUTBOUND_EVENTS, defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type MailInConfig, type OutboundConfig } from '../../integrations/config.ts';
+import { OUTBOUND_EVENTS, defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type MailInConfig, type OutboundConfig, type GroupMember, type SmsGroupConfig } from '../../integrations/config.ts';
 import { RULE_OPS, ruleOpLabel, type RuleOp } from '../../integrations/conditions.ts';
 import { safeUrl } from '../../integrations/enrich.ts';
 import type { Preset } from '../../integrations/presets/index.ts';
@@ -22,7 +22,7 @@ export interface IntegrationView {
   now: Date;
 }
 
-export interface IntegrationsFilter { kind: 'in' | 'out' | 'mail' | null; keyId: number | null }
+export interface IntegrationsFilter { kind: 'in' | 'out' | 'mail' | 'grupa' | null; keyId: number | null }
 
 /** Klucz do wyboru w formularzu: czynne klucze z usługami i nadpisami, po których wybiera się usługę i nadawcę. */
 export interface KeyOption { id: number; name: string; accountName: string; serviceIds: string[]; origs: string[] }
@@ -116,7 +116,7 @@ export function hookReveal(created: CreatedHook, apiUrl: string | null, appField
 export function integrationsPage(views: IntegrationView[], filter: IntegrationsFilter, keys: Array<{ id: number; name: string }>,
                                  created: CreatedHook | null = null, apiUrl: string | null = null): string {
   const kinds: Array<{ key: IntegrationsFilter['kind']; label: string }> = [
-    { key: null, label: 'Wszystkie' }, { key: 'in', label: 'Do SMS' }, { key: 'out', label: 'Z SMS-a' }, { key: 'mail', label: 'Z poczty' },
+    { key: null, label: 'Wszystkie' }, { key: 'in', label: 'Do SMS' }, { key: 'out', label: 'Z SMS-a' }, { key: 'mail', label: 'Z poczty' }, { key: 'grupa', label: 'Do grupy' },
   ];
   const tabs = kinds.map((k) => `<a href="${filterLink(filter, { kind: k.key })}"${k.key === filter.kind ? ' class="on"' : ''}>${esc(k.label)}</a>`).join('');
   const keyOptions = ['<option value="">wszystkie klucze</option>', ...keys.map((k) =>
@@ -185,7 +185,7 @@ export function chooseKindPage(): string {
     </div>
   </div>
   <div class="scroll">
-    <div class="tiles" style="grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 980px;">
+    <div class="tiles" style="grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 980px;">
       <a class="tile" href="/integracje/nowa?rodzaj=webhook_in">
         <div class="lab">Do SMS</div>
         <div style="font-size: 15px; font-weight: 600; margin-top: 6px;">Aplikacja wysyła SMS</div>
@@ -200,6 +200,11 @@ export function chooseKindPage(): string {
         <div class="lab">Z poczty</div>
         <div style="font-size: 15px; font-weight: 600; margin-top: 6px;">Mail trafia na telefon jako SMS</div>
         <div class="d">Bramka odczytuje skrzynkę IMAP i wysyła SMS-y na podstawie wiadomości od dozwolonych nadawców: alarm z UPS-a, raport z NAS-a, wiadomość pracownika</div>
+      </a>
+      <a class="tile" href="/integracje/nowa?rodzaj=sms_group">
+        <div class="lab">Do grupy</div>
+        <div style="font-size: 15px; font-weight: 600; margin-top: 6px;">SMS do grupy</div>
+        <div class="d">Uprawniony numer wysyła SMS na numer bramki, a bramka rozsyła treść do stałej listy numerów: klasa, zespół, rodzina</div>
       </a>
     </div>
   </div>`;
@@ -220,7 +225,7 @@ export function choosePresetPage(kind: IntegrationKind, presets: Preset[]): stri
     </div>
   </div>
   <div class="scroll">
-    <div class="tiles" style="grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 980px;">${tiles}</div>
+    <div class="tiles" style="grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 980px;">${tiles}</div>
   </div>`;
 }
 
@@ -832,6 +837,17 @@ export const intervalWords = (sec: number): string => (sec < 60 ? `${sec} s` : `
 const kvRow = (label: string, value: string, mono = false) => `<div>${esc(label)}</div><div${mono ? ' class="m"' : ''}>${value}</div>`;
 const dimOr = (value: string | undefined | null, fallback = 'brak') => (value ? esc(value) : `<span class="dim">${esc(fallback)}</span>`);
 
+/** Liczba z rzeczownikiem: „1 nadawca”, „2 nadawców” - od dwóch w górę dopełniacz liczby mnogiej. */
+const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+
+/** Do dziesięciu pozycji listy w szczegółach, dalej „i N więcej”; nazwa przed numerem w nawiasie. */
+function memberWords(members: GroupMember[]): string {
+  if (members.length === 0) return '<span class="fail">pusta lista</span>';
+  const shown = members.slice(0, 10).map((m) => (m.name ? `${m.name} (${m.phone})` : m.phone));
+  const more = members.length - shown.length;
+  return esc(shown.join(', ')) + (more > 0 ? ` <span class="dim">i ${esc(more)} więcej</span>` : '');
+}
+
 function configRows(row: IntegrationRow, apiUrl: string | null, simple: IntegrationDetail['simple'] = null): string {
   const rows: string[] = [];
   const c = row.config;
@@ -869,6 +885,22 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     rows.push(kvRow('Treść', `${esc(text)} · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}${cfg.fields.length > 0 ? ` · wycinki: ${esc(cfg.fields.map((f) => f.name).join(', '))}` : ''}`));
     const after = cfg.after.action === 'keep' ? 'pozostaje w skrzynce, oznaczona jako przeczytana' : cfg.after.action === 'delete' ? 'usunięcie' : `przeniesienie do folderu ${cfg.after.folder}`;
     rows.push(kvRow('Po przetworzeniu', `${esc(after)}${cfg.reply.enabled ? ' · odpowiedź e-mail do nadawcy' : ''}`));
+  } else if (row.kind === 'sms_group') {
+    const cfg = c as SmsGroupConfig;
+    const mode = cfg.mode === 'lists'
+      ? `osobne listy: ${count(cfg.senders.length, 'nadawca', 'nadawców')}, ${count(cfg.recipients.length, 'odbiorca', 'odbiorców')}`
+      : `grupa zamknięta: ${count(cfg.members.length, 'członek', 'członków')}`;
+    rows.push(kvRow('Tryb', esc(mode)));
+    rows.push(kvRow('Prefiks', cfg.prefix === '' ? '<span class="dim">bez prefiksu: każdy SMS od uprawnionego numeru</span>' : `<span class="m">${esc(cfg.prefix)}</span>`));
+    if (cfg.mode === 'lists') {
+      rows.push(kvRow('Nadawcy', memberWords(cfg.senders), true));
+      rows.push(kvRow('Odbiorcy', memberWords(cfg.recipients.map((phone) => ({ phone, name: '' }))), true));
+    } else {
+      rows.push(kvRow('Członkowie', memberWords(cfg.members), true));
+    }
+    const text = cfg.text.mode === 'body' ? 'sama treść' : cfg.text.mode === 'sender_body' ? 'nadawca i treść' : 'szablon Liquid';
+    rows.push(kvRow('Treść', `${esc(text)} · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
+    rows.push(kvRow('Potwierdzenie do nadawcy', cfg.confirm.enabled ? 'tak' : 'nie'));
   } else {
     const cfg = c as OutboundConfig;
     rows.push(kvRow('Adres docelowy', `${esc(cfg.method)} ${esc(cfg.url)}`, true));
@@ -977,7 +1009,7 @@ export function integrationDetailPage(d: IntegrationDetail): string {
           <th style="width: 120px;">Wynik</th>
           <th>Powód</th>
           <th style="width: 180px;">Powiązanie</th>
-          <th style="width: 130px;">${row.kind === 'mail_in' ? 'Nadawca' : 'Adres źródłowy'}</th>
+          <th style="width: 130px;">${row.kind === 'mail_in' || row.kind === 'sms_group' ? 'Nadawca' : 'Adres źródłowy'}</th>
           <th style="width: 76px;"></th>
         </tr>
         ${events}

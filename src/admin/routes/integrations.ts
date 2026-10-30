@@ -1,10 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { matches } from '../../integrations/conditions.ts';
-import { INTEGRATION_KINDS, MAIL_IN_PASSWORD_REF, defaultInboundConfig, defaultMailInConfig, type InboundConfig, type IntegrationKind, type MailInConfig, type OutboundConfig } from '../../integrations/config.ts';
-import { previewInbound, previewMailIn } from '../../integrations/pipeline.ts';
+import { INTEGRATION_KINDS, MAIL_IN_PASSWORD_REF, defaultInboundConfig, defaultMailInConfig, defaultSmsGroupConfig, type InboundConfig, type IntegrationKind, type MailInConfig, type OutboundConfig, type SmsGroupConfig } from '../../integrations/config.ts';
+import { previewInbound, previewMailIn, previewSmsGroup } from '../../integrations/pipeline.ts';
 import { checkMailbox } from '../../worker/mail-in.ts';
 import { mailConfigToValues, mailFormToConfig, mailFormValues, mailWarnings, needsAdvanced, sampleMail, type MailFormValues } from '../mail-form.ts';
 import { mailFormPage, type MailConnection, type MailFormOptions } from '../views/integration-mail.ts';
+import { groupConfigToValues, groupFormToConfig, groupFormValues, groupNeedsAdvanced, groupSampleEvent, type GroupFormValues } from '../group-form.ts';
+import { groupFormPage, type GroupFormOptions } from '../views/integration-group.ts';
 import { presetById, presetsFor, type Preset } from '../../integrations/presets/index.ts';
 import { PRIVATE_MAIL_MESSAGE, PRIVATE_TARGET_MESSAGE, hostTarget, systemResolver, webhookTarget } from '../../net/private-address.ts';
 import { guardedConnect } from '../../integrations/mail/client.ts';
@@ -35,7 +37,7 @@ const isKind = (raw: string | undefined): raw is IntegrationKind => (INTEGRATION
 export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps, render: Renderer): void {
   const now = deps.now ?? (() => new Date());
 
-  const presetNames = new Map(presetsFor('webhook_in').concat(presetsFor('webhook_out'), presetsFor('mail_in')).map((p) => [p.id, p.name]));
+  const presetNames = new Map(presetsFor('webhook_in').concat(presetsFor('webhook_out'), presetsFor('mail_in'), presetsFor('sms_group')).map((p) => [p.id, p.name]));
 
   /** Czynne klucze z usługami i nadpisami - do wyboru w formularzu i do filtra listy. */
   const keyOptions = (): KeyOption[] => {
@@ -59,7 +61,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     };
   };
 
-  const KIND_OF_FILTER: Record<'in' | 'out' | 'mail', IntegrationKind> = { in: 'webhook_in', out: 'webhook_out', mail: 'mail_in' };
+  const KIND_OF_FILTER: Record<'in' | 'out' | 'mail' | 'grupa', IntegrationKind> = { in: 'webhook_in', out: 'webhook_out', mail: 'mail_in', grupa: 'sms_group' };
 
   const listBody = (request: FastifyRequest, filter: IntegrationsFilter, created: CreatedHook | null = null) => {
     const since = new Date(now().getTime() - WINDOW_MS);
@@ -363,6 +365,64 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }
   };
 
+  /** Wartości formularza grupy z wiersza albo z ustawienia. */
+  const groupValuesOf = (preset: Preset, row?: IntegrationRow): GroupFormValues => (row
+    ? groupConfigToValues(row.config as SmsGroupConfig, { name: row.name, apiKeyId: String(row.apiKeyId), serviceId: row.serviceId ?? '', orig: row.orig ?? '', enabled: row.enabled === 1, preset: row.preset, storePayloads: row.storePayloads === 1 })
+    : groupConfigToValues({ ...defaultSmsGroupConfig(), ...preset.smsGroup }, { name: '', apiKeyId: '', serviceId: '', orig: '', enabled: true, preset: preset.id, storePayloads: false }));
+
+  /** Próbka z ładunku wpisu dziennika grupy (zdarzenie message.received): numer nadawcy i treść. */
+  const groupSampleOf = (payload: string): Pick<GroupFormValues, 'sampleFrom' | 'sampleText'> | null => {
+    try {
+      const p = JSON.parse(payload) as Record<string, unknown>;
+      const str = (k: string): string => (typeof p[k] === 'string' ? (p[k] as string) : '');
+      return { sampleFrom: str('from'), sampleText: str('text') };
+    } catch {
+      return null;
+    }
+  };
+
+  /** Tryb formularza grupy: prosty, chyba że konfiguracja używa pól zaawansowanych albo proszono o zaawansowany. */
+  const groupModeOf = (tryb: string | undefined, config: SmsGroupConfig | null): { mode: GroupFormOptions['mode']; note?: string } => {
+    if (tryb === 'zaawansowany') return { mode: 'zaawansowany' };
+    if (config !== null && groupNeedsAdvanced(config)) {
+      return { mode: 'zaawansowany', note: 'Ta grupa ma ustawienia spoza trybu prostego (warunek, szablon Liquid, limit części albo odrzucanie nadmiaru), dlatego otwiera się w trybie zaawansowanym.' };
+    }
+    return { mode: 'prosty' };
+  };
+
+  const groupPage = (request: FastifyRequest, ctx: FormContext, v: GroupFormValues, opts: GroupFormOptions) =>
+    render.page(request, { title: ctx.row ? ctx.row.name : 'Nowa grupa', active: 'integracje', body: groupFormPage(ctx, v, opts) });
+
+  interface SavedGroupForm { config: SmsGroupConfig; keyId: number; accountId: number; v: GroupFormValues }
+
+  /** Droga POST grupy: walidacja, „Sprawdź”, zapis przez `save`. */
+  const handleGroupForm = async (request: FastifyRequest, reply: FastifyReply, preset: Preset, row: IntegrationRow | undefined, save: (saved: SavedGroupForm) => string) => {
+    reply.type('text/html; charset=utf-8');
+    const body = (request.body ?? {}) as Body;
+    const ctx = formContext('sms_group', preset, row);
+    const v = groupFormValues(body);
+    const mode = groupModeOf(String(body.tryb ?? ''), null).mode;
+    const fail = (error: string, code = 400) => {
+      reply.code(code);
+      return groupPage(request, ctx, v, { mode, error });
+    };
+    const key = keyCheck(v, row?.apiKeyId);
+    if (!key.ok) return fail(key.error);
+    const countryCode = countryCodeOf(key.accountId);
+    const built = groupFormToConfig(v, countryCode, deps.engine);
+    if (!built.ok) return fail(built.error);
+    if (String(body.action ?? '') === 'sprawdz') {
+      const preview = previewSmsGroup(deps.engine, built.config, groupSampleEvent(v, built.config, now(), countryCode), now());
+      return groupPage(request, ctx, v, { mode, preview });
+    }
+    try {
+      return save({ config: built.config, keyId: key.keyId, accountId: key.accountId, v });
+    } catch (e) {
+      if ((e as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') return fail(`Integracja o tej nazwie już istnieje przy tym kluczu: ${v.name}.`);
+      throw e;
+    }
+  };
+
   /** Pola konfiguracji, które zmieniły się między dwiema wersjami - do dziennika audytu, bez wartości. */
   const changedFields = (before: IntegrationRow, after: IntegrationRow): string[] => {
     const out: string[] = [];
@@ -385,7 +445,8 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
 
   app.get<{ Querystring: { rodzaj?: string; klucz?: string } }>('/integracje', async (request, reply) => {
     reply.type('text/html; charset=utf-8');
-    const kind = request.query.rodzaj === 'in' || request.query.rodzaj === 'out' || request.query.rodzaj === 'mail' ? request.query.rodzaj : null;
+    const r = request.query.rodzaj;
+    const kind = r === 'in' || r === 'out' || r === 'mail' || r === 'grupa' ? r : null;
     const keyId = Number.parseInt(request.query.klucz ?? '', 10) || null;
     return listBody(request, { kind, keyId });
   });
@@ -398,6 +459,8 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       return render.page(request, { title: 'Nowa integracja', active: 'integracje', body: chooseKindPage() });
     }
     if (!isKind(rodzaj)) return reply.callNotFound();
+    // Grupa ma jedno ustawienie: krok wyboru jest zbędny, kafelek prowadzi od razu do formularza.
+    if (rodzaj === 'sms_group' && ustawienie === undefined) return reply.redirect('/integracje/nowa?rodzaj=sms_group&ustawienie=sms-grupa', 302);
     if (ustawienie === undefined) {
       reply.type('text/html; charset=utf-8');
       return render.page(request, { title: 'Nowa integracja', active: 'integracje', body: choosePresetPage(rodzaj, presetsFor(rodzaj)) });
@@ -406,6 +469,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     if (!preset || !preset.kinds.includes(rodzaj)) return reply.callNotFound();
     reply.type('text/html; charset=utf-8');
     if (rodzaj === 'mail_in') return mailPage(request, formContext('mail_in', preset), mailValuesOf(preset), { mode: mailModeOf(tryb, null).mode });
+    if (rodzaj === 'sms_group') return groupPage(request, formContext('sms_group', preset), groupValuesOf(preset), { mode: groupModeOf(tryb, null).mode });
     const ctx = formContext(rodzaj, preset);
     const values = valuesFromPreset(rodzaj, preset);
     const mode = modeOf(tryb, preset, rodzaj, null);
@@ -432,6 +496,25 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
         });
         render.flash(request, 'ok', `Skrzynka ${v.name} utworzona. Pierwsze sprawdzenie nastąpi w ciągu chwili.`);
         reply.redirect('/integracje', 302);
+        return '';
+      });
+    }
+
+    if (kind === 'sms_group') {
+      return handleGroupForm(request, reply, preset, undefined, ({ config, keyId, accountId, v }) => {
+        const id = deps.integrations.insert({
+          name: v.name, kind, apiKeyId: keyId, serviceId: v.serviceId || null, orig: v.orig || null, preset: preset.id,
+          enabled: v.enabled ? 1 : 0, config, secrets: {}, storePayloads: v.storePayloads ? 1 : 0, createdAt: now(),
+        });
+        // Grupa nasłuchuje odebranych - odbiornik uzgadnia pętle od razu, jak przy wychodzącej.
+        deps.receiver?.refresh({ retryAccount: accountId });
+        deps.audit.record({
+          actor: actorOf(request.adminUserId), action: 'integracja.utworzenie', target: `integracja:${id}`,
+          meta: { nazwa: v.name, rodzaj: kind, ustawienie: preset.id, klucz: keyId, wlaczona: v.enabled, sekrety: [] },
+          ip: request.ip,
+        });
+        render.flash(request, 'ok', `Grupa ${v.name} utworzona.`);
+        reply.redirect(`/integracje/${id}`, 302);
         return '';
       });
     }
@@ -494,6 +577,13 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       const mode = mailModeOf(sample === null ? request.query.tryb : 'zaawansowany', config);
       return mailPage(request, formContext('mail_in', preset, row), { ...mailValuesOf(preset, row), ...sample }, { ...mode, warnings: mailWarnings(config) });
     }
+    if (row.kind === 'sms_group') {
+      const config = row.config as SmsGroupConfig;
+      const fromEvent = request.query.probka === undefined ? undefined : deps.integrationEvents.get(Number(request.query.probka));
+      const sample = fromEvent && fromEvent.integrationId === row.id && fromEvent.payload !== null ? groupSampleOf(fromEvent.payload) : null;
+      const mode = groupModeOf(sample === null ? request.query.tryb : 'zaawansowany', config);
+      return groupPage(request, formContext('sms_group', preset, row), { ...groupValuesOf(preset, row), ...sample }, mode);
+    }
     const values = valuesOf(row, null);
     const mode = modeOf(request.query.probka === undefined ? request.query.tryb : 'zaawansowany', preset, row.kind, values);
     if (mode.mode === 'prosty') return simplePage(request, formContext(row.kind, preset, row), simpleDefaults(preset, values));
@@ -522,6 +612,23 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
           meta: { nazwa: v.name, pola: [...new Set(fields)] }, ip: request.ip,
         });
         render.flash(request, 'ok', `Skrzynka ${v.name} zapisana.`);
+        reply.redirect(`/integracje/${row.id}`, 302);
+        return '';
+      });
+    }
+    if (row.kind === 'sms_group') {
+      return handleGroupForm(request, reply, presetOf(row), row, ({ config, accountId, v }) => {
+        deps.integrations.update(row.id, {
+          name: v.name, serviceId: v.serviceId || null, orig: v.orig || null, preset: row.preset, enabled: v.enabled ? 1 : 0,
+          config, storePayloads: v.storePayloads ? 1 : 0,
+        }, now());
+        deps.receiver?.refresh({ retryAccount: accountId });
+        const after = deps.integrations.get(row.id)!;
+        deps.audit.record({
+          actor: actorOf(request.adminUserId), action: 'integracja.edycja', target: `integracja:${row.id}`,
+          meta: { nazwa: v.name, pola: changedFields(row, after) }, ip: request.ip,
+        });
+        render.flash(request, 'ok', `Grupa ${v.name} zapisana.`);
         reply.redirect(`/integracje/${row.id}`, 302);
         return '';
       });

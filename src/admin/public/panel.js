@@ -106,3 +106,21 @@
     });
   }
 })();
+
+// Pokazywanie pól zależnych od wyboru: element z data-show="nazwa=wartość" jest widoczny tylko wtedy,
+// gdy pole opcji o tej nazwie ma tę wartość (tryb grupy SMS). Bez skryptu wszystkie pola są widoczne,
+// a o tym, które się liczą, rozstrzyga wybrany tryb po stronie serwera.
+(function () {
+  var shown = document.querySelectorAll('[data-show]');
+  if (shown.length === 0) return;
+  var apply = function () {
+    for (var i = 0; i < shown.length; i += 1) {
+      var parts = (shown[i].getAttribute('data-show') || '').split('=');
+      var input = document.querySelector('input[name="' + parts[0] + '"]:checked');
+      shown[i].hidden = !input || input.value !== parts[1];
+    }
+  };
+  var inputs = document.querySelectorAll('input[type="radio"]');
+  for (var r = 0; r < inputs.length; r += 1) inputs[r].addEventListener('change', apply);
+  apply();
+})();
