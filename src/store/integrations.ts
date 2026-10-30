@@ -3,7 +3,7 @@ import type { Database } from 'better-sqlite3';
 import { decryptSecret, encryptSecret } from '../secrets/crypto.ts';
 import {
   parseConfig, type InboundConfig, type IntegrationConfig, type MailInConfig, type IntegrationKind, type IntegrationSecrets,
-  type OutboundConfig, type OutboundEvent,
+  type OutboundConfig, type OutboundEvent, type SmsGroupConfig,
 } from '../integrations/config.ts';
 
 export interface IntegrationRow {
@@ -42,6 +42,7 @@ const toRow = (r: Raw): IntegrationRow => ({
 export const isInbound = (r: IntegrationRow): r is IntegrationRow & { config: InboundConfig } => r.kind === 'webhook_in';
 export const isOutbound = (r: IntegrationRow): r is IntegrationRow & { config: OutboundConfig } => r.kind === 'webhook_out';
 export const isMailIn = (r: IntegrationRow): r is IntegrationRow & { config: MailInConfig } => r.kind === 'mail_in';
+export const isSmsGroup = (r: IntegrationRow): r is IntegrationRow & { config: SmsGroupConfig } => r.kind === 'sms_group';
 
 /** 24 bajty losowe = 32 znaki base64url; tyle samo entropii co klucz API. */
 export const newHookId = (): string => randomBytes(24).toString('base64url');
