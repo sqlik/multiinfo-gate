@@ -1,7 +1,10 @@
 export class InvalidPhoneError extends Error {
+  /** Przyczyna osobno od zdania, żeby formularze mogły zbudować własny komunikat. */
+  readonly reason: string | undefined;
   constructor(raw: string, reason?: string) {
     super(`Numer odbiorcy jest nieprawidłowy: ${raw}${reason ? ` (${reason})` : ''}`);
     this.name = 'InvalidPhoneError';
+    this.reason = reason;
   }
 }
 
