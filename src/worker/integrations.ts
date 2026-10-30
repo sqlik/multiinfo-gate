@@ -167,7 +167,21 @@ function runGroup(deps: IntegrationEmitDeps, integration: SmsGroupIntegration, e
     ...deps.group, integrations: deps.integrations, integrationEvents: deps.integrationEvents, guards: deps.guards, engine: deps.engine,
     ...(deps.log ? { log: deps.log } : {}),
   };
-  const out = runSmsGroup(pipeline, integration, event, now);
+  let out: ReturnType<typeof runSmsGroup>;
+  try {
+    out = runSmsGroup(pipeline, integration, event, now);
+  } catch (e) {
+    // Grupa działa wewnątrz zapisu odebranej wiadomości: wyjątek cofnąłby ten zapis, a Multiinfo oddałoby SMS
+    // ponownie przy następnym pytaniu. Błąd zostaje więc we wpisie i w powiadomieniu, nie w pętli odbioru.
+    const detail = e instanceof Error ? e.message : String(e);
+    deps.integrationEvents.record({
+      integrationId: integration.id, at: now, result: 'error', reason: detail, logLimit: integration.config.eventLogLimit,
+      sourceIp: event.from, inboundId: event.id, payload: integration.storePayloads === 1 ? JSON.stringify(event) : null,
+    });
+    notifyError(detail);
+    (deps.log ?? silentLogger).error('integracja.grupa.wyjatek', { integrationId: integration.id, error: detail });
+    return;
+  }
   if (out.kind === 'throttled' && out.notify) {
     const { limit, windowMinutes } = integration.config.throttle;
     deps.notifier?.notify('integration_throttled', `integration:${integration.id}`, `${integration.name}: przekroczony limit ${limit} w ${windowMinutes} min`, now);

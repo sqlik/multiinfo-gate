@@ -147,6 +147,16 @@ describe('emitIntegrations: grupa SMS', () => {
     expect(notify).toHaveBeenCalledWith('integration_error', `integration:${broken}`, expect.stringContaining('Zły:'), NOW);
     expect(sentMessages()).toEqual([['48601000002', 'a']]);
   });
+  it('nieoczekiwany wyjątek w potoku grupy nie przerywa pozostałych integracji: wpis błąd, powiadomienie, dostawa webhooka powstaje', () => {
+    const g = group({});
+    const hook = make({});
+    const broken = { ...deps, group: { ...deps.group!, messages: Object.assign(Object.create(Object.getPrototypeOf(deps.group!.messages)), deps.group!.messages, { insert: () => { throw new Error('dysk pełny'); } }) } };
+    const ids = emitIntegrations(broken, apiKeyId, 'message.received', { ...received, text: 'Pomoc: x' }, NOW, { inboundId: 'in_1' });
+    expect(ids).toHaveLength(1);
+    expect(deps.deliveries.get(ids[0]!)!.integrationId).toBe(hook);
+    expect(deps.integrationEvents.list(g, 5)[0]).toMatchObject({ result: 'error', reason: expect.stringContaining('dysk pełny') });
+    expect(notify).toHaveBeenCalledWith('integration_error', `integration:${g}`, expect.stringContaining('dysk pełny'), NOW);
+  });
   it('SMS bez prefiksu zapisuje pominięcie bez powiadomienia i bez wiadomości', () => {
     const g = group({});
     emitIntegrations(deps, apiKeyId, 'message.received', received, NOW);
