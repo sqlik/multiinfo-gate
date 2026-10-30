@@ -1,4 +1,4 @@
-import type { InboundConfig, IntegrationKind, MailInConfig, OutboundConfig } from '../config.ts';
+import type { InboundConfig, IntegrationKind, MailInConfig, OutboundConfig, SmsGroupConfig } from '../config.ts';
 
 export interface PresetField { path: string; label: string }
 
@@ -23,6 +23,8 @@ export interface Preset {
   outbound?: Partial<OutboundConfig>;
   /** Skrzynka pocztowa: ustawienie wypełnia tylko sekcję „Skrzynka” (serwer, port, zabezpieczenie). */
   mailIn?: Partial<MailInConfig>;
+  /** SMS do grupy: ustawienie nie wypełnia nic poza wartościami domyślnymi, listy i prefiks podaje administrator. */
+  smsGroup?: Partial<SmsGroupConfig>;
   /** Sekrety, o które formularz zapyta. */
   secrets?: PresetSecret[];
   /**
