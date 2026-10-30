@@ -39,7 +39,7 @@ aplikacji. Z wiadomości o stałej budowie bramka potrafi wyodrębnić wybrane p
 krótki SMS.
 
 Wersja 1.8.5 dodaje SMS do grupy. Uprawniony numer wysyła SMS na numer bramki, a bramka rozsyła
-treść do stałej listy numerów: klasy, zespołu albo rodziny. Słowo na początku SMS-a wybiera
+treść do stałej listy numerów: ekipy serwisowej, brygady albo zespołu handlowego. Słowo na początku SMS-a wybiera
 grupę, a nadawca może otrzymać potwierdzenie z liczbą odbiorców.
 
 ## Co trzeba mieć

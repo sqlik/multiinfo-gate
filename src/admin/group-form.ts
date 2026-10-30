@@ -143,7 +143,7 @@ export function groupNeedsAdvanced(config: SmsGroupConfig): boolean {
 
 /**
  * Próbka do „Sprawdź”: numer z pola albo pierwszy nadawca lub członek; treść z pola albo
- * `<prefiks> Jutro zbiórka o 8:00`. Numer z pola przechodzi przez normalizację, żeby `+48 601…` pasowało do listy;
+ * `<prefiks> Awaria pompy w hali B, proszę o kontakt`. Numer z pola przechodzi przez normalizację, żeby `+48 601…` pasowało do listy;
  * zapis niedający się znormalizować zostaje surowy, jak nadawca alfanumeryczny u odbiornika.
  */
 export function groupSampleEvent(v: GroupFormValues, config: SmsGroupConfig, now: Date, countryCode = '48'): ReceivedEvent {
@@ -156,6 +156,6 @@ export function groupSampleEvent(v: GroupFormValues, config: SmsGroupConfig, now
       from = v.sampleFrom;
     }
   }
-  const text = v.sampleText.trim() !== '' ? v.sampleText : [config.prefix, 'Jutro zbiórka o 8:00'].filter((p) => p !== '').join(' ');
+  const text = v.sampleText.trim() !== '' ? v.sampleText : [config.prefix, 'Awaria pompy w hali B, proszę o kontakt'].filter((p) => p !== '').join(' ');
   return { id: 'podglad', serviceId: v.serviceId, from, to: '', kind: 'text', text, receivedAt: now.toISOString(), relatedMessageId: null };
 }

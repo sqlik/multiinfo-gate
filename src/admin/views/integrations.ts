@@ -204,7 +204,7 @@ export function chooseKindPage(): string {
       <a class="tile" href="/integracje/nowa?rodzaj=sms_group">
         <div class="lab">Do grupy</div>
         <div style="font-size: 15px; font-weight: 600; margin-top: 6px;">SMS do grupy</div>
-        <div class="d">Uprawniony numer wysyła SMS na numer bramki, a bramka rozsyła treść do stałej listy numerów: klasa, zespół, rodzina</div>
+        <div class="d">Uprawniony numer wysyła SMS na numer bramki, a bramka rozsyła treść do stałej listy numerów: ekipa serwisowa, brygada, zespół handlowy</div>
       </a>
     </div>
   </div>`;

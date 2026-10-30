@@ -12,9 +12,9 @@ export const smsGrupa: Preset = {
   sampleSource: 'Przepływ własny bramki, 2026-10-30',
   guide: `Pisać mogą wyłącznie numery z listy uprawnionych, a w grupie zamkniętej członkowie grupy. SMS od innego numeru zostaje bez odpowiedzi i bez wysyłki, widać go tylko w dzienniku integracji.
 
-Prefiks to słowo na początku SMS-a, które wybiera grupę. Bramka zdejmuje je z treści i rozsyła resztę. Zapisy \`dzieci jutro zbiórka\` oraz \`Dzieci: jutro zbiórka\` dają ten sam SMS o treści \`jutro zbiórka\`. Wielkość liter nie ma znaczenia. Puste pole prefiksu oznacza, że każdy SMS od uprawnionego numeru idzie do grupy.
+Prefiks to słowo na początku SMS-a, które wybiera grupę. Bramka zdejmuje je z treści i rozsyła resztę. Zapisy \`serwis awaria pompy\` oraz \`Serwis: awaria pompy\` dają ten sam SMS o treści \`awaria pompy\`. Wielkość liter nie ma znaczenia. Puste pole prefiksu oznacza, że każdy SMS od uprawnionego numeru idzie do grupy.
 
-Druga grupa, na przykład dla rodziców obok dzieci, to druga integracja na tym samym kluczu i tej samej usłudze, z innym prefiksem.
+Druga grupa, na przykład biuro obok ekipy serwisowej, to druga integracja na tym samym kluczu i tej samej usłudze, z innym prefiksem.
 
 Numer na liście uprawnionych wysyła na koszt konta do wszystkich odbiorców. Lista ma być krótka, a numer zgubionego telefonu należy z niej usunąć.`,
 };

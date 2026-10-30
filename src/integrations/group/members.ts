@@ -32,7 +32,7 @@ export function parseMemberLines(raw: string, countryCode: string): MemberLines 
   return { ok: true, members };
 }
 
-/** Odwrotność `parseMemberLines` do formularza: `48601000001 Ania`, jeden w wierszu. */
+/** Odwrotność `parseMemberLines` do formularza: `48601000001 Anna Nowak`, jeden w wierszu. */
 export const memberLines = (members: GroupMember[]): string => members.map((m) => (m.name ? `${m.phone} ${m.name}` : m.phone)).join('\n');
 
 /** Nadawca z listy właściwej dla trybu albo null, gdy numer nie ma prawa pisać. */

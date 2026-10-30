@@ -31,7 +31,7 @@ describe('gotowe ustawienia', () => {
     const preset = presetById('sms-grupa')!;
     expect(preset).toMatchObject({ name: 'SMS do grupy', kinds: ['sms_group'] });
     expect(preset.warning).toContain('20 numerów to 20 wiadomości');
-    expect(preset.guide).toContain('Dzieci: jutro zbiórka');
+    expect(preset.guide).toContain('Serwis: awaria pompy');
     const config = parseConfig('sms_group', { ...defaultSmsGroupConfig(), ...preset.smsGroup, senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002'], prefix: 'dzieci' });
     const p = previewSmsGroup(engine, config, { ...received, text: 'Dzieci: jutro zbiórka 8:00' }, NOW);
     expect(p).toMatchObject({ senderAllowed: true, prefixMatched: true, recipients: ['48601000002'], text: 'jutro zbiórka 8:00', parts: 1 });
