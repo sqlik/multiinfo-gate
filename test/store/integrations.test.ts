@@ -4,7 +4,7 @@ import { openDatabase } from '../../src/store/db.ts';
 import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
 import { IntegrationsRepo, newHookId } from '../../src/store/integrations.ts';
-import { defaultInboundConfig, defaultOutboundConfig } from '../../src/integrations/config.ts';
+import { defaultInboundConfig, defaultOutboundConfig, defaultSmsGroupConfig } from '../../src/integrations/config.ts';
 import { accountInput } from './helpers.ts';
 
 const NOW = new Date('2026-09-02T10:00:00Z');
@@ -102,6 +102,21 @@ describe('IntegrationsRepo', () => {
     });
     expect(repo.inboundListenerKeyIds(accountId, '24138', NOW)).toEqual([apiKeyId]);
     expect(repo.inboundListenerKeyIds(accountId, '99999', NOW)).toEqual([]);
+  });
+  it('listOutboundFor zwraca włączoną grupę dla message.received, a nie dla statusów', () => {
+    const g = repo.insert({ name: 'Grupa', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1, config: defaultSmsGroupConfig(), secrets: {}, storePayloads: 0, createdAt: NOW });
+    expect(repo.listOutboundFor(apiKeyId, 'message.received').map((r) => r.id)).toContain(g);
+    expect(repo.listOutboundFor(apiKeyId, 'message.delivered').map((r) => r.id)).not.toContain(g);
+    expect(repo.listOutboundFor(apiKeyId, 'message.sent').map((r) => r.id)).not.toContain(g);
+    repo.setEnabled(g, false, NOW);
+    expect(repo.listOutboundFor(apiKeyId, 'message.received').map((r) => r.id)).not.toContain(g);
+  });
+  it('inboundListenerKeyIds: klucz z włączoną grupą zapala odbiór usługi, wyłączona nie', () => {
+    const g = repo.insert({ name: 'Grupa', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1, config: defaultSmsGroupConfig(), secrets: {}, storePayloads: 0, createdAt: NOW });
+    expect(repo.inboundListenerKeyIds(accountId, '24138', NOW)).toEqual([apiKeyId]);
+    expect(repo.inboundListenerKeyIds(accountId, '99999', NOW)).toEqual([]);
+    repo.setEnabled(g, false, NOW);
+    expect(repo.inboundListenerKeyIds(accountId, '24138', NOW)).toEqual([]);
   });
   it('remove kasuje integrację; listForKey i list widzą resztę', () => {
     const a = inbound();
