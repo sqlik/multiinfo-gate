@@ -385,7 +385,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
   const groupModeOf = (tryb: string | undefined, config: SmsGroupConfig | null): { mode: GroupFormOptions['mode']; note?: string } => {
     if (tryb === 'zaawansowany') return { mode: 'zaawansowany' };
     if (config !== null && groupNeedsAdvanced(config)) {
-      return { mode: 'zaawansowany', note: 'Ta grupa ma ustawienia spoza trybu prostego (warunek, szablon Liquid, limit części albo odrzucanie nadmiaru), dlatego otwiera się w trybie zaawansowanym.' };
+      return { mode: 'zaawansowany', note: 'Ta grupa ma ustawienia spoza trybu prostego (warunek albo szablon Liquid), dlatego otwiera się w trybie zaawansowanym.' };
     }
     return { mode: 'prosty' };
   };

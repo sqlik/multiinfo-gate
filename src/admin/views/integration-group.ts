@@ -23,8 +23,8 @@ function modeSwitch(ctx: FormContext, mode: 'prosty' | 'zaawansowany'): string {
       <a href="${esc(`${base}${join}tryb=zaawansowany`)}"${mode === 'zaawansowany' ? ' class="on"' : ''}>Zaawansowany</a>
     </div>
     <span class="dim" style="font-size: 12px;">${mode === 'prosty'
-      ? 'Listy numerów, prefiks, treść i potwierdzenie. Tryb zaawansowany udostępnia warunek, szablon Liquid, limit części i ochronę przed burzą.'
-      : 'Warunek, szablon Liquid, limit części, ochrona przed burzą, dziennik i próbka.'}</span>
+      ? 'Listy numerów, prefiks, treść, limit części i potwierdzenie. Tryb zaawansowany udostępnia warunek, szablon Liquid i ochronę przed burzą.'
+      : 'Warunek, szablon Liquid, ochrona przed burzą, dziennik i próbka.'}</span>
   </div>`;
 }
 
@@ -86,7 +86,7 @@ function sectionText(v: GroupFormValues, advanced: boolean): string {
       <label for="textTemplate">Szablon Liquid</label>
       ${textarea('textTemplate', v.textTemplate, 3, ' placeholder="{{ sender }} do grupy: {{ body }}"')}
       ${hint('Zmienne: body, prefix, sender, sender_name, recipients, from, to, text, serviceId, receivedAt, id, now, integration.name. Filtr sms_truncate: n skraca do n znaków')}
-    </div>
+    </div>` : ''}
     <div class="field">
       <label>Limit części</label>
       <div class="inline">
@@ -94,7 +94,7 @@ function sectionText(v: GroupFormValues, advanced: boolean): string {
         <div class="choices">${radio('overflow', 'truncate', v.overflow, 'skróć i wyślij')}${radio('overflow', 'reject', v.overflow, 'nie wysyłaj, zapisz błąd i powiadom')}</div>
       </div>
       ${hint('Każdy odbiorca dostaje tyle części, ile ma wiadomość. Przy odrzuceniu nadawca z włączonym potwierdzeniem otrzymuje informację o długości')}
-    </div>` : `<input type="hidden" name="maxParts" value="${esc(v.maxParts)}"><input type="hidden" name="overflow" value="${esc(v.overflow)}">`}
+    </div>
   </details>`;
 }
 

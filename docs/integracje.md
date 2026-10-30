@@ -936,11 +936,12 @@ ustawienia. Formularz w trybie prostym ma pięć sekcji.
 3. **Prefiks.** Słowo na początku SMS-a, które wybiera tę grupę. Puste pole oznacza każdy SMS
    od uprawnionego numeru. Szczegóły w rozdziale 5a.3.
 4. **Treść.** Dwa warianty z przykładem obok każdego: „Sama treść” albo „Nadawca i treść”.
+   Pod nimi limit części z wyborem, co zrobić z dłuższą wiadomością: skrócić albo nie wysyłać.
    Szczegóły w rozdziale 5a.4.
 5. **Potwierdzenie.** Pole wyboru „Odsyłaj nadawcy potwierdzenie z liczbą odbiorców”. Domyślnie
    wyłączone. Szczegóły w rozdziale 5a.5.
 
-![Formularz SMS do grupy w trybie prostym: tryb grupy, numery uprawnione do pisania z nazwami, numery odbiorców, prefiks, treść i potwierdzenie](obrazki/grupa-formularz.png)
+![Formularz SMS do grupy w trybie prostym: tryb grupy, numery uprawnione do pisania z nazwami, numery odbiorców, prefiks, treść z limitem części i potwierdzenie](obrazki/grupa-formularz.png)
 
 Przycisk **Sprawdź** niczego nie wysyła ani nie zapisuje. Pokazuje, czy nadawca próbki jest na
 liście, czy prefiks pasuje, jaką treść dostaną odbiorcy, listę odbiorców po normalizacji,
@@ -951,9 +952,8 @@ wpisać w sekcji „Próbka do sprawdzenia”.
 ![Podgląd „Sprawdź”: nadawca na liście, prefiks pasuje, treść po zdjęciu prefiksu, odbiorcy, SMS, liczba części i treść potwierdzenia](obrazki/grupa-sprawdz.png)
 
 Tryb zaawansowany dodaje warunek z rozdziału 3.6, szablon Liquid jako trzeci wariant treści,
-limit części z przepełnieniem, ochronę przed burzą, rozmiar dziennika i przechowywanie
-ładunków. Grupa zapisana z tymi ustawieniami otwiera się do edycji od razu w trybie
-zaawansowanym.
+ochronę przed burzą, rozmiar dziennika i przechowywanie ładunków. Grupa zapisana z warunkiem
+albo szablonem Liquid otwiera się do edycji od razu w trybie zaawansowanym.
 
 Druga grupa na tym samym numerze, na przykład rodzice obok dzieci, to druga integracja na tym
 samym kluczu i tej samej usłudze, z innym prefiksem. Jedna grupa ma jeden prefiks.
@@ -990,8 +990,9 @@ numeru idzie do grupy w całości.
 | Nadawca i treść | nazwa nadawcy z listy, dwukropek i reszta; bez nazwy numer nadawcy | `Ania: jutro zbiórka 8:00` |
 | Szablon Liquid | wynik szablonu na zmiennych z rozdziału 6.2, tylko tryb zaawansowany | `{{ sender }} do {{ recipients.size }}: {{ body }}` |
 
-Limit części i przepełnienie działają jak w rozdziale 3.5. Domyślnie jedna część i przycięcie.
-Każdy odbiorca dostaje tyle części, ile ma wiadomość. Przy ustawieniu „nie wysyłaj” SMS ponad
+Limit części i przepełnienie działają jak w rozdziale 3.5 i są dostępne w obu trybach
+formularza. Domyślnie jedna część i przycięcie. Każdy odbiorca dostaje tyle części, ile ma
+wiadomość. Przy ustawieniu „nie wysyłaj” SMS ponad
 limit daje wpis „błąd” w dzienniku, a nadawca z włączonym potwierdzeniem otrzymuje informację
 o długości.
 

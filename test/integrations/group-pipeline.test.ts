@@ -108,6 +108,11 @@ describe('runSmsGroup', () => {
     expect(events(alone.id)).toEqual([['skipped', 'brak odbiorców']]);
     expect(allMessages()).toHaveLength(1);
   });
+  it('osobne listy: nadawca wpisany także na listę odbiorców dostaje wiadomość jak każdy odbiorca', () => {
+    const out = runSmsGroup(deps, lists({ recipients: ['48601000001', '48601000002'], confirm: { enabled: true } }), event(), NOW);
+    expect(out).toMatchObject({ kind: 'sent', recipients: ['48601000001', '48601000002'] });
+    expect(allMessages().filter((m) => m.dest === '48601000001').map((m) => m.body).sort()).toEqual(['Wysłano do 2 odbiorców', 'jutro zbiórka 8:00']);
+  });
   it('sender_body bez nazwy na liście podstawia numer', () => {
     const out = runSmsGroup(deps, lists({ senders: [{ phone: '48601000001', name: '' }], text: { mode: 'sender_body' } }), event(), NOW);
     expect(out).toMatchObject({ kind: 'sent', text: '48601000001: jutro zbiórka 8:00' });

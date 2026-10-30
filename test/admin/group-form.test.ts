@@ -68,11 +68,11 @@ describe('groupConfigToValues i próbka', () => {
 });
 
 describe('groupNeedsAdvanced', () => {
-  it('Liquid, odrzucenie nadmiaru, więcej części albo warunek', () => {
+  it('Liquid albo warunek; limit części i nadmiar są w trybie prostym', () => {
     const d = defaultSmsGroupConfig();
     expect(groupNeedsAdvanced(d)).toBe(false);
-    expect(groupNeedsAdvanced({ ...d, overflow: 'reject' })).toBe(true);
-    expect(groupNeedsAdvanced({ ...d, maxParts: 2 })).toBe(true);
+    expect(groupNeedsAdvanced({ ...d, overflow: 'reject' })).toBe(false);
+    expect(groupNeedsAdvanced({ ...d, maxParts: 2 })).toBe(false);
     expect(groupNeedsAdvanced({ ...d, text: { mode: 'liquid', template: '{{ body }}' } })).toBe(true);
     expect(groupNeedsAdvanced({ ...d, condition: { mode: 'builder', rules: [{ path: 'body', op: 'contains', value: 'x' }] } })).toBe(true);
     expect(groupNeedsAdvanced({ ...d, text: { mode: 'sender_body' }, confirm: { enabled: true } })).toBe(false);

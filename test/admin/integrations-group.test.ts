@@ -40,7 +40,7 @@ describe('formularz SMS do grupy', () => {
     const res = await get(redirect.headers.location as string);
     expect(res.statusCode).toBe(200);
     const form = res.body;
-    for (const t of ['Numery uprawnione do pisania', 'Numery odbiorców', 'Numery członków', 'Prefiks', 'Sama treść', 'Nadawca i treść', 'Odsyłaj nadawcy potwierdzenie', 'data-show="mode=lists"', 'data-show="mode=closed"', 'Osobne listy', 'Grupa zamknięta', '20 numerów to 20 wiadomości', 'Utwórz grupę', 'name="kind" value="sms_group"']) expect(form).toContain(t);
+    for (const t of ['Numery uprawnione do pisania', 'Numery odbiorców', 'Numery członków', 'Prefiks', 'Sama treść', 'Nadawca i treść', 'Odsyłaj nadawcy potwierdzenie', 'data-show="mode=lists"', 'data-show="mode=closed"', 'Osobne listy', 'Grupa zamknięta', '20 numerów to 20 wiadomości', 'Utwórz grupę', 'name="kind" value="sms_group"', 'Limit części', 'name="overflow" value="reject"']) expect(form).toContain(t);
     expect(form).not.toContain('Szablon Liquid');
     expect(form).not.toContain('Limit burzy');
     const adv = (await get('/integracje/nowa?rodzaj=sms_group&ustawienie=sms-grupa&tryb=zaawansowany')).body;
@@ -109,14 +109,22 @@ describe('formularz SMS do grupy', () => {
     expect(closedDetail).toContain('grupa zamknięta: 2 członków');
     expect(closedDetail).toContain('Grupa Zespół zapisana.');
   });
-  it('edycja grupy z Liquidem albo odrzucaniem nadmiaru otwiera się zaawansowana z wyjaśnieniem', async () => {
+  it('edycja grupy z Liquidem otwiera się zaawansowana z wyjaśnieniem; odrzucanie nadmiaru zostaje w prostym', async () => {
     const id = h.integrations.insert({
       name: 'Rodzice', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1,
-      config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], overflow: 'reject' }, secrets: {}, storePayloads: 0, createdAt: NOW,
+      config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], overflow: 'reject', text: { mode: 'liquid', template: '{{ body }}' } }, secrets: {}, storePayloads: 0, createdAt: NOW,
     });
     const edit = (await get(`/integracje/${id}/edytuj`)).body;
     expect(edit).toContain('otwiera się w trybie zaawansowanym');
     expect(edit).toContain('Szablon Liquid');
+    const plain = h.integrations.insert({
+      name: 'Prosta', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1,
+      config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], overflow: 'reject', maxParts: 3 }, secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const simple = (await get(`/integracje/${plain}/edytuj`)).body;
+    expect(simple).not.toContain('otwiera się w trybie zaawansowanym');
+    expect(simple).toContain('name="maxParts" type="number" min="1" max="9" value="3"');
+    expect(simple).toContain('name="overflow" value="reject" checked');
     const detail = (await get(`/integracje/${id}`)).body;
     expect(detail).toContain('bez prefiksu: każdy SMS od uprawnionego numeru');
     expect(detail).toContain('nadmiar: odrzucenie');

@@ -135,10 +135,10 @@ export function groupFormToConfig(v: GroupFormValues, countryCode: string, engin
   return { ok: true, config };
 }
 
-/** Czy konfiguracja używa pól widocznych tylko w trybie zaawansowanym: warunek, Liquid w treści, odrzucanie nadmiaru, więcej niż jedna część. */
+/** Czy konfiguracja używa pól widocznych tylko w trybie zaawansowanym: warunek albo Liquid w treści. Limit części jest w obu trybach. */
 export function groupNeedsAdvanced(config: SmsGroupConfig): boolean {
   const hasCondition = config.condition.mode === 'liquid' || config.condition.rules.length > 0;
-  return hasCondition || config.text.mode === 'liquid' || config.overflow === 'reject' || config.maxParts !== 1;
+  return hasCondition || config.text.mode === 'liquid';
 }
 
 /**
