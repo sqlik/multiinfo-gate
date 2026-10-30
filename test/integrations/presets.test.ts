@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig, parseConfig, type InboundConfig } from '../../src/integrations/config.ts';
+import { defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig, defaultSmsGroupConfig, parseConfig, type InboundConfig } from '../../src/integrations/config.ts';
 import { PRESETS, presetById, presetsFor } from '../../src/integrations/presets/index.ts';
-import { previewInbound } from '../../src/integrations/pipeline.ts';
+import { previewInbound, previewSmsGroup } from '../../src/integrations/pipeline.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
 import { paramPatternFor } from '../../src/admin/simple-form.ts';
 import { buildOutboundContext, renderOutbound } from '../../src/worker/integrations.ts';
@@ -25,6 +25,16 @@ describe('gotowe ustawienia', () => {
     expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'fakturownia', 'fakturownia-klient', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
     expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'home-assistant', 'freescout', 'freshdesk', 'slack', 'ntfy', 'bitrix24', 'custom']);
     expect(presetsFor('mail_in').map((p) => p.id)).toEqual(['poczta-gmail', 'poczta-home', 'poczta-ovh', 'poczta-wlasny']);
+    expect(presetsFor('sms_group').map((p) => p.id)).toEqual(['sms-grupa']);
+  });
+  it('sms-grupa: przykładowe zdarzenie z prefiksem daje treść bez prefiksu dla listy', () => {
+    const preset = presetById('sms-grupa')!;
+    expect(preset).toMatchObject({ name: 'SMS do grupy', kinds: ['sms_group'] });
+    expect(preset.warning).toContain('20 numerów to 20 wiadomości');
+    expect(preset.guide).toContain('Dzieci: jutro zbiórka');
+    const config = parseConfig('sms_group', { ...defaultSmsGroupConfig(), ...preset.smsGroup, senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002'], prefix: 'dzieci' });
+    const p = previewSmsGroup(engine, config, { ...received, text: 'Dzieci: jutro zbiórka 8:00' }, NOW);
+    expect(p).toMatchObject({ senderAllowed: true, prefixMatched: true, recipients: ['48601000002'], text: 'jutro zbiórka 8:00', parts: 1 });
   });
   it('ustawienia poczty mają port 993, TLS i instrukcję o haśle; home.pl bez nazwy serwera (per konto); Własny serwer ma puste pola', () => {
     for (const id of ['poczta-gmail', 'poczta-home', 'poczta-ovh']) {
@@ -60,6 +70,7 @@ describe('gotowe ustawienia', () => {
       if (p.kinds.includes('webhook_in')) expect(p.inbound, p.id).toBeDefined();
       if (p.kinds.includes('webhook_out')) expect(p.outbound, p.id).toBeDefined();
       if (p.kinds.includes('mail_in')) expect(p.mailIn, p.id).toBeDefined();
+      if (p.kinds.includes('sms_group')) expect(p.smsGroup, p.id).toBeDefined();
       expect(p.guide.length, p.id).toBeGreaterThan(40);
       for (const s of p.secrets ?? []) expect(s.hint.length, `${p.id}:${s.ref}`).toBeGreaterThan(5);
     }

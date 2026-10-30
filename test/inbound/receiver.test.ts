@@ -3,7 +3,9 @@ import { ProviderError } from '../../src/multiinfo/response.ts';
 import { Receiver, RELATED_WINDOW_MS, type ReceiverDeps } from '../../src/inbound/receiver.ts';
 import { randomBytes } from 'node:crypto';
 import { NOW, SMS, buildReceiverDeps, keyInput } from './helpers.ts';
-import { defaultOutboundConfig } from '../../src/integrations/config.ts';
+import { defaultOutboundConfig, defaultSmsGroupConfig } from '../../src/integrations/config.ts';
+import { MessageEventsRepo } from '../../src/store/message-events.ts';
+import { sha256Hex } from '../../src/text/hash.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
 import { IntegrationEventsRepo } from '../../src/store/integration-events.ts';
 import { IntegrationGuardsRepo } from '../../src/store/integration-guards.ts';
@@ -125,6 +127,33 @@ describe('Receiver.pollOnce', () => {
     const d = deps.deliveries.listForInbound(out.id)[0]!;
     expect(JSON.parse(d.payload).text).toBe('Dziekuje, jasne');
     expect(d.scrubAfter).toBe(1);
+  });
+
+  it('konto bez przechowywania treści: grupa SMS dostaje treść, bo działa przed czyszczeniem; odebrana zostaje bez treści', async () => {
+    db.prepare('UPDATE accounts SET store_content = 0').run();
+    const keyId = deps.apiKeys.insert(keyInput(accountId, { inboundSubscribed: 0, webhookUrl: null, webhookSecret: null }));
+    const mk = randomBytes(32);
+    const integrations = new IntegrationsRepo(db, mk);
+    const groupId = integrations.insert({
+      name: 'Grupa', kind: 'sms_group', apiKeyId: keyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1,
+      config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], confirm: { enabled: true } },
+      secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    deps.integrations = integrations;
+    deps.integrationEmit = {
+      integrations, integrationEvents: new IntegrationEventsRepo(db, mk), guards: new IntegrationGuardsRepo(db), deliveries: deps.deliveries, jobs: deps.jobs, engine: new TemplateEngine(),
+      group: { accounts: deps.accounts, apiKeys: deps.apiKeys, messages: deps.messages, events: new MessageEventsRepo(db), jobs: deps.jobs, inbound: deps.inbound },
+    };
+    getSms.mockResolvedValue(SMS);
+    const out = await receiver.pollOnce(target()) as { id: string };
+    expect(deps.inbound.get(out.id)!.body).toBeNull();
+    // Konto nie przechowuje treści, więc wiadomości wychodzące też mają tylko skrót: on dowodzi, że grupa dostała pełną treść.
+    const sent = deps.messages.list({ limit: 10, offset: 0 }).sort((a, b) => a.dest.localeCompare(b.dest));
+    expect(sent.map((m) => [m.dest, m.body, m.bodyHash, m.integrationId, m.inReplyTo])).toEqual([
+      ['48601000001', null, sha256Hex('Wysłano do 1 odbiorcy'), groupId, out.id], ['48601000002', null, sha256Hex('Dziekuje, jasne'), groupId, null],
+    ]);
+    expect(deps.deliveries.listForInbound(out.id)).toHaveLength(0);
+    expect(deps.integrationEmit.integrationEvents.list(groupId, 5)[0]).toMatchObject({ result: 'sent', inboundId: out.id });
   });
 
   it('wiadomość binarna: hex bez interpretacji', async () => {

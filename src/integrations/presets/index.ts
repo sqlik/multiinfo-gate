@@ -17,6 +17,7 @@ import { pocztaOvh } from './poczta-ovh.ts';
 import { pocztaWlasny } from './poczta-wlasny.ts';
 import { prostyJson } from './prosty-json.ts';
 import { slack } from './slack.ts';
+import { smsGrupa } from './sms-grupa.ts';
 import type { Preset } from './types.ts';
 import { uptimeKuma } from './uptime-kuma.ts';
 import { woocommerce } from './woocommerce.ts';
@@ -30,7 +31,7 @@ export type { Preset, PresetField, PresetSecret } from './types.ts';
  * Poczta: bez Outlook.com, bo Microsoft od 2024-09-16 nie przyjmuje hasła ani hasła aplikacji do IMAP
  * (konta prywatne i Microsoft 365); logowanie OAuth2 czeka na osobne wydanie.
  */
-export const PRESETS: Preset[] = [prostyJson, n8n, uptimeKuma, grafana, zabbix, woocommerce, woocommerceKlient, fakturownia, fakturowniaKlient, homeAssistant, freescoutZgloszenie, freescout, freshdeskZgloszenie, freshdesk, slack, ntfy, bitrix24, pocztaGmail, pocztaHome, pocztaOvh, pocztaWlasny, custom];
+export const PRESETS: Preset[] = [prostyJson, n8n, uptimeKuma, grafana, zabbix, woocommerce, woocommerceKlient, fakturownia, fakturowniaKlient, homeAssistant, freescoutZgloszenie, freescout, freshdeskZgloszenie, freshdesk, slack, ntfy, bitrix24, pocztaGmail, pocztaHome, pocztaOvh, pocztaWlasny, smsGrupa, custom];
 
 export const presetById = (id: string): Preset | undefined => PRESETS.find((p) => p.id === id);
 

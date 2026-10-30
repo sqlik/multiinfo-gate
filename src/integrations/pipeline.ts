@@ -8,7 +8,10 @@ import type { IntegrationRow, IntegrationsRepo } from '../store/integrations.ts'
 import { measureText } from '../text/measure.ts';
 import { InvalidPhoneError, MAX_RECIPIENTS_PER_HOOK, normalizeRecipient, splitRecipients, TooManyRecipientsError } from '../text/phone.ts';
 import { segmentText, TooManyPartsError } from '../text/segment.ts';
-import type { InboundConfig, MailInConfig } from './config.ts';
+import type { GroupMember, InboundConfig, MailInConfig, SmsGroupConfig } from './config.ts';
+import { confirmText, type ConfirmEvent } from './group/confirm.ts';
+import { groupRecipients, groupSender } from './group/members.ts';
+import { matchPrefix } from './group/prefix.ts';
 import { matches } from './conditions.ts';
 import { authResultsPass, domainOf } from './mail/auth-results.ts';
 import { cleanText } from './mail/clean.ts';
@@ -527,5 +530,139 @@ export function previewMailIn(engine: TemplateEngine, config: MailInConfig, mail
     };
   } catch (e) {
     return { senderAllowed: sender !== null, recipients: [], recipientsLevel: 'none', invalid: [], fields: {}, cleaned: '', text: '', parts: 0, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export type SmsGroupIntegration = IntegrationRow & { config: SmsGroupConfig };
+
+/** Ładunek zdarzenia message.received, jak składa go odbiornik: SMS tekstowy ma `text`, binarny `hex`. */
+export interface ReceivedEvent {
+  id: string; serviceId: string; from: string; to: string; kind: string; text?: string; hex?: string; receivedAt: string; relatedMessageId: string | null;
+}
+
+export type SmsGroupSkipReason = 'binary' | 'sender_not_allowed' | 'no_prefix' | 'empty' | 'condition' | 'no_recipients';
+export type SmsGroupOutcome =
+  | { kind: 'sent'; messageIds: string[]; recipients: string[]; parts: number; text: string; confirmId: string | null }
+  | { kind: 'skipped'; reason: SmsGroupSkipReason }
+  | { kind: 'throttled'; notify: boolean }
+  | { kind: 'error'; code: InboundErrorCode; detail: string }
+  | { kind: 'unavailable'; detail: string };
+
+export interface SmsGroupPreview {
+  senderAllowed: boolean; prefixMatched: boolean; body: string; recipients: string[]; text: string; parts: number; confirm: string | null; error: string | null;
+}
+
+/** Kontekst szablonu i warunku (spec 4.4): pola zdarzenia na wierzchu i pod `p`, do tego treść po prefiksie, prefiks, nadawca i odbiorcy. */
+export function buildGroupContext(
+  event: ReceivedEvent, body: string, sender: GroupMember, recipients: string[], config: SmsGroupConfig, integration: { name: string }, now: Date,
+): Record<string, unknown> {
+  const p: Record<string, unknown> = {
+    ...event, body, prefix: config.prefix, sender: sender.name || sender.phone, sender_name: sender.name, recipients: [...recipients],
+  };
+  return { ...p, now: now.toISOString(), integration: { name: integration.name }, p };
+}
+
+export function renderGroupText(engine: TemplateEngine, config: SmsGroupConfig, context: Record<string, unknown>): string {
+  if (config.text.mode === 'liquid') return engine.render(config.text.template, context).trim();
+  const body = String(context.body ?? '');
+  if (config.text.mode === 'sender_body') return `${String(context.sender ?? '')}: ${body}`;
+  return body;
+}
+
+/**
+ * Potok grupy SMS (spec 3.2): klucz i konto, treść tekstowa, nadawca z listy, prefiks, odbiorcy, warunek i burza,
+ * treść SMS-a, wysyłka przez `dispatch`, potwierdzenie do nadawcy w wątku odebranej wiadomości. Działa synchronicznie
+ * w `emitIntegrations`, zanim odbiornik wyczyści treść odebranego SMS-a na koncie bez przechowywania treści.
+ * Pominięcie i limit burzy nie dają żadnej odpowiedzi do nadawcy: obcy numer nie dowiaduje się, że bramka coś obsługuje.
+ */
+export function runSmsGroup(deps: PipelineDeps, integration: SmsGroupIntegration, event: ReceivedEvent, now: Date): SmsGroupOutcome {
+  const log = deps.log ?? silentLogger;
+  const config = integration.config;
+  const stored = integration.storePayloads === 1 ? JSON.stringify(event) : null;
+  const note: Noter = (result, extra = {}) =>
+    deps.integrationEvents.record({ integrationId: integration.id, at: now, result, payload: stored, logLimit: config.eventLogLimit, sourceIp: event.from, inboundId: event.id, ...extra });
+  const skip = (reason: SmsGroupSkipReason, detail: string): SmsGroupOutcome => {
+    note('skipped', { reason: detail });
+    return { kind: 'skipped', reason };
+  };
+
+  const resolved = resolveKeyAccount(deps, integration, now);
+  if (!resolved.ok) {
+    note('error', { reason: resolved.detail });
+    log.warn('integracja.niedostepna', { integrationId: integration.id });
+    return { kind: 'unavailable', detail: resolved.detail };
+  }
+  const { key } = resolved;
+
+  if (event.kind !== 'text' || typeof event.text !== 'string') return skip('binary', 'brak treści tekstowej');
+  const sender = groupSender(config, event.from);
+  if (sender === null) return skip('sender_not_allowed', `nadawca spoza listy: ${event.from}`);
+  const match = matchPrefix(event.text, config.prefix);
+  if (!match.ok) return match.reason === 'empty' ? skip('empty', 'pusta treść') : skip('no_prefix', 'bez prefiksu');
+  const recipients = groupRecipients(config, event.from);
+  const context = buildGroupContext(event, match.body, sender, recipients, config, integration, now);
+
+  const guard = passGuards(deps, integration, config, context, note, undefined, now);
+  if (guard.kind === 'skipped') return { kind: 'skipped', reason: 'condition' };
+  if (guard.kind === 'throttled') return guard;
+  if (recipients.length === 0) return skip('no_recipients', 'brak odbiorców');
+
+  /** Potwierdzenie do nadawcy: zwykła wiadomość konta w wątku odebranej; jej awaria nie cofa rozesłania. */
+  const confirm = (e: ConfirmEvent): string | null => {
+    if (!config.confirm.enabled) return null;
+    try {
+      const [sent] = submitMessages(deps, authFromKey(key), {
+        to: [event.from], text: confirmText(e), integrationId: integration.id, maxParts: 1, inReplyTo: event.id, serviceId: event.serviceId,
+        ...(integration.orig ? { orig: integration.orig } : {}),
+      }, now);
+      return sent?.id ?? null;
+    } catch (err) {
+      if (!(err instanceof ApiError)) throw err;
+      note('error', { reason: `potwierdzenie: ${err.message}` });
+      return null;
+    }
+  };
+  const fail = (code: InboundErrorCode, detail: string): SmsGroupOutcome => {
+    note('error', { reason: detail });
+    log.warn('integracja.blad', { integrationId: integration.id, code });
+    confirm({ kind: 'service' });
+    return { kind: 'error', code, detail };
+  };
+
+  let text: string;
+  try {
+    text = renderGroupText(deps.engine, config, context);
+  } catch (e) {
+    if (e instanceof TemplateError) return fail('template', e.message);
+    throw e;
+  }
+  if (text === '') return fail('empty_text', 'Treść SMS-a jest pusta: szablon nie dał żadnego tekstu.');
+
+  const sent = dispatch(deps, integration, key, text, recipients, config, note, now);
+  if (sent.kind === 'error') {
+    log.warn('integracja.blad', { integrationId: integration.id, code: sent.code });
+    confirm(sent.code === 'too_many_parts' ? { kind: 'too_many_parts', maxParts: config.maxParts } : { kind: 'service' });
+    return sent;
+  }
+  const confirmId = confirm({ kind: 'sent', recipients: recipients.length });
+  return { kind: 'sent', messageIds: sent.messageIds, recipients, parts: sent.parts, text: sent.text, confirmId };
+}
+
+/** Podgląd do „Sprawdź” dla grupy: nic nie wysyła, nic nie zapisuje, nie dotyka bazy. */
+export function previewSmsGroup(engine: TemplateEngine, config: SmsGroupConfig, event: ReceivedEvent, now: Date): SmsGroupPreview {
+  const sender = groupSender(config, event.from);
+  const match = matchPrefix(event.text ?? '', config.prefix);
+  const body = match.ok ? match.body : '';
+  const recipients = sender !== null && match.ok ? groupRecipients(config, event.from) : [];
+  const base = { senderAllowed: sender !== null, prefixMatched: match.ok, body, recipients };
+  if (sender === null || !match.ok || recipients.length === 0) return { ...base, text: '', parts: 0, confirm: null, error: null };
+  try {
+    const text = renderGroupText(engine, config, buildGroupContext(event, body, sender, recipients, config, { name: 'podgląd' }, now));
+    if (text === '') return { ...base, text: '', parts: 0, confirm: null, error: 'Treść SMS-a jest pusta.' };
+    const fitted = fitToParts(text, config.overflow === 'truncate' ? config.maxParts : 9);
+    const confirm = config.confirm.enabled ? confirmText({ kind: 'sent', recipients: recipients.length }) : null;
+    return { ...base, text: fitted.text, parts: fitted.parts, confirm, error: null };
+  } catch (e) {
+    return { ...base, text: '', parts: 0, confirm: null, error: e instanceof Error ? e.message : String(e) };
   }
 }

@@ -1,5 +1,6 @@
 import { OUTBOUND_EVENTS, type OutboundConfig, type OutboundEvent } from '../integrations/config.ts';
 import { matches } from '../integrations/conditions.ts';
+import { runSmsGroup, type PipelineDeps, type ReceivedEvent, type SmsGroupIntegration } from '../integrations/pipeline.ts';
 import { TemplateEngine, TemplateError } from '../integrations/templates.ts';
 import { silentLogger, type Logger } from '../log.ts';
 import type { AdminNotifier } from '../notifications/rules.ts';
@@ -8,6 +9,9 @@ import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
 import type { IntegrationsRepo } from '../store/integrations.ts';
 import type { JobsRepo } from '../store/jobs.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
+
+/** Zależności wysyłki SMS dla grup; bez nich grupa zapisuje błąd zamiast rozsyłać. */
+export type SmsGroupDeps = Pick<PipelineDeps, 'accounts' | 'apiKeys' | 'messages' | 'events' | 'jobs' | 'inbound'>;
 
 export interface IntegrationEmitDeps {
   integrations: IntegrationsRepo;
@@ -18,6 +22,7 @@ export interface IntegrationEmitDeps {
   engine: TemplateEngine;
   notifier?: AdminNotifier;
   log?: Logger;
+  group?: SmsGroupDeps;
 }
 
 export interface EmitIntegrationsOptions {
@@ -94,6 +99,10 @@ export function emitIntegrations(
   const log = deps.log ?? silentLogger;
   const ids: number[] = [];
   for (const integration of deps.integrations.listOutboundFor(apiKeyId, event)) {
+    if (integration.kind === 'sms_group') {
+      runGroup(deps, integration as SmsGroupIntegration, payload as unknown as ReceivedEvent, now);
+      continue;
+    }
     const config = integration.config as OutboundConfig;
     const context = buildOutboundContext(event, payload, integration, now);
     const stored = integration.storePayloads === 1 ? JSON.stringify(payload) : null;
@@ -135,4 +144,47 @@ export function emitIntegrations(
     }
   }
   return ids;
+}
+
+/**
+ * Grupa SMS zamiast dostawy HTTP: rozesłanie dzieje się od razu, synchronicznie, bo odbiornik czyści treść
+ * odebranego SMS-a po powiadomieniach na koncie bez przechowywania treści. Proces bez zależności wysyłki
+ * (sam panel) zapisuje błąd zamiast cicho pominąć grupę.
+ */
+function runGroup(deps: IntegrationEmitDeps, integration: SmsGroupIntegration, event: ReceivedEvent, now: Date): void {
+  const notifyError = (detail: string) =>
+    deps.notifier?.notify('integration_error', `integration:${integration.id}`, `${integration.name}: ${detail}`, now);
+  if (!deps.group) {
+    const detail = 'wysyłka SMS niedostępna w tym procesie';
+    deps.integrationEvents.record({
+      integrationId: integration.id, at: now, result: 'error', reason: detail, logLimit: integration.config.eventLogLimit,
+      sourceIp: event.from, inboundId: event.id, payload: integration.storePayloads === 1 ? JSON.stringify(event) : null,
+    });
+    notifyError(detail);
+    return;
+  }
+  const pipeline: PipelineDeps = {
+    ...deps.group, integrations: deps.integrations, integrationEvents: deps.integrationEvents, guards: deps.guards, engine: deps.engine,
+    ...(deps.log ? { log: deps.log } : {}),
+  };
+  let out: ReturnType<typeof runSmsGroup>;
+  try {
+    out = runSmsGroup(pipeline, integration, event, now);
+  } catch (e) {
+    // Grupa działa wewnątrz zapisu odebranej wiadomości: wyjątek cofnąłby ten zapis, a Multiinfo oddałoby SMS
+    // ponownie przy następnym pytaniu. Błąd zostaje więc we wpisie i w powiadomieniu, nie w pętli odbioru.
+    const detail = e instanceof Error ? e.message : String(e);
+    deps.integrationEvents.record({
+      integrationId: integration.id, at: now, result: 'error', reason: detail, logLimit: integration.config.eventLogLimit,
+      sourceIp: event.from, inboundId: event.id, payload: integration.storePayloads === 1 ? JSON.stringify(event) : null,
+    });
+    notifyError(detail);
+    (deps.log ?? silentLogger).error('integracja.grupa.wyjatek', { integrationId: integration.id, error: detail });
+    return;
+  }
+  if (out.kind === 'throttled' && out.notify) {
+    const { limit, windowMinutes } = integration.config.throttle;
+    deps.notifier?.notify('integration_throttled', `integration:${integration.id}`, `${integration.name}: przekroczony limit ${limit} w ${windowMinutes} min`, now);
+  }
+  if (out.kind === 'error' || out.kind === 'unavailable') notifyError(out.detail);
 }

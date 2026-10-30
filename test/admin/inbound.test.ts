@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { InboundInput } from '../../src/store/inbound-messages.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
-import { defaultOutboundConfig } from '../../src/integrations/config.ts';
+import { defaultOutboundConfig, defaultSmsGroupConfig } from '../../src/integrations/config.ts';
 
 const NOW = new Date('2026-08-25T10:00:00Z');
 
@@ -157,6 +157,18 @@ describe('POST /dostawy/:id/ponow', () => {
     return id;
   };
 
+  it('szczegół odebranej pokazuje grupy SMS, które ją przetworzyły, z wynikiem i powodem', async () => {
+    seed('in_1');
+    const groupId = h.integrations.insert({ name: 'Dzieci 3b', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1, config: defaultSmsGroupConfig(), secrets: {}, storePayloads: 0, createdAt: NOW });
+    h.integrationEvents.record({ integrationId: groupId, at: NOW, result: 'sent', reason: '6 odbiorców', inboundId: 'in_1', messageId: 'msg_1', logLimit: 200 });
+    const body = (await page('/odebrane/in_1')).body;
+    expect(body).toContain('Grupy SMS');
+    expect(body).toContain(`<a href="/integracje/${groupId}">Dzieci 3b</a>`);
+    expect(body).toContain('wysłano');
+    expect(body).toContain('6 odbiorców');
+    seed('in_2');
+    expect((await page('/odebrane/in_2')).body).not.toContain('Grupy SMS');
+  });
   it('szczegół odebranej pokazuje przycisk tylko przy nieudanej dostawie', async () => {
     seed('in_1');
     const failed = failedDelivery();

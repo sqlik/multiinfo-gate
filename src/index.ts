@@ -78,7 +78,7 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
     release: () => pendingRelease(settings), mailIn,
   });
   const releases = new ReleaseChecker({ settings, notifier, log, enabled: config.updateCheck });
-  const integrationEmit = { integrations, integrationEvents, guards, deliveries, jobs, engine, notifier, log };
+  const integrationEmit = { integrations, integrationEvents, guards, deliveries, jobs, engine, notifier, log, group: { accounts, apiKeys, messages, events, jobs, inbound } };
 
   const backups = new BackupScheduler({
     db, dir: join(config.dataDir, 'backups'), retentionDays: config.backupRetentionDays, log,

@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { RULE_OPS } from './conditions.ts';
 import { isValidPath } from './paths.ts';
 
-export type IntegrationKind = 'webhook_in' | 'webhook_out' | 'mail_in';
-export const INTEGRATION_KINDS: IntegrationKind[] = ['webhook_in', 'webhook_out', 'mail_in'];
+export type IntegrationKind = 'webhook_in' | 'webhook_out' | 'mail_in' | 'sms_group';
+export const INTEGRATION_KINDS: IntegrationKind[] = ['webhook_in', 'webhook_out', 'mail_in', 'sms_group'];
 
 export const OUTBOUND_EVENTS = ['message.received', 'message.sent', 'message.delivered', 'message.failed'] as const;
 export type OutboundEvent = (typeof OUTBOUND_EVENTS)[number];
@@ -148,16 +148,55 @@ export const mailInConfigSchema = z.object({
 });
 export type MailInConfig = z.infer<typeof mailInConfigSchema>;
 
-export type IntegrationConfig = InboundConfig | OutboundConfig | MailInConfig;
+/** Tryb grupy: `lists` to osobna lista nadawców i osobna lista odbiorców, `closed` to jedna lista członków piszących do siebie nawzajem. */
+export const GROUP_MODES = ['lists', 'closed'] as const;
+export type GroupMode = (typeof GROUP_MODES)[number];
+export const GROUP_LIMITS = { senders: 100, recipients: 500, members: 500, prefix: 20, name: 40 } as const;
+
+/** Numer znormalizowany jak odbiorcy webhooków: same cyfry z kodem kraju. */
+const groupPhone = z.string().regex(/^\d{11,15}$/, 'numer nieznormalizowany');
+/** Pozycja listy nadawców albo członków: numer i opcjonalna nazwa do szablonu treści. */
+export const groupMemberSchema = z.object({ phone: groupPhone, name: z.string().max(GROUP_LIMITS.name).default('') });
+export type GroupMember = z.infer<typeof groupMemberSchema>;
+
+/**
+ * SMS do grupy: uprawniony numer wysyła SMS z prefiksem na numer bramki, bramka rozsyła treść bez prefiksu
+ * do stałej listy numerów. Listy puste przechodzą celowo, jak pusty `host` skrzynki: minimalne liczebności
+ * wymusza formularz, a potok z pustą listą nikogo nie dopuszcza. Schemat sprawdza obie pary list,
+ * listy drugiego trybu zapisują się puste.
+ */
+export const smsGroupConfigSchema = z.object({
+  ...common,
+  mode: z.enum(GROUP_MODES),
+  senders: z.array(groupMemberSchema).max(GROUP_LIMITS.senders),
+  recipients: z.array(groupPhone).max(GROUP_LIMITS.recipients),
+  members: z.array(groupMemberSchema).max(GROUP_LIMITS.members),
+  /** Słowo na początku SMS-a wybierające grupę; puste = każdy SMS od uprawnionego numeru. */
+  prefix: z.string().max(GROUP_LIMITS.prefix).regex(/^\S*$/, 'prefiks bez białych znaków'),
+  text: z.discriminatedUnion('mode', [
+    z.object({ mode: z.literal('body') }),
+    z.object({ mode: z.literal('sender_body') }),
+    z.object({ mode: z.literal('liquid'), template: z.string().max(4000) }),
+  ]),
+  /** Potwierdzenie do nadawcy po rozesłaniu, domyślnie wyłączone. */
+  confirm: z.object({ enabled: z.boolean() }),
+  maxParts: z.number().int().min(1).max(9),
+  overflow: z.enum(['truncate', 'reject']),
+});
+export type SmsGroupConfig = z.infer<typeof smsGroupConfigSchema>;
+
+export type IntegrationConfig = InboundConfig | OutboundConfig | MailInConfig | SmsGroupConfig;
 export type IntegrationSecrets = Record<string, string>;
 
 export function parseConfig(kind: 'webhook_in', raw: unknown): InboundConfig;
 export function parseConfig(kind: 'webhook_out', raw: unknown): OutboundConfig;
 export function parseConfig(kind: 'mail_in', raw: unknown): MailInConfig;
+export function parseConfig(kind: 'sms_group', raw: unknown): SmsGroupConfig;
 export function parseConfig(kind: IntegrationKind, raw: unknown): IntegrationConfig;
 export function parseConfig(kind: IntegrationKind, raw: unknown): IntegrationConfig {
   if (kind === 'webhook_in') return inboundConfigSchema.parse(raw);
   if (kind === 'mail_in') return mailInConfigSchema.parse(raw);
+  if (kind === 'sms_group') return smsGroupConfigSchema.parse(raw);
   return outboundConfigSchema.parse(raw);
 }
 
@@ -180,4 +219,11 @@ export const defaultMailInConfig = (): MailInConfig => ({
   folder: 'INBOX', intervalSec: 60, senders: [], requireAuthResults: false, authservId: '',
   recipientsFromMail: { enabled: false, where: 'subject' }, to: { fallback: [] }, clean: { cutFrom: [] }, fields: [],
   text: { mode: 'simple', variant: 'subject_text' }, maxParts: 1, overflow: 'truncate', after: { action: 'keep' }, reply: { enabled: false },
+});
+
+/** Wartości po bezpiecznej stronie: osobne listy, obie puste (nikt nie pisze), bez prefiksu, sama treść, bez potwierdzenia, jedna część i przycięcie. */
+export const defaultSmsGroupConfig = (): SmsGroupConfig => ({
+  condition: { mode: 'builder', rules: [] }, throttle: { limit: 10, windowMinutes: 10 }, eventLogLimit: 200,
+  mode: 'lists', senders: [], recipients: [], members: [], prefix: '', text: { mode: 'body' }, confirm: { enabled: false },
+  maxParts: 1, overflow: 'truncate',
 });

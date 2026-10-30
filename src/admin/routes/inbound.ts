@@ -74,6 +74,7 @@ export function registerInboundViewRoutes(app: FastifyInstance, deps: AdminDeps,
           : { ref: row.externalRef, integration: integrationLink(deps, row.externalIntegrationId) },
         related: row.relatedMessageId === null ? null : deps.messages.get(row.relatedMessageId) ?? null,
         replies: deps.messages.repliesTo(row.id),
+        groups: deps.integrationEvents.listGroupForInbound(row.id).map((e) => ({ integrationId: e.integrationId, integrationName: e.integrationName, result: e.result, reason: e.reason })),
       }),
     });
   });

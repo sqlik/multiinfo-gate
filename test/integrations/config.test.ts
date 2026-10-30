@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig, parseConfig } from '../../src/integrations/config.ts';
-import { isMailIn } from '../../src/store/integrations.ts';
+import { GROUP_LIMITS, INTEGRATION_KINDS, defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig, defaultSmsGroupConfig, parseConfig } from '../../src/integrations/config.ts';
+import { isMailIn, isSmsGroup } from '../../src/store/integrations.ts';
 
 const outbound = () => ({ ...defaultOutboundConfig(), url: 'https://example.invalid/hook' });
 
@@ -78,5 +78,31 @@ describe('mail_in', () => {
   it('isMailIn rozpoznaje rodzaj po wierszu', () => {
     expect(isMailIn({ kind: 'mail_in' } as never)).toBe(true);
     expect(isMailIn({ kind: 'webhook_in' } as never)).toBe(false);
+  });
+});
+
+describe('sms_group', () => {
+  it('domyślna konfiguracja przechodzi i ma bezpieczne wartości', () => {
+    const c = parseConfig('sms_group', defaultSmsGroupConfig());
+    expect(c).toMatchObject({ mode: 'lists', senders: [], recipients: [], members: [], prefix: '', text: { mode: 'body' }, confirm: { enabled: false }, maxParts: 1, overflow: 'truncate' });
+    expect(c.throttle).toEqual({ limit: 10, windowMinutes: 10 });
+    expect(c.eventLogLimit).toBe(200);
+  });
+  it('odrzuca prefiks ze spacją, numer nieznormalizowany i nazwę dłuższą niż 40 znaków', () => {
+    const base = defaultSmsGroupConfig();
+    expect(() => parseConfig('sms_group', { ...base, prefix: 'dla dzieci' })).toThrow();
+    expect(() => parseConfig('sms_group', { ...base, prefix: 'x'.repeat(21) })).toThrow();
+    expect(() => parseConfig('sms_group', { ...base, recipients: ['+48 601 000 001'] })).toThrow();
+    expect(() => parseConfig('sms_group', { ...base, senders: [{ phone: '48601000001', name: 'x'.repeat(41) }] })).toThrow();
+    expect(() => parseConfig('sms_group', { ...base, mode: 'open' })).toThrow();
+  });
+  it('nazwa przy numerze jest opcjonalna i wczytuje się jako pusty ciąg', () => {
+    expect(parseConfig('sms_group', { ...defaultSmsGroupConfig(), members: [{ phone: '48601000001' }] }).members[0]).toEqual({ phone: '48601000001', name: '' });
+  });
+  it('isSmsGroup rozpoznaje rodzaj po wierszu, a INTEGRATION_KINDS zawiera sms_group', () => {
+    expect(isSmsGroup({ kind: 'sms_group' } as never)).toBe(true);
+    expect(isSmsGroup({ kind: 'mail_in' } as never)).toBe(false);
+    expect(INTEGRATION_KINDS).toContain('sms_group');
+    expect(GROUP_LIMITS).toEqual({ senders: 100, recipients: 500, members: 500, prefix: 20, name: 40 });
   });
 });

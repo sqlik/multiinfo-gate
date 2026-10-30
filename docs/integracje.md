@@ -7,22 +7,25 @@ obiekt konfigurowany w panelu i przypięty do klucza API. Ma adres wejściowy al
 szablon i warunek.
 
 Od wersji 1.8 integracją jest również skrzynka pocztowa: bramka odczytuje wiadomości od
-dozwolonych nadawców i zamienia je na SMS-y (Mail2SMS, rozdział 5).
+dozwolonych nadawców i zamienia je na SMS-y (Mail2SMS, rozdział 5). Od wersji 1.8.5 integracją
+jest także grupa numerów: uprawniony numer wysyła SMS na numer bramki, a bramka rozsyła treść
+do stałej listy (SMS do grupy, rozdział 5a).
 
-Ten rozdział opisuje trzy kierunki, język szablonów, gotowe ustawienia dla popularnych aplikacji,
+Ten rozdział opisuje cztery kierunki, język szablonów, gotowe ustawienia dla popularnych aplikacji,
 dziennik integracji oraz powiadomienia dla administratora wysyłane mailem. Wysyłkę przez pełne
 API z kluczem w nagłówku opisuje rozdział [API dla aplikacji](api.md). Integracje są dla
 przypadków, w których aplikacja nie potrafi tego API użyć.
 
 ## 1. Czym jest integracja
 
-Integracja działa w jednym z trzech kierunków:
+Integracja działa w jednym z czterech kierunków:
 
 | Kierunek | W panelu | Co robi |
 |---|---|---|
 | do SMS | „Aplikacja wysyła SMS” | aplikacja wywołuje adres wejściowy bramki `POST /hooks/<identyfikator>` własnym ładunkiem, bramka odczytuje z niego numer i treść, składa SMS i wysyła |
 | z SMS-a | „SMS albo status trafia do aplikacji” | odebrany SMS albo status wysyłki bramka wysyła na adres aplikacji w formacie zapisanym w szablonie |
 | z poczty | „Mail2SMS” | bramka odczytuje skrzynkę IMAP i zamienia wiadomości od dozwolonych nadawców na SMS-y; numery wskazuje nadawca, lista nadawców albo stała lista (rozdział 5) |
+| do grupy | „SMS do grupy” | uprawniony numer wysyła SMS z prefiksem na numer bramki, bramka rozsyła treść bez prefiksu do stałej listy numerów (rozdział 5a) |
 
 Każda integracja działa w imieniu jednego klucza API. Obowiązują więc konto Multiinfo tego
 klucza, jego dozwolone usługi, nadpisy i limity, dokładnie tak jak przy wysyłce przez API.
@@ -63,9 +66,10 @@ opisuje, jaki adres wpisać zależnie od tego, w jakim środowisku została post
 
 Przycisk **Dodaj integrację** prowadzi przez trzy kroki:
 
-1. Kierunek: „Aplikacja wysyła SMS”, „SMS albo status trafia do aplikacji” albo „Mail2SMS”.
+1. Kierunek: „Aplikacja wysyła SMS”, „SMS albo status trafia do aplikacji”, „Mail2SMS” albo
+   „SMS do grupy”.
 2. Gotowe ustawienie: kafelek z nazwą aplikacji (rozdział 7) albo „Własne” dla aplikacji spoza
-   listy.
+   listy. SMS do grupy ma jedno ustawienie i otwiera formularz od razu.
 3. Formularz. Gotowe ustawienie otwiera się w **trybie prostym**, „Własne” natychmiast
    w **zaawansowanym**. Przełącznik nad formularzem zmienia tryb w każdej chwili.
 
@@ -888,6 +892,170 @@ w panelu. Podsumowanie dzienne zawiera liczbę skrzynek i liczbę skrzynek w bł
 - Nazwa serwera w nagłówku Authentication-Results zamyka drogę podrobionym nagłówkom SPF/DKIM.
   Bez nagłówka serwera wiadomość jest odrzucana (rozdział 5.2)
 
+## 5a. SMS do grupy
+
+Od wersji 1.8.5 bramka rozsyła jednego SMS-a do stałej listy numerów. Służy do tego integracja
+„do grupy”, w panelu nazwana SMS do grupy. Uprawniona osoba wysyła SMS na numer bramki. Bramka
+sprawdza, czy numer nadawcy jest na liście, zdejmuje z treści słowo wybierające grupę i rozsyła
+resztę do każdego numeru z listy osobną wiadomością. Rodzic pisze „dzieci jutro zbiórka 8:00”
+i wiadomość trafia do wszystkich dzieci z klasy. Pisze „rodzice zebranie w środę” i wiadomość
+trafia do rodziców. Po stronie telefonu nie trzeba niczego instalować. Wystarczy zwykły SMS.
+
+Grupa działa w imieniu klucza API, tak jak pozostałe integracje. SMS-y do odbiorców są widoczne
+na ekranie „Wiadomości” z nazwą klucza i nazwą grupy. Każdy odbiorca otrzymuje osobną wiadomość.
+Jeden SMS do grupy 20 numerów to 20 wiadomości na koncie Multiinfo.
+
+### 5a.1. Dwa tryby
+
+Grupa ma jeden z dwóch trybów. Różnią się tylko tym, skąd pochodzą listy numerów. Reszta,
+czyli prefiks, treść, potwierdzenie i dziennik, działa tak samo.
+
+| Tryb | W panelu | Kto pisze | Kto odbiera |
+|---|---|---|---|
+| osobne listy | „Osobne listy” | numery z listy uprawnionych, do 100 | numery z listy odbiorców, do 500 |
+| grupa zamknięta | „Grupa zamknięta” | każdy członek grupy | pozostali członkowie, bez nadawcy; od 2 do 500 numerów |
+
+Osobne listy pasują do klasy, drużyny albo zespołu, w którym pisze kilka osób, a odbiera wiele.
+Nadawca nie musi być odbiorcą. Grupa zamknięta pasuje do kilku osób, które mają jeden wspólny
+numer i piszą do siebie nawzajem: rodzina, dyżur, zarząd.
+
+### 5a.2. Dodanie grupy krok po kroku
+
+Przycisk **Dodaj integrację** i kafelek **Do grupy** otwierają formularz od razu, bez wyboru
+ustawienia. Formularz w trybie prostym ma pięć sekcji.
+
+1. **Podstawy.** Nazwa grupy, klucz API, a gdy klucz ma więcej niż jedną usługę, także usługa.
+   Grupa nasłuchuje SMS-ów odebranych w usłudze klucza.
+2. **Kto i do kogo.** Wybór trybu dwoma polami opcji. Dla osobnych list są dwa pola:
+   „Numery uprawnione do pisania” i „Numery odbiorców”. Dla grupy zamkniętej jedno pole:
+   „Numery członków”. W każdym polu jeden numer w wierszu. Po numerze można dopisać nazwę,
+   na przykład `601 000 001 Ania`. Nazwa zaczyna się od pierwszej litery i sięga końca wiersza.
+   Numer można zapisać ze spacjami, plusem, myślnikami albo nawiasami. Bramka sprowadza go do
+   postaci z kodem kraju konta, tak jak odbiorców z rozdziału 3.3. Numer powtórzony w dwóch
+   wierszach zostaje zapisany raz. Numer nieprawidłowy zatrzymuje zapis zdaniem z tym numerem.
+3. **Prefiks.** Słowo na początku SMS-a, które wybiera tę grupę. Puste pole oznacza każdy SMS
+   od uprawnionego numeru. Szczegóły w rozdziale 5a.3.
+4. **Treść.** Dwa warianty z przykładem obok każdego: „Sama treść” albo „Nadawca i treść”.
+   Pod nimi limit części z wyborem, co zrobić z dłuższą wiadomością: skrócić albo nie wysyłać.
+   Szczegóły w rozdziale 5a.4.
+5. **Potwierdzenie.** Pole wyboru „Odsyłaj nadawcy potwierdzenie z liczbą odbiorców”. Domyślnie
+   wyłączone. Szczegóły w rozdziale 5a.5.
+
+![Formularz SMS do grupy w trybie prostym: tryb grupy, numery uprawnione do pisania z nazwami, numery odbiorców, prefiks, treść z limitem części i potwierdzenie](obrazki/grupa-formularz.png)
+
+Przycisk **Sprawdź** niczego nie wysyła ani nie zapisuje. Pokazuje, czy nadawca próbki jest na
+liście, czy prefiks pasuje, jaką treść dostaną odbiorcy, listę odbiorców po normalizacji,
+liczbę części i treść potwierdzenia. W trybie prostym próbką jest pierwszy numer z listy
+i przykładowa treść z prefiksem. W trybie zaawansowanym numer nadawcy i treść próbki można
+wpisać w sekcji „Próbka do sprawdzenia”.
+
+![Podgląd „Sprawdź”: nadawca na liście, prefiks pasuje, treść po zdjęciu prefiksu, odbiorcy, SMS, liczba części i treść potwierdzenia](obrazki/grupa-sprawdz.png)
+
+Tryb zaawansowany dodaje warunek z rozdziału 3.6, szablon Liquid jako trzeci wariant treści,
+ochronę przed burzą, rozmiar dziennika i przechowywanie ładunków. Grupa zapisana z warunkiem
+albo szablonem Liquid otwiera się do edycji od razu w trybie zaawansowanym.
+
+Druga grupa na tym samym numerze, na przykład rodzice obok dzieci, to druga integracja na tym
+samym kluczu i tej samej usłudze, z innym prefiksem. Jedna grupa ma jeden prefiks.
+
+### 5a.3. Prefiks
+
+Prefiks to jedno słowo bez spacji, do 20 znaków. Bramka porównuje je z początkiem treści SMS-a.
+Wielkość liter nie ma znaczenia. Polskie znaki są sprowadzane do łacińskich, więc „Żłobek”
+i „zlobek” to ten sam prefiks. Po słowie może stać spacja, dwukropek albo oba. Każdy z poniższych
+zapisów daje SMS o treści `jutro zbiórka`:
+
+```
+dzieci jutro zbiórka
+Dzieci jutro zbiórka
+DZIECI: jutro zbiórka
+dzieci : jutro zbiórka
+Dzieci:jutro zbiórka
+```
+
+Bezpośrednio po prefiksie musi stać koniec tekstu, spacja albo dwukropek. SMS „dzieciak jutro”
+nie uruchamia grupy „dzieci”. Treść do rozesłania to reszta po prefiksie, bez dwukropka
+i spacji z początku, z zachowaniem wielkości liter i znaków.
+
+SMS bez prefiksu albo z nieznanym prefiksem jest pomijany. Bramka nie odpowiada na niego
+i niczego nie wysyła. Tak samo pomijany jest SMS składający się z samego prefiksu, na przykład
+„dzieci” albo „Dzieci:”. Puste pole prefiksu wyłącza ten krok: każdy SMS od uprawnionego
+numeru idzie do grupy w całości.
+
+### 5a.4. Treść
+
+| Wariant | Co dostają odbiorcy | Przykład |
+|---|---|---|
+| Sama treść | reszta SMS-a po prefiksie | `jutro zbiórka 8:00` |
+| Nadawca i treść | nazwa nadawcy z listy, dwukropek i reszta; bez nazwy numer nadawcy | `Ania: jutro zbiórka 8:00` |
+| Szablon Liquid | wynik szablonu na zmiennych z rozdziału 6.2, tylko tryb zaawansowany | `{{ sender }} do {{ recipients.size }}: {{ body }}` |
+
+Limit części i przepełnienie działają jak w rozdziale 3.5 i są dostępne w obu trybach
+formularza. Domyślnie jedna część i przycięcie. Każdy odbiorca dostaje tyle części, ile ma
+wiadomość. Przy ustawieniu „nie wysyłaj” SMS ponad
+limit daje wpis „błąd” w dzienniku, a nadawca z włączonym potwierdzeniem otrzymuje informację
+o długości.
+
+### 5a.5. Potwierdzenie do nadawcy
+
+Po włączeniu pola „Odsyłaj nadawcy potwierdzenie z liczbą odbiorców” bramka odpowiada nadawcy
+jednym SMS-em w wątku jego wiadomości. Potwierdzenie jest zwykłą wiadomością konta: widać je na
+ekranie „Wiadomości”, kosztuje jak każda i ma nazwę grupy w szczegółach.
+
+| Zdarzenie | Treść potwierdzenia |
+|---|---|
+| rozesłano | `Wysłano do 1 odbiorcy` albo `Wysłano do 6 odbiorców` |
+| odrzucono przez długość | `Nie wysłano: wiadomość wymaga więcej niż 1 części` |
+| błąd bramki, klucza albo szablonu | `Nie wysłano: błąd bramki, administrator został powiadomiony` |
+
+Potwierdzenie nigdy nie idzie do numeru spoza listy. Nie idzie też po pominięciu SMS-a bez
+prefiksu, z pustą treścią albo odrzuconego warunkiem, ani po przekroczeniu limitu burzy.
+Nadawca spoza listy nie dowiaduje się, że numer coś obsługuje. Awaria wysyłki potwierdzenia nie
+cofa rozesłania. W dzienniku zostaje wpis „błąd” z powodem.
+
+### 5a.6. Lista, szczegóły i dziennik
+
+Na liście integracji grupa ma kierunek „do grupy”. Przycisk **Do grupy** nad listą ogranicza ją
+do grup. Szczegóły opisują konfigurację słowami: tryb z liczbą nadawców i odbiorców albo
+członków, prefiks, listy numerów z nazwami, wariant treści i stan potwierdzenia.
+
+![Szczegóły grupy: konfiguracja słowami i dziennik z wpisami „wysłano”, „pominięto” z powodami](obrazki/grupa-szczegol.png)
+
+Dziennik działa jak w rozdziale 8. Kolumna „Nadawca” zawiera numer, z którego przyszedł SMS.
+Powody właściwe dla grupy:
+
+| Wynik | Powód |
+|---|---|
+| pominięto | brak treści tekstowej, nadawca spoza listy, bez prefiksu, pusta treść, warunek niespełniony, brak odbiorców |
+| limit | nadmiar ponad limit burzy, na przykład `ponad 10 w 10 min` |
+| błąd | treść ponad limit części przy „nie wysyłaj”, błąd szablonu, klucz albo konto niedostępne, nieudane potwierdzenie |
+| wysłano | liczba odbiorców, na przykład `6 odbiorców`, z odnośnikiem do pierwszej wiadomości |
+
+„Brak treści tekstowej” dotyczy SMS-a binarnego. „Brak odbiorców” pojawia się w grupie
+zamkniętej, gdy jedyny członek pisze do siebie. Przy włączonym przechowywaniu ładunków wpis
+zawiera zdarzenie odebranej wiadomości, a odnośnik **Użyj jako próbki** wpisuje numer nadawcy
+i treść w pola próbki.
+
+Szczegóły odebranej wiadomości mają wiersz „Grupy SMS” z nazwą każdej grupy, która ją
+przetworzyła, wynikiem i powodem. Szczegóły wiadomości wysłanej do odbiorcy mają wiersz
+„Integracja” z nazwą grupy.
+
+### 5a.7. Koszt i bezpieczeństwo
+
+- Numer na liście uprawnionych wysyła na koszt konta do wszystkich odbiorców. Lista ma być
+  krótka. Numer zgubionego telefonu należy z niej usunąć od razu
+- Zaufanie do numeru nadawcy jest takie jak w każdej usłudze opartej o numer telefonu: sieć
+  komórkowa uwierzytelnia kartę SIM
+- Koszt jednego SMS-a od nadawcy to liczba odbiorców razy liczba części. Ochrona przed burzą
+  liczy wiadomości od nadawców, nie wiadomości do odbiorców. Domyślny limit 10 w 10 minut przy
+  500 odbiorcach oznacza najwyżej 5000 wiadomości w oknie. Przy dużej grupie warto obniżyć limit
+  w sekcji „Ochrona i dziennik” trybu zaawansowanego
+- Pusta lista nadawców oznacza, że nikt nie pisze, nigdy „wszyscy”
+- SMS bez prefiksu i SMS od obcego numeru nie wywołują żadnej odpowiedzi. Potwierdzenia idą
+  wyłącznie do numerów z listy
+- Treść odebranego SMS-a wchodzi do szablonu Liquid jak ładunek obcej aplikacji: ten sam silnik
+  bez dostępu do systemu plików i te same limity
+
 ## 6. Szablony Liquid
 
 ### 6.1. Składnia w pigułce
@@ -923,6 +1091,7 @@ W szablonie dostępne są te zmienne:
 | `from`, `to`, `text` albo `hex`, `kind`, `receivedAt`, `serviceId`, `relatedMessageId` | `message.received` | jak w rozdziale 6.2 [API](api.md) |
 | `status`, `to`, `parts`, `error`, `miStatus`, `miSubstatus`, `providerCode`, `inReplyTo` | statusy | jak w rozdziale 6.2 API; pola zdarzenia leżą też na wierzchu, więc `{{ text }}` i `{{ p.text }}` to to samo |
 | `from`, `from_name`, `subject`, `text`, `text_full`, `date`, `to`, `message_id`, `fields.<nazwa>` | Mail2SMS | adres i nazwa nadawcy, temat bez przedrostka z numerami, treść oczyszczona, treść pełna, data w formacie ISO 8601, lista adresatów, `Message-ID`, wycinki z rozdziału 5.5; `p` to cały kontekst |
+| `body`, `prefix`, `sender`, `sender_name`, `recipients` | SMS do grupy | treść po zdjęciu prefiksu, prefiks z ustawień, nazwa nadawcy z listy albo jego numer, sama nazwa albo pusty ciąg, lista numerów odbiorców; pola zdarzenia `message.received` jak wyżej, `p` to cały kontekst |
 
 ### 6.3. Filtry bramki
 
@@ -1670,8 +1839,8 @@ prawdziwego formatu aplikacji. Ładunki są zaszyfrowane kluczem głównym i zni
 dniach. Ładunki bywają wrażliwe, dlatego przechowywanie zaleca się włączać tylko na czas konfiguracji.
 
 Ślady integracji widać też na innych ekranach. Szczegóły wiadomości mają wiersz
-„Integracja”. Szczegóły odebranej wiadomości mają wiersz „Zgłoszenie” z identyfikatorem oraz
-dostawy pod nazwą integracji. Przegląd ma kafelek „Integracje z błędami” z ostrzeżeniem. Edycja klucza pokazuje
+„Integracja”. Szczegóły odebranej wiadomości mają wiersz „Zgłoszenie” z identyfikatorem,
+wiersz „Grupy SMS” z wynikiem każdej grupy oraz dostawy pod nazwą integracji. Przegląd ma kafelek „Integracje z błędami” z ostrzeżeniem. Edycja klucza pokazuje
 listę jego integracji.
 
 ## 9. Powiadomienia administratora
@@ -1750,7 +1919,7 @@ telefonu.
   i znikają po siedmiu dniach
 - Sekrety integracji, hasło SMTP i hasło skrzynki pocztowej są zaszyfrowane kluczem głównym.
   Nie trafiają do dziennika, audytu, maili, logu ani odpowiedzi HTTP. Zasady właściwe dla
-  skrzynek zebrano w rozdziale 5.10
+  skrzynek zebrano w rozdziale 5.10, a dla grup SMS w rozdziale 5a.7
 - Adresy integracji z SMS-a w sieci wewnętrznej wymagają `MIG_WEBHOOK_ALLOW_PRIVATE=1`, tak samo
   jak adresy webhooków kluczy
 - Adres `/hooks/` ma limit 120 żądań na minutę na adres źródłowy, niezależny od limitów klucza.

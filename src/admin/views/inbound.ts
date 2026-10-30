@@ -4,6 +4,8 @@ import { deliveriesTable, type DeliveryView } from './deliveries.ts';
 import { warsawStamp } from '../../time/warsaw.ts';
 import { esc, preview } from './layout.ts';
 import { statusLabel, statusTone } from './status-labels.ts';
+import type { EventResult } from '../../store/integration-events.ts';
+import { resultBadge } from './integrations.ts';
 
 export interface InboundFilters { konto: number | null; usluga: string | null; od: string | null; dzienOd: string | null; dzienDo: string | null }
 
@@ -84,6 +86,8 @@ export interface InboundDetail {
   related: MessageRow | null; replies: MessageRow[];
   /** Zgłoszenie w obcej aplikacji założone z tej wiadomości przez integrację wychodzącą. */
   ticket?: { ref: string; integration: { id: number; name: string } } | null;
+  /** Grupy SMS, które przetworzyły tę wiadomość: wynik i powód z dziennika integracji. */
+  groups?: Array<{ integrationId: number; integrationName: string; result: EventResult; reason: string | null }>;
 }
 
 export function inboundDetailPage(d: InboundDetail): string {
@@ -94,6 +98,7 @@ export function inboundDetailPage(d: InboundDetail): string {
   const replies = d.replies.length === 0
     ? '<span class="dim">brak</span>'
     : d.replies.map((m) => `<a href="/wiadomosci/${esc(m.id)}">${esc(m.id)}</a> <span class="st"><span class="dot dot-${statusTone(m.status)}"></span>${esc(statusLabel(m.status))}</span>`).join('<br>');
+  const groups = (d.groups ?? []).map((g) => `<a href="/integracje/${esc(g.integrationId)}">${esc(g.integrationName)}</a> ${resultBadge(g.result)}${g.reason ? ` <span class="dim">${esc(g.reason)}</span>` : ''}`).join('<br>');
   return `<div class="head">
     <div>
       <div class="crumb"><a href="/odebrane">Odebrane</a> / szczegóły</div>
@@ -118,6 +123,7 @@ export function inboundDetailPage(d: InboundDetail): string {
           <div>Konektor</div><div class="m">${esc(r.connectorId ?? '-')}</div>
           <div>Zapisana</div><div class="m">${esc(warsawStamp(r.createdAt))}</div>
           ${!d.ticket ? '' : `<div>Zgłoszenie</div><div class="m">${esc(d.ticket.ref)} (<a href="/integracje/${esc(d.ticket.integration.id)}">${esc(d.ticket.integration.name)}</a>)</div>`}
+          ${groups === '' ? '' : `<div>Grupy SMS</div><div>${groups}</div>`}
           <div>Ostatnia wysłana do nadawcy</div><div class="m">${d.related === null ? '<span class="dim">brak w ciągu 48 godzin</span>' : `<a href="/wiadomosci/${esc(d.related.id)}">${esc(d.related.id)}</a> · ${esc(warsawStamp(d.related.createdAt))}`}</div>
           <div style="border-bottom: none;">Odpowiedzi wysłane</div><div style="border-bottom: none;">${replies}</div>
         </div>

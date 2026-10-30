@@ -66,6 +66,15 @@ export class IntegrationEventsRepo {
     return rows.map((r) => this.toRow(r));
   }
 
+  /** Wpisy grup SMS dla odebranej wiadomości z nazwą integracji - szczegół odebranej pokazuje, które grupy ją przetworzyły. */
+  listGroupForInbound(inboundId: string): Array<IntegrationEventRow & { integrationName: string }> {
+    const rows = this.db.prepare(
+      `SELECT e.*, i.name AS integration_name FROM integration_events e JOIN integrations i ON i.id = e.integration_id
+        WHERE e.inbound_id = ? AND i.kind = 'sms_group' ORDER BY e.id DESC`,
+    ).all(inboundId) as Array<Raw & { integration_name: string }>;
+    return rows.map((r) => ({ ...this.toRow(r), integrationName: r.integration_name }));
+  }
+
   /** Ostatni wpis integracji - do listy w panelu. */
   latest(integrationId: number): IntegrationEventRow | undefined {
     return this.list(integrationId, 1)[0];

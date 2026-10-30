@@ -3,7 +3,7 @@ import type { Database } from 'better-sqlite3';
 import { decryptSecret, encryptSecret } from '../secrets/crypto.ts';
 import {
   parseConfig, type InboundConfig, type IntegrationConfig, type MailInConfig, type IntegrationKind, type IntegrationSecrets,
-  type OutboundConfig, type OutboundEvent,
+  type OutboundConfig, type OutboundEvent, type SmsGroupConfig,
 } from '../integrations/config.ts';
 
 export interface IntegrationRow {
@@ -42,13 +42,19 @@ const toRow = (r: Raw): IntegrationRow => ({
 export const isInbound = (r: IntegrationRow): r is IntegrationRow & { config: InboundConfig } => r.kind === 'webhook_in';
 export const isOutbound = (r: IntegrationRow): r is IntegrationRow & { config: OutboundConfig } => r.kind === 'webhook_out';
 export const isMailIn = (r: IntegrationRow): r is IntegrationRow & { config: MailInConfig } => r.kind === 'mail_in';
+export const isSmsGroup = (r: IntegrationRow): r is IntegrationRow & { config: SmsGroupConfig } => r.kind === 'sms_group';
 
 /** 24 bajty losowe = 32 znaki base64url; tyle samo entropii co klucz API. */
 export const newHookId = (): string => randomBytes(24).toString('base64url');
 
-/** Warunek SQL: integracja `i` to włączona wychodząca nasłuchująca zdarzenia podanego jako parametr. */
-const OUTBOUND_LISTENER_SQL = `i.kind = 'webhook_out' AND i.enabled = 1
-          AND EXISTS (SELECT 1 FROM json_each(json_extract(i.config, '$.events')) e WHERE e.value = ?)`;
+/**
+ * Warunek SQL: integracja `i` to włączona wychodząca nasłuchująca zdarzenia podanego jako parametr
+ * albo włączona grupa SMS, gdy zdarzenie to odebrana wiadomość. Grupa nie ma pola `events`:
+ * nasłuchuje zawsze i tylko odebranych. Parametr zdarzenia występuje dwa razy.
+ */
+const OUTBOUND_LISTENER_SQL = `i.enabled = 1 AND (
+            (i.kind = 'webhook_out' AND EXISTS (SELECT 1 FROM json_each(json_extract(i.config, '$.events')) e WHERE e.value = ?))
+            OR (i.kind = 'sms_group' AND ? = 'message.received'))`;
 
 export class IntegrationsRepo {
   constructor(private readonly db: Database, private readonly masterKey: Buffer) {}
@@ -101,11 +107,11 @@ export class IntegrationsRepo {
   listOutboundFor(apiKeyId: number, event: OutboundEvent): IntegrationRow[] {
     return (this.db.prepare(
       `SELECT ${COLUMNS} FROM integrations i WHERE i.api_key_id = ? AND ${OUTBOUND_LISTENER_SQL} ORDER BY i.name`,
-    ).all(apiKeyId, event) as Raw[]).map(toRow);
+    ).all(apiKeyId, event, event) as Raw[]).map(toRow);
   }
 
   /**
-   * Klucze konta z dostępem do usługi, które mają włączoną wychodzącą na message.received -
+   * Klucze konta z dostępem do usługi, które mają włączoną wychodzącą na message.received albo grupę SMS -
    * drugi (obok subskrypcji klucza) powód, dla którego odbiornik pyta Multiinfo o usługę.
    */
   inboundListenerKeyIds(accountId: number, serviceId: string, now: Date): number[] {
@@ -115,7 +121,7 @@ export class IntegrationsRepo {
          JOIN integrations i ON i.api_key_id = k.id AND ${OUTBOUND_LISTENER_SQL}
         WHERE k.account_id = ? AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at > ?)
         ORDER BY k.id`,
-    ).all(serviceId, 'message.received', accountId, now.toISOString()) as Array<{ id: number }>;
+    ).all(serviceId, 'message.received', 'message.received', accountId, now.toISOString()) as Array<{ id: number }>;
     return rows.map((r) => r.id);
   }
 

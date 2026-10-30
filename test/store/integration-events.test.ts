@@ -5,7 +5,8 @@ import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
 import { IntegrationsRepo } from '../../src/store/integrations.ts';
 import { IntegrationEventsRepo } from '../../src/store/integration-events.ts';
-import { defaultInboundConfig } from '../../src/integrations/config.ts';
+import { defaultInboundConfig, defaultSmsGroupConfig } from '../../src/integrations/config.ts';
+import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { accountInput } from './helpers.ts';
 
 const NOW = new Date('2026-09-02T10:00:00Z');
@@ -22,9 +23,19 @@ beforeEach(() => {
   integrations = new IntegrationsRepo(db, key);
   integrationId = integrations.insert({ name: 'x', kind: 'webhook_in', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1, config: defaultInboundConfig(), secrets: {}, storePayloads: 1, createdAt: NOW });
   events = new IntegrationEventsRepo(db, key);
+  new InboundMessagesRepo(db).insertIfNew({ id: 'in_1', accountId, serviceId: '24138', miId: '1', sender: '48601000001', dest: '7968', kind: 'text', body: 'x', bodyHash: 'h', protocolId: 0, codingScheme: 0, connectorId: null, relatedMessageId: null, receivedAt: NOW.toISOString(), createdAt: NOW.toISOString() });
+  groupId = integrations.insert({ name: 'Grupa', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1, config: defaultSmsGroupConfig(), secrets: {}, storePayloads: 0, createdAt: NOW });
 });
+let groupId: number;
 
 describe('IntegrationEventsRepo', () => {
+  it('listGroupForInbound: wpisy grup SMS dla odebranej wiadomości z nazwą integracji, bez wpisów innych rodzajów', () => {
+    events.record({ integrationId: groupId, at: NOW, result: 'sent', reason: '2 odbiorców', inboundId: 'in_1', messageId: 'msg_1', logLimit: 200 });
+    events.record({ integrationId, at: NOW, result: 'sent', inboundId: 'in_1', logLimit: 200 });
+    events.record({ integrationId: groupId, at: NOW, result: 'skipped', reason: 'bez prefiksu', inboundId: 'in_1', logLimit: 200 });
+    expect(events.listGroupForInbound('in_1').map((e) => [e.integrationName, e.result, e.reason])).toEqual([['Grupa', 'skipped', 'bez prefiksu'], ['Grupa', 'sent', '2 odbiorców']]);
+    expect(events.listGroupForInbound('in_9')).toEqual([]);
+  });
   it('zapisuje wpis, szyfruje ładunek i odnotowuje ostatnie zdarzenie', () => {
     const id = events.record({ integrationId, at: NOW, result: 'sent', messageId: 'msg_1', payload: '{"secret":"x"}', logLimit: 200 });
     const raw = db.prepare('SELECT payload_enc FROM integration_events WHERE id = ?').get(id) as { payload_enc: string };
