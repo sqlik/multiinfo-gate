@@ -1,8 +1,11 @@
 import { esc } from './layout.ts';
 import { FAVICON_LINK } from './favicon.ts';
 
-/** Ekran logowania stoi poza ramą panelu - bez szyny nawigacji i bez liczników. */
-export function gate(title: string, inner: string, wide = false): string {
+/**
+ * Ekran logowania stoi poza ramą panelu - bez szyny nawigacji i bez liczników. W tej samej ramie
+ * stoją strony pomocy (`help`): awaria startu, błąd panelu - nie mogą zależeć od bazy ani układu panelu.
+ */
+export function gate(title: string, inner: string, wide: boolean | 'help' = false): string {
   return `<!doctype html>
 <html lang="pl">
 <head>
@@ -14,7 +17,7 @@ ${FAVICON_LINK}
 </head>
 <body>
 <div class="gate">
-  <div class="gate-card${wide ? ' wide' : ''}">
+  <div class="gate-card${wide === 'help' ? ' help' : wide ? ' wide' : ''}">
     <div class="gate-brand">Multiinfo<span> / </span>Gate</div>
     ${inner}
   </div>

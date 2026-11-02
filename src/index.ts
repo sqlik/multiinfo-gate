@@ -39,14 +39,9 @@ import { PackagesRepo } from './store/packages.ts';
 import { WebhookDeliveriesRepo } from './store/webhook-deliveries.ts';
 import { ClientPool } from './worker/clients.ts';
 import { Worker } from './worker/loop.ts';
+import type { RunningGate } from './startup/running.ts';
 
-export interface RunningGate {
-  apiPort: number;
-  adminPort: number;
-  apiHost: string;
-  adminHost: string;
-  stop: () => Promise<void>;
-}
+export type { RunningGate };
 
 export async function startGate(config: AppConfig): Promise<RunningGate> {
   const log = createLogger(config.logLevel);
@@ -131,6 +126,7 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
     adminPort: portOf(admin.server.address()),
     apiHost: config.apiHost,
     adminHost: config.adminHost,
+    mode: 'normal',
     stop: async () => {
       // Odbiornik pierwszy: przerywa long polling, zanim zamkniemy pulę klientów i bazę.
       await receiver.stop();

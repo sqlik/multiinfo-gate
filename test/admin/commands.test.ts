@@ -27,7 +27,7 @@ describe('polecenia dla wariantu instalacji', () => {
   });
 
   it('restart, plik z kluczem i zakładanie konta odpowiadają wariantowi', () => {
-    expect(restartCommand('docker')).toContain('docker compose restart');
+    expect(restartCommand('docker')).toContain('docker compose up -d --force-recreate');
     expect(restartCommand('lxc')).toContain('systemctl restart multiinfo-gate');
     expect(envFile('docker')).toContain('~/multiinfo-gate/docker/.env');
     expect(envFile('lxc')).toContain('/etc/multiinfo-gate/env');

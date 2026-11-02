@@ -23,7 +23,8 @@ export function logSearch(install: InstallKind | null, id: string): string {
 }
 
 export function restartCommand(install: InstallKind | null): string {
-  return variants(install, [COMPOSE_DIR, 'docker compose restart'], ['systemctl restart multiinfo-gate']);
+  // `restart` zostawia zmienne z chwili utworzenia kontenera; po poprawce w .env kontener trzeba utworzyć od nowa.
+  return variants(install, [COMPOSE_DIR, 'docker compose up -d --force-recreate'], ['systemctl restart multiinfo-gate']);
 }
 
 /** Plik z kluczem głównym jako tekst w `<code>`. */
