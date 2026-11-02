@@ -7,11 +7,12 @@ import { nodemailerMailer } from './worker/mail.ts';
 import { SessionStore } from './admin/session.ts';
 import { RateLimiter } from './api/rate-limit.ts';
 import { buildApiServer } from './api/server.ts';
-import { loadEnv, type AppConfig } from './config/env.ts';
+import { loadEnv, MissingMasterKeyError, type AppConfig } from './config/env.ts';
+import { detectInstall, type InstallKind } from './config/install.ts';
 import { Receiver } from './inbound/receiver.ts';
 import { SourceMatcher } from './integrations/sources.ts';
 import { TemplateEngine } from './integrations/templates.ts';
-import { createLogger } from './log.ts';
+import { createLogger, type Logger } from './log.ts';
 import { systemResolver } from './net/private-address.ts';
 import { Notifier } from './notifications/notifier.ts';
 import { NotificationScanner } from './notifications/scanner.ts';
@@ -21,7 +22,7 @@ import { AdminUsersRepo } from './store/admin-users.ts';
 import { ApiKeysRepo } from './store/api-keys.ts';
 import { AuditRepo } from './store/audit.ts';
 import { BackupScheduler } from './store/backup.ts';
-import { openDatabase } from './store/db.ts';
+import { applyMigrations, migrationState, NewerDatabaseError, openDatabaseRaw, type Database } from './store/db.ts';
 import { InboundMessagesRepo } from './store/inbound-messages.ts';
 import { InboundServicesRepo } from './store/inbound-services.ts';
 import { IntegrationEventsRepo } from './store/integration-events.ts';
@@ -39,13 +40,78 @@ import { PackagesRepo } from './store/packages.ts';
 import { WebhookDeliveriesRepo } from './store/webhook-deliveries.ts';
 import { ClientPool } from './worker/clients.ts';
 import { Worker } from './worker/loop.ts';
+import { newIncidentId, startEmergency } from './startup/emergency.ts';
+import { isKeyMismatch, KeyMismatchError, verifyMasterKey } from './startup/key-check.ts';
+import { classifyStartupError, isAddressInUse } from './startup/reason.ts';
 import type { RunningGate } from './startup/running.ts';
+import { backupBeforeUpgrade } from './startup/upgrade-backup.ts';
+import { GATE_VERSION } from './version.ts';
 
 export type { RunningGate };
 
-export async function startGate(config: AppConfig): Promise<RunningGate> {
-  const log = createLogger(config.logLevel);
-  const db = openDatabase(join(config.dataDir, 'multiinfo-gate.sqlite'));
+export interface StartOptions {
+  /** Wariant instalacji do poleceń na stronach pomocy; domyślnie rozpoznawany z systemu plików. */
+  install?: InstallKind | null;
+  log?: Logger;
+}
+
+/**
+ * Uruchamia bramkę. Każdy błąd przygotowania bazy albo startu usług, poza zajętym portem,
+ * przełącza proces w tryb awaryjny: przeglądarka pokazuje przyczynę zamiast zerwanego połączenia.
+ */
+export async function startGate(config: AppConfig, opts: StartOptions = {}): Promise<RunningGate> {
+  const log = opts.log ?? createLogger(config.logLevel);
+  const install = opts.install === undefined ? detectInstall() : opts.install;
+  try {
+    return await startNormal(config, log);
+  } catch (error) {
+    if (isAddressInUse(error)) throw error;
+    return startEmergency(config, { reason: classifyStartupError(error), id: newIncidentId() }, { install, log, error });
+  }
+}
+
+/**
+ * Wejście programu: konfiguracja ze zmiennych środowiska. Brak klucza albo klucz w złej postaci
+ * to też tryb awaryjny - porty i adresy są wtedy odczytywane z zastępczym kluczem, którego tryb
+ * awaryjny nie używa, bo nie otwiera bazy.
+ */
+export async function startFromEnv(env: NodeJS.ProcessEnv = process.env, opts: StartOptions = {}): Promise<RunningGate> {
+  let config: AppConfig;
+  try {
+    config = loadEnv(env);
+  } catch (error) {
+    if (!(error instanceof MissingMasterKeyError)) throw error;
+    const fallback = loadEnv({ ...env, MIG_MASTER_KEY: Buffer.alloc(32).toString('base64') });
+    const log = opts.log ?? createLogger(fallback.logLevel);
+    const install = opts.install === undefined ? detectInstall() : opts.install;
+    return startEmergency(fallback, { reason: 'key_invalid', id: newIncidentId() }, { install, log, error });
+  }
+  return startGate(config, opts);
+}
+
+/**
+ * Baza gotowa do pracy: kopia przed aktualizacją, migracje, sprawdzenie klucza. Kolejność ma
+ * znaczenie - kopia powstaje przed pierwszą zmianą schematu, a klucz sprawdza się na schemacie bieżącym.
+ */
+async function prepareDatabase(config: AppConfig, log: Logger): Promise<Database> {
+  const db = openDatabaseRaw(join(config.dataDir, 'multiinfo-gate.sqlite'));
+  try {
+    const { current, target } = migrationState(db);
+    if (current > target) throw new NewerDatabaseError(current, target);
+    await backupBeforeUpgrade({ db, dir: join(config.dataDir, 'backups'), current: GATE_VERSION, log });
+    applyMigrations(db);
+    const check = verifyMasterKey(db, config.masterKey);
+    if (isKeyMismatch(check)) throw new KeyMismatchError(check.unreadableGroups);
+    if (check.unreadable > 0) log.warn('klucz.czesc_nieczytelna', { groups: check.unreadableGroups });
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+}
+
+async function startNormal(config: AppConfig, log: Logger): Promise<RunningGate> {
+  const db = await prepareDatabase(config, log);
 
   const accounts = new AccountsRepo(db, config.masterKey);
   const apiKeys = new ApiKeysRepo(db, config.masterKey);
@@ -78,7 +144,6 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
   const backups = new BackupScheduler({
     db, dir: join(config.dataDir, 'backups'), retentionDays: config.backupRetentionDays, log,
   });
-  backups.start();
 
   const mailInPoller = new MailInPoller({
     accounts, apiKeys, messages, events, jobs, inbound, integrations, integrationEvents, guards, engine,
@@ -90,14 +155,12 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
     integrationEmit, integrations, integrationEvents, guards, notifier, notifications, scanner, releases,
     mailIn: mailInPoller, mailInRepo: mailIn,
   });
-  worker.start();
 
   const receiver = new Receiver({
     accounts, apiKeys, inbound, services: inboundServices, messages, deliveries, jobs, clients,
     timeoutMs: config.inboundTimeoutMs, idleMs: config.inboundIdleMs, log,
     integrations, integrationEmit, notifier,
   });
-  receiver.start();
 
   const api = buildApiServer({
     accounts, apiKeys, messages, events, packages, jobs, clients, inbound, rateLimiter: new RateLimiter(), log,
@@ -115,8 +178,21 @@ export async function startGate(config: AppConfig): Promise<RunningGate> {
 
   // Panel domyślnie zostaje na pętli zwrotnej (MIG_ADMIN_HOST); w kontenerze o wystawieniu
   // decyduje dodatkowo mapowanie portów w docker/docker-compose.yml.
-  await api.listen({ port: config.apiPort, host: config.apiHost });
-  await admin.listen({ port: config.adminPort, host: config.adminHost });
+  // Nasłuch i zapis wersji przed usługami w tle: błąd na tym etapie zamyka tylko serwery i bazę.
+  try {
+    await api.listen({ port: config.apiPort, host: config.apiHost });
+    await admin.listen({ port: config.adminPort, host: config.adminHost });
+    settings.setGateVersion(GATE_VERSION, new Date());
+  } catch (error) {
+    await api.close();
+    await admin.close();
+    clients.closeAll();
+    db.close();
+    throw error;
+  }
+  backups.start();
+  worker.start();
+  receiver.start();
 
   const portOf = (address: string | { port: number } | null): number =>
     typeof address === 'object' && address !== null ? address.port : 0;
@@ -165,8 +241,7 @@ function startedAsProgram(): boolean {
 }
 
 if (startedAsProgram()) {
-  const config = loadEnv();
-  const running = await startGate(config);
+  const running = await startFromEnv();
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.on(signal, () => { void running.stop().then(() => process.exit(0)); });
   }
