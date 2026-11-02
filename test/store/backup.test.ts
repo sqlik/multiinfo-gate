@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BackupScheduler, backupDatabase, backupFileName, pruneBackups } from '../../src/store/backup.ts';
+import { BackupScheduler, backupDatabase, backupDatabaseTo, backupFileName, pruneBackups } from '../../src/store/backup.ts';
 import { openDatabase } from '../../src/store/db.ts';
 import type { Logger } from '../../src/log.ts';
 
@@ -98,5 +98,17 @@ describe('BackupScheduler', () => {
     scheduler.stop();
     expect(existsSync(join(dir, 'multiinfo-gate-2026-08-26.sqlite'))).toBe(true);
     expect(log.info).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('backupDatabaseTo', () => {
+  it('zapisuje kopię pod wskazaną ścieżką', async () => {
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, 'dowolna.sqlite');
+    await backupDatabaseTo(db, path);
+    const copy = new Database(path, { readonly: true });
+    expect(copy.prepare('SELECT COUNT(*) AS n FROM admin_users').get()).toEqual({ n: 1 });
+    copy.close();
+    expect(existsSync(`${path}.part`)).toBe(false);
   });
 });

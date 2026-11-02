@@ -15,9 +15,7 @@ export const backupFileName = (day: Date): string => `multiinfo-gate-${day.toISO
  * Zapis idzie do pliku tymczasowego i dopiero po zakończeniu pod docelową nazwę,
  * żeby przerwana kopia nigdy nie wyglądała jak gotowa.
  */
-export async function backupDatabase(db: Database, dir: string, now: Date): Promise<string> {
-  mkdirSync(dir, { recursive: true });
-  const path = join(dir, backupFileName(now));
+export async function backupDatabaseTo(db: Database, path: string): Promise<void> {
   const partial = `${path}.part`;
   try {
     await db.backup(partial);
@@ -26,6 +24,13 @@ export async function backupDatabase(db: Database, dir: string, now: Date): Prom
     rmSync(partial, { force: true });
     throw e;
   }
+}
+
+/** Kopia nocna: plik z datą w nazwie w katalogu `dir`. */
+export async function backupDatabase(db: Database, dir: string, now: Date): Promise<string> {
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, backupFileName(now));
+  await backupDatabaseTo(db, path);
   return path;
 }
 

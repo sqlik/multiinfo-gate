@@ -62,8 +62,9 @@ function update_script() {
     systemctl stop multiinfo-gate
     msg_ok "Zatrzymano usługę"
 
-    # Kopia bazy z zatrzymaną bramką jest spójna; leży obok kopii nocnych i podlega tej samej
-    # retencji. Katalog może jeszcze nie istnieć, gdy bramka nie doczekała pierwszej nocy.
+    # Kopia bazy z zatrzymaną bramką jest spójna; leży obok kopii nocnych. Bramka przy starcie
+    # zostawia trzy najnowsze kopie przed aktualizacją, a kopii o tej nazwie nie powtarza.
+    # Katalog może jeszcze nie istnieć, gdy bramka nie doczekała pierwszej nocy.
     msg_info "Kopia bazy przed aktualizacją"
     install -d -m 750 -o multiinfo-gate -g multiinfo-gate /var/lib/multiinfo-gate/backups
     if [[ -f /var/lib/multiinfo-gate/multiinfo-gate.sqlite ]]; then
