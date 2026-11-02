@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterAll, describe, expect, it } from 'vitest';
-import { openDatabase } from '../../src/store/db.ts';
+import { MigrationError, NewerDatabaseError, applyMigrations, migrationState, openDatabase, openDatabaseRaw } from '../../src/store/db.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'mig-db-'));
 
@@ -118,5 +118,55 @@ describe('openDatabase', () => {
     const keyCols = db.prepare('PRAGMA table_info(api_keys)').all() as Array<{ name: string }>;
     expect(keyCols.map((c) => c.name)).toContain('expires_at');
     db.close();
+  });
+});
+
+describe('otwarcie bez migracji i stan schematu', () => {
+  it('openDatabaseRaw nie zakłada tabel i zostawia user_version 0', () => {
+    const db = openDatabaseRaw(':memory:');
+    expect(db.pragma('user_version', { simple: true })).toBe(0);
+    expect(db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table'").get()).toEqual({ n: 0 });
+  });
+
+  it('migrationState podaje bieżącą i docelową wersję schematu', () => {
+    const db = openDatabaseRaw(':memory:');
+    expect(migrationState(db)).toEqual({ current: 0, target: 9 });
+    applyMigrations(db);
+    expect(migrationState(db)).toEqual({ current: 9, target: 9 });
+  });
+
+  it('baza z nowszego wydania kończy otwarcie błędem NewerDatabaseError', () => {
+    const path = join(dir, 'nowsza.sqlite');
+    const raw = new Database(path);
+    raw.pragma('user_version = 10');
+    raw.close();
+    try {
+      openDatabase(path);
+      expect.unreachable('otwarcie nowszej bazy powinno się nie udać');
+    } catch (error) {
+      expect(error).toBeInstanceOf(NewerDatabaseError);
+      expect((error as NewerDatabaseError).current).toBe(10);
+      expect((error as NewerDatabaseError).target).toBe(9);
+    }
+    const check = new Database(path);
+    expect(check.pragma('user_version', { simple: true })).toBe(10);
+    check.close();
+  });
+
+  it('nieudana migracja rzuca MigrationError z nazwą pliku i nie podnosi wersji', () => {
+    const migrations = join(dir, 'migracje-blad');
+    mkdirSync(migrations, { recursive: true });
+    writeFileSync(join(migrations, '001-ok.sql'), 'CREATE TABLE a (x);');
+    writeFileSync(join(migrations, '002-zla.sql'), 'TO NIE JEST SQL;');
+    const db = openDatabaseRaw(':memory:');
+    try {
+      applyMigrations(db, { migrationsDir: migrations, migrations: ['001-ok.sql', '002-zla.sql'] });
+      expect.unreachable('migracja z błędnym SQL powinna się nie udać');
+    } catch (error) {
+      expect(error).toBeInstanceOf(MigrationError);
+      expect((error as MigrationError).file).toBe('002-zla.sql');
+      expect((error as MigrationError).cause).toBeInstanceOf(Error);
+    }
+    expect(db.pragma('user_version', { simple: true })).toBe(1);
   });
 });
