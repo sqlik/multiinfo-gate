@@ -1,10 +1,10 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MissingMasterKeyError } from '../../src/config/env.ts';
 import { KeyMismatchError } from '../../src/startup/key-check.ts';
-import { classifyStartupError, isAddressInUse } from '../../src/startup/reason.ts';
+import { classifyStartupError, isListenError } from '../../src/startup/reason.ts';
 import { BackupBeforeUpgradeError } from '../../src/startup/upgrade-backup.ts';
 import { MigrationError, NewerDatabaseError, openDatabaseRaw } from '../../src/store/db.ts';
 
@@ -28,6 +28,32 @@ describe('classifyStartupError', () => {
     }
     expect(classifyStartupError(coded('SQLITE_CORRUPT'))).toBe('corrupt');
     expect(classifyStartupError(coded('SQLITE_NOTADB'))).toBe('corrupt');
+  });
+
+  it('kody rozszerzone SQLite sprowadza do podstawowych', () => {
+    expect(classifyStartupError(coded('SQLITE_READONLY_DIRECTORY'))).toBe('permissions');
+    expect(classifyStartupError(coded('SQLITE_CANTOPEN_ISDIR'))).toBe('permissions');
+    expect(classifyStartupError(coded('SQLITE_CORRUPT_VTAB'))).toBe('corrupt');
+  });
+
+  it.skipIf(process.getuid?.() === 0)('katalog danych bez prawa zapisu to brak uprawnień', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mig-reason-'));
+    const path = join(dir, 'multiinfo-gate.sqlite');
+    openDatabaseRaw(path).close();
+    rmSync(`${path}-wal`, { force: true });
+    rmSync(`${path}-shm`, { force: true });
+    chmodSync(dir, 0o555);
+    try {
+      const db = openDatabaseRaw(path);
+      db.prepare('CREATE TABLE t (x)').run();
+      db.close();
+      expect.unreachable('zapis w katalogu tylko do odczytu powinien się nie udać');
+    } catch (error) {
+      expect(classifyStartupError(error)).toBe('permissions');
+    } finally {
+      chmodSync(dir, 0o755);
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('migracja przerwana brakiem miejsca to brak miejsca, nie wada migracji', () => {
@@ -54,10 +80,13 @@ describe('classifyStartupError', () => {
   });
 });
 
-describe('isAddressInUse', () => {
-  it('rozpoznaje zajęty port', () => {
-    expect(isAddressInUse(coded('EADDRINUSE'))).toBe(true);
-    expect(isAddressInUse(coded('ENOSPC'))).toBe(false);
-    expect(isAddressInUse(null)).toBe(false);
+describe('isListenError', () => {
+  it('rozpoznaje błędy nasłuchu na porcie', () => {
+    expect(isListenError(coded('EADDRINUSE'))).toBe(true);
+    expect(isListenError(Object.assign(coded('EACCES'), { syscall: 'listen' }))).toBe(true);
+    expect(isListenError(Object.assign(coded('EADDRNOTAVAIL'), { syscall: 'listen' }))).toBe(true);
+    expect(isListenError(coded('EACCES'))).toBe(false);
+    expect(isListenError(coded('ENOSPC'))).toBe(false);
+    expect(isListenError(null)).toBe(false);
   });
 });

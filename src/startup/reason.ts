@@ -24,6 +24,9 @@ const codeOf = (value: unknown): string | null => {
   return typeof code === 'string' ? code : null;
 };
 
+/** better-sqlite3 podaje kody rozszerzone (`SQLITE_READONLY_DIRECTORY`); przyczynę niesie część podstawowa. */
+const baseCode = (code: string): string => (code.startsWith('SQLITE_') ? code.split('_').slice(0, 2).join('_') : code);
+
 /**
  * Najpierw błędy bramki rozpoznawane po klasie, potem kody systemu w całym łańcuchu `cause`
  * (migracja przerwana brakiem miejsca to brak miejsca), na końcu nieudana migracja i powód ogólny.
@@ -35,13 +38,17 @@ export function classifyStartupError(error: unknown): StartupReason {
   if (error instanceof BackupBeforeUpgradeError) return 'backup_failed';
   for (let e: unknown = error; e; e = (e as { cause?: unknown }).cause) {
     const code = codeOf(e);
-    if (code !== null && BY_CODE[code]) return BY_CODE[code]!;
+    const reason = code === null ? undefined : BY_CODE[baseCode(code)];
+    if (reason) return reason;
   }
   if (error instanceof MigrationError) return 'migration_failed';
   return 'unknown';
 }
 
-/** Zajęty port: strony awaryjnej nie da się podać na tym porcie, więc proces kończy się jak dotąd. */
-export function isAddressInUse(error: unknown): boolean {
-  return codeOf(error) === 'EADDRINUSE';
+/**
+ * Błąd nasłuchu (zajęty port, port uprzywilejowany, nieistniejący adres): strony awaryjnej nie można
+ * podać na tym porcie, więc proces kończy się jak dotąd. EACCES z nasłuchu to nie uprawnienia do bazy.
+ */
+export function isListenError(error: unknown): boolean {
+  return codeOf(error) === 'EADDRINUSE' || (error as { syscall?: unknown } | null)?.syscall === 'listen';
 }

@@ -42,7 +42,7 @@ import { ClientPool } from './worker/clients.ts';
 import { Worker } from './worker/loop.ts';
 import { newIncidentId, startEmergency } from './startup/emergency.ts';
 import { isKeyMismatch, KeyMismatchError, verifyMasterKey } from './startup/key-check.ts';
-import { classifyStartupError, isAddressInUse } from './startup/reason.ts';
+import { classifyStartupError, isListenError } from './startup/reason.ts';
 import type { RunningGate } from './startup/running.ts';
 import { backupBeforeUpgrade } from './startup/upgrade-backup.ts';
 import { GATE_VERSION } from './version.ts';
@@ -65,7 +65,7 @@ export async function startGate(config: AppConfig, opts: StartOptions = {}): Pro
   try {
     return await startNormal(config, log, install);
   } catch (error) {
-    if (isAddressInUse(error)) throw error;
+    if (isListenError(error)) throw error;
     return startEmergency(config, { reason: classifyStartupError(error), id: newIncidentId() }, { install, log, error });
   }
 }
