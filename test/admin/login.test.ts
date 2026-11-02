@@ -256,3 +256,40 @@ describe('wylogowanie', () => {
     expect(h.sessions.get(session!.value)).toBeNull();
   });
 });
+
+describe('ekran logowania bez kont', () => {
+  const noAccounts = async (install: 'docker' | 'lxc') => {
+    const harness = await startAdminHarness(undefined, { install });
+    harness.db.prepare('DELETE FROM admin_users').run();
+    return harness;
+  };
+
+  it('podpowiada polecenie zakładające pierwsze konto', async () => {
+    const harness = await noAccounts('docker');
+    const res = await harness.app.inject({ method: 'GET', url: '/zaloguj' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('docker compose exec multiinfo-gate npm run admin:dodaj -- &lt;login&gt;');
+    expect(res.body).toContain('https://sqlik.github.io/multiinfo-gate/problemy/#pierwsze-konto');
+  });
+
+  it('powtarza podpowiedź po próbie logowania kontem domyślnym', async () => {
+    const harness = await noAccounts('docker');
+    const res = await harness.app.inject({ method: 'POST', url: '/zaloguj', payload: { login: 'admin', haslo: 'admin' } });
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toContain('Nieprawidłowy login lub hasło.');
+    expect(res.body).toContain('npm run admin:dodaj');
+  });
+
+  it('w kontenerze LXC wskazuje plik z danymi pierwszego konta', async () => {
+    const harness = await noAccounts('lxc');
+    const res = await harness.app.inject({ method: 'GET', url: '/zaloguj' });
+    expect(res.body).toContain('/root/multiinfo-gate.creds');
+    expect(res.body).not.toContain('docker compose');
+  });
+
+  it('przy istniejącym koncie ekran jest bez podpowiedzi', async () => {
+    const res = await h.app.inject({ method: 'GET', url: '/zaloguj' });
+    expect(res.body).not.toContain('admin:dodaj');
+    expect(res.body).not.toContain('pierwsze-konto');
+  });
+});

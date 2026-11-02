@@ -261,9 +261,12 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
     }
   });
 
+  /** Podpowiedź o pierwszym koncie tylko przy pustej tabeli kont. */
+  const firstAccount = () => (deps.users.count() === 0 ? { install: deps.install ?? null } : null);
+
   app.get('/zaloguj', async (request, reply) => {
     reply.type('text/html; charset=utf-8');
-    return (loginPage(secureContext(request) ? null : INSECURE_CONTEXT));
+    return (loginPage(secureContext(request) ? null : INSECURE_CONTEXT, firstAccount()));
   });
 
   app.post<{ Body: { login?: string; haslo?: string } }>('/zaloguj', async (request, reply) => {
@@ -291,7 +294,7 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
       throttle.fail(request.ip);
       deps.audit.record({ actor: login || '(pusty)', action: 'logowanie_nieudane', ip: request.ip });
       reply.code(401);
-      return (loginPage(BAD_CREDENTIALS));
+      return (loginPage(BAD_CREDENTIALS, firstAccount()));
     }
 
     if (user.totpEnabled === 0) {

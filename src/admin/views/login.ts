@@ -1,3 +1,6 @@
+import type { InstallKind } from '../../config/install.ts';
+import { problemUrl } from '../../docs-links.ts';
+import { addAdminCommand } from './commands.ts';
 import { esc } from './layout.ts';
 import { FAVICON_LINK } from './favicon.ts';
 
@@ -28,8 +31,21 @@ ${FAVICON_LINK}
 
 const warning = (message: string | null) => (message === null ? '' : `<div class="warn">${esc(message)}</div>`);
 
-export function loginPage(error: string | null = null): string {
-  return gate('Logowanie', `${warning(error)}
+/**
+ * Przy pustej tabeli kont: bramka nie ma konta domyślnego, a pierwsze zakłada się na serwerze.
+ * Bez tej podpowiedzi administrator próbował admin/admin i nie wiedział, gdzie szukać przyczyny.
+ */
+function firstAccountHint(install: InstallKind | null): string {
+  return `<div class="help-body">
+    <p>W bazie nie ma jeszcze żadnego konta panelu. Bramka nie ma konta domyślnego. Pierwsze konto
+       zakłada się poleceniem na serwerze:</p>
+    ${addAdminCommand(install)}
+    <p class="sub"><a href="${esc(problemUrl('pierwsze-konto'))}">Opis w dokumentacji</a></p>
+  </div>`;
+}
+
+export function loginPage(error: string | null = null, firstAccount: { install: InstallKind | null } | null = null): string {
+  return gate('Logowanie', `${warning(error)}${firstAccount ? firstAccountHint(firstAccount.install) : ''}
     <form method="post" action="/zaloguj">
       <div class="field">
         <label for="login">Login</label>
@@ -40,7 +56,7 @@ export function loginPage(error: string | null = null): string {
         <input id="haslo" name="haslo" type="password" autocomplete="current-password" required>
       </div>
       <button class="btn btn-p" type="submit">Dalej</button>
-    </form>`);
+    </form>`, firstAccount ? 'help' : false);
 }
 
 export function totpPage(error: string | null = null): string {
