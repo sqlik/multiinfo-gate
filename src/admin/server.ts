@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { InstallKind } from '../config/install.ts';
+import { problemUrl } from '../docs-links.ts';
 import { silentLogger, type Logger } from '../log.ts';
 import { fileURLToPath } from 'node:url';
 import fastifyCookie from '@fastify/cookie';
@@ -171,7 +172,13 @@ const cookieOptions = {
 interface Stage { userId: number; at: number; failures: number }
 
 export function buildAdminServer(deps: AdminDeps): FastifyInstance {
-  const app = Fastify({ logger: false, bodyLimit: 2 * 1024 * 1024 });
+  const app = Fastify({
+    logger: false, bodyLimit: 2 * 1024 * 1024,
+    // Zepsuty adres (np. błędne kodowanie procentowe) omija setErrorHandler - też strona, nie JSON.
+    frameworkErrors: (_error, _request, reply) => {
+      (reply as FastifyReply).code(400).header('Cache-Control', 'no-store').type('text/html; charset=utf-8').send(clientErrorPage(400));
+    },
+  });
   const now = deps.now ?? (() => new Date());
 
   // Etap pośredni żyje w pamięci procesu i nigdy nie daje dostępu do panelu:
@@ -216,7 +223,9 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
       return reply.code(status).send(clientErrorPage(status));
     }
     const id = randomBytes(4).toString('hex');
-    (deps.log ?? silentLogger).error('panel.wyjatek', { id, method: request.method, url: request.url.split('?')[0], error });
+    (deps.log ?? silentLogger).error('panel.wyjatek', {
+      id, method: request.method, url: request.url.split('?')[0], docs: problemUrl('blad-wewnetrzny'), error,
+    });
     return reply.code(500).send(errorPage(id, deps.install ?? null));
   });
 

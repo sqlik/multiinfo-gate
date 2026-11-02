@@ -34,6 +34,7 @@ describe('błąd wewnętrzny panelu', () => {
     const { id, url, method } = wyjatki()[0]!.fields as { id: string; url: string; method: string };
     expect(id).toMatch(/^[0-9a-f]{8}$/);
     expect(url).toBe('/zaloguj/kod');
+    expect(wyjatki()[0]!.fields!['docs']).toBe('https://sqlik.github.io/multiinfo-gate/problemy/#blad-wewnetrzny');
     expect(method).toBe('POST');
     expect(res.body).toContain(id);
     expect(res.body).toContain(`docker compose logs multiinfo-gate | grep ${id}`);
@@ -58,6 +59,13 @@ describe('inne odpowiedzi błędów', () => {
       payload: `nazwa=${'a'.repeat(3 * 1024 * 1024)}`,
     });
     expect(res.statusCode).toBe(413);
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(wyjatki()).toHaveLength(0);
+  });
+
+  it('zepsuty adres to strona błędu żądania, nie JSON', async () => {
+    const res = await h.app.inject({ method: 'GET', url: '/%E0%A4%A', headers: { cookie: h.cookie } });
+    expect(res.statusCode).toBe(400);
     expect(res.headers['content-type']).toContain('text/html');
     expect(wyjatki()).toHaveLength(0);
   });

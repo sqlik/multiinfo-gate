@@ -1,10 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import fastifyStatic from '@fastify/static';
-import Fastify from 'fastify';
+import Fastify, { type FastifyReply } from 'fastify';
 import { emergencyPage, type StartupFailure } from '../admin/views/emergency.ts';
 import type { AppConfig } from '../config/env.ts';
 import type { InstallKind } from '../config/install.ts';
+import { problemUrl, REASON_ANCHOR } from '../docs-links.ts';
 import type { Logger } from '../log.ts';
 import type { RunningGate } from './running.ts';
 
@@ -32,23 +33,35 @@ export interface EmergencyOptions {
 export async function startEmergency(config: AppConfig, failure: StartupFailure, opts: EmergencyOptions): Promise<RunningGate> {
   const page = emergencyPage(failure, opts.install);
 
-  const panel = Fastify({ logger: false });
+  // Wpis przed nasłuchem: gdy i nasłuch awaryjny się nie uda, pierwotna przyczyna zostaje w dzienniku.
+  opts.log.error('bramka.awaria_startu', {
+    reason: failure.reason, id: failure.id, docs: problemUrl(REASON_ANCHOR[failure.reason]),
+    api: `${config.apiHost}:${config.apiPort}`, panel: `${config.adminHost}:${config.adminPort}`,
+    ...(opts.error === undefined ? {} : { error: opts.error }),
+  });
+
+  const sendPage = (reply: FastifyReply) =>
+    reply.code(503).header('Cache-Control', 'no-store').type('text/html; charset=utf-8').send(page);
+  const sendApi = (url: string, reply: FastifyReply) => {
+    reply.code(503);
+    if (url.startsWith('/hooks/')) return reply.send({ accepted: false, reason: 'unavailable' });
+    return reply.send({ error: { code: 'unavailable', message: API_MESSAGE } });
+  };
+
+  // Każda odpowiedź, także na zepsuty adres i nieczytelne ciało żądania, ma kształt trybu awaryjnego.
+  const panel = Fastify({ logger: false, frameworkErrors: (_error, _request, reply) => sendPage(reply) });
   // Trasy tylko dla istniejących plików: katalog (`/`, `/fonts/`) i każda inna ścieżka idą do strony przyczyny.
   panel.register(fastifyStatic, { root: publicPath, prefix: '/', index: false, wildcard: false });
   panel.get('/healthz', async (_request, reply) => reply.code(503).send({ status: 'unavailable' }));
-  panel.setNotFoundHandler((_request, reply) => {
-    reply.code(503).header('Cache-Control', 'no-store').type('text/html; charset=utf-8').send(page);
-  });
+  panel.setNotFoundHandler((_request, reply) => { sendPage(reply); });
+  panel.setErrorHandler((_error, _request, reply) => sendPage(reply));
 
-  const api = Fastify({ logger: false });
+  const api = Fastify({ logger: false, frameworkErrors: (_error, request, reply) => sendApi(request.url, reply) });
   api.get('/healthz', async (_request, reply) => reply.code(503).send({
     status: 'unavailable', error: { code: 'unavailable', message: API_MESSAGE },
   }));
-  api.setNotFoundHandler((request, reply) => {
-    reply.code(503);
-    if (request.url.startsWith('/hooks/')) return reply.send({ accepted: false, reason: 'unavailable' });
-    return reply.send({ error: { code: 'unavailable', message: API_MESSAGE } });
-  });
+  api.setNotFoundHandler((request, reply) => { sendApi(request.url, reply); });
+  api.setErrorHandler((_error, request, reply) => sendApi(request.url, reply));
 
   try {
     await api.listen({ port: config.apiPort, host: config.apiHost });
@@ -75,10 +88,5 @@ export async function startEmergency(config: AppConfig, failure: StartupFailure,
     },
   };
 
-  opts.log.error('bramka.awaria_startu', {
-    reason: failure.reason, id: failure.id,
-    api: `${running.apiHost}:${running.apiPort}`, panel: `${running.adminHost}:${running.adminPort}`,
-    ...(opts.error === undefined ? {} : { error: opts.error }),
-  });
   return running;
 }
