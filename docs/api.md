@@ -1738,6 +1738,7 @@ użytkownikowi końcowemu.
 | 500 | `internal`, `account_missing` | błąd wewnętrzny bramki | zgłosić administratorowi z czasem wystąpienia i identyfikatorem obiektu |
 | 502 | `provider_error` | błąd Multiinfo przy wywołaniu synchronicznym; `providerCode` w body odpowiedzi | ponowić po chwili; przy powtarzaniu przekazać `providerCode` administratorowi |
 | 503 | `account_certificate` | Multiinfo odrzuciło certyfikat bramki | przekazać administratorowi |
+| 503 | `unavailable` | bramka nie rozpoczęła pracy (tryb awaryjny, rozdział 10) | przekazać administratorowi; przyczynę pokazuje panel bramki |
 
 Odmowy Multiinfo przy wysyłce asynchronicznej nie są kodami HTTP. Pojawiają się w polach
 `status`, `providerCode` i `error` wiadomości (`GET /v1/messages/{id}`) oraz w powiadomieniu
@@ -1752,6 +1753,17 @@ zatrzymał się na błędzie Multiinfo (na przykład `-24`, usługa nieaktywna).
 mogą wtedy nie działać. Administrator widzi przyczynę w panelu, na karcie konta. Wywołanie
 nadaje się do monitoringu zewnętrznego, na przykład sprawdzenia co minutę z alarmem po dwóch
 kolejnych niepowodzeniach.
+
+Gdy bramka nie może rozpocząć pracy, przechodzi w tryb awaryjny. Przyczyną bywa na przykład klucz
+główny niepasujący do bazy albo brak miejsca na dysku. W trybie awaryjnym bramka nie wysyła i nie
+odbiera wiadomości. `GET /healthz` odpowiada wtedy kodem 503 i treścią:
+
+```json
+{ "status": "unavailable", "error": { "code": "unavailable", "message": "Bramka nie rozpoczęła pracy. Przyczynę i sposób jej usunięcia pokazuje panel bramki." } }
+```
+
+Każde inne wywołanie API odpowiada kodem 503 z błędem `unavailable`. Przyczynę pokazuje panel
+bramki, a sposób jej usunięcia opisuje [Rozwiązywanie problemów](problemy.md).
 
 Ten sam adres na porcie panelu (przez tunel SSH albo HTTPS za proxy) odpowiada szczegółami:
 wersją, głębokością kolejki, kontami z dniami do wygaśnięcia certyfikatu, stanem odbiornika

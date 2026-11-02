@@ -138,6 +138,13 @@ describe('opis API', () => {
     }
   });
 
+  it('stan bramki opisuje tryb awaryjny odpowiedzią 503 ze stanem unavailable', () => {
+    const odp = doc.paths['/healthz']!['get']!.responses['503'];
+    const ref = odp?.content?.['application/json']?.schema.$ref;
+    expect(ref).toBe('#/components/schemas/StanNiedostepny');
+    expect(doc.components.schemas['StanNiedostepny']?.properties?.['status']?.enum).toEqual(['unavailable']);
+  });
+
   it('nazwa operacji jest niepowtarzalna, bo po niej nazywają się metody wygenerowanego klienta', () => {
     const nazwy = Object.values(doc.paths).flatMap((p) => Object.values(p)).map((o) => o.operationId);
     expect(new Set(nazwy).size).toBe(nazwy.length);
