@@ -108,6 +108,17 @@ describe('start bramki', () => {
     await expect(start(keyA, { MIG_API_HOST: '127.0.0.1', MIG_API_PORT: String(port) })).rejects.toMatchObject({ code: 'EADDRINUSE' });
   });
 
+  it('świeża instalacja, która nie wystartowała, nie dostaje potem kopii pustej bazy', async () => {
+    blocker = createServer();
+    await new Promise<void>((resolve) => blocker!.listen(0, '127.0.0.1', () => resolve()));
+    const port = (blocker.address() as { port: number }).port;
+    await expect(start(keyA, { MIG_API_HOST: '127.0.0.1', MIG_API_PORT: String(port) })).rejects.toMatchObject({ code: 'EADDRINUSE' });
+    running = await start(keyA);
+    expect(running.mode).toBe('normal');
+    const backups = join(dir, 'backups');
+    expect(existsSync(backups) ? readdirSync(backups) : []).toEqual([]);
+  });
+
   it('klucz w złej postaci przełącza w tryb awaryjny już przy odczycie konfiguracji', async () => {
     running = await startFromEnv({ ...env(keyA), MIG_MASTER_KEY: 'za-krotki' }, { log, install: 'docker' });
     expect(running.mode).toBe('emergency');

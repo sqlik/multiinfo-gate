@@ -100,6 +100,9 @@ async function prepareDatabase(config: AppConfig, log: Logger): Promise<Database
     if (current > target) throw new NewerDatabaseError(current, target);
     await backupBeforeUpgrade({ db, dir: join(config.dataDir, 'backups'), current: GATE_VERSION, log });
     applyMigrations(db);
+    // Świeża baza od razu zna swoją wersję: gdy pierwszy start się nie powiedzie, następny nie
+    // potraktuje jej jak bazy z poprzedniego wydania i nie zrobi kopii pustego schematu.
+    if (current === 0) new SettingsRepo(db).setGateVersion(GATE_VERSION, new Date());
     const check = verifyMasterKey(db, config.masterKey);
     if (isKeyMismatch(check)) throw new KeyMismatchError(check.unreadableGroups);
     if (check.unreadable > 0) log.warn('klucz.czesc_nieczytelna', { groups: check.unreadableGroups });
