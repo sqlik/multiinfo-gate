@@ -42,7 +42,7 @@ Wersja 1.8.5 dodaje SMS do grupy. Uprawniony numer wysyła SMS na numer bramki, 
 treść do stałej listy numerów: ekipy serwisowej, brygady albo zespołu handlowego. Słowo na początku SMS-a wybiera
 grupę, a nadawca może otrzymać potwierdzenie z liczbą odbiorców.
 
-Wersja 1.8.7 dokłada samodzielną kopię bazy przed aktualizacją. Bramka, która nie może rozpocząć
+Od wersji 1.8.7 bramka sama zapisuje kopię bazy przed aktualizacją. Bramka, która nie może rozpocząć
 pracy, pokazuje w panelu przyczynę i sposób naprawy zamiast zerwanego połączenia. Błąd panelu
 kończy się stroną z identyfikatorem zdarzenia, a wpis z tym identyfikatorem trafia do dziennika.
 Typowe problemy opisuje nowy dokument „Rozwiązywanie problemów”.

@@ -995,7 +995,8 @@ zawiera treści wiadomości, haseł ani pełnych kluczy. Zdarzenia warte uwagi:
 | `panel.wyjatek` | błąd wewnętrzny panelu; pole `id` to identyfikator zdarzenia ze strony błędu w przeglądarce. Opis w punkcie [Błąd wewnętrzny bramki](problemy.md#blad-wewnetrzny) |
 | `bramka.awaria_startu` | bramka nie rozpoczęła pracy i działa w trybie awaryjnym; pole `reason` podaje przyczynę, pole `id` identyfikator ze strony w panelu. Opis w punkcie [Bramka nie rozpoczęła pracy](problemy.md#awaria-startu) |
 | `kopia.przed_aktualizacja`, `kopia.przed_aktualizacja_blad` | wynik kopii zapisywanej przy pierwszym starcie nowej wersji (punkt 7.4); nieudana kopia bez zmiany schematu nie zatrzymuje bramki |
-| `klucz.czesc_nieczytelna` | część sekretów w bazie zaszyfrowano innym kluczem głównym; pole `groups` wymienia ich rodzaje. Bramka pracuje, ale tych danych nie odczyta |
+| `klucz.czesc_nieczytelna` | część sekretów w bazie zaszyfrowano innym kluczem głównym; pole `groups` wymienia ich rodzaje. Bramka pracuje, ale tych danych nie odczyta. Opis w punkcie [Część danych zaszyfrowana innym kluczem](problemy.md#klucz-czesciowy) |
+| `kopia.retencja_blad` | bramka nie usunęła najstarszych kopii przed aktualizacją, na przykład z braku prawa zapisu do katalogu `backups/`; bramka pracuje dalej |
 | `worker.zadanie_porzucone` | ósmy z rzędu błąd wewnętrzny tego samego zadania; wysyłka kończy wiadomość stanem `failed`, odpytywanie zostawia w przebiegu wpis o przerwaniu |
 
 ### 7.4. Aktualizacja
@@ -1030,8 +1031,8 @@ liczby.
 Kopię bazy przed aktualizacją bramka zapisuje sama. Przy pierwszym starcie nowej wersji, zanim
 cokolwiek zmieni w bazie, zapisuje plik `backups/przed-aktualizacja-<WERSJA>.sqlite`. `<WERSJA>` to
 numer sprzed aktualizacji. Bramka zostawia trzy najnowsze takie kopie. Migracje schematu bazy
-uruchamiają się po zapisaniu kopii. Gdy kopii nie da się zapisać, a nowa wersja zmienia schemat,
-bramka nie zmienia bazy i pokazuje przyczynę w panelu.
+uruchamiają się po zapisaniu kopii. Gdy zapis kopii się nie powiedzie, a nowa wersja zmienia
+schemat, bramka nie zmienia bazy i pokazuje przyczynę w panelu.
 
 ```bash
 cd ~/multiinfo-gate/docker
@@ -1057,12 +1058,33 @@ Plik `.env` przy aktualizacji zostaje bez zmian. Nie twórz go ponownie. Nowy kl
     Powrót do poprzedniej wersji wymaga przywrócenia kopii sprzed aktualizacji. Nowa wersja mogła
     zmienić schemat bazy, a starsza takiego schematu nie odczyta.
 
-W razie błędu przywróć kopię `przed-aktualizacja-<WERSJA>.sqlite` według punktu 7.2 i wróć do
-poprzedniej wersji. W tym celu wpisz `MIG_WERSJA=<poprzedni numer>` w `docker/.env` (na przykład
-`MIG_WERSJA=1.1.0`) i wykonaj ponownie `docker compose up -d`. Przy budowaniu ze źródeł
-(`docker-compose.build.yml`) zamiast `docker compose pull` wykonujesz
-`docker compose up -d --build`. Cofnięcie to wtedy `git -C ~/multiinfo-gate checkout v<poprzedni numer>`
-i ponowne budowanie. Typowe problemy po aktualizacji opisuje punkt
+Powrót do poprzedniej wersji wykonujesz przy zatrzymanej bramce, w katalogu
+`~/multiinfo-gate/docker`. Kolejność kroków ma znaczenie. Nowa wersja uruchomiona na przywróconej
+kopii ponownie zmieniłaby jej schemat. Najpierw zatrzymaj bramkę i otwórz plik `.env`:
+
+```bash
+docker compose stop
+nano .env
+```
+
+Wpisz w pliku wiersz `MIG_WERSJA=<POPRZEDNIA-WERSJA>`, na przykład `MIG_WERSJA=1.8.6`. Zapisz plik.
+Następnie przywróć kopię i uruchom poprzednią wersję:
+
+```bash
+W=$(docker volume inspect docker_gate-data --format '{{.Mountpoint}}')
+sudo cp $W/backups/przed-aktualizacja-<POPRZEDNIA-WERSJA>.sqlite $W/multiinfo-gate.sqlite
+sudo rm -f $W/multiinfo-gate.sqlite-wal $W/multiinfo-gate.sqlite-shm
+docker compose up -d
+```
+
+Ostatnie polecenie tworzy kontener z obrazu poprzedniej wersji i uruchamia go na przywróconej
+kopii. Oczekiwany wynik: `curl http://127.0.0.1:8081/healthz` pokazuje w polu `version` poprzedni
+numer.
+
+Przy budowaniu ze źródeł (`docker-compose.build.yml`) zamiast `docker compose pull` wykonujesz
+`docker compose up -d --build`. Przy powrocie zamiast zmiany `MIG_WERSJA` wykonaj
+`git -C ~/multiinfo-gate checkout v<POPRZEDNIA-WERSJA>`, a na końcu `docker compose up -d --build`.
+Typowe problemy po aktualizacji opisuje punkt
 [Po aktualizacji coś nie działa](problemy.md#po-aktualizacji).
 
 ### 7.5. Certyfikat Multiinfo
@@ -1375,10 +1397,15 @@ systemctl restart multiinfo-gate
 ```
 
 Powrót do poprzedniego wydania po nieudanej aktualizacji to przywrócenie kopii
-`przed-aktualizacja-<WERSJA>.sqlite` według przepisu wyżej i ręczne pobranie tamtego wydania:
+`przed-aktualizacja-<WERSJA>.sqlite` i ręczne pobranie tamtego wydania. Usługa startuje dopiero na
+końcu, już z poprzednim wydaniem. Nowe wydanie uruchomione na przywróconej kopii ponownie
+zmieniłoby jej schemat.
 
 ```bash
 systemctl stop multiinfo-gate
+cd /var/lib/multiinfo-gate
+install -o multiinfo-gate -g multiinfo-gate -m 640 backups/przed-aktualizacja-<WERSJA>.sqlite multiinfo-gate.sqlite
+rm -f multiinfo-gate.sqlite-wal multiinfo-gate.sqlite-shm
 rm -rf /opt/multiinfo-gate && mkdir /opt/multiinfo-gate
 curl -fsSL https://github.com/sqlik/multiinfo-gate/archive/refs/tags/v<WERSJA>.tar.gz | tar -xz --strip-components=1 -C /opt/multiinfo-gate
 cd /opt/multiinfo-gate && echo "allow-scripts=better-sqlite3" > .npmrc
