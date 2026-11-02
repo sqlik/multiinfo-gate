@@ -1,4 +1,6 @@
 import { randomBytes } from 'node:crypto';
+import type { InstallKind } from '../config/install.ts';
+import { silentLogger, type Logger } from '../log.ts';
 import { fileURLToPath } from 'node:url';
 import fastifyCookie from '@fastify/cookie';
 import fastifyFormbody from '@fastify/formbody';
@@ -48,6 +50,7 @@ import { qrSvg } from './qr.ts';
 import { createRenderer } from './render.ts';
 import { LoginThrottle } from './throttle.ts';
 import { WINDOW_MS } from './window.ts';
+import { clientErrorPage, errorPage, notFoundPage } from './views/error.ts';
 import { loginPage, totpPage } from './views/login.ts';
 import { recoveryCodesPage, totpSetupPage } from './views/totp-setup.ts';
 import {
@@ -97,6 +100,10 @@ export interface AdminDeps {
   allowPrivateWebhooks?: boolean;
   /** MIG_MAIL_ALLOW_PRIVATE: zgoda na serwer IMAP w sieci wewnętrznej. */
   allowPrivateMail?: boolean;
+  /** Dziennik błędów panelu (`panel.wyjatek`); bez niego wpisy przepadają. */
+  log?: Logger;
+  /** Wariant instalacji do poleceń na stronach pomocy; brak = oba warianty. */
+  install?: InstallKind | null;
 }
 
 declare module 'fastify' {
@@ -199,6 +206,24 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   app.register(fastifyMultipart, { limits: { fileSize: 512 * 1024, files: 1 } });
 
   app.decorateRequest('adminUserId', null);
+
+  // Błąd wewnętrzny trafia do dziennika z identyfikatorem, a przeglądarka dostaje stronę z tym
+  // identyfikatorem. Domyślna odpowiedź Fastify pokazywała treść wyjątku w JSON-ie i nic nie zapisywała.
+  app.setErrorHandler((error, request, reply) => {
+    const status = (error as { statusCode?: number }).statusCode;
+    reply.header('Cache-Control', 'no-store').type('text/html; charset=utf-8');
+    if (status !== undefined && status >= 400 && status < 500) {
+      return reply.code(status).send(clientErrorPage(status));
+    }
+    const id = randomBytes(4).toString('hex');
+    (deps.log ?? silentLogger).error('panel.wyjatek', { id, method: request.method, url: request.url.split('?')[0], error });
+    return reply.code(500).send(errorPage(id, deps.install ?? null));
+  });
+
+  // Niezalogowanych nieznana ścieżka i tak prowadzi do logowania (hak onRequest niżej).
+  app.setNotFoundHandler((_request, reply) => {
+    reply.code(404).header('Cache-Control', 'no-store').type('text/html; charset=utf-8').send(notFoundPage());
+  });
 
   // Szczegółowy stan dla monitoringu, bez sesji, ale tylko w kontekście bezpiecznym (pętla zwrotna,
   // tunel SSH, HTTPS za proxy) - tam, gdzie da się też zalogować. Z sieci bez TLS zostaje sam status,

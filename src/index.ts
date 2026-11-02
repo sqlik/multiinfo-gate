@@ -63,7 +63,7 @@ export async function startGate(config: AppConfig, opts: StartOptions = {}): Pro
   const log = opts.log ?? createLogger(config.logLevel);
   const install = opts.install === undefined ? detectInstall() : opts.install;
   try {
-    return await startNormal(config, log);
+    return await startNormal(config, log, install);
   } catch (error) {
     if (isAddressInUse(error)) throw error;
     return startEmergency(config, { reason: classifyStartupError(error), id: newIncidentId() }, { install, log, error });
@@ -110,7 +110,7 @@ async function prepareDatabase(config: AppConfig, log: Logger): Promise<Database
   }
 }
 
-async function startNormal(config: AppConfig, log: Logger): Promise<RunningGate> {
+async function startNormal(config: AppConfig, log: Logger, install: InstallKind | null): Promise<RunningGate> {
   const db = await prepareDatabase(config, log);
 
   const accounts = new AccountsRepo(db, config.masterKey);
@@ -174,6 +174,7 @@ async function startNormal(config: AppConfig, log: Logger): Promise<RunningGate>
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
     integrationEvents, guards, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate, allowPrivateMail: config.mailAllowPrivate,
+    log, install,
   });
 
   // Panel domyślnie zostaje na pętli zwrotnej (MIG_ADMIN_HOST); w kontenerze o wystawieniu

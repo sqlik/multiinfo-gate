@@ -25,6 +25,8 @@ import { TemplateEngine } from '../../src/integrations/templates.ts';
 import type { NotificationEvent } from '../../src/notifications/rules.ts';
 import type { MailContent } from '../../src/worker/mail.ts';
 import { FakeMailbox, fakeConnect } from './fake-mailbox.ts';
+import type { InstallKind } from '../../src/config/install.ts';
+import type { Logger } from '../../src/log.ts';
 
 export interface AdminHarness {
   app: ReturnType<typeof buildAdminServer>;
@@ -95,7 +97,7 @@ function makeProbeStub(): ProbeStub {
  */
 export async function startAdminHarness(
   now = new Date('2026-08-25T10:00:00Z'),
-  opts: { totp?: boolean; allowPrivateWebhooks?: boolean; allowPrivateMail?: boolean } = {},
+  opts: { totp?: boolean; allowPrivateWebhooks?: boolean; allowPrivateMail?: boolean; log?: Logger; install?: InstallKind | null } = {},
 ): Promise<AdminHarness> {
   const masterKey = randomBytes(32);
   const db = openDatabase(':memory:');
@@ -154,6 +156,8 @@ export async function startAdminHarness(
     resolve: (hostname) => resolve.value(hostname),
     ...(opts.allowPrivateWebhooks ? { allowPrivateWebhooks: true } : {}),
     ...(opts.allowPrivateMail ? { allowPrivateMail: true } : {}),
+    ...(opts.log ? { log: opts.log } : {}),
+    ...(opts.install !== undefined ? { install: opts.install } : {}),
   });
   await app.ready();
 
