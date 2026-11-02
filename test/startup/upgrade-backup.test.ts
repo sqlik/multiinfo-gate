@@ -116,6 +116,52 @@ describe('backupBeforeUpgrade', () => {
   });
 });
 
+describe('retencja przy zmianie wersji', () => {
+  it('porządkuje kopie także wtedy, gdy kopię o tej nazwie zapisał już update w LXC', async () => {
+    const db = migratedWithVersion('1.9.1');
+    mkdirSync(dir, { recursive: true });
+    ['1.8.7', '1.8.8', '1.9.0', '1.9.1'].forEach((v, i) => {
+      const path = join(dir, `przed-aktualizacja-${v}.sqlite`);
+      writeFileSync(path, 'x');
+      const t = new Date(Date.UTC(2026, 9, 1 + i));
+      utimesSync(path, t, t);
+    });
+    writeFileSync(join(dir, 'przed-aktualizacja-.sqlite'), 'x');
+    utimesSync(join(dir, 'przed-aktualizacja-.sqlite'), new Date(Date.UTC(2026, 8, 1)), new Date(Date.UTC(2026, 8, 1)));
+    expect(await backupBeforeUpgrade({ db, dir, current: '1.9.2', log })).toBeNull();
+    expect(readdirSync(dir).sort()).toEqual(['przed-aktualizacja-1.8.8.sqlite', 'przed-aktualizacja-1.9.0.sqlite', 'przed-aktualizacja-1.9.1.sqlite']);
+  });
+
+  it.skipIf(asRoot)('nieudana retencja kończy się ostrzeżeniem, nie przerwaniem startu', async () => {
+    const db = migratedWithVersion('1.9.1');
+    mkdirSync(dir, { recursive: true });
+    for (const v of ['1.8.7', '1.8.8', '1.9.0', '1.9.1']) writeFileSync(join(dir, `przed-aktualizacja-${v}.sqlite`), 'x');
+    chmodSync(dir, 0o500);
+    expect(await backupBeforeUpgrade({ db, dir, current: '1.9.2', log })).toBeNull();
+    expect(log.warn).toHaveBeenCalledWith('kopia.retencja_blad', expect.objectContaining({ dir }));
+  });
+
+  it('nie powtarza kopii zapisanej przez update tuż przed pierwszym startem 1.8.7', async () => {
+    const db = sixMigrations();
+    mkdirSync(dir, { recursive: true });
+    const old = new Date(Date.now() - 3_600_000);
+    utimesSync(join(root, 'gate.sqlite'), old, old);
+    writeFileSync(join(dir, 'przed-aktualizacja-1.8.6.sqlite'), 'kopia z update');
+    expect(await backupBeforeUpgrade({ db, dir, current: '1.8.7', log })).toBeNull();
+    expect(readdirSync(dir)).toEqual(['przed-aktualizacja-1.8.6.sqlite']);
+  });
+
+  it('starsza kopia niż plik bazy nie zastępuje kopii przed pierwszym startem 1.8.7', async () => {
+    const db = sixMigrations();
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, 'przed-aktualizacja-1.8.5.sqlite');
+    writeFileSync(path, 'stara kopia');
+    const old = new Date(Date.now() - 86_400_000);
+    utimesSync(path, old, old);
+    expect(await backupBeforeUpgrade({ db, dir, current: '1.8.7', log })).toBe(join(dir, 'przed-aktualizacja-do-1.8.7.sqlite'));
+  });
+});
+
 describe('pruneUpgradeBackups', () => {
   it('zostawia trzy najnowsze kopie przed aktualizacją i nie rusza kopii nocnych', () => {
     mkdirSync(dir, { recursive: true });

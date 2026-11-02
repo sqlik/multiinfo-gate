@@ -7,7 +7,7 @@ import { migrationState } from '../store/db.ts';
 import { SETTING_GATE_VERSION } from '../store/settings.ts';
 
 /** Kopie przed aktualizacją zapisuje bramka przy starcie nowej wersji i `update` w kontenerze LXC. */
-const UPGRADE_BACKUP = /^przed-aktualizacja-.+\.sqlite$/;
+const UPGRADE_BACKUP = /^przed-aktualizacja-.*\.sqlite$/;
 
 /** Tyle najnowszych kopii przed aktualizacją zostaje na dysku. */
 export const UPGRADE_BACKUPS_KEPT = 3;
@@ -48,6 +48,24 @@ export function pruneUpgradeBackups(dir: string, keep = UPGRADE_BACKUPS_KEPT): s
   return removed;
 }
 
+/** Czas ostatniego zapisu bazy: plik główny albo dziennik WAL, jeśli nie został scalony. */
+function lastWrite(dbPath: string): number | null {
+  if (!existsSync(dbPath)) return null;
+  const wal = `${dbPath}-wal`;
+  return Math.max(statSync(dbPath).mtimeMs, existsSync(wal) ? statSync(wal).mtimeMs : 0);
+}
+
+/**
+ * Kopia przed aktualizacją młodsza niż ostatni zapis bazy jest jej wierną kopią. Tak jest w LXC:
+ * `update` zatrzymuje bramkę i kopiuje bazę, zanim nowa wersja wystartuje. Dotyczy baz, które nie
+ * znają poprzedniej wersji - tylko wtedy nazwa kopii bramki różni się od nazwy ze skryptu.
+ */
+function freshCopyExists(dir: string, dbPath: string): boolean {
+  const written = lastWrite(dbPath);
+  if (written === null || !existsSync(dir)) return false;
+  return readdirSync(dir).some((name) => UPGRADE_BACKUP.test(name) && statSync(join(dir, name)).mtimeMs >= written);
+}
+
 export interface UpgradeBackupOptions {
   db: Database;
   dir: string;
@@ -69,16 +87,25 @@ export async function backupBeforeUpgrade(opts: UpgradeBackupOptions): Promise<s
   if (!pending && previous === opts.current) return null;
 
   const path = join(opts.dir, upgradeBackupName(previous, opts.current));
-  if (existsSync(path)) return null;
-  try {
-    mkdirSync(opts.dir, { recursive: true });
-    await backupDatabaseTo(opts.db, path);
-  } catch (error) {
-    if (pending) throw new BackupBeforeUpgradeError(error);
-    opts.log.warn('kopia.przed_aktualizacja_blad', { dir: opts.dir, error });
-    return null;
+  let written: string | null = null;
+  if (!existsSync(path) && !(previous === null && freshCopyExists(opts.dir, opts.db.name))) {
+    try {
+      mkdirSync(opts.dir, { recursive: true });
+      await backupDatabaseTo(opts.db, path);
+    } catch (error) {
+      if (pending) throw new BackupBeforeUpgradeError(error);
+      opts.log.warn('kopia.przed_aktualizacja_blad', { dir: opts.dir, error });
+      return null;
+    }
+    opts.log.info('kopia.przed_aktualizacja', { path });
+    written = path;
   }
-  opts.log.info('kopia.przed_aktualizacja', { path });
-  pruneUpgradeBackups(opts.dir);
-  return path;
+  // Retencja przy każdej zmianie wersji, także gdy kopię zapisał już `update` w LXC.
+  // Jej błąd nie zatrzymuje bramki: kopia, o którą chodzi, już istnieje.
+  try {
+    pruneUpgradeBackups(opts.dir);
+  } catch (error) {
+    opts.log.warn('kopia.retencja_blad', { dir: opts.dir, error });
+  }
+  return written;
 }
