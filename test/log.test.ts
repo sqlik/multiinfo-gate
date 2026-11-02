@@ -39,4 +39,10 @@ describe('createLogger', () => {
     expect(entry.error).toEqual({ name: 'TypeError', message: 'coś poszło nie tak' });
     expect(lines[0]).not.toContain('at ');
   });
+
+  it('dopisuje kod błędu systemu albo SQLite, gdy jest', () => {
+    const { log, lines } = capture('error');
+    log.error('bramka.awaria_startu', { error: Object.assign(new Error('unable to open database file'), { code: 'SQLITE_CANTOPEN' }) });
+    expect(JSON.parse(lines[0]!).error).toEqual({ name: 'Error', message: 'unable to open database file', code: 'SQLITE_CANTOPEN' });
+  });
 });

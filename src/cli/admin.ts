@@ -6,7 +6,35 @@ import { join } from 'node:path';
 import { createAdminUser } from '../admin/users.ts';
 import { loadEnv } from '../config/env.ts';
 import { AdminUsersRepo } from '../store/admin-users.ts';
-import { openDatabase } from '../store/db.ts';
+import { problemUrl } from '../docs-links.ts';
+import { isKeyMismatch, verifyMasterKey } from '../startup/key-check.ts';
+import { applyMigrations, migrationState, NewerDatabaseError, openDatabaseRaw, type Database } from '../store/db.ts';
+
+/**
+ * Baza dla polecenia zakładającego konto. Świeżej bazie zakłada schemat, ale bazy czekającej na
+ * zmianę schematu nie rusza: kopię przed taką zmianą zapisuje bramka przy starcie. Odmawia też przy
+ * kluczu niepasującym do bazy - nowe konto byłoby jedyną czytelną wartością, a reszta danych
+ * pozostałaby nieczytelna, choć bramka uznałaby bazę za zgodną.
+ */
+export function openAdminDatabase(path: string, masterKey: Buffer): Database {
+  const db = openDatabaseRaw(path);
+  try {
+    const { current, target } = migrationState(db);
+    if (current > target) throw new NewerDatabaseError(current, target);
+    if (current > 0 && current < target) {
+      throw new Error('Baza wymaga aktualizacji schematu. Uruchom najpierw bramkę: przy starcie zapisze kopię bazy '
+        + 'i zaktualizuje schemat. Potem wykonaj to polecenie ponownie.');
+    }
+    applyMigrations(db);
+    if (isKeyMismatch(verifyMasterKey(db, masterKey))) {
+      throw new Error(`Klucz główny nie pasuje do bazy. Opis i sposób naprawy: ${problemUrl('klucz-glowny')}`);
+    }
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+}
 
 /**
  * Hasło z potoku pozwala założyć konto skryptem wdrożeniowym; z terminala pytamy
@@ -39,7 +67,13 @@ async function main(): Promise<void> {
   }
 
   const config = loadEnv();
-  const db = openDatabase(join(config.dataDir, 'multiinfo-gate.sqlite'));
+  let db: Database;
+  try {
+    db = openAdminDatabase(join(config.dataDir, 'multiinfo-gate.sqlite'), config.masterKey);
+  } catch (error) {
+    stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    exit(1);
+  }
   const users = new AdminUsersRepo(db, config.masterKey);
 
   try {

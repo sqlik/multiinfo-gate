@@ -994,7 +994,8 @@ export function buildOpenApiDocument(): OpenApiDocument {
           description: 'Zwraca stan bramki bez klucza API. Stan degraded oznacza jedną z trzech sytuacji: konto'
             + ' Multiinfo jest wstrzymane, jego certyfikat wygasa w ciągu siedmiu dni albo odbiór wiadomości'
             + ' przychodzących zatrzymał się na błędzie Multiinfo. Wywołanie nadaje się do monitoringu zewnętrznego.'
-            + ' Ten sam adres na porcie panelu odpowiada szczegółami.',
+            + ' Ten sam adres na porcie panelu odpowiada szczegółami. Gdy bramka nie rozpoczęła pracy (tryb'
+            + ' awaryjny), stan bramki i każde wywołanie API odpowiadają kodem 503 z kodem błędu unavailable.',
           security: [],
           responses: {
             '200': {
@@ -1013,6 +1014,18 @@ export function buildOpenApiDocument(): OpenApiDocument {
                     },
                   },
                   example: { status: 'ok' },
+                },
+              },
+            },
+            '503': {
+              description: 'Tryb awaryjny: bramka nie rozpoczęła pracy, przyczynę pokazuje panel',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/StanNiedostepny' },
+                  example: {
+                    status: 'unavailable',
+                    error: { code: 'unavailable', message: 'Bramka nie rozpoczęła pracy. Przyczynę i sposób jej usunięcia pokazuje panel bramki.' },
+                  },
                 },
               },
             },
@@ -1053,6 +1066,15 @@ export function buildOpenApiDocument(): OpenApiDocument {
           description: 'Kształt każdej odpowiedzi błędu',
           required: ['error'],
           properties: { error: { $ref: '#/components/schemas/Blad' } },
+        },
+        StanNiedostepny: {
+          type: 'object',
+          description: 'Stan bramki w trybie awaryjnym, razem z opisem błędu w zwykłym kształcie',
+          required: ['status', 'error'],
+          properties: {
+            status: { type: 'string', enum: ['unavailable'], description: 'Bramka nie rozpoczęła pracy' },
+            error: { $ref: '#/components/schemas/Blad' },
+          },
         },
         OdpowiedzBleduRaportu: {
           type: 'object',

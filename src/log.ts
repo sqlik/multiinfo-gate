@@ -14,12 +14,15 @@ export interface Logger {
 const RANK: Record<LogLevel, number> = { silent: 0, error: 1, warn: 2, info: 3, debug: 4 };
 
 /**
- * Wyjątek zapisujemy jako nazwę i komunikat. Stos wywołań zawiera ścieżki
- * z serwera, a komunikaty Multiinfo i tak nie niosą poświadczeń - te idą
+ * Wyjątek zapisujemy jako nazwę, komunikat i kod (`SQLITE_*`, `E*`), jeśli go ma. Stos wywołań
+ * zawiera ścieżki z serwera, a komunikaty Multiinfo i tak nie niosą poświadczeń - te idą
  * w treści żądania, nie w adresie.
  */
 function plain(value: unknown): unknown {
-  if (value instanceof Error) return { name: value.name, message: value.message };
+  if (value instanceof Error) {
+    const code = (value as { code?: unknown }).code;
+    return { name: value.name, message: value.message, ...(typeof code === 'string' ? { code } : {}) };
+  }
   return value;
 }
 

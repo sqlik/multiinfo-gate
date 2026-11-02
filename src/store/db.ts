@@ -17,28 +17,78 @@ export interface OpenOptions {
   migrations?: string[];
 }
 
-/**
- * Otwiera bazę, włącza tryb WAL i klucze obce, po czym stosuje brakujące migracje.
- * Wywołanie na istniejącej bazie jest bezpieczne - pomija już zastosowane kroki.
- */
-export function openDatabase(path: string, options: OpenOptions = {}): Database.Database {
-  const db = new Database(path);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-  db.pragma('busy_timeout = 5000');
+/** Baza ma schemat nowszy, niż zna to wydanie - typowo po cofnięciu wersji bez przywrócenia kopii. */
+export class NewerDatabaseError extends Error {
+  constructor(readonly current: number, readonly target: number) {
+    super(`Baza ma wersję schematu ${current}, a to wydanie zna wersje do ${target}`);
+    this.name = 'NewerDatabaseError';
+  }
+}
 
+/** Migracja nie powiodła się; schemat został w poprzedniej wersji dzięki transakcji. */
+export class MigrationError extends Error {
+  constructor(readonly file: string, cause: unknown) {
+    super(`Migracja ${file} nie powiodła się: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
+    this.name = 'MigrationError';
+  }
+}
+
+/** Otwiera bazę z trybem WAL i kluczami obcymi, bez migracji. */
+export function openDatabaseRaw(path: string): Database.Database {
+  const db = new Database(path);
+  try {
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    db.pragma('busy_timeout = 5000');
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+  return db;
+}
+
+/** Wersja schematu zapisana w bazie i wersja, do której prowadzą znane migracje. */
+export function migrationState(db: Database.Database, migrations: string[] = MIGRATIONS): { current: number; target: number } {
+  return { current: db.pragma('user_version', { simple: true }) as number, target: migrations.length };
+}
+
+/**
+ * Stosuje brakujące migracje. Wywołanie na aktualnej bazie niczego nie zmienia.
+ * Każda migracja razem z podbiciem wersji w jednej transakcji: przerwana w połowie
+ * nie zostawia części tabel, po których kolejny start wywróciłby się na CREATE TABLE.
+ * PRAGMA foreign_keys w plikach jest w transakcji bez skutku - włącza je openDatabaseRaw.
+ */
+export function applyMigrations(db: Database.Database, options: OpenOptions = {}): void {
   const dir = options.migrationsDir ?? join(HERE, 'migrations');
   const migrations = options.migrations ?? MIGRATIONS;
-  const current = db.pragma('user_version', { simple: true }) as number;
-  // Każda migracja razem z podbiciem wersji w jednej transakcji: przerwana w połowie
-  // nie zostawia części tabel, po których kolejny start wywróciłby się na CREATE TABLE.
-  // PRAGMA foreign_keys w plikach jest w transakcji bez skutku - włączamy je wyżej.
+  const { current } = migrationState(db, migrations);
   const apply = db.transaction((sql: string, version: number) => {
     db.exec(sql);
     db.pragma(`user_version = ${version}`);
   });
   for (let i = current; i < migrations.length; i += 1) {
-    apply(readFileSync(join(dir, migrations[i]!), 'utf8'), i + 1);
+    const file = migrations[i]!;
+    try {
+      apply(readFileSync(join(dir, file), 'utf8'), i + 1);
+    } catch (error) {
+      throw new MigrationError(file, error);
+    }
+  }
+}
+
+/**
+ * Otwiera bazę i stosuje brakujące migracje. Baza z nowszego wydania kończy się
+ * błędem NewerDatabaseError bez żadnej zmiany w pliku.
+ */
+export function openDatabase(path: string, options: OpenOptions = {}): Database.Database {
+  const db = openDatabaseRaw(path);
+  try {
+    const { current, target } = migrationState(db, options.migrations ?? MIGRATIONS);
+    if (current > target) throw new NewerDatabaseError(current, target);
+    applyMigrations(db, options);
+  } catch (error) {
+    db.close();
+    throw error;
   }
   return db;
 }

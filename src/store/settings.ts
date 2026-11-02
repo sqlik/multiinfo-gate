@@ -8,6 +8,8 @@ export const SETTING_RELEASE_LATEST = 'release_latest';
 export const SETTING_RELEASE_NEXT_CHECK = 'release_next_check_at';
 /** Wydanie, które administrator odłożył przyciskiem na przeglądzie - pasek wraca przy nowszym. */
 export const SETTING_RELEASE_DISMISSED = 'release_dismissed';
+/** Wersja bramki, która ostatnio uruchomiła się na tej bazie - od niej zależy kopia przed aktualizacją. */
+export const SETTING_GATE_VERSION = 'gate_version';
 
 export interface ReleaseInfo { version: string; url: string; publishedAt: string | null }
 
@@ -37,6 +39,14 @@ export class SettingsRepo {
 
   setApiUrl(url: string | null, at: Date): void {
     this.set(SETTING_API_URL, url, at);
+  }
+
+  gateVersion(): string | null {
+    return this.get(SETTING_GATE_VERSION);
+  }
+
+  setGateVersion(version: string, at: Date): void {
+    this.set(SETTING_GATE_VERSION, version, at);
   }
 
   latestRelease(): ReleaseInfo | null {

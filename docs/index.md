@@ -13,7 +13,8 @@ faktury, choć numeru telefonu w samym powiadomieniu nie ma. Od wersji 1.8 bramk
 również skrzynkę pocztową (Mail2SMS): alarm z zasilacza UPS, raport z serwera NAS albo wiadomość
 pracownika docierają na telefon jako SMS bez zmian po stronie urządzenia. Od wersji 1.8.5 jeden
 SMS wysłany na numer bramki trafia do stałej grupy numerów (SMS do grupy): ekipy serwisowej, brygady
-albo zespołu handlowego.
+albo zespołu handlowego. Od wersji 1.8.7 bramka sama zapisuje kopię bazy przed aktualizacją. Gdy
+nie może rozpocząć pracy, pokazuje w panelu przyczynę i sposób naprawy.
 
 ![Przegląd: liczniki wiadomości wychodzących i odebranych z ostatniej doby, stan połączeń z Multiinfo i ostatnie niepowodzenia](obrazki/przeglad.png)
 
@@ -32,6 +33,8 @@ zamiast certyfikatów, oraz panel do zarządzania kontami, kluczami i podglądu 
   Mail2SMS ze skrzynki IMAP, SMS do grupy, szablony Liquid, gotowe ustawienia (Uptime Kuma, Grafana, Zabbix,
   WooCommerce, Fakturownia, FreeScout, Freshdesk, Bitrix24, Slack, ntfy, Gmail, home.pl, OVH),
   powiadomienia administratora mailem
+- [Rozwiązywanie problemów](problemy.md) - objaw, sprawdzenie i naprawa: panel, logowanie, tryb
+  awaryjny, aktualizacja, zgłaszanie problemów
 - [Przykład w PHP](https://github.com/sqlik/multiinfo-gate/tree/main/examples/php) - strona
   testowa i kod do skopiowania, w repozytorium
 
