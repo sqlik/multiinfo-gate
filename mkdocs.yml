@@ -18,6 +18,7 @@ nav:
   - Uruchomienie krok po kroku: uruchomienie.md
   - API dla aplikacji: api.md
   - Integracje z aplikacjami: integracje.md
+  - Rozwiązywanie problemów: problemy.md
 
 theme:
   name: material
@@ -57,6 +58,7 @@ extra_css:
 
 markdown_extensions:
   - admonition
+  - attr_list
   - tables
   - toc:
       permalink: true

@@ -42,6 +42,11 @@ Wersja 1.8.5 dodaje SMS do grupy. Uprawniony numer wysyła SMS na numer bramki, 
 treść do stałej listy numerów: ekipy serwisowej, brygady albo zespołu handlowego. Słowo na początku SMS-a wybiera
 grupę, a nadawca może otrzymać potwierdzenie z liczbą odbiorców.
 
+Wersja 1.8.7 dokłada samodzielną kopię bazy przed aktualizacją. Bramka, która nie może rozpocząć
+pracy, pokazuje w panelu przyczynę i sposób naprawy zamiast zerwanego połączenia. Błąd panelu
+kończy się stroną z identyfikatorem zdarzenia, a wpis z tym identyfikatorem trafia do dziennika.
+Typowe problemy opisuje nowy dokument „Rozwiązywanie problemów”.
+
 ## Co trzeba mieć
 
 - Konto Multiinfo z użytkownikiem API i certyfikatem (`.pfx` z hasłem)
@@ -67,6 +72,7 @@ Strona dokumentacji: [sqlik.github.io/multiinfo-gate](https://sqlik.github.io/mu
 - [Uruchomienie krok po kroku](https://sqlik.github.io/multiinfo-gate/uruchomienie/) - od konta Multiinfo do pierwszego SMS-a i wystawienia API na świat
 - [API dla aplikacji](https://sqlik.github.io/multiinfo-gate/api/) - każde wywołanie z przykładem w siedmiu wariantach (curl, HTTP, PHP, Python, Node.js, PowerShell, C#), webhooki, błędy, limity
 - [Integracje z aplikacjami](https://sqlik.github.io/multiinfo-gate/integracje/) - adres wejściowy dla aplikacji z własnym formatem, szablony Liquid, gotowe ustawienia, powiadomienia administratora mailem
+- [Rozwiązywanie problemów](https://sqlik.github.io/multiinfo-gate/problemy/) - objaw, sprawdzenie i naprawa: panel, logowanie, tryb awaryjny, aktualizacja, zgłaszanie problemów
 - [Przykład w PHP](examples/php/) - strona testowa i kod do skopiowania
 
 Źródłem strony są pliki w katalogu [`docs/`](docs/). Przykłady z zakładkami czytają się w nich

@@ -271,7 +271,9 @@ głównego, którego w bazie nie ma. Wynikają z tego trzy konsekwencje:
 
 - utrata klucza głównego oznacza, że bazy nie można odczytać. Wszystkie konta, certyfikaty
   i klucze API należy wtedy wpisać ponownie
-- zmiana klucza głównego przy istniejącej bazie sprawia, że bramka odmawia startu
+- zmiana klucza głównego przy istniejącej bazie sprawia, że bramka nie rozpoczyna pracy. Panel
+  pokazuje wtedy stronę z przyczyną, a API odpowiada kodem 503. Opis zawiera punkt
+  [Klucz główny nie pasuje do bazy](problemy.md#klucz-glowny)
 - kopia bazy razem z kluczem głównym jest równoważna kopii bez szyfrowania. Klucz przechowuje
   się osobno od kopii, na przykład w menedżerze haseł. Nigdy w repozytorium ani w tym samym
   katalogu
@@ -284,17 +286,24 @@ aktualizacjach.
 Polecenia (w katalogu `~/multiinfo-gate/docker`):
 
 ```bash
-echo "MIG_MASTER_KEY=$(openssl rand -base64 32)" > .env
+test -e .env && echo "Plik .env już istnieje. Nie nadpisuj go." || echo "MIG_MASTER_KEY=$(openssl rand -base64 32)" > .env
 chmod 600 .env
 cat .env
 ```
 
-Pierwsze polecenie generuje 32 losowe bajty, zapisuje je w base64 i tworzy plik `.env`. Drugie
-ogranicza dostęp do pliku do jego właściciela. Trzecie wypisuje zawartość. To jest moment na
-skopiowanie klucza do menedżera haseł.
+Pierwsze polecenie sprawdza, czy plik `.env` już istnieje. Gdy pliku nie ma, generuje 32 losowe
+bajty, zapisuje je w base64 i tworzy plik. Gdy plik jest, wypisuje ostrzeżenie i niczego nie
+zmienia. Istniejący plik zawiera klucz, którym zaszyfrowano bazę. Nadpisanie go nowym kluczem
+sprawia, że dane w bazie stają się nieczytelne. Drugie polecenie ogranicza dostęp do pliku do
+jego właściciela. Trzecie wypisuje zawartość. To jest moment na skopiowanie klucza do menedżera
+haseł.
 
 Oczekiwany wynik `cat .env`: jeden wiersz w postaci `MIG_MASTER_KEY=` i 44 znaki kończące się
 znakiem `=`.
+
+Komunikat `Plik .env już istnieje. Nie nadpisuj go.` oznacza, że klucz wygenerowano wcześniej.
+Plik zostaje bez zmian, a `cat .env` pokazuje dotychczasowy klucz. Pliku `.env` nie tworzy się
+ponownie przy aktualizacjach.
 
 ### 3.3. Uruchomienie
 
@@ -320,13 +329,18 @@ docker compose logs --tail 50
 
 Najczęstsze przyczyny:
 
-- `zmienna MIG_MASTER_KEY nie jest ustawiona` albo komunikat o złej długości klucza - błąd
-  w pliku `.env` (brak wiersza, dodatkowe spacje, obcięta wartość). Po poprawieniu wykonaj
-  ponownie `docker compose up -d`
+- `docker compose up -d` kończy się komunikatem `ustaw MIG_MASTER_KEY` - w pliku `.env` brakuje
+  wiersza z kluczem. Wróć do punktu 3.2
+- odpowiedź zawiera `"status":"unavailable"` - bramka nie rozpoczęła pracy, na przykład przez
+  obcięty klucz w `.env`. Dziennik zawiera wtedy wpis `bramka.awaria_startu` z przyczyną w polu
+  `reason`, a panel pokazuje stronę z opisem. Przyczyny opisuje punkt
+  [Bramka nie rozpoczęła pracy](problemy.md#awaria-startu)
 - `address already in use` - port 8080 albo 8081 zajmuje inny program na serwerze. Zmień
   `MIG_API_PORT` albo `MIG_ADMIN_PORT` w `docker-compose.yml` (tabela zmiennych w rozdziale
   7.7) i pamiętaj o nowym numerze w dalszych krokach
 - `curl: (7) Failed to connect` - kontener jeszcze się uruchamia. Powtórz po kilku sekundach
+
+Pozostałe objawy i sposoby naprawy opisuje [Rozwiązywanie problemów](problemy.md).
 
 ### 3.4. Pierwsze konto panelu
 
@@ -343,6 +357,11 @@ do historii poleceń.
 
 Oczekiwany wynik: komunikat o utworzeniu konta z informacją, że pierwsze logowanie wymaga
 włączenia drugiego składnika.
+
+Bramka nie ma konta domyślnego. Dopóki w bazie nie ma żadnego konta, ekran logowania pokazuje
+polecenie zakładające pierwsze konto.
+
+![Ekran logowania bez kont: informacja o braku konta domyślnego i polecenie zakładające pierwsze konto](obrazki/logowanie-pierwsze-konto.png)
 
 Drugi składnik to jednorazowy sześciocyfrowy kod generowany przez aplikację na telefonie.
 Nadaje się Google Authenticator, Microsoft Authenticator, Aegis, 1Password i każda inna
@@ -868,6 +887,10 @@ Gdy nie działa:
   domenę, którą Traefik obsługuje już dla innego kontenera
 - ostrzeżenie o certyfikacie w przeglądarce (certyfikat `TRAEFIK DEFAULT CERT`) - nieprawidłowa nazwa
   resolvera albo port 80 zamknięty
+- `404 page not found` z Traefika, a `docker compose ps` pokazuje bramkę w stanie `unhealthy` -
+  bramka nie rozpoczęła pracy i działa w trybie awaryjnym. Traefik pomija kontenery w tym stanie,
+  dlatego aplikacje dostają 404 zamiast odpowiedzi 503 bramki. Przyczynę pokazuje panel przez
+  tunel SSH. Opis zawiera punkt [Bramka nie rozpoczęła pracy](problemy.md#awaria-startu)
 
 W każdym z tych przypadków przyczynę podaje dziennik Traefika:
 `docker logs <kontener-traefika> --tail 30`. Porty `127.0.0.1:8080` i `:8081`
@@ -918,7 +941,8 @@ docker compose exec multiinfo-gate ls -la /data/backups
 docker volume inspect docker_gate-data --format '{{.Mountpoint}}'
 ```
 
-Pierwsze polecenie wypisuje listę kopii (pliki `multiinfo-gate-RRRR-MM-DD.sqlite`). Drugie
+Pierwsze polecenie wypisuje listę kopii: kopie nocne `multiinfo-gate-RRRR-MM-DD.sqlite` i kopie
+sprzed aktualizacji `przed-aktualizacja-<WERSJA>.sqlite` (punkt 7.4). Drugie
 wypisuje katalog na serwerze, w którym leży wolumin z bazą i kopiami. Zwykle jest to
 `/var/lib/docker/volumes/docker_gate-data/_data`.
 
@@ -937,6 +961,8 @@ docker compose start
 
 `<SCIEZKA-WOLUMENU>` to wynik `docker volume inspect` z punktu 7.1. Pliki `-wal` i `-shm` to
 dziennik transakcji SQLite należący do poprzedniej bazy. Po zastąpieniu pliku muszą zostać usunięte.
+Kopię sprzed aktualizacji przywraca się tak samo. W drugim poleceniu zamiast
+`multiinfo-gate-RRRR-MM-DD.sqlite` podaj jej nazwę, na przykład `przed-aktualizacja-1.8.6.sqlite`.
 
 ### 7.3. Dziennik
 
@@ -966,6 +992,10 @@ zawiera treści wiadomości, haseł ani pełnych kluczy. Zdarzenia warte uwagi:
 | `odbior.data_nieczytelna` | Multiinfo podało datę odbioru w nieoczekiwanej postaci; wiadomość jest zapisana z czasem zapisu w bramce zamiast czasu odbioru |
 | `kopia.zapisana`, `kopia.blad` | wynik nocnej kopii; brak `kopia.zapisana` przez dwie doby oznacza, że proces nie działa albo nie ma prawa zapisu do wolumenu |
 | `worker.wyjatek`, `api.wyjatek` | błąd wewnętrzny; treść wpisu jest materiałem do zgłoszenia. Zadanie workera wraca z rosnącym odstępem (od minuty do pół godziny) |
+| `panel.wyjatek` | błąd wewnętrzny panelu; pole `id` to identyfikator zdarzenia ze strony błędu w przeglądarce. Opis w punkcie [Błąd wewnętrzny bramki](problemy.md#blad-wewnetrzny) |
+| `bramka.awaria_startu` | bramka nie rozpoczęła pracy i działa w trybie awaryjnym; pole `reason` podaje przyczynę, pole `id` identyfikator ze strony w panelu. Opis w punkcie [Bramka nie rozpoczęła pracy](problemy.md#awaria-startu) |
+| `kopia.przed_aktualizacja`, `kopia.przed_aktualizacja_blad` | wynik kopii zapisywanej przy pierwszym starcie nowej wersji (punkt 7.4); nieudana kopia bez zmiany schematu nie zatrzymuje bramki |
+| `klucz.czesc_nieczytelna` | część sekretów w bazie zaszyfrowano innym kluczem głównym; pole `groups` wymienia ich rodzaje. Bramka pracuje, ale tych danych nie odczyta |
 | `worker.zadanie_porzucone` | ósmy z rzędu błąd wewnętrzny tego samego zadania; wysyłka kończy wiadomość stanem `failed`, odpytywanie zostawia w przebiegu wpis o przerwaniu |
 
 ### 7.4. Aktualizacja
@@ -997,28 +1027,43 @@ tej serii) i `1` (najnowsze wydanie zgodne wstecz). Zmienna `MIG_WERSJA` w `dock
 który z nich śledzi bramka. Domyślnie jest to `1`, czyli każda aktualizacja w obrębie pierwszej
 liczby.
 
-Przed aktualizacją wykonaj kopię bazy. Migracje schematu bazy uruchamiają się same przy starcie
-nowej wersji.
+Kopię bazy przed aktualizacją bramka zapisuje sama. Przy pierwszym starcie nowej wersji, zanim
+cokolwiek zmieni w bazie, zapisuje plik `backups/przed-aktualizacja-<WERSJA>.sqlite`. `<WERSJA>` to
+numer sprzed aktualizacji. Bramka zostawia trzy najnowsze takie kopie. Migracje schematu bazy
+uruchamiają się po zapisaniu kopii. Gdy kopii nie da się zapisać, a nowa wersja zmienia schemat,
+bramka nie zmienia bazy i pokazuje przyczynę w panelu.
 
 ```bash
 cd ~/multiinfo-gate/docker
-docker compose exec multiinfo-gate cp /data/multiinfo-gate.sqlite /data/backups/przed-aktualizacja.sqlite
 git -C ~/multiinfo-gate pull
 docker compose pull
 docker compose up -d
 ```
 
-Polecenia wykonują kolejno: kopię bazy, pobranie nowych plików uruchomieniowych i dokumentacji,
-pobranie nowego obrazu, uruchomienie. Oczekiwany wynik: `curl http://127.0.0.1:8080/healthz`
-odpowiada `{"status":"ok"}`, a `curl http://127.0.0.1:8081/healthz` pokazuje w polu `version`
-nowy numer.
+Polecenia wykonują kolejno: przejście do katalogu z plikami Compose, pobranie nowych plików
+uruchomieniowych i dokumentacji, pobranie nowego obrazu, uruchomienie. Oczekiwany wynik:
+`curl http://127.0.0.1:8080/healthz` odpowiada `{"status":"ok"}`, a
+`curl http://127.0.0.1:8081/healthz` pokazuje w polu `version` nowy numer.
 
-W razie błędu przywróć kopię `przed-aktualizacja.sqlite` według punktu 7.2 i wróć do poprzedniej
-wersji. W tym celu wpisz `MIG_WERSJA=<poprzedni numer>` w `docker/.env` (na przykład
+Kopię sprawdza polecenie `docker compose exec multiinfo-gate ls /data/backups`. Oczekiwany wynik
+zawiera plik `przed-aktualizacja-<WERSJA>.sqlite` z numerem poprzedniej wersji. Przy aktualizacji
+z wydania starszego niż 1.8.7 kopia nosi nazwę `przed-aktualizacja-do-1.8.7.sqlite`. Starsze
+wydania nie zapisywały w bazie swojego numeru.
+
+Plik `.env` przy aktualizacji zostaje bez zmian. Nie twórz go ponownie. Nowy klucz główny sprawia,
+że dane w bazie stają się nieczytelne (punkt 3.2).
+
+!!! warning "Powrót do poprzedniej wersji"
+    Powrót do poprzedniej wersji wymaga przywrócenia kopii sprzed aktualizacji. Nowa wersja mogła
+    zmienić schemat bazy, a starsza takiego schematu nie odczyta.
+
+W razie błędu przywróć kopię `przed-aktualizacja-<WERSJA>.sqlite` według punktu 7.2 i wróć do
+poprzedniej wersji. W tym celu wpisz `MIG_WERSJA=<poprzedni numer>` w `docker/.env` (na przykład
 `MIG_WERSJA=1.1.0`) i wykonaj ponownie `docker compose up -d`. Przy budowaniu ze źródeł
 (`docker-compose.build.yml`) zamiast `docker compose pull` wykonujesz
 `docker compose up -d --build`. Cofnięcie to wtedy `git -C ~/multiinfo-gate checkout v<poprzedni numer>`
-i ponowne budowanie.
+i ponowne budowanie. Typowe problemy po aktualizacji opisuje punkt
+[Po aktualizacji coś nie działa](problemy.md#po-aktualizacji).
 
 ### 7.5. Certyfikat Multiinfo
 
@@ -1309,7 +1354,7 @@ update
 
 Polecenie sprawdza w serwisie GitHub, czy jest nowsze wydanie. Jeżeli jest, zatrzymuje usługę,
 zapisuje kopię bazy jako `backups/przed-aktualizacja-<WERSJA>.sqlite`, pobiera i buduje nowe
-wydanie, po czym uruchamia usługę. Migracje bazy wykonują się same przy starcie. Oczekiwany
+wydanie, po czym uruchamia usługę. Bramka zostawia trzy najnowsze kopie przed aktualizacją. Migracje bazy wykonują się same przy starcie. Oczekiwany
 wynik: `Zaktualizowano do wydania <WERSJA>`, a po zalogowaniu maszt panelu pokazuje nowy numer.
 Panel w kontenerze nasłuchuje na adresie kontenera, nie na `127.0.0.1`, więc `curl` z punktu 7.4
 tu nie zadziała. Gdy nowszego wydania nie ma, polecenie kończy się komunikatem o braku
@@ -1347,6 +1392,9 @@ skrypt instalacyjny `better-sqlite3` w wydaniach sprzed 1.4.1, które nie mają 
 `allowScripts`. Nowszy npm bez tej zgody utworzyłby instalację bez części natywnej.
 W nowszych wydaniach wpis niczemu nie szkodzi. Usunięcie pliku `~/.multiinfo-gate` sprawia, że
 kolejne `update` znów zaproponuje najnowsze wydanie.
+
+Typowe problemy po aktualizacji opisuje punkt
+[Po aktualizacji coś nie działa](problemy.md#po-aktualizacji).
 
 ### 9.5. Kontener z Dockerem
 
