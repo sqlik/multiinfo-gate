@@ -3,19 +3,18 @@ import type { StartupReason } from './startup/reason.ts';
 /** Artykuł „Rozwiązywanie problemów” w dokumentacji publicznej. */
 export const TROUBLESHOOTING_URL = 'https://sqlik.github.io/multiinfo-gate/problemy/';
 
-/** Stałe kotwice punktów artykułu (`{#…}` w docs/problemy.md); panel i dziennik odsyłają do nich wprost. */
-export type ProblemAnchor =
-  | 'panel-nie-odpowiada' | 'pierwsze-konto' | 'logowanie-wraca' | 'kod-odrzucony' | 'blad-wewnetrzny'
-  | 'klucz-glowny' | 'klucz-nieprawidlowy' | 'kopia-przed-aktualizacja' | 'baza-z-nowszego-wydania'
-  | 'brak-miejsca' | 'uprawnienia' | 'uszkodzona-baza' | 'nieudana-migracja' | 'awaria-startu'
-  | 'zajety-port' | 'po-aktualizacji' | 'sms-od-abonentow' | 'zgloszenie';
-
-export const PROBLEM_ANCHORS: readonly ProblemAnchor[] = [
+/**
+ * Stałe kotwice punktów artykułu (`{#…}` w docs/problemy.md); panel i dziennik odsyłają do nich wprost.
+ * Zgodność z artykułem pilnuje test docs-links.
+ */
+export const PROBLEM_ANCHORS = [
   'panel-nie-odpowiada', 'pierwsze-konto', 'logowanie-wraca', 'kod-odrzucony', 'blad-wewnetrzny',
-  'klucz-glowny', 'klucz-nieprawidlowy', 'kopia-przed-aktualizacja', 'baza-z-nowszego-wydania',
+  'klucz-glowny', 'klucz-nieprawidlowy', 'klucz-czesciowy', 'kopia-przed-aktualizacja', 'baza-z-nowszego-wydania',
   'brak-miejsca', 'uprawnienia', 'uszkodzona-baza', 'nieudana-migracja', 'awaria-startu',
   'zajety-port', 'po-aktualizacji', 'sms-od-abonentow', 'zgloszenie',
-];
+] as const;
+
+export type ProblemAnchor = typeof PROBLEM_ANCHORS[number];
 
 export function problemUrl(anchor: ProblemAnchor): string {
   return `${TROUBLESHOOTING_URL}#${anchor}`;

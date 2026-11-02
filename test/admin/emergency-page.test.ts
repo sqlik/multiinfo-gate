@@ -30,4 +30,17 @@ describe('emergencyPage', () => {
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');
   });
+
+  it('przy kluczu w złej postaci nie podaje przyczyn, które tego błędu nie wywołują', () => {
+    const html = emergencyPage({ reason: 'key_invalid', id: 'x' }, 'docker');
+    expect(html).toContain('pusta albo obcięta');
+    expect(html).not.toContain('cudzysłów');
+    expect(html).not.toContain('spacja');
+  });
+
+  it('przy złym kluczu mówi rzeczowo o kopiach, bez potocznych zwrotów', () => {
+    const html = emergencyPage({ reason: 'key_mismatch', id: 'x' }, 'docker');
+    expect(html).toContain('są równie nieczytelne');
+    expect(html).not.toContain('nie pomogą');
+  });
 });

@@ -31,17 +31,17 @@ function explain(reason: StartupReason, install: InstallKind | null): Explanatio
           z zapisanych sekretów nie można odszyfrować bieżącym kluczem. Najczęstszą przyczyną jest nadpisanie
           pliku nowym kluczem, na przykład przez ponowne wykonanie polecenia z instalacji.</p>`,
         steps: `<p>Wpisz w pliku ${env} poprzedni klucz, na przykład z menedżera haseł. Kopie bazy są
-          zaszyfrowane tym samym kluczem, dlatego bez niego nie pomogą.</p>
+          zaszyfrowane tym samym kluczem, więc bez niego są równie nieczytelne.</p>
           <p>Jeżeli poprzedniego klucza nie ma, bazę trzeba założyć od nowa. Sposób opisuje dokumentacja.</p>`,
       };
     case 'key_invalid':
       return {
         headline: 'Brak klucza głównego albo klucz ma nieprawidłową postać',
-        about: `<p>Wartość <code>MIG_MASTER_KEY</code> w pliku ${env} musi mieć 44 znaki w zapisie base64
-          i kończyć się znakiem <code>=</code>. Najczęstsze przyczyny to obcięta wartość, dodatkowa spacja
-          albo cudzysłów.</p>`,
-        steps: `<p>Popraw wiersz w pliku ${env}. Poprawny wiersz ma postać <code>MIG_MASTER_KEY=</code>
-          i 44 znaki bez spacji.</p>`,
+        about: `<p>Wartość <code>MIG_MASTER_KEY</code> w pliku ${env} musi zapisywać 32 bajty w kodzie
+          base64, czyli 44 znaki zakończone znakiem <code>=</code>. Bieżąca wartość jest pusta albo obcięta.
+          Zdarza się to najczęściej przy niepełnym skopiowaniu klucza z menedżera haseł.</p>`,
+        steps: `<p>Wpisz w pliku ${env} pełny klucz. Poprawny wiersz ma postać <code>MIG_MASTER_KEY=</code>
+          i 44 znaki.</p>`,
       };
     case 'backup_failed':
       return {
