@@ -61,6 +61,26 @@ function lastWrite(dbPath: string): number | null {
 }
 
 /**
+ * Dziennik WAL z danymi przy starcie: poprzedni proces nie zamknął bazy czysto, na przykład
+ * `systemctl stop` po 90 s wysłał SIGKILL. Kopia samego pliku głównego (tak kopiuje `update`)
+ * nie zawiera wtedy ostatnich transakcji, a bramka przed jakimkolwiek zapisem widzi pełną bazę.
+ */
+function walHasFrames(dbPath: string): boolean {
+  const wal = `${dbPath}-wal`;
+  return existsSync(wal) && statSync(wal).size > 0;
+}
+
+/**
+ * Kopia o nazwie z tej aktualizacji jest wierna, gdy powstała po ostatnim zapisie bazy. Starsza
+ * zostaje z poprzedniej próby: po powrocie do poprzedniej wersji baza żyła dalej, więc ponowna
+ * aktualizacja potrzebuje nowej kopii, inaczej kolejny powrót zgubiłby te dane.
+ */
+function trustedCopy(copyPath: string, dbPath: string): boolean {
+  if (walHasFrames(dbPath)) return false;
+  return statSync(copyPath).mtimeMs >= (lastWrite(dbPath) ?? 0);
+}
+
+/**
  * Kopia przed aktualizacją młodsza niż ostatni zapis bazy jest jej wierną kopią. Tak jest w LXC:
  * `update` zatrzymuje bramkę i kopiuje bazę, zanim nowa wersja wystartuje. Dotyczy baz, które nie
  * znają poprzedniej wersji - tylko wtedy nazwa kopii bramki różni się od nazwy ze skryptu.
@@ -93,7 +113,9 @@ export async function backupBeforeUpgrade(opts: UpgradeBackupOptions): Promise<s
 
   const path = join(opts.dir, upgradeBackupName(previous, opts.current));
   let written: string | null = null;
-  if (!existsSync(path) && !(previous === null && freshCopyExists(opts.dir, opts.db.name))) {
+  const covered = existsSync(path) ? trustedCopy(path, opts.db.name)
+    : previous === null && !walHasFrames(opts.db.name) && freshCopyExists(opts.dir, opts.db.name);
+  if (!covered) {
     try {
       mkdirSync(opts.dir, { recursive: true });
       await backupDatabaseTo(opts.db, path);

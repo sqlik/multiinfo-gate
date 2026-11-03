@@ -45,6 +45,19 @@ describe('backupDatabase', () => {
   });
 });
 
+describe('backupDatabaseTo', () => {
+  it('uszkodzony plik .part po przerwanej kopii nie blokuje następnej kopii', async () => {
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, 'przed-aktualizacja-1.8.7.sqlite');
+    writeFileSync(`${path}.part`, 'resztka przerwanej kopii');
+    await backupDatabaseTo(db, path);
+    const copy = new Database(path, { readonly: true });
+    expect(copy.prepare('SELECT login FROM admin_users').get()).toEqual({ login: 't' });
+    copy.close();
+    expect(existsSync(`${path}.part`)).toBe(false);
+  });
+});
+
 describe('pruneBackups', () => {
   it('usuwa kopie starsze niż retencja po dacie z nazwy i zostawia inne pliki', () => {
     const files = ['multiinfo-gate-2026-08-26.sqlite', 'multiinfo-gate-2026-08-12.sqlite',

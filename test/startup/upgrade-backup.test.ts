@@ -82,8 +82,10 @@ describe('backupBeforeUpgrade', () => {
     expect(existsSync(dir) ? readdirSync(dir) : []).toEqual([]);
   });
 
-  it('nie nadpisuje istniejącej kopii o tej samej nazwie', async () => {
-    const db = migratedWithVersion('1.8.6');
+  it('nie nadpisuje istniejącej kopii o tej samej nazwie, młodszej niż ostatni zapis bazy', async () => {
+    // Baza zamknięta czysto, jak po zatrzymaniu usługi: dziennik -wal scalony.
+    migratedWithVersion('1.8.6').close();
+    const db = openDatabase(join(root, 'gate.sqlite'));
     mkdirSync(dir, { recursive: true });
     const existing = join(dir, 'przed-aktualizacja-1.8.6.sqlite');
     writeFileSync(existing, 'kopia z polecenia update');
@@ -146,9 +148,45 @@ describe('backupBeforeUpgrade', () => {
   });
 });
 
+describe('kopia o tej samej nazwie, której nie można zaufać', () => {
+  it('kopia starsza niż ostatni zapis bazy (powrót do poprzedniej wersji i ponowna aktualizacja) zostaje zapisana od nowa', async () => {
+    migratedWithVersion('1.8.7').close();
+    mkdirSync(dir, { recursive: true });
+    const stale = join(dir, 'przed-aktualizacja-1.8.7.sqlite');
+    writeFileSync(stale, 'kopia sprzed tygodnia');
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+    utimesSync(stale, weekAgo, weekAgo);
+    const db = openDatabase(join(root, 'gate.sqlite'));
+    expect(await backupBeforeUpgrade({ db, dir, current: '1.9.0', log })).toBe(stale);
+    const copy = new Database(stale, { readonly: true });
+    expect(copy.prepare("SELECT value FROM settings WHERE key = 'gate_version'").get()).toEqual({ value: '1.8.7' });
+    copy.close();
+  });
+
+  it('niescalony dziennik -wal przy starcie (poprzedni proces przerwany) wymusza własną kopię mimo młodszej kopii z update', async () => {
+    const db = migratedWithVersion('1.8.6');
+    const wal = join(root, 'gate.sqlite-wal');
+    expect(statSync(wal).size).toBeGreaterThan(0);
+    const killedAt = new Date(Date.now() - 3_600_000);
+    utimesSync(wal, killedAt, killedAt);
+    utimesSync(join(root, 'gate.sqlite'), killedAt, killedAt);
+    mkdirSync(dir, { recursive: true });
+    const scriptCopy = join(dir, 'przed-aktualizacja-1.8.6.sqlite');
+    writeFileSync(scriptCopy, 'kopia samego pliku głównego');
+    expect(await backupBeforeUpgrade({ db, dir, current: '1.9.0', log })).toBe(scriptCopy);
+    const copy = new Database(scriptCopy, { readonly: true });
+    expect(copy.prepare("SELECT value FROM settings WHERE key = 'gate_version'").get()).toEqual({ value: '1.8.6' });
+    copy.close();
+  });
+});
+
 describe('retencja przy zmianie wersji', () => {
   it('porządkuje kopie także wtedy, gdy kopię o tej nazwie zapisał już update w LXC', async () => {
-    const db = migratedWithVersion('1.9.1');
+    // Jak w LXC: usługa zamknęła bazę czysto, a update skopiował ją później.
+    migratedWithVersion('1.9.1').close();
+    const sept = new Date(Date.UTC(2026, 8, 15));
+    utimesSync(join(root, 'gate.sqlite'), sept, sept);
+    const db = openDatabase(join(root, 'gate.sqlite'));
     mkdirSync(dir, { recursive: true });
     ['1.8.7', '1.8.8', '1.9.0', '1.9.1'].forEach((v, i) => {
       const path = join(dir, `przed-aktualizacja-${v}.sqlite`);
@@ -163,7 +201,10 @@ describe('retencja przy zmianie wersji', () => {
   });
 
   it.skipIf(asRoot)('nieudana retencja kończy się ostrzeżeniem, nie przerwaniem startu', async () => {
-    const db = migratedWithVersion('1.9.1');
+    migratedWithVersion('1.9.1').close();
+    const old = new Date(Date.now() - 3_600_000);
+    utimesSync(join(root, 'gate.sqlite'), old, old);
+    const db = openDatabase(join(root, 'gate.sqlite'));
     mkdirSync(dir, { recursive: true });
     for (const v of ['1.8.7', '1.8.8', '1.9.0', '1.9.1']) writeFileSync(join(dir, `przed-aktualizacja-${v}.sqlite`), 'x');
     chmodSync(dir, 0o500);
@@ -172,11 +213,12 @@ describe('retencja przy zmianie wersji', () => {
   });
 
   it('nie powtarza kopii zapisanej przez update tuż przed pierwszym startem 1.8.7', async () => {
-    const db = sixMigrations();
+    sixMigrations().close();
     mkdirSync(dir, { recursive: true });
     const old = new Date(Date.now() - 3_600_000);
     utimesSync(join(root, 'gate.sqlite'), old, old);
     writeFileSync(join(dir, 'przed-aktualizacja-1.8.6.sqlite'), 'kopia z update');
+    const db = openDatabaseRaw(join(root, 'gate.sqlite'));
     expect(await backupBeforeUpgrade({ db, dir, current: '1.8.7', log })).toBeNull();
     expect(readdirSync(dir)).toEqual(['przed-aktualizacja-1.8.6.sqlite']);
   });

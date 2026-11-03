@@ -24,3 +24,8 @@ ALTER TABLE api_keys ADD COLUMN integrations_only INTEGER NOT NULL DEFAULT 0;
 -- Ochrona przed burzą integracji Power Automate liczy w oknie także odbiorców: jedna rozsyłka
 -- może objąć 5000 numerów, więc sam limit wywołań nie chroni konta przed zapętlonym przepływem.
 ALTER TABLE integration_throttle ADD COLUMN recipients INTEGER NOT NULL DEFAULT 0;
+
+-- Usunięcie integracji ustawia NULL w powiązanych wiadomościach i rozsyłkach (ON DELETE SET NULL).
+-- Indeks częściowy oszczędza przeglądania całej tabeli wiadomości i zajmuje miejsce tylko dla wierszy z integracją.
+CREATE INDEX messages_integration ON messages(integration_id) WHERE integration_id IS NOT NULL;
+CREATE INDEX packages_integration ON packages(integration_id) WHERE integration_id IS NOT NULL;

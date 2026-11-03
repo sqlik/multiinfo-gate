@@ -18,6 +18,8 @@ export const backupFileName = (day: Date): string => `multiinfo-gate-${day.toISO
 export async function backupDatabaseTo(db: Database, path: string): Promise<void> {
   const partial = `${path}.part`;
   try {
+    // Resztka kopii przerwanej wyłączeniem zasilania albo SIGKILL: SQLite nie zapisze kopii na uszkodzony plik.
+    rmSync(partial, { force: true });
     await db.backup(partial);
     renameSync(partial, path);
   } catch (e) {
