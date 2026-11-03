@@ -1,7 +1,7 @@
 import { ApiError } from '../api/errors.ts';
 import type { PaGroupBody, PaMessageBody, PaPackageBody } from '../api/pa-integrations.ts';
 import type { ApiDeps } from '../api/server.ts';
-import { submitPackage, type PackageAccepted } from '../api/submit-package.ts';
+import { packageEncoding, submitPackage, type PackageAccepted } from '../api/submit-package.ts';
 import { authFromKey, submitMessages, type SubmitResult } from '../api/submit.ts';
 import type { IntegrationEventInput } from '../store/integration-events.ts';
 import type { IntegrationRow } from '../store/integrations.ts';
@@ -74,13 +74,16 @@ export function runPowerAutomate(
     ...(requestedBy ? { requestedBy } : {}),
   };
   let cut = false;
-  /** Treść w limicie części integracji: przycięta albo odrzucona z miejscem w ciele żądania. */
-  const fit = (text: string, where = ''): string => {
-    const fitted = fitToParts(text, config.maxParts, call.body.encoding);
+  /**
+   * Treść w limicie części integracji: przycięta albo odrzucona z miejscem w ciele żądania.
+   * Rozsyłka liczy każdą treść w kodowaniu całej rozsyłki, bo tak wyśle ją Multiinfo.
+   */
+  const fit = (text: string, where = '', encoding: EncodingRequest = call.body.encoding): string => {
+    const fitted = fitToParts(text, config.maxParts, encoding);
     if (!fitted.over) return text;
     if (config.overflow === 'reject') {
       throw new ApiError(400, 'too_many_parts',
-        `${where}Treść wymaga ${neededParts(text, call.body.encoding)} części, a limit integracji to ${config.maxParts}.`);
+        `${where}Treść wymaga ${neededParts(text, encoding)} części, a limit integracji to ${config.maxParts}.`);
     }
     cut = true;
     return fitted.text;
@@ -90,10 +93,11 @@ export function runPowerAutomate(
   try {
     if (call.action === 'package') {
       const b = call.body;
-      const defaultText = b.defaultText === undefined ? undefined : fit(b.defaultText, 'defaultText: ');
+      const encoding = packageEncoding([b.defaultText, ...b.recipients.map((r) => r.text)], b.encoding);
+      const defaultText = b.defaultText === undefined ? undefined : fit(b.defaultText, 'defaultText: ', encoding);
       const recipients = b.recipients.map((r, i) => ({
         to: r.to,
-        ...(r.text !== undefined ? { text: fit(r.text, `recipients.${i}: `) } : {}),
+        ...(r.text !== undefined ? { text: fit(r.text, `recipients.${i}: `, encoding) } : {}),
         ...(r.clientId !== undefined ? { clientId: r.clientId } : {}),
       }));
       const accepted = submitPackage(deps, auth, {

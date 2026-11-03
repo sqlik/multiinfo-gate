@@ -261,7 +261,7 @@ describe('limit części integracji', () => {
 
   it('rozsyłka przy „nie wysyłaj”: jedna długa treść odbiorcy odrzuca całość z indeksem, bez rozsyłki', async () => {
     integrations.update(biuro, { ...rowPatch(biuro), config: { ...defaultPowerAutomateConfig(), maxParts: 1, overflow: 'reject' } }, NOW);
-    const res = await post(`/v1/integrations/int_${biuro}/packages`, { recipients: [{ to: '48601000001' }, { to: '48601000002', text: long }], defaultText: 'krótko' });
+    const res = await post(`/v1/integrations/int_${biuro}/packages`, { recipients: [{ to: '48601000001' }, { to: '48601000002', text: long }], defaultText: 'Termin bez zmian' });
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toMatch(/^recipients\.1: Treść wymaga 2 części/);
     expect(allPackages()).toEqual([]);
@@ -276,7 +276,7 @@ describe('limit części integracji', () => {
   it('rozsyłka przy „skróć i wyślij”: każda długa treść skrócona osobno', async () => {
     integrations.update(biuro, { ...rowPatch(biuro), config: { ...defaultPowerAutomateConfig(), maxParts: 1, overflow: 'truncate' } }, NOW);
     const res = await post(`/v1/integrations/int_${biuro}/packages`, {
-      recipients: [{ to: '48601000001' }, { to: '48601000002', text: long }, { to: '48601000003', text: 'krótko' }], defaultText: long,
+      recipients: [{ to: '48601000001' }, { to: '48601000002', text: long }, { to: '48601000003', text: 'Termin bez zmian' }], defaultText: long,
     });
     expect(res.statusCode).toBe(202);
     const pkg = packages.get(res.json().id)!;
@@ -284,8 +284,30 @@ describe('limit części integracji', () => {
     expect(cut.endsWith('...')).toBe(true);
     expect(pkg.multipart).toBe(0);
     expect(pkg.defaultText).toBe(cut);
-    expect(packages.recipients(pkg.id).map((r) => r.text)).toEqual([null, cut, 'krótko']);
+    expect(packages.recipients(pkg.id).map((r) => r.text)).toEqual([null, cut, 'Termin bez zmian']);
     expect(log(biuro)[0]!.reason).toBe('Wyślij rozsyłkę, 3 odbiorców; skrócono do 1 części');
+  });
+
+  it('rozsyłka przy „nie wysyłaj”: treść GSM obok polskiej liczy się w kodowaniu rozsyłki, bez rozsyłki', async () => {
+    integrations.update(biuro, { ...rowPatch(biuro), config: { ...defaultPowerAutomateConfig(), maxParts: 1, overflow: 'reject' } }, NOW);
+    const res = await post(`/v1/integrations/int_${biuro}/packages`, {
+      recipients: [{ to: '48601000001' }, { to: '48601000002', text: 'Zmiana grafiku od poniedziałku' }], defaultText: 'a'.repeat(150),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toMatch(/^defaultText: Treść wymaga 3 części, a limit integracji to 1\./);
+    expect(allPackages()).toEqual([]);
+  });
+
+  it('rozsyłka przy „skróć i wyślij”: treść GSM obok polskiej skrócona do limitu w kodowaniu rozsyłki', async () => {
+    integrations.update(biuro, { ...rowPatch(biuro), config: { ...defaultPowerAutomateConfig(), maxParts: 3, overflow: 'truncate' } }, NOW);
+    const res = await post(`/v1/integrations/int_${biuro}/packages`, {
+      recipients: [{ to: '48601000001' }, { to: '48601000002', text: 'Łódź' }], defaultText: 'a'.repeat(2000),
+    });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toMatchObject({ encoding: 'ucs2', multipart: true });
+    const pkg = packages.get(res.json().id)!;
+    expect(pkg.defaultText).toBe(fitToParts('a'.repeat(2000), 3, 'unicode').text);
+    expect(pkg.defaultText!.length).toBeLessThanOrEqual(201);
   });
 });
 

@@ -69,6 +69,22 @@ describe('submitPackage', () => {
     expect(deps.packages.list({ limit: 10, offset: 0 })).toEqual([]);
   });
 
+  it('treści w różnych kodowaniach: każdą liczy kodowanie całej rozsyłki, więc 160 znaków GSM obok polskiej treści przekracza 1 część', () => {
+    expect(() => submitPackage(deps, auth, { ...base, recipients: [{ to: '48601000001', text: 'a'.repeat(160) }, { to: '48601000002', text: 'Zażółć' }], maxParts: 1 }, NOW))
+      .toThrow(expect.objectContaining({ code: 'too_many_parts', message: expect.stringMatching(/^recipients\.0: /) }));
+    expect(deps.packages.list({ limit: 10, offset: 0 })).toEqual([]);
+  });
+
+  it('treści w różnych kodowaniach: znacznik wieloczęściowości z pomiaru w kodowaniu rozsyłki', () => {
+    const out = submitPackage(deps, auth, { ...base, recipients: [{ to: '48601000001', text: 'a'.repeat(100) }, { to: '48601000002', text: 'ą' }] }, NOW);
+    expect(out).toMatchObject({ encoding: 'ucs2', multipart: true });
+  });
+
+  it('podana treść wspólna wyznacza kodowanie także bez odbiorców, którzy jej używają, bo trafia do Multiinfo', () => {
+    const out = submitPackage(deps, auth, { ...base, recipients: [{ to: '48601000001', text: 'Zmiana grafiku' }], defaultText: 'Zażółć gęślą jaźń', maxParts: 1 }, NOW);
+    expect(out).toMatchObject({ encoding: 'ucs2', multipart: false });
+  });
+
   it('termin rozpoczęcia w przeszłości to start_at_in_past', () => {
     expect(() => submitPackage(deps, auth, { ...base, recipients: [{ to: '48601000001' }], defaultText: 'x', startAt: '2026-11-03T09:00:00Z' }, NOW))
       .toThrow(expect.objectContaining({ code: 'start_at_in_past' }));

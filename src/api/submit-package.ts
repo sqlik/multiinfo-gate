@@ -38,6 +38,17 @@ export interface PackageAccepted {
 const CLIENT_ID = /^[A-Za-z0-9._-]{1,20}$/;
 
 /**
+ * Kodowanie całej rozsyłki: package.aspx przyjmuje jedno kodowanie dla wszystkich treści.
+ * Polska treść jednego odbiorcy przełącza więc na UCS-2 każdą treść, także treść wspólną,
+ * którą bramka przekazuje do Multiinfo zawsze, gdy jest podana. Limit części trzeba liczyć
+ * w tym kodowaniu, inaczej treść GSM na granicy jednej części zajmie w UCS-2 trzy.
+ */
+export function packageEncoding(texts: ReadonlyArray<string | undefined>, requested: EncodingRequest): 'gsm' | 'unicode' {
+  if (requested !== 'auto') return requested === 'unicode' ? 'unicode' : 'gsm';
+  return texts.some((t) => t !== undefined && measureText(t, 'auto').encoding === 'ucs2') ? 'unicode' : 'gsm';
+}
+
+/**
  * Wspólna droga każdej rozsyłki - z `POST /v1/packages` i z integracji Power Automate: usługa,
  * nadpis, termin, numery, treści, zapis, kolejka. Rozsyłka wchodzi w całości albo wcale.
  */
@@ -64,8 +75,16 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
   const maxParts = Math.min(input.maxParts ?? auth.maxParts, auth.maxParts);
 
   // Jedno kodowanie i jeden znacznik wieloczęściowości na całą rozsyłkę: tak działa package.aspx.
-  let ucs2 = false;
-  let multipart = false;
+  const forced = packageEncoding([input.defaultText, ...input.recipients.map((r) => r.text)], input.encoding);
+  const partsOf = (text: string, where: string): number => {
+    try {
+      return segmentText(text, measureText(text, forced), maxParts).parts;
+    } catch (e) {
+      if (e instanceof TooManyPartsError) throw new ApiError(400, 'too_many_parts', `${where}: ${e.message}`);
+      throw e;
+    }
+  };
+  let multipart = input.defaultText !== undefined && partsOf(input.defaultText, 'defaultText') > 1;
   const recipients: RecipientInput[] = input.recipients.map((r, index) => {
     let dest: string;
     try {
@@ -82,20 +101,12 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
     if (text === undefined) {
       throw new ApiError(400, 'text_required', `recipients.${index}: brak treści i brak treści domyślnej.`);
     }
-    const measurement = measureText(text, input.encoding);
-    let segmentation;
-    try {
-      segmentation = segmentText(text, measurement, maxParts);
-    } catch (e) {
-      if (e instanceof TooManyPartsError) throw new ApiError(400, 'too_many_parts', `recipients.${index}: ${e.message}`);
-      throw e;
-    }
-    if (measurement.encoding === 'ucs2') ucs2 = true;
-    if (segmentation.parts > 1) multipart = true;
+    // Treść wspólną policzyło już sprawdzenie przed pętlą.
+    if (r.text !== undefined && partsOf(r.text, `recipients.${index}`) > 1) multipart = true;
     return { dest, text: r.text ?? null, clientId: r.clientId ?? null };
   });
 
-  const encoding = ucs2 && input.encoding !== 'gsm' ? 'ucs2' : 'gsm';
+  const encoding = forced === 'unicode' ? 'ucs2' : 'gsm';
   const id = shortId('pkg');
   deps.packages.insert({
     id, apiKeyId: auth.apiKeyId, accountId: auth.accountId, serviceId,
