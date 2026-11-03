@@ -232,6 +232,15 @@ describe('POST /v1/integrations/{id}/packages', () => {
     expect(log(ekipa)[0]).toMatchObject({ result: 'sent', reason: 'Wyślij rozsyłkę, 2 odbiorców', packageId: body.id, messageId: null });
   });
 
+  it('5000 odbiorców z własnymi treściami: ciało ponad 512 KB przyjęte', async () => {
+    const recipients = Array.from({ length: 5000 }, (_, i) => ({ to: `48601${String(i).padStart(6, '0')}`, text: `Wizyta technika jutro w godzinach 8:00-10:00, zlecenie ZL-${i}. ${'x'.repeat(70)}`, clientId: `ZL-${i}` }));
+    const payload = JSON.stringify({ recipients });
+    expect(payload.length).toBeGreaterThan(512 * 1024);
+    const res = await app.inject({ method: 'POST', url: `/v1/integrations/int_${ekipa}/packages`, headers: { ...auth(), 'content-type': 'application/json' }, payload });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().recipients).toBe(5000);
+  });
+
   it('pusta treść odbiorcy znaczy treść wspólną', async () => {
     const res = await post(`/v1/integrations/int_${ekipa}/packages`, { recipients: [{ to: '48601000001', text: '', clientId: null }], defaultText: 'x' });
     expect(res.statusCode).toBe(202);

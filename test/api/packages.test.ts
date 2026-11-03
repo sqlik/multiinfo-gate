@@ -302,3 +302,50 @@ describe('GET /v1/packages/:id', () => {
     expect(res.json().error.code).toBe('package_not_found');
   });
 });
+
+describe('rozmiar i postać ciała żądania', () => {
+  /** 5000 odbiorców z własną treścią na 130 znaków: około 900 KB, ponad ogólny limit 512 KB. */
+  const big = () => ({
+    recipients: Array.from({ length: 5000 }, (_, i) => ({
+      to: `48601${String(i).padStart(6, '0')}`, text: `Wizyta technika jutro w godzinach 8:00-10:00, zlecenie ZL-${i}. ${'x'.repeat(70)}`, clientId: `ZL-${i}`,
+    })),
+  });
+  const raw = (url: string, payload: string, headers: Record<string, string> = { authorization: `Bearer ${apiKey}` }) =>
+    app.inject({ method: 'POST', url, headers: { 'content-type': 'application/json', ...headers }, payload });
+
+  it('rozsyłka do 5000 odbiorców z własnymi treściami mieści się w limicie tras rozsyłki', async () => {
+    const body = JSON.stringify(big());
+    expect(body.length).toBeGreaterThan(512 * 1024);
+    const res = await raw('/v1/packages', body);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().recipients).toBe(5000);
+  });
+
+  it('ciało ponad limit: 413 body_too_large z limitem w komunikacie', async () => {
+    const res = await raw('/v1/messages', JSON.stringify({ to: '48601000001', text: 'x'.repeat(600 * 1024) }));
+    expect(res.statusCode).toBe(413);
+    expect(res.json().error).toEqual({ code: 'body_too_large', message: 'Ciało żądania przekracza dopuszczalny rozmiar 512 KB.' });
+    const pkg = await raw('/v1/packages', JSON.stringify({ defaultText: 'x'.repeat(5 * 1024 * 1024), recipients: [{ to: '48601000001' }] }));
+    expect(pkg.statusCode).toBe(413);
+    expect(pkg.json().error.message).toBe('Ciało żądania przekracza dopuszczalny rozmiar 4 MB.');
+  });
+
+  it('niepoprawny JSON i __proto__: 400 invalid_body', async () => {
+    for (const payload of ['{"to":', '{"__proto__":{"x":1},"to":"48601000001","text":"x"}']) {
+      const res = await raw('/v1/messages', payload);
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe('invalid_body');
+    }
+  });
+
+  it('ciało w innym formacie niż JSON: 415 unsupported_media_type', async () => {
+    const res = await raw('/v1/messages', '<to>48601000001</to>', { authorization: `Bearer ${apiKey}`, 'content-type': 'application/xml' });
+    expect(res.statusCode).toBe(415);
+    expect(res.json().error.code).toBe('unsupported_media_type');
+  });
+
+  it('duże ciało bez klucza: 401 przed odczytem ciała', async () => {
+    const res = await raw('/v1/packages', JSON.stringify(big()), {});
+    expect(res.statusCode).toBe(401);
+  });
+});

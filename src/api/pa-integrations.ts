@@ -7,7 +7,7 @@ import { authenticate } from './auth.ts';
 import { dropEmptyFields } from './empty-fields.ts';
 import { ApiError } from './errors.ts';
 import { messageBodySchema } from './messages.ts';
-import { packageBodySchema } from './packages.ts';
+import { keyBeforeBody, PACKAGE_BODY_LIMIT, packageBodySchema } from './packages.ts';
 import type { ApiDeps } from './server.ts';
 
 /** Identyfikator integracji w API: stały numer integracji, więc zmiana nazwy nie psuje przepływu. */
@@ -87,7 +87,9 @@ export function registerPaIntegrationRoutes(app: FastifyInstance, deps: ApiDeps)
   });
 
   for (const { path, action, schema, nested } of ACTIONS) {
-    app.post<{ Params: { id: string } }>(`/v1/integrations/:id/${path}`, async (request, reply) => {
+    // Rozsyłka do 5000 odbiorców z własnymi treściami potrzebuje limitu tras rozsyłki.
+    const options = path === 'packages' ? { bodyLimit: PACKAGE_BODY_LIMIT, onRequest: keyBeforeBody(deps) } : {};
+    app.post<{ Params: { id: string } }>(`/v1/integrations/:id/${path}`, options, async (request, reply) => {
       const auth = authenticate(request.headers.authorization, deps.apiKeys);
       if (!deps.rateLimiter.check(auth.apiKeyId, auth.ratePerMin)) {
         throw new ApiError(429, 'rate_limited', `Przekroczono limit ${auth.ratePerMin} żądań na minutę.`);

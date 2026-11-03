@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { PackageRow, RecipientRow } from '../store/packages.ts';
 import { authenticate } from './auth.ts';
@@ -9,6 +9,20 @@ import { submitPackage } from './submit-package.ts';
 
 /** Górna granica jednej rozsyłki - powyżej niej body żądania i wywołanie package.aspx rosną bez sensu. */
 const MAX_RECIPIENTS = 5000;
+
+/**
+ * Limit ciała tras rozsyłki: 5000 odbiorców z własnymi treściami zajmuje około 1 MB, więc
+ * ogólny limit API (512 KB) by ich nie zmieścił. Wyższy limit dotyczy tylko tych tras.
+ */
+export const PACKAGE_BODY_LIMIT = 4 * 1024 * 1024;
+
+/**
+ * Klucz sprawdzany przed odczytem ciała, które na trasach rozsyłki może mieć kilka megabajtów:
+ * żądanie bez ważnego klucza kończy się na 401, zanim bramka przeczyta i sparsuje ciało.
+ */
+export const keyBeforeBody = (deps: Pick<ApiDeps, 'apiKeys'>) => async (request: FastifyRequest): Promise<void> => {
+  authenticate(request.headers.authorization, deps.apiKeys);
+};
 
 const recipientSchema = z.object({
   to: z.string(),
@@ -56,7 +70,7 @@ function wantsCsv(query: Record<string, string>, accept: string | undefined): bo
 export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void {
   const now = deps.now ?? (() => new Date());
 
-  app.post('/v1/packages', async (request, reply) => {
+  app.post('/v1/packages', { bodyLimit: PACKAGE_BODY_LIMIT, onRequest: keyBeforeBody(deps) }, async (request, reply) => {
     const auth = authenticate(request.headers.authorization, deps.apiKeys);
 
     if (!deps.rateLimiter.check(auth.apiKeyId, auth.ratePerMin)) {
