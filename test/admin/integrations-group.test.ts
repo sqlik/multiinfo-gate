@@ -109,12 +109,13 @@ describe('formularz SMS do grupy', () => {
     expect(closedDetail).toContain('grupa zamknięta: 2 członków');
     expect(closedDetail).toContain('Grupa Zespół zapisana.');
   });
-  it('szczegół podaje identyfikator grupy dla API i konektora Power Automate', async () => {
+  it('szczegół grupy nie podaje identyfikatora dla API ani konektora: grupy działają tylko przy SMS-ie od uprawnionego numeru', async () => {
     await create();
     const row = groupRow();
     const detail = (await get(`/integracje/${row.id}`)).body;
-    expect(detail).toContain(`grp_${row.id}`);
-    expect(detail).toContain('Grupa jest dostępna także w API i w konektorze Power Automate');
+    expect(detail).not.toContain('grp_');
+    expect(detail).not.toContain('Power Automate');
+    expect(detail).not.toContain('Identyfikator w API');
   });
 
   it('edycja grupy z Liquidem otwiera się zaawansowana z wyjaśnieniem; odrzucanie nadmiaru zostaje w prostym', async () => {

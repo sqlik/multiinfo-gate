@@ -1,6 +1,5 @@
 import { GATE_VERSION } from '../version.ts';
 import { MISSING_API_KEY } from './auth.ts';
-import { groupMessageBodySchema } from './groups.ts';
 import { messageBodySchema } from './messages.ts';
 import { paGroupBodySchema, paMessageBodySchema } from './pa-integrations.ts';
 
@@ -203,9 +202,6 @@ function cialoZSchematu(shape: Record<string, { isOptional(): boolean }>, inne: 
 
 const cialoWysylki = (): JsonSchema => cialoZSchematu(messageBodySchema.shape);
 
-/** Ciało wysyłki do grupy: te same opisy pól, bez odbiorców, usługi i wątku. */
-const cialoWysylkiDoGrupy = (): JsonSchema => cialoZSchematu(groupMessageBodySchema.shape);
-
 /** Numer w „Wyślij SMS” integracji: jeden numer, bez listy. */
 const NUMER_INTEGRACJI: JsonSchema = {
   type: 'string',
@@ -347,66 +343,6 @@ const PARAMETR_ID_ROZSYLKI: OpenApiParameter = {
   description: 'Identyfikator rozsyłki zwrócony przy jej utworzeniu',
   schema: { type: 'string', pattern: '^pkg_[A-Za-z0-9]+$' },
   example: 'pkg_7c1e9a2b3d4f5a6b7c8d',
-};
-
-const PARAMETR_ID_GRUPY: OpenApiParameter = {
-  name: 'id',
-  in: 'path',
-  required: true,
-  description: 'Identyfikator grupy z listy grup albo ze szczegółu grupy w panelu bramki',
-  schema: { type: 'string', pattern: '^grp_[1-9][0-9]{0,9}$' },
-  example: 'grp_12',
-};
-
-/** Grupa na liście: bez numerów i nazwisk, które zostają w panelu bramki. */
-const GRUPA: JsonSchema = {
-  type: 'object',
-  required: ['id', 'name', 'recipients'],
-  properties: {
-    id: {
-      type: 'string',
-      description: 'Stały identyfikator grupy. Zmiana nazwy grupy w panelu go nie zmienia',
-      example: 'grp_12',
-    },
-    name: { type: 'string', description: 'Nazwa grupy nadana w panelu', example: 'Ekipa serwisowa' },
-    recipients: {
-      type: 'integer',
-      description: 'Liczba odbiorców: w trybie osobnych list lista odbiorców, w grupie zamkniętej wszyscy członkowie',
-      example: 8,
-    },
-  },
-};
-
-/** Odpowiedź wysyłki do grupy: jedna wiadomość na odbiorcę, w kolejności listy grupy. */
-const WYSYLKA_DO_GRUPY: JsonSchema = {
-  type: 'object',
-  required: ['group', 'recipients', 'messages'],
-  properties: {
-    group: {
-      type: 'object',
-      description: 'Grupa, do której poszła wysyłka',
-      required: ['id', 'name'],
-      properties: {
-        id: { type: 'string', description: 'Identyfikator grupy', example: 'grp_12' },
-        name: { type: 'string', description: 'Nazwa grupy', example: 'Ekipa serwisowa' },
-      },
-    },
-    recipients: { type: 'integer', description: 'Liczba przyjętych wiadomości, po jednej na odbiorcę', example: 3 },
-    messages: {
-      type: 'array',
-      description: 'Przyjęte wiadomości. Stan każdej z nich zwraca odczyt wiadomości',
-      items: {
-        type: 'object',
-        required: ['id', 'to', 'status', 'parts'],
-        properties: {
-          id: { type: 'string', description: 'Identyfikator wiadomości', example: 'msg_3f9c2a7b1e4d8c6a5b2f' },
-          to: { type: 'string', description: 'Numer odbiorcy', example: '48601000001' },
-          status: { type: 'string', description: 'Stan wiadomości; zaraz po przyjęciu queued', example: 'queued' },
-          parts: { type: 'integer', description: 'Liczba części wiadomości', example: 1 },
-        },
-      },
-    },
-  },
 };
 
 const PARAMETR_ID_INTEGRACJI: OpenApiParameter = {
@@ -1244,99 +1180,6 @@ export function buildOpenApiDocument(): OpenApiDocument {
           },
         },
       },
-      '/v1/groups': {
-        get: {
-          operationId: 'listaGrup',
-          summary: 'Lista grup',
-          description: 'Zwraca czynne grupy SMS przypisane do klucza, w kolejności nazw. Grupy zakłada i prowadzi'
-            + ' administrator w panelu bramki. Lista podaje tylko nazwę i liczbę odbiorców, bez numerów i nazwisk.'
-            + ' Grupa wyłączona w panelu nie występuje na liście.',
-          security: KLUCZ,
-          responses: {
-            '200': {
-              description: 'Grupy klucza',
-              content: {
-                'application/json': {
-                  schema: {
-                    type: 'object',
-                    required: ['data'],
-                    properties: { data: { type: 'array', items: { $ref: '#/components/schemas/Grupa' }, description: 'Grupy klucza' } },
-                  },
-                  example: { data: [{ id: 'grp_12', name: 'Ekipa serwisowa', recipients: 8 }] },
-                },
-              },
-            },
-            '401': BLAD_KLUCZA,
-          },
-        },
-      },
-      '/v1/groups/{id}/messages': {
-        post: {
-          operationId: 'wyslijDoGrupy',
-          summary: 'Wysyłka do grupy',
-          description: 'Wysyła treść do każdego odbiorcy grupy osobną wiadomością, usługą grupy. Nadawcą jest'
-            + ' nadpis z żądania, a gdy go nie ma, nadpis grupy albo nadpis domyślny. Wysyłka jest przyjmowana'
-            + ' w całości albo wcale. Ustawienia grupy dotyczące SMS-a przychodzącego (prefiks, uprawnieni'
-            + ' nadawcy, szablon treści, potwierdzenie, ochrona przed burzą) nie mają tu zastosowania.',
-          security: KLUCZ,
-          parameters: [PARAMETR_ID_GRUPY, PARAMETR_IDEMPOTENCJI],
-          requestBody: {
-            required: true,
-            content: {
-              'application/json': {
-                schema: cialoWysylkiDoGrupy(),
-                example: { text: 'Awaria w hali B, zgłoszenie 4411. Proszę o kontakt z dyspozytorem.' },
-              },
-            },
-          },
-          responses: {
-            '202': {
-              description: 'Wysyłka przyjęta do kolejki',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/WysylkaDoGrupySms' },
-                  example: {
-                    group: { id: 'grp_12', name: 'Ekipa serwisowa' },
-                    recipients: 2,
-                    messages: [
-                      { id: 'msg_3f9c2a7b1e4d8c6a5b2f', to: '48601000001', status: 'queued', parts: 1 },
-                      { id: 'msg_8a1b2c3d4e5f6a7b8c9d', to: '48601000002', status: 'queued', parts: 1 },
-                    ],
-                  },
-                },
-              },
-            },
-            '400': blad(
-              'Błąd w ciele żądania: invalid_body, invalid_orig, too_many_parts, service_required, valid_to_in_past,'
-                + ' valid_to_too_far',
-              'too_many_parts',
-              'Wiadomość wymaga 3 części, a dozwolone jest 2. Usuń co najmniej 12 miejsc.',
-            ),
-            '401': BLAD_KLUCZA,
-            '403': blad(
-              'Nadpis albo usługa grupy spoza uprawnień klucza: orig_not_allowed, service_not_allowed',
-              'orig_not_allowed',
-              'Ten klucz może użyć nadpisu: Firma Info.',
-            ),
-            '404': blad(
-              'Brak grupy albo grupa innego klucza; bramka nie rozróżnia tych dwóch sytuacji',
-              'group_not_found',
-              'Nie ma grupy o tym identyfikatorze.',
-            ),
-            '409': blad(
-              'Grupa wyłączona w panelu, grupa bez odbiorców albo ten sam Idempotency-Key z inną treścią:'
-                + ' group_disabled, group_empty, idempotency_conflict',
-              'group_disabled',
-              'Grupa Ekipa serwisowa jest wyłączona w panelu bramki.',
-            ),
-            '429': blad(
-              'Przekroczony limit żądań klucza na minutę',
-              'rate_limited',
-              'Przekroczono limit 60 żądań na minutę.',
-            ),
-          },
-        },
-      },
       '/v1/integrations': {
         get: {
           operationId: 'listaIntegracjiPowerAutomate',
@@ -1567,8 +1410,6 @@ export function buildOpenApiDocument(): OpenApiDocument {
         WiadomoscPrzychodzaca: WIADOMOSC_PRZYCHODZACA,
         Rozsylka: ROZSYLKA,
         WierszRaportu: WIERSZ_RAPORTU,
-        Grupa: GRUPA,
-        WysylkaDoGrupySms: WYSYLKA_DO_GRUPY,
         IntegracjaPowerAutomate: INTEGRACJA_POWER_AUTOMATE,
         WysylkaDoGrupy: WYSYLKA_DO_GRUPY_INTEGRACJI,
         Blad: {

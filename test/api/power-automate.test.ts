@@ -1,7 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { groupMessageBodySchema } from '../../src/api/groups.ts';
-import { messageBodySchema } from '../../src/api/messages.ts';
-import { packageBodySchema } from '../../src/api/packages.ts';
+import { paGroupBodySchema, paMessageBodySchema, paPackageBodySchema } from '../../src/api/pa-integrations.ts';
 import {
   CONNECTOR_OMITTED, CONNECTOR_OPERATIONS, CONNECTOR_TITLE, buildPowerAutomateConnector, connectorAddress,
   type SwaggerOperation, type SwaggerParameter, type SwaggerSchema,
@@ -84,10 +82,16 @@ describe('buildPowerAutomateConnector', () => {
 
   it('ma dokładnie stałe nazwy operacji, bo zapisane przepływy się do nich odwołują', () => {
     expect([...operations.keys()].sort()).toEqual([...CONNECTOR_OPERATIONS].sort());
+    expect(CONNECTOR_OPERATIONS).toEqual(['WyslijSms', 'WyslijRozsylke', 'WyslijSmsDoGrupy', 'StanWiadomosci', 'StanRozsylki', 'RaportRozsylki', 'ListaIntegracji']);
   });
 
   it('każda operacja odpowiada trasie prawdziwego serwera', () => {
     for (const o of operations.values()) expect(routes, o.operationId).toContain(`${o.method} ${o.path}`);
+  });
+
+  it('nie ma grup SMS ani uprawnień klucza: grupy z panelu nie są dostępne z Power Automate', () => {
+    for (const o of operations.values()) expect(o.path, o.operationId).not.toMatch(/^\/v1\/(groups|key)/);
+    expect(routes.some((r) => r.includes('/v1/groups'))).toBe(false);
   });
 
   it('nie ma śladu OpenAPI 3', () => {
@@ -141,18 +145,33 @@ describe('buildPowerAutomateConnector', () => {
         else expect(props, `${id}: ${name}`).toContain(name);
       }
     };
-    covered('WyslijSms', messageBodySchema.shape, CONNECTOR_OMITTED.WyslijSms!);
-    covered('WyslijRozsylke', packageBodySchema.shape, CONNECTOR_OMITTED.WyslijRozsylke ?? []);
-    covered('WyslijSmsDoGrupy', groupMessageBodySchema.shape, CONNECTOR_OMITTED.WyslijSmsDoGrupy!);
+    covered('WyslijSms', paMessageBodySchema.shape, CONNECTOR_OMITTED.WyslijSms!);
+    covered('WyslijRozsylke', paPackageBodySchema.shape, CONNECTOR_OMITTED.WyslijRozsylke!);
+    covered('WyslijSmsDoGrupy', paGroupBodySchema.shape, CONNECTOR_OMITTED.WyslijSmsDoGrupy!);
+    expect(CONNECTOR_OMITTED).toEqual({ WyslijSms: [], WyslijRozsylke: [], WyslijSmsDoGrupy: [] });
   });
 
   it('w akcji „Wyślij SMS” numer odbiorcy to jeden numer, a numer i treść są wymagane i na wierzchu', () => {
     const body = bodyOf('WyslijSms');
     expect(body.properties!.to).toMatchObject({ type: 'string', 'x-ms-summary': 'Numer odbiorcy', 'x-ms-visibility': 'important' });
+    expect(body.properties!.to!.description).toMatch(/[Pp]usty numer/);
     expect(body.properties!.text).toMatchObject({ 'x-ms-summary': 'Treść', 'x-ms-visibility': 'important' });
     expect(body.required).toEqual(['to', 'text']);
-    expect(body.properties!.serviceId).toMatchObject({ type: 'string', 'x-ms-visibility': 'advanced' });
-    expect(body.properties!.orig!['x-ms-visibility']).toBeUndefined();
+  });
+
+  it('akcje wysyłające nie mają pól nadawcy ani usługi, a mają pole „Zlecający” na wierzchu', () => {
+    for (const id of ['WyslijSms', 'WyslijRozsylke', 'WyslijSmsDoGrupy']) {
+      const props = bodyOf(id).properties!;
+      expect(props.orig, id).toBeUndefined();
+      expect(props.serviceId, id).toBeUndefined();
+      expect(props.requestedBy, id).toMatchObject({ type: 'string', 'x-ms-summary': 'Zlecający', 'x-ms-visibility': 'important' });
+      expect(props.requestedBy!.description, id).toMatch(/Nie trafia do treści SMS-a/);
+    }
+  });
+
+  it('„Wyślij SMS do grupy” nie ma numeru odbiorcy: odbiorców wyznacza lista integracji', () => {
+    expect(bodyOf('WyslijSmsDoGrupy').properties!.to).toBeUndefined();
+    expect(op('WyslijSmsDoGrupy').parameters!.some((p) => p.name === 'to')).toBe(false);
   });
 
   it('kodowanie ma polskie nazwy wartości', () => {
@@ -163,22 +182,21 @@ describe('buildPowerAutomateConnector', () => {
     ]);
   });
 
-  it('nadawca, usługa i grupa to listy wyboru z operacji wewnętrznych', () => {
+  it('pierwszym polem każdej akcji wysyłającej jest „Integracja” z listy integracji klucza', () => {
     for (const id of ['WyslijSms', 'WyslijRozsylke', 'WyslijSmsDoGrupy']) {
-      expect(bodyOf(id).properties!.orig!['x-ms-dynamic-values'], id).toEqual({
-        operationId: 'UprawnieniaKlucza', 'value-collection': 'origs', 'value-path': 'orig', 'value-title': 'orig',
+      const first = op(id).parameters![0]!;
+      expect(first, id).toMatchObject({
+        name: 'id', in: 'path', required: true, type: 'string', 'x-ms-summary': 'Integracja', 'x-ms-visibility': 'important',
       });
-    }
-    for (const id of ['WyslijSms', 'WyslijRozsylke']) {
-      expect(bodyOf(id).properties!.serviceId!['x-ms-dynamic-values'], id).toEqual({
-        operationId: 'UprawnieniaKlucza', 'value-collection': 'services', 'value-path': 'id', 'value-title': 'id',
+      expect(first['x-ms-dynamic-values'], id).toEqual({
+        operationId: 'ListaIntegracji', 'value-collection': 'data', 'value-path': 'id', 'value-title': 'name',
       });
+      expect(first.description, id).toContain('Integracja Power Automate');
+      expect(op(id).path, id).toMatch(/^\/v1\/integrations\/\{id\}\//);
     }
-    const group = op('WyslijSmsDoGrupy').parameters!.find((p) => p.in === 'path')!;
-    expect(group).toMatchObject({ name: 'id', required: true, 'x-ms-summary': 'Grupa', 'x-ms-visibility': 'important' });
-    expect(group['x-ms-dynamic-values']).toEqual({ operationId: 'ListaGrup', 'value-collection': 'data', 'value-path': 'id', 'value-title': 'name' });
-    expect(op('UprawnieniaKlucza')['x-ms-visibility']).toBe('internal');
-    expect(op('ListaGrup')['x-ms-visibility']).toBe('internal');
+    expect(op('WyslijSmsDoGrupy').parameters![0]!.description).toContain('każdego numeru z listy odbiorców');
+    expect(op('WyslijSms').parameters![0]!.description).not.toContain('każdego numeru z listy odbiorców');
+    expect(op('ListaIntegracji')).toMatchObject({ method: 'get', path: '/v1/integrations', 'x-ms-visibility': 'internal' });
     walk(doc, '$', (obj, path) => {
       const dyn = obj['x-ms-dynamic-values'] as { operationId: string } | undefined;
       if (dyn) expect(operations.has(dyn.operationId), path).toBe(true);

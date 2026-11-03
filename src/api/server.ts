@@ -20,7 +20,6 @@ import type { ClientPool } from '../worker/clients.ts';
 import { AuthError } from './auth.ts';
 import { registerCancelRoute } from './cancel.ts';
 import { ApiError } from './errors.ts';
-import { registerGroupRoutes } from './groups.ts';
 import { registerHealthRoute, type InboundHealth } from './health.ts';
 import { registerHookRoutes } from './hooks.ts';
 import { registerKeyInfoRoute } from './key-info.ts';
@@ -93,7 +92,6 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
   registerKeyInfoRoute(app, deps);
   registerCancelRoute(app, deps);
   registerPackageRoutes(app, deps);
-  registerGroupRoutes(app, deps);
   registerPaIntegrationRoutes(app, deps);
   registerInboundRoutes(app, deps);
   registerHookRoutes(app, deps);

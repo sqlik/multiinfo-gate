@@ -1,4 +1,3 @@
-import { groupApiId } from '../../api/groups.ts';
 import { OUTBOUND_EVENTS, defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type MailInConfig, type OutboundConfig, type GroupMember, type SmsGroupConfig } from '../../integrations/config.ts';
 import { RULE_OPS, ruleOpLabel, type RuleOp } from '../../integrations/conditions.ts';
 import { safeUrl } from '../../integrations/enrich.ts';
@@ -903,7 +902,6 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     const text = cfg.text.mode === 'body' ? 'sama treść' : cfg.text.mode === 'sender_body' ? 'nadawca i treść' : 'szablon Liquid';
     rows.push(kvRow('Treść', `${esc(text)} · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
     rows.push(kvRow('Potwierdzenie do nadawcy', cfg.confirm.enabled ? 'tak' : 'nie'));
-    rows.push(kvRow('Identyfikator w API', `<span class="m">${esc(groupApiId(row.id))}</span><br><span class="dim">Grupa jest dostępna także w API i w konektorze Power Automate pod tym identyfikatorem</span>`));
   } else {
     const cfg = c as OutboundConfig;
     rows.push(kvRow('Adres docelowy', `${esc(cfg.method)} ${esc(cfg.url)}`, true));

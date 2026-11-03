@@ -1019,9 +1019,7 @@ cofa rozesłania. W dzienniku zostaje wpis „błąd” z powodem.
 
 Na liście integracji grupa ma kierunek „do grupy”. Przycisk **Do grupy** nad listą ogranicza ją
 do grup. Szczegóły opisują konfigurację słowami: tryb z liczbą nadawców i odbiorców albo
-członków, prefiks, listy numerów z nazwami, wariant treści i stan potwierdzenia. Wiersz
-„Identyfikator w API” podaje identyfikator grupy dla aplikacji i konektora Power Automate
-(rozdział 5a.8).
+członków, prefiks, listy numerów z nazwami, wariant treści i stan potwierdzenia.
 
 ![Szczegóły grupy: konfiguracja słowami i dziennik z wpisami „wysłano”, „pominięto” z powodami](obrazki/grupa-szczegol.png)
 
@@ -1033,7 +1031,7 @@ Powody właściwe dla grupy:
 | pominięto | brak treści tekstowej, nadawca spoza listy, bez prefiksu, pusta treść, warunek niespełniony, brak odbiorców |
 | limit | nadmiar ponad limit burzy, na przykład `ponad 10 w 10 min` |
 | błąd | treść ponad limit części przy „nie wysyłaj”, błąd szablonu, klucz albo konto niedostępne, nieudane potwierdzenie |
-| wysłano | liczba odbiorców, na przykład `6 odbiorców`, a przy wysyłce z aplikacji `wysyłka przez API, 6 odbiorców`; z odnośnikiem do pierwszej wiadomości |
+| wysłano | liczba odbiorców, na przykład `6 odbiorców`, z odnośnikiem do pierwszej wiadomości |
 
 „Brak treści tekstowej” dotyczy SMS-a binarnego. „Brak odbiorców” pojawia się w grupie
 zamkniętej, gdy jedyny członek pisze do siebie. Przy włączonym przechowywaniu ładunków wpis
@@ -1059,22 +1057,6 @@ przetworzyła, wynikiem i powodem. Szczegóły wiadomości wysłanej do odbiorcy
   wyłącznie do numerów z listy
 - Treść odebranego SMS-a wchodzi do szablonu Liquid jak ładunek obcej aplikacji: ten sam silnik
   bez dostępu do systemu plików i te same limity
-
-### 5a.8. Wysyłka do grupy z aplikacji i z Power Automate
-
-Od wersji 1.9 treść do grupy wysyła także aplikacja, wywołaniem API klucza, do którego grupa jest
-przypisana. Tak samo wysyła ją przepływ Power Automate akcją „Wyślij SMS do grupy” konektora
-bramki. Przykład: zgłoszenie awarii z formularza trafia do całej ekipy serwisowej. Listę numerów
-nadal prowadzi się w panelu. Aplikacja zna tylko identyfikator grupy, na przykład `grp_12`.
-Panel podaje go w szczegółach grupy, w wierszu „Identyfikator w API”.
-
-Wysyłka z aplikacji trafia do wszystkich odbiorców listy, a w grupie zamkniętej do wszystkich
-członków. Idzie usługą grupy i z nadpisem grupy, chyba że aplikacja poda inny dozwolony nadpis.
-Prefiks, lista uprawnionych nadawców, szablon treści, potwierdzenie i ochrona przed burzą
-dotyczą tylko SMS-a przychodzącego. Przy wysyłce z aplikacji nie mają zastosowania. Grupa
-wyłączona w panelu nie przyjmuje wysyłki z aplikacji ani SMS-ów od nadawców.
-
-Opis wywołań jest w rozdziale [5b dokumentacji API](api.md#5b-sms-do-grupy).
 
 ## 6. Szablony Liquid
 

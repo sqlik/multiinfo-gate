@@ -36,14 +36,15 @@ export const requestedBySchema = z.string()
  * pól nie ma. Zod pomija nieznane pola: `serviceId` albo `orig` w żądaniu nic nie zmienia.
  * Pusty numer kończy wywołanie błędem i nigdy nie oznacza wysyłki do listy odbiorców integracji.
  */
-export const paMessageBodySchema = messageBodySchema
-  .omit({ to: true, serviceId: true, orig: true, inReplyTo: true, maxParts: true })
-  .extend({
+export const paMessageBodySchema = z
+  .object({
+    // Numer na początku: Power Automate pokazuje pola w kolejności schematu.
     to: z.string({ required_error: 'Numer odbiorcy jest pusty.', invalid_type_error: 'Numer odbiorcy musi być tekstem.' })
       .trim()
       .min(1, 'Numer odbiorcy jest pusty.'),
-    requestedBy: requestedBySchema,
-  });
+  })
+  .merge(messageBodySchema.omit({ to: true, serviceId: true, orig: true, inReplyTo: true, maxParts: true }))
+  .extend({ requestedBy: requestedBySchema });
 
 /** „Wyślij rozsyłkę”: pola jak w `POST /v1/packages` bez usługi i nadpisu. */
 export const paPackageBodySchema = packageBodySchema.omit({ serviceId: true, orig: true }).extend({ requestedBy: requestedBySchema });
