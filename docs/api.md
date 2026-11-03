@@ -19,9 +19,10 @@ tego API używają integracji. Adres `POST /hooks/<identyfikator>` przyjmuje ła
 a integracje wychodzące przekazują odebrane SMS-y i statusy do aplikacji w jej formacie. Opis
 jest w rozdziale [Integracje z aplikacjami](integracje.md).
 
-Przepływy Microsoft Power Automate wysyłają SMS-y konektorem bramki. Konektor to plik pobierany
-z panelu bramki. Korzysta z wywołań integracji Power Automate opisanych w rozdziale 5b. Import
-konektora i budowę przepływów opisuje artykuł [Power Automate](power-automate.md).
+Od wersji 1.9 przepływy Microsoft Power Automate wysyłają SMS-y za pomocą konektora bramki.
+Konektor jest plikiem pobieranym z panelu bramki i korzysta z wywołań integracji Power Automate
+opisanych w rozdziale 5b. Import konektora i budowę przepływów przedstawia artykuł
+[Power Automate](power-automate.md).
 
 Dokument opisuje każde wywołanie w tym samym układzie: przeznaczenie, pełne żądanie w siedmiu
 wariantach do wyboru zakładką (curl, surowy HTTP, PHP, Python, Node.js, PowerShell, C#),
@@ -199,8 +200,8 @@ klucza.
 | `ratePerMin` | limit żądań klucza na minutę |
 
 Lista `origs` obejmuje nadpis domyślny klucza. Gdy klucz go nie ma, obejmuje nadpis domyślny
-konta. Pusta lista oznacza, że wysyłka idzie bez nadpisu. Nadawcą jest wtedy numer przydzielony
-kontu w Multiinfo. Odpowiedź nie zawiera danych konta Multiinfo ani sekretów.
+konta. Pusta lista oznacza, że wiadomość zostanie wysłana bez nadpisu. Nadawcą jest wtedy numer
+przydzielony kontu w Multiinfo. Odpowiedź nie zawiera danych konta Multiinfo ani sekretów.
 
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
@@ -1645,29 +1646,30 @@ odbiorcę: nadawcę tej wiadomości (pole `from` z `message.received`).
 
 ## 5b. Integracje Power Automate
 
-Wywołania z tego rozdziału wysyłają SMS-y przez integrację Power Automate. Integrację zakłada
-administrator bramki w panelu: Integracje, Dodaj integrację, „Aplikacja wysyła SMS”, kafelek
-„Power Automate”. Opisuje to rozdział [Integracje z aplikacjami](integracje.md). Z tych wywołań
-korzysta konektor Power Automate, opisany w artykule [Power Automate](power-automate.md).
-Aplikacja może ich używać także bez konektora.
+Wywołania z tego rozdziału wysyłają SMS-y za pośrednictwem integracji Power Automate.
+Integrację tworzy administrator bramki w panelu: Integracje, Dodaj integrację, „Aplikacja wysyła
+SMS”, kafelek „Power Automate”. Opis integracji zawiera rozdział
+[Integracje z aplikacjami](integracje.md). Z tych wywołań korzysta konektor Power Automate,
+przedstawiony w artykule [Power Automate](power-automate.md). Aplikacja może z nich korzystać
+również bez konektora.
 
-Integracja wyznacza usługę, nadpis nadawcy i limit części treści. Ma własną ochronę przed burzą
-i własny dziennik. Może mieć listę odbiorców grupy, do 500 numerów. Do tej listy wysyła wyłącznie
-wywołanie z rozdziału 5b.4.
+Integracja określa usługę, nadpis nadawcy i limit części treści. Prowadzi własny dziennik
+i stosuje własną ochronę przed burzą. Może też zawierać listę odbiorców grupy liczącą do 500
+numerów. Na tę listę wysyła wyłącznie wywołanie z rozdziału 5b.4.
 
 Każde wywołanie wysyłające przechodzi przez mechanizmy ochronne integracji. Bramka sprawdza limit
-części i ochronę przed burzą. Zapisuje wpis w dzienniku integracji. Przy błędzie wysyła
-powiadomienie administratorowi. Wyłączona integracja nie wysyła niczego.
+części i ochronę przed burzą, a następnie zapisuje wpis w dzienniku integracji. W razie błędu
+powiadamia administratora. Wyłączona integracja nie wysyła żadnych wiadomości.
 
 Aplikacja widzi wyłącznie integracje swojego klucza. Identyfikator integracji (`int_...`) jest
-stały. Zmiana nazwy integracji w panelu go nie zmienia.
+stały, a zmiana nazwy integracji w panelu nie wpływa na niego.
 
-Każda z trzech wysyłek przyjmuje opcjonalne pole `requestedBy` („Zlecający”). Pole podaje, kto
-zlecił wysyłkę, na przykład adres e-mail autora wpisu na liście. Bramka zapisuje je w dzienniku
-integracji oraz przy wiadomości i rozsyłce. Pole nie trafia do treści SMS-a. Ma najwyżej 100
-znaków i nie może zawierać znaków sterujących, na przykład końca wiersza. Kolumna „Nadawca”
-w dzienniku integracji pokazuje `API · <zlecający>`. Bez zlecającego pokazuje `API · <adres IP
-wywołania>`.
+Każda z trzech wysyłek przyjmuje opcjonalne pole `requestedBy` („Zlecający”), które wskazuje
+osobę zlecającą wysyłkę, na przykład przez adres e-mail autora wpisu na liście. Bramka zapisuje
+tę informację w dzienniku integracji oraz przy wiadomości i rozsyłce, ale nie dołącza jej do
+treści SMS-a. Pole liczy najwyżej 100 znaków i nie może zawierać znaków sterujących, na przykład
+końca wiersza. Kolumna „Nadawca” w dzienniku integracji pokazuje `API · <zlecający>`, a przy
+braku zlecającego `API · <adres IP wywołania>`.
 
 ### 5b.1. Lista integracji: `GET /v1/integrations`
 
@@ -1773,8 +1775,8 @@ ani nazwisk. Te dane zostają w panelu bramki.
 
 ### 5b.2. SMS do jednego numeru: `POST /v1/integrations/{id}/messages`
 
-**Przeznaczenie.** Wysłanie jednego SMS-a na jeden numer przez integrację. Przykład: technik
-serwisu dostaje potwierdzenie zlecenia zapisanego na liście.
+**Przeznaczenie.** Wysłanie jednego SMS-a na jeden numer za pośrednictwem integracji. Na
+przykład klient otrzymuje potwierdzenie zlecenia serwisowego zapisanego na liście.
 
 === "curl"
 
@@ -1880,8 +1882,8 @@ Pola body żądania:
 Pusty numer nigdy nie oznacza wysyłki do listy odbiorców integracji. Do listy wysyła wyłącznie
 wywołanie z rozdziału 5b.4.
 
-Usługę, nadpis nadawcy i limit części wyznacza integracja. Pola `serviceId`, `orig`, `maxParts`
-i `inReplyTo` nie mają w tym wywołaniu znaczenia. Bramka je pomija. Nagłówek `Idempotency-Key`
+Usługę, nadpis nadawcy i limit części określa integracja. Pola `serviceId`, `orig`, `maxParts`
+i `inReplyTo` nie są w tym wywołaniu uwzględniane i bramka je pomija. Nagłówek `Idempotency-Key`
 działa jak w rozdziale 3.1.
 
 **Odpowiedź `202 Accepted`** ma ten sam kształt co odpowiedź z rozdziału 3 dla jednego numeru:
@@ -1898,12 +1900,13 @@ działa jak w rozdziale 3.1.
 }
 ```
 
-Dziennik integracji dostaje wpis „wysłano” z powodem „Wyślij SMS”.
+Dziennik integracji otrzymuje wpis „wysłano” z powodem „Wyślij SMS”.
 
 ### 5b.3. Rozsyłka: `POST /v1/integrations/{id}/packages`
 
-**Przeznaczenie.** Rozsyłka do listy do 5000 odbiorców przez integrację, jednym wywołaniem.
-Przykład: kierowcy floty dostają przypomnienie o przeglądzie, a część z nich osobną treść.
+**Przeznaczenie.** Rozsyłka do najwyżej 5000 odbiorców za pośrednictwem integracji, w jednym
+wywołaniu. Na przykład kierowcy floty otrzymują przypomnienie o przeglądzie, a część z nich
+własną treść.
 
 === "curl"
 
@@ -2029,15 +2032,15 @@ długa treść odrzuca całą rozsyłkę. Komunikat błędu zaczyna się wtedy o
 }
 ```
 
-Stan rozsyłki i raport zwracają wywołania z rozdziałów 5.2-5.4. Dziennik integracji dostaje
-wpis „wysłano” z powodem „Wyślij rozsyłkę, 2 odbiorców”. Wpis prowadzi do rozsyłki.
+Stan rozsyłki i raport zwracają wywołania z rozdziałów 5.2-5.4. Dziennik integracji otrzymuje
+wpis „wysłano” z powodem „Wyślij rozsyłkę, 2 odbiorców”, który prowadzi do rozsyłki.
 
 ### 5b.4. SMS do odbiorców grupy: `POST /v1/integrations/{id}/group`
 
 **Przeznaczenie.** Wysłanie tej samej treści do każdego numeru z listy odbiorców grupy
-integracji. Listę prowadzi administrator w panelu bramki, w szczegółach integracji. Zmiana składu
-ekipy nie wymaga zmian w aplikacji ani w przepływie. Przykład: zgłoszenie awarii trafia do całej
-ekipy serwisowej.
+integracji. Listę prowadzi administrator w panelu bramki, w szczegółach integracji, dlatego
+zmiana składu ekipy nie wymaga zmian w aplikacji ani w przepływie. Na przykład zgłoszenie awarii
+trafia jednocześnie do całej ekipy serwisowej.
 
 === "curl"
 
@@ -2161,27 +2164,28 @@ w całości albo wcale. Pusta lista kończy wywołanie błędem `group_empty`. N
 ```
 
 Stan każdej wiadomości zwraca odczyt `GET /v1/messages/{id}` (rozdział 4.1). Dziennik integracji
-dostaje wpis „wysłano” z powodem „Wyślij SMS do grupy, 2 odbiorców”.
+otrzymuje wpis „wysłano” z powodem „Wyślij SMS do grupy, 2 odbiorców”.
 
 ### 5b.5. Limit części i ochrona przed burzą
 
-Limit części ustawia administrator w integracji, w sekcji „Treść”. Ustawienie nadmiaru decyduje,
-co się dzieje z dłuższą treścią:
+Limit części określa administrator w sekcji „Treść” integracji. Ustawienie nadmiaru rozstrzyga,
+w jaki sposób bramka postępuje z dłuższą treścią:
 
-- „skróć i wyślij”: bramka skraca treść do limitu i wysyła ją. Skrócona treść bez polskich
-  znaków kończy się trzema kropkami, a z polskimi znakami znakiem „…”. Powód wpisu w dzienniku
-  kończy się dopiskiem „skrócono do <limit> części”.
+- „skróć i wyślij”: bramka skraca treść do limitu i wysyła wiadomość. Skrócona treść bez polskich
+  znaków kończy się trzema kropkami, a treść z polskimi znakami znakiem „…”. Powód wpisu
+  w dzienniku zawiera dopisek „skrócono do <limit> części”.
 - „nie wysyłaj, zapisz błąd i powiadom”: bramka odrzuca wywołanie kodem `400 too_many_parts`.
-  Komunikat podaje liczbę części treści i limit integracji. Dziennik dostaje wpis „błąd”,
+  Komunikat podaje liczbę części treści i limit integracji. Dziennik otrzymuje wpis „błąd”,
   a administrator powiadomienie.
 
-Ochrona przed burzą liczy wywołania wysyłające integracji w oknie czasu. Domyślnie to 30 wywołań
-na 10 minut. Wywołanie ponad limit dostaje `429 integration_throttled` i nie wysyła niczego.
-Dziennik dostaje wpis „limit”. Administrator dostaje powiadomienie raz na okno. Limit zmienia
-administrator w trybie zaawansowanym formularza integracji. Do wielu odbiorców lepiej wysyłać
-jednym wywołaniem z rozdziału 5b.3 albo 5b.4 niż pętlą wywołań z rozdziału 5b.2.
+Ochrona przed burzą zlicza wywołania wysyłające integracji w oknie czasowym. Domyślny limit
+wynosi 30 wywołań w ciągu 10 minut. Wywołanie ponad limit otrzymuje odpowiedź
+`429 integration_throttled`, a bramka nie wysyła żadnej wiadomości. Dziennik otrzymuje wpis
+„limit”, a administrator jedno powiadomienie na okno. Limit zmienia administrator w trybie
+zaawansowanym formularza integracji. Wysyłkę do wielu odbiorców zaleca się realizować jednym
+wywołaniem z rozdziału 5b.3 albo 5b.4 zamiast pętli wywołań z rozdziału 5b.2.
 
-Kod `integration_throttled` różni się od `rate_limited`. Kod `rate_limited` oznacza limit żądań
+Kod `integration_throttled` należy odróżnić od kodu `rate_limited`, który oznacza limit żądań
 klucza na minutę, wspólny dla całego API.
 
 ### 5b.6. Błędy wywołań integracji
@@ -2189,7 +2193,7 @@ klucza na minutę, wspólny dla całego API.
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
 | 400 | `invalid_body` | pusty numer, brak treści albo pole niezgodne ze schematem; `message` wymienia pola | poprawić wskazane pola |
-| 400 | `invalid_phone` | numer nie daje się znormalizować; `message` podaje powód | podać numer w postaci `48601000001` |
+| 400 | `invalid_phone` | numeru nie można znormalizować; `message` podaje powód | podać numer w postaci `48601000001` |
 | 400 | `too_many_parts` | treść dłuższa niż limit części integracji przy ustawieniu „nie wysyłaj”; `message` podaje liczbę części i limit | skrócić treść albo poprosić administratora o zmianę limitu |
 | 400 | `text_required`, `invalid_client_id`, `start_at_in_past` | rozsyłka jak w rozdziale 5.1 | jak w rozdziale 9 |
 | 400 | `valid_to_in_past`, `valid_to_too_far` | jak w rozdziale 3.2 | jak w rozdziale 3.2 |
@@ -2568,9 +2572,11 @@ Plik powstaje z tych samych schematów, na których bramka sprawdza żądania. O
 odbiegać od zachowania API. Sprawdza to test: po zmianie pola w kodzie plik należy
 przeliczyć poleceniem `npm run openapi`, w przeciwnym razie testy kończą się niepowodzeniem.
 
-Power Automate nie importuje tego pliku. Łącznik niestandardowy przyjmuje wyłącznie starszy
-format OpenAPI 2.0. Bramka ma do tego osobny plik konektora, pobierany z panelu w integracji
-Power Automate. Opisuje go artykuł [Power Automate](power-automate.md).
+Power Automate nie importuje tego pliku, ponieważ łącznik niestandardowy przyjmuje wyłącznie
+starszy format OpenAPI 2.0. Na potrzeby Power Automate bramka udostępnia osobny plik konektora,
+pobierany z panelu w integracji Power Automate. Jego opis znajdziesz w artykule
+[Power Automate](power-automate.md).
 
-Plik jest w wersji OpenAPI 3.0, a nie w nowszej 3.1. Wersję 3.0 czyta więcej narzędzi, także
-te, które nie obsługują jeszcze wersji 3.1. Dokument nie używa niczego spoza wersji 3.0.
+Plik został zapisany w wersji OpenAPI 3.0, a nie w nowszej 3.1. Wersję 3.0 obsługuje więcej
+narzędzi, w tym te, które nie wspierają jeszcze wersji 3.1. Dokument nie korzysta z żadnych
+elementów spoza wersji 3.0.

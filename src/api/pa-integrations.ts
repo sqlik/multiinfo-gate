@@ -27,7 +27,7 @@ export function parsePaIntegrationApiId(raw: string): number | null {
  */
 export const requestedBySchema = z.string()
   .trim()
-  .max(100, 'Zlecający może mieć najwyżej 100 znaków.')
+  .max(100, 'Zlecający może liczyć najwyżej 100 znaków.')
   .regex(/^[^\p{Cc}]*$/u, 'Zlecający nie może zawierać znaków sterujących, na przykład końca wiersza.')
   .optional();
 

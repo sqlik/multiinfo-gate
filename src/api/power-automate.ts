@@ -442,8 +442,9 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
       title: CONNECTOR_TITLE,
       version: GATE_VERSION,
       description: 'Wysyłka SMS-ów przez bramkę Multiinfo Gate do platformy Multiinfo operatora Plus: do jednego'
-        + ' numeru, rozsyłką do listy odbiorców albo do listy odbiorców prowadzonej w integracji, ze sprawdzeniem'
-        + ` stanu i raportu doręczeń. Każda wysyłka idzie przez integrację Power Automate z panelu bramki. Instrukcja: ${CONNECTOR_ARTICLE}`,
+        + ' numeru, w formie rozsyłki albo do listy odbiorców zapisanej w integracji, wraz ze sprawdzaniem stanu'
+        + ' i raportu doręczeń. Każda wysyłka przechodzi przez integrację Power Automate skonfigurowaną w panelu bramki.'
+        + ` Instrukcja: ${CONNECTOR_ARTICLE}`,
     },
     host: checked.host,
     basePath: '/',
@@ -493,7 +494,7 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
           operationId: 'WyslijRozsylke',
           summary: 'Wyślij rozsyłkę',
           description: 'Wysyła rozsyłkę do listy do 5000 odbiorców jednym wywołaniem, bez pętli w przepływie, przez'
-            + ' integrację Power Automate. Każdy odbiorca może mieć własną treść i własny identyfikator, który wraca'
+            + ' integrację Power Automate. Każdy odbiorca może otrzymać własną treść i własny identyfikator, który wraca'
             + ' w raporcie.',
           parameters: [
             integrationParam(INTEGRATION_FOR_SENDING),

@@ -12,11 +12,11 @@ export const powerAutomate: Preset = {
   listedUnder: 'webhook_in',
   fields: [],
   sampleSource: 'Przepływ własny bramki, 2026-11-03',
-  guide: `Integracja przyjmuje wywołania z przepływów Microsoft Power Automate. Przepływ wysyła SMS akcją konektora Multiinfo Gate: „Wyślij SMS” do jednego numeru, „Wyślij rozsyłkę” do listy odbiorców z przepływu albo „Wyślij SMS do grupy” do listy odbiorców prowadzonej w tej integracji.
+  guide: `Integracja przyjmuje zlecenia wysyłki z przepływów Microsoft Power Automate. Przepływ wysyła SMS za pomocą akcji konektora Multiinfo Gate: „Wyślij SMS” do jednego numeru, „Wyślij rozsyłkę” do listy odbiorców przygotowanej w przepływie albo „Wyślij SMS do grupy” do listy odbiorców zapisanej w tej integracji.
 
-Konektor to plik, który pobiera się niżej, w panelu „Konektor Power Automate”. W Power Automate importuje się go jako łącznik niestandardowy. Jeden plik obsługuje wszystkie integracje Power Automate tej bramki. Integrację wybiera się w akcji, w polu „Integracja”.
+Konektor jest plikiem, który pobierasz w panelu „Konektor Power Automate” poniżej formularza i importujesz w Power Automate jako łącznik niestandardowy. Jeden plik obsługuje wszystkie integracje Power Automate tej bramki, a właściwą integrację wybiera się w akcji, w polu „Integracja”.
 
-Każde wywołanie przechodzi przez ustawienia tej integracji. Integracja wyznacza nadawcę, usługę i limit części. Ochrona przed burzą zatrzymuje zapętlony przepływ. Dziennik pokazuje każde wywołanie, a gdy przepływ to poda, także osobę, która zleciła wysyłkę.
+Każde wywołanie przechodzi przez ustawienia tej integracji. Integracja określa nadawcę, usługę i limit części, a ochrona przed burzą zatrzymuje zapętlony przepływ. Dziennik rejestruje każde wywołanie oraz, jeżeli przepływ poda tę informację, osobę zlecającą wysyłkę.
 
-Łącznik niestandardowy wymaga licencji Power Automate Premium. Bramka musi być dostępna z internetu pod adresem \`https://\` z domeną. Krok po kroku opisuje to artykuł „Power Automate” w dokumentacji bramki.`,
+Łącznik niestandardowy wymaga licencji Power Automate Premium, a bramka musi być dostępna z internetu pod adresem \`https://\` z domeną. Opis krok po kroku znajdziesz w artykule „Power Automate” w dokumentacji bramki.`,
 };

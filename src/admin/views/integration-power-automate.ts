@@ -51,14 +51,14 @@ function sectionText(v: PaFormValues): string {
         <input name="maxParts" type="number" min="1" max="9" value="${esc(v.maxParts)}" style="width: 90px;">
         <div class="choices">${radio('overflow', 'truncate', v.overflow, 'skróć i wyślij')}${radio('overflow', 'reject', v.overflow, 'nie wysyłaj, zapisz błąd i powiadom')}</div>
       </div>
-      ${hint('Dotyczy SMS-a do jednego numeru, każdej treści rozsyłki i SMS-a do grupy. Treść buduje się w przepływie. Przy odrzuceniu przepływ dostaje błąd z liczbą części, a administrator powiadomienie')}
+      ${hint('Limit obowiązuje SMS do jednego numeru, każdą treść w rozsyłce oraz SMS do grupy. Treść przygotowuje przepływ. Przy odrzuceniu przepływ otrzymuje błąd z liczbą części, a administrator powiadomienie')}
     </div>
   </details>`;
 }
 
 const GUARD: GuardWords = {
   unit: 'wywołań',
-  throttleHint: 'Wywołania ponad limit w oknie kończą się błędem i wpisem „limit” bez SMS-a. Chroni to konto przed zapętlonym przepływem. Pierwsze przekroczenie w oknie jest zgłaszane mailem do administratora',
+  throttleHint: 'Wywołania ponad limit w oknie kończą się błędem i wpisem „limit”, bez wysłania SMS-a. Ochrona zabezpiecza konto przed skutkami zapętlonego przepływu. Pierwsze przekroczenie w oknie jest zgłaszane mailem do administratora',
   payloadHint: 'Przydatne podczas uruchamiania: dziennik pokazuje, co przysłał przepływ. Ładunki zawierają numery i treści, dlatego opcję zaleca się włączać tylko na czas konfiguracji.',
 };
 

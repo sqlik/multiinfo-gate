@@ -695,7 +695,7 @@ function sectionBodyOutbound(v: IntegrationFormValues): string {
   </details>`;
 }
 
-/** Słowa sekcji ochrony zależne od rodzaju: integracja Power Automate liczy wywołania, nie zdarzenia, i nie ma próbki. */
+/** Słowa sekcji ochrony zależne od rodzaju: integracja Power Automate liczy wywołania zamiast zdarzeń i nie ma próbki. */
 export interface GuardWords { unit: string; throttleHint: string; payloadHint: string }
 
 const GUARD_WORDS: GuardWords = {

@@ -14,9 +14,9 @@ również skrzynkę pocztową (Mail2SMS): alarm z zasilacza UPS, raport z serwer
 pracownika docierają na telefon jako SMS bez zmian po stronie urządzenia. Od wersji 1.8.5 jeden
 SMS wysłany na numer bramki trafia do stałej grupy numerów (SMS do grupy): ekipy serwisowej, brygady
 albo zespołu handlowego. Od wersji 1.8.7 bramka sama zapisuje kopię bazy przed aktualizacją. Gdy
-nie może rozpocząć pracy, pokazuje w panelu przyczynę i sposób naprawy. Od wersji 1.9 przepływy
-Microsoft Power Automate wysyłają SMS-y konektorem bramki: do jednego numeru, rozsyłką albo do
-listy odbiorców prowadzonej w bramce.
+nie może rozpocząć pracy, pokazuje w panelu przyczynę i sposób naprawy. Od wersji 1.9 bramka
+wprowadza konektor do Microsoft Power Automate, który umożliwia wysyłkę SMS-ów z przepływów: do
+jednego numeru, w formie rozsyłki albo do listy odbiorców prowadzonej w bramce.
 
 ![Przegląd: liczniki wiadomości wychodzących i odebranych z ostatniej doby, stan połączeń z Multiinfo i ostatnie niepowodzenia](obrazki/przeglad.png)
 
@@ -36,7 +36,7 @@ zamiast certyfikatów, oraz panel do zarządzania kontami, kluczami i podglądu 
   WooCommerce, Fakturownia, FreeScout, Freshdesk, Bitrix24, Slack, ntfy, Gmail, home.pl, OVH),
   powiadomienia administratora mailem
 - [Power Automate](power-automate.md) - konektor do Microsoft Power Automate: integracja w panelu,
-  import pliku, pierwszy przepływ, rozsyłka z Excela, typowe błędy
+  import pliku, pierwszy przepływ, rozsyłka z Excela, rozwiązywanie problemów
 - [Rozwiązywanie problemów](problemy.md) - objaw, sprawdzenie i naprawa: panel, logowanie, tryb
   awaryjny, aktualizacja, zgłaszanie problemów
 - [Przykład w PHP](https://github.com/sqlik/multiinfo-gate/tree/main/examples/php) - strona

@@ -9,8 +9,9 @@ szablon i warunek.
 Od wersji 1.8 integracją jest również skrzynka pocztowa: bramka odczytuje wiadomości od
 dozwolonych nadawców i zamienia je na SMS-y (Mail2SMS, rozdział 5). Od wersji 1.8.5 integracją
 jest także grupa numerów: uprawniony numer wysyła SMS na numer bramki, a bramka rozsyła treść
-do stałej listy (SMS do grupy, rozdział 5a). Od wersji 1.9 integracją jest również Power Automate:
-przepływ Microsoft Power Automate wysyła SMS-y akcjami konektora bramki (rozdział 5b).
+do stałej listy (SMS do grupy, rozdział 5a). Od wersji 1.9 integracją jest również Power Automate.
+Przepływy Microsoft Power Automate wysyłają za jej pośrednictwem SMS-y, korzystając z konektora
+bramki (rozdział 5b).
 
 Ten rozdział opisuje cztery kierunki, język szablonów, gotowe ustawienia dla popularnych aplikacji,
 dziennik integracji oraz powiadomienia dla administratora wysyłane mailem. Wysyłkę przez pełne
@@ -28,9 +29,9 @@ Integracja działa w jednym z czterech kierunków:
 | z poczty | „Mail2SMS” | bramka odczytuje skrzynkę IMAP i zamienia wiadomości od dozwolonych nadawców na SMS-y; numery wskazuje nadawca, lista nadawców albo stała lista (rozdział 5) |
 | do grupy | „SMS do grupy” | uprawniony numer wysyła SMS z prefiksem na numer bramki, bramka rozsyła treść bez prefiksu do stałej listy numerów (rozdział 5a) |
 
-Integracja Power Automate też ma kierunek „do SMS”. Zakłada się ją kafelkiem w katalogu
-„Aplikacja wysyła SMS”, ale zamiast adresu wejściowego `/hooks/` przyjmuje wywołania konektora
-Power Automate (rozdział 5b).
+Integracja Power Automate również należy do kierunku „do SMS”. Tworzy się ją za pomocą kafelka
+w katalogu „Aplikacja wysyła SMS”, jednak zamiast adresu wejściowego `/hooks/` przyjmuje ona
+wywołania konektora Power Automate (rozdział 5b).
 
 Każda integracja działa w imieniu jednego klucza API. Obowiązują więc konto Multiinfo tego
 klucza, jego dozwolone usługi, nadpisy i limity, dokładnie tak jak przy wysyłce przez API.
@@ -1069,103 +1070,108 @@ przetworzyła, wynikiem i powodem. Szczegóły wiadomości wysłanej do odbiorcy
 
 ## 5b. Power Automate
 
-Od wersji 1.9 bramka przyjmuje wysyłki z przepływów Microsoft Power Automate. Przepływ wysyła
-SMS akcją konektora Multiinfo Gate, a każde wywołanie przechodzi przez integrację Power
-Automate w panelu bramki. Integracja wyznacza nadawcę, usługę i limit części. Ma ochronę przed
-burzą, dziennik i powiadomienia administratora, tak jak pozostałe integracje.
+Od wersji 1.9 bramka przyjmuje zlecenia wysyłki z przepływów Microsoft Power Automate. Przepływ
+wysyła SMS za pomocą akcji konektora Multiinfo Gate, a każde wywołanie przechodzi przez
+integrację Power Automate skonfigurowaną w panelu bramki. Integracja określa nadawcę, usługę
+i limit części. Podobnie jak pozostałe integracje zapewnia ochronę przed burzą, prowadzi dziennik
+i powiadamia administratora.
 
-Konektor to plik pobierany z panelu bramki i importowany w Power Automate jako łącznik
-niestandardowy. Import, połączenie i budowę przepływów krok po kroku opisuje artykuł
-[Power Automate](power-automate.md). Wywołania, z których korzysta konektor, opisuje rozdział 5b
-[API dla aplikacji](api.md).
+Konektor jest plikiem pobieranym z panelu bramki i importowanym w Power Automate jako łącznik
+niestandardowy. Import, tworzenie połączenia i budowę przepływów krok po kroku przedstawia
+artykuł [Power Automate](power-automate.md). Wywołania API, z których korzysta konektor, opisuje
+rozdział 5b [API dla aplikacji](api.md).
 
-Integracja Power Automate nie ma warunku, szablonu Liquid ani próbki. Treść, odbiorców i warunki
-wysyłki buduje się w samym przepływie. Druga warstwa tych samych ustawień w bramce dawałaby dwa
-miejsca do szukania błędu.
+Integracja Power Automate nie obejmuje warunku, szablonu Liquid ani próbki. Treść, odbiorców
+i warunki wysyłki określa się w samym przepływie. Powielenie tych ustawień w bramce utrudniłoby
+wyszukiwanie błędów, ponieważ ta sama logika znajdowałaby się w dwóch miejscach.
 
-### 5b.1. Dodanie integracji
+### 5b.1. Utworzenie integracji
 
 Przycisk **Dodaj integrację**, kierunek **Aplikacja wysyła SMS** i kafelek **Power Automate**
-otwierają formularz w trybie prostym. Nad formularzem jest rozwijany opis „Jak działa Power
-Automate”. Formularz ma trzy sekcje:
+otwierają formularz w trybie prostym. Nad formularzem znajduje się rozwijany opis „Jak działa
+Power Automate”. Formularz składa się z trzech sekcji:
 
-1. **Podstawy.** Nazwa, klucz API, ID usługi, nadpis nadawcy i pole „Włączona”. Pod nazwą
-   integracja pojawia się w Power Automate w polu „Integracja”. ID usługi i nadpis wybiera się
-   z uprawnień klucza albo zostawia ustawienia domyślne klucza.
-2. **Odbiorcy grupy.** Pole „Numery odbiorców”: jeden numer w wierszu, po numerze opcjonalna
-   nazwa, do 500 numerów. Składnia i normalizacja są takie jak w SMS-ie do grupy (rozdział 5a.2).
-   Lista służy wyłącznie akcji „Wyślij SMS do grupy”. Pole nie jest wymagane. Przy pustej liście
-   ta akcja kończy się błędem, a pozostałe działają.
+1. **Podstawy.** Nazwa, klucz API, ID usługi, nadpis nadawcy oraz pole „Włączona”. Pod nadaną
+   nazwą integracja wyświetla się w Power Automate w polu „Integracja”. ID usługi i nadpis
+   wybiera się spośród uprawnień klucza albo pozostawia ustawienia domyślne klucza.
+2. **Odbiorcy grupy.** Pole „Numery odbiorców” przyjmuje do 500 numerów, po jednym w wierszu,
+   z opcjonalną nazwą po numerze. Składnia i normalizacja są takie same jak w SMS-ie do grupy
+   (rozdział 5a.2). Lista służy wyłącznie akcji „Wyślij SMS do grupy”, a pole jest opcjonalne.
+   Przy pustej liście ta akcja kończy się błędem, natomiast pozostałe działają bez zmian.
 3. **Treść.** Limit części z wyborem „skróć i wyślij” albo „nie wysyłaj, zapisz błąd
-   i powiadom”. Limit dotyczy SMS-a do jednego numeru, każdej treści rozsyłki i SMS-a do grupy.
-   Skracanie działa jak w rozdziale 3.5.
+   i powiadom”. Limit obowiązuje SMS do jednego numeru, każdą treść w rozsyłce oraz SMS do grupy.
+   Skracanie przebiega tak samo jak w rozdziale 3.5.
 
-Tryb zaawansowany dokłada sekcję **Ochrona i dziennik**:
+Tryb zaawansowany odsłania dodatkowo sekcję **Ochrona i dziennik**:
 
 | Pole | Znaczenie |
 |---|---|
-| Limit burzy | liczba wywołań w oknie minut, domyślnie 30 wywołań na 10 minut; wywołanie ponad limit kończy się błędem i wpisem „limit” bez SMS-a |
-| Wpisów w dzienniku | rozmiar dziennika integracji, od 20 do 2000 wpisów |
-| Przechowuj ładunki w dzienniku | zapisuje ciało każdego wywołania na 7 dni, zaszyfrowane; ładunki zawierają numery i treści, więc opcję włącza się tylko na czas konfiguracji |
+| Limit burzy | liczba wywołań dopuszczalnych w oknie czasowym, domyślnie 30 wywołań w ciągu 10 minut; wywołanie ponad limit kończy się błędem i wpisem „limit”, bez wysłania SMS-a |
+| Wpisów w dzienniku | pojemność dziennika integracji, od 20 do 2000 wpisów |
+| Przechowuj ładunki w dzienniku | zachowuje treść każdego wywołania przez 7 dni w postaci zaszyfrowanej; ładunki zawierają numery i treści, dlatego opcję zaleca się włączać wyłącznie na czas konfiguracji |
 
-Limit burzy liczy wywołania, a nie wiadomości. Rozsyłka do 5000 odbiorców to jedno wywołanie.
+Limit burzy zlicza wywołania, a nie wiadomości. Rozsyłka do 5000 odbiorców stanowi jedno
+wywołanie.
 
 ### 5b.2. Konektor
 
-Pod formularzem i w szczegółach integracji jest panel **Konektor Power Automate**. Zawiera trzy
-kroki uruchomienia, pole **Publiczny adres bramki dla Power Automate**, przycisk **Pobierz
-konektor** i odnośnik **Instrukcja krok po kroku** do artykułu Power Automate.
+Pod formularzem oraz w szczegółach integracji znajduje się panel **Konektor Power Automate**.
+Zawiera trzy kroki uruchomienia, pole **Publiczny adres bramki dla Power Automate**, przycisk
+**Pobierz konektor** oraz odnośnik **Instrukcja krok po kroku**, prowadzący do artykułu Power
+Automate.
 
-Pole adresu jest wypełnione adresem bramki z rozdziału 2.1, jeżeli ten zaczyna się od
-`https://` i zawiera domenę. Plik powstaje tylko dla adresu `https://` z domeną, bez ścieżki,
-bez portu albo z portem 443. Adres z `http://`, adres IP albo inny port daje komunikat bez pliku.
-Adres z pola służy wyłącznie do zbudowania pliku i nie jest zapisywany. Wspólny adres bramki
-z rozdziału 2.1 może więc nadal wskazywać sieć firmową.
+Panel uzupełnia pole adresem bramki z rozdziału 2.1, jeżeli adres ten zaczyna się od `https://`
+i zawiera domenę. Plik powstaje wyłącznie dla adresu `https://` z domeną, bez ścieżki, bez portu
+albo z portem 443. Adres rozpoczynający się od `http://`, adres IP albo inny port powodują
+wyświetlenie komunikatu zamiast pliku. Adres z pola służy wyłącznie do przygotowania pliku i nie
+jest zapisywany, dlatego wspólny adres bramki z rozdziału 2.1 może nadal wskazywać sieć firmową.
 
-Pobranie wymaga zalogowania do panelu. Plik nie zawiera klucza API ani innych sekretów. Jeden
-plik obsługuje wszystkie integracje Power Automate bramki: integrację wybiera się w akcji
-przepływu.
+Pobranie pliku wymaga zalogowania do panelu. Plik nie zawiera klucza API ani innych poufnych
+danych. Jeden plik obsługuje wszystkie integracje Power Automate danej bramki, a właściwą
+integrację wybiera się w akcji przepływu.
 
 ### 5b.3. Lista, szczegóły i dziennik
 
-Na liście integracji integracja Power Automate ma kierunek „do SMS” i podpis „Power Automate”
-pod nazwą. Przycisk **Do SMS** nad listą obejmuje także te integracje. Szczegóły opisują
-konfigurację słowami: klucz, usługę, nadpis nadawcy, odbiorców grupy z nazwami, limit części
-z zachowaniem przy nadmiarze, limit burzy, ładunki i rozmiar dziennika.
+Na liście integracji integracja Power Automate jest oznaczona kierunkiem „do SMS” i podpisem
+„Power Automate” pod nazwą. Przycisk **Do SMS** nad listą obejmuje również te integracje.
+Szczegóły przedstawiają konfigurację słowami: klucz, usługę, nadpis nadawcy, odbiorców grupy wraz
+z nazwami, limit części ze sposobem postępowania przy nadmiarze, limit burzy, ustawienie ładunków
+i pojemność dziennika.
 
-Dziennik działa jak w rozdziale 8. Każde wywołanie akcji wysyłającej zostawia jeden wpis.
-Akcje sprawdzające stan wiadomości, stan rozsyłki i raport nie zostawiają wpisów. Kolumna
-„Nadawca” pokazuje `API · <zlecający>`, gdy przepływ wypełnił pole „Zlecający”. W przeciwnym
-razie pokazuje `API · <adres IP wywołania>`.
+Dziennik działa tak, jak opisuje rozdział 8. Każde wywołanie akcji wysyłającej pozostawia jeden
+wpis. Akcje sprawdzające stan wiadomości, stan rozsyłki i raport nie tworzą wpisów. Kolumna
+„Nadawca” pokazuje `API · <zlecający>`, jeżeli przepływ uzupełnił pole „Zlecający”, a w przeciwnym
+razie `API · <adres IP wywołania>`.
 
 | Wynik | Powód |
 |---|---|
-| wysłano | nazwa akcji, a przy wielu odbiorcach także ich liczba: `Wyślij SMS`, `Wyślij rozsyłkę, 14 odbiorców`, `Wyślij SMS do grupy, 3 odbiorców`; przy skróconej treści dopisek `skrócono do 1 części` |
-| limit | nadmiar ponad limit burzy, na przykład `ponad 30 w 10 min` |
+| wysłano | nazwa akcji, a przy wielu odbiorcach także ich liczba: `Wyślij SMS`, `Wyślij rozsyłkę, 14 odbiorców`, `Wyślij SMS do grupy, 3 odbiorców`; skrócona treść otrzymuje dopisek `skrócono do 1 części` |
+| limit | przekroczenie limitu burzy, na przykład `ponad 30 w 10 min` |
 | błąd | nazwa akcji i komunikat bramki, na przykład `Wyślij SMS do grupy: Integracja Biuro handlowe nie ma odbiorców grupy. Listę uzupełnia administrator w panelu bramki.` |
 
 Wpis „wysłano” prowadzi do pierwszej wiadomości albo do rozsyłki. Wywołanie wyłączonej
-integracji nie zostawia wpisu.
+integracji nie pozostawia wpisu.
 
-Szczegóły wiadomości i rozsyłki mają wiersz „Integracja” z nazwą integracji. Gdy przepływ podał
-zlecającego, mają także wiersz „Zlecający”. Zlecający zostaje przy wiadomości i rozsyłce na
-stałe, także po usunięciu wpisu z dziennika. Lista rozsyłek pokazuje nazwę integracji pod nazwą
-klucza.
+Szczegóły wiadomości i rozsyłki zawierają wiersz „Integracja” z nazwą integracji, a jeżeli
+przepływ podał zlecającego, także wiersz „Zlecający”. Informacja o zlecającym pozostaje przy
+wiadomości i rozsyłce na stałe, również po usunięciu wpisu z dziennika. Lista rozsyłek wyświetla
+nazwę integracji pod nazwą klucza.
 
 ### 5b.4. Koszt i bezpieczeństwo
 
-- Klucz API wklejony w połączeniu Power Automate pozwala wysyłać przez każdą integrację Power
-  Automate tego klucza. Osobny klucz dla Power Automate da się odwołać bez wpływu na inne
+- Klucz API wklejony w połączeniu Power Automate umożliwia wysyłkę przez każdą integrację Power
+  Automate tego klucza. Osobny klucz dla Power Automate można odwołać bez wpływu na pozostałe
   aplikacje
-- Limit burzy liczy wywołania, a jedno wywołanie rozsyłki obejmuje do 5000 odbiorców. Przy
-  domyślnym limicie 30 wywołań na 10 minut przepływ może więc zlecić w jednym oknie rozsyłki do
-  150 000 odbiorców. Integracja dla przepływów z rozsyłkami powinna mieć niższy limit burzy,
-  ustawiony w sekcji „Ochrona i dziennik” trybu zaawansowanego
-- Pusty numer w akcji „Wyślij SMS” kończy się błędem. Akcja nigdy nie wysyła wtedy SMS-a do listy
-  odbiorców integracji
-- Integracja wyłączona albo usunięta po zapisaniu przepływu nie wysyła niczego. Przepływ dostaje
-  błąd z czytelnym kodem
-- Panel bramki nie musi być dostępny z internetu. Power Automate korzysta wyłącznie z portu API
+- Limit burzy zlicza wywołania, a pojedyncze wywołanie rozsyłki obejmuje do 5000 odbiorców. Przy
+  domyślnym limicie 30 wywołań w ciągu 10 minut przepływ może zatem zlecić w jednym oknie
+  rozsyłki do 150 000 odbiorców. W integracji obsługującej rozsyłki zaleca się ustawienie
+  niższego limitu burzy w sekcji „Ochrona i dziennik” trybu zaawansowanego
+- Pusty numer w akcji „Wyślij SMS” powoduje błąd. W takiej sytuacji akcja nigdy nie wysyła SMS-a
+  do listy odbiorców integracji
+- Integracja wyłączona albo usunięta po zapisaniu przepływu nie wysyła żadnych wiadomości,
+  a przepływ otrzymuje błąd z czytelnym kodem
+- Panel bramki nie musi być dostępny z internetu, ponieważ Power Automate korzysta wyłącznie
+  z portu API
 
 ## 6. Szablony Liquid
 

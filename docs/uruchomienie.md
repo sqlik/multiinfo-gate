@@ -571,9 +571,9 @@ na porcie 993 (albo 143). W Dockerze ani w Traefiku nie trzeba otwierać żadneg
 poczty w sieci wewnętrznej wymaga `MIG_MAIL_ALLOW_PRIVATE=1` (rozdział 7.7). Integracja działa
 w imieniu klucza API z rozdziału 4.5. Załóż go najpierw.
 
-Integracja „Power Automate” w kierunku „Aplikacja wysyła SMS” przyjmuje wysyłki z przepływów
-Microsoft Power Automate. Wymaga bramki dostępnej z internetu pod domeną z HTTPS, tak jak
-w rozdziale 6. Konektor, jego import i budowę przepływów opisuje artykuł
+Integracja „Power Automate” w kierunku „Aplikacja wysyła SMS” przyjmuje zlecenia wysyłki
+z przepływów Microsoft Power Automate. Wymaga bramki dostępnej z internetu pod domeną z HTTPS,
+zgodnie z rozdziałem 6. Konektor, jego import i budowę przepływów przedstawia artykuł
 [Power Automate](power-automate.md).
 
 ![Lista integracji z kierunkiem, ustawieniem, kluczem, stanem i licznikami z ostatniej doby](obrazki/integracje.png)
