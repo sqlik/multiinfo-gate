@@ -220,13 +220,16 @@ describe('buildPowerAutomateConnector', () => {
     }
   });
 
-  it('wysyłki odpowiadają 202 bez nagłówka Location, żeby akcja kończyła się od razu', () => {
+  it('sukces wysyłek opisuje odpowiedź 200 bez nagłówka Location: projektant Power Automate pomija 202', () => {
+    // Bramka odpowiada 202. Projektant bierze pola akcji tylko z odpowiedzi 200 albo default,
+    // więc przy 202 podsuwał pola błędu zamiast identyfikatora (próba na żywo 2026-11-03).
     for (const id of ['WyslijSms', 'WyslijRozsylke', 'WyslijSmsDoGrupy']) {
-      const accepted = op(id).responses['202']!;
+      expect(op(id).responses['202'], id).toBeUndefined();
+      const accepted = op(id).responses['200']!;
       expect(accepted.schema, id).toBeDefined();
       expect(accepted.headers, id).toBeUndefined();
     }
-    expect(resolve(op('WyslijSms').responses['202']!.schema!).properties!.id!['x-ms-summary']).toBeTruthy();
+    expect(resolve(op('WyslijSms').responses['200']!.schema!).properties!.id!['x-ms-summary']).toBe('Identyfikator wiadomości');
   });
 
   it('stan wiadomości wymienia znaczenie każdej wartości stanu po polsku', () => {

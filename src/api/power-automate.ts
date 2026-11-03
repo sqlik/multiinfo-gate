@@ -399,7 +399,13 @@ const INTEGRATION_FOR_GROUP = 'Integracja Power Automate z panelu bramki Multiin
   + ' z listy odbiorców tej integracji. Listę prowadzi administrator bramki w szczegółach integracji, więc zmiana składu'
   + ' ekipy nie wymaga zmiany przepływu. Gdy lista jest pusta, akcja kończy się błędem';
 
-/** Odpowiedzi błędów wspólne dla akcji wysyłających: integracja, wyłączenie, ochrona przed burzą. */
+/**
+ * Odpowiedzi błędów wspólne dla akcji wysyłających: integracja, wyłączenie, ochrona przed burzą.
+ *
+ * Przyjęcie wysyłki plik konektora opisuje jako 200, choć bramka odpowiada 202. Projektant Power Automate
+ * bierze pola akcji tylko z odpowiedzi 200 albo default, więc przy 202 nie podsuwał identyfikatora.
+ * Odpowiedź bez nagłówka Location kończy akcję od razu niezależnie od kodu.
+ */
 const SENDING_ERRORS: Record<string, SwaggerResponse> = {
   '404': {
     description: 'Nie ma takiej integracji Power Automate dla tego klucza: integration_not_found',
@@ -450,7 +456,7 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
             body('Wiadomość', 'Numer, treść i ustawienia wiadomości', requestBody(parts.messageBody, 'WyslijSms')),
           ],
           responses: {
-            '202': { description: 'Wiadomość przyjęta do kolejki', schema: ref('PrzyjetaWiadomosc') },
+            '200': { description: 'Wiadomość przyjęta do kolejki', schema: ref('PrzyjetaWiadomosc') },
             '409': {
               description: 'Integracja wyłączona w panelu bramki albo ten sam klucz idempotencji z inną treścią:'
                 + ' integration_disabled, idempotency_conflict',
@@ -486,7 +492,7 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
             body('Rozsyłka', 'Odbiorcy, treść i ustawienia rozsyłki', requestBody(parts.packageBody, 'WyslijRozsylke')),
           ],
           responses: {
-            '202': { description: 'Rozsyłka przyjęta do kolejki', schema: ref('PrzyjetaRozsylka') },
+            '200': { description: 'Rozsyłka przyjęta do kolejki', schema: ref('PrzyjetaRozsylka') },
             '409': { description: 'Integracja wyłączona w panelu bramki: integration_disabled', schema: ref('OdpowiedzBledu') },
             ...SENDING_ERRORS,
           },
@@ -537,7 +543,7 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
             body('Wiadomość', 'Treść i ustawienia wiadomości', requestBody(parts.groupBody, 'WyslijSmsDoGrupy')),
           ],
           responses: {
-            '202': { description: 'Wysyłka przyjęta do kolejki', schema: ref('WysylkaDoGrupy') },
+            '200': { description: 'Wysyłka przyjęta do kolejki', schema: ref('WysylkaDoGrupy') },
             '409': {
               description: 'Integracja wyłączona w panelu bramki, pusta lista odbiorców albo ten sam klucz idempotencji'
                 + ' z inną treścią: integration_disabled, group_empty, idempotency_conflict',
