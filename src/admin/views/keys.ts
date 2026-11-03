@@ -16,6 +16,8 @@ export interface CreatedKey {
   name: string;
   key: string | null;
   webhookSecret: string | null;
+  /** Klucz „Tylko integracje”: przykład nie może wysyłać przez /v1/messages, bo kończy się błędem 403. */
+  integrationsOnly?: boolean;
 }
 
 export interface AccountChoice {
@@ -61,19 +63,28 @@ const OSTRZEZENIE_SEKRET =
   'Sekret podpisuje każde wywołanie webhooka w nagłówku X-MIG-Signature. Jest wyświetlany wyłącznie teraz. ' +
   'Zmiana adresu webhooka wydaje nowy sekret.';
 
-/** Gotowe wywołanie do wklejenia w terminalu - aplikacja dostaje adres i klucz w jednym miejscu. */
-function keyExample(apiUrl: string | null, key: string): string {
+/**
+ * Gotowe wywołanie do wklejenia w terminalu - aplikacja dostaje adres i klucz w jednym miejscu.
+ * Klucz „Tylko integracje” nie wysyła przez /v1/messages, więc sprawdza się go odczytem listy integracji.
+ */
+function keyExample(apiUrl: string | null, key: string, integrationsOnly = false): string {
   const base = fullUrl(apiUrl, '');
-  const example = `curl -s ${base}/v1/messages \\
+  const example = integrationsOnly
+    ? `curl -s ${base}/v1/integrations \\
+  -H "Authorization: Bearer ${key}"`
+    : `curl -s ${base}/v1/messages \\
   -H "Authorization: Bearer ${key}" \\
   -H "Content-Type: application/json" \\
   -d '{"to":"48601000001","text":"Test z bramki"}'`;
+  const lead = integrationsOnly
+    ? 'Sprawdzenie z terminala. Polecenie wyświetla integracje Power Automate przypisane do klucza i nie wysyła SMS-a:'
+    : 'Sprawdzenie z terminala. Polecenie wysyła rzeczywisty SMS na podany numer:';
   const address = apiUrl === null
     ? '<span class="dim">Adres bramki nie został jeszcze podany. Po jego wpisaniu w panelu poniżej przykład otrzyma pełny adres.</span>'
     : `Adres API dla aplikacji: <span class="m">${esc(apiUrl)}</span>. Integracje używają tego samego adresu ze ścieżką <span class="m">/hooks/…</span>.`;
   return `<div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">
         <div style="margin-bottom: 6px;">${address}</div>
-        <div class="dim" style="margin-bottom: 4px;">Sprawdzenie z terminala. Polecenie wysyła rzeczywisty SMS na podany numer:</div>
+        <div class="dim" style="margin-bottom: 4px;">${esc(lead)}</div>
         <pre class="m" id="key-example" style="white-space: pre-wrap; margin: 0; font-size: 11.5px;">${esc(example)}</pre>
         <button class="btn btn-s" type="button" data-copy="#key-example" style="margin-top: 6px;">Kopiuj polecenie</button>
       </div>`;
@@ -145,6 +156,7 @@ export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne
       <td>
         <strong>${esc(v.row.name)}</strong>
         <div class="dim" style="font-size: 11.5px; margin-top: 2px;">utworzony ${esc(stamp(v.row.createdAt, ''))}</div>
+        ${v.row.integrationsOnly === 1 ? '<div style="margin-top: 5px;"><span class="tag" style="white-space: nowrap;">tylko integracje</span></div>' : ''}
       </td>
       <td class="m">${esc(shortened(v.row.keyPrefix))}</td>
       <td>${esc(v.accountName)}</td>
@@ -154,7 +166,7 @@ export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne
         : esc(v.row.allowedOrigs.join(', '))}</td>
       <td class="m">${esc(v.row.ratePerMin)} / min</td>
       ${expiryCell(v.row, now)}
-      <td>${host === null ? '<span class="dim">-</span>' : `<span class="m">${esc(host)}</span>`}${v.row.inboundSubscribed === 1 ? '<div style="margin-top: 5px;"><span class="tag">odbiera</span></div>' : ''}${v.row.integrationsOnly === 1 ? '<div style="margin-top: 5px;"><span class="tag">tylko integracje</span></div>' : ''}</td>
+      <td>${host === null ? '<span class="dim">-</span>' : `<span class="m">${esc(host)}</span>`}${v.row.inboundSubscribed === 1 ? '<div style="margin-top: 5px;"><span class="tag">odbiera</span></div>' : ''}</td>
       <td class="m">${v.row.lastUsedAt === null
         ? '<span class="dim" style="font-size: 12px;">jeszcze nieużywany</span>'
         : esc(stamp(v.row.lastUsedAt, ''))}</td>
@@ -173,7 +185,7 @@ export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne
         <button class="btn btn-s" type="button" data-copy="#new-key">Kopiuj</button>
       </div>
       <div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">${esc(OSTRZEZENIE)}</div>
-      ${keyExample(apiUrl, created.key)}
+      ${keyExample(apiUrl, created.key, created.integrationsOnly === true)}
       <div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">${esc(POWER_AUTOMATE_KEY)}</div>`}
       ${created.webhookSecret === null ? '' : `<div class="keyline">
         <div class="lab" style="width: 140px;">Sekret webhooka</div>

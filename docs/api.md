@@ -896,7 +896,7 @@ kolejnymi wywołaniami.
     $body = @{ defaultText = "Przypominamy o wizycie."; recipients = @(
         @{ to = "48601000001" },
         @{ to = "48605000001"; text = "Faktura 114 oczekuje na oplacenie."; clientId = "faktura-114" }
-    ); orig = "Firma Info" } | ConvertTo-Json
+    ); orig = "Firma Info" } | ConvertTo-Json -Depth 5
     $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/packages" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
     $odpowiedz.id
     ```
@@ -2012,7 +2012,7 @@ własną treść.
     $body = @{ defaultText = "Przeglad floty jutro o 8:00 w bazie przy ul. Portowej."; recipients = @(
         @{ to = "48601000001" },
         @{ to = "48601000002"; text = "Zmiana grafiku od poniedzialku."; clientId = "kierowca-14" }
-    ); requestedBy = "kierownik.floty@firma.pl" } | ConvertTo-Json
+    ); requestedBy = "kierownik.floty@firma.pl" } | ConvertTo-Json -Depth 5
     $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/integrations/int_12/packages" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
     $odpowiedz.id
     ```

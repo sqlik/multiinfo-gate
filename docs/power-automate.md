@@ -161,7 +161,7 @@ Oczekiwany wynik: panel wyświetla szczegóły integracji z konfiguracją opisan
 **Konektor Power Automate**. Na liście integracji nowa pozycja jest oznaczona kierunkiem „do SMS”
 i podpisem „Power Automate”.
 
-![Szczegóły integracji Power Automate: konfiguracja opisana słowami, panel Konektor Power Automate i dziennik z wpisami „wysłano” oraz „błąd”, w kolumnie Nadawca zlecający z przepływu](obrazki/power-automate-szczegol.png)
+![Szczegóły integracji Power Automate: konfiguracja opisana słowami, panel Konektor Power Automate i dziennik z wpisami „wysłano” oraz „błąd”, w kolumnie Nadawca zlecający z przepływu i adres IP wywołania](obrazki/power-automate-szczegol.png)
 
 Przełącznik **Zaawansowany** nad formularzem odsłania dodatkowo sekcję **Ochrona i dziennik**
 z limitem burzy, limitem odbiorców, pojemnością dziennika i przechowywaniem ładunków. Opis tych

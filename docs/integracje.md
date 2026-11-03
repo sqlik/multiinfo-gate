@@ -1154,7 +1154,7 @@ wpis. Akcje sprawdzające stan wiadomości, stan rozsyłki i raport nie tworzą 
 dlatego adres IP pozostaje w dzienniku zawsze. Pole „Zlecający” nie przyjmuje znaków sterujących
 ani niewidocznych znaków formatowania, które mogłyby zmienić wygląd wpisu.
 
-![Szczegóły integracji Power Automate: konfiguracja opisana słowami, panel Konektor Power Automate i dziennik z wpisami „wysłano” oraz „błąd”, w kolumnie Nadawca zlecający z przepływu](obrazki/power-automate-szczegol.png)
+![Szczegóły integracji Power Automate: konfiguracja opisana słowami, panel Konektor Power Automate i dziennik z wpisami „wysłano” oraz „błąd”, w kolumnie Nadawca zlecający z przepływu i adres IP wywołania](obrazki/power-automate-szczegol.png)
 
 | Wynik | Powód |
 |---|---|

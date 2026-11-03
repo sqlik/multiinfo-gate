@@ -517,7 +517,22 @@ describe('klucz - tylko integracje', () => {
     expect(key.integrationsOnly).toBe(1);
     expect(h.audit.list(10, 0)[0]!.meta).toMatchObject({ tylko_integracje: true });
     const list = await h.app.inject({ method: 'GET', url: '/klucze', headers: { cookie: h.cookie } });
-    expect(list.body).toContain('<span class="tag">tylko integracje</span>');
+    // Plakietka pod nazwą klucza, nie w kolumnie webhooka, z którą opcja nie ma związku.
+    expect(list.body).toMatch(/utworzony [^<]*<\/div>\s*<div style="margin-top: 5px;"><span class="tag"[^>]*>tylko integracje<\/span>/);
+  });
+
+  it('polecenie sprawdzające dla takiego klucza odczytuje listę integracji zamiast wysyłać SMS przez /v1/messages', async () => {
+    h.settings.setApiUrl('https://sms.firma.pl', new Date());
+    const created = await create({ integrationsOnly: '1' });
+    expect(created.body).toContain('curl -s https://sms.firma.pl/v1/integrations');
+    expect(created.body).not.toContain('curl -s https://sms.firma.pl/v1/messages');
+    expect(created.body).toContain('Polecenie wyświetla integracje Power Automate przypisane do klucza');
+  });
+
+  it('plakietka „tylko integracje” nie łamie się na dwa wiersze', async () => {
+    await create({ integrationsOnly: '1' });
+    const list = await h.app.inject({ method: 'GET', url: '/klucze', headers: { cookie: h.cookie } });
+    expect(list.body).toContain('<span class="tag" style="white-space: nowrap;">tylko integracje</span>');
   });
 
   it('edycja zmienia opcję, a formularz pokazuje ją zaznaczoną', async () => {

@@ -212,7 +212,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
 
     // Odpowiadamy stroną, a nie przekierowaniem: klucz nie może trafić do adresu,
     // bo adresy lądują w historii przeglądarki i w logach pośredników.
-    return listBody(request, { name: v.name, key: generated.key, webhookSecret });
+    return listBody(request, { name: v.name, key: generated.key, webhookSecret, integrationsOnly: v.integrationsOnly });
   });
 
   app.get<{ Params: { id: string } }>('/klucze/:id/edytuj', async (request, reply) => {
