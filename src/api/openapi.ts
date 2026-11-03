@@ -395,10 +395,10 @@ const WYSYLKA_DO_GRUPY_INTEGRACJI: JsonSchema = {
       description: 'Przyjęte wiadomości. Stan każdej z nich zwraca odczyt wiadomości',
       items: {
         type: 'object',
-        required: ['id', 'to', 'status', 'parts'],
+        // Bez numeru odbiorcy: lista grupy zostaje w panelu bramki.
+        required: ['id', 'status', 'parts'],
         properties: {
           id: { type: 'string', description: 'Identyfikator wiadomości', example: 'msg_3f9c2a7b1e4d8c6a5b2f' },
-          to: { type: 'string', description: 'Numer odbiorcy', example: '48601000011' },
           status: { type: 'string', description: 'Stan wiadomości; zaraz po przyjęciu queued', example: 'queued' },
           parts: { type: 'integer', description: 'Liczba części wiadomości', example: 1 },
         },

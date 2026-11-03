@@ -68,6 +68,10 @@ describe('opis API', () => {
     expect(numer.description).toMatch(/[Pp]usty numer/);
     expect(doc.paths['/v1/integrations']!.get!.operationId).toBe('listaIntegracjiPowerAutomate');
     expect(Object.keys(doc.components.schemas)).toEqual(expect.arrayContaining(['IntegracjaPowerAutomate', 'WysylkaDoGrupy']));
+    // Odpowiedź grupy nie podaje numerów członków listy.
+    const wiadomosc = doc.components.schemas.WysylkaDoGrupy!.properties!.messages!.items!;
+    expect(Object.keys(wiadomosc.properties!)).toEqual(['id', 'status', 'parts']);
+    expect(wiadomosc.required).toEqual(['id', 'status', 'parts']);
   });
 
   it('każde pole odpowiedzi odczytu ma opis po polsku', () => {

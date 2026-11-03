@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { PowerAutomateConfig } from '../integrations/config.ts';
-import { paActionLabel, runPowerAutomate, type PaCall, type PowerAutomateIntegration } from '../integrations/power-automate.ts';
+import { paActionLabel, payloadForLog, runPowerAutomate, type PaCall, type PowerAutomateIntegration } from '../integrations/power-automate.ts';
 import { silentLogger } from '../log.ts';
 import { authenticate } from './auth.ts';
 import { dropEmptyFields } from './empty-fields.ts';
@@ -28,7 +28,8 @@ export function parsePaIntegrationApiId(raw: string): number | null {
 export const requestedBySchema = z.string()
   .trim()
   .max(100, 'Zlecający może liczyć najwyżej 100 znaków.')
-  .regex(/^[^\p{Cc}]*$/u, 'Zlecający nie może zawierać znaków sterujących, na przykład końca wiersza.')
+  // Także znaki niewidoczne i zmieniające kierunek tekstu: pozwoliłyby podszyć się pod innego zlecającego.
+  .regex(/^[^\p{C}\p{Zl}\p{Zp}]*$/u, 'Zlecający nie może zawierać znaków sterujących ani niewidocznych znaków formatowania, na przykład końca wiersza.')
   .optional();
 
 /**
@@ -97,8 +98,8 @@ export function registerPaIntegrationRoutes(app: FastifyInstance, deps: ApiDeps)
 
       // Brak, integracja innego klucza i integracja innego rodzaju dają tę samą odpowiedź - nie potwierdzamy istnienia.
       const id = parsePaIntegrationApiId(request.params.id);
-      const row = id === null ? undefined : deps.integrations.get(id);
-      if (!row || row.kind !== 'power_automate' || row.apiKeyId !== auth.apiKeyId) {
+      const row = id === null ? undefined : deps.integrations.getOwned(id, auth.apiKeyId, 'power_automate');
+      if (!row) {
         throw new ApiError(404, 'integration_not_found', 'Nie ma integracji Power Automate o tym identyfikatorze.');
       }
       // Wyłączona bez wpisu w dzienniku: tak samo milczy wyłączony webhook.
@@ -110,15 +111,17 @@ export function registerPaIntegrationRoutes(app: FastifyInstance, deps: ApiDeps)
       const label = paActionLabel(action);
       const subject = `integration:${integration.id}`;
       const raw = dropEmptyFields(request.body, [...nested]);
-      // Kolumna „Nadawca” dziennika: zlecający z przepływu, a bez niego adres wywołania.
-      const sourceIp = `API · ${requestedByOf(raw) ?? request.ip}`;
+      // Kolumna „Nadawca” dziennika: zlecający z przepływu i zawsze adres wywołania, bo zlecającego
+      // podaje sam przepływ i mógłby udawać adres.
+      const requestedBy = requestedByOf(raw);
+      const sourceIp = requestedBy ? `API · ${requestedBy} · ${request.ip}` : `API · ${request.ip}`;
 
       const parsed = schema.safeParse(raw);
       if (!parsed.success) {
         const detail = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
         deps.integrationEvents.record({
           integrationId: integration.id, at, result: 'error', reason: `${label}: ${detail}`, sourceIp,
-          payload: integration.storePayloads === 1 ? JSON.stringify(request.body ?? null) : null, logLimit: integration.config.eventLogLimit,
+          payload: integration.storePayloads === 1 ? payloadForLog(request.body) : null, logLimit: integration.config.eventLogLimit,
         });
         deps.notifier?.notify('integration_error', subject, `${integration.name}: ${label}: ${detail}`, at);
         log.warn('integracja.blad', { integrationId: integration.id, code: 'invalid_body' });
@@ -140,10 +143,11 @@ export function registerPaIntegrationRoutes(app: FastifyInstance, deps: ApiDeps)
             const { to: _to, ...accepted } = outcome.messages[0]!;
             return accepted;
           }
+          // Bez numerów: odpowiedź trafia do historii przebiegów w chmurze Microsoftu, a lista zostaje w bramce.
           return {
             integration: { id: paIntegrationApiId(integration.id), name: integration.name },
             recipients: outcome.messages.length,
-            messages: outcome.messages.map((m) => ({ id: m.id, to: m.to, status: m.status, parts: m.parts })),
+            messages: outcome.messages.map((m) => ({ id: m.id, status: m.status, parts: m.parts })),
           };
         }
         case 'throttled': {
@@ -159,7 +163,9 @@ export function registerPaIntegrationRoutes(app: FastifyInstance, deps: ApiDeps)
         case 'unavailable':
           deps.notifier?.notify('integration_error', subject, `${integration.name}: ${outcome.detail}`, at);
           log.warn('integracja.niedostepna', { integrationId: integration.id });
-          throw new ApiError(503, 'integration_unavailable', `Integracja ${integration.name} nie może teraz wysyłać: ${outcome.detail}.`);
+          // Powód (na przykład treść błędu certyfikatu) zostaje w dzienniku i w mailu do administratora.
+          throw new ApiError(503, 'integration_unavailable',
+            `Integracja ${integration.name} nie może teraz wysyłać SMS-ów. Przyczynę podaje dziennik integracji w panelu bramki.`);
         case 'error': {
           // Mail do administratora bez numeru z wywołania: numer to dana osobowa, szczegół jest w dzienniku.
           const summary = outcome.error.code === 'invalid_phone' ? 'nieprawidłowy numer odbiorcy' : outcome.error.message;

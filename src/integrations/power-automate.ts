@@ -26,6 +26,20 @@ export type PaOutcome =
   | { kind: 'unavailable'; detail: string }
   | { kind: 'error'; error: ApiError };
 
+/** Największy ładunek zapisywany w dzienniku integracji; rozsyłka do 5000 odbiorców zajmuje około 1 MB. */
+const PAYLOAD_LOG_LIMIT = 64 * 1024;
+
+/**
+ * Ładunek do dziennika: dziennik przechowuje do 2000 wpisów przez 7 dni, a każda kopia nocna
+ * powiela bazę, więc duże rozsyłki zastępuje zdanie z rozmiarem.
+ */
+export function payloadForLog(body: unknown): string {
+  const json = JSON.stringify(body ?? null);
+  const bytes = Buffer.byteLength(json, 'utf8');
+  if (bytes <= PAYLOAD_LOG_LIMIT) return json;
+  return JSON.stringify({ uwaga: `Ładunek liczy ${Math.ceil(bytes / 1024)} KB, więcej niż 64 KB, dlatego dziennik go nie przechowuje.` });
+}
+
 /** Nazwa akcji tak, jak widzi ją autor przepływu; od niej zaczyna się powód wpisu w dzienniku. */
 const ACTION_LABEL: Record<PaCall['action'], string> = { sms: 'Wyślij SMS', package: 'Wyślij rozsyłkę', group: 'Wyślij SMS do grupy' };
 export const paActionLabel = (action: PaCall['action']): string => ACTION_LABEL[action];
@@ -57,12 +71,12 @@ function seenBefore(
  * zamienia wynik na odpowiedź HTTP i ewentualne powiadomienie administratora.
  */
 export function runPowerAutomate(
-  deps: PipelineDeps & Pick<ApiDeps, 'packages'>, integration: PowerAutomateIntegration, call: PaCall,
+  deps: PipelineDeps & Pick<ApiDeps, 'packages' | 'log'>, integration: PowerAutomateIntegration, call: PaCall,
   meta: { sourceIp: string; idempotencyKey?: string }, now: Date,
 ): PaOutcome {
   const config = integration.config;
   const label = ACTION_LABEL[call.action];
-  const stored = integration.storePayloads === 1 ? JSON.stringify(call.body) : null;
+  const stored = integration.storePayloads === 1 ? payloadForLog(call.body) : null;
   const note = (result: IntegrationEventInput['result'], extra: Partial<IntegrationEventInput> = {}): void => {
     deps.integrationEvents.record({ integrationId: integration.id, at: now, result, sourceIp: meta.sourceIp, payload: stored, logLimit: config.eventLogLimit, ...extra });
   };
@@ -111,10 +125,18 @@ export function runPowerAutomate(
     return fitted.text;
   };
   const withCut = (reason: string): string => (cut ? `${reason}; skrócono do ${config.maxParts} części` : reason);
-  /** Wpis po przyjęciu: „wysłano” albo „duplikat”, gdy wywołanie powtórzyło klucz idempotencji. */
+  /**
+   * Wpis po przyjęciu: „wysłano” albo „duplikat”, gdy wywołanie powtórzyło klucz idempotencji.
+   * Wysyłka jest już w kolejce, więc błąd zapisu wpisu nie może zamienić wyniku w błąd: przepływ
+   * ponowiłby akcję i wysłał SMS drugi raz.
+   */
   const accepted = (reason: string, extra: Partial<IntegrationEventInput>): void => {
-    if (repeated) note('duplicate', { reason: `${reason}, powtórzony klucz idempotencji`, ...extra });
-    else note('sent', { reason: withCut(reason), ...extra });
+    try {
+      if (repeated) note('duplicate', { reason: `${reason}, powtórzony klucz idempotencji`, ...extra });
+      else note('sent', { reason: withCut(reason), ...extra });
+    } catch (error) {
+      deps.log?.error('integracja.dziennik_blad', { integrationId: integration.id, error });
+    }
   };
 
   try {
@@ -137,12 +159,13 @@ export function runPowerAutomate(
     }
 
     const b = call.body;
-    const text = fit(b.text);
     const to = call.action === 'sms' ? [call.body.to] : config.recipients.map((r) => r.phone);
+    // Pusta lista przed długością treści: skrócenie treści nie pomoże, gdy nie ma do kogo wysłać.
     if (to.length === 0) {
       throw new ApiError(409, 'group_empty',
         `Integracja ${integration.name} nie ma odbiorców grupy. Listę uzupełnia administrator w panelu bramki.`);
     }
+    const text = fit(b.text);
     const results = submitMessages(deps, auth, {
       to, text, encoding: b.encoding, deliveryReport: b.deliveryReport, maxParts: config.maxParts, ...via,
       ...(b.validTo !== undefined ? { validTo: b.validTo } : {}),

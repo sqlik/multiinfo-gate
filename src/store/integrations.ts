@@ -90,6 +90,16 @@ export class IntegrationsRepo {
     return row ? toRow(row) : undefined;
   }
 
+  /**
+   * Integracja danego rodzaju należąca do klucza API. Warunek stoi w zapytaniu, więc konfiguracja
+   * cudzej integracji nie jest nawet odczytywana: brak i cudza dają ten sam wynik w tym samym czasie.
+   */
+  getOwned(id: number, apiKeyId: number, kind: IntegrationKind): IntegrationRow | undefined {
+    const row = this.db.prepare(`SELECT ${COLUMNS} FROM integrations WHERE id = ? AND api_key_id = ? AND kind = ?`)
+      .get(id, apiKeyId, kind) as Raw | undefined;
+    return row ? toRow(row) : undefined;
+  }
+
   getByHookId(hookId: string): IntegrationRow | undefined {
     const row = this.db.prepare(`SELECT ${COLUMNS} FROM integrations WHERE hook_id = ?`).get(hookId) as Raw | undefined;
     return row ? toRow(row) : undefined;

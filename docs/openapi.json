@@ -3045,7 +3045,6 @@
               "type": "object",
               "required": [
                 "id",
-                "to",
                 "status",
                 "parts"
               ],
@@ -3054,11 +3053,6 @@
                   "type": "string",
                   "description": "Identyfikator wiadomości",
                   "example": "msg_3f9c2a7b1e4d8c6a5b2f"
-                },
-                "to": {
-                  "type": "string",
-                  "description": "Numer odbiorcy",
-                  "example": "48601000011"
                 },
                 "status": {
                   "type": "string",

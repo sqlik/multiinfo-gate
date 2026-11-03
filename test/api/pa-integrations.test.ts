@@ -37,6 +37,7 @@ let biuro: number;
 let dyzur: number;
 let flota: number;
 let hook: number;
+let db: ReturnType<typeof openDatabase>;
 
 const EKIPA: PowerAutomateConfig['recipients'] = [
   { phone: '48601000011', name: 'Marek Kowalski' },
@@ -45,7 +46,7 @@ const EKIPA: PowerAutomateConfig['recipients'] = [
 ];
 
 beforeEach(async () => {
-  const db = openDatabase(':memory:');
+  db = openDatabase(':memory:');
   accounts = new AccountsRepo(db, masterKey);
   const apiKeys = new ApiKeysRepo(db, masterKey);
   messages = new MessagesRepo(db);
@@ -143,7 +144,7 @@ describe('POST /v1/integrations/{id}/messages', () => {
     const m = messages.get(body.id)!;
     expect(m).toMatchObject({ dest: '48601000001', integrationId: ekipa, serviceId: '24902', orig: 'SerwisAlarm', requestedBy: 'jan.nowak@firma.pl' });
     const [entry] = log(ekipa);
-    expect(entry).toMatchObject({ result: 'sent', reason: 'Wyślij SMS', messageId: body.id, sourceIp: 'API · jan.nowak@firma.pl' });
+    expect(entry).toMatchObject({ result: 'sent', reason: 'Wyślij SMS', messageId: body.id, sourceIp: 'API · jan.nowak@firma.pl · 127.0.0.1' });
     expect(JSON.parse(entry!.payload!)).toMatchObject({ to: '601000001' });
   });
 
@@ -219,11 +220,13 @@ describe('POST /v1/integrations/{id}/group', () => {
     const body = res.json();
     expect(body.integration).toEqual({ id: `int_${ekipa}`, name: 'Ekipa serwisowa' });
     expect(body.recipients).toBe(3);
-    expect(body.messages.map((m: { to: string }) => m.to)).toEqual(['48601000011', '48601000012', '48601000013']);
-    expect(body.messages[0]).toEqual({ id: expect.stringMatching(/^msg_/), to: '48601000011', status: 'queued', parts: 1 });
+    expect(body.messages).toHaveLength(3);
+    expect(body.messages[0]).toEqual({ id: expect.stringMatching(/^msg_/), status: 'queued', parts: 1 });
+    // Numery członków grupy zostają w bramce: odpowiedź trafia do historii przebiegów w chmurze Microsoftu.
+    expect(JSON.stringify(body)).not.toContain('48601');
     expect(allMessages()).toHaveLength(3);
     expect(allMessages().every((m) => m.integrationId === ekipa && m.requestedBy === 'Dyspozytornia')).toBe(true);
-    expect(log(ekipa)[0]).toMatchObject({ result: 'sent', reason: 'Wyślij SMS do grupy, 3 odbiorców', messageId: body.messages[0].id, sourceIp: 'API · Dyspozytornia' });
+    expect(log(ekipa)[0]).toMatchObject({ result: 'sent', reason: 'Wyślij SMS do grupy, 3 odbiorców', messageId: body.messages[0].id, sourceIp: 'API · Dyspozytornia · 127.0.0.1' });
   });
 
   it('pusta lista odbiorców: 409 group_empty, wpis „błąd”, zero wiadomości', async () => {
@@ -232,6 +235,13 @@ describe('POST /v1/integrations/{id}/group', () => {
     expect(res.json().error).toEqual({ code: 'group_empty', message: 'Integracja Biuro handlowe nie ma odbiorców grupy. Listę uzupełnia administrator w panelu bramki.' });
     expect(allMessages()).toEqual([]);
     expect(log(biuro)[0]).toMatchObject({ result: 'error', reason: expect.stringMatching(/^Wyślij SMS do grupy: /) });
+  });
+
+  it('pusta lista i zbyt długa treść: najpierw 409 group_empty, a nie błąd długości', async () => {
+    integrations.update(biuro, { ...rowPatch(biuro), config: { ...defaultPowerAutomateConfig(), maxParts: 1, overflow: 'reject' } }, NOW);
+    const res = await post(`/v1/integrations/int_${biuro}/group`, { text: 'x'.repeat(200) });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('group_empty');
   });
 
   it('ciało z polem to nie zmienia odbiorców', async () => {
@@ -273,6 +283,15 @@ describe('POST /v1/integrations/{id}/packages', () => {
     expect(second.json()).toEqual(first.json());
     expect(allPackages()).toHaveLength(1);
     expect(log(biuro).map((e) => e.result)).toEqual(['duplicate', 'sent']);
+  });
+
+  it('ładunek ponad 64 KB nie trafia do dziennika, wpis podaje jego rozmiar', async () => {
+    const recipients = Array.from({ length: 2000 }, (_, i) => ({ to: `48601${String(i).padStart(6, '0')}`, text: `Wizyta technika jutro, zlecenie ZL-${i}` }));
+    const res = await post(`/v1/integrations/int_${ekipa}/packages`, { recipients });
+    expect(res.statusCode).toBe(202);
+    const payload = log(ekipa)[0]!.payload!;
+    expect(payload.length).toBeLessThan(1024);
+    expect(JSON.parse(payload)).toEqual({ uwaga: expect.stringMatching(/^Ładunek liczy \d+ KB, więcej niż 64 KB, dlatego dziennik go nie przechowuje\.$/) });
   });
 
   it('pusta treść odbiorcy znaczy treść wspólną', async () => {
@@ -419,6 +438,13 @@ describe('integracja nieznana, cudza, innego rodzaju albo wyłączona', () => {
     expect(log(hook)).toEqual([]);
   });
 
+  it('cudza integracja z konfiguracją, której bramka nie odczyta: 404, a nie 500', async () => {
+    db.prepare('UPDATE integrations SET config = ? WHERE id = ?').run('{}', flota);
+    const res = await post(`/v1/integrations/int_${flota}/messages`, { to: '48601000001', text: 'x' });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.code).toBe('integration_not_found');
+  });
+
   it('wyłączona: 409 integration_disabled bez wpisu w dzienniku', async () => {
     const res = await post(`/v1/integrations/int_${dyzur}/messages`, { to: '48601000001', text: 'x' });
     expect(res.statusCode).toBe(409);
@@ -434,7 +460,7 @@ describe('integracja nieznana, cudza, innego rodzaju albo wyłączona', () => {
 });
 
 describe('zlecający', () => {
-  it.each([['Jan\u0007Nowak'], ['x'.repeat(101)], ['Jan\nNowak']])('%j: 400 invalid_body', async (requestedBy) => {
+  it.each([['Jan\u0007Nowak'], ['x'.repeat(101)], ['Jan\nNowak'], ['Jan\u202eNowak'], ['Jan\u2028Nowak'], ['Jan\u2029Nowak'], ['Jan\u200bNowak'], ['Jan\u00adNowak'], ['Jan\u2066Nowak']])('%j: 400 invalid_body', async (requestedBy) => {
     const res = await post(`/v1/integrations/int_${ekipa}/messages`, { to: '48601000001', text: 'x', requestedBy });
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBe('invalid_body');
@@ -444,7 +470,7 @@ describe('zlecający', () => {
   it('HTML przechodzi do bazy bez zmian, 100 znaków przechodzi', async () => {
     const res = await post(`/v1/integrations/int_${ekipa}/messages`, { to: '48601000001', text: 'x', requestedBy: '<b>Jan</b>' });
     expect(messages.get(res.json().id)!.requestedBy).toBe('<b>Jan</b>');
-    expect(log(ekipa)[0]!.sourceIp).toBe('API · <b>Jan</b>');
+    expect(log(ekipa)[0]!.sourceIp).toBe('API · <b>Jan</b> · 127.0.0.1');
     expect((await post(`/v1/integrations/int_${ekipa}/messages`, { to: '48601000002', text: 'x', requestedBy: 'x'.repeat(100) })).statusCode).toBe(202);
   });
 
@@ -462,8 +488,9 @@ describe('konto niedostępne', () => {
     const res = await post(`/v1/integrations/int_${ekipa}/messages`, { to: '48601000001', text: 'x' });
     expect(res.statusCode).toBe(503);
     expect(res.json().error.code).toBe('integration_unavailable');
-    expect(res.json().error.message).toContain('konto wstrzymane: certyfikat wygasł');
-    expect(log(ekipa)[0]).toMatchObject({ result: 'error' });
+    expect(res.json().error.message).toBe('Integracja Ekipa serwisowa nie może teraz wysyłać SMS-ów. Przyczynę podaje dziennik integracji w panelu bramki.');
+    expect(res.json().error.message).not.toContain('certyfikat');
+    expect(log(ekipa)[0]).toMatchObject({ result: 'error', reason: 'Wyślij SMS: konto wstrzymane: certyfikat wygasł' });
     expect(notices.map((n) => n.event)).toEqual(['integration_error']);
     expect(allMessages()).toEqual([]);
   });

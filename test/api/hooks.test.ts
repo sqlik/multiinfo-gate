@@ -244,7 +244,7 @@ describe('POST /hooks/:hookId', () => {
     apiKeys.revoke(apiKeyId);
     const res = await post(integ.hookId!, { msg: 'x' });
     expect(res.statusCode).toBe(503);
-    expect(res.json()).toMatchObject({ accepted: false, reason: 'unavailable' });
+    expect(res.json()).toEqual({ accepted: false, reason: 'unavailable', detail: 'Integracja nie może teraz wysyłać SMS-ów. Przyczynę podaje dziennik integracji w panelu bramki.' });
   });
   it('zalew z jednego adresu to 429', async () => {
     const integ = make({ throttle: { limit: 1000, windowMinutes: 10 } });

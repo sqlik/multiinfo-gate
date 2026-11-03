@@ -66,6 +66,16 @@ describe('runPowerAutomate', () => {
     expect((out as { error: ApiError }).error.code).toBe('invalid_phone');
   });
 
+  it('błąd zapisu wpisu po przyjęciu wysyłki nie zmienia wyniku: SMS jest w kolejce, wołający otrzymuje „sent”', () => {
+    const record = deps.integrationEvents.record.bind(deps.integrationEvents);
+    deps = { ...deps, integrationEvents: Object.assign(Object.create(deps.integrationEvents), {
+      record: (e: Parameters<typeof record>[0]) => { if (e.result === 'sent') throw new Error('SQLITE_FULL'); record(e); },
+    }) };
+    const out = runPowerAutomate(deps, integration, sms('48601000001'), meta, NOW);
+    expect(out.kind).toBe('sent');
+    expect(deps.messages.list({ limit: 10, offset: 0 })).toHaveLength(1);
+  });
+
   it('burza: throttled z flagą powiadomienia tylko przy pierwszej odmowie w oknie', () => {
     integration = { ...integration, config: { ...integration.config, throttle: { limit: 1, windowMinutes: 10, recipients: 5000 } } };
     expect(runPowerAutomate(deps, integration, sms('48601000001'), meta, NOW).kind).toBe('sent');
