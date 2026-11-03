@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { RULE_OPS } from './conditions.ts';
 import { isValidPath } from './paths.ts';
 
-export type IntegrationKind = 'webhook_in' | 'webhook_out' | 'mail_in' | 'sms_group';
-export const INTEGRATION_KINDS: IntegrationKind[] = ['webhook_in', 'webhook_out', 'mail_in', 'sms_group'];
+export type IntegrationKind = 'webhook_in' | 'webhook_out' | 'mail_in' | 'sms_group' | 'power_automate';
+export const INTEGRATION_KINDS: IntegrationKind[] = ['webhook_in', 'webhook_out', 'mail_in', 'sms_group', 'power_automate'];
 
 export const OUTBOUND_EVENTS = ['message.received', 'message.sent', 'message.delivered', 'message.failed'] as const;
 export type OutboundEvent = (typeof OUTBOUND_EVENTS)[number];
@@ -185,18 +185,35 @@ export const smsGroupConfigSchema = z.object({
 });
 export type SmsGroupConfig = z.infer<typeof smsGroupConfigSchema>;
 
-export type IntegrationConfig = InboundConfig | OutboundConfig | MailInConfig | SmsGroupConfig;
+/**
+ * Integracja Power Automate: konektor wywołuje ją z przepływu, a bramka prowadzi każde wywołanie
+ * przez limit części, ochronę przed burzą i dziennik. Bez warunku i szablonu: treść, odbiorców
+ * i warunki buduje się w przepływie. Lista odbiorców służy wyłącznie akcji „Wyślij SMS do grupy”
+ * i może być pusta.
+ */
+export const powerAutomateConfigSchema = z.object({
+  throttle: common.throttle,
+  eventLogLimit: common.eventLogLimit,
+  recipients: z.array(groupMemberSchema).max(GROUP_LIMITS.recipients),
+  maxParts: z.number().int().min(1).max(9),
+  overflow: z.enum(['truncate', 'reject']),
+});
+export type PowerAutomateConfig = z.infer<typeof powerAutomateConfigSchema>;
+
+export type IntegrationConfig = InboundConfig | OutboundConfig | MailInConfig | SmsGroupConfig | PowerAutomateConfig;
 export type IntegrationSecrets = Record<string, string>;
 
 export function parseConfig(kind: 'webhook_in', raw: unknown): InboundConfig;
 export function parseConfig(kind: 'webhook_out', raw: unknown): OutboundConfig;
 export function parseConfig(kind: 'mail_in', raw: unknown): MailInConfig;
 export function parseConfig(kind: 'sms_group', raw: unknown): SmsGroupConfig;
+export function parseConfig(kind: 'power_automate', raw: unknown): PowerAutomateConfig;
 export function parseConfig(kind: IntegrationKind, raw: unknown): IntegrationConfig;
 export function parseConfig(kind: IntegrationKind, raw: unknown): IntegrationConfig {
   if (kind === 'webhook_in') return inboundConfigSchema.parse(raw);
   if (kind === 'mail_in') return mailInConfigSchema.parse(raw);
   if (kind === 'sms_group') return smsGroupConfigSchema.parse(raw);
+  if (kind === 'power_automate') return powerAutomateConfigSchema.parse(raw);
   return outboundConfigSchema.parse(raw);
 }
 
@@ -226,4 +243,12 @@ export const defaultSmsGroupConfig = (): SmsGroupConfig => ({
   condition: { mode: 'builder', rules: [] }, throttle: { limit: 10, windowMinutes: 10 }, eventLogLimit: 200,
   mode: 'lists', senders: [], recipients: [], members: [], prefix: '', text: { mode: 'body' }, confirm: { enabled: false },
   maxParts: 1, overflow: 'truncate',
+});
+
+/**
+ * Burza 30 wywołań na 10 minut: przepływ wysyłający po jednym SMS-ie do kilkunastu osób nie trafia
+ * od razu na limit. Trzy części i odrzucenie nadmiaru: treść z przepływu nie jest obcinana po cichu.
+ */
+export const defaultPowerAutomateConfig = (): PowerAutomateConfig => ({
+  throttle: { limit: 30, windowMinutes: 10 }, eventLogLimit: 200, recipients: [], maxParts: 3, overflow: 'reject',
 });

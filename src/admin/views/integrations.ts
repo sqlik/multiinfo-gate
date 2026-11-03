@@ -28,7 +28,7 @@ export interface IntegrationsFilter { kind: 'in' | 'out' | 'mail' | 'grupa' | nu
 /** Klucz do wyboru w formularzu: czynne klucze z usługami i nadpisami, po których wybiera się usługę i nadawcę. */
 export interface KeyOption { id: number; name: string; accountName: string; serviceIds: string[]; origs: string[] }
 
-const KIND_LABEL: Record<IntegrationKind, string> = { webhook_in: 'do SMS', webhook_out: 'z SMS-a', mail_in: 'z poczty', sms_group: 'do grupy' };
+const KIND_LABEL: Record<IntegrationKind, string> = { webhook_in: 'do SMS', webhook_out: 'z SMS-a', mail_in: 'z poczty', sms_group: 'do grupy', power_automate: 'do SMS' };
 export const kindLabel = (kind: IntegrationKind): string => KIND_LABEL[kind];
 
 const RESULT_LABELS: Record<EventResult, string> = {
@@ -268,12 +268,13 @@ export const OUTBOUND_SAMPLE = {
 export function configToValues(kind: IntegrationKind, config: IntegrationConfig, base: Pick<IntegrationFormValues, 'name' | 'apiKeyId' | 'serviceId' | 'orig' | 'enabled' | 'preset' | 'storePayloads' | 'sample'>): IntegrationFormValues {
   const inbound = kind === 'webhook_in' ? config as InboundConfig : defaultInboundConfig();
   const outbound = kind === 'webhook_out' ? config as OutboundConfig : defaultOutboundConfig();
+  const condition = 'condition' in config ? config.condition : inbound.condition;
   return {
     ...base,
     throttleLimit: String(config.throttle.limit), throttleWindow: String(config.throttle.windowMinutes), eventLogLimit: String(config.eventLogLimit),
-    conditionMode: config.condition.mode,
-    rules: config.condition.mode === 'builder' ? config.condition.rules.map((r) => ({ path: r.path, op: r.op, value: r.value })) : [],
-    conditionExpr: config.condition.mode === 'liquid' ? config.condition.expr : '',
+    conditionMode: condition.mode,
+    rules: condition.mode === 'builder' ? condition.rules.map((r) => ({ path: r.path, op: r.op, value: r.value })) : [],
+    conditionExpr: condition.mode === 'liquid' ? condition.expr : '',
     authHeaderName: inbound.auth.header?.name ?? '', authHeaderValue: '', authBasicUser: inbound.auth.basic?.user ?? '', authBasicPass: '',
     authPayloadPath: inbound.auth.payload?.path ?? '', authPayloadValue: '',
     sources: inbound.auth.sources.join('\n'),
@@ -823,7 +824,7 @@ export interface IntegrationDetail {
 }
 
 /** Warunek w słowach: „heartbeat.status równe 0; monitor.name zawiera prod” albo wyrażenie Liquid. */
-export function conditionWords(condition: IntegrationConfig['condition']): string {
+export function conditionWords(condition: InboundConfig['condition']): string {
   if (condition.mode === 'liquid') return `Liquid: ${condition.expr}`;
   if (condition.rules.length === 0) return 'brak, każde zdarzenie jest przetwarzane';
   return condition.rules.map((r) => {
@@ -913,7 +914,8 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     if (cfg.responseRefPath) rows.push(kvRow('Identyfikator z odpowiedzi', esc(cfg.responseRefPath), true));
     rows.push(kvRow('Podpis X-MIG-Signature', cfg.sign ? 'tak' : 'nie'));
   }
-  rows.push(kvRow(simple ? 'Warunek wysyłki' : 'Warunek', esc(simple ? simple.when : conditionWords(c.condition))));
+  // Integracja Power Automate nie ma warunku: warunki buduje się w przepływie.
+  if ('condition' in c) rows.push(kvRow(simple ? 'Warunek wysyłki' : 'Warunek', esc(simple ? simple.when : conditionWords(c.condition))));
   rows.push(kvRow('Limit burzy', `${esc(c.throttle.limit)} zdarzeń na ${esc(c.throttle.windowMinutes)} minut`));
   rows.push(kvRow('Ładunki', row.storePayloads === 1 ? 'przechowywane 7 dni, zaszyfrowane' : 'nieprzechowywane'));
   rows.push(kvRow('Dziennik', `do ${esc(c.eventLogLimit)} wpisów`));

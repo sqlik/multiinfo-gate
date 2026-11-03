@@ -12,7 +12,7 @@ describe('migracja 006', () => {
     expect(cols('messages')).toContain('integration_id');
     expect(cols('inbound_messages')).toEqual(expect.arrayContaining(['external_ref', 'external_integration_id']));
     expect(cols('webhook_deliveries')).toEqual(expect.arrayContaining(['integration_id', 'method', 'headers_enc', 'response_ref']));
-    expect(db.pragma('user_version', { simple: true })).toBe(9);
+    expect(db.pragma('user_version', { simple: true })).toBe(10);
   });
 });
 
@@ -29,5 +29,21 @@ describe('migracja 008', () => {
     const db = openDatabase(':memory:');
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mail_in_%' ORDER BY name").all().map((r) => (r as { name: string }).name);
     expect(tables).toEqual(['mail_in_seen', 'mail_in_state']);
+  });
+});
+
+describe('migracja 010', () => {
+  it('010 dokłada zlecającego przy wiadomości i rozsyłce, integrację rozsyłki i rozsyłkę wpisu dziennika', () => {
+    const db = openDatabase(':memory:');
+    const cols = (t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((c) => c.name);
+    expect(db.pragma('user_version', { simple: true })).toBe(10);
+    expect(cols('messages')).toContain('requested_by');
+    expect(cols('packages')).toEqual(expect.arrayContaining(['integration_id', 'requested_by']));
+    expect(cols('integration_events')).toContain('package_id');
+  });
+  it('usunięcie integracji zostawia rozsyłkę bez powiązania', () => {
+    const db = openDatabase(':memory:');
+    const fks = db.prepare('PRAGMA foreign_key_list(packages)').all() as Array<{ table: string; from: string; on_delete: string }>;
+    expect(fks).toContainEqual(expect.objectContaining({ table: 'integrations', from: 'integration_id', on_delete: 'SET NULL' }));
   });
 });

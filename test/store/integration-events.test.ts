@@ -44,6 +44,13 @@ describe('IntegrationEventsRepo', () => {
     expect(events.latest(integrationId)!.id).toBe(id);
     expect(integrations.get(integrationId)!.lastEventAt).toBe(NOW.toISOString());
   });
+  it('zapisuje rozsyłkę powiązaną z wpisem, bez niej pole jest puste', () => {
+    events.record({ integrationId, at: NOW, result: 'sent', reason: 'Wyślij rozsyłkę, 2 odbiorców', packageId: 'pkg_1', logLimit: 200 });
+    events.record({ integrationId, at: NOW, result: 'sent', messageId: 'msg_1', logLimit: 200 });
+    const [bez, z] = events.list(integrationId, 10);
+    expect(z!.packageId).toBe('pkg_1');
+    expect(bez!.packageId).toBeNull();
+  });
   it('przycina dziennik do limitu', () => {
     for (let i = 0; i < 25; i += 1) events.record({ integrationId, at: NOW, result: 'skipped', logLimit: 20 });
     expect(events.list(integrationId, 100)).toHaveLength(20);

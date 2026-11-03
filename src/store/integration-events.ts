@@ -6,11 +6,13 @@ export type EventResult = 'sent' | 'skipped' | 'rejected' | 'throttled' | 'error
 export interface IntegrationEventRow {
   id: number; integrationId: number; at: string; result: EventResult; reason: string | null; sourceIp: string | null;
   messageId: string | null; inboundId: string | null; deliveryId: number | null; payload: string | null; response: string | null;
+  /** Rozsyłka zlecona wywołaniem integracji Power Automate. */
+  packageId: string | null;
 }
 
 export interface IntegrationEventInput {
   integrationId: number; at: Date; result: EventResult; reason?: string; sourceIp?: string; messageId?: string;
-  inboundId?: string; deliveryId?: number; payload?: string | null; response?: string;
+  inboundId?: string; deliveryId?: number; payload?: string | null; response?: string; packageId?: string;
   /** `eventLogLimit` integracji - wpisy ponad limit znikają przy zapisie. */
   logLimit: number;
 }
@@ -18,6 +20,7 @@ export interface IntegrationEventInput {
 interface Raw {
   id: number; integration_id: number; at: string; result: EventResult; reason: string | null; source_ip: string | null;
   message_id: string | null; inbound_id: string | null; delivery_id: number | null; payload_enc: string | null; response: string | null;
+  package_id: string | null;
 }
 
 const RESPONSE_CHARS = 300;
@@ -33,11 +36,11 @@ export class IntegrationEventsRepo {
   record(e: IntegrationEventInput): number {
     return this.db.transaction(() => {
       const info = this.db.prepare(
-        `INSERT INTO integration_events (integration_id, at, result, reason, source_ip, message_id, inbound_id, delivery_id, payload_enc, response)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO integration_events (integration_id, at, result, reason, source_ip, message_id, inbound_id, delivery_id, payload_enc, response, package_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(e.integrationId, e.at.toISOString(), e.result, e.reason?.slice(0, REASON_CHARS) ?? null, e.sourceIp ?? null,
         e.messageId ?? null, e.inboundId ?? null, e.deliveryId ?? null,
-        e.payload ? encryptSecret(e.payload, this.masterKey) : null, e.response?.slice(0, RESPONSE_CHARS) ?? null);
+        e.payload ? encryptSecret(e.payload, this.masterKey) : null, e.response?.slice(0, RESPONSE_CHARS) ?? null, e.packageId ?? null);
       this.db.prepare('UPDATE integrations SET last_event_at = ? WHERE id = ?').run(e.at.toISOString(), e.integrationId);
       // Rotacja przy zapisie: dziennik ma stały rozmiar, nie rośnie do sprzątania nocnego.
       this.db.prepare(
@@ -53,6 +56,7 @@ export class IntegrationEventsRepo {
       id: r.id, integrationId: r.integration_id, at: r.at, result: r.result, reason: r.reason, sourceIp: r.source_ip,
       messageId: r.message_id, inboundId: r.inbound_id, deliveryId: r.delivery_id,
       payload: r.payload_enc === null ? null : decryptSecret(r.payload_enc, this.masterKey), response: r.response,
+      packageId: r.package_id,
     };
   }
 

@@ -20,6 +20,8 @@ export interface MessageRow {
   integrationId: number | null;
   /** Adres e-mail nadawcy wiadomości z Mail2SMS; `null` dla pozostałych źródeł. */
   mailFrom: string | null;
+  /** Zlecający wysyłkę z przepływu Power Automate; `null` dla pozostałych źródeł. */
+  requestedBy: string | null;
 }
 
 export interface MessageInput {
@@ -33,6 +35,7 @@ export interface MessageInput {
   inReplyTo?: string | null;
   integrationId?: number | null;
   mailFrom?: string | null;
+  requestedBy?: string | null;
 }
 
 export interface MessageFilter {
@@ -59,6 +62,7 @@ interface RawMessage {
   idempotency_key: string | null;
   created_at: string; sent_at: string | null; final_at: string | null;
   trace: string | null; in_reply_to: string | null; integration_id: number | null; mail_from: string | null;
+  requested_by: string | null;
 }
 
 /** Statusy, po których wiadomość nie zmieni już stanu i trafia na listę nieudanych. */
@@ -96,6 +100,7 @@ function toRow(r: RawMessage): MessageRow {
     inReplyTo: r.in_reply_to,
     integrationId: r.integration_id,
     mailFrom: r.mail_from,
+    requestedBy: r.requested_by,
   };
 }
 
@@ -115,8 +120,8 @@ export class MessagesRepo {
       .prepare(
         `INSERT INTO messages (
            id, api_key_id, account_id, service_id, dest, body, body_hash,
-           encoding, parts, slots, orig, cost_center, valid_to, idempotency_key, in_reply_to, integration_id, mail_from, created_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           encoding, parts, slots, orig, cost_center, valid_to, idempotency_key, in_reply_to, integration_id, mail_from, requested_by, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                    COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))`,
       )
       .run(
@@ -137,6 +142,7 @@ export class MessagesRepo {
         input.inReplyTo ?? null,
         input.integrationId ?? null,
         input.mailFrom ?? null,
+        input.requestedBy ?? null,
         input.createdAt ?? null,
       );
   }

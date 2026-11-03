@@ -13,12 +13,17 @@ export interface PackageRow {
   status: PackageStatus; providerCode: number | null; error: string | null;
   reportStatus: ReportStatus; reportId: string | null; reportExpiresAt: string | null; reportPath: string | null;
   createdAt: string; completedAt: string | null;
+  /** Integracja Power Automate, która zleciła rozsyłkę; `null` dla żądań z API. */
+  integrationId: number | null;
+  /** Zlecający z przepływu Power Automate; `null` dla pozostałych źródeł. */
+  requestedBy: string | null;
 }
 
 export interface PackageInput {
   id: string; apiKeyId: number; accountId: number; serviceId: string;
   defaultText: string | null; orig: string | null; costCenter: string | null; startAt: string | null;
   deliveryReport: 0 | 1; encoding: 'gsm' | 'ucs2'; multipart: 0 | 1; createdAt: string;
+  integrationId?: number | null; requestedBy?: string | null;
 }
 
 export interface RecipientInput { dest: string; text: string | null; clientId: string | null }
@@ -41,7 +46,7 @@ interface Raw {
   mi_package_id: string | null; recipients_count: number; remaining_count: number | null; mi_status: number | null;
   status: PackageStatus; provider_code: number | null; error: string | null;
   report_status: ReportStatus; report_id: string | null; report_expires_at: string | null; report_path: string | null;
-  created_at: string; completed_at: string | null;
+  created_at: string; completed_at: string | null; integration_id: number | null; requested_by: string | null;
 }
 
 interface RawRecipient {
@@ -58,6 +63,7 @@ function toRow(r: Raw): PackageRow {
     miStatus: r.mi_status, status: r.status, providerCode: r.provider_code, error: r.error,
     reportStatus: r.report_status, reportId: r.report_id, reportExpiresAt: r.report_expires_at,
     reportPath: r.report_path, createdAt: r.created_at, completedAt: r.completed_at,
+    integrationId: r.integration_id, requestedBy: r.requested_by,
   };
 }
 
@@ -82,11 +88,11 @@ export class PackagesRepo {
     const create = this.db.transaction(() => {
       this.db.prepare(
         `INSERT INTO packages (id, api_key_id, account_id, service_id, default_text, orig, cost_center, start_at,
-           delivery_report, encoding, multipart, recipients_count, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           delivery_report, encoding, multipart, recipients_count, created_at, integration_id, requested_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(input.id, input.apiKeyId, input.accountId, input.serviceId, input.defaultText, input.orig,
         input.costCenter, input.startAt, input.deliveryReport, input.encoding, input.multipart,
-        recipients.length, input.createdAt);
+        recipients.length, input.createdAt, input.integrationId ?? null, input.requestedBy ?? null);
       const add = this.db.prepare(
         'INSERT INTO package_recipients (package_id, seq, dest, text, client_id) VALUES (?, ?, ?, ?, ?)');
       recipients.forEach((r, i) => add.run(input.id, i + 1, r.dest, r.text, r.clientId));

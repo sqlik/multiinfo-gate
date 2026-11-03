@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GROUP_LIMITS, INTEGRATION_KINDS, defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig, defaultSmsGroupConfig, parseConfig } from '../../src/integrations/config.ts';
+import { GROUP_LIMITS, INTEGRATION_KINDS, defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig, defaultPowerAutomateConfig, defaultSmsGroupConfig, parseConfig } from '../../src/integrations/config.ts';
 import { isMailIn, isSmsGroup } from '../../src/store/integrations.ts';
 
 const outbound = () => ({ ...defaultOutboundConfig(), url: 'https://example.invalid/hook' });
@@ -104,5 +104,29 @@ describe('sms_group', () => {
     expect(isSmsGroup({ kind: 'mail_in' } as never)).toBe(false);
     expect(INTEGRATION_KINDS).toContain('sms_group');
     expect(GROUP_LIMITS).toEqual({ senders: 100, recipients: 500, members: 500, prefix: 20, name: 40 });
+  });
+});
+
+describe('power_automate', () => {
+  it('domyślna konfiguracja przechodzi: burza 30 w 10 min, dziennik 200, pusta lista, 3 części, odrzucenie nadmiaru', () => {
+    expect(parseConfig('power_automate', defaultPowerAutomateConfig())).toEqual({
+      throttle: { limit: 30, windowMinutes: 10 }, eventLogLimit: 200, recipients: [], maxParts: 3, overflow: 'reject',
+    });
+    expect(INTEGRATION_KINDS).toContain('power_automate');
+  });
+  it('odrzuca 501 odbiorców i numer nieznormalizowany', () => {
+    const base = defaultPowerAutomateConfig();
+    const many = Array.from({ length: 501 }, (_, i) => ({ phone: `48601${String(i).padStart(6, '0')}`, name: '' }));
+    expect(() => parseConfig('power_automate', { ...base, recipients: many })).toThrow();
+    expect(() => parseConfig('power_automate', { ...base, recipients: [{ phone: '601000001', name: '' }] })).toThrow();
+  });
+  it('lista do 500 odbiorców z nazwami przechodzi, nazwa opcjonalna', () => {
+    const c = parseConfig('power_automate', { ...defaultPowerAutomateConfig(), recipients: [{ phone: '48601000011', name: 'Marek Kowalski' }, { phone: '48601000012' }] });
+    expect(c.recipients).toEqual([{ phone: '48601000011', name: 'Marek Kowalski' }, { phone: '48601000012', name: '' }]);
+  });
+  it('nie wymaga pola condition i odrzuca limit części spoza 1-9', () => {
+    expect(defaultPowerAutomateConfig()).not.toHaveProperty('condition');
+    expect(() => parseConfig('power_automate', { ...defaultPowerAutomateConfig(), maxParts: 10 })).toThrow();
+    expect(() => parseConfig('power_automate', { ...defaultPowerAutomateConfig(), overflow: 'skip' })).toThrow();
   });
 });

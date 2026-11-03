@@ -1,0 +1,110 @@
+import { shortId } from '../ids.ts';
+import type { RecipientInput } from '../store/packages.ts';
+import { measureText, type EncodingRequest } from '../text/measure.ts';
+import { InvalidPhoneError, normalizePhone } from '../text/phone.ts';
+import { TooManyPartsError, segmentText } from '../text/segment.ts';
+import type { AuthContext } from './auth.ts';
+import { ApiError } from './errors.ts';
+import { resolveOrig } from './orig.ts';
+import type { ApiDeps } from './server.ts';
+
+export type SubmitPackageDeps = Pick<ApiDeps, 'accounts' | 'packages' | 'jobs'>;
+
+export interface PackageSubmitInput {
+  recipients: Array<{ to: string; text?: string | undefined; clientId?: string | undefined }>;
+  defaultText?: string | undefined;
+  serviceId?: string | undefined;
+  orig?: string | undefined;
+  startAt?: string | undefined;
+  deliveryReport: boolean;
+  encoding: EncodingRequest;
+  costCenter?: string | undefined;
+  /** Limit części niższy niż klucza (integracja); wyższy niż klucza nie działa. */
+  maxParts?: number | undefined;
+  /** Integracja Power Automate, która zleciła rozsyłkę; brak dla żądań z API. */
+  integrationId?: number | undefined;
+  /** Zlecający z przepływu Power Automate; brak dla pozostałych źródeł. */
+  requestedBy?: string | undefined;
+}
+
+export interface PackageAccepted {
+  id: string; status: 'queued'; recipients: number; encoding: 'gsm' | 'ucs2'; multipart: boolean;
+}
+
+/**
+ * Identyfikator klienta idzie do Plusa w nawiasach kwadratowych przed przecinkiem
+ * oddzielającym treść - nie może zawierać nic, co ten zapis rozbije.
+ */
+const CLIENT_ID = /^[A-Za-z0-9._-]{1,20}$/;
+
+/**
+ * Wspólna droga każdej rozsyłki - z `POST /v1/packages` i z integracji Power Automate: usługa,
+ * nadpis, termin, numery, treści, zapis, kolejka. Rozsyłka wchodzi w całości albo wcale.
+ */
+export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input: PackageSubmitInput, now: Date): PackageAccepted {
+  const account = deps.accounts.get(auth.accountId);
+  if (!account) throw new ApiError(500, 'account_missing', 'Konto przypisane do klucza nie istnieje.');
+
+  const serviceId = String(input.serviceId ?? auth.defaultServiceId ?? '');
+  if (!serviceId) throw new ApiError(400, 'service_required', 'Klucz nie ma domyślnej usługi - podaj serviceId.');
+  if (!auth.allowedServiceIds.includes(serviceId)) {
+    throw new ApiError(403, 'service_not_allowed', `Klucz nie ma dostępu do usługi ${serviceId}.`);
+  }
+
+  const orig = resolveOrig(input.orig, auth, account, deps.accounts);
+
+  let startAt: Date | undefined;
+  if (input.startAt !== undefined) {
+    startAt = new Date(input.startAt);
+    if (startAt.getTime() <= now.getTime()) {
+      throw new ApiError(400, 'start_at_in_past', 'Termin rozpoczęcia rozsyłki już minął.');
+    }
+  }
+
+  const maxParts = Math.min(input.maxParts ?? auth.maxParts, auth.maxParts);
+
+  // Jedno kodowanie i jeden znacznik wieloczęściowości na całą rozsyłkę: tak działa package.aspx.
+  let ucs2 = false;
+  let multipart = false;
+  const recipients: RecipientInput[] = input.recipients.map((r, index) => {
+    let dest: string;
+    try {
+      dest = normalizePhone(r.to, account.defaultCountryCode);
+    } catch (e) {
+      if (e instanceof InvalidPhoneError) throw new ApiError(400, 'invalid_phone', `recipients.${index}: ${e.message}`);
+      throw e;
+    }
+    if (r.clientId !== undefined && !CLIENT_ID.test(r.clientId)) {
+      throw new ApiError(400, 'invalid_client_id',
+        `recipients.${index}: identyfikator klienta może mieć 1-20 znaków z zakresu A-Z, a-z, 0-9, kropka, podkreślenie, myślnik.`);
+    }
+    const text = r.text ?? input.defaultText;
+    if (text === undefined) {
+      throw new ApiError(400, 'text_required', `recipients.${index}: brak treści i brak treści domyślnej.`);
+    }
+    const measurement = measureText(text, input.encoding);
+    let segmentation;
+    try {
+      segmentation = segmentText(text, measurement, maxParts);
+    } catch (e) {
+      if (e instanceof TooManyPartsError) throw new ApiError(400, 'too_many_parts', `recipients.${index}: ${e.message}`);
+      throw e;
+    }
+    if (measurement.encoding === 'ucs2') ucs2 = true;
+    if (segmentation.parts > 1) multipart = true;
+    return { dest, text: r.text ?? null, clientId: r.clientId ?? null };
+  });
+
+  const encoding = ucs2 && input.encoding !== 'gsm' ? 'ucs2' : 'gsm';
+  const id = shortId('pkg');
+  deps.packages.insert({
+    id, apiKeyId: auth.apiKeyId, accountId: auth.accountId, serviceId,
+    defaultText: input.defaultText ?? null, orig: orig ?? null, costCenter: input.costCenter ?? null,
+    startAt: startAt?.toISOString() ?? null, deliveryReport: input.deliveryReport ? 1 : 0,
+    encoding, multipart: multipart ? 1 : 0, createdAt: now.toISOString(),
+    integrationId: input.integrationId ?? null, requestedBy: input.requestedBy ?? null,
+  }, recipients);
+  deps.jobs.enqueue('package.create', { packageId: id }, now);
+
+  return { id, status: 'queued', recipients: recipients.length, encoding, multipart };
+}

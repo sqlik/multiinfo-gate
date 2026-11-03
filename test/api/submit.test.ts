@@ -46,6 +46,13 @@ describe('submitMessages', () => {
     const [m] = submitMessages(deps, auth, { to: ['48601000001'], text: 'x' }, NOW);
     expect(deps.messages.get(m!.id)!.integrationId).toBeNull();
   });
+  it('zapisuje zlecającego przy wiadomości, bez pola zlecający jest pusty', () => {
+    const auth = authFromKey(apiKeys.get(apiKeyId)!);
+    const [z] = submitMessages(deps, auth, { to: ['48601000001'], text: 'x', requestedBy: 'jan.nowak@firma.pl' }, NOW);
+    const [b] = submitMessages(deps, auth, { to: ['48601000002'], text: 'x' }, NOW);
+    expect(deps.messages.get(z!.id)!.requestedBy).toBe('jan.nowak@firma.pl');
+    expect(deps.messages.get(b!.id)!.requestedBy).toBeNull();
+  });
   it('zły numer to ApiError invalid_phone bez zapisu', () => {
     const auth = authFromKey(apiKeys.get(apiKeyId)!);
     expect(() => submitMessages(deps, auth, { to: ['48601000001', 'abc'], text: 'x' }, NOW)).toThrow(ApiError);
