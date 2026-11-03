@@ -28,7 +28,7 @@ const post = (url: string, fields: Record<string, string | string[]>) => {
 const formBody = (over: Record<string, string | string[]> = {}): Record<string, string | string[]> => ({
   name: 'Ekipa serwisowa', apiKeyId: String(apiKeyId), serviceId: '', orig: '', enabled: '1',
   recipients: '601 000 011 Marek Kowalski\n601000012', maxParts: '3', overflow: 'reject',
-  throttleLimit: '30', throttleWindow: '10', eventLogLimit: '200', tryb: 'prosty', ...over,
+  throttleLimit: '30', throttleWindow: '10', throttleRecipients: '5000', eventLogLimit: '200', tryb: 'prosty', ...over,
 });
 const create = (over: Record<string, string | string[]> = {}) => post('/integracje', { kind: 'power_automate', preset: 'power-automate', ...formBody(over) });
 const paRow = () => h.integrations.list().find((r) => r.kind === 'power_automate')!;
@@ -70,6 +70,8 @@ describe('formularz', () => {
     const form = (await get(`${NEW_FORM}&tryb=zaawansowany`)).body;
     expect(form).toContain('Ochrona i dziennik');
     expect(form).toContain('Limit burzy');
+    expect(form).toContain('name="throttleRecipients" type="number" min="1" max="50000" value="5000"');
+    expect(form).toContain('Limit odbiorców');
     expect(form).toContain('Ochrona przed burzą, dziennik i ładunki');
   });
 
@@ -94,7 +96,7 @@ describe('zapis', () => {
     expect(row.config).toEqual({
       ...defaultPowerAutomateConfig(),
       recipients: [{ phone: '48601000011', name: 'Marek Kowalski' }, { phone: '48601000012', name: '' }],
-      maxParts: 3, overflow: 'reject', throttle: { limit: 30, windowMinutes: 10 },
+      maxParts: 3, overflow: 'reject', throttle: { limit: 30, windowMinutes: 10, recipients: 5000 },
     } satisfies PowerAutomateConfig);
     expect(h.audit.list(5, 0)[0]).toMatchObject({ action: 'integracja.utworzenie', target: `integracja:${row.id}` });
     expect((await get(`/integracje/${row.id}`)).body).toContain('Integracja Ekipa serwisowa utworzona.');
@@ -138,11 +140,29 @@ describe('edycja', () => {
   });
 
   it('tryb prosty zachowuje w polach ukrytych ochronę ustawioną w trybie zaawansowanym', async () => {
-    await create({ throttleLimit: '5', storePayloads: '1', tryb: 'zaawansowany' });
+    await create({ throttleLimit: '5', throttleRecipients: '700', storePayloads: '1', tryb: 'zaawansowany' });
+    expect(paRow().config).toMatchObject({ throttle: { limit: 5, windowMinutes: 10, recipients: 700 } });
     const form = (await get(`/integracje/${paRow().id}/edytuj`)).body;
     expect(form).not.toContain('Ochrona i dziennik');
     expect(form).toContain('<input type="hidden" name="throttleLimit" value="5">');
+    expect(form).toContain('<input type="hidden" name="throttleRecipients" value="700">');
     expect(form).toContain('<input type="hidden" name="storePayloads" value="1">');
+  });
+
+  it('tryb prosty mówi o ochronie przed burzą zmienionej w trybie zaawansowanym', async () => {
+    await create({ throttleLimit: '1000', throttleWindow: '1', tryb: 'zaawansowany' });
+    const form = (await get(`/integracje/${paRow().id}/edytuj`)).body;
+    expect(form).toContain('Ochrona przed burzą: najwyżej 1000 wywołań i 5000 odbiorców w ciągu 1 minuty. Wartości zmienia tryb zaawansowany');
+  });
+
+  it('tryb prosty z domyślną ochroną nie pokazuje zdania o ochronie', async () => {
+    expect((await get(NEW_FORM)).body).not.toContain('Ochrona przed burzą: najwyżej');
+  });
+
+  it('limit odbiorców spoza 1-50000 daje 400', async () => {
+    const res = await create({ throttleRecipients: '50001', tryb: 'zaawansowany' });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('Limit odbiorców: podaj liczbę od 1 do 50000.');
   });
 });
 
@@ -212,7 +232,7 @@ describe('szczegóły integracji', () => {
     const row = paRow();
     const detail = (await get(`/integracje/${row.id}`)).body;
     for (const t of ['Odbiorcy grupy', 'Marek Kowalski (48601000011)', '48601000012', 'do 3 części, nadmiar: odrzucenie', 'Usługa', 'domyślna klucza',
-      'Nadpis nadawcy', 'domyślny klucza', '30 wywołań na 10 minut', 'Konektor Power Automate', `name="wroc" value="/integracje/${row.id}"`,
+      'Nadpis nadawcy', 'domyślny klucza', '30 wywołań i 5000 odbiorców na 10 minut', 'Konektor Power Automate', `name="wroc" value="/integracje/${row.id}"`,
       'action="/integracje/power-automate/konektor"']) {
       expect(detail, t).toContain(t);
     }

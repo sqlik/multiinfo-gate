@@ -67,10 +67,10 @@ describe('runPowerAutomate', () => {
   });
 
   it('burza: throttled z flagą powiadomienia tylko przy pierwszej odmowie w oknie', () => {
-    integration = { ...integration, config: { ...integration.config, throttle: { limit: 1, windowMinutes: 10 } } };
+    integration = { ...integration, config: { ...integration.config, throttle: { limit: 1, windowMinutes: 10, recipients: 5000 } } };
     expect(runPowerAutomate(deps, integration, sms('48601000001'), meta, NOW).kind).toBe('sent');
-    expect(runPowerAutomate(deps, integration, sms('48601000001'), meta, NOW)).toEqual({ kind: 'throttled', notify: true });
-    expect(runPowerAutomate(deps, integration, sms('48601000001'), meta, NOW)).toEqual({ kind: 'throttled', notify: false });
+    expect(runPowerAutomate(deps, integration, sms('48601000001'), meta, NOW)).toEqual({ kind: 'throttled', notify: true, by: 'calls' });
+    expect(runPowerAutomate(deps, integration, sms('48601000001'), meta, NOW)).toEqual({ kind: 'throttled', notify: false, by: 'calls' });
   });
 });
 

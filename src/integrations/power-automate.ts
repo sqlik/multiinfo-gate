@@ -22,7 +22,7 @@ export type PaCall =
 export type PaOutcome =
   | { kind: 'sent'; messages: Array<SubmitResult & { to: string }> }
   | { kind: 'sent'; package: PackageAccepted }
-  | { kind: 'throttled'; notify: boolean }
+  | { kind: 'throttled'; notify: boolean; by: 'calls' | 'recipients' }
   | { kind: 'unavailable'; detail: string }
   | { kind: 'error'; error: ApiError };
 
@@ -58,11 +58,14 @@ export function runPowerAutomate(
     return { kind: 'unavailable', detail: resolved.detail };
   }
 
-  // Burza liczy wywołania: zapętlony przepływ zatrzymuje się, zanim cokolwiek trafi do kolejki.
-  const gate = deps.guards.throttle(integration.id, config.throttle.limit, config.throttle.windowMinutes, now);
+  // Burza liczy wywołania i odbiorców: zapętlony przepływ zatrzymuje się, zanim cokolwiek trafi do kolejki.
+  const { limit, windowMinutes, recipients: recipientLimit } = config.throttle;
+  const count = call.action === 'sms' ? 1 : call.action === 'package' ? call.body.recipients.length : config.recipients.length;
+  const gate = deps.guards.throttle(integration.id, limit, windowMinutes, now, { count, limit: recipientLimit });
   if (!gate.allowed) {
-    note('throttled', { reason: `ponad ${config.throttle.limit} w ${config.throttle.windowMinutes} min` });
-    return { kind: 'throttled', notify: gate.notify };
+    const by = gate.by ?? 'calls';
+    note('throttled', { reason: by === 'calls' ? `ponad ${limit} w ${windowMinutes} min` : `ponad ${recipientLimit} odbiorców w ${windowMinutes} min` });
+    return { kind: 'throttled', notify: gate.notify, by };
   }
 
   const auth = authFromKey(resolved.key);

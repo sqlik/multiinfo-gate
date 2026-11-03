@@ -27,24 +27,37 @@ export class IntegrationGuardsRepo {
   /**
    * Okno stałe od pierwszego zdarzenia: `limit` przechodzi, reszta odpada do końca okna.
    * `notify` tylko przy pierwszym odrzuceniu w oknie - jeden mail na burzę, nie na każdy alert.
+   * `recipients` (integracja Power Automate) dokłada w tym samym oknie limit odbiorców: wywołanie,
+   * które by go przekroczyło, odpada i nie zużywa żadnego z limitów. `by` mówi, który limit zadziałał.
    */
-  throttle(integrationId: number, limit: number, windowMinutes: number, now: Date): { allowed: boolean; notify: boolean } {
+  throttle(
+    integrationId: number, limit: number, windowMinutes: number, now: Date, recipients?: { count: number; limit: number },
+  ): { allowed: true; notify: false } | { allowed: false; notify: boolean; by?: 'calls' | 'recipients' } {
     return this.db.transaction(() => {
-      const row = this.db.prepare('SELECT window_start, count, notified FROM integration_throttle WHERE integration_id = ?')
-        .get(integrationId) as { window_start: string; count: number; notified: 0 | 1 } | undefined;
+      const row = this.db.prepare('SELECT window_start, count, recipients, notified FROM integration_throttle WHERE integration_id = ?')
+        .get(integrationId) as { window_start: string; count: number; recipients: number; notified: 0 | 1 } | undefined;
       const windowMs = windowMinutes * 60_000;
       const fresh = !row || now.getTime() - Date.parse(row.window_start) >= windowMs;
       const count = fresh ? 0 : row!.count;
+      const used = fresh ? 0 : row!.recipients;
       const notified = fresh ? 0 : row!.notified;
-      if (count < limit) {
+      const overRecipients = recipients !== undefined && used + recipients.count > recipients.limit;
+      if (count < limit && !overRecipients) {
         this.db.prepare(
-          `INSERT INTO integration_throttle (integration_id, window_start, count, notified) VALUES (?, ?, ?, ?)
-           ON CONFLICT(integration_id) DO UPDATE SET window_start = excluded.window_start, count = excluded.count, notified = excluded.notified`,
-        ).run(integrationId, fresh ? now.toISOString() : row!.window_start, count + 1, notified);
-        return { allowed: true, notify: false };
+          `INSERT INTO integration_throttle (integration_id, window_start, count, recipients, notified) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(integration_id) DO UPDATE SET window_start = excluded.window_start, count = excluded.count,
+             recipients = excluded.recipients, notified = excluded.notified`,
+        ).run(integrationId, fresh ? now.toISOString() : row!.window_start, count + 1, used + (recipients?.count ?? 0), notified);
+        return { allowed: true as const, notify: false as const };
       }
-      this.db.prepare('UPDATE integration_throttle SET notified = 1 WHERE integration_id = ?').run(integrationId);
-      return { allowed: false, notify: notified === 0 };
+      // Odrzucenie w świeżym oknie (jedna rozsyłka ponad limit odbiorców) też otwiera okno.
+      this.db.prepare(
+        `INSERT INTO integration_throttle (integration_id, window_start, count, recipients, notified) VALUES (?, ?, ?, ?, 1)
+         ON CONFLICT(integration_id) DO UPDATE SET window_start = excluded.window_start, count = excluded.count,
+           recipients = excluded.recipients, notified = 1`,
+      ).run(integrationId, fresh ? now.toISOString() : row!.window_start, count, used);
+      const by = recipients === undefined ? {} : { by: count >= limit ? 'calls' as const : 'recipients' as const };
+      return { allowed: false as const, notify: notified === 0, ...by };
     })();
   }
 }

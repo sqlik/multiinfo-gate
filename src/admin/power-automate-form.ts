@@ -1,4 +1,4 @@
-import { GROUP_LIMITS, parseConfig, type PowerAutomateConfig } from '../integrations/config.ts';
+import { GROUP_LIMITS, PA_RECIPIENT_LIMIT_MAX, parseConfig, type PowerAutomateConfig } from '../integrations/config.ts';
 import { memberLines, parseMemberLines } from '../integrations/group/members.ts';
 
 type Body = Record<string, string | string[] | undefined>;
@@ -9,7 +9,7 @@ export interface PaFormValues {
   /** Lista jak w `memberLines`: jeden numer w wierszu, po numerze opcjonalna nazwa. */
   recipients: string;
   maxParts: string; overflow: 'truncate' | 'reject';
-  throttleLimit: string; throttleWindow: string; eventLogLimit: string; storePayloads: boolean;
+  throttleLimit: string; throttleWindow: string; throttleRecipients: string; eventLogLimit: string; storePayloads: boolean;
 }
 
 export type PaFormBase = Pick<PaFormValues, 'name' | 'apiKeyId' | 'serviceId' | 'orig' | 'enabled' | 'preset' | 'storePayloads'>;
@@ -23,7 +23,8 @@ export function paFormValues(body: Body): PaFormValues {
     name: s('name'), apiKeyId: s('apiKeyId'), serviceId: s('serviceId'), orig: s('orig'), enabled: on(body.enabled), preset: s('preset'),
     recipients: first(body.recipients),
     maxParts: s('maxParts'), overflow: s('overflow') === 'truncate' ? 'truncate' : 'reject',
-    throttleLimit: s('throttleLimit'), throttleWindow: s('throttleWindow'), eventLogLimit: s('eventLogLimit'), storePayloads: on(body.storePayloads),
+    throttleLimit: s('throttleLimit'), throttleWindow: s('throttleWindow'), throttleRecipients: s('throttleRecipients'),
+    eventLogLimit: s('eventLogLimit'), storePayloads: on(body.storePayloads),
   };
 }
 
@@ -32,7 +33,8 @@ export function paConfigToValues(config: PowerAutomateConfig, base: PaFormBase):
     ...base,
     recipients: memberLines(config.recipients),
     maxParts: String(config.maxParts), overflow: config.overflow,
-    throttleLimit: String(config.throttle.limit), throttleWindow: String(config.throttle.windowMinutes), eventLogLimit: String(config.eventLogLimit),
+    throttleLimit: String(config.throttle.limit), throttleWindow: String(config.throttle.windowMinutes),
+    throttleRecipients: String(config.throttle.recipients), eventLogLimit: String(config.eventLogLimit),
   };
 }
 
@@ -58,12 +60,14 @@ export function paFormToConfig(v: PaFormValues, countryCode: string): { ok: true
   if (typeof throttleLimit === 'string') return fail(throttleLimit);
   const throttleWindow = int(v.throttleWindow, 1, 1440, 'Okno limitu burzy');
   if (typeof throttleWindow === 'string') return fail(throttleWindow);
+  const throttleRecipients = int(v.throttleRecipients, 1, PA_RECIPIENT_LIMIT_MAX, 'Limit odbiorców');
+  if (typeof throttleRecipients === 'string') return fail(throttleRecipients);
   const eventLogLimit = int(v.eventLogLimit, 20, 2000, 'Wpisów w dzienniku');
   if (typeof eventLogLimit === 'string') return fail(eventLogLimit);
   // Schemat zod jako siatka bezpieczeństwa: to, co przeszło wyżej, ma przejść i tu.
   try {
     const config = parseConfig('power_automate', {
-      throttle: { limit: throttleLimit, windowMinutes: throttleWindow }, eventLogLimit,
+      throttle: { limit: throttleLimit, windowMinutes: throttleWindow, recipients: throttleRecipients }, eventLogLimit,
       recipients: parsed.members, maxParts, overflow: v.overflow,
     });
     return { ok: true, config };

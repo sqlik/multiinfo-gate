@@ -147,12 +147,14 @@ export function registerPaIntegrationRoutes(app: FastifyInstance, deps: ApiDeps)
           };
         }
         case 'throttled': {
-          const { limit, windowMinutes } = integration.config.throttle;
+          const { limit, windowMinutes, recipients } = integration.config.throttle;
+          const what = outcome.by === 'calls' ? `${limit} wysyłek` : `${recipients} odbiorców`;
           if (outcome.notify) {
-            deps.notifier?.notify('integration_throttled', subject, `${integration.name}: przekroczony limit ${limit} w ${windowMinutes} min`, at);
+            const short = outcome.by === 'calls' ? `${limit}` : `${recipients} odbiorców`;
+            deps.notifier?.notify('integration_throttled', subject, `${integration.name}: przekroczony limit ${short} w ${windowMinutes} min`, at);
           }
           throw new ApiError(429, 'integration_throttled',
-            `Integracja ${integration.name} przekroczyła limit ${limit} wysyłek w ${windowMinutes} min. Spróbuj później albo poproś administratora o zmianę limitu.`);
+            `Integracja ${integration.name} przekroczyła limit ${what} w ${windowMinutes} min. Spróbuj później albo poproś administratora o zmianę limitu.`);
         }
         case 'unavailable':
           deps.notifier?.notify('integration_error', subject, `${integration.name}: ${outcome.detail}`, at);

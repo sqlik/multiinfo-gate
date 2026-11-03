@@ -1,5 +1,6 @@
 import type { PaFormValues } from '../power-automate-form.ts';
-import { guideHtml, kindLabel, radio, sectionBasics, sectionGuard, textarea, type FormContext, type GuardWords } from './integrations.ts';
+import { defaultPowerAutomateConfig, PA_RECIPIENT_LIMIT_MAX } from '../../integrations/config.ts';
+import { countForms, guideHtml, kindLabel, radio, sectionBasics, sectionGuard, textarea, type FormContext, type GuardWords } from './integrations.ts';
 import { esc } from './layout.ts';
 import { powerAutomatePanel } from './power-automate.ts';
 
@@ -62,6 +63,28 @@ const GUARD: GuardWords = {
   payloadHint: 'Przydatne podczas uruchamiania: dziennik pokazuje, co przysłał przepływ. Ładunki zawierają numery i treści, dlatego opcję zaleca się włączać tylko na czas konfiguracji.',
 };
 
+/** Limit odbiorców w oknie ochrony przed burzą, w tym samym oknie co limit wywołań. */
+function recipientLimitField(v: PaFormValues): string {
+  return `<div class="field">
+      <label for="throttleRecipients">Limit odbiorców</label>
+      <div class="inline">
+        <input id="throttleRecipients" name="throttleRecipients" type="number" min="1" max="${PA_RECIPIENT_LIMIT_MAX}" value="${esc(v.throttleRecipients)}" style="width: 110px;"> <span class="dim">odbiorców w tym samym oknie</span>
+      </div>
+      ${hint('Liczy numery ze wszystkich wywołań w oknie. SMS do jednego numeru zajmuje jedno miejsce, a rozsyłka i SMS do grupy tyle miejsc, ilu obejmują odbiorców. Wywołanie, które przekroczyłoby limit, kończy się błędem i wpisem „limit”')}
+    </div>`;
+}
+
+/**
+ * Tryb prosty ukrywa ochronę przed burzą. Gdy ktoś zmienił ją w trybie zaawansowanym, administrator
+ * edytujący integrację w trybie prostym widzi bieżące wartości, zanim zapisze je ponownie.
+ */
+function guardSummary(v: PaFormValues): string {
+  const d = defaultPowerAutomateConfig().throttle;
+  if (v.throttleLimit === String(d.limit) && v.throttleWindow === String(d.windowMinutes) && v.throttleRecipients === String(d.recipients)) return '';
+  const n = (raw: string) => Number.parseInt(raw, 10) || 0;
+  return hint(`Ochrona przed burzą: najwyżej ${countForms(n(v.throttleLimit), 'wywołanie', 'wywołania', 'wywołań')} i ${countForms(n(v.throttleRecipients), 'odbiorca', 'odbiorców', 'odbiorców')} w ciągu ${countForms(n(v.throttleWindow), 'minuty', 'minut', 'minut')}. Wartości zmienia tryb zaawansowany`);
+}
+
 export function paFormPage(ctx: FormContext, v: PaFormValues, opts: PaFormOptions): string {
   const edit = ctx.row !== undefined;
   const advanced = opts.mode === 'zaawansowany';
@@ -70,7 +93,7 @@ export function paFormPage(ctx: FormContext, v: PaFormValues, opts: PaFormOption
       <summary style="padding: 12px 16px;">Jak działa Power Automate</summary>
       <div class="guide" style="padding: 0 16px 12px; font-size: 12.5px; line-height: 1.55;">${guideHtml(ctx.preset.guide)}</div>
     </details>`;
-  const hidden = `<input type="hidden" name="throttleLimit" value="${esc(v.throttleLimit)}"><input type="hidden" name="throttleWindow" value="${esc(v.throttleWindow)}"><input type="hidden" name="eventLogLimit" value="${esc(v.eventLogLimit)}">${v.storePayloads ? '<input type="hidden" name="storePayloads" value="1">' : ''}`;
+  const hidden = `<input type="hidden" name="throttleLimit" value="${esc(v.throttleLimit)}"><input type="hidden" name="throttleWindow" value="${esc(v.throttleWindow)}"><input type="hidden" name="throttleRecipients" value="${esc(v.throttleRecipients)}"><input type="hidden" name="eventLogLimit" value="${esc(v.eventLogLimit)}">${v.storePayloads ? '<input type="hidden" name="storePayloads" value="1">' : ''}${guardSummary(v)}`;
   const crumbTail = edit ? 'edycja' : `<a href="/integracje/nowa">nowa</a> / <a href="/integracje/nowa?rodzaj=webhook_in">${esc(kindLabel('power_automate'))}</a>`;
   return `<div class="head">
     <div>
@@ -91,7 +114,7 @@ export function paFormPage(ctx: FormContext, v: PaFormValues, opts: PaFormOption
         ${sectionBasics(ctx, v, { nameHint: 'Pod tą nazwą integracja pojawia się w Power Automate w polu „Integracja”' })}
         ${sectionRecipients(v)}
         ${sectionText(v)}
-        ${advanced ? sectionGuard(v, GUARD) : hidden}
+        ${advanced ? sectionGuard(v, { ...GUARD, extraField: recipientLimitField(v) }) : hidden}
         <div class="bar">
           <button class="btn btn-p" type="submit">${edit ? 'Zapisz integrację' : 'Utwórz integrację'}</button>
         </div>

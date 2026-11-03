@@ -191,8 +191,12 @@ export type SmsGroupConfig = z.infer<typeof smsGroupConfigSchema>;
  * i warunki buduje się w przepływie. Lista odbiorców służy wyłącznie akcji „Wyślij SMS do grupy”
  * i może być pusta.
  */
+/** Górna granica limitu odbiorców w oknie: dziesięć pełnych rozsyłek. */
+export const PA_RECIPIENT_LIMIT_MAX = 50_000;
+
 export const powerAutomateConfigSchema = z.object({
-  throttle: common.throttle,
+  // Obok wywołań liczy odbiorców: jedno wywołanie rozsyłki może objąć 5000 numerów.
+  throttle: common.throttle.extend({ recipients: z.number().int().min(1).max(PA_RECIPIENT_LIMIT_MAX).default(5000) }),
   eventLogLimit: common.eventLogLimit,
   recipients: z.array(groupMemberSchema).max(GROUP_LIMITS.recipients),
   maxParts: z.number().int().min(1).max(9),
@@ -247,8 +251,10 @@ export const defaultSmsGroupConfig = (): SmsGroupConfig => ({
 
 /**
  * Burza 30 wywołań na 10 minut: przepływ wysyłający po jednym SMS-ie do kilkunastu osób nie trafia
- * od razu na limit. Trzy części i odrzucenie nadmiaru: treść z przepływu nie jest obcinana po cichu.
+ * od razu na limit. 5000 odbiorców w tym samym oknie: jedna pełna rozsyłka przechodzi, zapętlona
+ * zatrzymuje się na drugim wywołaniu. Trzy części i odrzucenie nadmiaru: treść z przepływu nie jest
+ * obcinana po cichu.
  */
 export const defaultPowerAutomateConfig = (): PowerAutomateConfig => ({
-  throttle: { limit: 30, windowMinutes: 10 }, eventLogLimit: 200, recipients: [], maxParts: 3, overflow: 'reject',
+  throttle: { limit: 30, windowMinutes: 10, recipients: 5000 }, eventLogLimit: 200, recipients: [], maxParts: 3, overflow: 'reject',
 });

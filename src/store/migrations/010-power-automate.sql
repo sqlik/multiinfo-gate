@@ -10,3 +10,7 @@ ALTER TABLE packages ADD COLUMN requested_by TEXT;
 
 -- Wpis dziennika integracji wskazuje rozsyłkę, tak jak dziś wskazuje wiadomość.
 ALTER TABLE integration_events ADD COLUMN package_id TEXT;
+
+-- Ochrona przed burzą integracji Power Automate liczy w oknie także odbiorców: jedna rozsyłka
+-- może objąć 5000 numerów, więc sam limit wywołań nie chroni konta przed zapętlonym przepływem.
+ALTER TABLE integration_throttle ADD COLUMN recipients INTEGER NOT NULL DEFAULT 0;

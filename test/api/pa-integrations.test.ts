@@ -337,6 +337,32 @@ describe('ochrona przed burzą', () => {
     expect(notices.filter((n) => n.event === 'integration_throttled')).toHaveLength(1);
     expect(allMessages()).toHaveLength(2);
   });
+
+  it('limit odbiorców: rozsyłka ponad limit w oknie dostaje 429, wpis „limit” i nie zostawia rozsyłki', async () => {
+    integrations.update(biuro, { ...rowPatch(biuro), config: { ...defaultPowerAutomateConfig(), throttle: { limit: 30, windowMinutes: 10, recipients: 1000 } } }, NOW);
+    const recipients = Array.from({ length: 600 }, (_, i) => ({ to: `48601${String(i).padStart(6, '0')}` }));
+    expect((await post(`/v1/integrations/int_${biuro}/packages`, { recipients, defaultText: 'Przegląd floty jutro o 8:00' })).statusCode).toBe(202);
+    const second = await post(`/v1/integrations/int_${biuro}/packages`, { recipients, defaultText: 'Przegląd floty jutro o 8:00' });
+    expect(second.statusCode).toBe(429);
+    expect(second.json().error).toEqual({
+      code: 'integration_throttled',
+      message: 'Integracja Biuro handlowe przekroczyła limit 1000 odbiorców w 10 min. Spróbuj później albo poproś administratora o zmianę limitu.',
+    });
+    expect(log(biuro)[0]).toMatchObject({ result: 'throttled', reason: 'ponad 1000 odbiorców w 10 min' });
+    expect(allPackages()).toHaveLength(1);
+    expect(notices.find((n) => n.event === 'integration_throttled')!.summary).toBe('Biuro handlowe: przekroczony limit 1000 odbiorców w 10 min');
+  });
+
+  it('limit odbiorców liczy też SMS do grupy: każdy członek listy to jeden odbiorca', async () => {
+    integrations.update(ekipa, { ...rowPatch(ekipa), config: { ...defaultPowerAutomateConfig(), recipients: EKIPA, throttle: { limit: 30, windowMinutes: 10, recipients: 5 } } }, NOW);
+    expect((await post(`/v1/integrations/int_${ekipa}/group`, { text: 'Awaria w hali B' })).statusCode).toBe(202);
+    expect((await post(`/v1/integrations/int_${ekipa}/group`, { text: 'Awaria w hali B' })).statusCode).toBe(429);
+    expect(allMessages()).toHaveLength(3);
+  });
+
+  it('domyślny limit odbiorców to 5000 w oknie', () => {
+    expect(defaultPowerAutomateConfig().throttle).toEqual({ limit: 30, windowMinutes: 10, recipients: 5000 });
+  });
 });
 
 describe('integracja nieznana, cudza, innego rodzaju albo wyłączona', () => {

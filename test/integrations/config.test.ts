@@ -108,9 +108,9 @@ describe('sms_group', () => {
 });
 
 describe('power_automate', () => {
-  it('domyślna konfiguracja przechodzi: burza 30 w 10 min, dziennik 200, pusta lista, 3 części, odrzucenie nadmiaru', () => {
+  it('domyślna konfiguracja przechodzi: burza 30 wywołań i 5000 odbiorców w 10 min, dziennik 200, pusta lista, 3 części, odrzucenie nadmiaru', () => {
     expect(parseConfig('power_automate', defaultPowerAutomateConfig())).toEqual({
-      throttle: { limit: 30, windowMinutes: 10 }, eventLogLimit: 200, recipients: [], maxParts: 3, overflow: 'reject',
+      throttle: { limit: 30, windowMinutes: 10, recipients: 5000 }, eventLogLimit: 200, recipients: [], maxParts: 3, overflow: 'reject',
     });
     expect(INTEGRATION_KINDS).toContain('power_automate');
   });

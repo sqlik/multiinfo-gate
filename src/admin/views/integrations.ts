@@ -695,8 +695,11 @@ function sectionBodyOutbound(v: IntegrationFormValues): string {
   </details>`;
 }
 
-/** Słowa sekcji ochrony zależne od rodzaju: integracja Power Automate liczy wywołania zamiast zdarzeń i nie ma próbki. */
-export interface GuardWords { unit: string; throttleHint: string; payloadHint: string }
+/**
+ * Słowa sekcji ochrony zależne od rodzaju: integracja Power Automate liczy wywołania zamiast zdarzeń,
+ * nie ma próbki i dokłada pole limitu odbiorców (`extraField`).
+ */
+export interface GuardWords { unit: string; throttleHint: string; payloadHint: string; extraField?: string }
 
 const GUARD_WORDS: GuardWords = {
   unit: 'zdarzeń',
@@ -715,6 +718,7 @@ export function sectionGuard(v: Pick<IntegrationFormValues, 'throttleLimit' | 't
       </div>
       <div class="hint">${esc(words.throttleHint)}</div>
     </div>
+    ${words.extraField ?? ''}
     <div class="field">
       <label for="eventLogLimit">Wpisów w dzienniku</label>
       <input id="eventLogLimit" name="eventLogLimit" type="number" min="20" max="2000" value="${esc(v.eventLogLimit)}">
@@ -856,7 +860,7 @@ const dimOr = (value: string | undefined | null, fallback = 'brak') => (value ? 
 const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
 /** Rzeczownik nieosobowy w trzech formach: „1 numer”, „3 numery”, „5 numerów”, „12 numerów”, „22 numery”. */
-function countForms(n: number, one: string, few: string, many: string): string {
+export function countForms(n: number, one: string, few: string, many: string): string {
   if (n === 1) return `1 ${one}`;
   const last = n % 10;
   const tens = n % 100;
@@ -944,7 +948,10 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
   }
   // Integracja Power Automate nie ma warunku: warunki buduje się w przepływie.
   if ('condition' in c) rows.push(kvRow(simple ? 'Warunek wysyłki' : 'Warunek', esc(simple ? simple.when : conditionWords(c.condition))));
-  rows.push(kvRow('Limit burzy', `${esc(c.throttle.limit)} ${row.kind === 'power_automate' ? 'wywołań' : 'zdarzeń'} na ${esc(c.throttle.windowMinutes)} minut`));
+  const perWindow = `na ${countForms(c.throttle.windowMinutes, 'minutę', 'minuty', 'minut')}`;
+  rows.push(kvRow('Limit burzy', row.kind === 'power_automate'
+    ? `${countForms(c.throttle.limit, 'wywołanie', 'wywołania', 'wywołań')} i ${countForms((c as PowerAutomateConfig).throttle.recipients, 'odbiorca', 'odbiorców', 'odbiorców')} ${perWindow}`
+    : `${esc(c.throttle.limit)} zdarzeń ${perWindow}`));
   rows.push(kvRow('Ładunki', row.storePayloads === 1 ? 'przechowywane 7 dni, zaszyfrowane' : 'nieprzechowywane'));
   rows.push(kvRow('Dziennik', `do ${esc(c.eventLogLimit)} wpisów`));
   return rows.join('');
