@@ -9,7 +9,7 @@ import { buildOpenApiDocument, type JsonSchema, type OpenApiDocument } from './o
  * i dokumentacja mówiły to samo. Tu dochodzą tylko rzeczy właściwe dla Power Automate: krótkie
  * etykiety pól (`x-ms-summary`), widoczność, listy wyboru i polskie nazwy wartości.
  *
- * Każda akcja wysyłająca idzie przez integrację Power Automate (`/v1/integrations/{id}/...`),
+ * Każda akcja wysyłająca przechodzi przez integrację Power Automate (`/v1/integrations/{id}/...`),
  * więc z przepływu nie ma drogi do wysyłki bez dziennika, limitu części i ochrony przed burzą.
  * Jeden plik obsługuje wszystkie integracje: integrację wybiera się w akcji.
  */
@@ -30,7 +30,7 @@ export const CONNECTOR_OPERATIONS = [
 
 /**
  * Pola schematów wywołań integracji świadomie pominięte w konektorze. Dziś żadne: usługę, nadpis
- * i limit części wyznacza integracja, więc schematy wywołań już ich nie mają.
+ * i limit części wyznacza integracja, więc schematy wywołań już ich nie zawierają.
  */
 export const CONNECTOR_OMITTED: Record<string, string[]> = {
   WyslijSms: [],
@@ -238,15 +238,24 @@ const LABELS_BY_NAME: Record<string, string> = {
  */
 const DESCRIPTIONS_BY_PATH: Record<string, string> = {
   'WyslijSms.to': 'Jeden numer telefonu, na przykład 48601000001. Numer bez kodu kraju otrzymuje kod domyślny konta,'
-    + ' dla Polski 48. Spacje i myślniki są pomijane. Pusty numer kończy akcję błędem. Akcja nie wysyła wtedy SMS-a'
+    + ' dla Polski 48. Spacje i łączniki są pomijane. Pusty numer kończy akcję błędem. Akcja nie wysyła wtedy SMS-a'
     + ' do listy odbiorców integracji',
+  text: 'Treść SMS-a. Polskie znaki są dozwolone, ale skracają jedną część do 70 znaków. Treść dłuższą niż limit części'
+    + ' integracja skraca albo odrzuca, zależnie od ustawienia w panelu bramki. Puste pole kończy akcję błędem',
+  validTo: 'Czas ważności w formacie ISO 8601, na przykład 2026-11-04T18:00:00Z, najwyżej 72 godziny od przyjęcia.'
+    + ' Wiadomość niedoręczona do tego czasu otrzymuje stan expired. Puste pole oznacza, że bramka nie ustawia czasu'
+    + ' ważności',
+  startAt: 'Termin rozpoczęcia rozsyłki w formacie ISO 8601, na przykład 2026-11-04T07:00:00Z. Termin musi przypadać'
+    + ' w przyszłości. Puste pole oznacza wysyłkę od razu',
   requestedBy: 'Kto zlecił wysyłkę, na przykład adres e-mail osoby z formularza albo autora wpisu na liście SharePoint.'
-    + ' Bramka zapisuje go w dzienniku integracji i przy wiadomości. Nie trafia do treści SMS-a',
+    + ' Bramka zapisuje go w dzienniku integracji oraz przy wiadomości albo rozsyłce. Nie trafia do treści SMS-a',
   encoding: 'Automatyczne wybiera GSM-7, a przy polskich znakach Unicode. Przy GSM Multiinfo zastępuje polskie znaki'
     + ' łacińskimi odpowiednikami. Unicode zawsze koduje treść w UCS-2',
   deliveryReport: 'Wartość „Nie” oznacza rezygnację z raportu doręczenia. Stan wiadomości kończy się wtedy na sent',
   'WyslijRozsylke.recipients': 'Lista odbiorców, od 1 do 5000 pozycji. Pozycje wpisuje się po kolei albo podaje całą'
     + ' listę z akcji „Wybierz”',
+  'WyslijRozsylke.recipients[].to': 'Numer telefonu odbiorcy, na przykład 48601000001. Numer bez kodu kraju otrzymuje'
+    + ' kod domyślny konta, dla Polski 48. Pusty albo nieprawidłowy numer na dowolnej pozycji odrzuca całą rozsyłkę',
   'WyslijRozsylke.recipients[].text': 'Treść dla tego odbiorcy. Puste pole oznacza treść wspólną rozsyłki',
   'WyslijRozsylke.recipients[].clientId': 'Własny identyfikator odbiorcy, na przykład numer zlecenia. Od 1 do 20'
     + ' znaków: litery bez polskich znaków, cyfry, kropka, podkreślenie i łącznik. Wraca w raporcie rozsyłki',
@@ -287,7 +296,7 @@ const SIMPLE_KEYS = ['type', 'format', 'enum', 'default', 'pattern', 'minimum', 
  * bo konektor podaje jeden numer i jedną usługę. Swagger 2.0 nie zna `nullable`. Power Automate sprawdza każdą
  * odpowiedź ze schematem, odrzuca null przy podanym typie i pomija `x-nullable`. Pole odpowiedzi, które bywa null,
  * nie ma więc typu ani ograniczeń; `x-nullable` zostaje jako opis dla innych narzędzi.
- * Każde pole dostaje etykietę i opis; brak któregoś przerywa budowanie, tak jak w `openapi.ts`.
+ * Każde pole otrzymuje etykietę i opis. Brak któregoś przerywa budowanie, tak jak w `openapi.ts`.
  */
 function convert(schema: JsonSchema, path: string, request: boolean): SwaggerSchema {
   if (schema.$ref) return { $ref: schema.$ref.replace('#/components/schemas/', '#/definitions/') };
@@ -412,7 +421,7 @@ const INTEGRATION_FOR_GROUP = 'Integracja Power Automate z panelu bramki Multiin
  * Odpowiedzi błędów wspólne dla akcji wysyłających: integracja, wyłączenie, ochrona przed burzą.
  *
  * Przyjęcie wysyłki plik konektora opisuje jako 200, choć bramka odpowiada 202. Projektant Power Automate
- * bierze pola akcji tylko z odpowiedzi 200 albo default, więc przy 202 nie podsuwał identyfikatora.
+ * odczytuje pola akcji tylko z odpowiedzi 200 albo default, więc przy 202 nie podsuwał identyfikatora.
  * Odpowiedź bez nagłówka Location kończy akcję od razu niezależnie od kodu.
  */
 const SENDING_ERRORS: Record<string, SwaggerResponse> = {

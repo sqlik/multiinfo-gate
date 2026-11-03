@@ -16,7 +16,7 @@ export interface Preset {
   blurb: string;
   kinds: IntegrationKind[];
   /**
-   * Katalog, w którym kafelek stoi, gdy różni się od rodzaju integracji. Power Automate to osobny
+   * Katalog, w którym kafelek stoi, gdy różni się od rodzaju integracji. Power Automate jest osobnym
    * rodzaj, a administrator szuka go wśród aplikacji wysyłających SMS, obok n8n.
    */
   listedUnder?: IntegrationKind;

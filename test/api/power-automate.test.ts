@@ -163,6 +163,20 @@ describe('buildPowerAutomateConnector', () => {
     });
   });
 
+  it('opisy dla autora przepływu: bez średników i potocznych słów, z pełną informacją o pustym polu', () => {
+    walk(doc, '$', (obj, path) => {
+      if (typeof obj.description !== 'string') return;
+      expect(obj.description, path).not.toMatch(/;|\brusza\b|\bposzł|\bidzie\b|\bbierze\b|\bmyślnik/);
+    });
+    const recipient = resolve(bodyOf('WyslijRozsylke').properties!.recipients!.items!);
+    expect(recipient.properties!.to!.description).toMatch(/Pusty albo nieprawidłowy numer na dowolnej pozycji odrzuca całą rozsyłkę/);
+    expect(bodyOf('WyslijRozsylke').properties!.requestedBy!.description).toContain('przy wiadomości albo rozsyłce');
+    expect(bodyOf('WyslijSms').properties!.to!.description).toContain('Spacje i łączniki są pomijane');
+    expect(bodyOf('WyslijSms').properties!.text!.description).toMatch(/Puste pole kończy akcję błędem/);
+    expect(bodyOf('WyslijRozsylke').properties!.startAt!.description).toMatch(/Puste pole oznacza wysyłkę od razu/);
+    expect(bodyOf('WyslijSms').properties!.validTo!.description).toMatch(/Puste pole/);
+  });
+
   it('pola wysyłki pochodzą ze schematów tras: żadne nie znika po cichu', () => {
     const covered = (id: string, shape: Record<string, unknown>, omitted: string[]) => {
       const props = Object.keys(bodyOf(id).properties!);

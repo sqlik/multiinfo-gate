@@ -697,7 +697,7 @@ function sectionBodyOutbound(v: IntegrationFormValues): string {
 
 /**
  * Słowa sekcji ochrony zależne od rodzaju: integracja Power Automate liczy wywołania zamiast zdarzeń,
- * nie ma próbki i dokłada pole limitu odbiorców (`extraField`).
+ * nie ma próbki i wprowadza pole limitu odbiorców (`extraField`).
  */
 export interface GuardWords { unit: string; throttleHint: string; payloadHint: string; extraField?: string }
 

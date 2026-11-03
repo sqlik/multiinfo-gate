@@ -115,7 +115,7 @@ const POLA_WIADOMOSCI: Record<string, JsonSchema> = {
   text: {
     type: 'string',
     minLength: 1,
-    description: 'Treść wiadomości. Znaki spoza alfabetu GSM, w tym polskie, są dozwolone; wpływają na kodowanie'
+    description: 'Treść wiadomości. Znaki spoza alfabetu GSM, w tym polskie, są dozwolone, ale wpływają na kodowanie'
       + ' i liczbę części.',
     example: 'Przypominamy o wizycie 26.08 o 10:00.',
   },
@@ -272,8 +272,8 @@ const CIALO_ROZSYLKI: JsonSchema = {
     startAt: {
       type: 'string',
       format: 'date-time',
-      description: 'Termin rozpoczęcia rozsyłki w formacie ISO 8601. Musi być w przyszłości; Multiinfo rusza'
-        + ' o tej godzinie.',
+      description: 'Termin rozpoczęcia rozsyłki w formacie ISO 8601. Termin musi przypadać w przyszłości, a Multiinfo'
+        + ' rozpoczyna wysyłkę o tej godzinie. Pominięty oznacza wysyłkę od razu.',
       example: '2026-08-27T08:00:00.000Z',
     },
   },
@@ -382,7 +382,7 @@ const WYSYLKA_DO_GRUPY_INTEGRACJI: JsonSchema = {
   properties: {
     integration: {
       type: 'object',
-      description: 'Integracja, której listą poszła wysyłka',
+      description: 'Integracja, której lista odbiorców posłużyła do wysyłki',
       required: ['id', 'name'],
       properties: {
         id: { type: 'string', description: 'Identyfikator integracji', example: 'int_12' },
@@ -399,7 +399,7 @@ const WYSYLKA_DO_GRUPY_INTEGRACJI: JsonSchema = {
         required: ['id', 'status', 'parts'],
         properties: {
           id: { type: 'string', description: 'Identyfikator wiadomości', example: 'msg_3f9c2a7b1e4d8c6a5b2f' },
-          status: { type: 'string', description: 'Stan wiadomości; zaraz po przyjęciu queued', example: 'queued' },
+          status: { type: 'string', description: 'Stan wiadomości, zaraz po przyjęciu queued', example: 'queued' },
           parts: { type: 'integer', description: 'Liczba części wiadomości', example: 1 },
         },
       },
@@ -510,9 +510,9 @@ const WIADOMOSC: JsonSchema = {
     providerCode: {
       type: 'integer',
       nullable: true,
-      description: 'Kod odmowy albo błędu z Multiinfo; poza błędem null',
+      description: 'Kod odmowy albo błędu z Multiinfo. Poza błędem pole jest puste',
     },
-    error: { type: 'string', nullable: true, description: 'Wyjaśnienie błędu po polsku; poza błędem null' },
+    error: { type: 'string', nullable: true, description: 'Wyjaśnienie błędu po polsku. Poza błędem pole jest puste' },
   },
 };
 
