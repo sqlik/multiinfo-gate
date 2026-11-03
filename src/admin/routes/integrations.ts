@@ -1,13 +1,16 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { matches } from '../../integrations/conditions.ts';
-import { INTEGRATION_KINDS, MAIL_IN_PASSWORD_REF, defaultInboundConfig, defaultMailInConfig, defaultSmsGroupConfig, type InboundConfig, type IntegrationKind, type MailInConfig, type OutboundConfig, type SmsGroupConfig } from '../../integrations/config.ts';
+import { INTEGRATION_KINDS, MAIL_IN_PASSWORD_REF, defaultInboundConfig, defaultMailInConfig, defaultPowerAutomateConfig, defaultSmsGroupConfig, type InboundConfig, type IntegrationKind, type MailInConfig, type OutboundConfig, type PowerAutomateConfig, type SmsGroupConfig } from '../../integrations/config.ts';
 import { previewInbound, previewMailIn, previewSmsGroup } from '../../integrations/pipeline.ts';
 import { checkMailbox } from '../../worker/mail-in.ts';
 import { mailConfigToValues, mailFormToConfig, mailFormValues, mailWarnings, needsAdvanced, sampleMail, type MailFormValues } from '../mail-form.ts';
 import { mailFormPage, type MailConnection, type MailFormOptions } from '../views/integration-mail.ts';
 import { groupConfigToValues, groupFormToConfig, groupFormValues, groupNeedsAdvanced, groupSampleEvent, type GroupFormValues } from '../group-form.ts';
 import { groupFormPage, type GroupFormOptions } from '../views/integration-group.ts';
-import { presetById, presetsFor, type Preset } from '../../integrations/presets/index.ts';
+import { catalogFor, presetById, presetsFor, type Preset } from '../../integrations/presets/index.ts';
+import { buildPowerAutomateConnector, connectorAddress } from '../../api/power-automate.ts';
+import { paConfigToValues, paFormToConfig, paFormValues, type PaFormValues } from '../power-automate-form.ts';
+import { paFormPage, type PaFormOptions } from '../views/integration-power-automate.ts';
 import { PRIVATE_MAIL_MESSAGE, PRIVATE_TARGET_MESSAGE, hostTarget, systemResolver, webhookTarget } from '../../net/private-address.ts';
 import { guardedConnect } from '../../integrations/mail/client.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
@@ -37,7 +40,7 @@ const isKind = (raw: string | undefined): raw is IntegrationKind => (INTEGRATION
 export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps, render: Renderer): void {
   const now = deps.now ?? (() => new Date());
 
-  const presetNames = new Map(presetsFor('webhook_in').concat(presetsFor('webhook_out'), presetsFor('mail_in'), presetsFor('sms_group')).map((p) => [p.id, p.name]));
+  const presetNames = new Map(INTEGRATION_KINDS.flatMap((k) => presetsFor(k)).map((p) => [p.id, p.name]));
 
   /** Czynne klucze z usługami i nadpisami - do wyboru w formularzu i do filtra listy. */
   const keyOptions = (): KeyOption[] => {
@@ -61,12 +64,15 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     };
   };
 
-  const KIND_OF_FILTER: Record<'in' | 'out' | 'mail' | 'grupa', IntegrationKind> = { in: 'webhook_in', out: 'webhook_out', mail: 'mail_in', grupa: 'sms_group' };
+  /** Przycisk „Do SMS” obejmuje także integracje Power Automate: obie wysyłają SMS na wywołanie aplikacji. */
+  const KIND_OF_FILTER: Record<'in' | 'out' | 'mail' | 'grupa', IntegrationKind[]> = {
+    in: ['webhook_in', 'power_automate'], out: ['webhook_out'], mail: ['mail_in'], grupa: ['sms_group'],
+  };
 
   const listBody = (request: FastifyRequest, filter: IntegrationsFilter, created: CreatedHook | null = null) => {
     const since = new Date(now().getTime() - WINDOW_MS);
     const rows = deps.integrations.list()
-      .filter((r) => filter.kind === null || r.kind === KIND_OF_FILTER[filter.kind])
+      .filter((r) => filter.kind === null || KIND_OF_FILTER[filter.kind].includes(r.kind))
       .filter((r) => filter.keyId === null || r.apiKeyId === filter.keyId);
     return render.page(request, {
       title: 'Integracje', active: 'integracje',
@@ -423,6 +429,61 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }
   };
 
+  /** Wartości formularza Power Automate z wiersza albo z wartości domyślnych. */
+  const paValuesOf = (preset: Preset, row?: IntegrationRow): PaFormValues => (row
+    ? paConfigToValues(row.config as PowerAutomateConfig, { name: row.name, apiKeyId: String(row.apiKeyId), serviceId: row.serviceId ?? '', orig: row.orig ?? '', enabled: row.enabled === 1, preset: row.preset, storePayloads: row.storePayloads === 1 })
+    : paConfigToValues(defaultPowerAutomateConfig(), { name: '', apiKeyId: '', serviceId: '', orig: '', enabled: true, preset: preset.id, storePayloads: false }));
+
+  /** Tryb prosty, chyba że proszono o zaawansowany. Pola trybu zaawansowanego jadą w prostym jako ukryte, więc nic nie ginie. */
+  const paModeOf = (tryb: string | undefined): PaFormOptions['mode'] => (tryb === 'zaawansowany' ? 'zaawansowany' : 'prosty');
+
+  const paPage = (request: FastifyRequest, ctx: FormContext, v: PaFormValues, opts: Omit<PaFormOptions, 'apiUrl'>) =>
+    render.page(request, { title: ctx.row ? ctx.row.name : 'Nowa integracja', active: 'integracje', body: paFormPage(ctx, v, { ...opts, apiUrl: deps.settings.apiUrl() }) });
+
+  interface SavedPaForm { config: PowerAutomateConfig; keyId: number; v: PaFormValues }
+
+  /** Droga POST integracji Power Automate: walidacja i zapis przez `save`. */
+  const handlePaForm = async (request: FastifyRequest, reply: FastifyReply, preset: Preset, row: IntegrationRow | undefined, save: (saved: SavedPaForm) => string) => {
+    reply.type('text/html; charset=utf-8');
+    const body = (request.body ?? {}) as Body;
+    const ctx = formContext('power_automate', preset, row);
+    const v = paFormValues(body);
+    const mode = paModeOf(String(body.tryb ?? ''));
+    const fail = (error: string) => {
+      reply.code(400);
+      return paPage(request, ctx, v, { mode, error });
+    };
+    const key = keyCheck(v, row?.apiKeyId);
+    if (!key.ok) return fail(key.error);
+    const built = paFormToConfig(v, countryCodeOf(key.accountId));
+    if (!built.ok) return fail(built.error);
+    try {
+      return save({ config: built.config, keyId: key.keyId, v });
+    } catch (e) {
+      if ((e as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') return fail(`Integracja o tej nazwie już istnieje przy tym kluczu: ${v.name}.`);
+      throw e;
+    }
+  };
+
+  /** Powrót z pobrania konektora: tylko strona integracji tego panelu, nigdy adres spoza niego. */
+  const backFromDownload = (raw: string | string[] | undefined): string => {
+    const back = typeof raw === 'string' ? raw : '';
+    return /^\/integracje(?:[/?][^\s\\]*)?$/.test(back) ? back : '/integracje';
+  };
+
+  /** Plik konektora z adresem z pola panelu; adres nie jest zapisywany, a pobranie niczego nie zmienia. */
+  app.get<{ Querystring: { adres?: string | string[]; wroc?: string | string[] } }>('/integracje/power-automate/konektor', async (request, reply) => {
+    const raw = request.query.adres;
+    const address = connectorAddress(typeof raw === 'string' ? raw : '');
+    if (!address.ok) {
+      render.flash(request, 'fail', address.error);
+      return reply.redirect(backFromDownload(request.query.wroc), 302);
+    }
+    reply.type('application/json; charset=utf-8');
+    reply.header('content-disposition', 'attachment; filename="multiinfo-gate-power-automate.json"');
+    return JSON.stringify(buildPowerAutomateConnector(address.url), null, 2);
+  });
+
   /** Pola konfiguracji, które zmieniły się między dwiema wersjami - do dziennika audytu, bez wartości. */
   const changedFields = (before: IntegrationRow, after: IntegrationRow): string[] => {
     const out: string[] = [];
@@ -461,15 +522,17 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     if (!isKind(rodzaj)) return reply.callNotFound();
     // Grupa ma jedno ustawienie: krok wyboru jest zbędny, kafelek prowadzi od razu do formularza.
     if (rodzaj === 'sms_group' && ustawienie === undefined) return reply.redirect('/integracje/nowa?rodzaj=sms_group&ustawienie=sms-grupa', 302);
+    if (rodzaj === 'power_automate' && ustawienie === undefined) return reply.redirect('/integracje/nowa?rodzaj=power_automate&ustawienie=power-automate', 302);
     if (ustawienie === undefined) {
       reply.type('text/html; charset=utf-8');
-      return render.page(request, { title: 'Nowa integracja', active: 'integracje', body: choosePresetPage(rodzaj, presetsFor(rodzaj)) });
+      return render.page(request, { title: 'Nowa integracja', active: 'integracje', body: choosePresetPage(rodzaj, catalogFor(rodzaj)) });
     }
     const preset = presetById(ustawienie);
     if (!preset || !preset.kinds.includes(rodzaj)) return reply.callNotFound();
     reply.type('text/html; charset=utf-8');
     if (rodzaj === 'mail_in') return mailPage(request, formContext('mail_in', preset), mailValuesOf(preset), { mode: mailModeOf(tryb, null).mode });
     if (rodzaj === 'sms_group') return groupPage(request, formContext('sms_group', preset), groupValuesOf(preset), { mode: groupModeOf(tryb, null).mode });
+    if (rodzaj === 'power_automate') return paPage(request, formContext('power_automate', preset), paValuesOf(preset), { mode: paModeOf(tryb) });
     const ctx = formContext(rodzaj, preset);
     const values = valuesFromPreset(rodzaj, preset);
     const mode = modeOf(tryb, preset, rodzaj, null);
@@ -514,6 +577,23 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
           ip: request.ip,
         });
         render.flash(request, 'ok', `Grupa ${v.name} utworzona.`);
+        reply.redirect(`/integracje/${id}`, 302);
+        return '';
+      });
+    }
+
+    if (kind === 'power_automate') {
+      return handlePaForm(request, reply, preset, undefined, ({ config, keyId, v }) => {
+        const id = deps.integrations.insert({
+          name: v.name, kind, apiKeyId: keyId, serviceId: v.serviceId || null, orig: v.orig || null, preset: preset.id,
+          enabled: v.enabled ? 1 : 0, config, secrets: {}, storePayloads: v.storePayloads ? 1 : 0, createdAt: now(),
+        });
+        deps.audit.record({
+          actor: actorOf(request.adminUserId), action: 'integracja.utworzenie', target: `integracja:${id}`,
+          meta: { nazwa: v.name, rodzaj: kind, ustawienie: preset.id, klucz: keyId, wlaczona: v.enabled, sekrety: [] },
+          ip: request.ip,
+        });
+        render.flash(request, 'ok', `Integracja ${v.name} utworzona.`);
         reply.redirect(`/integracje/${id}`, 302);
         return '';
       });
@@ -584,6 +664,9 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       const mode = groupModeOf(sample === null ? request.query.tryb : 'zaawansowany', config);
       return groupPage(request, formContext('sms_group', preset, row), { ...groupValuesOf(preset, row), ...sample }, mode);
     }
+    if (row.kind === 'power_automate') {
+      return paPage(request, formContext('power_automate', preset, row), paValuesOf(preset, row), { mode: paModeOf(request.query.tryb) });
+    }
     const values = valuesOf(row, null);
     const mode = modeOf(request.query.probka === undefined ? request.query.tryb : 'zaawansowany', preset, row.kind, values);
     if (mode.mode === 'prosty') return simplePage(request, formContext(row.kind, preset, row), simpleDefaults(preset, values));
@@ -629,6 +712,22 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
           meta: { nazwa: v.name, pola: changedFields(row, after) }, ip: request.ip,
         });
         render.flash(request, 'ok', `Grupa ${v.name} zapisana.`);
+        reply.redirect(`/integracje/${row.id}`, 302);
+        return '';
+      });
+    }
+    if (row.kind === 'power_automate') {
+      return handlePaForm(request, reply, presetOf(row), row, ({ config, v }) => {
+        deps.integrations.update(row.id, {
+          name: v.name, serviceId: v.serviceId || null, orig: v.orig || null, preset: row.preset, enabled: v.enabled ? 1 : 0,
+          config, storePayloads: v.storePayloads ? 1 : 0,
+        }, now());
+        const after = deps.integrations.get(row.id)!;
+        deps.audit.record({
+          actor: actorOf(request.adminUserId), action: 'integracja.edycja', target: `integracja:${row.id}`,
+          meta: { nazwa: v.name, pola: changedFields(row, after) }, ip: request.ip,
+        });
+        render.flash(request, 'ok', `Integracja ${v.name} zapisana.`);
         reply.redirect(`/integracje/${row.id}`, 302);
         return '';
       });

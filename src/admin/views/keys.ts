@@ -3,7 +3,6 @@ import type { ApiKeyRow } from '../../store/api-keys.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
 import { lastValidDay, warsawStamp } from '../../time/warsaw.ts';
 import { esc } from './layout.ts';
-import { powerAutomatePanel } from './power-automate.ts';
 import { apiAddressPanel, fullUrl } from './settings.ts';
 
 export interface KeyView {
@@ -48,8 +47,8 @@ export function valuesOf(row: ApiKeyRow): KeyFormValues {
 }
 
 const POWER_AUTOMATE_KEY =
-  'Ten sam klucz wkleja się w oknie połączenia konektora Power Automate. Plik konektora pobiera się w panelu ' +
-  '„Konektor Power Automate” niżej.';
+  'Klucz dla Power Automate wybiera się w integracji Power Automate (Integracje, Dodaj integrację, Aplikacja wysyła SMS, ' +
+  'Power Automate), a wkleja w oknie połączenia konektora. Plik konektora pobiera się w tej integracji.';
 
 const OSTRZEZENIE =
   'Klucz jest wyświetlany wyłącznie teraz. W bazie pozostaje jedynie jego skrót, więc nie można go odczytać ' +
@@ -191,7 +190,6 @@ export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne
     ${notice === null ? '' : `<div class="warn">${esc(notice)}</div>`}
     ${reveal}
     ${apiAddressPanel(apiUrl, filter === 'czynne' ? '/klucze' : '/klucze?status=odwolane')}
-    ${powerAutomatePanel(apiUrl)}
     <div class="bar" style="margin-bottom: 12px;">${tabs}</div>
     <div class="panel">
       <div class="panel-h">

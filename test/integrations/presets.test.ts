@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig, defaultSmsGroupConfig, parseConfig, type InboundConfig } from '../../src/integrations/config.ts';
-import { PRESETS, presetById, presetsFor } from '../../src/integrations/presets/index.ts';
+import { PRESETS, catalogFor, presetById, presetsFor } from '../../src/integrations/presets/index.ts';
 import { previewInbound, previewSmsGroup } from '../../src/integrations/pipeline.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
 import { paramPatternFor } from '../../src/admin/simple-form.ts';
@@ -26,6 +26,12 @@ describe('gotowe ustawienia', () => {
     expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'home-assistant', 'freescout', 'freshdesk', 'slack', 'ntfy', 'bitrix24', 'custom']);
     expect(presetsFor('mail_in').map((p) => p.id)).toEqual(['poczta-gmail', 'poczta-home', 'poczta-ovh', 'poczta-wlasny']);
     expect(presetsFor('sms_group').map((p) => p.id)).toEqual(['sms-grupa']);
+    expect(presetsFor('power_automate').map((p) => p.id)).toEqual(['power-automate']);
+  });
+  it('katalog „do SMS” pokazuje Power Automate po n8n, choć to osobny rodzaj integracji', () => {
+    expect(catalogFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'power-automate', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'fakturownia', 'fakturownia-klient', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
+    expect(catalogFor('webhook_out').map((p) => p.id)).toEqual(presetsFor('webhook_out').map((p) => p.id));
+    expect(presetById('power-automate')).toMatchObject({ name: 'Power Automate', kinds: ['power_automate'], listedUnder: 'webhook_in' });
   });
   it('sms-grupa: przykładowe zdarzenie z prefiksem daje treść bez prefiksu dla listy', () => {
     const preset = presetById('sms-grupa')!;

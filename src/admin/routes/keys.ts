@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { generateApiKey } from '../../api/keys.ts';
-import { buildPowerAutomateConnector, connectorAddress } from '../../api/power-automate.ts';
 import { PRIVATE_TARGET_MESSAGE, systemResolver, webhookTarget } from '../../net/private-address.ts';
 import { endOfWarsawDay } from '../../time/warsaw.ts';
 import type { Renderer } from '../render.ts';
@@ -137,19 +136,6 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
   app.get<{ Querystring: { status?: string } }>('/klucze', async (request, reply) => {
     reply.type('text/html; charset=utf-8');
     return listBody(request, null, null, request.query.status === 'odwolane' ? 'odwolane' : 'czynne');
-  });
-
-  /** Plik konektora z adresem z pola panelu; adres nie jest zapisywany, a pobranie niczego nie zmienia. */
-  app.get<{ Querystring: { adres?: string | string[] } }>('/klucze/power-automate', async (request, reply) => {
-    const raw = request.query.adres;
-    const address = connectorAddress(typeof raw === 'string' ? raw : '');
-    if (!address.ok) {
-      render.flash(request, 'fail', address.error);
-      return reply.redirect('/klucze', 302);
-    }
-    reply.type('application/json; charset=utf-8');
-    reply.header('content-disposition', 'attachment; filename="multiinfo-gate-power-automate.json"');
-    return JSON.stringify(buildPowerAutomateConnector(address.url), null, 2);
   });
 
   app.get<{ Querystring: { accountId?: string } }>('/klucze/nowy', async (request, reply) => {

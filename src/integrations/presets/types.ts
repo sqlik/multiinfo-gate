@@ -15,6 +15,11 @@ export interface Preset {
   /** Jedno zdanie pod nazwą na kafelku. */
   blurb: string;
   kinds: IntegrationKind[];
+  /**
+   * Katalog, w którym kafelek stoi, gdy różni się od rodzaju integracji. Power Automate to osobny
+   * rodzaj, a administrator szuka go wśród aplikacji wysyłających SMS, obok n8n.
+   */
+  listedUnder?: IntegrationKind;
   /** Przykładowy ładunek przychodzący (do podglądu i testu). */
   sample?: unknown;
   /** Pola ładunku z opisami po polsku - lista obok szablonu. */

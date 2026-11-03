@@ -212,7 +212,8 @@ export function chooseKindPage(): string {
 
 /** Krok drugi: gotowe ustawienie; „Własne” ma być ostatnie - lista `presetsFor` już tak je układa. */
 export function choosePresetPage(kind: IntegrationKind, presets: Preset[]): string {
-  const tiles = presets.map((p) => `<a class="tile" href="/integracje/nowa?rodzaj=${esc(kind)}&amp;ustawienie=${esc(p.id)}">
+  // Kafelek innego rodzaju (Power Automate w katalogu „do SMS”) prowadzi do formularza swojego rodzaju.
+  const tiles = presets.map((p) => `<a class="tile" href="/integracje/nowa?rodzaj=${esc(p.kinds.includes(kind) ? kind : p.kinds[0]!)}&amp;ustawienie=${esc(p.id)}">
         <div style="font-size: 15px; font-weight: 600;">${esc(p.name)}</div>
         <div class="d">${esc(p.blurb)}</div>
       </a>`).join('');
@@ -399,7 +400,9 @@ export function guideHtml(markdown: string): string {
   return out.join('');
 }
 
-export function sectionBasics(ctx: FormContext, v: Pick<IntegrationFormValues, 'name' | 'apiKeyId' | 'serviceId' | 'orig' | 'enabled'>): string {
+export function sectionBasics(
+  ctx: FormContext, v: Pick<IntegrationFormValues, 'name' | 'apiKeyId' | 'serviceId' | 'orig' | 'enabled'>, opts: { nameHint?: string } = {},
+): string {
   const services = [...new Set(ctx.keys.flatMap((k) => k.serviceIds))];
   const origs = [...new Set(ctx.keys.flatMap((k) => k.origs))];
   const keyField = ctx.row
@@ -420,6 +423,7 @@ export function sectionBasics(ctx: FormContext, v: Pick<IntegrationFormValues, '
     <div class="field">
       <label for="name">Nazwa</label>
       <input id="name" name="name" value="${esc(v.name)}" required>
+      ${opts.nameHint ? `<div class="hint">${esc(opts.nameHint)}</div>` : ''}
     </div>
     ${keyField}
     <div class="field">
@@ -690,16 +694,25 @@ function sectionBodyOutbound(v: IntegrationFormValues): string {
   </details>`;
 }
 
-export function sectionGuard(v: Pick<IntegrationFormValues, 'throttleLimit' | 'throttleWindow' | 'eventLogLimit' | 'storePayloads'>): string {
+/** Słowa sekcji ochrony zależne od rodzaju: integracja Power Automate liczy wywołania, nie zdarzenia, i nie ma próbki. */
+export interface GuardWords { unit: string; throttleHint: string; payloadHint: string }
+
+const GUARD_WORDS: GuardWords = {
+  unit: 'zdarzeń',
+  throttleHint: 'Zdarzenia ponad limit w oknie otrzymują wpis „limit” bez SMS-a. Pierwsze przekroczenie w oknie jest zgłaszane mailem do administratora',
+  payloadHint: 'Przydatne podczas uruchamiania: ładunek z dziennika można użyć jako próbki. Ładunki mogą zawierać dane wrażliwe, dlatego opcję zaleca się włączać tylko na czas konfiguracji.',
+};
+
+export function sectionGuard(v: Pick<IntegrationFormValues, 'throttleLimit' | 'throttleWindow' | 'eventLogLimit' | 'storePayloads'>, words: GuardWords = GUARD_WORDS): string {
   return `<details>
     <summary>Ochrona i dziennik</summary>
     <div class="field">
       <label>Limit burzy</label>
       <div class="inline">
-        <input name="throttleLimit" type="number" min="1" max="1000" value="${esc(v.throttleLimit)}" style="width: 110px;"> <span class="dim">zdarzeń na</span>
+        <input name="throttleLimit" type="number" min="1" max="1000" value="${esc(v.throttleLimit)}" style="width: 110px;"> <span class="dim">${esc(words.unit)} na</span>
         <input name="throttleWindow" type="number" min="1" max="1440" value="${esc(v.throttleWindow)}" style="width: 110px;"> <span class="dim">minut</span>
       </div>
-      <div class="hint">Zdarzenia ponad limit w oknie otrzymują wpis „limit” bez SMS-a. Pierwsze przekroczenie w oknie jest zgłaszane mailem do administratora</div>
+      <div class="hint">${esc(words.throttleHint)}</div>
     </div>
     <div class="field">
       <label for="eventLogLimit">Wpisów w dzienniku</label>
@@ -707,7 +720,7 @@ export function sectionGuard(v: Pick<IntegrationFormValues, 'throttleLimit' | 't
     </div>
     <div class="field">
       ${checkbox('storePayloads', v.storePayloads, 'Przechowuj ładunki w dzienniku (7 dni, zaszyfrowane)')}
-      <div class="hint">Przydatne podczas uruchamiania: ładunek z dziennika można użyć jako próbki. Ładunki mogą zawierać dane wrażliwe, dlatego opcję zaleca się włączać tylko na czas konfiguracji.</div>
+      <div class="hint">${esc(words.payloadHint)}</div>
     </div>
   </details>`;
 }
@@ -902,7 +915,7 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     const text = cfg.text.mode === 'body' ? 'sama treść' : cfg.text.mode === 'sender_body' ? 'nadawca i treść' : 'szablon Liquid';
     rows.push(kvRow('Treść', `${esc(text)} · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
     rows.push(kvRow('Potwierdzenie do nadawcy', cfg.confirm.enabled ? 'tak' : 'nie'));
-  } else {
+  } else if (row.kind === 'webhook_out') {
     const cfg = c as OutboundConfig;
     rows.push(kvRow('Adres docelowy', `${esc(cfg.method)} ${esc(cfg.url)}`, true));
     rows.push(kvRow('Zdarzenia', esc(cfg.events.join(', ')), true));
