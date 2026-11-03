@@ -31,7 +31,7 @@ beforeEach(() => {
   apiKeyId = apiKeys.insert({ accountId, name: 'k', keyHash: 'h', keyPrefix: 'p', defaultServiceId: '24138', defaultOrig: null, maxParts: 3, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'] });
   integrations = new IntegrationsRepo(db, key);
   const inbound = new InboundMessagesRepo(db);
-  inbound.insertIfNew({ id: 'in_1', accountId, serviceId: '24138', miId: '1', sender: '48601000001', dest: '7968', kind: 'text', body: 'Dzieci: jutro zbiórka 8:00', bodyHash: 'h', protocolId: 0, codingScheme: 0, connectorId: null, relatedMessageId: null, receivedAt: NOW.toISOString(), createdAt: NOW.toISOString() });
+  inbound.insertIfNew({ id: 'in_1', accountId, serviceId: '24138', miId: '1', sender: '48601000001', dest: '7968', kind: 'text', body: 'Serwis: jutro odprawa 8:00', bodyHash: 'h', protocolId: 0, codingScheme: 0, connectorId: null, relatedMessageId: null, receivedAt: NOW.toISOString(), createdAt: NOW.toISOString() });
   deps = {
     accounts, apiKeys, messages: new MessagesRepo(db), events: new MessageEventsRepo(db), jobs: new JobsRepo(db),
     inbound, integrationEvents: new IntegrationEventsRepo(db, key), guards: new IntegrationGuardsRepo(db),
@@ -39,7 +39,7 @@ beforeEach(() => {
   };
 });
 
-const event = (over: Partial<ReceivedEvent> = {}): ReceivedEvent => ({ id: 'in_1', serviceId: '24138', from: '48601000001', to: '7968', kind: 'text', text: 'Dzieci: jutro zbiórka 8:00', receivedAt: NOW.toISOString(), relatedMessageId: null, ...over });
+const event = (over: Partial<ReceivedEvent> = {}): ReceivedEvent => ({ id: 'in_1', serviceId: '24138', from: '48601000001', to: '7968', kind: 'text', text: 'Serwis: jutro odprawa 8:00', receivedAt: NOW.toISOString(), relatedMessageId: null, ...over });
 const make = (config: Partial<SmsGroupConfig> & { name?: string }, storePayloads: 0 | 1 = 0) => {
   seq += 1;
   const { name, ...rest } = config;
@@ -49,7 +49,7 @@ const make = (config: Partial<SmsGroupConfig> & { name?: string }, storePayloads
   });
   return integrations.get(id) as SmsGroupIntegration;
 };
-const lists = (over: Partial<SmsGroupConfig> & { name?: string } = {}) => make({ senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002', '48601000003'], prefix: 'dzieci', ...over });
+const lists = (over: Partial<SmsGroupConfig> & { name?: string } = {}) => make({ senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002', '48601000003'], prefix: 'serwis', ...over });
 const events = (id: number) => deps.integrationEvents.list(id, 10).map((e) => [e.result, e.reason]);
 const allMessages = () => deps.messages.list({ limit: 50, offset: 0 });
 
@@ -57,19 +57,19 @@ describe('runSmsGroup', () => {
   it('rozsyła treść bez prefiksu do listy; wpis wysłano z liczbą odbiorców i identyfikatorem odebranej', () => {
     const g = lists();
     const out = runSmsGroup(deps, g, event(), NOW);
-    expect(out).toMatchObject({ kind: 'sent', recipients: ['48601000002', '48601000003'], text: 'jutro zbiórka 8:00', parts: 1, confirmId: null });
+    expect(out).toMatchObject({ kind: 'sent', recipients: ['48601000002', '48601000003'], text: 'jutro odprawa 8:00', parts: 1, confirmId: null });
     const ids = (out as { messageIds: string[] }).messageIds;
     expect(ids).toHaveLength(2);
-    expect(deps.messages.get(ids[0]!)).toMatchObject({ body: 'jutro zbiórka 8:00', dest: '48601000002', integrationId: g.id });
-    expect(deps.messages.get(ids[1]!)).toMatchObject({ body: 'jutro zbiórka 8:00', dest: '48601000003' });
+    expect(deps.messages.get(ids[0]!)).toMatchObject({ body: 'jutro odprawa 8:00', dest: '48601000002', integrationId: g.id });
+    expect(deps.messages.get(ids[1]!)).toMatchObject({ body: 'jutro odprawa 8:00', dest: '48601000003' });
     expect(events(g.id)).toEqual([['sent', '2 odbiorców']]);
     expect(deps.integrationEvents.list(g.id, 1)[0]).toMatchObject({ inboundId: 'in_1', sourceIp: '48601000001', messageId: ids[0] });
   });
   it('nadawca spoza listy, brak prefiksu, pusta treść i SMS binarny to pominięto bez wysyłki i bez potwierdzenia', () => {
     const g = lists({ confirm: { enabled: true } });
     expect(runSmsGroup(deps, g, event({ from: '48601000009' }), NOW)).toEqual({ kind: 'skipped', reason: 'sender_not_allowed' });
-    expect(runSmsGroup(deps, g, event({ text: 'jutro zbiórka' }), NOW)).toEqual({ kind: 'skipped', reason: 'no_prefix' });
-    expect(runSmsGroup(deps, g, event({ text: 'Dzieci:' }), NOW)).toEqual({ kind: 'skipped', reason: 'empty' });
+    expect(runSmsGroup(deps, g, event({ text: 'jutro odprawa' }), NOW)).toEqual({ kind: 'skipped', reason: 'no_prefix' });
+    expect(runSmsGroup(deps, g, event({ text: 'Serwis:' }), NOW)).toEqual({ kind: 'skipped', reason: 'empty' });
     expect(runSmsGroup(deps, g, event({ kind: 'binary', text: undefined, hex: '00ff' }), NOW)).toEqual({ kind: 'skipped', reason: 'binary' });
     expect(allMessages()).toHaveLength(0);
     expect(events(g.id).map((e) => e[1])).toEqual(['brak treści tekstowej', 'pusta treść', 'bez prefiksu', 'nadawca spoza listy: 48601000009']);
@@ -91,18 +91,18 @@ describe('runSmsGroup', () => {
   it('przepełnienie z odrzuceniem: wpis błąd i potwierdzenie o długości; z przycięciem: wysłano', () => {
     const long = 'x'.repeat(400);
     const r = lists({ overflow: 'reject', confirm: { enabled: true } });
-    const reject = runSmsGroup(deps, r, event({ text: `dzieci ${long}` }), NOW);
+    const reject = runSmsGroup(deps, r, event({ text: `serwis ${long}` }), NOW);
     expect(reject).toMatchObject({ kind: 'error', code: 'too_many_parts' });
     expect(allMessages().map((m) => [m.dest, m.body])).toEqual([['48601000001', 'Nie wysłano: wiadomość wymaga więcej niż 1 części']]);
     expect(events(r.id)[0]).toEqual(['error', 'Treść wymaga więcej niż 1 części.']);
-    const cut = runSmsGroup(deps, lists({ name: 'Druga' }), event({ text: `dzieci ${long}` }), NOW);
+    const cut = runSmsGroup(deps, lists({ name: 'Druga' }), event({ text: `serwis ${long}` }), NOW);
     expect(cut).toMatchObject({ kind: 'sent', parts: 1 });
     expect((cut as { text: string }).text.endsWith('...')).toBe(true);
   });
   it('grupa zamknięta: do pozostałych członków, nazwa nadawcy w treści w trybie sender_body; jedyny członek to brak odbiorców', () => {
     const closed = make({ mode: 'closed', members: [{ phone: '48601000001', name: 'Ania' }, { phone: '48601000002', name: '' }], prefix: '', text: { mode: 'sender_body' } });
-    const out = runSmsGroup(deps, closed, event({ text: 'Jutro zbiórka' }), NOW);
-    expect(out).toMatchObject({ kind: 'sent', recipients: ['48601000002'], text: 'Ania: Jutro zbiórka' });
+    const out = runSmsGroup(deps, closed, event({ text: 'Jutro odprawa' }), NOW);
+    expect(out).toMatchObject({ kind: 'sent', recipients: ['48601000002'], text: 'Ania: Jutro odprawa' });
     const alone = make({ name: 'Sama', mode: 'closed', members: [{ phone: '48601000001', name: '' }], prefix: '', confirm: { enabled: true } });
     expect(runSmsGroup(deps, alone, event({ text: 'Halo' }), NOW)).toEqual({ kind: 'skipped', reason: 'no_recipients' });
     expect(events(alone.id)).toEqual([['skipped', 'brak odbiorców']]);
@@ -111,11 +111,11 @@ describe('runSmsGroup', () => {
   it('osobne listy: nadawca wpisany także na listę odbiorców dostaje wiadomość jak każdy odbiorca', () => {
     const out = runSmsGroup(deps, lists({ recipients: ['48601000001', '48601000002'], confirm: { enabled: true } }), event(), NOW);
     expect(out).toMatchObject({ kind: 'sent', recipients: ['48601000001', '48601000002'] });
-    expect(allMessages().filter((m) => m.dest === '48601000001').map((m) => m.body).sort()).toEqual(['Wysłano do 2 odbiorców', 'jutro zbiórka 8:00']);
+    expect(allMessages().filter((m) => m.dest === '48601000001').map((m) => m.body).sort()).toEqual(['Wysłano do 2 odbiorców', 'jutro odprawa 8:00']);
   });
   it('sender_body bez nazwy na liście podstawia numer', () => {
     const out = runSmsGroup(deps, lists({ senders: [{ phone: '48601000001', name: '' }], text: { mode: 'sender_body' } }), event(), NOW);
-    expect(out).toMatchObject({ kind: 'sent', text: '48601000001: jutro zbiórka 8:00' });
+    expect(out).toMatchObject({ kind: 'sent', text: '48601000001: jutro odprawa 8:00' });
   });
   it('warunek widzi body i sender; burza daje throttled bez potwierdzenia', () => {
     const cond = lists({ condition: { mode: 'builder', rules: [{ path: 'body', op: 'contains', value: 'pilne' }] } });
@@ -131,7 +131,7 @@ describe('runSmsGroup', () => {
   });
   it('szablon Liquid z sender_name i recipients.size; błąd szablonu to wpis błąd bez wysyłki', () => {
     const liquid = lists({ text: { mode: 'liquid', template: '{{ sender_name }} do {{ recipients.size }}: {{ body | upcase }}' } });
-    expect(runSmsGroup(deps, liquid, event(), NOW)).toMatchObject({ kind: 'sent', text: 'Ania do 2: JUTRO ZBIÓRKA 8:00' });
+    expect(runSmsGroup(deps, liquid, event(), NOW)).toMatchObject({ kind: 'sent', text: 'Ania do 2: JUTRO ODPRAWA 8:00' });
     const broken = lists({ name: 'Zły', text: { mode: 'liquid', template: '{{ body | nieznany }}' }, confirm: { enabled: true } });
     expect(runSmsGroup(deps, broken, event(), NOW)).toMatchObject({ kind: 'error', code: 'template' });
     expect(events(broken.id)[0]![0]).toBe('error');
@@ -152,9 +152,9 @@ describe('runSmsGroup', () => {
     const plain = lists();
     runSmsGroup(deps, plain, event(), NOW);
     expect(deps.integrationEvents.list(plain.id, 1)[0]!.payload).toBeNull();
-    const stored = make({ name: 'Z ładunkiem', senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], prefix: 'dzieci' }, 1);
+    const stored = make({ name: 'Z ładunkiem', senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], prefix: 'serwis' }, 1);
     runSmsGroup(deps, stored, event(), NOW);
-    expect(JSON.parse(deps.integrationEvents.list(stored.id, 1)[0]!.payload!)).toMatchObject({ from: '48601000001', text: 'Dzieci: jutro zbiórka 8:00' });
+    expect(JSON.parse(deps.integrationEvents.list(stored.id, 1)[0]!.payload!)).toMatchObject({ from: '48601000001', text: 'Serwis: jutro odprawa 8:00' });
   });
 });
 
@@ -162,19 +162,19 @@ describe('previewSmsGroup', () => {
   it('pokazuje nadawcę, prefiks, odbiorców, treść, części i potwierdzenie bez zapisu', () => {
     const g = lists({ confirm: { enabled: true } });
     const p = previewSmsGroup(deps.engine, g.config, event(), NOW);
-    expect(p).toEqual({ senderAllowed: true, prefixMatched: true, body: 'jutro zbiórka 8:00', recipients: ['48601000002', '48601000003'], text: 'jutro zbiórka 8:00', parts: 1, confirm: 'Wysłano do 2 odbiorców', error: null });
+    expect(p).toEqual({ senderAllowed: true, prefixMatched: true, body: 'jutro odprawa 8:00', recipients: ['48601000002', '48601000003'], text: 'jutro odprawa 8:00', parts: 1, confirm: 'Wysłano do 2 odbiorców', error: null });
     expect(previewSmsGroup(deps.engine, lists().config, event({ from: '48601000009', text: 'halo' }), NOW)).toMatchObject({ senderAllowed: false, prefixMatched: false, recipients: [], text: '', confirm: null });
     expect(deps.integrationEvents.list(g.id, 5)).toHaveLength(0);
     expect(allMessages()).toHaveLength(0);
   });
   it('obcy nadawca z dobrym prefiksem: prefiks pasuje, ale bez odbiorców i treści', () => {
     const p = previewSmsGroup(deps.engine, lists().config, event({ from: '48601000009' }), NOW);
-    expect(p).toMatchObject({ senderAllowed: false, prefixMatched: true, body: 'jutro zbiórka 8:00', recipients: [], text: '' });
+    expect(p).toMatchObject({ senderAllowed: false, prefixMatched: true, body: 'jutro odprawa 8:00', recipients: [], text: '' });
   });
   it('błąd szablonu i przepełnienie w podglądzie', () => {
     const broken = previewSmsGroup(deps.engine, lists({ text: { mode: 'liquid', template: '{{ body | nieznany }}' } }).config, event(), NOW);
     expect(broken.error).toBeTruthy();
-    const long = previewSmsGroup(deps.engine, lists({ name: 'D', overflow: 'reject' }).config, event({ text: `dzieci ${'x'.repeat(400)}` }), NOW);
+    const long = previewSmsGroup(deps.engine, lists({ name: 'D', overflow: 'reject' }).config, event({ text: `serwis ${'x'.repeat(400)}` }), NOW);
     expect(long.parts).toBeGreaterThan(1);
   });
 });

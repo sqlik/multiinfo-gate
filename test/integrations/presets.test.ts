@@ -38,9 +38,9 @@ describe('gotowe ustawienia', () => {
     expect(preset).toMatchObject({ name: 'SMS do grupy', kinds: ['sms_group'] });
     expect(preset.warning).toContain('20 numerów to 20 wiadomości');
     expect(preset.guide).toContain('Serwis: awaria pompy');
-    const config = parseConfig('sms_group', { ...defaultSmsGroupConfig(), ...preset.smsGroup, senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002'], prefix: 'dzieci' });
-    const p = previewSmsGroup(engine, config, { ...received, text: 'Dzieci: jutro zbiórka 8:00' }, NOW);
-    expect(p).toMatchObject({ senderAllowed: true, prefixMatched: true, recipients: ['48601000002'], text: 'jutro zbiórka 8:00', parts: 1 });
+    const config = parseConfig('sms_group', { ...defaultSmsGroupConfig(), ...preset.smsGroup, senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002'], prefix: 'serwis' });
+    const p = previewSmsGroup(engine, config, { ...received, text: 'Serwis: jutro odprawa 8:00' }, NOW);
+    expect(p).toMatchObject({ senderAllowed: true, prefixMatched: true, recipients: ['48601000002'], text: 'jutro odprawa 8:00', parts: 1 });
   });
   it('ustawienia poczty mają port 993, TLS i instrukcję o haśle; home.pl bez nazwy serwera (per konto); Własny serwer ma puste pola', () => {
     for (const id of ['poczta-gmail', 'poczta-home', 'poczta-ovh']) {

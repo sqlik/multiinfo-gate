@@ -90,7 +90,7 @@ describe('sms_group', () => {
   });
   it('odrzuca prefiks ze spacją, numer nieznormalizowany i nazwę dłuższą niż 40 znaków', () => {
     const base = defaultSmsGroupConfig();
-    expect(() => parseConfig('sms_group', { ...base, prefix: 'dla dzieci' })).toThrow();
+    expect(() => parseConfig('sms_group', { ...base, prefix: 'dla serwisu' })).toThrow();
     expect(() => parseConfig('sms_group', { ...base, prefix: 'x'.repeat(21) })).toThrow();
     expect(() => parseConfig('sms_group', { ...base, recipients: ['+48 601 000 001'] })).toThrow();
     expect(() => parseConfig('sms_group', { ...base, senders: [{ phone: '48601000001', name: 'x'.repeat(41) }] })).toThrow();

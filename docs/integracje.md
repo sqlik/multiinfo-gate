@@ -966,8 +966,8 @@ samym kluczu i tej samej usłudze, z innym prefiksem. Jedna grupa ma jeden prefi
 ### 5a.3. Prefiks
 
 Prefiks to jedno słowo bez spacji, do 20 znaków. Bramka porównuje je z początkiem treści SMS-a.
-Wielkość liter nie ma znaczenia. Polskie znaki są sprowadzane do łacińskich, więc „Żłobek”
-i „zlobek” to ten sam prefiks. Po słowie może stać spacja, dwukropek albo oba. Każdy z poniższych
+Wielkość liter nie ma znaczenia. Polskie znaki są sprowadzane do łacińskich, więc „Łódź”
+i „lodz” to ten sam prefiks. Po słowie może stać spacja, dwukropek albo oba. Każdy z poniższych
 zapisów daje SMS o treści `awaria pompy`:
 
 ```
