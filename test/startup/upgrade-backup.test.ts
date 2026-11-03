@@ -114,6 +114,36 @@ describe('backupBeforeUpgrade', () => {
     chmodSync(dir, 0o500);
     await expect(backupBeforeUpgrade({ db, dir, current: '1.8.7', log })).rejects.toBeInstanceOf(BackupBeforeUpgradeError);
   });
+
+  it('kopia z update zapisana przed otwarciem bazy nie daje drugiej kopii', async () => {
+    // Kolejność jak w LXC: baza zamknięta, update robi kopię, bramka otwiera bazę (powstaje pusty -wal).
+    const path = join(root, 'gate.sqlite');
+    sixMigrations().close();
+    const old = new Date(Date.now() - 3_600_000);
+    utimesSync(path, old, old);
+    mkdirSync(dir, { recursive: true });
+    const copy = join(dir, 'przed-aktualizacja-1.8.6.sqlite');
+    writeFileSync(copy, 'kopia z update');
+    const copyAt = new Date(Date.now() - 60_000);
+    utimesSync(copy, copyAt, copyAt);
+    const db = openDatabaseRaw(path);
+    expect(statSync(`${path}-wal`).size).toBe(0);
+    expect(await backupBeforeUpgrade({ db, dir, current: '1.9.0', log })).toBeNull();
+    expect(readdirSync(dir)).toEqual(['przed-aktualizacja-1.8.6.sqlite']);
+  });
+
+  it('niescalony dziennik -wal z danymi nowszy niż kopia wymusza własną kopię', async () => {
+    const db = sixMigrations();
+    mkdirSync(dir, { recursive: true });
+    const copy = join(dir, 'przed-aktualizacja-1.8.6.sqlite');
+    writeFileSync(copy, 'kopia');
+    const copyAt = new Date(Date.now() - 60_000);
+    utimesSync(copy, copyAt, copyAt);
+    db.exec('CREATE TABLE zapis_po_kopii (a)');
+    expect(statSync(join(root, 'gate.sqlite-wal')).size).toBeGreaterThan(0);
+    expect(await backupBeforeUpgrade({ db, dir, current: '1.9.0', log }))
+      .toBe(join(dir, 'przed-aktualizacja-do-1.9.0.sqlite'));
+  });
 });
 
 describe('retencja przy zmianie wersji', () => {

@@ -48,11 +48,16 @@ export function pruneUpgradeBackups(dir: string, keep = UPGRADE_BACKUPS_KEPT): s
   return removed;
 }
 
-/** Czas ostatniego zapisu bazy: plik główny albo dziennik WAL, jeśli nie został scalony. */
+/**
+ * Czas ostatniego zapisu bazy: plik główny albo dziennik WAL, jeśli nie został scalony. Pusty
+ * dziennik się nie liczy: powstaje przy otwarciu bazy w trybie WAL, a po czystym zatrzymaniu
+ * SQLite scala go i usuwa. Bez tego kopia z `update` byłaby zawsze starsza niż świeżo otwarta baza.
+ */
 function lastWrite(dbPath: string): number | null {
   if (!existsSync(dbPath)) return null;
   const wal = `${dbPath}-wal`;
-  return Math.max(statSync(dbPath).mtimeMs, existsSync(wal) ? statSync(wal).mtimeMs : 0);
+  const walStat = existsSync(wal) ? statSync(wal) : null;
+  return Math.max(statSync(dbPath).mtimeMs, walStat && walStat.size > 0 ? walStat.mtimeMs : 0);
 }
 
 /**
