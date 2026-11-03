@@ -855,12 +855,12 @@ const dimOr = (value: string | undefined | null, fallback = 'brak') => (value ? 
 /** Liczba z rzeczownikiem: „1 nadawca”, „2 nadawców” - od dwóch w górę dopełniacz liczby mnogiej. */
 const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
-/** „1 numer”, „3 numery”, „5 numerów”, „12 numerów”, „22 numery”: rzeczownik nieosobowy odmienia się po polsku trzema formami. */
-function numbersWord(n: number): string {
-  if (n === 1) return '1 numer';
+/** Rzeczownik nieosobowy w trzech formach: „1 numer”, „3 numery”, „5 numerów”, „12 numerów”, „22 numery”. */
+function countForms(n: number, one: string, few: string, many: string): string {
+  if (n === 1) return `1 ${one}`;
   const last = n % 10;
   const tens = n % 100;
-  return `${n} ${last >= 2 && last <= 4 && (tens < 12 || tens > 14) ? 'numery' : 'numerów'}`;
+  return `${n} ${last >= 2 && last <= 4 && (tens < 12 || tens > 14) ? few : many}`;
 }
 
 /** Do dziesięciu pozycji listy w szczegółach, dalej „i N więcej”; nazwa przed numerem w nawiasie. */
@@ -930,7 +930,7 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     rows.push(kvRow('Nadpis nadawcy', row.orig === null ? '<span class="dim">domyślny klucza</span>' : esc(row.orig), row.orig !== null));
     rows.push(kvRow('Odbiorcy grupy', cfg.recipients.length === 0
       ? '<span class="dim">pusta lista: akcja „Wyślij SMS do grupy” kończy się błędem</span>'
-      : `${numbersWord(cfg.recipients.length)}: ${memberWords(cfg.recipients)}`, true));
+      : `${countForms(cfg.recipients.length, 'numer', 'numery', 'numerów')}: ${memberWords(cfg.recipients)}`, true));
     rows.push(kvRow('Treść', `do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
   } else if (row.kind === 'webhook_out') {
     const cfg = c as OutboundConfig;
@@ -1032,7 +1032,7 @@ export function integrationDetailPage(d: IntegrationDetail): string {
   <div class="scroll">
     ${mailbox}
     <div class="panel">
-      <div class="panel-h"><div class="lab">Konfiguracja</div><div class="m dim">24 h: ${esc(d.view.counts.sent)} wysłane · ${esc(d.view.counts.errors)} błędy</div></div>
+      <div class="panel-h"><div class="lab">Konfiguracja</div><div class="m dim">24 h: ${esc(d.view.counts.sent)} wysłane · ${countForms(d.view.counts.errors, 'błąd', 'błędy', 'błędów')}</div></div>
       <div class="kv">${configRows(row, d.apiUrl, d.simple ?? null)}</div>
     </div>
     ${row.kind === 'power_automate' ? powerAutomatePanel(d.apiUrl, `/integracje/${row.id}`) : ''}

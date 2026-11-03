@@ -116,6 +116,18 @@ describe('GET /integracje', () => {
   });
 });
 
+describe('GET /integracje/:id - nagłówek konfiguracji', () => {
+  it('liczba błędów z doby w poprawnej odmianie: 0 błędów, 1 błąd, 2 błędy, 5 błędów, 12 błędów, 22 błędy', async () => {
+    for (const [n, word] of [[0, '0 błędów'], [1, '1 błąd'], [2, '2 błędy'], [5, '5 błędów'], [12, '12 błędów'], [22, '22 błędy']] as const) {
+      const id = seedInbound(`Kuma ${n}`);
+      for (let i = 0; i < n; i++) {
+        h.integrationEvents.record({ integrationId: id, at: new Date(NOW.getTime() - 60_000), result: 'error', reason: 'pusta treść', logLimit: 200 });
+      }
+      expect((await page(`/integracje/${id}`)).body, String(n)).toContain(`· ${word}</div>`);
+    }
+  });
+});
+
 describe('GET /integracje/nowa', () => {
   it('wybór kierunku, potem kafelki ustawień, potem formularz', async () => {
     const kind = await page('/integracje/nowa');
