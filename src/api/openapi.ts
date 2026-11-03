@@ -216,13 +216,13 @@ const NUMER_INTEGRACJI: JsonSchema = {
 const cialoWysylkiIntegracji = (): JsonSchema => cialoZSchematu(paMessageBodySchema.shape, { to: NUMER_INTEGRACJI });
 const cialoGrupyIntegracji = (): JsonSchema => cialoZSchematu(paGroupBodySchema.shape);
 
-/** Klucz powtórzenia; ten sam przy wysyłce do numerów i do grupy. */
+/** Klucz powtórzenia; ten sam przy wysyłce do numerów, do grupy i przy rozsyłce. */
 const PARAMETR_IDEMPOTENCJI: OpenApiParameter = {
   name: 'Idempotency-Key',
   in: 'header',
   required: false,
-  description: 'Własny klucz powtórzenia. Powtórzone żądanie z tym samym kluczem i tą samą treścią'
-    + ' zwraca pierwotną odpowiedź zamiast wysyłać wiadomość drugi raz.',
+  description: 'Własny klucz powtórzenia. Powtórzone żądanie z tym samym kluczem i tymi samymi danymi'
+    + ' zwraca pierwotną odpowiedź zamiast wysyłać wiadomość albo rozsyłkę drugi raz.',
   schema: { type: 'string' },
   example: 'zamowienie-2026-08-26-114',
 };
@@ -763,7 +763,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
               'Ten klucz może użyć nadpisu: Firma Sklep.',
             ),
             '409': blad(
-              'Ten sam Idempotency-Key użyty z inną treścią albo innym numerem',
+              'Ten sam Idempotency-Key użyty z inną treścią, innym numerem albo przez integrację',
               'idempotency_conflict',
               'Ten klucz idempotencji został już użyty z inną treścią lub innym odbiorcą.',
             ),
@@ -909,6 +909,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             + ' treść oraz własny identyfikator zwracany w raporcie. Kodowanie jest wspólne dla całej rozsyłki:'
             + ' jeżeli którakolwiek treść wymaga UCS-2, wszystkie wiadomości idą w UCS-2.',
           security: KLUCZ,
+          parameters: [PARAMETR_IDEMPOTENCJI],
           requestBody: {
             required: true,
             content: {
@@ -946,6 +947,11 @@ export function buildOpenApiDocument(): OpenApiDocument {
               'Usługa albo nadpis spoza uprawnień klucza: service_not_allowed, orig_not_allowed',
               'service_not_allowed',
               'Klucz nie ma dostępu do usługi 24139.',
+            ),
+            '409': blad(
+              'Ten sam Idempotency-Key użyty z inną rozsyłką albo przez integrację',
+              'idempotency_conflict',
+              'Ten klucz idempotencji został już użyty z inną rozsyłką albo przez inną integrację.',
             ),
             '429': blad(
               'Przekroczony limit żądań klucza na minutę',
@@ -1265,7 +1271,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             + ' integracji dotyczy treści wspólnej i każdej treści odbiorcy osobno. Przy ustawieniu „nie wysyłaj”'
             + ' jedna zbyt długa treść odrzuca całą rozsyłkę.',
           security: KLUCZ,
-          parameters: [PARAMETR_ID_INTEGRACJI],
+          parameters: [PARAMETR_ID_INTEGRACJI, PARAMETR_IDEMPOTENCJI],
           requestBody: {
             required: true,
             content: {
@@ -1292,7 +1298,8 @@ export function buildOpenApiDocument(): OpenApiDocument {
             ),
             ...BLEDY_INTEGRACJI,
             '409': blad(
-              'Integracja wyłączona w panelu: integration_disabled',
+              'Integracja wyłączona w panelu albo ten sam Idempotency-Key użyty z inną rozsyłką: integration_disabled,'
+                + ' idempotency_conflict',
               'integration_disabled',
               'Integracja Ekipa serwisowa jest wyłączona w panelu bramki.',
             ),

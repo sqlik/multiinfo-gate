@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
+import { z } from '../zod.ts';
 import type { PowerAutomateConfig } from '../integrations/config.ts';
 import { paActionLabel, payloadForLog, runPowerAutomate, type PaCall, type PowerAutomateIntegration } from '../integrations/power-automate.ts';
 import { silentLogger } from '../log.ts';

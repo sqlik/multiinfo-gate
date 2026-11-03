@@ -166,6 +166,20 @@ describe('POST /v1/integrations/{id}/messages', () => {
     expect(notices.map((n) => n.event)).toEqual(['integration_error']);
   });
 
+  it.each([
+    ['messages', { to: '48601000001' }, 'text: Treść jest pusta.'],
+    ['messages', { to: '48601000001', text: 'x', validTo: 'jutro' }, 'validTo: Wartość musi być datą i godziną w formacie ISO 8601, na przykład 2026-11-04T08:00:00Z.'],
+    ['messages', { to: '48601000001', text: 'x', deliveryReport: 'tak' }, 'deliveryReport: Wartość musi być równa true albo false.'],
+    ['packages', { recipients: [] }, 'recipients: Lista odbiorców jest pusta.'],
+    ['packages', { recipients: [{ to: '48601000001' }, { to: '' }], defaultText: 'x' }, 'recipients.1.to: Numer odbiorcy jest pusty.'],
+    ['packages', { defaultText: 'x' }, 'recipients: Lista odbiorców jest pusta.'],
+    ['group', {}, 'text: Treść jest pusta.'],
+  ])('komunikat walidacji po polsku: %s %j', async (path, body, message) => {
+    const res = await post(`/v1/integrations/int_${ekipa}/${path}`, body);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toEqual({ code: 'invalid_body', message });
+  });
+
   it('serviceId i orig w ciele nie zmieniają usługi ani nadpisu integracji', async () => {
     const res = await post(`/v1/integrations/int_${ekipa}/messages`, { to: '48601000001', text: 'x', serviceId: '24138', orig: 'Serwis' });
     expect(res.statusCode).toBe(202);

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { z } from 'zod';
+import { z } from '../zod.ts';
 import type { PackageRow, RecipientRow } from '../store/packages.ts';
 import { authenticate } from './auth.ts';
 import { dropEmptyFields } from './empty-fields.ts';
@@ -25,7 +25,7 @@ export const keyBeforeBody = (deps: Pick<ApiDeps, 'apiKeys'>) => async (request:
 };
 
 const recipientSchema = z.object({
-  to: z.string(),
+  to: z.string({ error: (issue) => (issue.input === undefined ? 'Numer odbiorcy jest pusty.' : undefined) }),
   text: z.string().min(1).optional(),
   clientId: z.string().optional(),
 });
@@ -34,7 +34,9 @@ const recipientSchema = z.object({
 export const packageBodySchema = z.object({
   serviceId: z.union([z.string(), z.number()]).optional(),
   defaultText: z.string().min(1).optional(),
-  recipients: z.array(recipientSchema).min(1).max(MAX_RECIPIENTS),
+  recipients: z.array(recipientSchema, { error: (issue) => (issue.input === undefined ? 'Lista odbiorców jest pusta.' : undefined) })
+    .min(1, 'Lista odbiorców jest pusta.')
+    .max(MAX_RECIPIENTS, `Rozsyłka może objąć najwyżej ${MAX_RECIPIENTS} odbiorców.`),
   orig: z.string().optional(),
   startAt: z.string().datetime().optional(),
   deliveryReport: z.boolean().default(true),

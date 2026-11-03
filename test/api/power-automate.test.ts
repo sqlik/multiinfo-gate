@@ -240,7 +240,7 @@ describe('buildPowerAutomateConnector', () => {
   });
 
   it('klucz idempotencji jest nagłówkiem w ustawieniach zaawansowanych wysyłek', () => {
-    for (const id of ['WyslijSms', 'WyslijSmsDoGrupy']) {
+    for (const id of ['WyslijSms', 'WyslijSmsDoGrupy', 'WyslijRozsylke']) {
       const header = op(id).parameters!.find((p) => p.in === 'header')!;
       expect(header, id).toMatchObject({ name: 'Idempotency-Key', type: 'string', required: false, 'x-ms-visibility': 'advanced' });
     }

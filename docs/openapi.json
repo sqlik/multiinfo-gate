@@ -119,7 +119,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Własny klucz powtórzenia. Powtórzone żądanie z tym samym kluczem i tą samą treścią zwraca pierwotną odpowiedź zamiast wysyłać wiadomość drugi raz.",
+            "description": "Własny klucz powtórzenia. Powtórzone żądanie z tym samym kluczem i tymi samymi danymi zwraca pierwotną odpowiedź zamiast wysyłać wiadomość albo rozsyłkę drugi raz.",
             "schema": {
               "type": "string"
             },
@@ -395,7 +395,7 @@
             }
           },
           "409": {
-            "description": "Ten sam Idempotency-Key użyty z inną treścią albo innym numerem",
+            "description": "Ten sam Idempotency-Key użyty z inną treścią, innym numerem albo przez integrację",
             "content": {
               "application/json": {
                 "schema": {
@@ -779,6 +779,18 @@
             "bearerAuth": []
           }
         ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Własny klucz powtórzenia. Powtórzone żądanie z tym samym kluczem i tymi samymi danymi zwraca pierwotną odpowiedź zamiast wysyłać wiadomość albo rozsyłkę drugi raz.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "zamowienie-2026-08-26-114"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -980,6 +992,22 @@
                   "error": {
                     "code": "service_not_allowed",
                     "message": "Klucz nie ma dostępu do usługi 24139."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Ten sam Idempotency-Key użyty z inną rozsyłką albo przez integrację",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "idempotency_conflict",
+                    "message": "Ten klucz idempotencji został już użyty z inną rozsyłką albo przez inną integrację."
                   }
                 }
               }
@@ -1675,7 +1703,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Własny klucz powtórzenia. Powtórzone żądanie z tym samym kluczem i tą samą treścią zwraca pierwotną odpowiedź zamiast wysyłać wiadomość drugi raz.",
+            "description": "Własny klucz powtórzenia. Powtórzone żądanie z tym samym kluczem i tymi samymi danymi zwraca pierwotną odpowiedź zamiast wysyłać wiadomość albo rozsyłkę drugi raz.",
             "schema": {
               "type": "string"
             },
@@ -1948,6 +1976,16 @@
               "pattern": "^int_[1-9][0-9]{0,9}$"
             },
             "example": "int_12"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Własny klucz powtórzenia. Powtórzone żądanie z tym samym kluczem i tymi samymi danymi zwraca pierwotną odpowiedź zamiast wysyłać wiadomość albo rozsyłkę drugi raz.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "zamowienie-2026-08-26-114"
           }
         ],
         "requestBody": {
@@ -2162,7 +2200,7 @@
             }
           },
           "409": {
-            "description": "Integracja wyłączona w panelu: integration_disabled",
+            "description": "Integracja wyłączona w panelu albo ten sam Idempotency-Key użyty z inną rozsyłką: integration_disabled, idempotency_conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -2238,7 +2276,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Własny klucz powtórzenia. Powtórzone żądanie z tym samym kluczem i tą samą treścią zwraca pierwotną odpowiedź zamiast wysyłać wiadomość drugi raz.",
+            "description": "Własny klucz powtórzenia. Powtórzone żądanie z tym samym kluczem i tymi samymi danymi zwraca pierwotną odpowiedź zamiast wysyłać wiadomość albo rozsyłkę drugi raz.",
             "schema": {
               "type": "string"
             },

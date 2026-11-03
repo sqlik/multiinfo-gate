@@ -248,6 +248,21 @@ describe('POST /v1/messages', () => {
   });
 });
 
+describe('POST /v1/messages - komunikaty walidacji', () => {
+  it.each([
+    [{ to: '', text: 'x' }, 'to: Numer odbiorcy jest pusty.'],
+    [{ text: 'x' }, 'to: Numer odbiorcy jest pusty.'],
+    [{ to: 48601000001, text: 'x' }, 'to: Pole to musi być numerem w postaci tekstu albo listą numerów.'],
+    [{ to: '48601000001', text: '' }, 'text: Treść jest pusta.'],
+    [{ to: '48601000001', text: 'x', encoding: 'ascii' }, 'encoding: Dozwolone wartości: auto, gsm, unicode.'],
+    [{ to: '48601000001', text: 'x', maxParts: 10 }, 'maxParts: Wartość może wynosić najwyżej 9.'],
+  ])('%j: 400 invalid_body po polsku', async (body, message) => {
+    const res = await post(body);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toEqual({ code: 'invalid_body', message });
+  });
+});
+
 describe('POST /v1/messages - inReplyTo', () => {
   const seedInbound = (serviceId = '24138') => inbound.insertIfNew({
     id: 'in_1', accountId, serviceId, miId: '22', sender: '48601135134', dest: '7968', kind: 'text', body: 'Pytanie',

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
+import { z } from '../zod.ts';
 import type { MessageRow } from '../store/messages.ts';
 import { authenticate } from './auth.ts';
 import { dropEmptyFields } from './empty-fields.ts';
@@ -12,8 +12,10 @@ import { submitMessages } from './submit.ts';
  * (`src/api/openapi.ts`), żeby nowe pole nie mogło umknąć opisowi.
  */
 export const messageBodySchema = z.object({
-  to: z.union([z.string(), z.array(z.string()).min(1).max(500)]),
-  text: z.string().min(1),
+  to: z.union([z.string(), z.array(z.string()).min(1).max(500)], {
+    error: (issue) => (issue.input === undefined ? 'Numer odbiorcy jest pusty.' : 'Pole to musi być numerem w postaci tekstu albo listą numerów.'),
+  }),
+  text: z.string({ error: (issue) => (issue.input === undefined ? 'Treść jest pusta.' : undefined) }).min(1, 'Treść jest pusta.'),
   orig: z.string().optional(),
   serviceId: z.union([z.string(), z.number()]).optional(),
   encoding: z.enum(['auto', 'gsm', 'unicode']).default('auto'),

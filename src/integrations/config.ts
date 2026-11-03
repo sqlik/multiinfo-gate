@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '../zod.ts';
 import { RULE_OPS } from './conditions.ts';
 import { isValidPath } from './paths.ts';
 

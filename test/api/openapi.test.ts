@@ -68,6 +68,10 @@ describe('opis API', () => {
     expect(numer.description).toMatch(/[Pp]usty numer/);
     expect(doc.paths['/v1/integrations']!.get!.operationId).toBe('listaIntegracjiPowerAutomate');
     expect(Object.keys(doc.components.schemas)).toEqual(expect.arrayContaining(['IntegracjaPowerAutomate', 'WysylkaDoGrupy']));
+    // Rozsyłka, także zwykła, przyjmuje klucz idempotencji.
+    for (const path of ['/v1/packages', '/v1/integrations/{id}/packages']) {
+      expect(doc.paths[path]!.post!.parameters!.map((p) => p.name), path).toContain('Idempotency-Key');
+    }
     // Odpowiedź grupy nie podaje numerów członków listy.
     const wiadomosc = doc.components.schemas.WysylkaDoGrupy!.properties!.messages!.items!;
     expect(Object.keys(wiadomosc.properties!)).toEqual(['id', 'status', 'parts']);

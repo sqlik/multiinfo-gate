@@ -384,8 +384,9 @@ const IDEMPOTENCY: SwaggerParameter = {
   type: 'string',
   'x-ms-summary': 'Klucz idempotencji',
   'x-ms-visibility': 'advanced',
-  description: 'Własny klucz powtórzenia, na przykład numer zlecenia. Ponowione wywołanie z tym samym kluczem i tą samą'
-    + ' treścią zwraca pierwotną odpowiedź zamiast wysyłać SMS drugi raz. Przydaje się, gdy przepływ ponawia akcję',
+  description: 'Własny klucz powtórzenia, na przykład numer zlecenia. Ponowione wywołanie z tym samym kluczem i tymi'
+    + ' samymi danymi zwraca pierwotną odpowiedź zamiast wysyłać SMS albo rozsyłkę drugi raz. Przydaje się, gdy'
+    + ' przepływ ponawia akcję',
 };
 
 const pathId = (summary: string, description: string, extra: Partial<SwaggerParameter> = {}): SwaggerParameter => ({
@@ -498,11 +499,16 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
             + ' w raporcie.',
           parameters: [
             integrationParam(INTEGRATION_FOR_SENDING),
+            IDEMPOTENCY,
             body('Rozsyłka', 'Odbiorcy, treść i ustawienia rozsyłki', requestBody(parts.packageBody, 'WyslijRozsylke')),
           ],
           responses: {
             '200': { description: 'Rozsyłka przyjęta do kolejki', schema: ref('PrzyjetaRozsylka') },
-            '409': { description: 'Integracja wyłączona w panelu bramki: integration_disabled', schema: ref('OdpowiedzBledu') },
+            '409': {
+              description: 'Integracja wyłączona w panelu bramki albo ten sam klucz idempotencji użyty z inną rozsyłką:'
+                + ' integration_disabled, idempotency_conflict',
+              schema: ref('OdpowiedzBledu'),
+            },
             ...SENDING_ERRORS,
           },
         },
