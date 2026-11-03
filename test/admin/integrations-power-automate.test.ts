@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { generateApiKey } from '../../src/api/keys.ts';
+import { RateLimiter } from '../../src/api/rate-limit.ts';
+import { buildApiServer } from '../../src/api/server.ts';
 import { defaultPowerAutomateConfig, type PowerAutomateConfig } from '../../src/integrations/config.ts';
+import { integrationDeps } from '../helpers/api-deps.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
 const NOW = new Date('2026-11-03T10:00:00Z');
@@ -199,5 +203,81 @@ describe('pobranie konektora', () => {
     await download('https://sms.firma.pl');
     await download('http://10.0.0.5');
     expect(h.audit.list(100, 0).length).toBe(before);
+  });
+});
+
+describe('szczegóły integracji', () => {
+  it('konfiguracja słowami: usługa, nadpis, odbiorcy z nazwami, limit części, ochrona; bez warunku; panel konektora z powrotem na szczegóły', async () => {
+    await create();
+    const row = paRow();
+    const detail = (await get(`/integracje/${row.id}`)).body;
+    for (const t of ['Odbiorcy grupy', 'Marek Kowalski (48601000011)', '48601000012', 'do 3 części, nadmiar: odrzucenie', 'Usługa', 'domyślna klucza',
+      'Nadpis nadawcy', 'domyślny klucza', '30 wywołań na 10 minut', 'Konektor Power Automate', `name="wroc" value="/integracje/${row.id}"`,
+      'action="/integracje/power-automate/konektor"']) {
+      expect(detail, t).toContain(t);
+    }
+    expect(detail).not.toContain('Warunek');
+    expect(detail).not.toContain('Adres docelowy');
+  });
+
+  it('pusta lista mówi, że akcja „Wyślij SMS do grupy” skończy się błędem', async () => {
+    await create({ recipients: '', overflow: 'truncate' });
+    const detail = (await get(`/integracje/${paRow().id}`)).body;
+    expect(detail).toContain('pusta lista: akcja „Wyślij SMS do grupy” kończy się błędem');
+    expect(detail).toContain('nadmiar: przycięcie');
+  });
+
+  it('dziennik po wywołaniu rozsyłki przez API: odnośnik do rozsyłki, zlecający jako tekst w kolumnie „Nadawca”, bez „Użyj jako próbki”', async () => {
+    await create({ storePayloads: '1', tryb: 'zaawansowany' });
+    const row = paRow();
+    // Integracja na kluczu z prawdziwym skrótem, żeby API przyjęło wywołanie.
+    const key = generateApiKey();
+    const keyId = h.apiKeys.insert({
+      accountId: h.apiKeys.get(apiKeyId)!.accountId, name: 'Przepływy', keyHash: key.hash, keyPrefix: key.prefix, defaultServiceId: '24138',
+      defaultOrig: null, maxParts: 5, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'],
+    });
+    h.db.prepare('UPDATE integrations SET api_key_id = ? WHERE id = ?').run(keyId, row.id);
+    const api = buildApiServer({
+      accounts: h.accounts, apiKeys: h.apiKeys, messages: h.messages, events: h.events, jobs: h.jobs, packages: h.packages, inbound: h.inbound,
+      clients: {} as never, rateLimiter: new RateLimiter(), ...integrationDeps(h.db, h.masterKey), now: () => NOW,
+    });
+    const res = await api.inject({
+      method: 'POST', url: `/v1/integrations/int_${row.id}/packages`, headers: { authorization: key.key },
+      payload: { recipients: [{ to: '48601000001' }, { to: '48601000002' }], defaultText: 'Przegląd floty jutro', requestedBy: '<b>Jan</b>' },
+    });
+    expect(res.statusCode).toBe(202);
+    const pkgId = res.json().id as string;
+    const detail = (await get(`/integracje/${row.id}`)).body;
+    expect(detail).toContain(`href="/rozsylki/${pkgId}"`);
+    expect(detail).toContain('Wyślij rozsyłkę, 2 odbiorców');
+    expect(detail).toContain('API · &lt;b&gt;Jan&lt;/b&gt;');
+    expect(detail).not.toContain('<b>Jan</b>');
+    expect(detail).toMatch(/<th[^>]*>Nadawca<\/th>/);
+    expect(detail).not.toContain('Użyj jako próbki');
+    expect(detail).toContain('ładunek');
+  });
+});
+
+describe('funkcje wspólne integracji', () => {
+  it('wyłączenie, włączenie, kopia i usunięcie działają dla integracji Power Automate', async () => {
+    await create();
+    const row = paRow();
+    expect((await post(`/integracje/${row.id}/wylacz`, {})).statusCode).toBe(302);
+    expect(h.integrations.get(row.id)!.enabled).toBe(0);
+    expect((await post(`/integracje/${row.id}/wlacz`, {})).statusCode).toBe(302);
+    expect(h.integrations.get(row.id)!.enabled).toBe(1);
+    const copy = await post(`/integracje/${row.id}/kopiuj`, {});
+    expect(copy.statusCode).toBe(302);
+    const copyRow = h.integrations.list().find((r) => r.name === 'Ekipa serwisowa (kopia)')!;
+    expect(copyRow).toMatchObject({ kind: 'power_automate', enabled: 0, config: row.config });
+    expect((await get(`/integracje/${copyRow.id}/edytuj`)).statusCode).toBe(200);
+    expect((await post(`/integracje/${row.id}/usun`, {})).statusCode).toBe(302);
+    expect(h.integrations.get(row.id)).toBeUndefined();
+  });
+
+  it('przegląd liczy integrację Power Automate z błędem w ostatniej dobie', async () => {
+    await create();
+    h.integrationEvents.record({ integrationId: paRow().id, at: NOW, result: 'throttled', reason: 'ponad 30 w 10 min', logLimit: 200 });
+    expect((await get('/przeglad')).body).toMatch(/Integracje z błędami<\/div>\s*<div class="n fail">1</);
   });
 });

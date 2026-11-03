@@ -345,4 +345,16 @@ describe('ślady integracji', () => {
     seed('m_api');
     expect((await page('/wiadomosci/m_api')).body).not.toContain('E-mail nadawcy');
   });
+
+  it('szczegół wiadomości z Power Automate pokazuje zlecającego jako tekst; wiadomość bez zlecającego nie ma tego wiersza', async () => {
+    h.messages.insert({
+      id: 'm_pa', apiKeyId, accountId, serviceId: '24138', dest: '48601135134', body: 'Awaria', bodyHash: 'h', encoding: 'gsm', parts: 1, slots: 6,
+      orig: null, costCenter: null, validTo: null, idempotencyKey: null, createdAt: NOW.toISOString(), requestedBy: '<b>Jan</b>',
+    });
+    const body = (await page('/wiadomosci/m_pa')).body;
+    expect(body).toContain('>Zlecający<');
+    expect(body).toContain('&lt;b&gt;Jan&lt;/b&gt;');
+    seed('m_bez');
+    expect((await page('/wiadomosci/m_bez')).body).not.toContain('Zlecający');
+  });
 });

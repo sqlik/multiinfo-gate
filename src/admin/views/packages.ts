@@ -12,12 +12,16 @@ export interface PackagesData {
   limit: number;
   keyNames: Map<number, string>;
   accountNames: Map<number, string>;
+  /** Nazwy integracji Power Automate, z których przyszły rozsyłki. */
+  integrationNames: Map<number, string>;
 }
 
 export interface PackageDetail {
   row: PackageRow;
   accountName: string;
   keyName: string;
+  /** Integracja Power Automate, która zleciła rozsyłkę; brak dla rozsyłki z API. */
+  integration: { id: number; name: string } | null;
   recipients: RecipientRow[];
   /** Ilu odbiorców pokazujemy; reszta jest w CSV. */
   shown: number;
@@ -41,7 +45,8 @@ export function packagesPage(data: PackagesData): string {
         <td class="m dim">${esc(stamp(p.createdAt))}</td>
         <td class="m"><a href="/rozsylki/${esc(p.id)}">${esc(p.id)}</a></td>
         <td>${esc(data.accountNames.get(p.accountId) ?? `konto ${p.accountId}`)}</td>
-        <td class="dim">${esc(data.keyNames.get(p.apiKeyId) ?? `klucz ${p.apiKeyId}`)}</td>
+        <td class="dim">${esc(data.keyNames.get(p.apiKeyId) ?? `klucz ${p.apiKeyId}`)}${p.integrationId === null ? ''
+          : `<div style="font-size: 11.5px; margin-top: 2px;"><a href="/integracje/${esc(p.integrationId)}">${esc(data.integrationNames.get(p.integrationId) ?? `integracja ${p.integrationId}`)}</a></div>`}</td>
         <td class="m">${esc(p.recipientsCount)}</td>
         <td class="m">${p.remainingCount === null ? '<span class="dim">-</span>' : esc(p.remainingCount)}</td>
         <td>${state(p)}</td>
@@ -148,6 +153,8 @@ export function packagePage(d: PackageDetail): string {
       <div class="panel">
         <div class="panel-h"><div class="lab">Parametry</div></div>
         <div class="kv">
+          ${d.integration === null ? '' : `<div>Integracja</div><div><a href="/integracje/${esc(d.integration.id)}">${esc(d.integration.name)}</a></div>`}
+          ${p.requestedBy === null ? '' : `<div>Zlecający</div><div>${esc(p.requestedBy)}</div>`}
           <div>ID usługi</div><div class="m">${esc(p.serviceId)}</div>
           <div>Nadpis</div><div class="m">${esc(p.orig ?? '-')}</div>
           <div>Kodowanie</div><div class="m">${esc(p.encoding === 'gsm' ? 'GSM-7' : 'UCS-2')}${p.multipart === 1 ? ' · wieloczęściowa' : ''}</div>
