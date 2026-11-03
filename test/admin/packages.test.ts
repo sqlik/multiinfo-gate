@@ -96,6 +96,14 @@ describe('GET /rozsylki/:id', () => {
     expect(res.body).toContain('gotowy · 2 odbiorców');
   });
 
+  it('gotowy raport jednego odbiorcy w poprawnej odmianie', async () => {
+    seed('pkg_1', [{ dest: '48601135134', text: null, clientId: null }]);
+    h.packages.setCreated('pkg_1', '14');
+    h.packages.setCompleted('pkg_1', NOW);
+    h.packages.setReport('pkg_1', { status: 'ready', reportId: '123' });
+    expect((await page('/rozsylki/pkg_1')).body).toContain('gotowy · 1 odbiorca');
+  });
+
   it('bez gotowego raportu pokazuje wyszarzony przycisk ze stanem', async () => {
     seed('pkg_2');
     h.packages.setCreated('pkg_2', '14');

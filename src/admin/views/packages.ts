@@ -140,7 +140,7 @@ export function packagePage(d: PackageDetail): string {
     : `<span class="btn btn-s disabled" title="${esc(reportStatusLabel(p.reportStatus))}">Pobierz CSV</span>`;
 
   const reportState = p.reportStatus === 'ready'
-    ? `gotowy · ${esc(p.recipientsCount)} odbiorców`
+    ? `gotowy · ${esc(p.recipientsCount)} ${p.recipientsCount === 1 ? 'odbiorca' : 'odbiorców'}`
       + (p.reportExpiresAt === null ? '' : ` · ważny do ${esc(stamp(p.reportExpiresAt))}`)
     : `<span class="${p.reportStatus === 'failed' ? 'fail' : 'dim'}">${esc(reportStatusLabel(p.reportStatus))}</span>`;
 
