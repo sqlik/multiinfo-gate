@@ -385,7 +385,7 @@ Bramka odpowiada po zapisaniu wpisu i zakolejkowaniu wysyłki. Nie czeka na Mult
 | nieprawidłowy token, basic auth, źródło spoza listy | 401 albo 403 | `{ "accepted": false, "reason": "unauthorized" }` |
 | ładunek za duży, niepoprawny JSON | 413 albo 400 | komunikat serwera |
 | za dużo żądań z adresu | 429 | `{ "accepted": false, "reason": "rate_limited" }` |
-| klucz odwołany albo przeterminowany, konto wstrzymane | 503 | `{ "accepted": false, "reason": "unavailable", "detail": "…" }` |
+| klucz odwołany albo przeterminowany, konto wstrzymane | 503 | `{ "accepted": false, "reason": "unavailable", "detail": "…" }`; pole `detail` zawiera zdanie ogólne, a przyczynę podaje dziennik integracji |
 | nieznany identyfikator, integracja wyłączona | 404 | `{ "accepted": false, "reason": "unknown" }` |
 
 Kody 200 przy odrzuceniu są celowe. Aplikacje monitorujące traktują je jako sukces i nie
@@ -1092,8 +1092,9 @@ otwierają formularz w trybie prostym. Nad formularzem znajduje się rozwijany o
 Power Automate”. Formularz składa się z trzech sekcji:
 
 1. **Podstawy.** Nazwa, klucz API, ID usługi, nadpis nadawcy oraz pole „Włączona”. Pod nadaną
-   nazwą integracja wyświetla się w Power Automate w polu „Integracja”. ID usługi i nadpis
-   wybiera się spośród uprawnień klucza albo pozostawia ustawienia domyślne klucza.
+   nazwą integracja wyświetla się w Power Automate w polu „Integracja”. Nazwa liczy najwyżej 100
+   znaków. ID usługi i nadpis wybiera się spośród uprawnień klucza albo pozostawia ustawienia
+   domyślne klucza. Lista kluczy obejmuje wyłącznie klucze czynne, bez odwołanych i wygasłych.
 2. **Odbiorcy grupy.** Pole „Numery odbiorców” przyjmuje do 500 numerów, po jednym w wierszu,
    z opcjonalną nazwą po numerze. Składnia i normalizacja są takie same jak w SMS-ie do grupy
    (rozdział 5a.2). Lista służy wyłącznie akcji „Wyślij SMS do grupy”, a pole jest opcjonalne.
@@ -1109,11 +1110,15 @@ Tryb zaawansowany odsłania dodatkowo sekcję **Ochrona i dziennik**:
 | Pole | Znaczenie |
 |---|---|
 | Limit burzy | liczba wywołań dopuszczalnych w oknie czasowym, domyślnie 30 wywołań w ciągu 10 minut; wywołanie ponad limit kończy się błędem i wpisem „limit”, bez wysłania SMS-a |
+| Limit odbiorców | liczba odbiorców wszystkich wywołań w tym samym oknie, od 1 do 50 000, domyślnie 5000; SMS do jednego numeru liczy się jako jeden odbiorca, a rozsyłka i SMS do grupy jako tylu odbiorców, ilu obejmują |
 | Wpisów w dzienniku | pojemność dziennika integracji, od 20 do 2000 wpisów |
-| Przechowuj ładunki w dzienniku | zachowuje treść każdego wywołania przez 7 dni w postaci zaszyfrowanej; ładunki zawierają numery i treści, dlatego opcję zaleca się włączać wyłącznie na czas konfiguracji |
+| Przechowuj ładunki w dzienniku | zachowuje treść każdego wywołania przez 7 dni w postaci zaszyfrowanej; ładunki zawierają numery i treści, dlatego opcję zaleca się włączać wyłącznie na czas konfiguracji; ładunek większy niż 64 KB, na przykład duża rozsyłka, zastępuje zdanie z jego rozmiarem |
 
-Limit burzy zlicza wywołania, a nie wiadomości. Rozsyłka do 5000 odbiorców stanowi jedno
-wywołanie.
+Wywołanie, które przekroczyłoby którykolwiek z limitów, kończy się błędem i wpisem „limit” bez
+wysłania SMS-a. Takie wywołanie nie zużywa żadnego z limitów. Pełna rozsyłka do 5000 odbiorców
+wyczerpuje domyślny limit odbiorców okna, dlatego zapętlony przepływ zatrzymuje się przy drugim
+wywołaniu. Jeżeli ochronę zmieniono w trybie zaawansowanym, tryb prosty wyświetla jej bieżące
+wartości.
 
 ### 5b.2. Konektor
 
@@ -1128,8 +1133,10 @@ albo z portem 443. Adres rozpoczynający się od `http://`, adres IP albo inny p
 wyświetlenie komunikatu zamiast pliku. Adres z pola służy wyłącznie do przygotowania pliku i nie
 jest zapisywany, dlatego wspólny adres bramki z rozdziału 2.1 może nadal wskazywać sieć firmową.
 
-Pobranie pliku wymaga zalogowania do panelu. Plik nie zawiera klucza API ani innych poufnych
-danych. Jeden plik obsługuje wszystkie integracje Power Automate danej bramki, a właściwą
+Pobranie pliku wymaga zalogowania do panelu i odbywa się wyłącznie przyciskiem w panelu. Odnośnik do
+pobrania otwarty w pasku przeglądarki nie zwraca pliku, dlatego podesłany link z obcym adresem nie
+przygotuje pliku kierującego klucz API na cudzy serwer. Plik nie zawiera klucza API ani innych
+poufnych danych. Jeden plik obsługuje wszystkie integracje Power Automate danej bramki, a właściwą
 integrację wybiera się w akcji przepływu.
 
 ### 5b.3. Lista, szczegóły i dziennik
@@ -1137,20 +1144,23 @@ integrację wybiera się w akcji przepływu.
 Na liście integracji integracja Power Automate jest oznaczona kierunkiem „do SMS” i podpisem
 „Power Automate” pod nazwą. Przycisk **Do SMS** nad listą obejmuje również te integracje.
 Szczegóły przedstawiają konfigurację słowami: klucz, usługę, nadpis nadawcy, odbiorców grupy wraz
-z nazwami, limit części ze sposobem postępowania przy nadmiarze, limit burzy, ustawienie ładunków
-i pojemność dziennika.
+z nazwami, limit części ze sposobem postępowania przy nadmiarze, limit burzy z limitem odbiorców,
+ustawienie ładunków i pojemność dziennika.
 
 Dziennik działa tak, jak opisuje rozdział 8. Każde wywołanie akcji wysyłającej pozostawia jeden
 wpis. Akcje sprawdzające stan wiadomości, stan rozsyłki i raport nie tworzą wpisów. Kolumna
-„Nadawca” pokazuje `API · <zlecający>`, jeżeli przepływ uzupełnił pole „Zlecający”, a w przeciwnym
-razie `API · <adres IP wywołania>`.
+„Nadawca” pokazuje `API · <zlecający> · <adres IP wywołania>`, jeżeli przepływ uzupełnił pole
+„Zlecający”, a w przeciwnym razie `API · <adres IP wywołania>`. Zlecającego podaje sam przepływ,
+dlatego adres IP pozostaje w dzienniku zawsze. Pole „Zlecający” nie przyjmuje znaków sterujących
+ani niewidocznych znaków formatowania, które mogłyby zmienić wygląd wpisu.
 
 ![Szczegóły integracji Power Automate: konfiguracja opisana słowami, panel Konektor Power Automate i dziennik z wpisami „wysłano” oraz „błąd”, w kolumnie Nadawca zlecający z przepływu](obrazki/power-automate-szczegol.png)
 
 | Wynik | Powód |
 |---|---|
 | wysłano | nazwa akcji, a przy wielu odbiorcach także ich liczba: `Wyślij SMS`, `Wyślij rozsyłkę, 14 odbiorców`, `Wyślij SMS do grupy, 3 odbiorców`; skrócona treść otrzymuje dopisek `skrócono do 1 części` |
-| limit | przekroczenie limitu burzy, na przykład `ponad 30 w 10 min` |
+| limit | przekroczenie limitu burzy, na przykład `ponad 30 w 10 min`, albo limitu odbiorców, na przykład `ponad 5000 odbiorców w 10 min` |
+| duplikat | powtórzone wywołanie z tym samym kluczem idempotencji, na przykład `Wyślij SMS, powtórzony klucz idempotencji`; bramka zwraca pierwotną odpowiedź i niczego nie wysyła |
 | błąd | nazwa akcji i komunikat bramki, na przykład `Wyślij SMS do grupy: Integracja Biuro handlowe nie ma odbiorców grupy. Listę uzupełnia administrator w panelu bramki.` |
 
 Wpis „wysłano” prowadzi do pierwszej wiadomości albo do rozsyłki. Wywołanie wyłączonej
@@ -1166,10 +1176,13 @@ nazwę integracji pod nazwą klucza.
 - Klucz API wklejony w połączeniu Power Automate umożliwia wysyłkę przez każdą integrację Power
   Automate tego klucza. Osobny klucz dla Power Automate można odwołać bez wpływu na pozostałe
   aplikacje
-- Limit burzy zlicza wywołania, a pojedyncze wywołanie rozsyłki obejmuje do 5000 odbiorców. Przy
-  domyślnym limicie 30 wywołań w ciągu 10 minut przepływ może zatem zlecić w jednym oknie
-  rozsyłki do 150 000 odbiorców. W integracji obsługującej rozsyłki zaleca się ustawienie
-  niższego limitu burzy w sekcji „Ochrona i dziennik” trybu zaawansowanego
+- Klucz z opcją „Tylko integracje” (rozdział 4.5 [Uruchomienia](uruchomienie.md)) nie pozwala
+  wysyłać przez `POST /v1/messages` ani `POST /v1/packages`. Przepływ nie może nim zatem ominąć
+  limitu części, ochrony przed burzą ani dziennika, na przykład akcją HTTP
+- Limit odbiorców ogranicza liczbę SMS-ów zleconych w jednym oknie, także przez rozsyłki i SMS do
+  grupy. Domyślnie wynosi 5000 odbiorców w ciągu 10 minut, czyli jedną pełną rozsyłkę
+- Odpowiedź akcji „Wyślij SMS do grupy” nie zawiera numerów członków grupy, dlatego lista nie
+  trafia do historii przebiegów w chmurze Microsoftu
 - Pusty numer w akcji „Wyślij SMS” powoduje błąd. W takiej sytuacji akcja nigdy nie wysyła SMS-a
   do listy odbiorców integracji
 - Integracja wyłączona albo usunięta po zapisaniu przepływu nie wysyła żadnych wiadomości,

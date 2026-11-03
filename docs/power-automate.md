@@ -1,8 +1,8 @@
 # Power Automate
 
-Od wersji 1.9 bramka wprowadza konektor do Microsoft Power Automate. Dzięki niemu przepływ
-wysyła SMS-y przez bramkę tak samo jak każdą inną akcją: autor przepływu wybiera akcję, uzupełnia
-pola i zapisuje przepływ. Konektor jest plikiem, który pobierasz z panelu bramki i importujesz
+Od wersji 1.9 bramka wprowadza konektor do Microsoft Power Automate. Dzięki niemu wysyłka SMS-a
+z przepływu przebiega tak samo jak każda inna akcja: autor przepływu wybiera akcję, uzupełnia pola
+i zapisuje przepływ. Konektor jest plikiem, który pobierasz z panelu bramki i importujesz
 w Power Automate jako łącznik niestandardowy.
 
 Każda wysyłka zlecona przez konektor przechodzi przez integrację Power Automate skonfigurowaną
@@ -47,7 +47,9 @@ Wybór akcji zależy od źródła odbiorców:
 Każda akcja wysyłająca rozpoczyna się od pola **Integracja**, w którym wybierasz integrację Power
 Automate skonfigurowaną w panelu bramki. Pole **Zlecający** służy do wskazania osoby zlecającej
 wysyłkę, na przykład przez adres e-mail autora wpisu na liście. Bramka zapisuje tę informację
-w dzienniku integracji oraz przy wiadomości. Zlecający nie jest dołączany do treści SMS-a.
+w dzienniku integracji oraz przy wiadomości albo rozsyłce. Zlecający nie jest dołączany do treści
+SMS-a. Wartość pola podaje sam przepływ, dlatego dziennik zapisuje obok niej adres IP, z którego
+nadeszło wywołanie.
 
 ## 2. Wymagania
 
@@ -125,6 +127,12 @@ Klucz utworzysz na ekranie **Klucze API → Wygeneruj klucz**, opisanym w rozdzi
 [Uruchomienia](uruchomienie.md). Panel wyświetla klucz tylko raz, dlatego od razu zapisz go
 w menedżerze haseł. Klucz wklejasz później w oknie połączenia w Power Automate (rozdział 6.1).
 
+Przy tworzeniu klucza zaznacz opcję **Tylko integracje**. Klucz z tą opcją działa wyłącznie
+w integracjach, dlatego przepływ nie może nim wysłać SMS-a z pominięciem limitu części, ochrony
+przed burzą i dziennika, na przykład akcją HTTP wywołującą bezpośrednio API bramki. Takie
+wywołanie kończy się błędem `403` z kodem `integrations_only_key`. Akcje konektora, w tym
+sprawdzanie stanu wiadomości i rozsyłek, działają bez ograniczeń.
+
 ### 3.2. Utworzenie integracji
 
 1. W panelu bramki otwórz **Integracje → Dodaj integrację**.
@@ -156,8 +164,9 @@ i podpisem „Power Automate”.
 ![Szczegóły integracji Power Automate: konfiguracja opisana słowami, panel Konektor Power Automate i dziennik z wpisami „wysłano” oraz „błąd”, w kolumnie Nadawca zlecający z przepływu](obrazki/power-automate-szczegol.png)
 
 Przełącznik **Zaawansowany** nad formularzem odsłania dodatkowo sekcję **Ochrona i dziennik**
-z limitem burzy, pojemnością dziennika i przechowywaniem ładunków. Opis tych ustawień znajdziesz
-w rozdziale 5b [Integracji z aplikacjami](integracje.md).
+z limitem burzy, limitem odbiorców, pojemnością dziennika i przechowywaniem ładunków. Opis tych
+ustawień znajdziesz w rozdziale 5b [Integracji z aplikacjami](integracje.md). Jeżeli ochronę przed
+burzą zmieniono w trybie zaawansowanym, tryb prosty wyświetla jej bieżące wartości.
 
 Każda integracja Power Automate prowadzi własną listę odbiorców i własny dziennik oraz stosuje
 własny limit części. Dla różnych zespołów lub spraw warto utworzyć osobne integracje, także
@@ -182,6 +191,11 @@ oraz adresu z portem innym niż 443. Popraw adres i ponownie pobierz plik.
 Adres z pola służy wyłącznie do przygotowania pliku i nie jest zapisywany w bramce. Plik nie
 zawiera klucza API ani innych poufnych danych, ponieważ klucz podaje się dopiero przy tworzeniu
 połączenia. Jeden plik obsługuje wszystkie integracje Power Automate danej bramki.
+
+Plik pobiera się wyłącznie przyciskiem **Pobierz konektor** w panelu. Odnośnik do pobrania
+otwarty w pasku przeglądarki nie zwraca pliku. Plik konektora otrzymany z innego źródła, na
+przykład w wiadomości e-mail, mógłby kierować klucz API na obcy serwer, dlatego przed importem
+należy pobrać plik samodzielnie z panelu bramki.
 
 ## 5. Import łącznika w Power Automate
 
@@ -262,7 +276,7 @@ Przycisk **Pokaż wszystkie** przy **Parametrach zaawansowanych** odsłania pozo
 | Raport doręczenia | wartość „Nie” oznacza rezygnację z raportu doręczenia, a stan wiadomości kończy się wówczas na `sent` |
 | Ważna do | termin, po którym niedoręczona wiadomość otrzymuje stan `expired`; najpóźniej 72 godziny od przyjęcia |
 | Znacznik rozliczeń | dowolny tekst na potrzeby rozliczeń, zwracany wraz ze stanem wiadomości |
-| Klucz idempotencji | ponowne wywołanie z tym samym kluczem nie powoduje wysłania drugiego SMS-a ([API](api.md), rozdział 3.1) |
+| Klucz idempotencji | ponowne wywołanie z tym samym kluczem i tymi samymi danymi zwraca pierwotną odpowiedź zamiast wysyłać drugi SMS, nie jest liczone do ochrony przed burzą, a dziennik otrzymuje wpis „duplikat” ([API](api.md), rozdział 3.1) |
 
 Usługi Multiinfo ani nadawcy nie wybiera się w akcji, ponieważ określa je integracja.
 
@@ -279,8 +293,8 @@ Oczekiwany wynik:
   z wartością `queued`
 - SMS dociera na numer odbiorcy
 - dziennik w szczegółach integracji zawiera wpis „wysłano” z powodem „Wyślij SMS”, a kolumna
-  „Nadawca” pokazuje `API · Dział obsługi klienta`. Jeżeli przepływ nie podał zlecającego,
-  kolumna pokazuje adres IP, z którego nadeszło wywołanie
+  „Nadawca” pokazuje zlecającego i adres IP wywołania, na przykład `API · Dział obsługi klienta
+  · 203.0.113.7`. Jeżeli przepływ nie podał zlecającego, kolumna pokazuje sam adres IP
 - wiadomość jest widoczna na ekranie **Wiadomości**, a jej szczegóły zawierają wiersze
   „Integracja” i „Zlecający”
 
@@ -378,6 +392,18 @@ większą tabelę, włącz **Podział na strony** na zakładce **Ustawienia** te
 [Excel Online (Business)](https://learn.microsoft.com/pl-pl/connectors/excelonlinebusiness/).
 Pojedyncza rozsyłka obejmuje najwyżej 5000 odbiorców.
 
+Kodowanie jest wspólne dla całej rozsyłki, ponieważ tak przyjmuje ją Multiinfo. Jeżeli choć jedna
+treść zawiera polskie znaki, wszystkie treści rozsyłki są wysyłane w Unicode, a limit części
+integracji obowiązuje każdą treść w tym kodowaniu. Treść bez polskich znaków o długości 160 znaków
+zajmuje wtedy trzy części zamiast jednej. Treść wspólna liczy się zawsze, gdy jest podana, nawet
+jeżeli każdy odbiorca ma własną treść.
+
+Pole **Klucz idempotencji** w parametrach zaawansowanych akcji „Wyślij rozsyłkę” chroni przed
+powtórną rozsyłką, gdy Power Automate ponawia akcję po zerwanym połączeniu. Wpisz w nim wartość
+niepowtarzalną dla danej rozsyłki, na przykład tekst `wizyty-` połączony z datą jutrzejszych wizyt,
+czyli `wizyty-2026-11-04`. Ponowienie z tym samym kluczem i tymi samymi odbiorcami zwraca pierwotną
+rozsyłkę, a dziennik otrzymuje wpis „duplikat”.
+
 ### 8.3. Stan i raport rozsyłki
 
 1. Dodaj akcję **Opóźnienie**, na przykład 10 minut.
@@ -388,7 +414,7 @@ Pojedyncza rozsyłka obejmuje najwyżej 5000 odbiorców.
    każdego odbiorcy z numerem, identyfikatorem odbiorcy i stanem wiadomości.
 
 Bramka zamawia raport w Multiinfo po zakończeniu rozsyłki. Wcześniej akcja „Pobierz raport
-rozsyłki” kończy się błędem `409` z kodem `package_not_completed` albo `report_not_ready`. Czas
+rozsyłki” kończy się błędem `409` z kodem `report_not_ready`. Czas
 przygotowania raportu zależy od liczby odbiorców i od Multiinfo. Jeżeli raport nie jest jeszcze
 gotowy, uruchom akcję ponownie po dłuższym opóźnieniu.
 
@@ -404,8 +430,9 @@ serwisowej.
    numeru, ponieważ odbiorców wyznacza lista zapisana w integracji.
 
 Oczekiwany wynik: każdy numer z listy otrzymuje osobny SMS. Dane wyjściowe akcji zawierają
-identyfikator każdej wiadomości. Dziennik integracji zawiera wpis „wysłano” z powodem
-obejmującym liczbę odbiorców, na przykład „Wyślij SMS do grupy, 3 odbiorców”.
+identyfikator i stan każdej wiadomości, ale nie zawierają numerów. Lista odbiorców pozostaje w
+bramce i nie trafia do historii przebiegów w chmurze Microsoftu. Dziennik integracji zawiera wpis
+„wysłano” z powodem obejmującym liczbę odbiorców, na przykład „Wyślij SMS do grupy, 3 odbiorców”.
 
 Zmiana listy w panelu obowiązuje od następnego wywołania i nie wymaga modyfikacji przepływu.
 Każdy odbiorca otrzymuje osobną wiadomość rozliczaną na koncie Multiinfo, dlatego SMS do grupy
@@ -433,19 +460,23 @@ akcję wysyłającą: SMS do jednego numeru, każdą treść w rozsyłce oraz SM
 
 ### 10.2. Ochrona przed burzą
 
-Ochrona przed burzą zlicza wywołania akcji wysyłających integracji. Domyślnie przepuszcza 30
-wywołań w ciągu 10 minut. Rozsyłka do 5000 odbiorców liczy się jako jedno wywołanie, podobnie jak
-SMS do jednego numeru. Dzięki temu zapętlony przepływ zostaje zatrzymany, zanim wygeneruje
-znaczne koszty.
+Ochrona przed burzą zlicza w jednym oknie czasowym wywołania akcji wysyłających oraz ich
+odbiorców. Domyślnie przepuszcza 30 wywołań i 5000 odbiorców w ciągu 10 minut. SMS do jednego
+numeru liczy się jako jeden odbiorca, a rozsyłka i SMS do grupy jako tylu odbiorców, ilu
+obejmują. Pełna rozsyłka do 5000 odbiorców wyczerpuje zatem limit odbiorców okna, dzięki czemu
+zapętlony przepływ zostaje zatrzymany przy drugim wywołaniu, zanim wygeneruje znaczne koszty.
 
-Wywołanie ponad limit otrzymuje odpowiedź `429` z kodem `integration_throttled`, a bramka nie
-wysyła SMS-a. Dziennik integracji otrzymuje wpis „limit”, a administrator jedno powiadomienie na
-okno, niezależnie od liczby odrzuconych wywołań.
+Wywołanie ponad którykolwiek z limitów otrzymuje odpowiedź `429` z kodem `integration_throttled`,
+a bramka nie wysyła SMS-a. Komunikat podaje limit, który został przekroczony. Dziennik integracji
+otrzymuje wpis „limit”, na przykład z powodem „ponad 5000 odbiorców w 10 min”, a administrator
+jedno powiadomienie na okno, niezależnie od liczby odrzuconych wywołań. Odrzucone wywołanie nie
+zużywa żadnego z limitów.
 
 Po odpowiedzi `429` Power Automate ponawia akcję zgodnie z domyślnymi zasadami ponawiania.
 W trakcie prób akcja była ponawiana do czterech razy, a przebieg trwał kilka minut, zanim
 zakończył się błędem. Każde ponowienie stanowi osobne wywołanie i otrzymuje osobny wpis „limit”.
-Ponowienie, które przypada już w nowym oknie, wysyła SMS w zwykły sposób.
+Ponowienie, które przypada już w nowym oknie, wysyła SMS w zwykły sposób. Ponowienie z tym samym
+kluczem idempotencji niczego nie wysyła, dlatego nie jest liczone do limitów.
 
 Aby akcja kończyła się błędem natychmiast, bez ponawiania, zmień jej ustawienia:
 
@@ -453,9 +484,10 @@ Aby akcja kończyła się błędem natychmiast, bez ponawiania, zmień jej ustaw
 2. W sekcji **Sieć**, w polu **Zasady ponawiania**, wybierz **Brak**.
 3. Zapisz przepływ.
 
-Limit zmienia administrator bramki w trybie zaawansowanym formularza integracji, w sekcji
-**Ochrona i dziennik**. Wysyłkę do wielu odbiorców zaleca się realizować jednym wywołaniem
-„Wyślij rozsyłkę” albo „Wyślij SMS do grupy” zamiast pętli wywołań „Wyślij SMS”.
+Oba limity zmienia administrator bramki w trybie zaawansowanym formularza integracji, w sekcji
+**Ochrona i dziennik**, w polach **Limit burzy** i **Limit odbiorców**. Wysyłkę do wielu
+odbiorców zaleca się realizować jednym wywołaniem „Wyślij rozsyłkę” albo „Wyślij SMS do grupy”
+zamiast pętli wywołań „Wyślij SMS”.
 
 ### 10.3. Wyłączona integracja
 
@@ -505,10 +537,13 @@ kodów wraz z ich znaczeniem znajdziesz w rozdziale 5b.6 [API](api.md).
 | błąd `400` z kodem `too_many_parts` | treść przekracza limit części integracji przy ustawieniu „nie wysyłaj” | skrócić treść albo poprosić administratora o zmianę limitu (rozdział 10.1) |
 | błąd `400` z kodem `invalid_phone` | numeru nie można sprowadzić do poprawnej postaci; komunikat podaje przyczynę | poprawić numer w danych przepływu |
 | błąd `400` z kodem `invalid_body` | brak numeru lub treści albo pole w niepoprawnym formacie; komunikat wymienia pola | uzupełnić albo poprawić wskazane pola akcji |
+| błąd `413` z kodem `body_too_large` | lista odbiorców rozsyłki z treściami przekracza 4 MB | podzielić listę na kilka rozsyłek |
 | błąd `403` z kodem `service_not_allowed` albo `orig_not_allowed` | usługa albo nadpis integracji wykracza poza uprawnienia klucza | poprosić administratora o korektę integracji albo uprawnień klucza |
-| akcja jest ponawiana przez kilka minut i kończy się błędem `429` z kodem `integration_throttled` | przekroczono limit ochrony przed burzą integracji | postąpić zgodnie z rozdziałem 10.2 |
+| błąd `403` z kodem `integrations_only_key` w akcji HTTP | klucz z opcją **Tylko integracje** nie pozwala wysyłać przez API z pominięciem integracji | użyć akcji konektora zamiast akcji HTTP |
+| błąd `409` z kodem `idempotency_conflict` | ten sam klucz idempotencji użyto wcześniej z innymi danymi albo w innej integracji | podać inny klucz idempotencji |
+| akcja jest ponawiana przez kilka minut i kończy się błędem `429` z kodem `integration_throttled` | przekroczono limit wywołań albo limit odbiorców ochrony przed burzą integracji | postąpić zgodnie z rozdziałem 10.2 |
 | błąd `429` z kodem `rate_limited` | przekroczono limit żądań klucza na minutę | zastąpić pętlę rozsyłką albo poprosić administratora o podniesienie limitu klucza |
-| błąd `503` z kodem `integration_unavailable` | konto Multiinfo integracji jest wstrzymane albo nie istnieje | przekazać informację administratorowi bramki |
+| błąd `503` z kodem `integration_unavailable` | konto Multiinfo integracji jest wstrzymane albo klucz integracji jest nieczynny; przyczynę podaje dziennik integracji w panelu bramki | przekazać informację administratorowi bramki |
 | błąd połączenia albo certyfikatu | bramka jest niedostępna z internetu albo jej certyfikat nie pochodzi od publicznego urzędu certyfikacji | sprawdzić dostępność zgodnie z rozdziałem 2.3 |
 | po aktualizacji łącznika przebieg działa według poprzedniego opisu | Power Automate korzysta jeszcze z poprzedniej wersji opisu łącznika | odczekać zgodnie z rozdziałem 11 |
 

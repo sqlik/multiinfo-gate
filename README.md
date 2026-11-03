@@ -49,8 +49,9 @@ Typowe problemy opisuje nowy dokument „Rozwiązywanie problemów”.
 
 Wersja 1.9 wprowadza integrację Power Automate. Przepływy Microsoft Power Automate wysyłają SMS-y
 za pomocą konektora bramki: do jednego numeru, w formie rozsyłki do listy przygotowanej
-w przepływie, na przykład na podstawie tabeli Excela, albo do listy odbiorców prowadzonej
-w bramce. Konektor pobiera się z panelu i importuje w Power Automate jako łącznik niestandardowy.
+w przepływie albo do listy odbiorców prowadzonej w bramce. Listę rozsyłki przepływ może zbudować
+na przykład na podstawie tabeli Excela. Konektor pobiera się z panelu i importuje w Power Automate
+jako łącznik niestandardowy.
 Każda wysyłka przechodzi przez integrację z limitem części, ochroną przed burzą i dziennikiem,
 który wskazuje również osobę zlecającą wysyłkę.
 

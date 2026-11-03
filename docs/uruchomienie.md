@@ -514,6 +514,12 @@ zaczyna wtedy odpytywać Multiinfo o wiadomości z usług klucza i przekazuje ka
 samej usługi może odbierać naraz. Gdy ostatni odbierający klucz zostanie odwołany, wygaśnie albo
 straci zaznaczenie, bramka przestaje odpytywać o tę usługę.
 
+Pole **Tylko integracje** ogranicza klucz do integracji. Klucz z tą opcją nie wysyła SMS-ów przez
+`POST /v1/messages` ani `POST /v1/packages`, a takie wywołanie kończy się błędem `403` z kodem
+`integrations_only_key`. Opcja jest zalecana dla klucza konektora Power Automate, ponieważ klucz
+wklejony w przepływie nie pozwala wtedy ominąć limitu części, ochrony przed burzą ani dziennika
+integracji. Lista kluczy oznacza taki klucz plakietką „tylko integracje”.
+
 Stan odbioru widać na karcie konta w sekcji „Odbiór wiadomości”: czy jest aktywny, czas ostatniego
 odpytania i ostatniej odebranej wiadomości. Usługa zatrzymana błędem Multiinfo (na przykład
 nieaktywna) pokazuje przyczynę. Bramka ponawia odpytanie co 15 minut. Gdy administrator
