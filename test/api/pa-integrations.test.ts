@@ -159,9 +159,9 @@ describe('POST /v1/integrations/{id}/messages', () => {
   it.each([[''], ['  '], [null], [undefined]])('numer %j: 400 invalid_body, wpis „błąd”, zero wiadomości', async (to) => {
     const res = await post(`/v1/integrations/int_${ekipa}/messages`, { text: 'Awaria w hali B', ...(to === undefined ? {} : { to }) });
     expect(res.statusCode).toBe(400);
-    expect(res.json().error.code).toBe('invalid_body');
+    expect(res.json().error).toEqual({ code: 'invalid_body', message: 'to: Numer odbiorcy jest pusty.' });
     expect(allMessages()).toEqual([]);
-    expect(log(ekipa)[0]).toMatchObject({ result: 'error', reason: expect.stringMatching(/^Wyślij SMS: to/) });
+    expect(log(ekipa)[0]).toMatchObject({ result: 'error', reason: 'Wyślij SMS: to: Numer odbiorcy jest pusty.' });
     expect(notices.map((n) => n.event)).toEqual(['integration_error']);
   });
 

@@ -39,7 +39,7 @@ export const requestedBySchema = z.string()
 export const paMessageBodySchema = z
   .object({
     // Numer na początku: Power Automate pokazuje pola w kolejności schematu.
-    to: z.string({ required_error: 'Numer odbiorcy jest pusty.', invalid_type_error: 'Numer odbiorcy musi być tekstem.' })
+    to: z.string({ error: (issue) => (issue.input === undefined ? 'Numer odbiorcy jest pusty.' : 'Numer odbiorcy musi być tekstem.') })
       .trim()
       .min(1, 'Numer odbiorcy jest pusty.'),
   })
