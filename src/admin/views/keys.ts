@@ -64,7 +64,7 @@ const OSTRZEZENIE_SEKRET =
   'Zmiana adresu webhooka wydaje nowy sekret.';
 
 /**
- * Gotowe wywołanie do wklejenia w terminalu - aplikacja dostaje adres i klucz w jednym miejscu.
+ * Gotowe wywołanie do wklejenia w terminalu - aplikacja otrzymuje adres i klucz w jednym miejscu.
  * Klucz „Tylko integracje” nie wysyła przez /v1/messages, więc sprawdza się go odczytem listy integracji.
  */
 function keyExample(apiUrl: string | null, key: string, integrationsOnly = false): string {
