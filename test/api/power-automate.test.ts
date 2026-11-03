@@ -10,17 +10,17 @@ import { apiServerRoutes } from '../helpers/routes.ts';
 
 describe('connectorAddress', () => {
   it('przyjmuje adres https z domeną, porządkuje wielkość liter i ukośnik końcowy', () => {
-    expect(connectorAddress(' https://SMS.Firma.pl/ ')).toEqual({ ok: true, url: 'https://sms.firma.pl', host: 'sms.firma.pl', port: null });
+    expect(connectorAddress(' https://SMS.Firma.pl/ ')).toEqual({ ok: true, url: 'https://sms.firma.pl', host: 'sms.firma.pl' });
   });
 
   it('port 443 traktuje jak brak portu', () => {
-    expect(connectorAddress('https://sms.firma.pl:443')).toMatchObject({ ok: true, url: 'https://sms.firma.pl', port: null });
+    expect(connectorAddress('https://sms.firma.pl:443')).toEqual({ ok: true, url: 'https://sms.firma.pl', host: 'sms.firma.pl' });
   });
 
-  it('inny port zostaje w adresie i w nazwie hosta', () => {
-    expect(connectorAddress('https://sms.firma.pl:8443')).toEqual({
-      ok: true, url: 'https://sms.firma.pl:8443', host: 'sms.firma.pl:8443', port: 8443,
-    });
+  it('odrzuca port inny niż 443: konektor jest sprawdzony na żywo tylko z portem 443', () => {
+    const result = connectorAddress('https://sms.firma.pl:8443');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/^Adres dla Power Automate nie może zawierać portu innego niż 443\./);
   });
 
   it.each([
@@ -281,8 +281,8 @@ describe('buildPowerAutomateConnector', () => {
     });
   });
 
-  it('adres z portem trafia do pola host', () => {
-    expect(buildPowerAutomateConnector('https://sms.firma.pl:8443').host).toBe('sms.firma.pl:8443');
+  it('odmawia zbudowania pliku dla adresu z portem innym niż 443', () => {
+    expect(() => buildPowerAutomateConnector('https://sms.firma.pl:8443')).toThrow(/portu innego niż 443/);
   });
 
   it('odmawia zbudowania pliku dla adresu, którego Power Automate nie użyje', () => {

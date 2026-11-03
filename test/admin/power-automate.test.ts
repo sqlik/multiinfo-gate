@@ -37,10 +37,14 @@ describe('powerAutomatePanel', () => {
     expect(powerAutomatePanel('http://10.10.10.159:8080', '/integracje')).toContain('name="adres" value=""');
   });
 
-  it('adres z portem innym niż 443 wypełnia pole i dostaje ostrzeżenie o porcie', () => {
+  it('adres z portem innym niż 443 zostawia pole puste, bez ostrzeżenia o porcie', () => {
     const html = powerAutomatePanel('https://sms.firma.pl:8443', '/integracje');
-    expect(html).toContain('name="adres" value="https://sms.firma.pl:8443"');
-    expect(html).toContain('port 8443');
+    expect(html).toContain('name="adres" value=""');
+    expect(html).not.toContain('class="warn"');
+  });
+
+  it('podpowiedź mówi, że adres jest bez portu albo z portem 443', () => {
+    expect(powerAutomatePanel(null, '/integracje')).toContain('bez portu albo z portem 443');
   });
 
   it('powrót trafia do pola ukrytego jako tekst', () => {

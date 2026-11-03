@@ -12,10 +12,6 @@ import { esc } from './layout.ts';
 export function powerAutomatePanel(apiUrl: string | null, back: string): string {
   const checked = apiUrl === null ? null : connectorAddress(apiUrl);
   const value = checked?.ok ? checked.url : '';
-  const portWarning = checked?.ok && checked.port !== null
-    ? `<div class="warn" style="margin: 8px 0 0;">Adres zawiera port ${esc(checked.port)}. Zalecany jest adres bez portu.
-        Power Automate łączy się z chmury Microsoftu, a zapory sieci firmowych zwykle przepuszczają z internetu tylko port 443</div>`
-    : '';
   return `<div class="panel" style="max-width: 760px;">
       <div class="panel-h"><div class="lab">Konektor Power Automate</div></div>
       <div style="padding: 0 16px 10px; font-size: 12.5px; line-height: 1.5;">Plik konektora pozwala wysyłać SMS-y z przepływów
@@ -31,9 +27,8 @@ export function powerAutomatePanel(apiUrl: string | null, back: string): string 
         <div class="field">
           <label for="pa-adres">Publiczny adres bramki dla Power Automate</label>
           <input id="pa-adres" name="adres" value="${esc(value)}" placeholder="https://sms.firma.pl">
-          <div class="hint">Adres <code>https://</code> z domeną, dostępny z internetu, najlepiej bez portu. Power Automate
+          <div class="hint">Adres <code>https://</code> z domeną, dostępny z internetu, bez portu albo z portem 443. Power Automate
             łączy się z bramką z chmury Microsoftu. Adres służy tylko do zbudowania pliku i nie jest zapisywany</div>
-          ${portWarning}
         </div>
         <div class="bar">
           <button class="btn btn-p" type="submit">Pobierz konektor</button>

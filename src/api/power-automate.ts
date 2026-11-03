@@ -114,7 +114,7 @@ export interface SwaggerDocument {
 }
 
 export type ConnectorAddress =
-  | { ok: true; url: string; host: string; port: number | null }
+  | { ok: true; url: string; host: string }
   | { ok: false; error: string };
 
 const ADDRESS_HELP = 'Wymagania opisuje artykuł „Power Automate” w dokumentacji bramki.';
@@ -148,10 +148,12 @@ export function connectorAddress(raw: string): ConnectorAddress {
   if (!hostname.includes('.')) {
     return fail('musi zawierać pełną domenę dostępną z internetu, na przykład sms.firma.pl.');
   }
-  // URL pomija port domyślny 443, więc pusty port znaczy 443.
-  const port = url.port === '' ? null : Number(url.port);
-  const host = port === null ? hostname : `${hostname}:${port}`;
-  return { ok: true, url: `https://${host}`, host, port };
+  // URL pomija port domyślny 443, więc pusty port znaczy 443. Konektor sprawdzono na żywo tylko z tym portem.
+  if (url.port !== '') {
+    return fail('nie może zawierać portu innego niż 443. Udostępnij bramkę z internetu na porcie 443, na przykład'
+      + ' przez serwer pośredniczący Traefik.');
+  }
+  return { ok: true, url: `https://${hostname}`, host: hostname };
 }
 
 /** Etykiety według ścieżki pola; gdy ścieżki nie ma, etykieta według nazwy pola. */
