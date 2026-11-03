@@ -147,9 +147,13 @@ w menedżerze haseł. Klucz wklejasz później w oknie połączenia w Power Auto
    rozdział 10.1.
 7. Kliknij **Utwórz integrację**.
 
+![Formularz integracji Power Automate w trybie prostym: nazwa, klucz API, ID usługi i nadpis, lista odbiorców grupy, limit części oraz pod formularzem panel Konektor Power Automate](obrazki/power-automate-formularz.png)
+
 Oczekiwany wynik: panel wyświetla szczegóły integracji z konfiguracją opisaną słowami oraz panel
 **Konektor Power Automate**. Na liście integracji nowa pozycja jest oznaczona kierunkiem „do SMS”
 i podpisem „Power Automate”.
+
+![Szczegóły integracji Power Automate: konfiguracja opisana słowami, panel Konektor Power Automate i dziennik z wpisami „wysłano” oraz „błąd”, w kolumnie Nadawca zlecający z przepływu](obrazki/power-automate-szczegol.png)
 
 Przełącznik **Zaawansowany** nad formularzem odsłania dodatkowo sekcję **Ochrona i dziennik**
 z limitem burzy, pojemnością dziennika i przechowywaniem ładunków. Opis tych ustawień znajdziesz
@@ -194,6 +198,8 @@ połączenia. Jeden plik obsługuje wszystkie integracje Power Automate danej br
    zmian. Pole wyboru **Połącz za pomocą lokalnej bramy danych** pozostaw niezaznaczone.
 6. Kliknij **Utwórz łącznik**.
 
+![Okno Importuj plik OpenAPI w Power Automate: nazwa łącznika Multiinfo Gate i wskazany plik multiinfo-gate-power-automate.json](obrazki/power-automate-import.png)
+
 Oczekiwany wynik: komunikat „Pomyślnie utworzono łącznik niestandardowy.” W kroku
 **3. Definicja** widnieje siedem akcji bez ostrzeżeń. Akcja „Lista integracji” pełni funkcję
 wewnętrzną: na jej podstawie konektor buduje listę w polu „Integracja”. W przepływie dostępnych
@@ -232,6 +238,8 @@ poprawne. Kolejne akcje Multiinfo Gate w tym przepływie korzystają z utworzone
 polami akcji wyświetla się wówczas informacja „Połączono z połączeniem” wraz z nazwą połączenia
 oraz odnośnik **Zmień odwołanie do połączenia**.
 
+![Akcja Wyślij SMS w projektancie przepływu: rozwinięta lista w polu Integracja z nazwami integracji z panelu bramki](obrazki/power-automate-integracja.png)
+
 ### 6.2. Pola akcji „Wyślij SMS”
 
 | Pole | Zawartość |
@@ -243,6 +251,8 @@ oraz odnośnik **Zmień odwołanie do połączenia**.
 
 Pusty numer odbiorcy powoduje błąd akcji. W takiej sytuacji akcja nigdy nie wysyła SMS-a do
 listy odbiorców integracji.
+
+![Akcja Wyślij SMS z uzupełnionymi polami: integracja, numer odbiorcy, treść i zlecający, a poniżej kodowanie i raport doręczenia](obrazki/power-automate-wyslij-sms.png)
 
 Przycisk **Pokaż wszystkie** przy **Parametrach zaawansowanych** odsłania pozostałe pola:
 
@@ -301,6 +311,8 @@ sprawdza osobna akcja.
 3. Kolejne kroki przepływu mogą zależeć od pola **Stan wiadomości**. Na przykład akcja
    **Warunek** może przy stanie `failed` wysłać wiadomość e-mail do dyspozytora.
 
+![Akcja Sprawdź stan wiadomości: okno zawartości dynamicznej z polem Identyfikator wiadomości akcji Wyślij SMS](obrazki/power-automate-identyfikator.png)
+
 Oczekiwany wynik: dane wyjściowe akcji zawierają pola wiadomości, w tym **Stan wiadomości**
 i **Błąd**.
 
@@ -353,6 +365,8 @@ rozsyłki.
 4. W polu **Treść wspólna** wpisz treść dla odbiorców bez własnej treści. Pole jest wymagane,
    jeżeli którykolwiek odbiorca nie otrzymał treści w tabeli.
 5. W polu **Zlecający** wskaż osobę zlecającą rozsyłkę, na przykład `Kierownik floty`.
+
+![Przepływ rozsyłki z Excela: akcja Wybierz z mapą kluczy to, text i clientId przypisanych do kolumn Numer, Treść i Identyfikator](obrazki/power-automate-rozsylka.png)
 
 Oczekiwany wynik: akcja „Wyślij rozsyłkę” kończy się od razu i zwraca **Identyfikator
 rozsyłki**. Dziennik integracji zawiera wpis „wysłano” z powodem „Wyślij rozsyłkę, 3 odbiorców”,
@@ -476,6 +490,8 @@ Nieudana akcja Multiinfo Gate wyświetla nad przebiegiem czerwony pasek z komuni
 w języku polskim. Kod odpowiedzi HTTP, na przykład `BadRequest` albo `Conflict`, widnieje przy
 akcji, a kod błędu bramki (`error.code`) znajduje się w danych wyjściowych akcji. Pełny wykaz
 kodów wraz z ich znaczeniem znajdziesz w rozdziale 5b.6 [API](api.md).
+
+![Nieudany przebieg przepływu: czerwony pasek z komunikatem bramki o nieprawidłowym numerze odbiorcy i kod BadRequest przy akcji Wyślij SMS](obrazki/power-automate-blad.png)
 
 | Objaw | Przyczyna | Rozwiązanie |
 |---|---|---|

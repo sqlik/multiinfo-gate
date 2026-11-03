@@ -535,7 +535,7 @@ za aplikację kliencką. Utracony klucz zastępuje się nowym: generujesz nowy, 
 aplikacji, odwołujesz stary. Utracony sekret webhooka wydaje ponownie edycja klucza ze zmianą
 adresu webhooka.
 
-![Ekran kluczy API tuż po wygenerowaniu klucza: klucz pokazany jeden raz z gotowym poleceniem curl, nad listą adres bramki dla aplikacji](obrazki/klucz.png)
+![Ekran kluczy API tuż po wygenerowaniu klucza: klucz pokazany jeden raz z gotowym poleceniem curl i wskazówką dla Power Automate, nad listą adres bramki dla aplikacji](obrazki/klucz.png)
 
 ### 4.6. Użytkownicy panelu
 

@@ -1102,6 +1102,8 @@ Power Automate”. Formularz składa się z trzech sekcji:
    i powiadom”. Limit obowiązuje SMS do jednego numeru, każdą treść w rozsyłce oraz SMS do grupy.
    Skracanie przebiega tak samo jak w rozdziale 3.5.
 
+![Formularz integracji Power Automate w trybie prostym: nazwa, klucz API, ID usługi i nadpis, lista odbiorców grupy, limit części oraz pod formularzem panel Konektor Power Automate](obrazki/power-automate-formularz.png)
+
 Tryb zaawansowany odsłania dodatkowo sekcję **Ochrona i dziennik**:
 
 | Pole | Znaczenie |
@@ -1142,6 +1144,8 @@ Dziennik działa tak, jak opisuje rozdział 8. Każde wywołanie akcji wysyłaj�
 wpis. Akcje sprawdzające stan wiadomości, stan rozsyłki i raport nie tworzą wpisów. Kolumna
 „Nadawca” pokazuje `API · <zlecający>`, jeżeli przepływ uzupełnił pole „Zlecający”, a w przeciwnym
 razie `API · <adres IP wywołania>`.
+
+![Szczegóły integracji Power Automate: konfiguracja opisana słowami, panel Konektor Power Automate i dziennik z wpisami „wysłano” oraz „błąd”, w kolumnie Nadawca zlecający z przepływu](obrazki/power-automate-szczegol.png)
 
 | Wynik | Powód |
 |---|---|
