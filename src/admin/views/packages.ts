@@ -114,7 +114,7 @@ function recipientRow(r: RecipientRow): string {
 /** Zdanie w miejscu podsumowania, zanim wczytano raport. Raport powstaje tylko dla zakończonej rozsyłki. */
 function summaryPending(p: PackageRow): string {
   if (p.status === 'cancelled' || p.status === 'failed') {
-    return 'Raport powstaje tylko dla zakończonej rozsyłki, więc podsumowania nie będzie.';
+    return 'Podsumowanie nie jest dostępne, ponieważ raport powstaje wyłącznie dla zakończonej rozsyłki.';
   }
   const lead = 'Podsumowanie pojawi się po wczytaniu raportu';
   if (p.reportStatus !== 'none') return `${lead} (stan: ${reportStatusLabel(p.reportStatus)}).`;

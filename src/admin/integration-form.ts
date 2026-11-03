@@ -98,9 +98,21 @@ function condition(v: CommonValues, engine: TemplateEngine): InboundConfig['cond
 export type CommonValues = Pick<IntegrationFormValues, 'name' | 'throttleLimit' | 'throttleWindow' | 'eventLogLimit' | 'conditionMode' | 'rules' | 'conditionExpr'>;
 export type CommonConfig = Pick<InboundConfig, 'condition' | 'throttle' | 'eventLogLimit'>;
 
+/**
+ * Nazwa integracji wychodzi poza panel: do listy w Power Automate, do komunikatów API i do maili
+ * z powiadomieniami. Dlatego ma limit długości i nie może zawierać znaków sterujących ani niewidocznych.
+ */
+export function integrationNameError(name: string): string | null {
+  if (name === '') return 'Podaj nazwę integracji.';
+  if ([...name].length > 100) return 'Nazwa integracji może mieć najwyżej 100 znaków.';
+  if (/[\p{C}\p{Zl}\p{Zp}]/u.test(name)) return 'Nazwa integracji nie może zawierać znaków sterujących ani niewidocznych znaków formatowania.';
+  return null;
+}
+
 /** Pola wspólne każdej integracji (nazwa, burza, dziennik, warunek) z formularza; błąd jako zdanie po polsku. */
 export function commonFromValues(v: CommonValues, engine: TemplateEngine): CommonConfig | string {
-  if (v.name === '') return 'Podaj nazwę integracji.';
+  const nameError = integrationNameError(v.name);
+  if (nameError !== null) return nameError;
   const throttleLimit = int(v.throttleLimit, 1, 1000, 'Limit burzy');
   if (typeof throttleLimit === 'string') return throttleLimit;
   const throttleWindow = int(v.throttleWindow, 1, 1440, 'Okno limitu burzy');

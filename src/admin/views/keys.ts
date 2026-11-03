@@ -2,6 +2,7 @@ import type { AccountRow } from '../../store/accounts.ts';
 import type { ApiKeyRow } from '../../store/api-keys.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
 import { lastValidDay, warsawStamp } from '../../time/warsaw.ts';
+import { kindLabel } from './integrations.ts';
 import { esc } from './layout.ts';
 import { apiAddressPanel, fullUrl } from './settings.ts';
 
@@ -48,8 +49,9 @@ export function valuesOf(row: ApiKeyRow): KeyFormValues {
 }
 
 const POWER_AUTOMATE_KEY =
-  'Klucz dla Power Automate wybiera się w integracji Power Automate (Integracje, Dodaj integrację, Aplikacja wysyła SMS, ' +
-  'Power Automate), a wkleja w oknie połączenia konektora. Plik konektora pobiera się w tej integracji.';
+  'Klucz dla Power Automate wybiera się w formularzu integracji Power Automate: Integracje, Dodaj integrację, Aplikacja ' +
+  'wysyła SMS, Power Automate. Ten sam klucz wkleja się w oknie połączenia konektora, a plik konektora pobiera się ' +
+  'w szczegółach integracji.';
 
 const OSTRZEZENIE =
   'Klucz jest wyświetlany wyłącznie teraz. W bazie pozostaje jedynie jego skrót, więc nie można go odczytać ' +
@@ -347,7 +349,7 @@ function integrationsPanel(integrations: IntegrationRow[]): string {
     ? '<tr><td class="dim" colspan="3">Żadna integracja nie korzysta z tego klucza.</td></tr>'
     : integrations.map((i) => `<tr>
         <td><a href="/integracje/${esc(i.id)}">${esc(i.name)}</a></td>
-        <td><span class="tag">${i.kind === 'webhook_in' ? 'do SMS' : 'z SMS-a'}</span></td>
+        <td><span class="tag">${esc(kindLabel(i.kind))}</span></td>
         <td>${i.enabled === 1 ? '<span class="st"><span class="dot dot-ok"></span>włączona</span>' : '<span class="st"><span class="dot dot-dim"></span>wyłączona</span>'}</td>
       </tr>`).join('');
   return `<div class="panel" style="max-width: 560px;">

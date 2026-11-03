@@ -1,5 +1,6 @@
 import { GROUP_LIMITS, PA_RECIPIENT_LIMIT_MAX, parseConfig, type PowerAutomateConfig } from '../integrations/config.ts';
 import { memberLines, parseMemberLines } from '../integrations/group/members.ts';
+import { integrationNameError } from './integration-form.ts';
 
 type Body = Record<string, string | string[] | undefined>;
 
@@ -50,7 +51,8 @@ function int(raw: string, min: number, max: number, what: string): number | stri
  */
 export function paFormToConfig(v: PaFormValues, countryCode: string): { ok: true; config: PowerAutomateConfig } | { ok: false; error: string } {
   const fail = (error: string) => ({ ok: false as const, error });
-  if (v.name === '') return fail('Podaj nazwę integracji.');
+  const nameError = integrationNameError(v.name);
+  if (nameError !== null) return fail(nameError);
   const parsed = parseMemberLines(v.recipients, countryCode);
   if (!parsed.ok) return fail(parsed.error);
   if (parsed.members.length > GROUP_LIMITS.recipients) return fail(`Numery odbiorców: najwyżej ${GROUP_LIMITS.recipients}.`);

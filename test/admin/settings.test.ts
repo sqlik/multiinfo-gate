@@ -45,7 +45,7 @@ describe('adres bramki', () => {
     expect(cleared.headers.location).toBe('/klucze');
     expect(h.settings.apiUrl()).toBeNull();
     // Przeglądarki czytają „/\zly.example” jak „//zly.example” - to też obcy adres.
-    for (const wroc of ['/\\zly.example', '//zly.example', '/klucze\\@zly.example']) {
+    for (const wroc of ['/\\zly.example', '//zly.example', '/klucze\\@zly.example', '/klucze/ą', '/klucze/\u0000', '/klucze/../integracje/..//zly.example']) {
       const res = await post('/adres-bramki', { apiUrl: 'https://sms.firma.pl', wroc });
       expect(res.headers.location).toBe('/klucze');
     }

@@ -1019,7 +1019,7 @@ export function integrationDetailPage(d: IntegrationDetail): string {
       data-confirm="Usunąć integrację „${esc(row.name)}”? Dziennik zostanie usunięty razem z nią, a adres wejściowy przestanie działać." data-confirm-ok="Usuń">
       <button class="btn btn-s" type="submit">Usuń</button></form>`;
   const events = d.events.length === 0
-    ? '<tr><td class="dim" colspan="6">Dziennik jest pusty. Integracja nie otrzymała jeszcze żadnego zdarzenia.</td></tr>'
+    ? `<tr><td class="dim" colspan="6">Dziennik jest pusty. Integracja nie otrzymała jeszcze żadnego ${row.kind === 'power_automate' ? 'wywołania' : 'zdarzenia'}.</td></tr>`
     : d.events.map((e) => eventRow(row, e)).join('');
   const copy = `<form method="post" action="/integracje/${esc(row.id)}/kopiuj" style="display: inline;"><button class="btn btn-s" type="submit">Utwórz kopię</button></form>`;
   const mailbox = row.kind === 'mail_in' ? mailboxPanel(d.view) : '';

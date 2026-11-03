@@ -3,8 +3,8 @@ import { esc } from './layout.ts';
 
 /**
  * Panel pobrania pliku konektora w formularzu i w szczegółach integracji Power Automate. Osobny
- * formularz `GET`, bo HTML nie zagnieżdża formularzy, a pola integracji (numery, nazwy) nie mogą
- * trafić do adresu pobrania. Pole jest wypełnione adresem bramki tylko wtedy, gdy ten nadaje się
+ * formularz, bo HTML nie zagnieżdża formularzy, a pola integracji (numery, nazwy) nie mogą trafić
+ * do pobrania. Metoda `POST`: pobrania nie wywoła podesłany link z obcym adresem. Pole jest wypełnione adresem bramki tylko wtedy, gdy ten nadaje się
  * dla Power Automate (`https://` z domeną). Adres z pola służy wyłącznie do zbudowania pliku i nie
  * jest zapisywany: wspólny adres bramki obsługuje aplikacje w sieci firmowej. `back` to strona,
  * na którą wraca komunikat o złym adresie.
@@ -22,7 +22,7 @@ export function powerAutomatePanel(apiUrl: string | null, back: string): string 
           <li>Przy pierwszym połączeniu wklej klucz API wybrany w tej integracji</li>
         </ol>
       </div>
-      <form method="get" action="/integracje/power-automate/konektor" class="form" style="padding: 0 16px 14px;">
+      <form method="post" action="/integracje/power-automate/konektor" class="form" style="padding: 0 16px 14px;">
         <input type="hidden" name="wroc" value="${esc(back)}">
         <div class="field">
           <label for="pa-adres">Publiczny adres bramki dla Power Automate</label>
@@ -32,7 +32,7 @@ export function powerAutomatePanel(apiUrl: string | null, back: string): string 
         </div>
         <div class="bar">
           <button class="btn btn-p" type="submit">Pobierz konektor</button>
-          <a class="btn btn-s" href="${esc(CONNECTOR_ARTICLE)}" target="_blank" rel="noopener">Instrukcja krok po kroku</a>
+          <a class="btn btn-s" href="${esc(CONNECTOR_ARTICLE)}" target="_blank" rel="noopener noreferrer">Instrukcja krok po kroku</a>
         </div>
       </form>
     </div>`;

@@ -141,7 +141,7 @@ describe('GET /rozsylki/:id', () => {
     h.packages.setCancelled('pkg_x', NOW);
     for (const id of ['pkg_f', 'pkg_x']) {
       const body = (await page(`/rozsylki/${id}`)).body;
-      expect(body, id).toContain('Raport powstaje tylko dla zakończonej rozsyłki, więc podsumowania nie będzie.');
+      expect(body, id).toContain('Podsumowanie nie jest dostępne, ponieważ raport powstaje wyłącznie dla zakończonej rozsyłki.');
       expect(body, id).not.toContain('Podsumowanie pojawi się');
     }
   });

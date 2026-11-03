@@ -82,6 +82,8 @@ describe('formularz', () => {
     const download = form.indexOf('action="/integracje/power-automate/konektor"');
     expect(save).toBeGreaterThan(-1);
     expect(download).toBeGreaterThan(close);
+    expect(form).toContain('<form method="post" action="/integracje/power-automate/konektor"');
+    expect(form).toContain('rel="noopener noreferrer"');
     expect(form).toContain('name="wroc" value="/integracje/nowa?rodzaj=power_automate&amp;ustawienie=power-automate&amp;tryb=prosty"');
   });
 });
@@ -159,6 +161,29 @@ describe('edycja', () => {
     expect((await get(NEW_FORM)).body).not.toContain('Ochrona przed burzą: najwyżej');
   });
 
+  it.each([
+    ['x'.repeat(101), 'Nazwa integracji może mieć najwyżej 100 znaków.'],
+    ['Ekipa\u0000serwisowa', 'Nazwa integracji nie może zawierać znaków sterujących ani niewidocznych znaków formatowania.'],
+    ['Ekipa\u202eserwisowa', 'Nazwa integracji nie może zawierać znaków sterujących ani niewidocznych znaków formatowania.'],
+  ])('nazwa %j daje 400 bez zapisu', async (name, message) => {
+    const res = await create({ name });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain(message);
+    expect(h.integrations.list()).toEqual([]);
+  });
+
+  it('klucz w złej postaci albo wygasły daje 400, a wygasłego klucza nie ma na liście wyboru', async () => {
+    expect((await create({ apiKeyId: `${apiKeyId}abc` })).statusCode).toBe(400);
+    const expired = h.apiKeys.insert({
+      accountId: h.apiKeys.get(apiKeyId)!.accountId, name: 'Stary klucz', keyHash: 'argon2:bbb', keyPrefix: 'b1b2c3d4', defaultServiceId: '24138', defaultOrig: null,
+      maxParts: 5, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'], expiresAt: '2026-01-01T00:00:00.000Z',
+    });
+    const res = await create({ apiKeyId: String(expired) });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('Wskaż czynny klucz API.');
+    expect((await get(NEW_FORM)).body).not.toContain('Stary klucz');
+  });
+
   it('limit odbiorców spoza 1-50000 daje 400', async () => {
     const res = await create({ throttleRecipients: '50001', tryb: 'zaawansowany' });
     expect(res.statusCode).toBe(400);
@@ -181,9 +206,35 @@ describe('lista integracji', () => {
 describe('pobranie konektora', () => {
   const download = (address: string, back = '/integracje/nowa?rodzaj=power_automate&ustawienie=power-automate', cookie = h.cookie) =>
     h.app.inject({
-      method: 'GET', url: `/integracje/power-automate/konektor?adres=${encodeURIComponent(address)}&wroc=${encodeURIComponent(back)}`,
-      headers: cookie === '' ? {} : { cookie },
+      method: 'POST', url: '/integracje/power-automate/konektor',
+      headers: { ...(cookie === '' ? {} : { cookie }), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ adres: address, wroc: back }).toString(),
     });
+
+  it('link z adresem w pasku przeglądarki nie pobiera pliku: pobranie tylko przyciskiem formularza POST', async () => {
+    const res = await h.app.inject({
+      method: 'GET', url: `/integracje/power-automate/konektor?adres=${encodeURIComponent('https://sms-firma.example')}&wroc=/integracje`,
+      headers: { cookie: h.cookie, 'sec-fetch-site': 'none' },
+    });
+    expect(res.headers['content-disposition']).toBeUndefined();
+    expect(res.statusCode).toBe(404);
+  });
+
+  it.each([
+    ['/integracje/ą'], ['/integracje/%00'], ['/integracje/\u0000'], ['/integracje/../klucze'], ['/integracje/..//evil.example'],
+    ['/integracje/7/../../klucze'], ['/integracje?x=%2F%2Fevil'],
+  ])('powrót %j spoza stron integracji albo ze znakami spoza ASCII: /integracje, bez błędu 500', async (back) => {
+    const res = await download('http://10.0.0.5', back);
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe('/integracje');
+  });
+
+  it.each([
+    ['/integracje'], ['/integracje/7'], ['/integracje/7/edytuj?tryb=prosty'], ['/integracje/nowa?rodzaj=power_automate&ustawienie=power-automate&tryb=zaawansowany'],
+  ])('powrót %j na stronę integracji zostaje', async (back) => {
+    const res = await download('http://10.0.0.5', back);
+    expect(res.headers.location).toBe(back);
+  });
 
   it('oddaje plik konektora jako załącznik z adresem z pola, bez zapisu adresu', async () => {
     h.settings.setApiUrl('http://10.10.10.159:8080', NOW);
@@ -208,7 +259,10 @@ describe('pobranie konektora', () => {
   });
 
   it('powtórzone parametry nie wywracają trasy', async () => {
-    const res = await h.app.inject({ method: 'GET', url: '/integracje/power-automate/konektor?adres=a&adres=b&wroc=/integracje&wroc=/x', headers: { cookie: h.cookie } });
+    const res = await h.app.inject({
+      method: 'POST', url: '/integracje/power-automate/konektor',
+      headers: { cookie: h.cookie, 'content-type': 'application/x-www-form-urlencoded' }, payload: 'adres=a&adres=b&wroc=/integracje&wroc=/x',
+    });
     expect(res.statusCode).toBe(302);
   });
 
@@ -247,6 +301,18 @@ describe('szczegóły integracji', () => {
       const row = h.integrations.list().find((r) => r.name === `Lista ${n}`)!;
       expect((await get(`/integracje/${row.id}`)).body, String(n)).toContain(word);
     }
+  });
+
+  it('pusty dziennik mówi o wywołaniach, nie o zdarzeniach', async () => {
+    await create();
+    const detail = (await get(`/integracje/${paRow().id}`)).body;
+    expect(detail).toContain('Dziennik jest pusty. Integracja nie otrzymała jeszcze żadnego wywołania.');
+  });
+
+  it('strona edycji klucza pokazuje kierunek integracji jej rodzajem: „do SMS” dla Power Automate', async () => {
+    await create();
+    const page = (await get(`/klucze/${apiKeyId}/edytuj`)).body;
+    expect(page).toMatch(/Ekipa serwisowa<\/a><\/td>\s*<td><span class="tag">do SMS<\/span>/);
   });
 
   it('pusta lista mówi, że akcja „Wyślij SMS do grupy” skończy się błędem', async () => {

@@ -3,8 +3,23 @@ import { GROUP_LIMITS, type GroupMember, type SmsGroupConfig } from '../config.t
 
 export type MemberLines = { ok: true; members: GroupMember[] } | { ok: false; error: string };
 
-/** Linia formularza: numer z cyfr, spacji, plusów, myślników, nawiasów i kropek, a od pierwszej litery nazwa do końca linii. */
-const MEMBER_LINE = /^([\d\s+().-]+?)\s*(\p{L}.*)?$/u;
+/** Najdłuższy wiersz listy: numer z odstępami i nazwa do 40 znaków mieszczą się z dużym zapasem. */
+const MAX_LINE = 200;
+/** Część numeru: cyfry, spacje, plusy, myślniki, nawiasy i kropki. */
+const PHONE_PART = /^[\d\s+().-]+$/;
+
+/**
+ * Wiersz formularza: numer, a od pierwszej litery nazwa do końca wiersza. Podział po indeksie
+ * pierwszej litery zamiast jednego wyrażenia z nakładającymi się powtórzeniami: wiersz z tysiącami
+ * spacji nie blokuje procesu bramki. Wiersz, którego początek nie jest numerem, idzie w całości do
+ * normalizacji, żeby komunikat mówił o numerze.
+ */
+function splitLine(line: string): [string, string] {
+  const at = line.search(/\p{L}/u);
+  if (at === -1) return [line, ''];
+  const head = line.slice(0, at);
+  return at > 0 && PHONE_PART.test(head) ? [head.trimEnd(), line.slice(at).trim()] : [line, ''];
+}
 
 /**
  * Lista członków z pola formularza, jeden numer w wierszu, po numerze opcjonalna nazwa.
@@ -14,9 +29,11 @@ const MEMBER_LINE = /^([\d\s+().-]+?)\s*(\p{L}.*)?$/u;
 export function parseMemberLines(raw: string, countryCode: string): MemberLines {
   const members: GroupMember[] = [];
   const seen = new Set<string>();
-  for (const line of raw.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== '')) {
-    const m = MEMBER_LINE.exec(line);
-    const [rawPhone, name] = m ? [m[1]!, (m[2] ?? '').trim()] : [line, ''];
+  const lines = raw.split(/\r?\n/).map((l) => l.trim());
+  for (const [index, line] of lines.entries()) {
+    if (line === '') continue;
+    if (line.length > MAX_LINE) return { ok: false, error: `Wiersz ${index + 1} listy numerów ma więcej niż ${MAX_LINE} znaków.` };
+    const [rawPhone, name] = splitLine(line);
     let phone: string;
     try {
       phone = normalizeRecipient(rawPhone, countryCode);

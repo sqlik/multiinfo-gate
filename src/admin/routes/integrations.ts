@@ -9,6 +9,7 @@ import { groupConfigToValues, groupFormToConfig, groupFormValues, groupNeedsAdva
 import { groupFormPage, type GroupFormOptions } from '../views/integration-group.ts';
 import { catalogFor, presetById, presetsFor, type Preset } from '../../integrations/presets/index.ts';
 import { buildPowerAutomateConnector, connectorAddress } from '../../api/power-automate.ts';
+import { keyUsable } from '../../api/submit.ts';
 import { paConfigToValues, paFormToConfig, paFormValues, type PaFormValues } from '../power-automate-form.ts';
 import { paFormPage, type PaFormOptions } from '../views/integration-power-automate.ts';
 import { PRIVATE_MAIL_MESSAGE, PRIVATE_TARGET_MESSAGE, hostTarget, systemResolver, webhookTarget } from '../../net/private-address.ts';
@@ -42,10 +43,10 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
 
   const presetNames = new Map(INTEGRATION_KINDS.flatMap((k) => presetsFor(k)).map((p) => [p.id, p.name]));
 
-  /** Czynne klucze z usługami i nadpisami - do wyboru w formularzu i do filtra listy. */
+  /** Czynne klucze z usługami i nadpisami - do wyboru w formularzu i do filtra listy. Wygasły klucz nie wyśle SMS-a. */
   const keyOptions = (): KeyOption[] => {
     const accounts = new Map(deps.accounts.list().map((a) => [a.id, a.name]));
-    return deps.apiKeys.list().filter((k) => k.revokedAt === null).map((k) => ({
+    return deps.apiKeys.list().filter((k) => keyUsable(k, now()).ok).map((k) => ({
       id: k.id, name: k.name, accountName: accounts.get(k.accountId) ?? `konto ${k.accountId}`,
       serviceIds: k.allowedServiceIds, origs: k.allowedOrigs,
     }));
@@ -120,9 +121,11 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
 
   /** Klucz, usługa i nadpis z formularza: klucz czynny, usługa i nadpis z jego listy albo puste (domyślne klucza). */
   const keyCheck = (v: Pick<IntegrationFormValues, 'apiKeyId' | 'serviceId' | 'orig'>, fixedKeyId?: number): { ok: true; keyId: number; accountId: number } | { ok: false; error: string } => {
-    const keyId = fixedKeyId ?? Number.parseInt(v.apiKeyId, 10);
-    const key = deps.apiKeys.get(keyId);
-    if (!key || key.revokedAt !== null) return { ok: false, error: 'Wskaż czynny klucz API.' };
+    // Sam numer: „12abc” nie jest kluczem 12.
+    const keyId = fixedKeyId ?? (/^\d{1,10}$/.test(v.apiKeyId) ? Number(v.apiKeyId) : Number.NaN);
+    const key = Number.isNaN(keyId) ? undefined : deps.apiKeys.get(keyId);
+    // Odwołany i wygasły klucz nie wyśle SMS-a, więc integracja na nim nie zadziała.
+    if (!key || !keyUsable(key, now()).ok) return { ok: false, error: 'Wskaż czynny klucz API.' };
     if (v.serviceId !== '' && !key.allowedServiceIds.includes(v.serviceId)) {
       return { ok: false, error: `Klucz ${key.name} nie ma dostępu do ID usługi ${v.serviceId}.` };
     }
@@ -465,19 +468,26 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }
   };
 
-  /** Powrót z pobrania konektora: tylko strona integracji tego panelu, nigdy adres spoza niego. */
+  /**
+   * Powrót z pobrania konektora: wyłącznie strony, na których panel pokazuje pobranie (lista,
+   * szczegóły, edycja, nowa integracja), bez znaków spoza ASCII i bez segmentów „..”.
+   */
   const backFromDownload = (raw: string | string[] | undefined): string => {
     const back = typeof raw === 'string' ? raw : '';
-    return /^\/integracje(?:[/?][^\s\\]*)?$/.test(back) ? back : '/integracje';
+    return /^\/integracje(?:\/\d{1,10}(?:\/edytuj)?|\/nowa)?(?:\?[A-Za-z0-9_=&-]*)?$/.test(back) ? back : '/integracje';
   };
 
-  /** Plik konektora z adresem z pola panelu; adres nie jest zapisywany, a pobranie niczego nie zmienia. */
-  app.get<{ Querystring: { adres?: string | string[]; wroc?: string | string[] } }>('/integracje/power-automate/konektor', async (request, reply) => {
-    const raw = request.query.adres;
+  /**
+   * Plik konektora z adresem z pola panelu; adres nie jest zapisywany. Tylko metodą POST z formularza
+   * panelu: podesłany link z obcym adresem otwarty przez zalogowanego administratora nie może oddać
+   * pliku, który kierowałby klucz API wklejony w Power Automate na cudzy serwer.
+   */
+  app.post<{ Body: { adres?: string | string[]; wroc?: string | string[] } }>('/integracje/power-automate/konektor', async (request, reply) => {
+    const raw = request.body?.adres;
     const address = connectorAddress(typeof raw === 'string' ? raw : '');
     if (!address.ok) {
       render.flash(request, 'fail', address.error);
-      return reply.redirect(backFromDownload(request.query.wroc), 302);
+      return reply.redirect(backFromDownload(request.body?.wroc), 302);
     }
     reply.type('application/json; charset=utf-8');
     reply.header('content-disposition', 'attachment; filename="multiinfo-gate-power-automate.json"');

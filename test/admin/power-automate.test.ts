@@ -20,7 +20,7 @@ describe('powerAutomatePanel', () => {
     expect(html).toContain('name="adres" value=""');
     expect(html).toContain('placeholder="https://sms.firma.pl"');
     expect(html).toContain('action="/integracje/power-automate/konektor"');
-    expect(html).toContain('method="get"');
+    expect(html).toContain('method="post"');
     expect(html).toContain('<input type="hidden" name="wroc" value="/integracje/12">');
     expect(html).toContain('Pobierz konektor');
     expect(html).toContain('https://sqlik.github.io/multiinfo-gate/power-automate/');
@@ -70,7 +70,7 @@ describe('strona kluczy', () => {
       }).toString(),
     });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Klucz dla Power Automate wybiera się w integracji Power Automate (Integracje, Dodaj integrację, Aplikacja wysyła SMS, Power Automate)');
+    expect(res.body).toContain('Klucz dla Power Automate wybiera się w formularzu integracji Power Automate: Integracje, Dodaj integrację, Aplikacja wysyła SMS, Power Automate. Ten sam klucz wkleja się w oknie połączenia konektora, a plik konektora pobiera się w szczegółach integracji.');
     expect(res.body).toContain('w oknie połączenia konektora');
   });
 });
