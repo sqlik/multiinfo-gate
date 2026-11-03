@@ -496,6 +496,31 @@ describe('zlecający', () => {
   });
 });
 
+describe('klucz tylko do integracji', () => {
+  beforeEach(() => {
+    db.prepare("UPDATE api_keys SET integrations_only = 1 WHERE name = 'Power Automate'").run();
+  });
+
+  it('POST /v1/messages i POST /v1/packages: 403 integrations_only_key, bez wysyłki', async () => {
+    const plain = await post('/v1/messages', { to: '48601000001', text: 'x' });
+    expect(plain.statusCode).toBe(403);
+    expect(plain.json().error).toEqual({
+      code: 'integrations_only_key',
+      message: 'Ten klucz jest przeznaczony wyłącznie dla integracji. Wysyłka przez /v1/messages i /v1/packages wymaga innego klucza.',
+    });
+    expect((await post('/v1/packages', { recipients: [{ to: '48601000001' }], defaultText: 'x' })).statusCode).toBe(403);
+    expect(allMessages()).toEqual([]);
+    expect(allPackages()).toEqual([]);
+  });
+
+  it('wywołania integracji i odczyt stanu działają', async () => {
+    const sent = await post(`/v1/integrations/int_${ekipa}/messages`, { to: '48601000001', text: 'x' });
+    expect(sent.statusCode).toBe(202);
+    const read = await app.inject({ method: 'GET', url: `/v1/messages/${sent.json().id}`, headers: auth() });
+    expect(read.statusCode).toBe(200);
+  });
+});
+
 describe('konto niedostępne', () => {
   it('konto wstrzymane: 503 integration_unavailable, wpis „błąd”, powiadomienie, zero wiadomości', async () => {
     accounts.pause(accountId, 'certyfikat wygasł');

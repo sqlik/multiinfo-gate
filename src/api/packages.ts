@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from '../zod.ts';
 import type { PackageRow, RecipientRow } from '../store/packages.ts';
-import { authenticate } from './auth.ts';
+import { authenticate, refuseIntegrationsOnly } from './auth.ts';
 import { dropEmptyFields } from './empty-fields.ts';
 import { ApiError } from './errors.ts';
 import type { ApiDeps } from './server.ts';
@@ -74,6 +74,7 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
 
   app.post('/v1/packages', { bodyLimit: PACKAGE_BODY_LIMIT, onRequest: keyBeforeBody(deps) }, async (request, reply) => {
     const auth = authenticate(request.headers.authorization, deps.apiKeys);
+    refuseIntegrationsOnly(auth);
 
     if (!deps.rateLimiter.check(auth.apiKeyId, auth.ratePerMin)) {
       throw new ApiError(429, 'rate_limited', `Przekroczono limit ${auth.ratePerMin} żądań na minutę.`);

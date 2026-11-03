@@ -44,6 +44,7 @@ function formValues(body: Body): KeyFormValues {
     origs: values(body.origs), defaultOrig: s('defaultOrig'), maxParts: s('maxParts'), ratePerMin: s('ratePerMin'),
     webhookUrl: s('webhookUrl'), expiresOn: s('expiresOn'), noExpiry: s('noExpiry') === '1',
     inboundSubscribed: s('inboundSubscribed') === '1',
+    integrationsOnly: s('integrationsOnly') === '1',
   };
 }
 
@@ -192,6 +193,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       origs: v.origs,
       expiresAt: checked.expiresAt,
       inboundSubscribed: v.inboundSubscribed ? 1 : 0,
+      integrationsOnly: v.integrationsOnly ? 1 : 0,
     });
     // Nowy subskrybent może zapalić odbiór usługi - odbiornik uzgadnia pętle od razu, nie za 10 s.
     deps.receiver?.refresh({ retryAccount: choice.row.id });
@@ -203,7 +205,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       target: `klucz:${id}`,
       meta: {
         nazwa: v.name, konto: choice.row.name, prefiks: generated.prefix, uslugi: v.serviceIds, nadpisy: v.origs,
-        webhook: checked.webhookUrl, wazny_do: checked.expiresAt, odbior: v.inboundSubscribed,
+        webhook: checked.webhookUrl, wazny_do: checked.expiresAt, odbior: v.inboundSubscribed, tylko_integracje: v.integrationsOnly,
       },
       ip: request.ip,
     });
@@ -262,6 +264,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       ...(webhookSecret === undefined ? {} : { webhookSecret }),
       expiresAt: checked.expiresAt, serviceIds: v.serviceIds, origs: v.origs,
       inboundSubscribed: v.inboundSubscribed ? 1 : 0,
+      integrationsOnly: v.integrationsOnly ? 1 : 0,
     });
     deps.receiver?.refresh({ retryAccount: key.accountId });
     const after = valuesOf(deps.apiKeys.get(key.id)!);

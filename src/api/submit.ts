@@ -43,6 +43,7 @@ export function authFromKey(row: ApiKeyRow): AuthContext {
   return {
     apiKeyId: row.id, accountId: row.accountId, allowedServiceIds: row.allowedServiceIds, allowedOrigs: row.allowedOrigs,
     defaultServiceId: row.defaultServiceId, defaultOrig: row.defaultOrig, maxParts: row.maxParts, ratePerMin: row.ratePerMin,
+    integrationsOnly: row.integrationsOnly === 1,
   };
 }
 

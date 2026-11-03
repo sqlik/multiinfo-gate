@@ -12,6 +12,8 @@ export interface AuthContext {
   defaultOrig: string | null;
   maxParts: number;
   ratePerMin: number;
+  /** Klucz wyłącznie dla integracji: zwykła wysyłka przez API jest zablokowana. */
+  integrationsOnly: boolean;
 }
 
 export class AuthError extends Error {
@@ -70,5 +72,17 @@ export function authenticate(
     defaultOrig: row.defaultOrig,
     maxParts: row.maxParts,
     ratePerMin: row.ratePerMin,
+    integrationsOnly: row.integrationsOnly === 1,
   };
+}
+
+/**
+ * Zwykła wysyłka przez API dla klucza ograniczonego do integracji. Klucz wklejony w Power Automate
+ * mógłby inaczej wysyłać akcją HTTP z pominięciem limitu części, ochrony przed burzą i dziennika.
+ */
+export function refuseIntegrationsOnly(auth: AuthContext): void {
+  if (auth.integrationsOnly) {
+    throw new AuthError(403, 'integrations_only_key',
+      'Ten klucz jest przeznaczony wyłącznie dla integracji. Wysyłka przez /v1/messages i /v1/packages wymaga innego klucza.');
+  }
 }

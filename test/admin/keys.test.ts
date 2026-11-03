@@ -502,3 +502,35 @@ describe('klucz z integracjami', () => {
     expect(h.apiKeys.get(key.id)!.revokedAt).not.toBeNull();
   });
 });
+
+describe('klucz - tylko integracje', () => {
+  it('pole jest w formularzu i domyślnie odznaczone', async () => {
+    const res = await h.app.inject({ method: 'GET', url: `/klucze/nowy?accountId=${accountId}`, headers: { cookie: h.cookie } });
+    expect(res.body).toContain('name="integrationsOnly"');
+    expect(res.body).not.toMatch(/name="integrationsOnly"[^>]*checked/);
+    expect(res.body).toContain('Tylko integracje');
+  });
+
+  it('zapisuje opcję, pokazuje plakietkę na liście i odnotowuje ją w dzienniku', async () => {
+    await create({ integrationsOnly: '1' });
+    const key = h.apiKeys.list()[0]!;
+    expect(key.integrationsOnly).toBe(1);
+    expect(h.audit.list(10, 0)[0]!.meta).toMatchObject({ tylko_integracje: true });
+    const list = await h.app.inject({ method: 'GET', url: '/klucze', headers: { cookie: h.cookie } });
+    expect(list.body).toContain('<span class="tag">tylko integracje</span>');
+  });
+
+  it('edycja zmienia opcję, a formularz pokazuje ją zaznaczoną', async () => {
+    await create();
+    const key = h.apiKeys.list()[0]!;
+    const res = await h.app.inject({ url: `/klucze/${key.id}/edytuj`, ...form({
+      name: key.name, serviceIds: '24138', defaultServiceId: '24138', origs: 'Firma Info', maxParts: '5', ratePerMin: '60',
+      noExpiry: '1', integrationsOnly: '1',
+    }) });
+    expect(res.statusCode).toBe(302);
+    expect(h.apiKeys.get(key.id)!.integrationsOnly).toBe(1);
+    expect(h.audit.list(10, 0)[0]!.meta).toMatchObject({ pola: expect.arrayContaining(['integrationsOnly']) });
+    const edit = await h.app.inject({ method: 'GET', url: `/klucze/${key.id}/edytuj`, headers: { cookie: h.cookie } });
+    expect(edit.body).toMatch(/name="integrationsOnly"[^>]*checked/);
+  });
+});

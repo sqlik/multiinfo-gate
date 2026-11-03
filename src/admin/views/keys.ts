@@ -27,13 +27,13 @@ export interface AccountChoice {
 export interface KeyFormValues {
   name: string; serviceIds: string[]; defaultServiceId: string; origs: string[]; defaultOrig: string;
   maxParts: string; ratePerMin: string; webhookUrl: string; expiresOn: string; noExpiry: boolean;
-  inboundSubscribed: boolean;
+  inboundSubscribed: boolean; integrationsOnly: boolean;
 }
 
 export const NEW_KEY_VALUES = (choice: AccountChoice): KeyFormValues => ({
   name: '', serviceIds: choice.serviceIds, defaultServiceId: choice.serviceIds[0] ?? '', origs: [],
   defaultOrig: '', maxParts: '5', ratePerMin: '60', webhookUrl: '', expiresOn: '', noExpiry: false,
-  inboundSubscribed: false,
+  inboundSubscribed: false, integrationsOnly: false,
 });
 
 export function valuesOf(row: ApiKeyRow): KeyFormValues {
@@ -43,6 +43,7 @@ export function valuesOf(row: ApiKeyRow): KeyFormValues {
     ratePerMin: String(row.ratePerMin), webhookUrl: row.webhookUrl ?? '',
     expiresOn: row.expiresAt === null ? '' : lastValidDay(row.expiresAt), noExpiry: row.expiresAt === null,
     inboundSubscribed: row.inboundSubscribed === 1,
+    integrationsOnly: row.integrationsOnly === 1,
   };
 }
 
@@ -151,7 +152,7 @@ export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne
         : esc(v.row.allowedOrigs.join(', '))}</td>
       <td class="m">${esc(v.row.ratePerMin)} / min</td>
       ${expiryCell(v.row, now)}
-      <td>${host === null ? '<span class="dim">-</span>' : `<span class="m">${esc(host)}</span>`}${v.row.inboundSubscribed === 1 ? '<div style="margin-top: 5px;"><span class="tag">odbiera</span></div>' : ''}</td>
+      <td>${host === null ? '<span class="dim">-</span>' : `<span class="m">${esc(host)}</span>`}${v.row.inboundSubscribed === 1 ? '<div style="margin-top: 5px;"><span class="tag">odbiera</span></div>' : ''}${v.row.integrationsOnly === 1 ? '<div style="margin-top: 5px;"><span class="tag">tylko integracje</span></div>' : ''}</td>
       <td class="m">${v.row.lastUsedAt === null
         ? '<span class="dim" style="font-size: 12px;">jeszcze nieużywany</span>'
         : esc(stamp(v.row.lastUsedAt, ''))}</td>
@@ -300,6 +301,12 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
       <label class="choice"><input type="checkbox" name="inboundSubscribed" value="1"${v.inboundSubscribed ? ' checked' : ''}> Odbiera wiadomości przychodzące</label>
       <div class="hint">Bramka będzie pytać Multiinfo o SMS-y wysłane na numery usług tego klucza i przekazywać je
         zdarzeniem message.received na adres webhooka. Wymaga adresu webhooka.</div>
+    </div>
+    <div class="field">
+      <label class="choice"><input type="checkbox" name="integrationsOnly" value="1"${v.integrationsOnly ? ' checked' : ''}> Tylko integracje</label>
+      <div class="hint">Klucz działa wyłącznie w integracjach, na przykład w konektorze Power Automate. Wysyłka przez
+        /v1/messages i /v1/packages kończy się błędem, dzięki czemu klucz wklejony w Power Automate nie pozwala ominąć
+        limitu części, ochrony przed burzą ani dziennika integracji. Opcja jest zalecana dla klucza konektora</div>
     </div>
     ${mode === 'edit' ? `<div class="field">
       <label for="webhookSecret">Sekret webhooka</label>

@@ -17,6 +17,10 @@ CREATE UNIQUE INDEX packages_idempotency ON packages(api_key_id, idempotency_key
 -- Wpis dziennika integracji wskazuje rozsyłkę, tak jak dziś wskazuje wiadomość.
 ALTER TABLE integration_events ADD COLUMN package_id TEXT;
 
+-- Klucz wyłącznie dla integracji: odrzuca POST /v1/messages i POST /v1/packages, więc klucz
+-- wklejony w Power Automate nie pozwala wysyłać z pominięciem mechanizmów ochronnych integracji.
+ALTER TABLE api_keys ADD COLUMN integrations_only INTEGER NOT NULL DEFAULT 0;
+
 -- Ochrona przed burzą integracji Power Automate liczy w oknie także odbiorców: jedna rozsyłka
 -- może objąć 5000 numerów, więc sam limit wywołań nie chroni konta przed zapętlonym przepływem.
 ALTER TABLE integration_throttle ADD COLUMN recipients INTEGER NOT NULL DEFAULT 0;
