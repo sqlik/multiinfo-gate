@@ -470,6 +470,43 @@ const WIERSZ_RAPORTU: JsonSchema = {
   },
 };
 
+/** Uprawnienia klucza; listy obiektów, bo listy wyboru w aplikacjach czytają pola obiektów. */
+const UPRAWNIENIA_KLUCZA: JsonSchema = {
+  type: 'object',
+  required: ['name', 'services', 'origs', 'maxParts', 'ratePerMin'],
+  properties: {
+    name: { type: 'string', description: 'Nazwa klucza nadana w panelu', example: 'Powiadomienia CRM' },
+    services: {
+      type: 'array',
+      description: 'Usługi Multiinfo, z których klucz może wysyłać',
+      items: {
+        type: 'object',
+        required: ['id', 'default'],
+        properties: {
+          id: { type: 'string', description: 'Identyfikator usługi Multiinfo', example: '24138' },
+          default: { type: 'boolean', description: 'Usługa używana, gdy wysyłka nie podaje pola serviceId' },
+        },
+      },
+    },
+    origs: {
+      type: 'array',
+      description: 'Nadpisy nadawcy, których klucz może użyć w polu orig, w kolejności alfabetycznej. Lista obejmuje'
+        + ' nadpis domyślny klucza, a gdy klucz go nie ma, nadpis domyślny konta. Pusta lista oznacza wysyłkę bez'
+        + ' nadpisu, z numerem przydzielonym kontu w Multiinfo jako nadawcą.',
+      items: {
+        type: 'object',
+        required: ['orig', 'default'],
+        properties: {
+          orig: { type: 'string', description: 'Nadpis nadawcy', example: 'Firma Info' },
+          default: { type: 'boolean', description: 'Nadpis używany, gdy wysyłka nie podaje pola orig' },
+        },
+      },
+    },
+    maxParts: { type: 'integer', description: 'Najwyższa liczba części jednej wiadomości', example: 5 },
+    ratePerMin: { type: 'integer', description: 'Limit żądań klucza na minutę', example: 60 },
+  },
+};
+
 export function buildOpenApiDocument(): OpenApiDocument {
   return {
     openapi: '3.0.3',
@@ -492,6 +529,40 @@ export function buildOpenApiDocument(): OpenApiDocument {
     }],
     security: KLUCZ,
     paths: {
+      '/v1/key': {
+        get: {
+          operationId: 'uprawnieniaKlucza',
+          summary: 'Uprawnienia klucza',
+          description: 'Zwraca uprawnienia klucza, którym wywołanie jest uwierzytelnione: usługi, nadpisy nadawcy'
+            + ' i limity. Aplikacja buduje z nich listy wyboru usługi i nadawcy albo sprawdza klucz przed pierwszą'
+            + ' wysyłką. Odpowiedź nie zawiera danych konta Multiinfo ani sekretów. Wywołanie liczy się do limitu'
+            + ' żądań klucza.',
+          security: KLUCZ,
+          responses: {
+            '200': {
+              description: 'Uprawnienia klucza',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/UprawnieniaKlucza' },
+                  example: {
+                    name: 'Powiadomienia CRM',
+                    services: [{ id: '24138', default: true }],
+                    origs: [{ orig: 'Firma Alert', default: false }, { orig: 'Firma Info', default: true }],
+                    maxParts: 5,
+                    ratePerMin: 60,
+                  },
+                },
+              },
+            },
+            '401': BLAD_KLUCZA,
+            '429': blad(
+              'Przekroczony limit żądań klucza na minutę',
+              'rate_limited',
+              'Przekroczono limit 60 żądań na minutę.',
+            ),
+          },
+        },
+      },
       '/v1/messages': {
         post: {
           operationId: 'wyslijWiadomosc',
@@ -1044,6 +1115,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
         },
       },
       schemas: {
+        UprawnieniaKlucza: UPRAWNIENIA_KLUCZA,
         Wiadomosc: WIADOMOSC,
         WiadomoscPrzychodzaca: WIADOMOSC_PRZYCHODZACA,
         Rozsylka: ROZSYLKA,

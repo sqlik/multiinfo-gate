@@ -85,6 +85,124 @@ Błędy uwierzytelniania mają kod HTTP `401` i jedną z wartości `error.code`:
 | `revoked_api_key` | klucz odwołany w panelu | uzyskać nowy klucz od administratora |
 | `expired_api_key` | upłynęła data ważności klucza; `message` podaje ostatni ważny dzień | poprosić administratora o przedłużenie ważności w panelu |
 
+### 2.1. Uprawnienia klucza: `GET /v1/key`
+
+**Przeznaczenie.** Odczyt uprawnień klucza, którym wywołanie jest uwierzytelnione: usług,
+nadpisów nadawcy i limitów. Aplikacja buduje z odpowiedzi listy wyboru usługi i nadawcy.
+Programista może nim sprawdzić klucz przed pierwszą wysyłką. Z tego wywołania konektor Power Automate
+wypełnia listy „Nadawca” i „Usługa Multiinfo”. Wywołanie liczy się do limitu żądań klucza.
+
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/key \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    GET /v1/key HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/key');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    foreach ($odpowiedz['origs'] as $w) {
+        echo $w['orig'], PHP_EOL;
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/key",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    for w in odpowiedz["origs"]:
+        print(w["orig"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/key", {
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    for (const w of odpowiedz.origs) console.log(w.orig);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/v1/key" -Headers $naglowki
+    $odpowiedz.origs | ForEach-Object { $_.orig }
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/v1/key"));
+    foreach (var w in odpowiedz.RootElement.GetProperty("origs").EnumerateArray())
+        Console.WriteLine(w.GetProperty("orig"));
+    ```
+
+**Odpowiedź `200`:**
+
+```json
+{
+  "name": "Powiadomienia CRM",
+  "services": [
+    { "id": "24138", "default": true }
+  ],
+  "origs": [
+    { "orig": "Firma Alert", "default": false },
+    { "orig": "Firma Info", "default": true }
+  ],
+  "maxParts": 5,
+  "ratePerMin": 60
+}
+```
+
+| Pole | Opis |
+|---|---|
+| `name` | nazwa klucza nadana w panelu |
+| `services` | usługi Multiinfo dozwolone dla klucza; `default: true` oznacza usługę używaną, gdy wysyłka nie podaje `serviceId` |
+| `origs` | nadpisy nadawcy dozwolone w polu `orig`, w kolejności alfabetycznej; `default: true` oznacza nadpis używany, gdy wysyłka nie podaje `orig` |
+| `maxParts` | najwyższa liczba części jednej wiadomości |
+| `ratePerMin` | limit żądań klucza na minutę |
+
+Lista `origs` obejmuje nadpis domyślny klucza. Gdy klucz go nie ma, obejmuje nadpis domyślny
+konta. Pusta lista oznacza, że wysyłka idzie bez nadpisu. Nadawcą jest wtedy numer przydzielony
+kontu w Multiinfo. Odpowiedź nie zawiera danych konta Multiinfo ani sekretów.
+
+| HTTP | `error.code` | Przyczyna | Postępowanie |
+|---|---|---|---|
+| 401 | jak w tabeli wyżej | brak, nieprawidłowy, odwołany albo wygasły klucz | jak w tabeli wyżej |
+| 429 | `rate_limited` | przekroczony limit żądań klucza na minutę | odczekać minutę; nie ponawiać w pętli |
+
 ## 3. Wysyłka wiadomości: `POST /v1/messages`
 
 **Przeznaczenie.** Wysłanie jednej wiadomości do jednego numeru albo tej samej treści do kilku

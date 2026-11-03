@@ -22,6 +22,7 @@ import { registerCancelRoute } from './cancel.ts';
 import { ApiError } from './errors.ts';
 import { registerHealthRoute, type InboundHealth } from './health.ts';
 import { registerHookRoutes } from './hooks.ts';
+import { registerKeyInfoRoute } from './key-info.ts';
 import { registerMessageRoutes } from './messages.ts';
 import { registerInboundRoutes } from './inbound.ts';
 import { registerPackageRoutes } from './packages.ts';
@@ -87,6 +88,7 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
   });
 
   registerMessageRoutes(app, deps);
+  registerKeyInfoRoute(app, deps);
   registerCancelRoute(app, deps);
   registerPackageRoutes(app, deps);
   registerInboundRoutes(app, deps);
