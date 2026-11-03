@@ -8,7 +8,8 @@ import { paGroupBodySchema, paMessageBodySchema } from './pa-integrations.ts';
  * `npm run openapi`, które `npm test` wywołuje samo, a osobny krok w przepływach GitHuba pilnuje,
  * że zapisany plik nie odstaje od kodu. Pola ciała wysyłki biorą się z tego samego schematu zod,
  * którego używa trasa, więc nowe pole nie umknie opisowi: pole bez opisu przerywa budowanie
- * dokumentu. Wersja 3.0, a nie 3.1, bo konektory własne Power Platform czytają tylko 2.0 oraz 3.0.
+ * dokumentu. Wersja 3.0, a nie 3.1, bo 3.0 czyta więcej narzędzi. Power Automate nie przyjmuje żadnej
+ * z nich: plik konektora w Swaggerze 2.0 buduje z tego dokumentu `power-automate.ts`.
  */
 
 export interface JsonSchema {

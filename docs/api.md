@@ -19,6 +19,10 @@ tego API używają integracji. Adres `POST /hooks/<identyfikator>` przyjmuje ła
 a integracje wychodzące przekazują odebrane SMS-y i statusy do aplikacji w jej formacie. Opis
 jest w rozdziale [Integracje z aplikacjami](integracje.md).
 
+Przepływy Microsoft Power Automate wysyłają SMS-y konektorem bramki. Konektor to plik pobierany
+z panelu bramki. Korzysta z wywołań integracji Power Automate opisanych w rozdziale 5b. Import
+konektora i budowę przepływów opisuje artykuł [Power Automate](power-automate.md).
+
 Dokument opisuje każde wywołanie w tym samym układzie: przeznaczenie, pełne żądanie w siedmiu
 wariantach do wyboru zakładką (curl, surowy HTTP, PHP, Python, Node.js, PowerShell, C#),
 odpowiedź oraz błędy tego wywołania wraz z zalecanym postępowaniem. To samo API opisuje plik
@@ -89,8 +93,8 @@ Błędy uwierzytelniania mają kod HTTP `401` i jedną z wartości `error.code`:
 
 **Przeznaczenie.** Odczyt uprawnień klucza, którym wywołanie jest uwierzytelnione: usług,
 nadpisów nadawcy i limitów. Aplikacja buduje z odpowiedzi listy wyboru usługi i nadawcy.
-Programista może nim sprawdzić klucz przed pierwszą wysyłką. Z tego wywołania konektor Power Automate
-wypełnia listy „Nadawca” i „Usługa Multiinfo”. Wywołanie liczy się do limitu żądań klucza.
+Programista może nim sprawdzić klucz przed pierwszą wysyłką. Wywołanie liczy się do limitu żądań
+klucza.
 
 === "curl"
 
@@ -1644,7 +1648,8 @@ odbiorcę: nadawcę tej wiadomości (pole `from` z `message.received`).
 Wywołania z tego rozdziału wysyłają SMS-y przez integrację Power Automate. Integrację zakłada
 administrator bramki w panelu: Integracje, Dodaj integrację, „Aplikacja wysyła SMS”, kafelek
 „Power Automate”. Opisuje to rozdział [Integracje z aplikacjami](integracje.md). Z tych wywołań
-korzysta konektor Power Automate. Aplikacja może ich używać także bez konektora.
+korzysta konektor Power Automate, opisany w artykule [Power Automate](power-automate.md).
+Aplikacja może ich używać także bez konektora.
 
 Integracja wyznacza usługę, nadpis nadawcy i limit części treści. Ma własną ochronę przed burzą
 i własny dziennik. Może mieć listę odbiorców grupy, do 500 numerów. Do tej listy wysyła wyłącznie
@@ -2550,12 +2555,8 @@ curl -O https://sqlik.github.io/multiinfo-gate/openapi.json
 Adres bazowy jest w pliku zmienną `domena`. Narzędzie zapyta o nią przy imporcie. Podaj domenę,
 pod którą bramka jest wystawiona, bez `https://` na początku.
 
-Trzy typowe zastosowania:
+Dwa typowe zastosowania:
 
-- **Konektor własny w Power Automate.** W [make.powerautomate.com](https://make.powerautomate.com)
-  wybierz **Więcej → Wszystkie odkrycia → Konektory niestandardowe → Nowy konektor → Zaimportuj
-  plik OpenAPI**. Wskaż pobrany plik. Kreator sam wypełni akcje oraz pola. Zostaje dopisać klucz
-  API w zabezpieczeniach konektora. Gotowy konektor bramki jest w planach na wydanie 1.9
 - **Aplikacja w Make.** W [make.com](https://make.com) otwórz **Custom apps → Create a new app**
   i użyj opcji importu opisu OpenAPI. Powstaną z niego moduły aplikacji, które wstawisz do
   scenariusza obok pozostałych
@@ -2567,6 +2568,9 @@ Plik powstaje z tych samych schematów, na których bramka sprawdza żądania. O
 odbiegać od zachowania API. Sprawdza to test: po zmianie pola w kodzie plik należy
 przeliczyć poleceniem `npm run openapi`, w przeciwnym razie testy kończą się niepowodzeniem.
 
-Wersja 3.0 zamiast nowszej 3.1 jest wyborem świadomym. Konektory własne Power Platformu czytają
-wyłącznie formaty 2.0 oraz 3.0. Dokument nie używa niczego, czego nie ma w wersji 3.0, więc
-pozostałe narzędzia przyjmują go tak samo dobrze.
+Power Automate nie importuje tego pliku. Łącznik niestandardowy przyjmuje wyłącznie starszy
+format OpenAPI 2.0. Bramka ma do tego osobny plik konektora, pobierany z panelu w integracji
+Power Automate. Opisuje go artykuł [Power Automate](power-automate.md).
+
+Plik jest w wersji OpenAPI 3.0, a nie w nowszej 3.1. Wersję 3.0 czyta więcej narzędzi, także
+te, które nie obsługują jeszcze wersji 3.1. Dokument nie używa niczego spoza wersji 3.0.

@@ -23,8 +23,8 @@ i szablony Liquid. Administratora bramka powiadamia mailem o błędach i certyfi
 Wersja 1.6 dokłada do katalogu pięć gotowych ustawień: n8n, WooCommerce w wariancie „nowe
 zamówienie” oraz w wariancie „status do klienta”, Home Assistanta i Slacka. Sklep zawiadamia
 SMS-em obsługę o nowym zamówieniu albo kupującego o zmianie statusu. Do tego dochodzi opis API
-w formacie OpenAPI, plik `docs/openapi.json`. Plik jest czytany przez Power Automate, Make oraz
-generatory bibliotek klienckich, co eliminuje ręczne przepisywanie pól z dokumentacji.
+w formacie OpenAPI, plik `docs/openapi.json`. Plik czytają Make oraz generatory bibliotek
+klienckich, co eliminuje ręczne przepisywanie pól z dokumentacji.
 
 Wersja 1.7 dokłada trzy gotowe ustawienia: Fakturownię w wariancie „powiadomienie obsługi” oraz
 w wariancie „powiadomienie klienta”, a także Bitrix24. Fakturownia zawiadamia SMS-em o nowej
@@ -46,6 +46,13 @@ Od wersji 1.8.7 bramka sama zapisuje kopię bazy przed aktualizacją. Bramka, kt
 pracy, pokazuje w panelu przyczynę i sposób naprawy zamiast zerwanego połączenia. Błąd panelu
 kończy się stroną z identyfikatorem zdarzenia, a wpis z tym identyfikatorem trafia do dziennika.
 Typowe problemy opisuje nowy dokument „Rozwiązywanie problemów”.
+
+Wersja 1.9 dokłada integrację Power Automate. Przepływ Microsoft Power Automate wysyła SMS-y
+akcjami konektora bramki: do jednego numeru, rozsyłką do listy z danych przepływu, na przykład
+z tabeli Excela, albo do listy odbiorców prowadzonej w bramce. Konektor pobiera się z panelu
+i importuje w Power Automate jako łącznik niestandardowy. Każda wysyłka przechodzi przez
+integrację z limitem części, ochroną przed burzą i dziennikiem. Dziennik pokazuje także osobę,
+która zleciła wysyłkę.
 
 ## Co trzeba mieć
 
@@ -72,6 +79,7 @@ Strona dokumentacji: [sqlik.github.io/multiinfo-gate](https://sqlik.github.io/mu
 - [Uruchomienie krok po kroku](https://sqlik.github.io/multiinfo-gate/uruchomienie/) - od konta Multiinfo do pierwszego SMS-a i wystawienia API na świat
 - [API dla aplikacji](https://sqlik.github.io/multiinfo-gate/api/) - każde wywołanie z przykładem w siedmiu wariantach (curl, HTTP, PHP, Python, Node.js, PowerShell, C#), webhooki, błędy, limity
 - [Integracje z aplikacjami](https://sqlik.github.io/multiinfo-gate/integracje/) - adres wejściowy dla aplikacji z własnym formatem, szablony Liquid, gotowe ustawienia, powiadomienia administratora mailem
+- [Power Automate](https://sqlik.github.io/multiinfo-gate/power-automate/) - konektor do Microsoft Power Automate: integracja w panelu, import pliku, pierwszy przepływ, rozsyłka z Excela, typowe błędy
 - [Rozwiązywanie problemów](https://sqlik.github.io/multiinfo-gate/problemy/) - objaw, sprawdzenie i naprawa: panel, logowanie, tryb awaryjny, aktualizacja, zgłaszanie problemów
 - [Przykład w PHP](examples/php/) - strona testowa i kod do skopiowania
 
