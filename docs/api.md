@@ -1639,6 +1639,266 @@ odbiorcę: nadawcę tej wiadomości (pole `from` z `message.received`).
     Console.WriteLine(odpowiedz.RootElement.GetProperty("id"));
     ```
 
+## 5b. SMS do grupy
+
+Grupy SMS zakłada i prowadzi administrator bramki w panelu. Opisuje to rozdział
+[SMS do grupy](integracje.md#5a-sms-do-grupy) instrukcji integracji. Grupa ma listę odbiorców
+albo listę członków, do 500 numerów. Jest przypisana do jednego klucza API i jednej usługi.
+Aplikacja wysyła treść do grupy jednym wywołaniem i nie musi znać numerów odbiorców. Zmiana
+składu grupy w panelu nie wymaga zmian w aplikacji.
+
+Aplikacja widzi wyłącznie grupy swojego klucza. Identyfikator grupy (`grp_...`) jest stały.
+Zmiana nazwy grupy w panelu go nie zmienia. Panel podaje go w szczegółach grupy, w wierszu
+„Identyfikator w API”. Grupa wyłączona w panelu jest niedostępna także w API.
+
+### 5b.1. Lista grup: `GET /v1/groups`
+
+**Przeznaczenie.** Odczyt grup przypisanych do klucza. Aplikacja buduje z odpowiedzi listę
+wyboru grupy. Z tego wywołania konektor Power Automate wypełnia listę „Grupa”.
+
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/groups \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    GET /v1/groups HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/groups');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    foreach ($odpowiedz['data'] as $w) {
+        echo $w['id'], ' ', $w['name'], PHP_EOL;
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/groups",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    for w in odpowiedz["data"]:
+        print(w["id"], w["name"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/groups", {
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    for (const w of odpowiedz.data) console.log(w.id, w.name);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/v1/groups" -Headers $naglowki
+    $odpowiedz.data | ForEach-Object { "$($_.id) $($_.name)" }
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/v1/groups"));
+    foreach (var w in odpowiedz.RootElement.GetProperty("data").EnumerateArray())
+        Console.WriteLine(w.GetProperty("id") + " " + w.GetProperty("name"));
+    ```
+
+**Odpowiedź `200`:**
+
+```json
+{
+  "data": [
+    { "id": "grp_12", "name": "Ekipa serwisowa", "recipients": 8 },
+    { "id": "grp_15", "name": "Kierowcy", "recipients": 14 }
+  ]
+}
+```
+
+| Pole | Opis |
+|---|---|
+| `id` | stały identyfikator grupy |
+| `name` | nazwa grupy nadana w panelu |
+| `recipients` | liczba odbiorców: w trybie osobnych list - lista odbiorców, w grupie zamkniętej - wszyscy członkowie |
+
+Lista obejmuje tylko czynne grupy, w kolejności nazw. Nie zawiera numerów ani nazwisk. Te dane
+zostają w panelu bramki.
+
+### 5b.2. Wysyłka do grupy: `POST /v1/groups/{id}/messages`
+
+**Przeznaczenie.** Wysłanie tej samej treści do każdego odbiorcy grupy. Bramka zapisuje osobną
+wiadomość dla każdego odbiorcy i odpowiada natychmiast. Wysyłka jest przyjmowana w całości albo
+wcale. Przykład: zgłoszenie awarii trafia do całej ekipy serwisowej.
+
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/groups/grp_12/messages \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>" \
+      -H "Content-Type: application/json" \
+      -d '{"text":"Awaria pompy w hali B. Dyspozytor czeka na kontakt."}'
+    ```
+
+=== "HTTP"
+
+    ```http
+    POST /v1/groups/grp_12/messages HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    Content-Type: application/json
+
+    {"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt."}
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/groups/grp_12/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode([
+            'text' => 'Awaria pompy w hali B. Dyspozytor czeka na kontakt.',
+        ]),
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>', 'Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    foreach ($odpowiedz['messages'] as $w) {
+        echo $w['id'], ' ', $w['to'], PHP_EOL;
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/groups/grp_12/messages",
+        data=json.dumps({"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt."}).encode(),
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    for w in odpowiedz["messages"]:
+        print(w["id"], w["to"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/groups/grp_12/messages", {
+      method: "POST",
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json" },
+      body: JSON.stringify({"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt."}),
+    });
+    const odpowiedz = await res.json();
+    for (const w of odpowiedz.messages) console.log(w.id, w.to);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $body = @{ text = "Awaria pompy w hali B. Dyspozytor czeka na kontakt." } | ConvertTo-Json
+    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/groups/grp_12/messages" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
+    $odpowiedz.messages | ForEach-Object { "$($_.id) $($_.to)" }
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Text;
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var tresc = new StringContent("""{"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt."}""", Encoding.UTF8, "application/json");
+    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/groups/grp_12/messages", tresc);
+    var odpowiedz = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+    foreach (var w in odpowiedz.RootElement.GetProperty("messages").EnumerateArray())
+        Console.WriteLine(w.GetProperty("id") + " " + w.GetProperty("to"));
+    ```
+
+Pola body żądania:
+
+| Pole | Wymagane | Opis |
+|---|---|---|
+| `text` | tak | treść wiadomości, jak w rozdziale 3 |
+| `orig` | nie | nadpis nadawcy; pominięty = nadpis grupy, a gdy grupa go nie ma - nadpis domyślny klucza albo konta |
+| `encoding`, `maxParts`, `deliveryReport`, `validTo`, `costCenter` | nie | jak w rozdziale 3 |
+
+Usługę wyznacza grupa. Grupa bez usługi wysyła usługą domyślną klucza. Pola `to`, `serviceId`
+i `inReplyTo` nie mają w tym wywołaniu znaczenia. Bramka je pomija. Nagłówek `Idempotency-Key`
+działa jak w rozdziale 3.1.
+
+Ustawienia grupy dotyczące SMS-a przychodzącego nie mają tu zastosowania. Chodzi o prefiks,
+uprawnionych nadawców, szablon treści, potwierdzenie, ochronę przed burzą i limit części grupy.
+Limit części wyznacza klucz albo pole `maxParts`.
+
+**Odpowiedź `202 Accepted`:**
+
+```json
+{
+  "group": { "id": "grp_12", "name": "Ekipa serwisowa" },
+  "recipients": 2,
+  "messages": [
+    { "id": "msg_3f9c2a7b1e4d8c6a5b2f", "to": "48601000001", "status": "queued", "parts": 1 },
+    { "id": "msg_8a1b2c3d4e5f6a7b8c9d", "to": "48601000002", "status": "queued", "parts": 1 }
+  ]
+}
+```
+
+Stan każdej wiadomości zwraca odczyt `GET /v1/messages/{id}` (rozdział 4.1). Wiadomości są
+widoczne w panelu na ekranie „Wiadomości” z nazwą klucza i nazwą grupy. Dziennik grupy dostaje
+wpis „wysłano” z powodem „wysyłka przez API” i liczbą odbiorców.
+
+| HTTP | `error.code` | Przyczyna | Postępowanie |
+|---|---|---|---|
+| 400 | `invalid_body` | brak treści albo pole niezgodne ze schematem; `message` wymienia pola | poprawić wskazane pola |
+| 400 | `too_many_parts` | treść przekracza limit części; `message` podaje, ile miejsc należy usunąć | skrócić treść albo uzgodnić wyższy limit klucza |
+| 400 | `invalid_orig`, `service_required`, `valid_to_in_past`, `valid_to_too_far` | jak w rozdziale 3.2 | jak w rozdziale 3.2 |
+| 403 | `orig_not_allowed` | nadpis spoza uprawnień klucza; `message` wymienia dozwolone | użyć jednego z wymienionych |
+| 403 | `service_not_allowed` | usługa grupy spoza uprawnień klucza | poprosić administratora o poprawienie usługi grupy albo uprawnień klucza |
+| 404 | `group_not_found` | brak grupy o tym identyfikatorze albo grupa innego klucza | sprawdzić identyfikator na liście grup |
+| 409 | `group_disabled` | grupa wyłączona w panelu | poprosić administratora o włączenie grupy |
+| 409 | `group_empty` | grupa bez odbiorców | poprosić administratora o uzupełnienie listy |
+| 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią albo przy innym składzie grupy | użyć nowego klucza idempotencji |
+| 429 | `rate_limited` | przekroczony limit żądań klucza na minutę | odczekać minutę; nie ponawiać w pętli |
+
 ## 6. Powiadomienia webhook
 
 Webhook to mechanizm powiadomień zwrotnych. Aplikacja udostępnia adres HTTP, a bramka wysyła na
@@ -1858,9 +2118,10 @@ użytkownikowi końcowemu.
 | 401 | `missing_api_key`, `invalid_api_key`, `revoked_api_key`, `expired_api_key` | brak, nieprawidłowy, odwołany albo wygasły klucz | rozdział 2 |
 | 403 | `service_not_allowed` | usługa spoza uprawnień klucza | użyć usługi przypisanej do klucza |
 | 403 | `orig_not_allowed` | nadpis spoza uprawnień klucza; `message` wymienia dozwolone | użyć jednego z wymienionych |
-| 404 | `message_not_found`, `package_not_found`, `inbound_not_found` | brak obiektu albo obiekt innego klucza | sprawdzić identyfikator |
+| 404 | `message_not_found`, `package_not_found`, `inbound_not_found`, `group_not_found` | brak obiektu albo obiekt innego klucza | sprawdzić identyfikator |
 | 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią wiadomości albo numerem | użyć nowego klucza idempotencji |
 | 409 | `already_final`, `already_passed` | anulowanie niemożliwe (4.3) | brak |
+| 409 | `group_disabled`, `group_empty` | grupa wyłączona w panelu albo bez odbiorców (5b.2) | poprosić administratora o włączenie albo uzupełnienie grupy |
 | 409 | `package_not_completed`, `report_not_ready` | raport rozsyłki jeszcze niedostępny | powtórzyć po minucie |
 | 429 | `rate_limited` | przekroczony limit żądań klucza na minutę | odczekać minutę |
 | 500 | `internal`, `account_missing` | błąd wewnętrzny bramki | zgłosić administratorowi z czasem wystąpienia i identyfikatorem obiektu |
