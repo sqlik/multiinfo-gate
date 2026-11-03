@@ -1,4 +1,5 @@
 import { GATE_VERSION } from '../version.ts';
+import { MISSING_API_KEY } from './auth.ts';
 import { messageBodySchema } from './messages.ts';
 
 /**
@@ -92,7 +93,7 @@ function blad(description: string, code: string, message: string): OpenApiRespon
 const BLAD_KLUCZA = blad(
   'Klucz API brakujący, nieznany, odwołany albo wygasły: missing_api_key, invalid_api_key, revoked_api_key, expired_api_key',
   'missing_api_key',
-  'Brak nagłówka Authorization ze schematem Bearer.',
+  MISSING_API_KEY,
 );
 
 /**
@@ -1039,7 +1040,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
           type: 'http',
           scheme: 'bearer',
           description: 'Klucz API bramki w nagłówku Authorization, w postaci Bearer mig_live_... Klucz generuje'
-            + ' administrator bramki w panelu.',
+            + ' administrator bramki w panelu. Bramka przyjmuje także sam klucz bez przedrostka Bearer.',
         },
       },
       schemas: {

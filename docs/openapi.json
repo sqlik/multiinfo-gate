@@ -295,7 +295,7 @@
                 "example": {
                   "error": {
                     "code": "missing_api_key",
-                    "message": "Brak nagłówka Authorization ze schematem Bearer."
+                    "message": "Brak klucza API w nagłówku Authorization. Podaj „Bearer <klucz>” albo sam klucz."
                   }
                 }
               }
@@ -476,7 +476,7 @@
                 "example": {
                   "error": {
                     "code": "missing_api_key",
-                    "message": "Brak nagłówka Authorization ze schematem Bearer."
+                    "message": "Brak klucza API w nagłówku Authorization. Podaj „Bearer <klucz>” albo sam klucz."
                   }
                 }
               }
@@ -529,7 +529,7 @@
                 "example": {
                   "error": {
                     "code": "missing_api_key",
-                    "message": "Brak nagłówka Authorization ze schematem Bearer."
+                    "message": "Brak klucza API w nagłówku Authorization. Podaj „Bearer <klucz>” albo sam klucz."
                   }
                 }
               }
@@ -619,7 +619,7 @@
                 "example": {
                   "error": {
                     "code": "missing_api_key",
-                    "message": "Brak nagłówka Authorization ze schematem Bearer."
+                    "message": "Brak klucza API w nagłówku Authorization. Podaj „Bearer <klucz>” albo sam klucz."
                   }
                 }
               }
@@ -886,7 +886,7 @@
                 "example": {
                   "error": {
                     "code": "missing_api_key",
-                    "message": "Brak nagłówka Authorization ze schematem Bearer."
+                    "message": "Brak klucza API w nagłówku Authorization. Podaj „Bearer <klucz>” albo sam klucz."
                   }
                 }
               }
@@ -971,7 +971,7 @@
                 "example": {
                   "error": {
                     "code": "missing_api_key",
-                    "message": "Brak nagłówka Authorization ze schematem Bearer."
+                    "message": "Brak klucza API w nagłówku Authorization. Podaj „Bearer <klucz>” albo sam klucz."
                   }
                 }
               }
@@ -1081,7 +1081,7 @@
                 "example": {
                   "error": {
                     "code": "missing_api_key",
-                    "message": "Brak nagłówka Authorization ze schematem Bearer."
+                    "message": "Brak klucza API w nagłówku Authorization. Podaj „Bearer <klucz>” albo sam klucz."
                   }
                 }
               }
@@ -1242,7 +1242,7 @@
                 "example": {
                   "error": {
                     "code": "missing_api_key",
-                    "message": "Brak nagłówka Authorization ze schematem Bearer."
+                    "message": "Brak klucza API w nagłówku Authorization. Podaj „Bearer <klucz>” albo sam klucz."
                   }
                 }
               }
@@ -1417,7 +1417,7 @@
                 "example": {
                   "error": {
                     "code": "missing_api_key",
-                    "message": "Brak nagłówka Authorization ze schematem Bearer."
+                    "message": "Brak klucza API w nagłówku Authorization. Podaj „Bearer <klucz>” albo sam klucz."
                   }
                 }
               }
@@ -1486,7 +1486,7 @@
                 "example": {
                   "error": {
                     "code": "missing_api_key",
-                    "message": "Brak nagłówka Authorization ze schematem Bearer."
+                    "message": "Brak klucza API w nagłówku Authorization. Podaj „Bearer <klucz>” albo sam klucz."
                   }
                 }
               }
@@ -1570,7 +1570,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Klucz API bramki w nagłówku Authorization, w postaci Bearer mig_live_... Klucz generuje administrator bramki w panelu."
+        "description": "Klucz API bramki w nagłówku Authorization, w postaci Bearer mig_live_... Klucz generuje administrator bramki w panelu. Bramka przyjmuje także sam klucz bez przedrostka Bearer."
       }
     },
     "schemas": {

@@ -70,11 +70,17 @@ klucza. Utracony klucz zastępuje się nowym.
 Klucz jest powiązany z jednym kontem Multiinfo. Ma listę dozwolonych usług i nadpisów, limit
 liczby części jednej wiadomości, limit żądań na minutę oraz datę ważności.
 
+Klucz przekazuje się w nagłówku `Authorization`. Zalecana postać to
+`Authorization: Bearer <TWOJ-KLUCZ>`. Bramka przyjmuje także sam klucz, bez przedrostka
+`Bearer`: `Authorization: <TWOJ-KLUCZ>`. Tej postaci używa konektor Power Automate. Wysyła on
+w nagłówku klucz wpisany przy połączeniu, bez zmian. Sam klucz bramka rozpoznaje po początku
+`mig_live_`. Białe znaki przed kluczem i po nim są pomijane.
+
 Błędy uwierzytelniania mają kod HTTP `401` i jedną z wartości `error.code`:
 
 | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|
-| `missing_api_key` | brak nagłówka `Authorization` albo nagłówek bez schematu `Bearer` | dodać nagłówek w postaci `Authorization: Bearer <TWOJ-KLUCZ>` |
+| `missing_api_key` | brak nagłówka `Authorization`, nagłówek z innym schematem niż `Bearer` albo wartość, która nie jest kluczem bramki | dodać nagłówek w postaci `Authorization: Bearer <TWOJ-KLUCZ>` |
 | `invalid_api_key` | klucz nieznany albo w nieprawidłowym formacie | sprawdzić, czy klucz został skopiowany w całości, bez spacji i cudzysłowów |
 | `revoked_api_key` | klucz odwołany w panelu | uzyskać nowy klucz od administratora |
 | `expired_api_key` | upłynęła data ważności klucza; `message` podaje ostatni ważny dzień | poprosić administratora o przedłużenie ważności w panelu |
@@ -194,6 +200,10 @@ Pola body żądania:
 | `validTo` | nie | ISO 8601, najwyżej 72 godziny od przyjęcia; wiadomość niedoręczona do tego czasu otrzymuje stan `expired` |
 | `costCenter` | nie | dowolny znacznik na potrzeby rozliczeń aplikacji; zwracany w odczycie wiadomości |
 | `inReplyTo` | nie | identyfikator wiadomości przychodzącej (`in_...`), na którą to odpowiedź (rozdział 5a.3); bramka przekazuje go Multiinfo jako `smsInId`; dopuszczalny tylko przy jednym odbiorcy, którym jest nadawca tej wiadomości i w tej samej usłudze, z której przyszła |
+
+Pole opcjonalne z pustym napisem `""` albo z wartością `null` bramka traktuje jak pominięte.
+Tak samo traktuje pola rozsyłki i pola odbiorców rozsyłki (rozdział 5.1). Pole wymagane
+z pustą wartością pozostaje błędem `400 invalid_body`.
 
 **Odpowiedź `202 Accepted`** (dla tablicy `to` - tablica takich obiektów, w kolejności numerów):
 

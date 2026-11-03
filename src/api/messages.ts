@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { MessageRow } from '../store/messages.ts';
 import { authenticate } from './auth.ts';
+import { dropEmptyFields } from './empty-fields.ts';
 import { ApiError } from './errors.ts';
 import type { ApiDeps } from './server.ts';
 import { submitMessages } from './submit.ts';
@@ -35,7 +36,7 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
       throw new ApiError(429, 'rate_limited', `Przekroczono limit ${auth.ratePerMin} żądań na minutę.`);
     }
 
-    const parsed = messageBodySchema.safeParse(request.body);
+    const parsed = messageBodySchema.safeParse(dropEmptyFields(request.body));
     if (!parsed.success) {
       throw new ApiError(
         400,

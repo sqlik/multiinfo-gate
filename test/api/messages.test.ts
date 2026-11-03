@@ -174,6 +174,31 @@ describe('POST /v1/messages', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it('przyjmuje sam klucz w nagłówku Authorization, bez przedrostka Bearer', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/v1/messages', headers: { authorization: apiKey }, payload: { to: '48601135134', text: 'x' },
+    });
+    expect(res.statusCode).toBe(202);
+  });
+
+  it('puste pola opcjonalne traktuje jak pominięte', async () => {
+    const res = await post({
+      to: '48601135134', text: 'x', orig: '', serviceId: '', validTo: '', costCenter: '', encoding: null, maxParts: null,
+    });
+    expect(res.statusCode).toBe(202);
+    const row = messages.get(res.json().id)!;
+    expect(row.orig).toBe('Firma Info');
+    expect(row.serviceId).toBe('24138');
+    expect(row.costCenter).toBeNull();
+    expect(row.validTo).toBeNull();
+  });
+
+  it('pusta treść nadal jest błędem, bo treść jest wymagana', async () => {
+    const res = await post({ to: '48601135134', text: '' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('invalid_body');
+  });
+
   it('przyjmuje tablicę numerów i zwraca tablicę wyników', async () => {
     const res = await post({ to: ['48601135134', '48601135135'], text: 'x' });
     expect(res.statusCode).toBe(202);

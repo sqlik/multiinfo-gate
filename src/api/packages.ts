@@ -6,6 +6,7 @@ import { measureText } from '../text/measure.ts';
 import { InvalidPhoneError, normalizePhone } from '../text/phone.ts';
 import { TooManyPartsError, segmentText } from '../text/segment.ts';
 import { authenticate } from './auth.ts';
+import { dropEmptyFields } from './empty-fields.ts';
 import { ApiError } from './errors.ts';
 import { resolveOrig } from './orig.ts';
 import type { ApiDeps } from './server.ts';
@@ -19,7 +20,8 @@ const recipientSchema = z.object({
   clientId: z.string().optional(),
 });
 
-const bodySchema = z.object({
+/** Schemat ciała rozsyłki; poza trasą używa go plik konektora Power Automate. */
+export const packageBodySchema = z.object({
   serviceId: z.union([z.string(), z.number()]).optional(),
   defaultText: z.string().min(1).optional(),
   recipients: z.array(recipientSchema).min(1).max(MAX_RECIPIENTS),
@@ -72,7 +74,7 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
       throw new ApiError(429, 'rate_limited', `Przekroczono limit ${auth.ratePerMin} żądań na minutę.`);
     }
 
-    const parsed = bodySchema.safeParse(request.body);
+    const parsed = packageBodySchema.safeParse(dropEmptyFields(request.body, ['recipients']));
     if (!parsed.success) {
       throw new ApiError(400, 'invalid_body',
         parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));

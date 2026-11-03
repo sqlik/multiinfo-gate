@@ -120,6 +120,14 @@ describe('POST /v1/packages', () => {
     expect(pkg.deliveryReport).toBe(0);
   });
 
+  it('puste pola odbiorcy traktuje jak pominięte: treść wspólna, bez identyfikatora', async () => {
+    const res = await post({ defaultText: 'Tresc domyslna', orig: '', startAt: null, recipients: [{ to: '48601135134', text: '', clientId: '' }] });
+    expect(res.statusCode).toBe(202);
+    const pkg = packages.get(res.json().id)!;
+    expect(pkg.orig).toBe('Firma Info');
+    expect(packages.recipients(pkg.id)[0]).toMatchObject({ text: null, clientId: null });
+  });
+
   it('odrzuca odbiorcę bez treści, gdy brak treści domyślnej', async () => {
     const res = await post({ recipients: [{ to: '48601135134' }] });
     expect(res.statusCode).toBe(400);
