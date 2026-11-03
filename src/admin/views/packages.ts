@@ -111,13 +111,24 @@ function recipientRow(r: RecipientRow): string {
     </tr>`;
 }
 
+/** Zdanie w miejscu podsumowania, zanim wczytano raport. Raport powstaje tylko dla zakończonej rozsyłki. */
+function summaryPending(p: PackageRow): string {
+  if (p.status === 'cancelled' || p.status === 'failed') {
+    return 'Raport powstaje tylko dla zakończonej rozsyłki, więc podsumowania nie będzie.';
+  }
+  const lead = 'Podsumowanie pojawi się po wczytaniu raportu';
+  if (p.reportStatus !== 'none') return `${lead} (stan: ${reportStatusLabel(p.reportStatus)}).`;
+  return p.status === 'completed'
+    ? `${lead}. Raport nie został jeszcze zamówiony.`
+    : `${lead}. Bramka zamówi raport po zakończeniu rozsyłki.`;
+}
+
 export function packagePage(d: PackageDetail): string {
   const p = d.row;
   const yes = (v: 0 | 1) => (v === 1 ? 'tak' : 'nie');
 
   const summary = d.summary === null
-    ? `<div class="dim" style="padding: 14px 16px; font-size: 12.5px;">Podsumowanie pojawi się po wczytaniu raportu
-        (stan: ${esc(reportStatusLabel(p.reportStatus))}).</div>`
+    ? `<div class="dim" style="padding: 14px 16px; font-size: 12.5px;">${esc(summaryPending(p))}</div>`
     : `<div class="tiles" style="margin: 0; padding: 12px 16px;">
         <div class="tile"><div class="lab">Doręczone</div><div class="n ok">${esc(d.summary.delivered)}</div></div>
         <div class="tile"><div class="lab">Nieudane</div><div class="n fail">${esc(d.summary.failed)}</div></div>

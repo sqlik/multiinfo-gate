@@ -112,6 +112,40 @@ describe('GET /rozsylki/:id', () => {
     expect(res.body).toContain('nieutworzony');
   });
 
+  it('przed zamówieniem raportu mówi, kiedy raport powstanie, bez „(stan: -)”', async () => {
+    seed('pkg_q');
+    const queued = (await page('/rozsylki/pkg_q')).body;
+    expect(queued).toContain('Podsumowanie pojawi się po wczytaniu raportu. Bramka zamówi raport po zakończeniu rozsyłki.');
+    expect(queued).not.toContain('(stan: -)');
+
+    seed('pkg_c');
+    h.packages.setCreated('pkg_c', '14');
+    h.packages.setCompleted('pkg_c', NOW);
+    const completed = (await page('/rozsylki/pkg_c')).body;
+    expect(completed).toContain('Podsumowanie pojawi się po wczytaniu raportu. Raport nie został jeszcze zamówiony.');
+    expect(completed).not.toContain('(stan: -)');
+  });
+
+  it('rozsyłka anulowana albo z błędem nie zapowiada podsumowania', async () => {
+    seed('pkg_f');
+    h.packages.setFailed('pkg_f', 13, 'Nieprawidłowa usługa', NOW);
+    seed('pkg_x');
+    h.packages.setCancelled('pkg_x', NOW);
+    for (const id of ['pkg_f', 'pkg_x']) {
+      const body = (await page(`/rozsylki/${id}`)).body;
+      expect(body, id).toContain('Raport powstaje tylko dla zakończonej rozsyłki, więc podsumowania nie będzie.');
+      expect(body, id).not.toContain('Podsumowanie pojawi się');
+    }
+  });
+
+  it('raport w przygotowaniu podaje stan raportu', async () => {
+    seed('pkg_p');
+    h.packages.setCreated('pkg_p', '14');
+    h.packages.setCompleted('pkg_p', NOW);
+    h.packages.setReport('pkg_p', { status: 'pending' });
+    expect((await page('/rozsylki/pkg_p')).body).toContain('Podsumowanie pojawi się po wczytaniu raportu (stan: w przygotowaniu).');
+  });
+
   it('pokazuje błąd z kodem operatora', async () => {
     seed();
     h.packages.setFailed('pkg_1', -63, 'Zbyt wielu odbiorców', NOW);
