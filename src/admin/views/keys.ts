@@ -3,6 +3,7 @@ import type { ApiKeyRow } from '../../store/api-keys.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
 import { lastValidDay, warsawStamp } from '../../time/warsaw.ts';
 import { esc } from './layout.ts';
+import { powerAutomatePanel } from './power-automate.ts';
 import { apiAddressPanel, fullUrl } from './settings.ts';
 
 export interface KeyView {
@@ -45,6 +46,10 @@ export function valuesOf(row: ApiKeyRow): KeyFormValues {
     inboundSubscribed: row.inboundSubscribed === 1,
   };
 }
+
+const POWER_AUTOMATE_KEY =
+  'Ten sam klucz wkleja się w oknie połączenia konektora Power Automate. Plik konektora pobiera się w panelu ' +
+  '„Konektor Power Automate” niżej.';
 
 const OSTRZEZENIE =
   'Klucz jest wyświetlany wyłącznie teraz. W bazie pozostaje jedynie jego skrót, więc nie można go odczytać ' +
@@ -166,7 +171,8 @@ export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne
         <button class="btn btn-s" type="button" data-copy="#new-key">Kopiuj</button>
       </div>
       <div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">${esc(OSTRZEZENIE)}</div>
-      ${keyExample(apiUrl, created.key)}`}
+      ${keyExample(apiUrl, created.key)}
+      <div style="padding: 0 16px 16px; font-size: 12.5px; line-height: 1.5;">${esc(POWER_AUTOMATE_KEY)}</div>`}
       ${created.webhookSecret === null ? '' : `<div class="keyline">
         <div class="lab" style="width: 140px;">Sekret webhooka</div>
         <div class="keybox">${esc(created.webhookSecret)}</div>
@@ -185,6 +191,7 @@ export function keysPage(all: KeyView[], now: Date, filter: KeysFilter = 'czynne
     ${notice === null ? '' : `<div class="warn">${esc(notice)}</div>`}
     ${reveal}
     ${apiAddressPanel(apiUrl, filter === 'czynne' ? '/klucze' : '/klucze?status=odwolane')}
+    ${powerAutomatePanel(apiUrl)}
     <div class="bar" style="margin-bottom: 12px;">${tabs}</div>
     <div class="panel">
       <div class="panel-h">
