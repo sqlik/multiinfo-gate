@@ -15,7 +15,10 @@ describe('TemplateEngine.render', () => {
   it('filtry bramki', () => {
     expect(engine.render('{{ "Zażółć gęślą" | gsm }}', {})).toBe('Zazolc gesla');
     expect(engine.render('{{ p.contact.phone | phone }}', { p })).toBe('48601000001');
-    expect(engine.render('{{ "abcdefghij" | sms_truncate: 6 }}', {})).toBe('abcde…');
+    expect(engine.render('{{ "abcdefghij" | sms_truncate: 6 }}', {})).toBe('abc...');
+    expect(engine.render('{{ "abcdefżźć" | sms_truncate: 6 }}', {})).toBe('abc...');
+    expect(engine.render('{{ "zażółć gęślą" | sms_truncate: 6 }}', {})).toBe('zażół…');
+    expect(engine.render('{{ "abcdefghij" | sms_truncate: 2 }}', {})).toBe('a…');
     expect(engine.render('{{ p.at | date_pl }}', { p })).toBe('02.09.2026 12:00');
   });
   it('html_text robi z HTML-u helpdesku tekst ze spacjami między blokami', () => {

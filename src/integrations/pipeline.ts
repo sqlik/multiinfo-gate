@@ -120,16 +120,21 @@ export function fitToParts(text: string, maxParts: number, encoding: EncodingReq
   };
   const whole = fits(text);
   if (whole !== null) return { text, parts: whole, over: false };
-  // Ucinamy po znakach, aż zmieści się w limicie; wielokropek liczy się jak znak.
+  // Ucinamy po znakach, aż zmieści się w limicie. Treść w GSM-7 kończą trzy kropki,
+  // bo znak wielokropka spoza alfabetu GSM przełączyłby ją na UCS-2.
   const chars = [...text];
+  const cutAt = (n: number): string => {
+    const head = chars.slice(0, n).join('');
+    return measureText(head, encoding).encoding === 'gsm' ? `${head}...` : `${head}…`;
+  };
   let lo = 0;
   let hi = chars.length;
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
-    if (fits(`${chars.slice(0, mid).join('')}…`) !== null) lo = mid;
+    if (fits(cutAt(mid)) !== null) lo = mid;
     else hi = mid - 1;
   }
-  const cut = `${chars.slice(0, lo).join('')}…`;
+  const cut = cutAt(lo);
   return { text: cut, parts: fits(cut) ?? maxParts, over: true };
 }
 

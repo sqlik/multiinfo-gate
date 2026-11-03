@@ -1,4 +1,5 @@
 import { Liquid, type LiquidOptions } from 'liquidjs';
+import { measureText } from '../text/measure.ts';
 import { normalizePhone } from '../text/phone.ts';
 import { warsawStamp } from '../time/warsaw.ts';
 
@@ -84,7 +85,12 @@ export class TemplateEngine {
       const text = String(v ?? '');
       const limit = Math.max(1, Number(n) || 160);
       const chars = [...text];
-      return chars.length <= limit ? text : `${chars.slice(0, limit - 1).join('')}…`;
+      if (chars.length <= limit) return text;
+      // Trzy kropki zachowują GSM-7; przy polskich znakach w ucinanej części zostaje wielokropek.
+      const head = chars.slice(0, limit - 3).join('');
+      return limit > 3 && measureText(head, 'auto').encoding === 'gsm'
+        ? `${head}...`
+        : `${chars.slice(0, limit - 1).join('')}…`;
     });
     this.liquid.registerFilter('html_text', (v: unknown) => htmlText(String(v ?? '')));
     this.liquid.registerFilter('date_pl', (v: unknown) => {

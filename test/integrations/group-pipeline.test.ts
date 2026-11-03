@@ -97,7 +97,7 @@ describe('runSmsGroup', () => {
     expect(events(r.id)[0]).toEqual(['error', 'Treść wymaga więcej niż 1 części.']);
     const cut = runSmsGroup(deps, lists({ name: 'Druga' }), event({ text: `dzieci ${long}` }), NOW);
     expect(cut).toMatchObject({ kind: 'sent', parts: 1 });
-    expect((cut as { text: string }).text.endsWith('…')).toBe(true);
+    expect((cut as { text: string }).text.endsWith('...')).toBe(true);
   });
   it('grupa zamknięta: do pozostałych członków, nazwa nadawcy w treści w trybie sender_body; jedyny członek to brak odbiorców', () => {
     const closed = make({ mode: 'closed', members: [{ phone: '48601000001', name: 'Ania' }, { phone: '48601000002', name: '' }], prefix: '', text: { mode: 'sender_body' } });

@@ -281,7 +281,7 @@ describe('limit części integracji', () => {
     expect(res.statusCode).toBe(202);
     const pkg = packages.get(res.json().id)!;
     const cut = fitToParts(long, 1).text;
-    expect(cut.endsWith('…')).toBe(true);
+    expect(cut.endsWith('...')).toBe(true);
     expect(pkg.multipart).toBe(0);
     expect(pkg.defaultText).toBe(cut);
     expect(packages.recipients(pkg.id).map((r) => r.text)).toEqual([null, cut, 'krótko']);

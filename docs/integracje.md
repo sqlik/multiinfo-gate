@@ -318,6 +318,9 @@ i zachowanie przy nadmiarze: „skróć z wielokropkiem” albo „odrzuć zdarz
 ten sam kod, który dzieli wiadomości w API. Polskie znaki skracają więc część do 70 znaków.
 Filtr `gsm` zamienia je na łacińskie i przywraca 160.
 
+Skrócona treść bez polskich znaków kończy się trzema kropkami. Znak „…” nie należy do alfabetu
+GSM, więc skróciłby część do 70 znaków. Skrócona treść z polskimi znakami kończy się znakiem „…”.
+
 ### 3.6. Warunek
 
 Sekcja „Warunek” decyduje, czy zdarzenie jest przetwarzane dalej. Ma dwa tryby. W trybie reguł wpisuje
@@ -1102,7 +1105,7 @@ i inne z dokumentacji LiquidJS) bramka dodaje pięć własnych:
 
 | Filtr | Działanie | Przykład |
 |---|---|---|
-| `sms_truncate: N` | utnij do N znaków z wielokropkiem | `{{ p.heartbeat.msg \| sms_truncate: 100 }}` |
+| `sms_truncate: N` | utnij do N znaków razem z zakończeniem: trzy kropki, a przy polskich znakach znak „…” | `{{ p.heartbeat.msg \| sms_truncate: 100 }}` |
 | `gsm` | zamień polskie znaki na łacińskie, żeby część SMS-a mieściła 160 zamiast 70 znaków | `{{ p.text \| gsm }}` |
 | `phone` | znormalizuj numer jak w rozdziale 3.3 | `{{ p.contact.phone \| phone }}` |
 | `date_pl` | czas w strefie polskiej jako `DD.MM.RRRR GG:MM` | `{{ receivedAt \| date_pl }}` |

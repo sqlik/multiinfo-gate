@@ -2163,8 +2163,9 @@ dostaje wpis „wysłano” z powodem „Wyślij SMS do grupy, 2 odbiorców”.
 Limit części ustawia administrator w integracji, w sekcji „Treść”. Ustawienie nadmiaru decyduje,
 co się dzieje z dłuższą treścią:
 
-- „skróć i wyślij”: bramka skraca treść do limitu i wysyła ją. Powód wpisu w dzienniku kończy
-  się dopiskiem „skrócono do <limit> części”.
+- „skróć i wyślij”: bramka skraca treść do limitu i wysyła ją. Skrócona treść bez polskich
+  znaków kończy się trzema kropkami, a z polskimi znakami znakiem „…”. Powód wpisu w dzienniku
+  kończy się dopiskiem „skrócono do <limit> części”.
 - „nie wysyłaj, zapisz błąd i powiadom”: bramka odrzuca wywołanie kodem `400 too_many_parts`.
   Komunikat podaje liczbę części treści i limit integracji. Dziennik dostaje wpis „błąd”,
   a administrator powiadomienie.
