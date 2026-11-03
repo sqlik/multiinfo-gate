@@ -1,65 +1,12 @@
-import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildOpenApiDocument } from '../../src/api/openapi.ts';
-import { RateLimiter } from '../../src/api/rate-limit.ts';
-import { buildApiServer } from '../../src/api/server.ts';
-import { AccountsRepo } from '../../src/store/accounts.ts';
-import { ApiKeysRepo } from '../../src/store/api-keys.ts';
-import { openDatabase } from '../../src/store/db.ts';
-import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
-import { JobsRepo } from '../../src/store/jobs.ts';
-import { MessageEventsRepo } from '../../src/store/message-events.ts';
-import { MessagesRepo } from '../../src/store/messages.ts';
-import { PackagesRepo } from '../../src/store/packages.ts';
-import { integrationDeps } from '../helpers/api-deps.ts';
-
-/**
- * Trasy prawdziwego serwera, w postaci `METODA /adres`. Fastify rysuje je drzewem ze wspólnymi
- * przedrostkami, więc pełny adres powstaje ze sklejenia gałęzi od korzenia do liścia.
- */
-function trasySerwera(drzewo: string): string[] {
-  const sciezki: string[] = [];
-  const przodkowie: string[] = [];
-  for (const linia of drzewo.split('\n')) {
-    const marker = linia.search(/[├└]── /);
-    if (marker === -1) continue;
-    const poziom = Math.floor(marker / 4);
-    const tresc = linia.slice(marker + 4);
-    const [, segment = '', metody] = /^(.*?)(?: \(([^()]*)\))?$/.exec(tresc) ?? [];
-    przodkowie.length = poziom;
-    przodkowie.push(segment);
-    if (!metody) continue;
-    // Fastify dokłada HEAD do każdego GET-a; opis API mówi o metodach, które wywołuje aplikacja.
-    const adres = przodkowie.join('').replace(/:([A-Za-z]+)/g, '{$1}');
-    for (const metoda of metody.split(', ')) {
-      if (metoda !== 'HEAD') sciezki.push(`${metoda.toLowerCase()} ${adres}`);
-    }
-  }
-  return sciezki;
-}
+import { apiServerRoutes } from '../helpers/routes.ts';
 
 let trasy: string[];
 
 beforeAll(async () => {
-  const masterKey = randomBytes(32);
-  const db = openDatabase(':memory:');
-  const app = buildApiServer({
-    accounts: new AccountsRepo(db, masterKey),
-    apiKeys: new ApiKeysRepo(db, masterKey),
-    messages: new MessagesRepo(db),
-    events: new MessageEventsRepo(db),
-    jobs: new JobsRepo(db),
-    packages: new PackagesRepo(db),
-    inbound: new InboundMessagesRepo(db),
-    clients: {} as never,
-    rateLimiter: new RateLimiter(),
-    healthMode: 'public',
-    ...integrationDeps(db, masterKey),
-  });
-  await app.ready();
-  trasy = trasySerwera(app.printRoutes({ commonPrefix: false }));
-  await app.close();
+  trasy = await apiServerRoutes();
 });
 
 describe('opis API', () => {
