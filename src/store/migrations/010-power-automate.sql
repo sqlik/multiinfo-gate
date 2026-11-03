@@ -8,6 +8,12 @@ ALTER TABLE messages ADD COLUMN requested_by TEXT;
 ALTER TABLE packages ADD COLUMN integration_id INTEGER REFERENCES integrations(id) ON DELETE SET NULL;
 ALTER TABLE packages ADD COLUMN requested_by TEXT;
 
+-- Klucz idempotencji rozsyłki: ponowienie po zerwanym połączeniu zwraca pierwotną rozsyłkę zamiast
+-- tworzyć drugą. Skrót żądania odróżnia powtórzenie od innej rozsyłki z tym samym kluczem.
+ALTER TABLE packages ADD COLUMN idempotency_key TEXT;
+ALTER TABLE packages ADD COLUMN request_hash TEXT;
+CREATE UNIQUE INDEX packages_idempotency ON packages(api_key_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+
 -- Wpis dziennika integracji wskazuje rozsyłkę, tak jak dziś wskazuje wiadomość.
 ALTER TABLE integration_events ADD COLUMN package_id TEXT;
 

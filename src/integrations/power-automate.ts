@@ -37,6 +37,21 @@ const neededParts = (text: string, encoding: EncodingRequest): number =>
   segmentText(text, measureText(text, encoding), Number.MAX_SAFE_INTEGER).parts;
 
 /**
+ * Czy każda wysyłka tego wywołania istnieje już pod tym kluczem idempotencji. Grupa zapisuje klucz
+ * z numerem pozycji (`klucz#0`, `klucz#1`), gdy ma więcej niż jednego odbiorcę. Lista, która od tamtej
+ * pory urosła, zawiera nowe numery, więc takie wywołanie nie jest powtórzeniem.
+ */
+function seenBefore(
+  deps: Pick<PipelineDeps, 'messages'> & Pick<ApiDeps, 'packages'>, apiKeyId: number, call: PaCall, config: PowerAutomateConfig, key: string,
+): boolean {
+  if (call.action === 'package') return deps.packages.findByIdempotencyKey(apiKeyId, key) !== undefined;
+  const n = call.action === 'sms' ? 1 : config.recipients.length;
+  if (n === 0) return false;
+  const keys = n === 1 ? [key] : Array.from({ length: n }, (_, i) => `${key}#${i}`);
+  return keys.every((k) => deps.messages.findByIdempotencyKey(apiKeyId, k) !== undefined);
+}
+
+/**
  * Potok integracji Power Automate: klucz i konto, ochrona przed burzą, limit części każdej treści,
  * wysyłka usługą i nadpisem integracji, wpis w dzienniku. Każde wyjście zapisuje wpis; wołający
  * zamienia wynik na odpowiedź HTTP i ewentualne powiadomienie administratora.
@@ -58,10 +73,14 @@ export function runPowerAutomate(
     return { kind: 'unavailable', detail: resolved.detail };
   }
 
+  // Powtórzenie z tym samym kluczem idempotencji niczego nie wysyła, więc nie liczy się do burzy:
+  // przepływ, który ponawia akcję, otrzymuje pierwotną odpowiedź zamiast 429.
+  const repeated = meta.idempotencyKey !== undefined && seenBefore(deps, resolved.key.id, call, config, meta.idempotencyKey);
+
   // Burza liczy wywołania i odbiorców: zapętlony przepływ zatrzymuje się, zanim cokolwiek trafi do kolejki.
   const { limit, windowMinutes, recipients: recipientLimit } = config.throttle;
   const count = call.action === 'sms' ? 1 : call.action === 'package' ? call.body.recipients.length : config.recipients.length;
-  const gate = deps.guards.throttle(integration.id, limit, windowMinutes, now, { count, limit: recipientLimit });
+  const gate = repeated ? { allowed: true as const } : deps.guards.throttle(integration.id, limit, windowMinutes, now, { count, limit: recipientLimit });
   if (!gate.allowed) {
     const by = gate.by ?? 'calls';
     note('throttled', { reason: by === 'calls' ? `ponad ${limit} w ${windowMinutes} min` : `ponad ${recipientLimit} odbiorców w ${windowMinutes} min` });
@@ -92,6 +111,11 @@ export function runPowerAutomate(
     return fitted.text;
   };
   const withCut = (reason: string): string => (cut ? `${reason}; skrócono do ${config.maxParts} części` : reason);
+  /** Wpis po przyjęciu: „wysłano” albo „duplikat”, gdy wywołanie powtórzyło klucz idempotencji. */
+  const accepted = (reason: string, extra: Partial<IntegrationEventInput>): void => {
+    if (repeated) note('duplicate', { reason: `${reason}, powtórzony klucz idempotencji`, ...extra });
+    else note('sent', { reason: withCut(reason), ...extra });
+  };
 
   try {
     if (call.action === 'package') {
@@ -103,12 +127,13 @@ export function runPowerAutomate(
         ...(r.text !== undefined ? { text: fit(r.text, `recipients.${i}: `, encoding) } : {}),
         ...(r.clientId !== undefined ? { clientId: r.clientId } : {}),
       }));
-      const accepted = submitPackage(deps, auth, {
+      const pkg = submitPackage(deps, auth, {
         recipients, defaultText, startAt: b.startAt, deliveryReport: b.deliveryReport, encoding: b.encoding,
         costCenter: b.costCenter, maxParts: config.maxParts, ...via,
+        ...(meta.idempotencyKey !== undefined ? { idempotencyKey: meta.idempotencyKey } : {}),
       }, now);
-      note('sent', { reason: withCut(`${label}, ${recipientsWord(accepted.recipients)}`), packageId: accepted.id });
-      return { kind: 'sent', package: accepted };
+      accepted(repeated ? label : `${label}, ${recipientsWord(pkg.recipients)}`, { packageId: pkg.id });
+      return { kind: 'sent', package: pkg };
     }
 
     const b = call.body;
@@ -126,8 +151,8 @@ export function runPowerAutomate(
     }, now);
     // Numery przeszły już sprawdzenie w `submitMessages`, więc normalizacja tutaj zawsze się udaje.
     const messages = results.map((r, i) => ({ ...r, to: normalizePhone(to[i]!, resolved.account.defaultCountryCode) }));
-    const reason = call.action === 'sms' ? label : `${label}, ${recipientsWord(results.length)}`;
-    note('sent', { reason: withCut(reason), ...(results[0] ? { messageId: results[0].id } : {}) });
+    const reason = call.action === 'sms' || repeated ? label : `${label}, ${recipientsWord(results.length)}`;
+    accepted(reason, results[0] ? { messageId: results[0].id } : {});
     return { kind: 'sent', messages };
   } catch (e) {
     if (e instanceof ApiError) {

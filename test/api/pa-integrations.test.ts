@@ -179,6 +179,28 @@ describe('POST /v1/integrations/{id}/messages', () => {
     expect(allMessages()).toHaveLength(1);
   });
 
+  it('powtórzony Idempotency-Key nie liczy się do burzy: pierwotna odpowiedź i wpis „duplikat”', async () => {
+    integrations.update(biuro, { ...rowPatch(biuro), config: { ...defaultPowerAutomateConfig(), throttle: { limit: 1, windowMinutes: 10, recipients: 5000 } } }, NOW);
+    const headers = { ...auth(), 'idempotency-key': 'zl-2' };
+    const first = await post(`/v1/integrations/int_${biuro}/messages`, { to: '48601000001', text: 'Oferta gotowa' }, headers);
+    const second = await post(`/v1/integrations/int_${biuro}/messages`, { to: '48601000001', text: 'Oferta gotowa' }, headers);
+    expect(second.statusCode).toBe(202);
+    expect(second.json().id).toBe(first.json().id);
+    expect(log(biuro).map((e) => e.result)).toEqual(['duplicate', 'sent']);
+    expect(log(biuro)[0]!.reason).toBe('Wyślij SMS, powtórzony klucz idempotencji');
+  });
+
+  it('klucz idempotencji użyty w innej integracji albo w zwykłym wywołaniu API: 409 idempotency_conflict, bez wysyłki', async () => {
+    const headers = { ...auth(), 'idempotency-key': 'zl-3' };
+    expect((await post(`/v1/integrations/int_${ekipa}/messages`, { to: '48601000001', text: 'x' }, headers)).statusCode).toBe(202);
+    const other = await post(`/v1/integrations/int_${biuro}/messages`, { to: '48601000001', text: 'x' }, headers);
+    expect(other.statusCode).toBe(409);
+    expect(other.json().error.code).toBe('idempotency_conflict');
+    const plain = await post('/v1/messages', { to: '48601000001', text: 'x' }, headers);
+    expect(plain.statusCode).toBe(409);
+    expect(allMessages()).toHaveLength(1);
+  });
+
   it('nieprawidłowy numer: 400 invalid_phone, wpis „błąd”, powiadomienie bez numeru', async () => {
     const res = await post(`/v1/integrations/int_${ekipa}/messages`, { to: 'abc123', text: 'x' });
     expect(res.statusCode).toBe(400);
@@ -239,6 +261,18 @@ describe('POST /v1/integrations/{id}/packages', () => {
     const res = await app.inject({ method: 'POST', url: `/v1/integrations/int_${ekipa}/packages`, headers: { ...auth(), 'content-type': 'application/json' }, payload });
     expect(res.statusCode).toBe(202);
     expect(res.json().recipients).toBe(5000);
+  });
+
+  it('powtórzony Idempotency-Key rozsyłki zwraca pierwotną rozsyłkę, bez drugiej rozsyłki i bez zużycia limitu', async () => {
+    integrations.update(biuro, { ...rowPatch(biuro), config: { ...defaultPowerAutomateConfig(), throttle: { limit: 1, windowMinutes: 10, recipients: 5000 } } }, NOW);
+    const headers = { ...auth(), 'idempotency-key': 'grafik-2026-11-04' };
+    const body = { recipients: [{ to: '48601000001' }, { to: '48601000002' }], defaultText: 'Przegląd floty jutro o 8:00' };
+    const first = await post(`/v1/integrations/int_${biuro}/packages`, body, headers);
+    const second = await post(`/v1/integrations/int_${biuro}/packages`, body, headers);
+    expect(second.statusCode).toBe(202);
+    expect(second.json()).toEqual(first.json());
+    expect(allPackages()).toHaveLength(1);
+    expect(log(biuro).map((e) => e.result)).toEqual(['duplicate', 'sent']);
   });
 
   it('pusta treść odbiorcy znaczy treść wspólną', async () => {

@@ -83,7 +83,11 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
         parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
     }
     const { serviceId, ...input } = parsed.data;
-    const accepted = submitPackage(deps, auth, { ...input, serviceId: serviceId === undefined ? undefined : String(serviceId) }, now());
+    const idempotencyKey = request.headers['idempotency-key'];
+    const accepted = submitPackage(deps, auth, {
+      ...input, serviceId: serviceId === undefined ? undefined : String(serviceId),
+      ...(typeof idempotencyKey === 'string' ? { idempotencyKey } : {}),
+    }, now());
 
     reply.code(202);
     return accepted;

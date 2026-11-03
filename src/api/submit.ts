@@ -136,6 +136,10 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
     if (existing && (existing.bodyHash !== hash || existing.dest !== dest)) {
       throw new ApiError(409, 'idempotency_conflict', 'Ten klucz idempotencji został już użyty z inną treścią lub innym odbiorcą.');
     }
+    // Klucz jest wspólny dla klucza API: integracja nie może zwrócić wiadomości innej integracji ani zwykłego wywołania.
+    if (existing && existing.integrationId !== (input.integrationId ?? null)) {
+      throw new ApiError(409, 'idempotency_conflict', 'Ten klucz idempotencji został już użyty przez inną integrację albo w zwykłym wywołaniu API.');
+    }
     return { dest, perRecipientIdem, existing };
   });
 

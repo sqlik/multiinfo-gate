@@ -85,6 +85,29 @@ describe('submitPackage', () => {
     expect(out).toMatchObject({ encoding: 'ucs2', multipart: false });
   });
 
+  it('powtórzony klucz idempotencji z tą samą rozsyłką zwraca pierwotną rozsyłkę bez drugiego zapisu', () => {
+    const input = { ...base, recipients: [{ to: '601000001' }], defaultText: 'Przegląd floty jutro o 8:00', idempotencyKey: 'grafik-2026-11-04' };
+    const first = submitPackage(deps, auth, input, NOW);
+    const second = submitPackage(deps, auth, { ...input, recipients: [{ to: '48601000001' }] }, NOW);
+    expect(second).toEqual(first);
+    expect(deps.packages.list({ limit: 10, offset: 0 })).toHaveLength(1);
+    expect(deps.jobs.depth()).toBe(1);
+  });
+
+  it('klucz idempotencji użyty z inną rozsyłką albo przez inną integrację: 409 idempotency_conflict', () => {
+    const input = { ...base, recipients: [{ to: '48601000001' }], defaultText: 'x', idempotencyKey: 'grafik-2026-11-04' };
+    submitPackage(deps, auth, input, NOW);
+    expect(() => submitPackage(deps, auth, { ...input, defaultText: 'y' }, NOW)).toThrow(expect.objectContaining({ code: 'idempotency_conflict' }));
+    expect(() => submitPackage(deps, auth, { ...input, integrationId }, NOW)).toThrow(expect.objectContaining({ code: 'idempotency_conflict' }));
+    expect(deps.packages.list({ limit: 10, offset: 0 })).toHaveLength(1);
+  });
+
+  it('błąd dodania zadania cofa zapis rozsyłki', () => {
+    const failing = { ...deps, jobs: { enqueue: () => { throw new Error('dysk pełny'); } } as unknown as typeof deps.jobs };
+    expect(() => submitPackage(failing, auth, { ...base, recipients: [{ to: '48601000001' }], defaultText: 'x' }, NOW)).toThrow('dysk pełny');
+    expect(deps.packages.list({ limit: 10, offset: 0 })).toEqual([]);
+  });
+
   it('termin rozpoczęcia w przeszłości to start_at_in_past', () => {
     expect(() => submitPackage(deps, auth, { ...base, recipients: [{ to: '48601000001' }], defaultText: 'x', startAt: '2026-11-03T09:00:00Z' }, NOW))
       .toThrow(expect.objectContaining({ code: 'start_at_in_past' }));

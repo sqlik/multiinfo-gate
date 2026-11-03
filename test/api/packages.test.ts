@@ -349,3 +349,17 @@ describe('rozmiar i postać ciała żądania', () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+describe('POST /v1/packages - Idempotency-Key', () => {
+  it('powtórzenie z tym samym kluczem i tą samą rozsyłką zwraca pierwotną rozsyłkę', async () => {
+    const send = () => app.inject({
+      method: 'POST', url: '/v1/packages', headers: { authorization: `Bearer ${apiKey}`, 'idempotency-key': 'grafik-1' },
+      payload: { recipients: [{ to: '48601000001' }], defaultText: 'Przegląd floty jutro o 8:00' },
+    });
+    const first = await send();
+    const second = await send();
+    expect(first.statusCode).toBe(202);
+    expect(second.json()).toEqual(first.json());
+    expect(packages.list({ limit: 10, offset: 0 })).toHaveLength(1);
+  });
+});

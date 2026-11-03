@@ -1,5 +1,6 @@
+import { sha256Hex } from '../text/hash.ts';
 import { shortId } from '../ids.ts';
-import type { RecipientInput } from '../store/packages.ts';
+import type { PackageStatus, RecipientInput } from '../store/packages.ts';
 import { measureText, type EncodingRequest } from '../text/measure.ts';
 import { InvalidPhoneError, normalizePhone } from '../text/phone.ts';
 import { TooManyPartsError, segmentText } from '../text/segment.ts';
@@ -25,10 +26,12 @@ export interface PackageSubmitInput {
   integrationId?: number | undefined;
   /** Zlecający z przepływu Power Automate; brak dla pozostałych źródeł. */
   requestedBy?: string | undefined;
+  /** Nagłówek `Idempotency-Key`: powtórzenie tej samej rozsyłki zwraca pierwotną. */
+  idempotencyKey?: string | undefined;
 }
 
 export interface PackageAccepted {
-  id: string; status: 'queued'; recipients: number; encoding: 'gsm' | 'ucs2'; multipart: boolean;
+  id: string; status: PackageStatus; recipients: number; encoding: 'gsm' | 'ucs2'; multipart: boolean;
 }
 
 /**
@@ -107,15 +110,36 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
   });
 
   const encoding = forced === 'unicode' ? 'ucs2' : 'gsm';
+  const integrationId = input.integrationId ?? null;
+
+  // Skrót z wartości po sprawdzeniu: zapis numeru z kodem kraju i bez niego to ta sama rozsyłka.
+  const requestHash = sha256Hex(JSON.stringify({
+    serviceId, orig: orig ?? null, startAt: startAt?.toISOString() ?? null, deliveryReport: input.deliveryReport,
+    encoding: input.encoding, costCenter: input.costCenter ?? null, defaultText: input.defaultText ?? null, recipients,
+  }));
+  if (input.idempotencyKey !== undefined) {
+    const existing = deps.packages.findByIdempotencyKey(auth.apiKeyId, input.idempotencyKey);
+    if (existing) {
+      if (existing.requestHash !== requestHash || existing.integrationId !== integrationId) {
+        throw new ApiError(409, 'idempotency_conflict',
+          'Ten klucz idempotencji został już użyty z inną rozsyłką albo przez inną integrację.');
+      }
+      return { id: existing.id, status: existing.status, recipients: existing.recipientsCount, encoding: existing.encoding, multipart: existing.multipart === 1 };
+    }
+  }
+
   const id = shortId('pkg');
-  deps.packages.insert({
-    id, apiKeyId: auth.apiKeyId, accountId: auth.accountId, serviceId,
-    defaultText: input.defaultText ?? null, orig: orig ?? null, costCenter: input.costCenter ?? null,
-    startAt: startAt?.toISOString() ?? null, deliveryReport: input.deliveryReport ? 1 : 0,
-    encoding, multipart: multipart ? 1 : 0, createdAt: now.toISOString(),
-    integrationId: input.integrationId ?? null, requestedBy: input.requestedBy ?? null,
-  }, recipients);
-  deps.jobs.enqueue('package.create', { packageId: id }, now);
+  deps.packages.transaction(() => {
+    deps.packages.insert({
+      id, apiKeyId: auth.apiKeyId, accountId: auth.accountId, serviceId,
+      defaultText: input.defaultText ?? null, orig: orig ?? null, costCenter: input.costCenter ?? null,
+      startAt: startAt?.toISOString() ?? null, deliveryReport: input.deliveryReport ? 1 : 0,
+      encoding, multipart: multipart ? 1 : 0, createdAt: now.toISOString(),
+      integrationId, requestedBy: input.requestedBy ?? null,
+      idempotencyKey: input.idempotencyKey ?? null, requestHash: input.idempotencyKey === undefined ? null : requestHash,
+    }, recipients);
+    deps.jobs.enqueue('package.create', { packageId: id }, now);
+  });
 
   return { id, status: 'queued', recipients: recipients.length, encoding, multipart };
 }
