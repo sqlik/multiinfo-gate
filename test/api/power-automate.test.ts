@@ -4,6 +4,7 @@ import {
   CONNECTOR_OMITTED, CONNECTOR_OPERATIONS, CONNECTOR_TITLE, buildPowerAutomateConnector, connectorAddress,
   type SwaggerOperation, type SwaggerParameter, type SwaggerSchema,
 } from '../../src/api/power-automate.ts';
+import { buildOpenApiDocument, type JsonSchema } from '../../src/api/openapi.ts';
 import { GATE_VERSION } from '../../src/version.ts';
 import { apiServerRoutes } from '../helpers/routes.ts';
 
@@ -99,6 +100,31 @@ describe('buildPowerAutomateConnector', () => {
     walk(doc, '$', (obj, path) => {
       for (const key of forbidden) expect(Object.hasOwn(obj, key), `${path}.${key}`).toBe(false);
     });
+  });
+
+  it('pole, które w API bywa null, nie ma typu: Power Automate odrzuca null przy podanym typie i nie zna x-nullable', () => {
+    // Próba na żywo 2026-11-03: „Sprawdź stan wiadomości” kończyła się ResponseSwaggerSchemaValidationFailure,
+    // bo inReplyTo przyszło jako null, a schemat podawał typ string. Sama flaga x-nullable tego nie zmienia.
+    const schemas = buildOpenApiDocument().components.schemas as Record<string, JsonSchema>;
+    const constraints = ['type', 'format', 'enum', 'pattern', 'minimum', 'maximum', 'minLength'] as const;
+    const compare = (source: JsonSchema, target: SwaggerSchema, path: string): number => {
+      let nullable = 0;
+      if (source.nullable) nullable += 1;
+      expect(target['x-nullable'], path).toBe(source.nullable ? true : undefined);
+      if (source.nullable) for (const key of constraints) expect(target[key], `${path}.${key}`).toBeUndefined();
+      else if (source.type) expect(target.type, path).toBe(source.type);
+      if (source.items && target.items) nullable += compare(source.items, resolve(target.items), `${path}[]`);
+      for (const [name, prop] of Object.entries(source.properties ?? {})) {
+        if (prop.$ref || !target.properties?.[name]) continue;
+        nullable += compare(prop, target.properties[name], `${path}.${name}`);
+      }
+      return nullable;
+    };
+    let total = 0;
+    for (const name of ['Wiadomosc', 'Rozsylka', 'WierszRaportu']) total += compare(schemas[name]!, doc.definitions[name]!, name);
+    expect(total).toBeGreaterThan(10);
+    expect(doc.definitions.Wiadomosc!.properties!.inReplyTo!.type).toBeUndefined();
+    expect(doc.definitions.Wiadomosc!.properties!.inReplyTo!['x-ms-summary']).toBe('Odpowiedź na wiadomość');
   });
 
   it('każde odwołanie prowadzi do istniejącej definicji', () => {

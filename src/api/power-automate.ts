@@ -54,6 +54,8 @@ export interface SwaggerSchema {
   items?: SwaggerSchema;
   properties?: Record<string, SwaggerSchema>;
   required?: string[];
+  /** Pole bywa null. Opis dla narzędzi Swaggera; Power Automate tę flagę pomija, dlatego takie pole nie ma typu. */
+  'x-nullable'?: boolean;
   'x-ms-summary'?: string;
   'x-ms-visibility'?: Visibility;
   'x-ms-dynamic-values'?: DynamicValues;
@@ -280,7 +282,9 @@ const SIMPLE_KEYS = ['type', 'format', 'enum', 'default', 'pattern', 'minimum', 
 
 /**
  * Schemat OpenAPI 3.0 w postaci Swaggera 2.0. Wariant `oneOf` sprowadza się do pierwszego (napis),
- * bo konektor podaje jeden numer i jedną usługę. `nullable` znika: Swagger 2.0 go nie zna.
+ * bo konektor podaje jeden numer i jedną usługę. Swagger 2.0 nie zna `nullable`. Power Automate sprawdza każdą
+ * odpowiedź ze schematem, odrzuca null przy podanym typie i pomija `x-nullable`. Pole odpowiedzi, które bywa null,
+ * nie ma więc typu ani ograniczeń; `x-nullable` zostaje jako opis dla innych narzędzi.
  * Każde pole dostaje etykietę i opis; brak któregoś przerywa budowanie, tak jak w `openapi.ts`.
  */
 function convert(schema: JsonSchema, path: string, request: boolean): SwaggerSchema {
@@ -288,9 +292,11 @@ function convert(schema: JsonSchema, path: string, request: boolean): SwaggerSch
   const { oneOf, ...rest } = schema;
   const source: JsonSchema = oneOf ? { ...oneOf[0], ...rest } : rest;
   const out: SwaggerSchema = {};
-  for (const key of SIMPLE_KEYS) {
+  const untyped = Boolean(source.nullable) && !request;
+  for (const key of untyped ? [] : SIMPLE_KEYS) {
     if (source[key] !== undefined) (out as Record<string, unknown>)[key] = source[key];
   }
+  if (source.nullable) out['x-nullable'] = true;
   if (source.items) out.items = convert(source.items, `${path}[]`, request);
   if (source.properties) {
     out.properties = {};
