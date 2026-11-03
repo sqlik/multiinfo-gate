@@ -220,6 +220,15 @@ describe('szczegóły integracji', () => {
     expect(detail).not.toContain('Adres docelowy');
   });
 
+  it('liczba numerów w poprawnej odmianie: 1 numer, 2 numery, 5 numerów, 12 numerów, 22 numery', async () => {
+    const lines = (n: number) => Array.from({ length: n }, (_, i) => `601${String(i).padStart(6, '0')}`).join('\n');
+    for (const [n, word] of [[1, '1 numer:'], [2, '2 numery:'], [5, '5 numerów:'], [12, '12 numerów:'], [22, '22 numery:']] as const) {
+      await create({ name: `Lista ${n}`, recipients: lines(n) });
+      const row = h.integrations.list().find((r) => r.name === `Lista ${n}`)!;
+      expect((await get(`/integracje/${row.id}`)).body, String(n)).toContain(word);
+    }
+  });
+
   it('pusta lista mówi, że akcja „Wyślij SMS do grupy” skończy się błędem', async () => {
     await create({ recipients: '', overflow: 'truncate' });
     const detail = (await get(`/integracje/${paRow().id}`)).body;

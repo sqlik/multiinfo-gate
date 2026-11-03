@@ -855,6 +855,14 @@ const dimOr = (value: string | undefined | null, fallback = 'brak') => (value ? 
 /** Liczba z rzeczownikiem: „1 nadawca”, „2 nadawców” - od dwóch w górę dopełniacz liczby mnogiej. */
 const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
+/** „1 numer”, „3 numery”, „5 numerów”, „12 numerów”, „22 numery”: rzeczownik nieosobowy odmienia się po polsku trzema formami. */
+function numbersWord(n: number): string {
+  if (n === 1) return '1 numer';
+  const last = n % 10;
+  const tens = n % 100;
+  return `${n} ${last >= 2 && last <= 4 && (tens < 12 || tens > 14) ? 'numery' : 'numerów'}`;
+}
+
 /** Do dziesięciu pozycji listy w szczegółach, dalej „i N więcej”; nazwa przed numerem w nawiasie. */
 function memberWords(members: GroupMember[]): string {
   if (members.length === 0) return '<span class="fail">pusta lista</span>';
@@ -922,7 +930,7 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     rows.push(kvRow('Nadpis nadawcy', row.orig === null ? '<span class="dim">domyślny klucza</span>' : esc(row.orig), row.orig !== null));
     rows.push(kvRow('Odbiorcy grupy', cfg.recipients.length === 0
       ? '<span class="dim">pusta lista: akcja „Wyślij SMS do grupy” kończy się błędem</span>'
-      : `${count(cfg.recipients.length, 'numer', 'numerów')}: ${memberWords(cfg.recipients)}`, true));
+      : `${numbersWord(cfg.recipients.length)}: ${memberWords(cfg.recipients)}`, true));
     rows.push(kvRow('Treść', `do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
   } else if (row.kind === 'webhook_out') {
     const cfg = c as OutboundConfig;
