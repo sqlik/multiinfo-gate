@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildOpenApiDocument } from '../../src/api/openapi.ts';
+import { paGroupBodySchema, paMessageBodySchema, paPackageBodySchema } from '../../src/api/pa-integrations.ts';
 import { apiServerRoutes } from '../helpers/routes.ts';
 
 let trasy: string[];
@@ -48,8 +49,29 @@ describe('opis API', () => {
     }
   });
 
+  it('wywołania integracji Power Automate opisują każde pole ciała, bez usługi i nadpisu, ze zlecającym', () => {
+    const ciala = {
+      '/v1/integrations/{id}/messages': paMessageBodySchema.shape,
+      '/v1/integrations/{id}/packages': paPackageBodySchema.shape,
+      '/v1/integrations/{id}/group': paGroupBodySchema.shape,
+    };
+    for (const [sciezka, shape] of Object.entries(ciala)) {
+      const operacja = doc.paths[sciezka]!.post!;
+      expect(operacja.parameters![0], sciezka).toMatchObject({ name: 'id', in: 'path', required: true });
+      const schema = operacja.requestBody!.content['application/json']!.schema;
+      expect(Object.keys(schema.properties!).sort(), sciezka).toEqual(Object.keys(shape).sort());
+      for (const [nazwa, pole] of Object.entries(schema.properties!)) expect(pole.description, `${sciezka} ${nazwa}`).toBeTruthy();
+      expect(schema.properties!['requestedBy']!.maxLength, sciezka).toBe(100);
+    }
+    const numer = doc.paths['/v1/integrations/{id}/messages']!.post!.requestBody!.content['application/json']!.schema.properties!['to']!;
+    expect(numer.type).toBe('string');
+    expect(numer.description).toMatch(/[Pp]usty numer/);
+    expect(doc.paths['/v1/integrations']!.get!.operationId).toBe('listaIntegracjiPowerAutomate');
+    expect(Object.keys(doc.components.schemas)).toEqual(expect.arrayContaining(['IntegracjaPowerAutomate', 'WysylkaDoGrupy']));
+  });
+
   it('każde pole odpowiedzi odczytu ma opis po polsku', () => {
-    for (const nazwa of ['Wiadomosc', 'WiadomoscPrzychodzaca', 'Rozsylka', 'WierszRaportu']) {
+    for (const nazwa of ['Wiadomosc', 'WiadomoscPrzychodzaca', 'Rozsylka', 'WierszRaportu', 'IntegracjaPowerAutomate', 'WysylkaDoGrupy']) {
       const schema = doc.components.schemas[nazwa]!;
       for (const [pole, opis] of Object.entries(schema.properties!)) {
         expect(opis.description, `${nazwa}.${pole}`).toBeTruthy();

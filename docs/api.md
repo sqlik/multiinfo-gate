@@ -1639,34 +1639,47 @@ odbiorcę: nadawcę tej wiadomości (pole `from` z `message.received`).
     Console.WriteLine(odpowiedz.RootElement.GetProperty("id"));
     ```
 
-## 5b. SMS do grupy
+## 5b. Integracje Power Automate
 
-Grupy SMS zakłada i prowadzi administrator bramki w panelu. Opisuje to rozdział
-[SMS do grupy](integracje.md#5a-sms-do-grupy) instrukcji integracji. Grupa ma listę odbiorców
-albo listę członków, do 500 numerów. Jest przypisana do jednego klucza API i jednej usługi.
-Aplikacja wysyła treść do grupy jednym wywołaniem i nie musi znać numerów odbiorców. Zmiana
-składu grupy w panelu nie wymaga zmian w aplikacji.
+Wywołania z tego rozdziału wysyłają SMS-y przez integrację Power Automate. Integrację zakłada
+administrator bramki w panelu: Integracje, Dodaj integrację, „Aplikacja wysyła SMS”, kafelek
+„Power Automate”. Opisuje to rozdział [Integracje z aplikacjami](integracje.md). Z tych wywołań
+korzysta konektor Power Automate. Aplikacja może ich używać także bez konektora.
 
-Aplikacja widzi wyłącznie grupy swojego klucza. Identyfikator grupy (`grp_...`) jest stały.
-Zmiana nazwy grupy w panelu go nie zmienia. Panel podaje go w szczegółach grupy, w wierszu
-„Identyfikator w API”. Grupa wyłączona w panelu jest niedostępna także w API.
+Integracja wyznacza usługę, nadpis nadawcy i limit części treści. Ma własną ochronę przed burzą
+i własny dziennik. Może mieć listę odbiorców grupy, do 500 numerów. Do tej listy wysyła wyłącznie
+wywołanie z rozdziału 5b.4.
 
-### 5b.1. Lista grup: `GET /v1/groups`
+Każde wywołanie wysyłające przechodzi przez mechanizmy ochronne integracji. Bramka sprawdza limit
+części i ochronę przed burzą. Zapisuje wpis w dzienniku integracji. Przy błędzie wysyła
+powiadomienie administratorowi. Wyłączona integracja nie wysyła niczego.
 
-**Przeznaczenie.** Odczyt grup przypisanych do klucza. Aplikacja buduje z odpowiedzi listę
-wyboru grupy. Z tego wywołania konektor Power Automate wypełnia listę „Grupa”.
+Aplikacja widzi wyłącznie integracje swojego klucza. Identyfikator integracji (`int_...`) jest
+stały. Zmiana nazwy integracji w panelu go nie zmienia.
+
+Każda z trzech wysyłek przyjmuje opcjonalne pole `requestedBy` („Zlecający”). Pole podaje, kto
+zlecił wysyłkę, na przykład adres e-mail autora wpisu na liście. Bramka zapisuje je w dzienniku
+integracji oraz przy wiadomości i rozsyłce. Pole nie trafia do treści SMS-a. Ma najwyżej 100
+znaków i nie może zawierać znaków sterujących, na przykład końca wiersza. Kolumna „Nadawca”
+w dzienniku integracji pokazuje `API · <zlecający>`. Bez zlecającego pokazuje `API · <adres IP
+wywołania>`.
+
+### 5b.1. Lista integracji: `GET /v1/integrations`
+
+**Przeznaczenie.** Odczyt czynnych integracji Power Automate przypisanych do klucza. Z tego
+wywołania konektor Power Automate buduje listę w polu „Integracja”.
 
 === "curl"
 
     ```bash
-    curl -s https://<TWOJA-DOMENA>/v1/groups \
+    curl -s https://<TWOJA-DOMENA>/v1/integrations \
       -H "Authorization: Bearer <TWOJ-KLUCZ>"
     ```
 
 === "HTTP"
 
     ```http
-    GET /v1/groups HTTP/1.1
+    GET /v1/integrations HTTP/1.1
     Host: <TWOJA-DOMENA>
     Authorization: Bearer <TWOJ-KLUCZ>
     ```
@@ -1675,7 +1688,7 @@ wyboru grupy. Z tego wywołania konektor Power Automate wypełnia listę „Grup
 
     ```php
     <?php
-    $ch = curl_init('https://<TWOJA-DOMENA>/v1/groups');
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/integrations');
     curl_setopt_array($ch, [
         CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
         CURLOPT_RETURNTRANSFER => true,
@@ -1692,7 +1705,7 @@ wyboru grupy. Z tego wywołania konektor Power Automate wypełnia listę „Grup
     import json, urllib.request
 
     req = urllib.request.Request(
-        "https://<TWOJA-DOMENA>/v1/groups",
+        "https://<TWOJA-DOMENA>/v1/integrations",
         headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
     )
     with urllib.request.urlopen(req) as res:
@@ -1704,7 +1717,7 @@ wyboru grupy. Z tego wywołania konektor Power Automate wypełnia listę „Grup
 === "Node.js"
 
     ```js
-    const res = await fetch("https://<TWOJA-DOMENA>/v1/groups", {
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/integrations", {
       headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
     });
     const odpowiedz = await res.json();
@@ -1715,7 +1728,7 @@ wyboru grupy. Z tego wywołania konektor Power Automate wypełnia listę „Grup
 
     ```powershell
     $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
-    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/v1/groups" -Headers $naglowki
+    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/v1/integrations" -Headers $naglowki
     $odpowiedz.data | ForEach-Object { "$($_.id) $($_.name)" }
     ```
 
@@ -1728,7 +1741,7 @@ wyboru grupy. Z tego wywołania konektor Power Automate wypełnia listę „Grup
     using var http = new HttpClient();
     http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
 
-    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/v1/groups"));
+    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/v1/integrations"));
     foreach (var w in odpowiedz.RootElement.GetProperty("data").EnumerateArray())
         Console.WriteLine(w.GetProperty("id") + " " + w.GetProperty("name"));
     ```
@@ -1738,56 +1751,319 @@ wyboru grupy. Z tego wywołania konektor Power Automate wypełnia listę „Grup
 ```json
 {
   "data": [
-    { "id": "grp_12", "name": "Ekipa serwisowa", "recipients": 8 },
-    { "id": "grp_15", "name": "Kierowcy", "recipients": 14 }
+    { "id": "int_15", "name": "Biuro handlowe", "recipients": 0 },
+    { "id": "int_12", "name": "Ekipa serwisowa", "recipients": 3 }
   ]
 }
 ```
 
 | Pole | Opis |
 |---|---|
-| `id` | stały identyfikator grupy |
-| `name` | nazwa grupy nadana w panelu |
-| `recipients` | liczba odbiorców: w trybie osobnych list - lista odbiorców, w grupie zamkniętej - wszyscy członkowie |
+| `id` | stały identyfikator integracji |
+| `name` | nazwa integracji nadana w panelu |
+| `recipients` | liczba numerów na liście odbiorców grupy integracji |
 
-Lista obejmuje tylko czynne grupy, w kolejności nazw. Nie zawiera numerów ani nazwisk. Te dane
-zostają w panelu bramki.
+Lista obejmuje tylko włączone integracje Power Automate, w kolejności nazw. Nie zawiera numerów
+ani nazwisk. Te dane zostają w panelu bramki.
 
-### 5b.2. Wysyłka do grupy: `POST /v1/groups/{id}/messages`
+### 5b.2. SMS do jednego numeru: `POST /v1/integrations/{id}/messages`
 
-**Przeznaczenie.** Wysłanie tej samej treści do każdego odbiorcy grupy. Bramka zapisuje osobną
-wiadomość dla każdego odbiorcy i odpowiada natychmiast. Wysyłka jest przyjmowana w całości albo
-wcale. Przykład: zgłoszenie awarii trafia do całej ekipy serwisowej.
+**Przeznaczenie.** Wysłanie jednego SMS-a na jeden numer przez integrację. Przykład: technik
+serwisu dostaje potwierdzenie zlecenia zapisanego na liście.
 
 === "curl"
 
     ```bash
-    curl -s https://<TWOJA-DOMENA>/v1/groups/grp_12/messages \
+    curl -s https://<TWOJA-DOMENA>/v1/integrations/int_12/messages \
       -H "Authorization: Bearer <TWOJ-KLUCZ>" \
       -H "Content-Type: application/json" \
-      -d '{"text":"Awaria pompy w hali B. Dyspozytor czeka na kontakt."}'
+      -d '{"to":"48601000001","text":"Zlecenie 4411 przyjete. Technik dotrze jutro w godzinach 8:00-10:00.","requestedBy":"jan.nowak@firma.pl"}'
     ```
 
 === "HTTP"
 
     ```http
-    POST /v1/groups/grp_12/messages HTTP/1.1
+    POST /v1/integrations/int_12/messages HTTP/1.1
     Host: <TWOJA-DOMENA>
     Authorization: Bearer <TWOJ-KLUCZ>
     Content-Type: application/json
 
-    {"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt."}
+    {"to": "48601000001", "text": "Zlecenie 4411 przyjete. Technik dotrze jutro w godzinach 8:00-10:00.", "requestedBy": "jan.nowak@firma.pl"}
     ```
 
 === "PHP"
 
     ```php
     <?php
-    $ch = curl_init('https://<TWOJA-DOMENA>/v1/groups/grp_12/messages');
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/integrations/int_12/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode([
+            'to' => '48601000001',
+            'text' => 'Zlecenie 4411 przyjete. Technik dotrze jutro w godzinach 8:00-10:00.',
+            'requestedBy' => 'jan.nowak@firma.pl',
+        ]),
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>', 'Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['id'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/integrations/int_12/messages",
+        data=json.dumps({"to": "48601000001", "text": "Zlecenie 4411 przyjete. Technik dotrze jutro w godzinach 8:00-10:00.", "requestedBy": "jan.nowak@firma.pl"}).encode(),
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["id"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/integrations/int_12/messages", {
+      method: "POST",
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json" },
+      body: JSON.stringify({"to": "48601000001", "text": "Zlecenie 4411 przyjete. Technik dotrze jutro w godzinach 8:00-10:00.", "requestedBy": "jan.nowak@firma.pl"}),
+    });
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.id);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $body = @{ to = "48601000001"; text = "Zlecenie 4411 przyjete. Technik dotrze jutro w godzinach 8:00-10:00."; requestedBy = "jan.nowak@firma.pl" } | ConvertTo-Json
+    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/integrations/int_12/messages" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
+    $odpowiedz.id
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Text;
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var tresc = new StringContent("""{"to": "48601000001", "text": "Zlecenie 4411 przyjete. Technik dotrze jutro w godzinach 8:00-10:00.", "requestedBy": "jan.nowak@firma.pl"}""", Encoding.UTF8, "application/json");
+    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/integrations/int_12/messages", tresc);
+    var odpowiedz = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("id"));
+    ```
+
+Pola body żądania:
+
+| Pole | Wymagane | Opis |
+|---|---|---|
+| `to` | tak | jeden numer odbiorcy, jak w rozdziale 3; pusty numer kończy wywołanie błędem `invalid_body` |
+| `text` | tak | treść wiadomości, jak w rozdziale 3 |
+| `requestedBy` | nie | zlecający, do 100 znaków |
+| `encoding`, `deliveryReport`, `validTo`, `costCenter` | nie | jak w rozdziale 3 |
+
+Pusty numer nigdy nie oznacza wysyłki do listy odbiorców integracji. Do listy wysyła wyłącznie
+wywołanie z rozdziału 5b.4.
+
+Usługę, nadpis nadawcy i limit części wyznacza integracja. Pola `serviceId`, `orig`, `maxParts`
+i `inReplyTo` nie mają w tym wywołaniu znaczenia. Bramka je pomija. Nagłówek `Idempotency-Key`
+działa jak w rozdziale 3.1.
+
+**Odpowiedź `202 Accepted`** ma ten sam kształt co odpowiedź z rozdziału 3 dla jednego numeru:
+
+```json
+{
+  "id": "msg_3f9c2a7b1e4d8c6a5b2f",
+  "status": "queued",
+  "encoding": "gsm",
+  "parts": 1,
+  "characters": 68,
+  "slots": 68,
+  "slotsRemaining": 92
+}
+```
+
+Dziennik integracji dostaje wpis „wysłano” z powodem „Wyślij SMS”.
+
+### 5b.3. Rozsyłka: `POST /v1/integrations/{id}/packages`
+
+**Przeznaczenie.** Rozsyłka do listy do 5000 odbiorców przez integrację, jednym wywołaniem.
+Przykład: kierowcy floty dostają przypomnienie o przeglądzie, a część z nich osobną treść.
+
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/integrations/int_12/packages \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>" \
+      -H "Content-Type: application/json" \
+      -d '{"defaultText":"Przeglad floty jutro o 8:00 w bazie przy ul. Portowej.","recipients":[{"to":"48601000001"},{"to":"48601000002","text":"Zmiana grafiku od poniedzialku.","clientId":"kierowca-14"}],"requestedBy":"kierownik.floty@firma.pl"}'
+    ```
+
+=== "HTTP"
+
+    ```http
+    POST /v1/integrations/int_12/packages HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    Content-Type: application/json
+
+    {"defaultText": "Przeglad floty jutro o 8:00 w bazie przy ul. Portowej.", "recipients": [{"to": "48601000001"}, {"to": "48601000002", "text": "Zmiana grafiku od poniedzialku.", "clientId": "kierowca-14"}], "requestedBy": "kierownik.floty@firma.pl"}
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/integrations/int_12/packages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode([
+            'defaultText' => 'Przeglad floty jutro o 8:00 w bazie przy ul. Portowej.',
+            'recipients' => [
+                [
+                    'to' => '48601000001',
+                ],
+                [
+                    'to' => '48601000002',
+                    'text' => 'Zmiana grafiku od poniedzialku.',
+                    'clientId' => 'kierowca-14',
+                ],
+            ],
+            'requestedBy' => 'kierownik.floty@firma.pl',
+        ]),
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>', 'Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['id'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/integrations/int_12/packages",
+        data=json.dumps({"defaultText": "Przeglad floty jutro o 8:00 w bazie przy ul. Portowej.", "recipients": [{"to": "48601000001"}, {"to": "48601000002", "text": "Zmiana grafiku od poniedzialku.", "clientId": "kierowca-14"}], "requestedBy": "kierownik.floty@firma.pl"}).encode(),
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["id"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/integrations/int_12/packages", {
+      method: "POST",
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json" },
+      body: JSON.stringify({"defaultText": "Przeglad floty jutro o 8:00 w bazie przy ul. Portowej.", "recipients": [{"to": "48601000001"}, {"to": "48601000002", "text": "Zmiana grafiku od poniedzialku.", "clientId": "kierowca-14"}], "requestedBy": "kierownik.floty@firma.pl"}),
+    });
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.id);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $body = @{ defaultText = "Przeglad floty jutro o 8:00 w bazie przy ul. Portowej."; recipients = @(
+        @{ to = "48601000001" },
+        @{ to = "48601000002"; text = "Zmiana grafiku od poniedzialku."; clientId = "kierowca-14" }
+    ); requestedBy = "kierownik.floty@firma.pl" } | ConvertTo-Json
+    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/integrations/int_12/packages" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
+    $odpowiedz.id
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Text;
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var tresc = new StringContent("""{"defaultText": "Przeglad floty jutro o 8:00 w bazie przy ul. Portowej.", "recipients": [{"to": "48601000001"}, {"to": "48601000002", "text": "Zmiana grafiku od poniedzialku.", "clientId": "kierowca-14"}], "requestedBy": "kierownik.floty@firma.pl"}""", Encoding.UTF8, "application/json");
+    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/integrations/int_12/packages", tresc);
+    var odpowiedz = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("id"));
+    ```
+
+Pola body są takie jak w rozdziale 5.1, bez `serviceId` i `orig`. Dochodzi pole `requestedBy`.
+Usługę i nadpis wyznacza integracja.
+
+Limit części integracji dotyczy treści wspólnej i każdej treści odbiorcy osobno. Przy ustawieniu
+„skróć i wyślij” bramka skraca każdą zbyt długą treść. Przy ustawieniu „nie wysyłaj” jedna zbyt
+długa treść odrzuca całą rozsyłkę. Komunikat błędu zaczyna się wtedy od miejsca w body:
+`defaultText:` albo `recipients.<numer pozycji od 0>:`.
+
+**Odpowiedź `202 Accepted`** ma ten sam kształt co odpowiedź z rozdziału 5.1:
+
+```json
+{
+  "id": "pkg_7c1e9a2b3d4f5a6b7c8d",
+  "status": "queued",
+  "recipients": 2,
+  "encoding": "gsm",
+  "multipart": false
+}
+```
+
+Stan rozsyłki i raport zwracają wywołania z rozdziałów 5.2-5.4. Dziennik integracji dostaje
+wpis „wysłano” z powodem „Wyślij rozsyłkę, 2 odbiorców”. Wpis prowadzi do rozsyłki.
+
+### 5b.4. SMS do odbiorców grupy: `POST /v1/integrations/{id}/group`
+
+**Przeznaczenie.** Wysłanie tej samej treści do każdego numeru z listy odbiorców grupy
+integracji. Listę prowadzi administrator w panelu bramki, w szczegółach integracji. Zmiana składu
+ekipy nie wymaga zmian w aplikacji ani w przepływie. Przykład: zgłoszenie awarii trafia do całej
+ekipy serwisowej.
+
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/integrations/int_12/group \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>" \
+      -H "Content-Type: application/json" \
+      -d '{"text":"Awaria pompy w hali B. Dyspozytor czeka na kontakt.","requestedBy":"Dyspozytornia"}'
+    ```
+
+=== "HTTP"
+
+    ```http
+    POST /v1/integrations/int_12/group HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    Content-Type: application/json
+
+    {"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt.", "requestedBy": "Dyspozytornia"}
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/integrations/int_12/group');
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => json_encode([
             'text' => 'Awaria pompy w hali B. Dyspozytor czeka na kontakt.',
+            'requestedBy' => 'Dyspozytornia',
         ]),
         CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>', 'Content-Type: application/json'],
         CURLOPT_RETURNTRANSFER => true,
@@ -1804,8 +2080,8 @@ wcale. Przykład: zgłoszenie awarii trafia do całej ekipy serwisowej.
     import json, urllib.request
 
     req = urllib.request.Request(
-        "https://<TWOJA-DOMENA>/v1/groups/grp_12/messages",
-        data=json.dumps({"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt."}).encode(),
+        "https://<TWOJA-DOMENA>/v1/integrations/int_12/group",
+        data=json.dumps({"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt.", "requestedBy": "Dyspozytornia"}).encode(),
         headers={"Authorization": "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json"},
         method="POST",
     )
@@ -1818,10 +2094,10 @@ wcale. Przykład: zgłoszenie awarii trafia do całej ekipy serwisowej.
 === "Node.js"
 
     ```js
-    const res = await fetch("https://<TWOJA-DOMENA>/v1/groups/grp_12/messages", {
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/integrations/int_12/group", {
       method: "POST",
       headers: { Authorization: "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json" },
-      body: JSON.stringify({"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt."}),
+      body: JSON.stringify({"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt.", "requestedBy": "Dyspozytornia"}),
     });
     const odpowiedz = await res.json();
     for (const w of odpowiedz.messages) console.log(w.id, w.to);
@@ -1831,8 +2107,8 @@ wcale. Przykład: zgłoszenie awarii trafia do całej ekipy serwisowej.
 
     ```powershell
     $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
-    $body = @{ text = "Awaria pompy w hali B. Dyspozytor czeka na kontakt." } | ConvertTo-Json
-    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/groups/grp_12/messages" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
+    $body = @{ text = "Awaria pompy w hali B. Dyspozytor czeka na kontakt."; requestedBy = "Dyspozytornia" } | ConvertTo-Json
+    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/integrations/int_12/group" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
     $odpowiedz.messages | ForEach-Object { "$($_.id) $($_.to)" }
     ```
 
@@ -1846,8 +2122,8 @@ wcale. Przykład: zgłoszenie awarii trafia do całej ekipy serwisowej.
     using var http = new HttpClient();
     http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
 
-    var tresc = new StringContent("""{"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt."}""", Encoding.UTF8, "application/json");
-    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/groups/grp_12/messages", tresc);
+    var tresc = new StringContent("""{"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt.", "requestedBy": "Dyspozytornia"}""", Encoding.UTF8, "application/json");
+    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/integrations/int_12/group", tresc);
     var odpowiedz = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
     foreach (var w in odpowiedz.RootElement.GetProperty("messages").EnumerateArray())
         Console.WriteLine(w.GetProperty("id") + " " + w.GetProperty("to"));
@@ -1858,46 +2134,70 @@ Pola body żądania:
 | Pole | Wymagane | Opis |
 |---|---|---|
 | `text` | tak | treść wiadomości, jak w rozdziale 3 |
-| `orig` | nie | nadpis nadawcy; pominięty = nadpis grupy, a gdy grupa go nie ma - nadpis domyślny klucza albo konta |
-| `encoding`, `maxParts`, `deliveryReport`, `validTo`, `costCenter` | nie | jak w rozdziale 3 |
+| `requestedBy` | nie | zlecający, do 100 znaków |
+| `encoding`, `deliveryReport`, `validTo`, `costCenter` | nie | jak w rozdziale 3 |
 
-Usługę wyznacza grupa. Grupa bez usługi wysyła usługą domyślną klucza. Pola `to`, `serviceId`
-i `inReplyTo` nie mają w tym wywołaniu znaczenia. Bramka je pomija. Nagłówek `Idempotency-Key`
-działa jak w rozdziale 3.1.
-
-Ustawienia grupy dotyczące SMS-a przychodzącego nie mają tu zastosowania. Chodzi o prefiks,
-uprawnionych nadawców, szablon treści, potwierdzenie, ochronę przed burzą i limit części grupy.
-Limit części wyznacza klucz albo pole `maxParts`.
+Odbiorców wyznacza lista integracji. Pole `to` nie ma w tym wywołaniu znaczenia. Bramka je
+pomija, podobnie jak `serviceId`, `orig`, `maxParts` i `inReplyTo`. Wysyłka jest przyjmowana
+w całości albo wcale. Pusta lista kończy wywołanie błędem `group_empty`. Nagłówek
+`Idempotency-Key` działa jak w rozdziale 3.1.
 
 **Odpowiedź `202 Accepted`:**
 
 ```json
 {
-  "group": { "id": "grp_12", "name": "Ekipa serwisowa" },
+  "integration": { "id": "int_12", "name": "Ekipa serwisowa" },
   "recipients": 2,
   "messages": [
-    { "id": "msg_3f9c2a7b1e4d8c6a5b2f", "to": "48601000001", "status": "queued", "parts": 1 },
-    { "id": "msg_8a1b2c3d4e5f6a7b8c9d", "to": "48601000002", "status": "queued", "parts": 1 }
+    { "id": "msg_3f9c2a7b1e4d8c6a5b2f", "to": "48601000011", "status": "queued", "parts": 1 },
+    { "id": "msg_8a1b2c3d4e5f6a7b8c9d", "to": "48601000012", "status": "queued", "parts": 1 }
   ]
 }
 ```
 
-Stan każdej wiadomości zwraca odczyt `GET /v1/messages/{id}` (rozdział 4.1). Wiadomości są
-widoczne w panelu na ekranie „Wiadomości” z nazwą klucza i nazwą grupy. Dziennik grupy dostaje
-wpis „wysłano” z powodem „wysyłka przez API” i liczbą odbiorców.
+Stan każdej wiadomości zwraca odczyt `GET /v1/messages/{id}` (rozdział 4.1). Dziennik integracji
+dostaje wpis „wysłano” z powodem „Wyślij SMS do grupy, 2 odbiorców”.
+
+### 5b.5. Limit części i ochrona przed burzą
+
+Limit części ustawia administrator w integracji, w sekcji „Treść”. Ustawienie nadmiaru decyduje,
+co się dzieje z dłuższą treścią:
+
+- „skróć i wyślij”: bramka skraca treść do limitu i wysyła ją. Powód wpisu w dzienniku kończy
+  się dopiskiem „skrócono do <limit> części”.
+- „nie wysyłaj, zapisz błąd i powiadom”: bramka odrzuca wywołanie kodem `400 too_many_parts`.
+  Komunikat podaje liczbę części treści i limit integracji. Dziennik dostaje wpis „błąd”,
+  a administrator powiadomienie.
+
+Ochrona przed burzą liczy wywołania wysyłające integracji w oknie czasu. Domyślnie to 30 wywołań
+na 10 minut. Wywołanie ponad limit dostaje `429 integration_throttled` i nie wysyła niczego.
+Dziennik dostaje wpis „limit”. Administrator dostaje powiadomienie raz na okno. Limit zmienia
+administrator w trybie zaawansowanym formularza integracji. Do wielu odbiorców lepiej wysyłać
+jednym wywołaniem z rozdziału 5b.3 albo 5b.4 niż pętlą wywołań z rozdziału 5b.2.
+
+Kod `integration_throttled` różni się od `rate_limited`. Kod `rate_limited` oznacza limit żądań
+klucza na minutę, wspólny dla całego API.
+
+### 5b.6. Błędy wywołań integracji
 
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
-| 400 | `invalid_body` | brak treści albo pole niezgodne ze schematem; `message` wymienia pola | poprawić wskazane pola |
-| 400 | `too_many_parts` | treść przekracza limit części; `message` podaje, ile miejsc należy usunąć | skrócić treść albo uzgodnić wyższy limit klucza |
-| 400 | `invalid_orig`, `service_required`, `valid_to_in_past`, `valid_to_too_far` | jak w rozdziale 3.2 | jak w rozdziale 3.2 |
-| 403 | `orig_not_allowed` | nadpis spoza uprawnień klucza; `message` wymienia dozwolone | użyć jednego z wymienionych |
-| 403 | `service_not_allowed` | usługa grupy spoza uprawnień klucza | poprosić administratora o poprawienie usługi grupy albo uprawnień klucza |
-| 404 | `group_not_found` | brak grupy o tym identyfikatorze albo grupa innego klucza | sprawdzić identyfikator na liście grup |
-| 409 | `group_disabled` | grupa wyłączona w panelu | poprosić administratora o włączenie grupy |
-| 409 | `group_empty` | grupa bez odbiorców | poprosić administratora o uzupełnienie listy |
-| 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią albo przy innym składzie grupy | użyć nowego klucza idempotencji |
+| 400 | `invalid_body` | pusty numer, brak treści albo pole niezgodne ze schematem; `message` wymienia pola | poprawić wskazane pola |
+| 400 | `invalid_phone` | numer nie daje się znormalizować; `message` podaje powód | podać numer w postaci `48601000001` |
+| 400 | `too_many_parts` | treść dłuższa niż limit części integracji przy ustawieniu „nie wysyłaj”; `message` podaje liczbę części i limit | skrócić treść albo poprosić administratora o zmianę limitu |
+| 400 | `text_required`, `invalid_client_id`, `start_at_in_past` | rozsyłka jak w rozdziale 5.1 | jak w rozdziale 9 |
+| 400 | `valid_to_in_past`, `valid_to_too_far` | jak w rozdziale 3.2 | jak w rozdziale 3.2 |
+| 403 | `service_not_allowed`, `orig_not_allowed` | usługa albo nadpis integracji spoza uprawnień klucza | poprosić administratora o poprawienie integracji albo uprawnień klucza |
+| 404 | `integration_not_found` | brak integracji, integracja innego klucza albo innego rodzaju | sprawdzić identyfikator na liście integracji |
+| 409 | `integration_disabled` | integracja wyłączona w panelu | poprosić administratora o włączenie integracji |
+| 409 | `group_empty` | lista odbiorców grupy integracji jest pusta | poprosić administratora o uzupełnienie listy |
+| 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią albo numerem | użyć nowego klucza idempotencji |
+| 429 | `integration_throttled` | przekroczony limit wysyłek integracji (ochrona przed burzą) | odczekać do końca okna; przy stałym ruchu poprosić administratora o zmianę limitu |
 | 429 | `rate_limited` | przekroczony limit żądań klucza na minutę | odczekać minutę; nie ponawiać w pętli |
+| 503 | `integration_unavailable` | konto Multiinfo integracji jest wstrzymane albo nie istnieje; `message` podaje powód | przekazać administratorowi |
+
+Wywołanie wyłączonej integracji nie zostawia wpisu w dzienniku. Pozostałe błędy z tabeli poza
+`401`, `404` i `rate_limited` zostawiają wpis „błąd” albo „limit”.
 
 ## 6. Powiadomienia webhook
 
@@ -2091,6 +2391,9 @@ harmonogramu wyżej.
 | Ważność wiadomości (`validTo`) | do 72 godzin od przyjęcia | `400 valid_to_too_far` |
 | Odbiorcy jednej rozsyłki | 5000 | `400 invalid_body` |
 | Numery w tablicy `to` | 500 | `400 invalid_body` |
+| Liczba części treści w wywołaniu integracji Power Automate | 1-9, ustawiana w integracji | skrócenie treści albo `400 too_many_parts`, zależnie od ustawienia integracji (5b.5) |
+| Wywołania wysyłające integracji Power Automate | ochrona przed burzą ustawiana w integracji, domyślnie 30 na 10 minut | `429 integration_throttled` (5b.5) |
+| Odbiorcy grupy integracji Power Automate | 500 | lista prowadzona w panelu bramki |
 | Rozmiar body żądania | 512 KB | odpowiedź `413` bez pola `error.code` |
 
 ## 9. Zestawienie błędów
@@ -2118,15 +2421,17 @@ użytkownikowi końcowemu.
 | 401 | `missing_api_key`, `invalid_api_key`, `revoked_api_key`, `expired_api_key` | brak, nieprawidłowy, odwołany albo wygasły klucz | rozdział 2 |
 | 403 | `service_not_allowed` | usługa spoza uprawnień klucza | użyć usługi przypisanej do klucza |
 | 403 | `orig_not_allowed` | nadpis spoza uprawnień klucza; `message` wymienia dozwolone | użyć jednego z wymienionych |
-| 404 | `message_not_found`, `package_not_found`, `inbound_not_found`, `group_not_found` | brak obiektu albo obiekt innego klucza | sprawdzić identyfikator |
+| 404 | `message_not_found`, `package_not_found`, `inbound_not_found`, `integration_not_found` | brak obiektu albo obiekt innego klucza | sprawdzić identyfikator |
 | 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią wiadomości albo numerem | użyć nowego klucza idempotencji |
 | 409 | `already_final`, `already_passed` | anulowanie niemożliwe (4.3) | brak |
-| 409 | `group_disabled`, `group_empty` | grupa wyłączona w panelu albo bez odbiorców (5b.2) | poprosić administratora o włączenie albo uzupełnienie grupy |
+| 409 | `integration_disabled`, `group_empty` | integracja Power Automate wyłączona w panelu albo bez odbiorców grupy (5b.6) | poprosić administratora o włączenie integracji albo uzupełnienie listy |
 | 409 | `package_not_completed`, `report_not_ready` | raport rozsyłki jeszcze niedostępny | powtórzyć po minucie |
 | 429 | `rate_limited` | przekroczony limit żądań klucza na minutę | odczekać minutę |
+| 429 | `integration_throttled` | przekroczony limit wysyłek integracji Power Automate (5b.5) | odczekać do końca okna albo poprosić administratora o zmianę limitu |
 | 500 | `internal`, `account_missing` | błąd wewnętrzny bramki | zgłosić administratorowi z czasem wystąpienia i identyfikatorem obiektu |
 | 502 | `provider_error` | błąd Multiinfo przy wywołaniu synchronicznym; `providerCode` w body odpowiedzi | ponowić po chwili; przy powtarzaniu przekazać `providerCode` administratorowi |
 | 503 | `account_certificate` | Multiinfo odrzuciło certyfikat bramki | przekazać administratorowi |
+| 503 | `integration_unavailable` | konto Multiinfo integracji Power Automate jest wstrzymane albo nie istnieje | przekazać administratorowi |
 | 503 | `unavailable` | bramka nie rozpoczęła pracy (tryb awaryjny, rozdział 10) | przekazać administratorowi; przyczynę pokazuje panel bramki |
 
 Odmowy Multiinfo przy wysyłce asynchronicznej nie są kodami HTTP. Pojawiają się w polach

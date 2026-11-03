@@ -26,6 +26,7 @@ import { registerHookRoutes } from './hooks.ts';
 import { registerKeyInfoRoute } from './key-info.ts';
 import { registerMessageRoutes } from './messages.ts';
 import { registerInboundRoutes } from './inbound.ts';
+import { registerPaIntegrationRoutes } from './pa-integrations.ts';
 import { registerPackageRoutes } from './packages.ts';
 import type { RateLimiter } from './rate-limit.ts';
 
@@ -93,6 +94,7 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
   registerCancelRoute(app, deps);
   registerPackageRoutes(app, deps);
   registerGroupRoutes(app, deps);
+  registerPaIntegrationRoutes(app, deps);
   registerInboundRoutes(app, deps);
   registerHookRoutes(app, deps);
   registerHealthRoute(

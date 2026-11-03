@@ -367,7 +367,7 @@ function apiParts(api: OpenApiDocument) {
       Rozsylka: schemas.Rozsylka!,
       RaportRozsylki: jsonSchemaOf(op('/v1/packages/{id}/report', 'get').responses['200']?.content),
       WierszRaportu: schemas.WierszRaportu!,
-      WysylkaDoGrupy: schemas.WysylkaDoGrupy!,
+      WysylkaDoGrupy: schemas.WysylkaDoGrupySms!,
       UprawnieniaKlucza: schemas.UprawnieniaKlucza!,
       ListaGrup: jsonSchemaOf(op('/v1/groups', 'get').responses['200']?.content),
       Grupa: schemas.Grupa!,
