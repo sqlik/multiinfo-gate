@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { ApiKeysRepo, ApiKeyRow } from '../store/api-keys.ts';
 import { lastValidDay } from '../time/warsaw.ts';
-import { hashApiKey, prefixOf } from './keys.ts';
+import { API_KEY_PREFIX, hashApiKey, prefixOf } from './keys.ts';
 
 export interface AuthContext {
   apiKeyId: number;
@@ -12,6 +12,8 @@ export interface AuthContext {
   defaultOrig: string | null;
   maxParts: number;
   ratePerMin: number;
+  /** Klucz wyłącznie dla integracji: zwykła wysyłka przez API jest zablokowana. */
+  integrationsOnly: boolean;
 }
 
 export class AuthError extends Error {
@@ -20,6 +22,9 @@ export class AuthError extends Error {
     this.name = 'AuthError';
   }
 }
+
+/** Komunikat braku klucza; ten sam tekst stoi w przykładzie opisu API. */
+export const MISSING_API_KEY = 'Brak klucza API w nagłówku Authorization. Podaj „Bearer <klucz>” albo sam klucz.';
 
 function sameHash(a: string, b: string): boolean {
   const left = Buffer.from(a, 'hex');
@@ -32,12 +37,14 @@ export function authenticate(
   repo: ApiKeysRepo,
   now: () => Date = () => new Date(),
 ): AuthContext {
-  const match = header?.match(/^Bearer\s+(\S+)$/);
-  if (!match) {
-    throw new AuthError(401, 'missing_api_key', 'Brak nagłówka Authorization ze schematem Bearer.');
+  // Konektory Power Automate wysyłają w nagłówku wartość wpisaną przy połączeniu, bez schematu.
+  // Sam klucz rozpoznajemy po przedrostku, żeby inne schematy (Basic, tokeny) nie wyglądały na klucz.
+  const match = header?.trim().match(/^(Bearer\s+)?(\S+)$/);
+  if (!match || (match[1] === undefined && !match[2]!.startsWith(API_KEY_PREFIX))) {
+    throw new AuthError(401, 'missing_api_key', MISSING_API_KEY);
   }
 
-  const key = match[1]!;
+  const key = match[2]!;
   const prefix = prefixOf(key);
   if (!prefix) throw new AuthError(401, 'invalid_api_key', 'Klucz API ma nieprawidłowy format.');
 
@@ -65,5 +72,17 @@ export function authenticate(
     defaultOrig: row.defaultOrig,
     maxParts: row.maxParts,
     ratePerMin: row.ratePerMin,
+    integrationsOnly: row.integrationsOnly === 1,
   };
+}
+
+/**
+ * Zwykła wysyłka przez API dla klucza ograniczonego do integracji. Klucz wklejony w Power Automate
+ * mógłby inaczej wysyłać akcją HTTP z pominięciem limitu części, ochrony przed burzą i dziennika.
+ */
+export function refuseIntegrationsOnly(auth: AuthContext): void {
+  if (auth.integrationsOnly) {
+    throw new AuthError(403, 'integrations_only_key',
+      'Ten klucz jest przeznaczony wyłącznie dla integracji. Wysyłka przez /v1/messages i /v1/packages wymaga innego klucza.');
+  }
 }

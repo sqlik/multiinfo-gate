@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig, defaultSmsGroupConfig, parseConfig, type InboundConfig } from '../../src/integrations/config.ts';
-import { PRESETS, presetById, presetsFor } from '../../src/integrations/presets/index.ts';
+import { PRESETS, catalogFor, presetById, presetsFor } from '../../src/integrations/presets/index.ts';
 import { previewInbound, previewSmsGroup } from '../../src/integrations/pipeline.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
 import { paramPatternFor } from '../../src/admin/simple-form.ts';
@@ -26,15 +26,21 @@ describe('gotowe ustawienia', () => {
     expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'home-assistant', 'freescout', 'freshdesk', 'slack', 'ntfy', 'bitrix24', 'custom']);
     expect(presetsFor('mail_in').map((p) => p.id)).toEqual(['poczta-gmail', 'poczta-home', 'poczta-ovh', 'poczta-wlasny']);
     expect(presetsFor('sms_group').map((p) => p.id)).toEqual(['sms-grupa']);
+    expect(presetsFor('power_automate').map((p) => p.id)).toEqual(['power-automate']);
+  });
+  it('katalog „do SMS” pokazuje Power Automate po n8n, choć integracja z Power Automate ma własne kind', () => {
+    expect(catalogFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'power-automate', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'fakturownia', 'fakturownia-klient', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
+    expect(catalogFor('webhook_out').map((p) => p.id)).toEqual(presetsFor('webhook_out').map((p) => p.id));
+    expect(presetById('power-automate')).toMatchObject({ name: 'Power Automate', kinds: ['power_automate'], listedUnder: 'webhook_in' });
   });
   it('sms-grupa: przykładowe zdarzenie z prefiksem daje treść bez prefiksu dla listy', () => {
     const preset = presetById('sms-grupa')!;
     expect(preset).toMatchObject({ name: 'SMS do grupy', kinds: ['sms_group'] });
     expect(preset.warning).toContain('20 numerów to 20 wiadomości');
     expect(preset.guide).toContain('Serwis: awaria pompy');
-    const config = parseConfig('sms_group', { ...defaultSmsGroupConfig(), ...preset.smsGroup, senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002'], prefix: 'dzieci' });
-    const p = previewSmsGroup(engine, config, { ...received, text: 'Dzieci: jutro zbiórka 8:00' }, NOW);
-    expect(p).toMatchObject({ senderAllowed: true, prefixMatched: true, recipients: ['48601000002'], text: 'jutro zbiórka 8:00', parts: 1 });
+    const config = parseConfig('sms_group', { ...defaultSmsGroupConfig(), ...preset.smsGroup, senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002'], prefix: 'serwis' });
+    const p = previewSmsGroup(engine, config, { ...received, text: 'Serwis: jutro odprawa 8:00' }, NOW);
+    expect(p).toMatchObject({ senderAllowed: true, prefixMatched: true, recipients: ['48601000002'], text: 'jutro odprawa 8:00', parts: 1 });
   });
   it('ustawienia poczty mają port 993, TLS i instrukcję o haśle; home.pl bez nazwy serwera (per konto); Własny serwer ma puste pola', () => {
     for (const id of ['poczta-gmail', 'poczta-home', 'poczta-ovh']) {
@@ -263,7 +269,7 @@ describe('gotowe ustawienia', () => {
   });
 
   it('oba ustawienia WooCommerce odsiewają żądanie próbne sklepu', () => {
-    // Ciało żądania próbnego po rozpakowaniu formularza; żaden wariant „kiedy” nie może go przepuścić.
+    // Body żądania próbnego po rozpakowaniu formularza; żaden wariant „kiedy” nie może go przepuścić.
     const proba = { webhook_id: '1' };
     for (const id of ['woocommerce', 'woocommerce-klient']) {
       const preset = presetById(id)!;

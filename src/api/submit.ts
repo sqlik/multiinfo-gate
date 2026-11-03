@@ -28,6 +28,8 @@ export interface SubmitInput {
   integrationId?: number;
   /** Adres e-mail nadawcy wiadomości z Mail2SMS; brak dla pozostałych źródeł. */
   mailFrom?: string;
+  /** Zlecający wysyłkę z przepływu Power Automate; brak dla pozostałych źródeł. */
+  requestedBy?: string;
 }
 
 export interface SubmitResult {
@@ -41,6 +43,7 @@ export function authFromKey(row: ApiKeyRow): AuthContext {
   return {
     apiKeyId: row.id, accountId: row.accountId, allowedServiceIds: row.allowedServiceIds, allowedOrigs: row.allowedOrigs,
     defaultServiceId: row.defaultServiceId, defaultOrig: row.defaultOrig, maxParts: row.maxParts, ratePerMin: row.ratePerMin,
+    integrationsOnly: row.integrationsOnly === 1,
   };
 }
 
@@ -134,6 +137,10 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
     if (existing && (existing.bodyHash !== hash || existing.dest !== dest)) {
       throw new ApiError(409, 'idempotency_conflict', 'Ten klucz idempotencji został już użyty z inną treścią lub innym odbiorcą.');
     }
+    // Klucz jest wspólny dla klucza API: integracja nie może zwrócić wiadomości innej integracji ani zwykłego wywołania.
+    if (existing && existing.integrationId !== (input.integrationId ?? null)) {
+      throw new ApiError(409, 'idempotency_conflict', 'Ten klucz idempotencji został już użyty przez inną integrację albo w zwykłym wywołaniu API.');
+    }
     return { dest, perRecipientIdem, existing };
   });
 
@@ -157,6 +164,7 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
       inReplyTo,
       integrationId: input.integrationId ?? null,
       mailFrom: input.mailFrom ?? null,
+      requestedBy: input.requestedBy ?? null,
       createdAt: now.toISOString(),
     });
     deps.jobs.enqueue('send', { messageId: id, text: input.text, deliveryReport }, now);

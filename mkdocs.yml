@@ -18,6 +18,7 @@ nav:
   - Uruchomienie krok po kroku: uruchomienie.md
   - API dla aplikacji: api.md
   - Integracje z aplikacjami: integracje.md
+  - Power Automate: power-automate.md
   - Rozwiązywanie problemów: problemy.md
 
 theme:

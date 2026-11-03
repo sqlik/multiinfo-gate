@@ -98,7 +98,8 @@ export function registerHookRoutes(app: FastifyInstance, deps: ApiDeps): void {
         return reply.code(200).send({ accepted: false, reason: 'throttled' });
       case 'unavailable':
         deps.notifier?.notify('integration_error', `integration:${integration.id}`, `${integration.name}: ${outcome.detail}`, at);
-        return reply.code(503).send({ accepted: false, reason: 'unavailable', detail: outcome.detail });
+        // Powód zostaje w dzienniku i w mailu do administratora; aplikacja zewnętrzna otrzymuje zdanie ogólne.
+        return reply.code(503).send({ accepted: false, reason: 'unavailable', detail: 'Integracja nie może teraz wysyłać SMS-ów. Przyczynę podaje dziennik integracji w panelu bramki.' });
       case 'error': {
         // Mail do administratora bez numeru z ładunku: numer to dana osobowa, a szczegół wystarczy w odpowiedzi i dzienniku.
         const summary = outcome.code === 'invalid_phone' ? 'nieprawidłowy numer odbiorcy w ładunku' : outcome.detail;

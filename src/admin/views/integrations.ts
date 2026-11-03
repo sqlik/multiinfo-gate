@@ -1,4 +1,4 @@
-import { OUTBOUND_EVENTS, defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type MailInConfig, type OutboundConfig, type GroupMember, type SmsGroupConfig } from '../../integrations/config.ts';
+import { OUTBOUND_EVENTS, defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type MailInConfig, type OutboundConfig, type GroupMember, type PowerAutomateConfig, type SmsGroupConfig } from '../../integrations/config.ts';
 import { RULE_OPS, ruleOpLabel, type RuleOp } from '../../integrations/conditions.ts';
 import { safeUrl } from '../../integrations/enrich.ts';
 import type { Preset } from '../../integrations/presets/index.ts';
@@ -6,6 +6,7 @@ import type { EventResult, IntegrationEventRow } from '../../store/integration-e
 import type { IntegrationRow } from '../../store/integrations.ts';
 import type { MailInState } from '../../store/mail-in.ts';
 import { warsawStamp } from '../../time/warsaw.ts';
+import { powerAutomatePanel } from './power-automate.ts';
 import { esc } from './layout.ts';
 import { apiAddressPanel, fullUrl } from './settings.ts';
 
@@ -27,7 +28,7 @@ export interface IntegrationsFilter { kind: 'in' | 'out' | 'mail' | 'grupa' | nu
 /** Klucz do wyboru w formularzu: czynne klucze z usługami i nadpisami, po których wybiera się usługę i nadawcę. */
 export interface KeyOption { id: number; name: string; accountName: string; serviceIds: string[]; origs: string[] }
 
-const KIND_LABEL: Record<IntegrationKind, string> = { webhook_in: 'do SMS', webhook_out: 'z SMS-a', mail_in: 'z poczty', sms_group: 'do grupy' };
+const KIND_LABEL: Record<IntegrationKind, string> = { webhook_in: 'do SMS', webhook_out: 'z SMS-a', mail_in: 'z poczty', sms_group: 'do grupy', power_automate: 'do SMS' };
 export const kindLabel = (kind: IntegrationKind): string => KIND_LABEL[kind];
 
 const RESULT_LABELS: Record<EventResult, string> = {
@@ -212,7 +213,8 @@ export function chooseKindPage(): string {
 
 /** Krok drugi: gotowe ustawienie; „Własne” ma być ostatnie - lista `presetsFor` już tak je układa. */
 export function choosePresetPage(kind: IntegrationKind, presets: Preset[]): string {
-  const tiles = presets.map((p) => `<a class="tile" href="/integracje/nowa?rodzaj=${esc(kind)}&amp;ustawienie=${esc(p.id)}">
+  // Kafelek innego rodzaju (Power Automate w katalogu „do SMS”) prowadzi do formularza swojego rodzaju.
+  const tiles = presets.map((p) => `<a class="tile" href="/integracje/nowa?rodzaj=${esc(p.kinds.includes(kind) ? kind : p.kinds[0]!)}&amp;ustawienie=${esc(p.id)}">
         <div style="font-size: 15px; font-weight: 600;">${esc(p.name)}</div>
         <div class="d">${esc(p.blurb)}</div>
       </a>`).join('');
@@ -267,12 +269,13 @@ export const OUTBOUND_SAMPLE = {
 export function configToValues(kind: IntegrationKind, config: IntegrationConfig, base: Pick<IntegrationFormValues, 'name' | 'apiKeyId' | 'serviceId' | 'orig' | 'enabled' | 'preset' | 'storePayloads' | 'sample'>): IntegrationFormValues {
   const inbound = kind === 'webhook_in' ? config as InboundConfig : defaultInboundConfig();
   const outbound = kind === 'webhook_out' ? config as OutboundConfig : defaultOutboundConfig();
+  const condition = 'condition' in config ? config.condition : inbound.condition;
   return {
     ...base,
     throttleLimit: String(config.throttle.limit), throttleWindow: String(config.throttle.windowMinutes), eventLogLimit: String(config.eventLogLimit),
-    conditionMode: config.condition.mode,
-    rules: config.condition.mode === 'builder' ? config.condition.rules.map((r) => ({ path: r.path, op: r.op, value: r.value })) : [],
-    conditionExpr: config.condition.mode === 'liquid' ? config.condition.expr : '',
+    conditionMode: condition.mode,
+    rules: condition.mode === 'builder' ? condition.rules.map((r) => ({ path: r.path, op: r.op, value: r.value })) : [],
+    conditionExpr: condition.mode === 'liquid' ? condition.expr : '',
     authHeaderName: inbound.auth.header?.name ?? '', authHeaderValue: '', authBasicUser: inbound.auth.basic?.user ?? '', authBasicPass: '',
     authPayloadPath: inbound.auth.payload?.path ?? '', authPayloadValue: '',
     sources: inbound.auth.sources.join('\n'),
@@ -398,7 +401,9 @@ export function guideHtml(markdown: string): string {
   return out.join('');
 }
 
-export function sectionBasics(ctx: FormContext, v: Pick<IntegrationFormValues, 'name' | 'apiKeyId' | 'serviceId' | 'orig' | 'enabled'>): string {
+export function sectionBasics(
+  ctx: FormContext, v: Pick<IntegrationFormValues, 'name' | 'apiKeyId' | 'serviceId' | 'orig' | 'enabled'>, opts: { nameHint?: string } = {},
+): string {
   const services = [...new Set(ctx.keys.flatMap((k) => k.serviceIds))];
   const origs = [...new Set(ctx.keys.flatMap((k) => k.origs))];
   const keyField = ctx.row
@@ -419,6 +424,7 @@ export function sectionBasics(ctx: FormContext, v: Pick<IntegrationFormValues, '
     <div class="field">
       <label for="name">Nazwa</label>
       <input id="name" name="name" value="${esc(v.name)}" required>
+      ${opts.nameHint ? `<div class="hint">${esc(opts.nameHint)}</div>` : ''}
     </div>
     ${keyField}
     <div class="field">
@@ -689,24 +695,37 @@ function sectionBodyOutbound(v: IntegrationFormValues): string {
   </details>`;
 }
 
-export function sectionGuard(v: Pick<IntegrationFormValues, 'throttleLimit' | 'throttleWindow' | 'eventLogLimit' | 'storePayloads'>): string {
+/**
+ * Słowa sekcji ochrony zależne od rodzaju: integracja z Power Automate liczy wywołania zamiast zdarzeń,
+ * nie ma próbki i wprowadza pole limitu odbiorców (`extraField`).
+ */
+export interface GuardWords { unit: string; throttleHint: string; payloadHint: string; extraField?: string }
+
+const GUARD_WORDS: GuardWords = {
+  unit: 'zdarzeń',
+  throttleHint: 'Zdarzenia ponad limit w oknie otrzymują wpis „limit” bez SMS-a. Pierwsze przekroczenie w oknie jest zgłaszane mailem do administratora',
+  payloadHint: 'Przydatne podczas uruchamiania: ładunek z dziennika można użyć jako próbki. Ładunki mogą zawierać dane wrażliwe, dlatego opcję zaleca się włączać tylko na czas konfiguracji.',
+};
+
+export function sectionGuard(v: Pick<IntegrationFormValues, 'throttleLimit' | 'throttleWindow' | 'eventLogLimit' | 'storePayloads'>, words: GuardWords = GUARD_WORDS): string {
   return `<details>
     <summary>Ochrona i dziennik</summary>
     <div class="field">
       <label>Limit burzy</label>
       <div class="inline">
-        <input name="throttleLimit" type="number" min="1" max="1000" value="${esc(v.throttleLimit)}" style="width: 110px;"> <span class="dim">zdarzeń na</span>
+        <input name="throttleLimit" type="number" min="1" max="1000" value="${esc(v.throttleLimit)}" style="width: 110px;"> <span class="dim">${esc(words.unit)} na</span>
         <input name="throttleWindow" type="number" min="1" max="1440" value="${esc(v.throttleWindow)}" style="width: 110px;"> <span class="dim">minut</span>
       </div>
-      <div class="hint">Zdarzenia ponad limit w oknie otrzymują wpis „limit” bez SMS-a. Pierwsze przekroczenie w oknie jest zgłaszane mailem do administratora</div>
+      <div class="hint">${esc(words.throttleHint)}</div>
     </div>
+    ${words.extraField ?? ''}
     <div class="field">
       <label for="eventLogLimit">Wpisów w dzienniku</label>
       <input id="eventLogLimit" name="eventLogLimit" type="number" min="20" max="2000" value="${esc(v.eventLogLimit)}">
     </div>
     <div class="field">
       ${checkbox('storePayloads', v.storePayloads, 'Przechowuj ładunki w dzienniku (7 dni, zaszyfrowane)')}
-      <div class="hint">Przydatne podczas uruchamiania: ładunek z dziennika można użyć jako próbki. Ładunki mogą zawierać dane wrażliwe, dlatego opcję zaleca się włączać tylko na czas konfiguracji.</div>
+      <div class="hint">${esc(words.payloadHint)}</div>
     </div>
   </details>`;
 }
@@ -822,7 +841,7 @@ export interface IntegrationDetail {
 }
 
 /** Warunek w słowach: „heartbeat.status równe 0; monitor.name zawiera prod” albo wyrażenie Liquid. */
-export function conditionWords(condition: IntegrationConfig['condition']): string {
+export function conditionWords(condition: InboundConfig['condition']): string {
   if (condition.mode === 'liquid') return `Liquid: ${condition.expr}`;
   if (condition.rules.length === 0) return 'brak, każde zdarzenie jest przetwarzane';
   return condition.rules.map((r) => {
@@ -839,6 +858,14 @@ const dimOr = (value: string | undefined | null, fallback = 'brak') => (value ? 
 
 /** Liczba z rzeczownikiem: „1 nadawca”, „2 nadawców” - od dwóch w górę dopełniacz liczby mnogiej. */
 const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+
+/** Rzeczownik nieosobowy w trzech formach: „1 numer”, „3 numery”, „5 numerów”, „12 numerów”, „22 numery”. */
+export function countForms(n: number, one: string, few: string, many: string): string {
+  if (n === 1) return `1 ${one}`;
+  const last = n % 10;
+  const tens = n % 100;
+  return `${n} ${last >= 2 && last <= 4 && (tens < 12 || tens > 14) ? few : many}`;
+}
 
 /** Do dziesięciu pozycji listy w szczegółach, dalej „i N więcej”; nazwa przed numerem w nawiasie. */
 function memberWords(members: GroupMember[]): string {
@@ -901,7 +928,15 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     const text = cfg.text.mode === 'body' ? 'sama treść' : cfg.text.mode === 'sender_body' ? 'nadawca i treść' : 'szablon Liquid';
     rows.push(kvRow('Treść', `${esc(text)} · do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
     rows.push(kvRow('Potwierdzenie do nadawcy', cfg.confirm.enabled ? 'tak' : 'nie'));
-  } else {
+  } else if (row.kind === 'power_automate') {
+    const cfg = c as PowerAutomateConfig;
+    rows.push(kvRow('Usługa', row.serviceId === null ? '<span class="dim">domyślna klucza</span>' : esc(row.serviceId), row.serviceId !== null));
+    rows.push(kvRow('Nadpis nadawcy', row.orig === null ? '<span class="dim">domyślny klucza</span>' : esc(row.orig), row.orig !== null));
+    rows.push(kvRow('Odbiorcy grupy', cfg.recipients.length === 0
+      ? '<span class="dim">pusta lista: akcja „Wyślij SMS do grupy” kończy się błędem</span>'
+      : `${countForms(cfg.recipients.length, 'numer', 'numery', 'numerów')}: ${memberWords(cfg.recipients)}`, true));
+    rows.push(kvRow('Treść', `do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
+  } else if (row.kind === 'webhook_out') {
     const cfg = c as OutboundConfig;
     rows.push(kvRow('Adres docelowy', `${esc(cfg.method)} ${esc(cfg.url)}`, true));
     rows.push(kvRow('Zdarzenia', esc(cfg.events.join(', ')), true));
@@ -911,8 +946,12 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     if (cfg.responseRefPath) rows.push(kvRow('Identyfikator z odpowiedzi', esc(cfg.responseRefPath), true));
     rows.push(kvRow('Podpis X-MIG-Signature', cfg.sign ? 'tak' : 'nie'));
   }
-  rows.push(kvRow(simple ? 'Warunek wysyłki' : 'Warunek', esc(simple ? simple.when : conditionWords(c.condition))));
-  rows.push(kvRow('Limit burzy', `${esc(c.throttle.limit)} zdarzeń na ${esc(c.throttle.windowMinutes)} minut`));
+  // Integracja z Power Automate nie ma warunku: warunki buduje się w przepływie.
+  if ('condition' in c) rows.push(kvRow(simple ? 'Warunek wysyłki' : 'Warunek', esc(simple ? simple.when : conditionWords(c.condition))));
+  const perWindow = `na ${countForms(c.throttle.windowMinutes, 'minutę', 'minuty', 'minut')}`;
+  rows.push(kvRow('Limit burzy', row.kind === 'power_automate'
+    ? `${countForms(c.throttle.limit, 'wywołanie', 'wywołania', 'wywołań')} i ${countForms((c as PowerAutomateConfig).throttle.recipients, 'odbiorca', 'odbiorców', 'odbiorców')} ${perWindow}`
+    : `${esc(c.throttle.limit)} zdarzeń ${perWindow}`));
   rows.push(kvRow('Ładunki', row.storePayloads === 1 ? 'przechowywane 7 dni, zaszyfrowane' : 'nieprzechowywane'));
   rows.push(kvRow('Dziennik', `do ${esc(c.eventLogLimit)} wpisów`));
   return rows.join('');
@@ -922,16 +961,19 @@ function relatedCell(e: IntegrationEventRow): string {
   const links: string[] = [];
   if (e.messageId !== null) links.push(`<a href="/wiadomosci/${esc(e.messageId)}">${esc(e.messageId)}</a>`);
   if (e.inboundId !== null) links.push(`<a href="/odebrane/${esc(e.inboundId)}">${esc(e.inboundId)}</a>`);
+  if (e.packageId !== null) links.push(`<a href="/rozsylki/${esc(e.packageId)}">${esc(e.packageId)}</a>`);
   return links.length === 0 ? '<span class="dim">-</span>' : links.join('<br>');
 }
 
-function eventRow(integrationId: number, d: DetailEvent): string {
+function eventRow(row: IntegrationRow, d: DetailEvent): string {
   const e = d.row;
+  // Integracja z Power Automate nie ma próbki: treść buduje przepływ, a nie szablon bramki.
+  const sample = row.kind === 'power_automate' ? '' : `<a href="/integracje/${esc(row.id)}/edytuj?probka=${esc(e.id)}">Użyj jako próbki</a>`;
   const payload = e.payload === null ? '' : `<details style="margin-top: 4px;">
         <summary class="dim" style="cursor: pointer; font-size: 11.5px;">ładunek${e.response === null ? '' : ' i odpowiedź'}</summary>
         <pre class="m" style="white-space: pre-wrap; margin: 6px 0; font-size: 11.5px;">${esc(e.payload)}</pre>
         ${e.response === null ? '' : `<pre class="m dim" style="white-space: pre-wrap; margin: 0 0 6px; font-size: 11.5px;">${esc(e.response)}</pre>`}
-        <a href="/integracje/${esc(integrationId)}/edytuj?probka=${esc(e.id)}">Użyj jako próbki</a>
+        ${sample}
       </details>`;
   const retry = d.retryable && e.deliveryId !== null
     ? `<form method="post" action="/dostawy/${esc(e.deliveryId)}/ponow"><button class="btn btn-s" type="submit" style="padding: 4px 9px; font-size: 12px;">Ponów</button></form>` : '';
@@ -977,8 +1019,8 @@ export function integrationDetailPage(d: IntegrationDetail): string {
       data-confirm="Usunąć integrację „${esc(row.name)}”? Dziennik zostanie usunięty razem z nią, a adres wejściowy przestanie działać." data-confirm-ok="Usuń">
       <button class="btn btn-s" type="submit">Usuń</button></form>`;
   const events = d.events.length === 0
-    ? '<tr><td class="dim" colspan="6">Dziennik jest pusty. Integracja nie otrzymała jeszcze żadnego zdarzenia.</td></tr>'
-    : d.events.map((e) => eventRow(row.id, e)).join('');
+    ? `<tr><td class="dim" colspan="6">Dziennik jest pusty. Integracja nie otrzymała jeszcze żadnego ${row.kind === 'power_automate' ? 'wywołania' : 'zdarzenia'}.</td></tr>`
+    : d.events.map((e) => eventRow(row, e)).join('');
   const copy = `<form method="post" action="/integracje/${esc(row.id)}/kopiuj" style="display: inline;"><button class="btn btn-s" type="submit">Utwórz kopię</button></form>`;
   const mailbox = row.kind === 'mail_in' ? mailboxPanel(d.view) : '';
   return `<div class="head">
@@ -997,9 +1039,10 @@ export function integrationDetailPage(d: IntegrationDetail): string {
   <div class="scroll">
     ${mailbox}
     <div class="panel">
-      <div class="panel-h"><div class="lab">Konfiguracja</div><div class="m dim">24 h: ${esc(d.view.counts.sent)} wysłane · ${esc(d.view.counts.errors)} błędy</div></div>
+      <div class="panel-h"><div class="lab">Konfiguracja</div><div class="m dim">24 h: ${esc(d.view.counts.sent)} wysłane · ${countForms(d.view.counts.errors, 'błąd', 'błędy', 'błędów')}</div></div>
       <div class="kv">${configRows(row, d.apiUrl, d.simple ?? null)}</div>
     </div>
+    ${row.kind === 'power_automate' ? powerAutomatePanel(d.apiUrl, `/integracje/${row.id}`) : ''}
     <div class="panel">
       <div class="panel-h"><div class="lab">Dziennik</div>
         <div class="m dim">${row.storePayloads === 1 ? 'ładunki przechowywane 7 dni' : 'Ładunki nieprzechowywane. Przechowywanie można włączyć w edycji na czas konfiguracji'}</div></div>
@@ -1009,7 +1052,7 @@ export function integrationDetailPage(d: IntegrationDetail): string {
           <th style="width: 120px;">Wynik</th>
           <th>Powód</th>
           <th style="width: 180px;">Powiązanie</th>
-          <th style="width: 130px;">${row.kind === 'mail_in' || row.kind === 'sms_group' ? 'Nadawca' : 'Adres źródłowy'}</th>
+          <th style="width: 130px;">${row.kind === 'mail_in' || row.kind === 'sms_group' || row.kind === 'power_automate' ? 'Nadawca' : 'Adres źródłowy'}</th>
           <th style="width: 76px;"></th>
         </tr>
         ${events}

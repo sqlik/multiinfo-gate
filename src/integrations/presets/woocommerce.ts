@@ -6,7 +6,7 @@ const TEKST: InboundConfig['text'] = { mode: 'liquid', template: 'Nowe zamowieni
 
 /**
  * Warunek wspólny dla każdego wariantu: zamówienie ma numer wewnętrzny `id`.
- * Po zapisaniu webhooka sklep wysyła żądanie próbne z ciałem `webhook_id=1` w formacie formularza.
+ * Po zapisaniu webhooka sklep wysyła żądanie próbne z body `webhook_id=1` w formacie formularza.
  * Bez tego warunku bramka wzięłaby je za zamówienie i wysłała SMS bez treści, a sklep pokazałby błąd,
  * bo żądanie próbne uznaje za udane wyłącznie odpowiedź z kodem 200.
  */

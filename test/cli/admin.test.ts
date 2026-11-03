@@ -21,7 +21,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 describe('openAdminDatabase', () => {
   it('na świeżej bazie zakłada schemat', () => {
     const db = openAdminDatabase(path, keyA);
-    expect(db.pragma('user_version', { simple: true })).toBe(9);
+    expect(db.pragma('user_version', { simple: true })).toBe(10);
     db.close();
   });
 

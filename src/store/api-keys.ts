@@ -13,6 +13,8 @@ export interface ApiKeyRow {
   allowedOrigs: string[];
   /** Klucz odbiera wiadomości przychodzące: dostaje message.received ze swoich usług. */
   inboundSubscribed: 0 | 1;
+  /** Klucz wyłącznie dla integracji: wysyłka przez /v1/messages i /v1/packages jest zablokowana. */
+  integrationsOnly: 0 | 1;
 }
 
 export interface ApiKeyInput {
@@ -26,6 +28,8 @@ export interface ApiKeyInput {
   expiresAt?: string | null;
   /** Pominięcie oznacza brak odbioru. */
   inboundSubscribed?: 0 | 1;
+  /** Pominięcie oznacza klucz bez ograniczenia do integracji. */
+  integrationsOnly?: 0 | 1;
 }
 
 export interface ApiKeyPatch {
@@ -35,6 +39,7 @@ export interface ApiKeyPatch {
   webhookSecret?: string | null;
   expiresAt: string | null; serviceIds: string[]; origs: string[];
   inboundSubscribed: 0 | 1;
+  integrationsOnly: 0 | 1;
 }
 
 /**
@@ -49,14 +54,14 @@ export const INBOUND_SUBSCRIBER_SQL = `k.inbound_subscribed = 1 AND k.webhook_ur
 const PUBLIC_COLUMNS = `
   id, account_id, name, key_hash, key_prefix, default_service_id, default_orig,
   max_parts, rate_per_min, webhook_url, last_used_at, revoked_at, expires_at, created_at,
-  inbound_subscribed`;
+  inbound_subscribed, integrations_only`;
 
 interface RawApiKey {
   id: number; account_id: number; name: string; key_hash: string; key_prefix: string;
   default_service_id: string | null; default_orig: string | null;
   max_parts: number; rate_per_min: number;
   webhook_url: string | null; last_used_at: string | null; revoked_at: string | null;
-  expires_at: string | null; created_at: string; inbound_subscribed: 0 | 1;
+  expires_at: string | null; created_at: string; inbound_subscribed: 0 | 1; integrations_only: 0 | 1;
 }
 
 export class ApiKeysRepo {
@@ -84,6 +89,7 @@ export class ApiKeysRepo {
       allowedServiceIds: this.serviceIds(r.id),
       allowedOrigs: this.origs(r.id),
       inboundSubscribed: r.inbound_subscribed,
+      integrationsOnly: r.integrations_only,
     };
   }
 
@@ -131,8 +137,8 @@ export class ApiKeysRepo {
         .prepare(
           `INSERT INTO api_keys (
              account_id, name, key_hash, key_prefix, default_service_id, default_orig,
-             max_parts, rate_per_min, webhook_url, webhook_secret_enc, expires_at, inbound_subscribed
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             max_parts, rate_per_min, webhook_url, webhook_secret_enc, expires_at, inbound_subscribed, integrations_only
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           input.accountId,
@@ -147,6 +153,7 @@ export class ApiKeysRepo {
           input.webhookSecret === null ? null : encryptSecret(input.webhookSecret, this.masterKey),
           input.expiresAt ?? null,
           input.inboundSubscribed ?? 0,
+          input.integrationsOnly ?? 0,
         );
       const id = Number(info.lastInsertRowid);
 
@@ -171,7 +178,7 @@ export class ApiKeysRepo {
       this.db
         .prepare(
           `UPDATE api_keys SET name = ?, default_service_id = ?, default_orig = ?, max_parts = ?,
-             rate_per_min = ?, webhook_url = ?, expires_at = ?, inbound_subscribed = ? WHERE id = ?`,
+             rate_per_min = ?, webhook_url = ?, expires_at = ?, inbound_subscribed = ?, integrations_only = ? WHERE id = ?`,
         )
         .run(
           patch.name,
@@ -182,6 +189,7 @@ export class ApiKeysRepo {
           patch.webhookUrl,
           patch.expiresAt,
           patch.inboundSubscribed,
+          patch.integrationsOnly,
           id,
         );
       if (patch.webhookSecret !== undefined) {

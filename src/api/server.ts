@@ -22,8 +22,10 @@ import { registerCancelRoute } from './cancel.ts';
 import { ApiError } from './errors.ts';
 import { registerHealthRoute, type InboundHealth } from './health.ts';
 import { registerHookRoutes } from './hooks.ts';
+import { registerKeyInfoRoute } from './key-info.ts';
 import { registerMessageRoutes } from './messages.ts';
 import { registerInboundRoutes } from './inbound.ts';
+import { registerPaIntegrationRoutes } from './pa-integrations.ts';
 import { registerPackageRoutes } from './packages.ts';
 import type { RateLimiter } from './rate-limit.ts';
 
@@ -61,9 +63,16 @@ export interface ApiDeps {
   log?: Logger;
 }
 
+/** Limit body żądania API; trasy rozsyłki mają własny, wyższy (`PACKAGE_BODY_LIMIT`). */
+const API_BODY_LIMIT = 512 * 1024;
+
+/** Rozmiar w komunikacie dla autora aplikacji: „512 KB”, „4 MB”. */
+const sizeLabel = (bytes: number): string =>
+  bytes >= 1024 * 1024 ? `${Math.round(bytes / (1024 * 1024))} MB` : `${Math.round(bytes / 1024)} KB`;
+
 export function buildApiServer(deps: ApiDeps): FastifyInstance {
   const app = Fastify({
-    logger: false, bodyLimit: 512 * 1024,
+    logger: false, bodyLimit: API_BODY_LIMIT,
     ...(deps.trustedProxies?.length ? { trustProxy: deps.trustedProxies } : {}),
   });
   // Formularze dla `/hooks/`: aplikacje bez JSON-a (starsze automaty, NAS-y) wysyłają urlencoded.
@@ -82,13 +91,27 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
     if (error instanceof AuthError) {
       return reply.code(error.httpStatus).send({ error: { code: error.code, message: error.message } });
     }
+    // Błędy odczytu body zgłasza Fastify przed trasą: to błędy wołającego, nie bramki.
+    const status = (error as { statusCode?: number }).statusCode;
+    if (status === 413) {
+      const limit = _request.routeOptions.bodyLimit ?? API_BODY_LIMIT;
+      return reply.code(413).send({ error: { code: 'body_too_large', message: `Body żądania przekracza dopuszczalny rozmiar ${sizeLabel(limit)}.` } });
+    }
+    if (status === 415) {
+      return reply.code(415).send({ error: { code: 'unsupported_media_type', message: 'Body żądania musi mieć format JSON (Content-Type: application/json).' } });
+    }
+    if (status === 400) {
+      return reply.code(400).send({ error: { code: 'invalid_body', message: 'Body żądania jest puste albo nie jest poprawnym dokumentem JSON.' } });
+    }
     (deps.log ?? silentLogger).error('api.wyjatek', { method: _request.method, url: _request.url.split('?')[0], error });
     return reply.code(500).send({ error: { code: 'internal', message: 'Błąd wewnętrzny bramki.' } });
   });
 
   registerMessageRoutes(app, deps);
+  registerKeyInfoRoute(app, deps);
   registerCancelRoute(app, deps);
   registerPackageRoutes(app, deps);
+  registerPaIntegrationRoutes(app, deps);
   registerInboundRoutes(app, deps);
   registerHookRoutes(app, deps);
   registerHealthRoute(

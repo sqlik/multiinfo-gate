@@ -94,7 +94,7 @@ describe('POST /hooks/:hookId', () => {
     expect(messages.get(res.json().messageIds[0])!.dest).toBe('48601000001');
   });
   it('żądanie próbne WooCommerce dostaje 200 i nie wysyła SMS-a', async () => {
-    // Sklep wysyła je po zapisaniu webhooka: format formularza, ciało webhook_id, żadnego pola zamówienia.
+    // Sklep wysyła je po zapisaniu webhooka: format formularza, body webhook_id, żadnego pola zamówienia.
     // Za udane uznaje wyłącznie kod 200, więc warunek gotowego ustawienia musi je odsiać przed wysyłką.
     const integ = make({ ...presetById('woocommerce')!.inbound, to: { fallback: ['48601000009'] } });
     const res = await app.inject({
@@ -244,7 +244,7 @@ describe('POST /hooks/:hookId', () => {
     apiKeys.revoke(apiKeyId);
     const res = await post(integ.hookId!, { msg: 'x' });
     expect(res.statusCode).toBe(503);
-    expect(res.json()).toMatchObject({ accepted: false, reason: 'unavailable' });
+    expect(res.json()).toEqual({ accepted: false, reason: 'unavailable', detail: 'Integracja nie może teraz wysyłać SMS-ów. Przyczynę podaje dziennik integracji w panelu bramki.' });
   });
   it('zalew z jednego adresu to 429', async () => {
     const integ = make({ throttle: { limit: 1000, windowMinutes: 10 } });

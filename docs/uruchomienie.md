@@ -514,6 +514,13 @@ zaczyna wtedy odpytywać Multiinfo o wiadomości z usług klucza i przekazuje ka
 samej usługi może odbierać naraz. Gdy ostatni odbierający klucz zostanie odwołany, wygaśnie albo
 straci zaznaczenie, bramka przestaje odpytywać o tę usługę.
 
+Pole **Tylko integracje** ogranicza klucz do integracji. Klucz z tą opcją nie wysyła SMS-ów przez
+`POST /v1/messages` ani `POST /v1/packages`, a takie wywołanie kończy się błędem `403` z kodem
+`integrations_only_key`. Opcja jest zalecana dla klucza konektora Power Automate, ponieważ klucz
+wklejony w przepływie nie pozwala wtedy ominąć limitu części, ochrony przed burzą ani dziennika
+integracji. Lista kluczy oznacza taki klucz plakietką „tylko integracje”. Polecenie sprawdzające
+przy nowym kluczu odczytuje wtedy listę integracji zamiast wysyłać SMS.
+
 Stan odbioru widać na karcie konta w sekcji „Odbiór wiadomości”: czy jest aktywny, czas ostatniego
 odpytania i ostatniej odebranej wiadomości. Usługa zatrzymana błędem Multiinfo (na przykład
 nieaktywna) pokazuje przyczynę. Bramka ponawia odpytanie co 15 minut. Gdy administrator
@@ -535,7 +542,7 @@ za aplikację kliencką. Utracony klucz zastępuje się nowym: generujesz nowy, 
 aplikacji, odwołujesz stary. Utracony sekret webhooka wydaje ponownie edycja klucza ze zmianą
 adresu webhooka.
 
-![Ekran kluczy API tuż po wygenerowaniu klucza: klucz pokazany jeden raz z gotowym poleceniem curl, nad listą adres bramki dla aplikacji](obrazki/klucz.png)
+![Ekran kluczy API tuż po wygenerowaniu klucza Power Automate: klucz pokazany jeden raz z poleceniem curl odczytującym listę integracji i wskazówką dla Power Automate, nad listą adres bramki dla aplikacji, a na liście klucz z plakietką „tylko integracje”](obrazki/klucz.png)
 
 ### 4.6. Użytkownicy panelu
 
@@ -570,6 +577,11 @@ nadawców na SMS-y. Wymaga wyłącznie połączenia wychodzącego z maszyny bram
 na porcie 993 (albo 143). W Dockerze ani w Traefiku nie trzeba otwierać żadnego portu. Serwer
 poczty w sieci wewnętrznej wymaga `MIG_MAIL_ALLOW_PRIVATE=1` (rozdział 7.7). Integracja działa
 w imieniu klucza API z rozdziału 4.5. Załóż go najpierw.
+
+Integracja z Power Automate w kierunku „Aplikacja wysyła SMS” przyjmuje zlecenia wysyłki
+z przepływów Microsoft Power Automate. Wymaga bramki dostępnej z internetu pod domeną z HTTPS,
+zgodnie z rozdziałem 6. Konektor, jego import i budowę przepływów przedstawia artykuł
+[Power Automate](power-automate.md).
 
 ![Lista integracji z kierunkiem, ustawieniem, kluczem, stanem i licznikami z ostatniej doby](obrazki/integracje.png)
 

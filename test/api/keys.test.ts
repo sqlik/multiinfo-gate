@@ -52,8 +52,31 @@ describe('authenticate', () => {
     expect(() => authenticate(undefined, repoWith([row]))).toThrow(AuthError);
   });
 
-  it('odrzuca nagłówek bez schematu Bearer', () => {
-    expect(() => authenticate(key, repoWith([row]))).toThrow(AuthError);
+  it('przyjmuje sam klucz w nagłówku Authorization', () => {
+    expect(authenticate(key, repoWith([row])).apiKeyId).toBe(1);
+  });
+
+  it('przyjmuje klucz z białymi znakami wokół, z przedrostkiem i bez', () => {
+    expect(authenticate(` ${key}\n`, repoWith([row])).apiKeyId).toBe(1);
+    expect(authenticate(`Bearer  ${key} `, repoWith([row])).apiKeyId).toBe(1);
+  });
+
+  it.each([[undefined], [''], ['Bearer'], ['Bearer '], [`Basic ${key}`], ['token123'], [`${key} drugi`]])(
+    'nagłówek %j to 401 missing_api_key', (h) => {
+      expect(() => authenticate(h as string | undefined, repoWith([row])))
+        .toThrow(expect.objectContaining({ httpStatus: 401, code: 'missing_api_key' }));
+    });
+
+  it('ucięty klucz z przedrostkiem mig_live_ to 401 invalid_api_key', () => {
+    expect(() => authenticate('mig_live_abc', repoWith([row]))).toThrow(expect.objectContaining({ code: 'invalid_api_key' }));
+  });
+
+  it('komunikat braku klucza wymienia obie postacie', () => {
+    expect(() => authenticate(undefined, repoWith([row]))).toThrow(/Bearer <klucz>.*sam klucz/);
+  });
+
+  it('z przedrostkiem Bearer zły klucz to jak dotąd 401 invalid_api_key', () => {
+    expect(() => authenticate('Bearer token123', repoWith([row]))).toThrow(expect.objectContaining({ code: 'invalid_api_key' }));
   });
 
   it('odrzuca klucz nieznany', () => {

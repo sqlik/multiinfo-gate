@@ -272,6 +272,7 @@ export function messagePage(d: MessageDetail): string {
           ${m.inReplyTo === null ? '' : `<div>Odpowiedź na</div><div class="m"><a href="/odebrane/${esc(m.inReplyTo)}">${esc(m.inReplyTo)}</a></div>`}
           ${!d.integration ? '' : `<div>Integracja</div><div><a href="/integracje/${esc(d.integration.id)}">${esc(d.integration.name)}</a></div>`}
           ${m.mailFrom === null ? '' : `<div>E-mail nadawcy</div><div class="m">${esc(m.mailFrom)}</div>`}
+          ${m.requestedBy === null ? '' : `<div>Zlecający</div><div>${esc(m.requestedBy)}</div>`}
           <div>Części w Multiinfo</div><div>${parts}</div>
           <div>Status Multiinfo</div><div class="m">${substatus === null
             ? '<span class="dim">brak</span>'

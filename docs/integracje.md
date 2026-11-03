@@ -9,7 +9,9 @@ szablon i warunek.
 Od wersji 1.8 integracją jest również skrzynka pocztowa: bramka odczytuje wiadomości od
 dozwolonych nadawców i zamienia je na SMS-y (Mail2SMS, rozdział 5). Od wersji 1.8.5 integracją
 jest także grupa numerów: uprawniony numer wysyła SMS na numer bramki, a bramka rozsyła treść
-do stałej listy (SMS do grupy, rozdział 5a).
+do stałej listy (SMS do grupy, rozdział 5a). Od wersji 1.9 integracją jest również Power Automate.
+Przepływy Microsoft Power Automate wysyłają za jej pośrednictwem SMS-y, korzystając z konektora
+bramki (rozdział 5b).
 
 Ten rozdział opisuje cztery kierunki, język szablonów, gotowe ustawienia dla popularnych aplikacji,
 dziennik integracji oraz powiadomienia dla administratora wysyłane mailem. Wysyłkę przez pełne
@@ -26,6 +28,10 @@ Integracja działa w jednym z czterech kierunków:
 | z SMS-a | „SMS albo status trafia do aplikacji” | odebrany SMS albo status wysyłki bramka wysyła na adres aplikacji w formacie zapisanym w szablonie |
 | z poczty | „Mail2SMS” | bramka odczytuje skrzynkę IMAP i zamienia wiadomości od dozwolonych nadawców na SMS-y; numery wskazuje nadawca, lista nadawców albo stała lista (rozdział 5) |
 | do grupy | „SMS do grupy” | uprawniony numer wysyła SMS z prefiksem na numer bramki, bramka rozsyła treść bez prefiksu do stałej listy numerów (rozdział 5a) |
+
+Integracja z Power Automate również należy do kierunku „do SMS”. Tworzy się ją za pomocą kafelka
+w katalogu „Aplikacja wysyła SMS”, jednak zamiast adresu wejściowego `/hooks/` przyjmuje ona
+wywołania konektora Power Automate (rozdział 5b).
 
 Każda integracja działa w imieniu jednego klucza API. Obowiązują więc konto Multiinfo tego
 klucza, jego dozwolone usługi, nadpisy i limity, dokładnie tak jak przy wysyłce przez API.
@@ -69,7 +75,8 @@ Przycisk **Dodaj integrację** prowadzi przez trzy kroki:
 1. Kierunek: „Aplikacja wysyła SMS”, „SMS albo status trafia do aplikacji”, „Mail2SMS” albo
    „SMS do grupy”.
 2. Gotowe ustawienie: kafelek z nazwą aplikacji (rozdział 7) albo „Własne” dla aplikacji spoza
-   listy. SMS do grupy ma jedno ustawienie i otwiera formularz od razu.
+   listy. SMS do grupy ma jedno ustawienie i otwiera formularz od razu. Kafelek „Power Automate”
+   w kierunku „Aplikacja wysyła SMS” otwiera formularz integracji z Power Automate (rozdział 5b).
 3. Formularz. Gotowe ustawienie otwiera się w **trybie prostym**, „Własne” natychmiast
    w **zaawansowanym**. Przełącznik nad formularzem zmienia tryb w każdej chwili.
 
@@ -318,6 +325,9 @@ i zachowanie przy nadmiarze: „skróć z wielokropkiem” albo „odrzuć zdarz
 ten sam kod, który dzieli wiadomości w API. Polskie znaki skracają więc część do 70 znaków.
 Filtr `gsm` zamienia je na łacińskie i przywraca 160.
 
+Skrócona treść bez polskich znaków kończy się trzema kropkami. Znak „…” nie należy do alfabetu
+GSM, więc skróciłby część do 70 znaków. Skrócona treść z polskimi znakami kończy się znakiem „…”.
+
 ### 3.6. Warunek
 
 Sekcja „Warunek” decyduje, czy zdarzenie jest przetwarzane dalej. Ma dwa tryby. W trybie reguł wpisuje
@@ -375,7 +385,7 @@ Bramka odpowiada po zapisaniu wpisu i zakolejkowaniu wysyłki. Nie czeka na Mult
 | nieprawidłowy token, basic auth, źródło spoza listy | 401 albo 403 | `{ "accepted": false, "reason": "unauthorized" }` |
 | ładunek za duży, niepoprawny JSON | 413 albo 400 | komunikat serwera |
 | za dużo żądań z adresu | 429 | `{ "accepted": false, "reason": "rate_limited" }` |
-| klucz odwołany albo przeterminowany, konto wstrzymane | 503 | `{ "accepted": false, "reason": "unavailable", "detail": "…" }` |
+| klucz odwołany albo przeterminowany, konto wstrzymane | 503 | `{ "accepted": false, "reason": "unavailable", "detail": "…" }`; pole `detail` zawiera zdanie ogólne, a przyczynę podaje dziennik integracji |
 | nieznany identyfikator, integracja wyłączona | 404 | `{ "accepted": false, "reason": "unknown" }` |
 
 Kody 200 przy odrzuceniu są celowe. Aplikacje monitorujące traktują je jako sukces i nie
@@ -963,8 +973,8 @@ samym kluczu i tej samej usłudze, z innym prefiksem. Jedna grupa ma jeden prefi
 ### 5a.3. Prefiks
 
 Prefiks to jedno słowo bez spacji, do 20 znaków. Bramka porównuje je z początkiem treści SMS-a.
-Wielkość liter nie ma znaczenia. Polskie znaki są sprowadzane do łacińskich, więc „Żłobek”
-i „zlobek” to ten sam prefiks. Po słowie może stać spacja, dwukropek albo oba. Każdy z poniższych
+Wielkość liter nie ma znaczenia. Polskie znaki są sprowadzane do łacińskich, więc „Łódź”
+i „lodz” to ten sam prefiks. Po słowie może stać spacja, dwukropek albo oba. Każdy z poniższych
 zapisów daje SMS o treści `awaria pompy`:
 
 ```
@@ -1058,6 +1068,128 @@ przetworzyła, wynikiem i powodem. Szczegóły wiadomości wysłanej do odbiorcy
 - Treść odebranego SMS-a wchodzi do szablonu Liquid jak ładunek obcej aplikacji: ten sam silnik
   bez dostępu do systemu plików i te same limity
 
+## 5b. Power Automate
+
+Od wersji 1.9 bramka przyjmuje zlecenia wysyłki z przepływów Microsoft Power Automate. Przepływ
+wysyła SMS za pomocą akcji konektora Multiinfo Gate, a każde wywołanie przechodzi przez
+integrację z Power Automate skonfigurowaną w panelu bramki. Integracja określa nadawcę, usługę
+i limit części. Podobnie jak pozostałe integracje zapewnia ochronę przed burzą, prowadzi dziennik
+i powiadamia administratora.
+
+Konektor jest plikiem pobieranym z panelu bramki i importowanym w Power Automate jako łącznik
+niestandardowy. Import, tworzenie połączenia i budowę przepływów krok po kroku przedstawia
+artykuł [Power Automate](power-automate.md). Wywołania API, z których korzysta konektor, opisuje
+rozdział 5b [API dla aplikacji](api.md).
+
+Integracja z Power Automate nie obejmuje warunku, szablonu Liquid ani próbki. Treść, odbiorców
+i warunki wysyłki określa się w samym przepływie. Powielenie tych ustawień w bramce utrudniłoby
+wyszukiwanie błędów, ponieważ ta sama logika znajdowałaby się w dwóch miejscach.
+
+### 5b.1. Utworzenie integracji
+
+Przycisk **Dodaj integrację**, kierunek **Aplikacja wysyła SMS** i kafelek **Power Automate**
+otwierają formularz w trybie prostym. Nad formularzem znajduje się rozwijany opis „Jak działa
+Power Automate”. Formularz składa się z trzech sekcji:
+
+1. **Podstawy.** Nazwa, klucz API, ID usługi, nadpis nadawcy oraz pole „Włączona”. Pod nadaną
+   nazwą integracja wyświetla się w Power Automate w polu „Integracja”. Nazwa liczy najwyżej 100
+   znaków. ID usługi i nadpis wybiera się spośród uprawnień klucza albo pozostawia ustawienia
+   domyślne klucza. Lista kluczy obejmuje wyłącznie klucze czynne, bez odwołanych i wygasłych.
+2. **Odbiorcy grupy.** Pole „Numery odbiorców” przyjmuje do 500 numerów, po jednym w wierszu,
+   z opcjonalną nazwą po numerze. Składnia i normalizacja są takie same jak w SMS-ie do grupy
+   (rozdział 5a.2). Lista służy wyłącznie akcji „Wyślij SMS do grupy”, a pole jest opcjonalne.
+   Przy pustej liście ta akcja kończy się błędem, natomiast pozostałe działają bez zmian.
+3. **Treść.** Limit części z wyborem „skróć i wyślij” albo „nie wysyłaj, zapisz błąd
+   i powiadom”. Limit obowiązuje SMS do jednego numeru, każdą treść w rozsyłce oraz SMS do grupy.
+   Skracanie przebiega tak samo jak w rozdziale 3.5.
+
+![Formularz integracji z Power Automate w trybie prostym: nazwa, klucz API, ID usługi i nadpis, lista odbiorców grupy, limit części oraz pod formularzem panel Konektor Power Automate](obrazki/power-automate-formularz.png)
+
+Tryb zaawansowany odsłania dodatkowo sekcję **Ochrona i dziennik**:
+
+| Pole | Znaczenie |
+|---|---|
+| Limit burzy | liczba wywołań dopuszczalnych w oknie czasowym, domyślnie 30 wywołań w ciągu 10 minut; wywołanie ponad limit kończy się błędem i wpisem „limit”, bez wysłania SMS-a |
+| Limit odbiorców | liczba odbiorców wszystkich wywołań w tym samym oknie, od 1 do 50 000, domyślnie 5000; SMS do jednego numeru liczy się jako jeden odbiorca, a rozsyłka i SMS do grupy jako tylu odbiorców, ilu obejmują |
+| Wpisów w dzienniku | pojemność dziennika integracji, od 20 do 2000 wpisów |
+| Przechowuj ładunki w dzienniku | zachowuje treść każdego wywołania przez 7 dni w postaci zaszyfrowanej; ładunki zawierają numery i treści, dlatego opcję zaleca się włączać wyłącznie na czas konfiguracji; ładunek większy niż 64 KB, na przykład duża rozsyłka, zastępuje zdanie z jego rozmiarem |
+
+Wywołanie, które przekroczyłoby którykolwiek z limitów, kończy się błędem i wpisem „limit” bez
+wysłania SMS-a. Takie wywołanie nie zużywa żadnego z limitów. Pełna rozsyłka do 5000 odbiorców
+wyczerpuje domyślny limit odbiorców okna, dlatego zapętlony przepływ zatrzymuje się przy drugim
+wywołaniu. Jeżeli ochronę zmieniono w trybie zaawansowanym, tryb prosty wyświetla jej bieżące
+wartości.
+
+### 5b.2. Konektor
+
+Pod formularzem oraz w szczegółach integracji znajduje się panel **Konektor Power Automate**.
+Zawiera trzy kroki uruchomienia, pole **Publiczny adres bramki dla Power Automate**, przycisk
+**Pobierz konektor** oraz odnośnik **Instrukcja krok po kroku**, prowadzący do artykułu Power
+Automate.
+
+Panel uzupełnia pole adresem bramki z rozdziału 2.1, jeżeli adres ten zaczyna się od `https://`
+i zawiera domenę. Plik powstaje wyłącznie dla adresu `https://` z domeną, bez ścieżki, bez portu
+albo z portem 443. Adres rozpoczynający się od `http://`, adres IP albo inny port powodują
+wyświetlenie komunikatu zamiast pliku. Adres z pola służy wyłącznie do przygotowania pliku i nie
+jest zapisywany, dlatego wspólny adres bramki z rozdziału 2.1 może nadal wskazywać sieć firmową.
+
+Pobranie pliku wymaga zalogowania do panelu i odbywa się wyłącznie przyciskiem w panelu. Odnośnik do
+pobrania otwarty w pasku przeglądarki nie zwraca pliku, dlatego podesłany link z obcym adresem nie
+przygotuje pliku kierującego klucz API na cudzy serwer. Plik nie zawiera klucza API ani innych
+poufnych danych. Jeden plik obsługuje wszystkie integracje z Power Automate danej bramki, a właściwą
+integrację wybiera się w akcji przepływu.
+
+### 5b.3. Lista, szczegóły i dziennik
+
+Na liście integracji integracja z Power Automate jest oznaczona kierunkiem „do SMS” i podpisem
+„Power Automate” pod nazwą. Przycisk **Do SMS** nad listą obejmuje również te integracje.
+Szczegóły przedstawiają konfigurację słowami: klucz, usługę, nadpis nadawcy, odbiorców grupy wraz
+z nazwami, limit części ze sposobem postępowania przy nadmiarze, limit burzy z limitem odbiorców,
+ustawienie ładunków i pojemność dziennika.
+
+Dziennik działa tak, jak opisuje rozdział 8. Każde wywołanie akcji wysyłającej pozostawia jeden
+wpis. Akcje sprawdzające stan wiadomości, stan rozsyłki i raport nie tworzą wpisów. Kolumna
+„Nadawca” pokazuje `API · <zlecający> · <adres IP wywołania>`, jeżeli przepływ uzupełnił pole
+„Zlecający”, a w przeciwnym razie `API · <adres IP wywołania>`. Zlecającego podaje sam przepływ,
+dlatego adres IP pozostaje w dzienniku zawsze. Pole „Zlecający” nie przyjmuje znaków sterujących
+ani niewidocznych znaków formatowania, które mogłyby zmienić wygląd wpisu.
+
+![Szczegóły integracji z Power Automate: konfiguracja opisana słowami, panel Konektor Power Automate i dziennik z wpisami „wysłano” oraz „błąd”, w kolumnie Nadawca zlecający z przepływu i adres IP wywołania](obrazki/power-automate-szczegol.png)
+
+| Wynik | Powód |
+|---|---|
+| wysłano | nazwa akcji, a przy wielu odbiorcach także ich liczba: `Wyślij SMS`, `Wyślij rozsyłkę, 14 odbiorców`, `Wyślij SMS do grupy, 3 odbiorców`; skrócona treść otrzymuje dopisek `skrócono do 1 części` |
+| limit | przekroczenie limitu burzy, na przykład `ponad 30 w 10 min`, albo limitu odbiorców, na przykład `ponad 5000 odbiorców w 10 min` |
+| duplikat | powtórzone wywołanie z tym samym kluczem idempotencji, na przykład `Wyślij SMS, powtórzony klucz idempotencji`; bramka zwraca pierwotną odpowiedź i niczego nie wysyła |
+| błąd | nazwa akcji i komunikat bramki, na przykład `Wyślij SMS do grupy: Integracja Biuro handlowe nie ma odbiorców grupy. Listę uzupełnia administrator w panelu bramki.` |
+
+Wpis „wysłano” prowadzi do pierwszej wiadomości albo do rozsyłki. Wywołanie wyłączonej
+integracji nie pozostawia wpisu.
+
+Szczegóły wiadomości i rozsyłki zawierają wiersz „Integracja” z nazwą integracji, a jeżeli
+przepływ podał zlecającego, także wiersz „Zlecający”. Informacja o zlecającym pozostaje przy
+wiadomości i rozsyłce na stałe, również po usunięciu wpisu z dziennika. Lista rozsyłek wyświetla
+nazwę integracji pod nazwą klucza.
+
+### 5b.4. Koszt i bezpieczeństwo
+
+- Klucz API wklejony w połączeniu Power Automate umożliwia wysyłkę przez każdą integrację Power
+  Automate tego klucza. Osobny klucz dla Power Automate można odwołać bez wpływu na pozostałe
+  aplikacje
+- Klucz z opcją „Tylko integracje” (rozdział 4.5 [Uruchomienia](uruchomienie.md)) nie pozwala
+  wysyłać przez `POST /v1/messages` ani `POST /v1/packages`. Przepływ nie może nim zatem ominąć
+  limitu części, ochrony przed burzą ani dziennika, na przykład akcją HTTP
+- Limit odbiorców ogranicza liczbę SMS-ów zleconych w jednym oknie, także przez rozsyłki i SMS do
+  grupy. Domyślnie wynosi 5000 odbiorców w ciągu 10 minut, czyli jedną pełną rozsyłkę
+- Odpowiedź akcji „Wyślij SMS do grupy” nie zawiera numerów członków grupy, dlatego lista nie
+  trafia do historii przebiegów w chmurze Microsoftu
+- Pusty numer w akcji „Wyślij SMS” powoduje błąd. W takiej sytuacji akcja nigdy nie wysyła SMS-a
+  do listy odbiorców integracji
+- Integracja wyłączona albo usunięta po zapisaniu przepływu nie wysyła żadnych wiadomości,
+  a przepływ otrzymuje błąd z czytelnym kodem
+- Panel bramki nie musi być dostępny z internetu, ponieważ Power Automate korzysta wyłącznie
+  z portu API
+
 ## 6. Szablony Liquid
 
 ### 6.1. Składnia w pigułce
@@ -1102,7 +1234,7 @@ i inne z dokumentacji LiquidJS) bramka dodaje pięć własnych:
 
 | Filtr | Działanie | Przykład |
 |---|---|---|
-| `sms_truncate: N` | utnij do N znaków z wielokropkiem | `{{ p.heartbeat.msg \| sms_truncate: 100 }}` |
+| `sms_truncate: N` | utnij do N znaków razem z zakończeniem: trzy kropki, a przy polskich znakach znak „…” | `{{ p.heartbeat.msg \| sms_truncate: 100 }}` |
 | `gsm` | zamień polskie znaki na łacińskie, żeby część SMS-a mieściła 160 zamiast 70 znaków | `{{ p.text \| gsm }}` |
 | `phone` | znormalizuj numer jak w rozdziale 3.3 | `{{ p.contact.phone \| phone }}` |
 | `date_pl` | czas w strefie polskiej jako `DD.MM.RRRR GG:MM` | `{{ receivedAt \| date_pl }}` |
@@ -1201,7 +1333,7 @@ a nadmiar odrzuca. Jeżeli aplikacja ma pole na nagłówki, dodaj w bramce nagł
 SMS z przepływu n8n oraz odebrany SMS jako wyzwalacz przepływu. Ustawienie działa w obie strony.
 
 **Do SMS.** W przepływie dodaj węzeł **HTTP Request**. **Method** ustaw na `POST`, a **URL** to
-adres wejściowy integracji. Włącz **Send Body** i ustaw **Body Content Type** na `JSON`. W ciele
+adres wejściowy integracji. Włącz **Send Body** i ustaw **Body Content Type** na `JSON`. W body
 podaj dwa pola:
 
 ```json
@@ -1373,7 +1505,7 @@ Z ładunku wyżej wychodzi „Nowe zamowienie #14 na 49.00 PLN od Anna Kowalska�
 warianty treści dokładają sposób płatności albo liczbę pozycji.
 
 Warunek ustawienia sprawdza, czy ładunek ma pole `id`. Zaraz po zapisaniu webhooka sklep wysyła
-pod ten adres żądanie próbne z ciałem `webhook_id=1`. Warunek je odsiewa, więc bramka odpowiada
+pod ten adres żądanie próbne z body `webhook_id=1`. Warunek je odsiewa, więc bramka odpowiada
 kodem 200 i nie wysyła SMS-a. Bez tego warunku zamiast zamówienia zostałby wysłany SMS bez treści,
 a sklep pokazałby błąd zapisu.
 

@@ -48,7 +48,7 @@ export async function startEmergency(config: AppConfig, failure: StartupFailure,
     return reply.send({ error: { code: 'unavailable', message: API_MESSAGE } });
   };
 
-  // Każda odpowiedź, także na zepsuty adres i nieczytelne ciało żądania, ma kształt trybu awaryjnego.
+  // Każda odpowiedź, także na zepsuty adres i nieczytelne body żądania, ma kształt trybu awaryjnego.
   const panel = Fastify({ logger: false, frameworkErrors: (_error, _request, reply) => sendPage(reply) });
   // Trasy tylko dla istniejących plików: katalog (`/`, `/fonts/`) i każda inna ścieżka idą do strony przyczyny.
   panel.register(fastifyStatic, { root: publicPath, prefix: '/', index: false, wildcard: false });

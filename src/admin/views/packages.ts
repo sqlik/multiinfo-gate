@@ -12,12 +12,16 @@ export interface PackagesData {
   limit: number;
   keyNames: Map<number, string>;
   accountNames: Map<number, string>;
+  /** Nazwy integracji z Power Automate, z których przyszły rozsyłki. */
+  integrationNames: Map<number, string>;
 }
 
 export interface PackageDetail {
   row: PackageRow;
   accountName: string;
   keyName: string;
+  /** Integracja z Power Automate, która zleciła rozsyłkę; brak dla rozsyłki z API. */
+  integration: { id: number; name: string } | null;
   recipients: RecipientRow[];
   /** Ilu odbiorców pokazujemy; reszta jest w CSV. */
   shown: number;
@@ -41,7 +45,8 @@ export function packagesPage(data: PackagesData): string {
         <td class="m dim">${esc(stamp(p.createdAt))}</td>
         <td class="m"><a href="/rozsylki/${esc(p.id)}">${esc(p.id)}</a></td>
         <td>${esc(data.accountNames.get(p.accountId) ?? `konto ${p.accountId}`)}</td>
-        <td class="dim">${esc(data.keyNames.get(p.apiKeyId) ?? `klucz ${p.apiKeyId}`)}</td>
+        <td class="dim">${esc(data.keyNames.get(p.apiKeyId) ?? `klucz ${p.apiKeyId}`)}${p.integrationId === null ? ''
+          : `<div style="font-size: 11.5px; margin-top: 2px;"><a href="/integracje/${esc(p.integrationId)}">${esc(data.integrationNames.get(p.integrationId) ?? `integracja ${p.integrationId}`)}</a></div>`}</td>
         <td class="m">${esc(p.recipientsCount)}</td>
         <td class="m">${p.remainingCount === null ? '<span class="dim">-</span>' : esc(p.remainingCount)}</td>
         <td>${state(p)}</td>
@@ -106,13 +111,24 @@ function recipientRow(r: RecipientRow): string {
     </tr>`;
 }
 
+/** Zdanie w miejscu podsumowania, zanim wczytano raport. Raport powstaje tylko dla zakończonej rozsyłki. */
+function summaryPending(p: PackageRow): string {
+  if (p.status === 'cancelled' || p.status === 'failed') {
+    return 'Podsumowanie nie jest dostępne, ponieważ raport powstaje wyłącznie dla zakończonej rozsyłki.';
+  }
+  const lead = 'Podsumowanie pojawi się po wczytaniu raportu';
+  if (p.reportStatus !== 'none') return `${lead} (stan: ${reportStatusLabel(p.reportStatus)}).`;
+  return p.status === 'completed'
+    ? `${lead}. Raport nie został jeszcze zamówiony.`
+    : `${lead}. Bramka zamówi raport po zakończeniu rozsyłki.`;
+}
+
 export function packagePage(d: PackageDetail): string {
   const p = d.row;
   const yes = (v: 0 | 1) => (v === 1 ? 'tak' : 'nie');
 
   const summary = d.summary === null
-    ? `<div class="dim" style="padding: 14px 16px; font-size: 12.5px;">Podsumowanie pojawi się po wczytaniu raportu
-        (stan: ${esc(reportStatusLabel(p.reportStatus))}).</div>`
+    ? `<div class="dim" style="padding: 14px 16px; font-size: 12.5px;">${esc(summaryPending(p))}</div>`
     : `<div class="tiles" style="margin: 0; padding: 12px 16px;">
         <div class="tile"><div class="lab">Doręczone</div><div class="n ok">${esc(d.summary.delivered)}</div></div>
         <div class="tile"><div class="lab">Nieudane</div><div class="n fail">${esc(d.summary.failed)}</div></div>
@@ -124,7 +140,7 @@ export function packagePage(d: PackageDetail): string {
     : `<span class="btn btn-s disabled" title="${esc(reportStatusLabel(p.reportStatus))}">Pobierz CSV</span>`;
 
   const reportState = p.reportStatus === 'ready'
-    ? `gotowy · ${esc(p.recipientsCount)} odbiorców`
+    ? `gotowy · ${esc(p.recipientsCount)} ${p.recipientsCount === 1 ? 'odbiorca' : 'odbiorców'}`
       + (p.reportExpiresAt === null ? '' : ` · ważny do ${esc(stamp(p.reportExpiresAt))}`)
     : `<span class="${p.reportStatus === 'failed' ? 'fail' : 'dim'}">${esc(reportStatusLabel(p.reportStatus))}</span>`;
 
@@ -148,6 +164,8 @@ export function packagePage(d: PackageDetail): string {
       <div class="panel">
         <div class="panel-h"><div class="lab">Parametry</div></div>
         <div class="kv">
+          ${d.integration === null ? '' : `<div>Integracja</div><div><a href="/integracje/${esc(d.integration.id)}">${esc(d.integration.name)}</a></div>`}
+          ${p.requestedBy === null ? '' : `<div>Zlecający</div><div>${esc(p.requestedBy)}</div>`}
           <div>ID usługi</div><div class="m">${esc(p.serviceId)}</div>
           <div>Nadpis</div><div class="m">${esc(p.orig ?? '-')}</div>
           <div>Kodowanie</div><div class="m">${esc(p.encoding === 'gsm' ? 'GSM-7' : 'UCS-2')}${p.multipart === 1 ? ' · wieloczęściowa' : ''}</div>

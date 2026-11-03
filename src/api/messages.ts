@@ -1,18 +1,21 @@
 import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
+import { z } from '../zod.ts';
 import type { MessageRow } from '../store/messages.ts';
-import { authenticate } from './auth.ts';
+import { authenticate, refuseIntegrationsOnly } from './auth.ts';
+import { dropEmptyFields } from './empty-fields.ts';
 import { ApiError } from './errors.ts';
 import type { ApiDeps } from './server.ts';
 import { submitMessages } from './submit.ts';
 
 /**
- * Schemat ciała wysyłki. Poza trasą używa go opis API w formacie OpenAPI
+ * Schemat body wysyłki. Poza trasą używa go opis API w formacie OpenAPI
  * (`src/api/openapi.ts`), żeby nowe pole nie mogło umknąć opisowi.
  */
 export const messageBodySchema = z.object({
-  to: z.union([z.string(), z.array(z.string()).min(1).max(500)]),
-  text: z.string().min(1),
+  to: z.union([z.string(), z.array(z.string()).min(1).max(500)], {
+    error: (issue) => (issue.input === undefined ? 'Numer odbiorcy jest pusty.' : 'Pole to musi być numerem w postaci tekstu albo listą numerów.'),
+  }),
+  text: z.string({ error: (issue) => (issue.input === undefined ? 'Treść jest pusta.' : undefined) }).min(1, 'Treść jest pusta.'),
   orig: z.string().optional(),
   serviceId: z.union([z.string(), z.number()]).optional(),
   encoding: z.enum(['auto', 'gsm', 'unicode']).default('auto'),
@@ -30,12 +33,13 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
 
   app.post('/v1/messages', async (request, reply) => {
     const auth = authenticate(request.headers.authorization, deps.apiKeys);
+    refuseIntegrationsOnly(auth);
 
     if (!deps.rateLimiter.check(auth.apiKeyId, auth.ratePerMin)) {
       throw new ApiError(429, 'rate_limited', `Przekroczono limit ${auth.ratePerMin} żądań na minutę.`);
     }
 
-    const parsed = messageBodySchema.safeParse(request.body);
+    const parsed = messageBodySchema.safeParse(dropEmptyFields(request.body));
     if (!parsed.success) {
       throw new ApiError(
         400,

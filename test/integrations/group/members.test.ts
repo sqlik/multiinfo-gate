@@ -20,6 +20,19 @@ describe('parseMemberLines', () => {
   it('nazwa dłuższa niż 40 znaków to błąd', () => {
     expect(parseMemberLines(`601000001 ${'a'.repeat(41)}`, '48')).toMatchObject({ ok: false, error: expect.stringContaining('40') });
   });
+  it('wiersz z numerem, tysiącami spacji i znakiem spoza wzorca kończy się od razu, bez wielokrotnego dopasowania', () => {
+    const started = performance.now();
+    const out = parseMemberLines(`1${' '.repeat(100_000)}!`, '48');
+    expect(performance.now() - started).toBeLessThan(100);
+    expect(out).toMatchObject({ ok: false });
+  });
+  it('wiersz dłuższy niż 200 znaków to błąd z numerem wiersza', () => {
+    expect(parseMemberLines(`601000001 Ania\n601000002 ${'a'.repeat(30)}${' '.repeat(170)}x`, '48'))
+      .toEqual({ ok: false, error: 'Wiersz 2 listy numerów ma więcej niż 200 znaków.' });
+  });
+  it('numer z nawiasami, kropkami i plusem, a nazwa od pierwszej litery', () => {
+    expect(parseMemberLines('+48 (601) 000.001 Jan Kowalski', '48')).toEqual({ ok: true, members: [{ phone: '48601000001', name: 'Jan Kowalski' }] });
+  });
   it('pusty tekst to pusta lista', () => {
     expect(parseMemberLines('\n  \n', '48')).toEqual({ ok: true, members: [] });
   });

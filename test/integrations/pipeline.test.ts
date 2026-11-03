@@ -295,7 +295,7 @@ describe('runInbound', () => {
     const out = await runInbound(deps, cut, { msg: long }, ip, NOW) as { messageIds: string[] };
     const m = deps.messages.get(out.messageIds[0]!)!;
     expect(m.parts).toBe(1);
-    expect(m.body!.endsWith('…')).toBe(true);
+    expect(m.body!.endsWith('...')).toBe(true);
     const reject = make({ maxParts: 1, overflow: 'reject' }, { name: 'Kuma 2' });
     expect(await runInbound(deps, reject, { msg: long }, ip, NOW)).toMatchObject({ kind: 'error', code: 'too_many_parts' });
   });
@@ -384,5 +384,14 @@ describe('fitToParts', () => {
     expect(cut.over).toBe(true);
     expect(cut.parts).toBe(1);
     expect(cut.text.length).toBeLessThanOrEqual(160);
+  });
+  it('treść GSM kończy trzema kropkami, żeby nie przejść na UCS-2', () => {
+    expect(fitToParts('a'.repeat(200), 1).text).toBe(`${'a'.repeat(157)}...`);
+    expect(fitToParts(`${'a'.repeat(200)}ż`, 1).text).toBe(`${'a'.repeat(157)}...`);
+    expect(fitToParts('ż'.repeat(200), 1, 'gsm').text).toBe(`${'ż'.repeat(157)}...`);
+  });
+  it('treść UCS-2 kończy wielokropkiem', () => {
+    expect(fitToParts('ż'.repeat(100), 1).text).toBe(`${'ż'.repeat(69)}…`);
+    expect(fitToParts('a'.repeat(100), 1, 'unicode').text).toBe(`${'a'.repeat(69)}…`);
   });
 });

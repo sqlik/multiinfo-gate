@@ -33,7 +33,7 @@ describe('backupDatabase', () => {
     expect(path).toBe(join(dir, 'multiinfo-gate-2026-08-26.sqlite'));
     expect(backupFileName(NOW)).toBe('multiinfo-gate-2026-08-26.sqlite');
     const copy = new Database(path, { readonly: true });
-    expect(copy.pragma('user_version', { simple: true })).toBe(9);
+    expect(copy.pragma('user_version', { simple: true })).toBe(10);
     expect(copy.prepare('SELECT COUNT(*) AS n FROM admin_users').get()).toEqual({ n: 1 });
     // Kopia to cały plik, więc tabele integracji i powiadomień z migracji 006 są w niej razem ze schematem.
     const tables = (copy.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>).map((t) => t.name);
@@ -42,6 +42,19 @@ describe('backupDatabase', () => {
     }
     copy.close();
     expect(readdirSync(dir).some((f) => f.endsWith('.part'))).toBe(false);
+  });
+});
+
+describe('backupDatabaseTo', () => {
+  it('uszkodzony plik .part po przerwanej kopii nie blokuje następnej kopii', async () => {
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, 'przed-aktualizacja-1.8.7.sqlite');
+    writeFileSync(`${path}.part`, 'resztka przerwanej kopii');
+    await backupDatabaseTo(db, path);
+    const copy = new Database(path, { readonly: true });
+    expect(copy.prepare('SELECT login FROM admin_users').get()).toEqual({ login: 't' });
+    copy.close();
+    expect(existsSync(`${path}.part`)).toBe(false);
   });
 });
 

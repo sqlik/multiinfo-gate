@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { reportCsv } from '../../api/packages.ts';
 import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
+import { integrationLink } from '../views/deliveries.ts';
 import { packagePage, packagesPage } from '../views/packages.ts';
 
 const PAGE_SIZE = 25;
@@ -26,6 +27,7 @@ export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps,
         limit: PAGE_SIZE,
         keyNames: new Map(deps.apiKeys.list().map((k) => [k.id, k.name])),
         accountNames: new Map(deps.accounts.list().map((a) => [a.id, a.name])),
+        integrationNames: new Map(deps.integrations.list().map((i) => [i.id, i.name])),
       }),
     });
   });
@@ -42,6 +44,7 @@ export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps,
         row,
         accountName: deps.accounts.get(row.accountId)?.name ?? `konto ${row.accountId}`,
         keyName: deps.apiKeys.get(row.apiKeyId)?.name ?? `klucz ${row.apiKeyId}`,
+        integration: row.integrationId === null ? null : integrationLink(deps, row.integrationId),
         recipients: deps.packages.recipients(row.id, RECIPIENTS_SHOWN),
         shown: RECIPIENTS_SHOWN,
         summary: row.reportStatus === 'ready' ? deps.packages.recipientSummary(row.id) : null,

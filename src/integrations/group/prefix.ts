@@ -1,6 +1,6 @@
 import { toGsm } from '../templates.ts';
 
-/** Postać do porównania prefiksu: polskie znaki sprowadzone do łacińskich, małe litery. „Żłobek” i „zlobek” to ten sam prefiks. */
+/** Postać do porównania prefiksu: polskie znaki sprowadzone do łacińskich, małe litery. „Łódź” i „lodz” to ten sam prefiks. */
 export const foldText = (text: string): string => toGsm(text).toLowerCase();
 
 export type PrefixMatch = { ok: true; body: string } | { ok: false; reason: 'no_prefix' | 'empty' };

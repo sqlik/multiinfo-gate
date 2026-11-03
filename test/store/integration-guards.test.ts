@@ -42,4 +42,19 @@ describe('throttle', () => {
     for (let i = 0; i < 2; i += 1) guards.throttle(integrationId, 3, 10, later(11));
     expect(guards.throttle(integrationId, 3, 10, later(12))).toEqual({ allowed: false, notify: true });
   });
+
+  it('limit odbiorców w tym samym oknie: wywołanie ponad limit odbiorców odpada i nie zużywa limitu', () => {
+    const recipients = (count: number) => ({ count, limit: 1000 });
+    expect(guards.throttle(integrationId, 30, 10, NOW, recipients(600))).toEqual({ allowed: true, notify: false });
+    expect(guards.throttle(integrationId, 30, 10, later(1), recipients(600))).toEqual({ allowed: false, notify: true, by: 'recipients' });
+    expect(guards.throttle(integrationId, 30, 10, later(2), recipients(400))).toEqual({ allowed: true, notify: false });
+    expect(guards.throttle(integrationId, 30, 10, later(3), recipients(1))).toEqual({ allowed: false, notify: false, by: 'recipients' });
+    // Nowe okno zeruje także licznik odbiorców.
+    expect(guards.throttle(integrationId, 30, 10, later(11), recipients(1000))).toEqual({ allowed: true, notify: false });
+  });
+
+  it('przekroczony limit wywołań wskazuje wywołania', () => {
+    guards.throttle(integrationId, 1, 10, NOW, { count: 1, limit: 1000 });
+    expect(guards.throttle(integrationId, 1, 10, later(1), { count: 1, limit: 1000 })).toEqual({ allowed: false, notify: true, by: 'calls' });
+  });
 });

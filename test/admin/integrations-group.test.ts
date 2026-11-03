@@ -10,7 +10,7 @@ beforeEach(async () => {
   h = await startAdminHarness(NOW);
   const accountId = seedAccount(h);
   apiKeyId = h.apiKeys.insert({
-    accountId, name: 'Szkoła', keyHash: 'argon2:aaa', keyPrefix: 'a1b2c3d4', defaultServiceId: '24138', defaultOrig: null, maxParts: 5, ratePerMin: 60,
+    accountId, name: 'Firma serwisowa', keyHash: 'argon2:aaa', keyPrefix: 'a1b2c3d4', defaultServiceId: '24138', defaultOrig: null, maxParts: 5, ratePerMin: 60,
     webhookUrl: null, webhookSecret: null, serviceIds: ['24138'],
   });
 });
@@ -22,8 +22,8 @@ const post = (url: string, fields: Record<string, string | string[]>) => {
   return h.app.inject({ method: 'POST', url, headers: { cookie: h.cookie, 'content-type': 'application/x-www-form-urlencoded' }, payload: params.toString() });
 };
 const formBody = (over: Record<string, string | string[]> = {}): Record<string, string | string[]> => ({
-  name: 'Dzieci', apiKeyId: String(apiKeyId), serviceId: '', orig: '', enabled: '1', mode: 'lists', senders: '601 000 001 Ania', recipients: '601000002\n601000003', members: '',
-  prefix: 'dzieci', textMode: 'body', textTemplate: '', maxParts: '1', overflow: 'truncate', throttleLimit: '10', throttleWindow: '10', eventLogLimit: '200',
+  name: 'Ekipa serwisowa', apiKeyId: String(apiKeyId), serviceId: '', orig: '', enabled: '1', mode: 'lists', senders: '601 000 001 Ania', recipients: '601000002\n601000003', members: '',
+  prefix: 'serwis', textMode: 'body', textTemplate: '', maxParts: '1', overflow: 'truncate', throttleLimit: '10', throttleWindow: '10', eventLogLimit: '200',
   conditionMode: 'builder', tryb: 'prosty', sampleFrom: '', sampleText: '', ...over,
 });
 const create = (over: Record<string, string | string[]> = {}) => post('/integracje', { kind: 'sms_group', preset: 'sms-grupa', ...formBody(over) });
@@ -51,12 +51,12 @@ describe('formularz SMS do grupy', () => {
     expect(res.statusCode).toBe(302);
     const row = groupRow();
     expect(res.headers.location).toBe(`/integracje/${row.id}`);
-    expect(row).toMatchObject({ name: 'Dzieci', preset: 'sms-grupa', enabled: 1, apiKeyId });
-    expect(row.config).toMatchObject({ mode: 'lists', senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002', '48601000003'], members: [], prefix: 'dzieci', text: { mode: 'body' }, confirm: { enabled: false } });
+    expect(row).toMatchObject({ name: 'Ekipa serwisowa', preset: 'sms-grupa', enabled: 1, apiKeyId });
+    expect(row.config).toMatchObject({ mode: 'lists', senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002', '48601000003'], members: [], prefix: 'serwis', text: { mode: 'body' }, confirm: { enabled: false } });
     expect(h.refreshed.at(-1)).toEqual({ retryAccount: h.apiKeys.get(apiKeyId)!.accountId });
     expect(h.audit.list(5, 0)[0]).toMatchObject({ action: 'integracja.utworzenie', target: `integracja:${row.id}` });
     const detail = (await get(`/integracje/${row.id}`)).body;
-    expect(detail).toContain('Grupa Dzieci utworzona.');
+    expect(detail).toContain('Grupa Ekipa serwisowa utworzona.');
   });
   it('błąd walidacji wraca formularzem z komunikatem i kodem 400, bez zapisu', async () => {
     const res = await create({ recipients: '' });
@@ -74,9 +74,9 @@ describe('formularz SMS do grupy', () => {
     expect(again.body).toContain('Integracja o tej nazwie już istnieje');
   });
   it('„Sprawdź” pokazuje podgląd bez zapisu: nadawca, prefiks, odbiorcy, SMS, potwierdzenie', async () => {
-    const res = await create({ action: 'sprawdz', confirmEnabled: 'on', sampleText: 'Dzieci: jutro zbiórka' });
+    const res = await create({ action: 'sprawdz', confirmEnabled: 'on', sampleText: 'Serwis: jutro odprawa' });
     expect(res.statusCode).toBe(200);
-    for (const t of ['Nadawca na liście', 'Prefiks pasuje', 'jutro zbiórka', '48601000002, 48601000003', 'Wysłano do 2 odbiorców', 'bez zapisu i bez wysyłki']) expect(res.body).toContain(t);
+    for (const t of ['Nadawca na liście', 'Prefiks pasuje', 'jutro odprawa', '48601000002, 48601000003', 'Wysłano do 2 odbiorców', 'bez zapisu i bez wysyłki']) expect(res.body).toContain(t);
     expect(h.integrations.list()).toHaveLength(0);
     const foreign = await create({ action: 'sprawdz', sampleFrom: '+48 601 000 009', sampleText: 'halo' });
     expect(foreign.body).toContain('Nadawca spoza listy: wiadomość zostałaby pominięta');
@@ -88,16 +88,16 @@ describe('formularz SMS do grupy', () => {
     await create({ confirmEnabled: 'on' });
     const row = groupRow();
     const detail = (await get(`/integracje/${row.id}`)).body;
-    for (const t of ['do grupy', 'osobne listy: 1 nadawca, 2 odbiorców', 'Ania (48601000001)', '48601000002, 48601000003', 'dzieci', 'Potwierdzenie do nadawcy', 'sama treść', '<th style="width: 130px;">Nadawca</th>']) expect(detail).toContain(t);
+    for (const t of ['do grupy', 'osobne listy: 1 nadawca, 2 odbiorców', 'Ania (48601000001)', '48601000002, 48601000003', 'serwis', 'Potwierdzenie do nadawcy', 'sama treść', '<th style="width: 130px;">Nadawca</th>']) expect(detail).toContain(t);
     const edit = (await get(`/integracje/${row.id}/edytuj`)).body;
     expect(edit).toContain('48601000001 Ania');
     expect(edit).toContain('48601000002\n48601000003');
     expect(edit).toContain('Zapisz grupę');
     expect(edit).toContain('name="confirmEnabled" value="1" checked');
-    const eventId = h.integrationEvents.record({ integrationId: row.id, at: NOW, result: 'skipped', reason: 'bez prefiksu', logLimit: 200, payload: JSON.stringify({ id: 'in_9', serviceId: '24138', from: '48601000001', to: '7968', kind: 'text', text: 'jutro zbiórka', receivedAt: NOW.toISOString(), relatedMessageId: null }) });
+    const eventId = h.integrationEvents.record({ integrationId: row.id, at: NOW, result: 'skipped', reason: 'bez prefiksu', logLimit: 200, payload: JSON.stringify({ id: 'in_9', serviceId: '24138', from: '48601000001', to: '7968', kind: 'text', text: 'jutro odprawa', receivedAt: NOW.toISOString(), relatedMessageId: null }) });
     const withSample = (await get(`/integracje/${row.id}/edytuj?probka=${eventId}`)).body;
     expect(withSample).toContain('value="48601000001"');
-    expect(withSample).toContain('>jutro zbiórka</textarea>');
+    expect(withSample).toContain('>jutro odprawa</textarea>');
     expect(withSample).toContain('Szablon Liquid');
     const saved = await post(`/integracje/${row.id}/edytuj`, formBody({ mode: 'closed', members: '601000001 Ania\n601000002 Basia', name: 'Zespół', tryb: 'zaawansowany' }));
     expect(saved.statusCode).toBe(302);
@@ -109,9 +109,18 @@ describe('formularz SMS do grupy', () => {
     expect(closedDetail).toContain('grupa zamknięta: 2 członków');
     expect(closedDetail).toContain('Grupa Zespół zapisana.');
   });
+  it('szczegół grupy nie podaje identyfikatora dla API ani konektora: grupy działają tylko przy SMS-ie od uprawnionego numeru', async () => {
+    await create();
+    const row = groupRow();
+    const detail = (await get(`/integracje/${row.id}`)).body;
+    expect(detail).not.toContain('grp_');
+    expect(detail).not.toContain('Power Automate');
+    expect(detail).not.toContain('Identyfikator w API');
+  });
+
   it('edycja grupy z Liquidem otwiera się zaawansowana z wyjaśnieniem; odrzucanie nadmiaru zostaje w prostym', async () => {
     const id = h.integrations.insert({
-      name: 'Rodzice', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1,
+      name: 'Kierownicy', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1,
       config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], overflow: 'reject', text: { mode: 'liquid', template: '{{ body }}' } }, secrets: {}, storePayloads: 0, createdAt: NOW,
     });
     const edit = (await get(`/integracje/${id}/edytuj`)).body;
@@ -134,10 +143,10 @@ describe('formularz SMS do grupy', () => {
     h.integrations.insert({ name: 'HA', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1, config: { condition: { mode: 'builder', rules: [] }, throttle: { limit: 10, windowMinutes: 10 }, eventLogLimit: 200, events: ['message.received'], url: 'https://ha.example/x', method: 'POST', headers: [], body: { mode: 'json', template: '{}' }, sign: false }, secrets: {}, storePayloads: 0, createdAt: NOW });
     const all = (await get('/integracje')).body;
     expect(all).toContain('>Do grupy</a>');
-    expect(all).toContain('Dzieci');
+    expect(all).toContain('Ekipa serwisowa');
     expect(all).toContain('HA');
     const filtered = (await get('/integracje?rodzaj=grupa')).body;
-    expect(filtered).toContain('Dzieci');
+    expect(filtered).toContain('Ekipa serwisowa');
     expect(filtered).not.toContain('>HA<');
     expect(filtered).toContain('<span class="tag">do grupy</span>');
   });

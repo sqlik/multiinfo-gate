@@ -44,6 +44,7 @@ function formValues(body: Body): KeyFormValues {
     origs: values(body.origs), defaultOrig: s('defaultOrig'), maxParts: s('maxParts'), ratePerMin: s('ratePerMin'),
     webhookUrl: s('webhookUrl'), expiresOn: s('expiresOn'), noExpiry: s('noExpiry') === '1',
     inboundSubscribed: s('inboundSubscribed') === '1',
+    integrationsOnly: s('integrationsOnly') === '1',
   };
 }
 
@@ -192,6 +193,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       origs: v.origs,
       expiresAt: checked.expiresAt,
       inboundSubscribed: v.inboundSubscribed ? 1 : 0,
+      integrationsOnly: v.integrationsOnly ? 1 : 0,
     });
     // Nowy subskrybent może zapalić odbiór usługi - odbiornik uzgadnia pętle od razu, nie za 10 s.
     deps.receiver?.refresh({ retryAccount: choice.row.id });
@@ -203,14 +205,14 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       target: `klucz:${id}`,
       meta: {
         nazwa: v.name, konto: choice.row.name, prefiks: generated.prefix, uslugi: v.serviceIds, nadpisy: v.origs,
-        webhook: checked.webhookUrl, wazny_do: checked.expiresAt, odbior: v.inboundSubscribed,
+        webhook: checked.webhookUrl, wazny_do: checked.expiresAt, odbior: v.inboundSubscribed, tylko_integracje: v.integrationsOnly,
       },
       ip: request.ip,
     });
 
     // Odpowiadamy stroną, a nie przekierowaniem: klucz nie może trafić do adresu,
     // bo adresy lądują w historii przeglądarki i w logach pośredników.
-    return listBody(request, { name: v.name, key: generated.key, webhookSecret });
+    return listBody(request, { name: v.name, key: generated.key, webhookSecret, integrationsOnly: v.integrationsOnly });
   });
 
   app.get<{ Params: { id: string } }>('/klucze/:id/edytuj', async (request, reply) => {
@@ -262,6 +264,7 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
       ...(webhookSecret === undefined ? {} : { webhookSecret }),
       expiresAt: checked.expiresAt, serviceIds: v.serviceIds, origs: v.origs,
       inboundSubscribed: v.inboundSubscribed ? 1 : 0,
+      integrationsOnly: v.integrationsOnly ? 1 : 0,
     });
     deps.receiver?.refresh({ retryAccount: key.accountId });
     const after = valuesOf(deps.apiKeys.get(key.id)!);

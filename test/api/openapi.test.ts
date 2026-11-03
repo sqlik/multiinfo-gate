@@ -1,65 +1,13 @@
-import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildOpenApiDocument } from '../../src/api/openapi.ts';
-import { RateLimiter } from '../../src/api/rate-limit.ts';
-import { buildApiServer } from '../../src/api/server.ts';
-import { AccountsRepo } from '../../src/store/accounts.ts';
-import { ApiKeysRepo } from '../../src/store/api-keys.ts';
-import { openDatabase } from '../../src/store/db.ts';
-import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
-import { JobsRepo } from '../../src/store/jobs.ts';
-import { MessageEventsRepo } from '../../src/store/message-events.ts';
-import { MessagesRepo } from '../../src/store/messages.ts';
-import { PackagesRepo } from '../../src/store/packages.ts';
-import { integrationDeps } from '../helpers/api-deps.ts';
-
-/**
- * Trasy prawdziwego serwera, w postaci `METODA /adres`. Fastify rysuje je drzewem ze wspólnymi
- * przedrostkami, więc pełny adres powstaje ze sklejenia gałęzi od korzenia do liścia.
- */
-function trasySerwera(drzewo: string): string[] {
-  const sciezki: string[] = [];
-  const przodkowie: string[] = [];
-  for (const linia of drzewo.split('\n')) {
-    const marker = linia.search(/[├└]── /);
-    if (marker === -1) continue;
-    const poziom = Math.floor(marker / 4);
-    const tresc = linia.slice(marker + 4);
-    const [, segment = '', metody] = /^(.*?)(?: \(([^()]*)\))?$/.exec(tresc) ?? [];
-    przodkowie.length = poziom;
-    przodkowie.push(segment);
-    if (!metody) continue;
-    // Fastify dokłada HEAD do każdego GET-a; opis API mówi o metodach, które wywołuje aplikacja.
-    const adres = przodkowie.join('').replace(/:([A-Za-z]+)/g, '{$1}');
-    for (const metoda of metody.split(', ')) {
-      if (metoda !== 'HEAD') sciezki.push(`${metoda.toLowerCase()} ${adres}`);
-    }
-  }
-  return sciezki;
-}
+import { paGroupBodySchema, paMessageBodySchema, paPackageBodySchema } from '../../src/api/pa-integrations.ts';
+import { apiServerRoutes } from '../helpers/routes.ts';
 
 let trasy: string[];
 
 beforeAll(async () => {
-  const masterKey = randomBytes(32);
-  const db = openDatabase(':memory:');
-  const app = buildApiServer({
-    accounts: new AccountsRepo(db, masterKey),
-    apiKeys: new ApiKeysRepo(db, masterKey),
-    messages: new MessagesRepo(db),
-    events: new MessageEventsRepo(db),
-    jobs: new JobsRepo(db),
-    packages: new PackagesRepo(db),
-    inbound: new InboundMessagesRepo(db),
-    clients: {} as never,
-    rateLimiter: new RateLimiter(),
-    healthMode: 'public',
-    ...integrationDeps(db, masterKey),
-  });
-  await app.ready();
-  trasy = trasySerwera(app.printRoutes({ commonPrefix: false }));
-  await app.close();
+  trasy = await apiServerRoutes();
 });
 
 describe('opis API', () => {
@@ -84,7 +32,7 @@ describe('opis API', () => {
     expect(opisane.sort()).toEqual(publiczne);
   });
 
-  it('wysyłka wymaga klucza oraz opisuje wszystkie pola ciała', () => {
+  it('wysyłka wymaga klucza oraz opisuje wszystkie pola body', () => {
     const wyslij = doc.paths['/v1/messages']!.post!;
     expect(wyslij.security).toEqual([{ bearerAuth: [] }]);
     const schema = wyslij.requestBody!.content['application/json']!.schema;
@@ -94,15 +42,44 @@ describe('opis API', () => {
     expect(schema.required!.slice().sort()).toEqual(['text', 'to']);
   });
 
-  it('każde pole ciała wysyłki ma opis po polsku', () => {
+  it('każde pole body wysyłki ma opis po polsku', () => {
     const schema = doc.paths['/v1/messages']!.post!.requestBody!.content['application/json']!.schema;
     for (const [nazwa, pole] of Object.entries(schema.properties!)) {
       expect(pole.description, nazwa).toBeTruthy();
     }
   });
 
+  it('wywołania integracji z Power Automate opisują każde pole body, bez usługi i nadpisu, ze zlecającym', () => {
+    const ciala = {
+      '/v1/integrations/{id}/messages': paMessageBodySchema.shape,
+      '/v1/integrations/{id}/packages': paPackageBodySchema.shape,
+      '/v1/integrations/{id}/group': paGroupBodySchema.shape,
+    };
+    for (const [sciezka, shape] of Object.entries(ciala)) {
+      const operacja = doc.paths[sciezka]!.post!;
+      expect(operacja.parameters![0], sciezka).toMatchObject({ name: 'id', in: 'path', required: true });
+      const schema = operacja.requestBody!.content['application/json']!.schema;
+      expect(Object.keys(schema.properties!).sort(), sciezka).toEqual(Object.keys(shape).sort());
+      for (const [nazwa, pole] of Object.entries(schema.properties!)) expect(pole.description, `${sciezka} ${nazwa}`).toBeTruthy();
+      expect(schema.properties!['requestedBy']!.maxLength, sciezka).toBe(100);
+    }
+    const numer = doc.paths['/v1/integrations/{id}/messages']!.post!.requestBody!.content['application/json']!.schema.properties!['to']!;
+    expect(numer.type).toBe('string');
+    expect(numer.description).toMatch(/[Pp]usty numer/);
+    expect(doc.paths['/v1/integrations']!.get!.operationId).toBe('listaIntegracjiPowerAutomate');
+    expect(Object.keys(doc.components.schemas)).toEqual(expect.arrayContaining(['IntegracjaPowerAutomate', 'WysylkaDoGrupy']));
+    // Rozsyłka, także zwykła, przyjmuje klucz idempotencji.
+    for (const path of ['/v1/packages', '/v1/integrations/{id}/packages']) {
+      expect(doc.paths[path]!.post!.parameters!.map((p) => p.name), path).toContain('Idempotency-Key');
+    }
+    // Odpowiedź grupy nie podaje numerów członków listy.
+    const wiadomosc = doc.components.schemas.WysylkaDoGrupy!.properties!.messages!.items!;
+    expect(Object.keys(wiadomosc.properties!)).toEqual(['id', 'status', 'parts']);
+    expect(wiadomosc.required).toEqual(['id', 'status', 'parts']);
+  });
+
   it('każde pole odpowiedzi odczytu ma opis po polsku', () => {
-    for (const nazwa of ['Wiadomosc', 'WiadomoscPrzychodzaca', 'Rozsylka', 'WierszRaportu']) {
+    for (const nazwa of ['Wiadomosc', 'WiadomoscPrzychodzaca', 'Rozsylka', 'WierszRaportu', 'IntegracjaPowerAutomate', 'WysylkaDoGrupy']) {
       const schema = doc.components.schemas[nazwa]!;
       for (const [pole, opis] of Object.entries(schema.properties!)) {
         expect(opis.description, `${nazwa}.${pole}`).toBeTruthy();

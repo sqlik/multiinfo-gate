@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { defaultPowerAutomateConfig } from '../../src/integrations/config.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
 const NOW = new Date('2026-08-25T10:00:00Z');
@@ -95,6 +96,14 @@ describe('GET /rozsylki/:id', () => {
     expect(res.body).toContain('gotowy · 2 odbiorców');
   });
 
+  it('gotowy raport jednego odbiorcy w poprawnej odmianie', async () => {
+    seed('pkg_1', [{ dest: '48601135134', text: null, clientId: null }]);
+    h.packages.setCreated('pkg_1', '14');
+    h.packages.setCompleted('pkg_1', NOW);
+    h.packages.setReport('pkg_1', { status: 'ready', reportId: '123' });
+    expect((await page('/rozsylki/pkg_1')).body).toContain('gotowy · 1 odbiorca');
+  });
+
   it('bez gotowego raportu pokazuje wyszarzony przycisk ze stanem', async () => {
     seed('pkg_2');
     h.packages.setCreated('pkg_2', '14');
@@ -109,6 +118,40 @@ describe('GET /rozsylki/:id', () => {
     expect(res.body).toContain('Podsumowanie pojawi się po wczytaniu raportu');
     expect(res.body).toContain('brak raportu');
     expect(res.body).toContain('nieutworzony');
+  });
+
+  it('przed zamówieniem raportu mówi, kiedy raport powstanie, bez „(stan: -)”', async () => {
+    seed('pkg_q');
+    const queued = (await page('/rozsylki/pkg_q')).body;
+    expect(queued).toContain('Podsumowanie pojawi się po wczytaniu raportu. Bramka zamówi raport po zakończeniu rozsyłki.');
+    expect(queued).not.toContain('(stan: -)');
+
+    seed('pkg_c');
+    h.packages.setCreated('pkg_c', '14');
+    h.packages.setCompleted('pkg_c', NOW);
+    const completed = (await page('/rozsylki/pkg_c')).body;
+    expect(completed).toContain('Podsumowanie pojawi się po wczytaniu raportu. Raport nie został jeszcze zamówiony.');
+    expect(completed).not.toContain('(stan: -)');
+  });
+
+  it('rozsyłka anulowana albo z błędem nie zapowiada podsumowania', async () => {
+    seed('pkg_f');
+    h.packages.setFailed('pkg_f', 13, 'Nieprawidłowa usługa', NOW);
+    seed('pkg_x');
+    h.packages.setCancelled('pkg_x', NOW);
+    for (const id of ['pkg_f', 'pkg_x']) {
+      const body = (await page(`/rozsylki/${id}`)).body;
+      expect(body, id).toContain('Podsumowanie nie jest dostępne, ponieważ raport powstaje wyłącznie dla zakończonej rozsyłki.');
+      expect(body, id).not.toContain('Podsumowanie pojawi się');
+    }
+  });
+
+  it('raport w przygotowaniu podaje stan raportu', async () => {
+    seed('pkg_p');
+    h.packages.setCreated('pkg_p', '14');
+    h.packages.setCompleted('pkg_p', NOW);
+    h.packages.setReport('pkg_p', { status: 'pending' });
+    expect((await page('/rozsylki/pkg_p')).body).toContain('Podsumowanie pojawi się po wczytaniu raportu (stan: w przygotowaniu).');
   });
 
   it('pokazuje błąd z kodem operatora', async () => {
@@ -130,6 +173,44 @@ describe('GET /rozsylki/:id', () => {
 
   it('zwraca 404 dla nieznanej rozsyłki', async () => {
     expect((await page('/rozsylki/pkg_nie_ma')).statusCode).toBe(404);
+  });
+});
+
+describe('rozsyłka z integracji z Power Automate', () => {
+  function seedFromIntegration() {
+    const integrationId = h.integrations.insert({
+      name: 'Kierowcy floty', kind: 'power_automate', apiKeyId, serviceId: null, orig: null, preset: 'power-automate', enabled: 1,
+      config: defaultPowerAutomateConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    h.packages.insert({
+      id: 'pkg_pa', apiKeyId, accountId, serviceId: '24138', defaultText: 'Przegląd floty', orig: null,
+      costCenter: null, startAt: null, deliveryReport: 1, encoding: 'ucs2', multipart: 0, createdAt: NOW.toISOString(),
+      integrationId, requestedBy: '<b>Kierownik</b>',
+    }, [{ dest: '48601000001', text: null, clientId: null }]);
+    return integrationId;
+  }
+
+  it('szczegół pokazuje integrację z odnośnikiem i zlecającego jako tekst', async () => {
+    const integrationId = seedFromIntegration();
+    const body = (await page('/rozsylki/pkg_pa')).body;
+    expect(body).toContain(`<div>Integracja</div><div><a href="/integracje/${integrationId}">Kierowcy floty</a></div>`);
+    expect(body).toContain('>Zlecający<');
+    expect(body).toContain('&lt;b&gt;Kierownik&lt;/b&gt;');
+  });
+
+  it('rozsyłka z API nie ma wierszy integracji ani zlecającego', async () => {
+    seed();
+    const body = (await page('/rozsylki/pkg_1')).body;
+    expect(body).not.toContain('<div>Integracja</div>');
+    expect(body).not.toContain('Zlecający');
+  });
+
+  it('lista pokazuje nazwę integracji przy kluczu', async () => {
+    seedFromIntegration();
+    seed();
+    const body = (await page('/rozsylki')).body;
+    expect(body).toContain('Kierowcy floty');
+    expect(body.match(/Kierowcy floty/g)).toHaveLength(1);
   });
 });
 

@@ -174,6 +174,31 @@ describe('POST /v1/messages', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it('przyjmuje sam klucz w nagłówku Authorization, bez przedrostka Bearer', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/v1/messages', headers: { authorization: apiKey }, payload: { to: '48601135134', text: 'x' },
+    });
+    expect(res.statusCode).toBe(202);
+  });
+
+  it('puste pola opcjonalne traktuje jak pominięte', async () => {
+    const res = await post({
+      to: '48601135134', text: 'x', orig: '', serviceId: '', validTo: '', costCenter: '', encoding: null, maxParts: null,
+    });
+    expect(res.statusCode).toBe(202);
+    const row = messages.get(res.json().id)!;
+    expect(row.orig).toBe('Firma Info');
+    expect(row.serviceId).toBe('24138');
+    expect(row.costCenter).toBeNull();
+    expect(row.validTo).toBeNull();
+  });
+
+  it('pusta treść nadal jest błędem, bo treść jest wymagana', async () => {
+    const res = await post({ to: '48601135134', text: '' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('invalid_body');
+  });
+
   it('przyjmuje tablicę numerów i zwraca tablicę wyników', async () => {
     const res = await post({ to: ['48601135134', '48601135135'], text: 'x' });
     expect(res.statusCode).toBe(202);
@@ -220,6 +245,21 @@ describe('POST /v1/messages', () => {
     for (let i = 0; i < 60; i += 1) await post({ to: '48601135134', text: 'x' });
     const res = await post({ to: '48601135134', text: 'x' });
     expect(res.statusCode).toBe(429);
+  });
+});
+
+describe('POST /v1/messages - komunikaty walidacji', () => {
+  it.each([
+    [{ to: '', text: 'x' }, 'to: Numer odbiorcy jest pusty.'],
+    [{ text: 'x' }, 'to: Numer odbiorcy jest pusty.'],
+    [{ to: 48601000001, text: 'x' }, 'to: Pole to musi być numerem w postaci tekstu albo listą numerów.'],
+    [{ to: '48601000001', text: '' }, 'text: Treść jest pusta.'],
+    [{ to: '48601000001', text: 'x', encoding: 'ascii' }, 'encoding: Dozwolone wartości: auto, gsm, unicode.'],
+    [{ to: '48601000001', text: 'x', maxParts: 10 }, 'maxParts: Wartość może wynosić najwyżej 9.'],
+  ])('%j: 400 invalid_body po polsku', async (body, message) => {
+    const res = await post(body);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toEqual({ code: 'invalid_body', message });
   });
 });
 

@@ -19,6 +19,11 @@ tego API używają integracji. Adres `POST /hooks/<identyfikator>` przyjmuje ła
 a integracje wychodzące przekazują odebrane SMS-y i statusy do aplikacji w jej formacie. Opis
 jest w rozdziale [Integracje z aplikacjami](integracje.md).
 
+Od wersji 1.9 przepływy Microsoft Power Automate wysyłają SMS-y za pomocą konektora bramki.
+Konektor jest plikiem pobieranym z panelu bramki i korzysta z wywołań integracji z Power Automate
+opisanych w rozdziale 5b. Import konektora i budowę przepływów przedstawia artykuł
+[Power Automate](power-automate.md).
+
 Dokument opisuje każde wywołanie w tym samym układzie: przeznaczenie, pełne żądanie w siedmiu
 wariantach do wyboru zakładką (curl, surowy HTTP, PHP, Python, Node.js, PowerShell, C#),
 odpowiedź oraz błędy tego wywołania wraz z zalecanym postępowaniem. To samo API opisuje plik
@@ -70,14 +75,138 @@ klucza. Utracony klucz zastępuje się nowym.
 Klucz jest powiązany z jednym kontem Multiinfo. Ma listę dozwolonych usług i nadpisów, limit
 liczby części jednej wiadomości, limit żądań na minutę oraz datę ważności.
 
+Klucz przekazuje się w nagłówku `Authorization`. Zalecana postać to
+`Authorization: Bearer <TWOJ-KLUCZ>`. Bramka przyjmuje także sam klucz, bez przedrostka
+`Bearer`: `Authorization: <TWOJ-KLUCZ>`. Tej postaci używa konektor Power Automate. Wysyła on
+w nagłówku klucz wpisany przy połączeniu, bez zmian. Sam klucz bramka rozpoznaje po początku
+`mig_live_`. Białe znaki przed kluczem i po nim są pomijane.
+
 Błędy uwierzytelniania mają kod HTTP `401` i jedną z wartości `error.code`:
 
 | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|
-| `missing_api_key` | brak nagłówka `Authorization` albo nagłówek bez schematu `Bearer` | dodać nagłówek w postaci `Authorization: Bearer <TWOJ-KLUCZ>` |
+| `missing_api_key` | brak nagłówka `Authorization`, nagłówek z innym schematem niż `Bearer` albo wartość, która nie jest kluczem bramki | dodać nagłówek w postaci `Authorization: Bearer <TWOJ-KLUCZ>` |
 | `invalid_api_key` | klucz nieznany albo w nieprawidłowym formacie | sprawdzić, czy klucz został skopiowany w całości, bez spacji i cudzysłowów |
 | `revoked_api_key` | klucz odwołany w panelu | uzyskać nowy klucz od administratora |
 | `expired_api_key` | upłynęła data ważności klucza; `message` podaje ostatni ważny dzień | poprosić administratora o przedłużenie ważności w panelu |
+
+### 2.1. Uprawnienia klucza: `GET /v1/key`
+
+**Przeznaczenie.** Odczyt uprawnień klucza, którym wywołanie jest uwierzytelnione: usług,
+nadpisów nadawcy i limitów. Aplikacja buduje z odpowiedzi listy wyboru usługi i nadawcy.
+Programista może nim sprawdzić klucz przed pierwszą wysyłką. Wywołanie liczy się do limitu żądań
+klucza.
+
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/key \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    GET /v1/key HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/key');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    foreach ($odpowiedz['origs'] as $w) {
+        echo $w['orig'], PHP_EOL;
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/key",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    for w in odpowiedz["origs"]:
+        print(w["orig"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/key", {
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    for (const w of odpowiedz.origs) console.log(w.orig);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/v1/key" -Headers $naglowki
+    $odpowiedz.origs | ForEach-Object { $_.orig }
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/v1/key"));
+    foreach (var w in odpowiedz.RootElement.GetProperty("origs").EnumerateArray())
+        Console.WriteLine(w.GetProperty("orig"));
+    ```
+
+**Odpowiedź `200`:**
+
+```json
+{
+  "name": "Powiadomienia CRM",
+  "services": [
+    { "id": "24138", "default": true }
+  ],
+  "origs": [
+    { "orig": "Firma Alert", "default": false },
+    { "orig": "Firma Info", "default": true }
+  ],
+  "maxParts": 5,
+  "ratePerMin": 60
+}
+```
+
+| Pole | Opis |
+|---|---|
+| `name` | nazwa klucza nadana w panelu |
+| `services` | usługi Multiinfo dozwolone dla klucza; `default: true` oznacza usługę używaną, gdy wysyłka nie podaje `serviceId` |
+| `origs` | nadpisy nadawcy dozwolone w polu `orig`, w kolejności alfabetycznej; `default: true` oznacza nadpis używany, gdy wysyłka nie podaje `orig` |
+| `maxParts` | najwyższa liczba części jednej wiadomości |
+| `ratePerMin` | limit żądań klucza na minutę |
+
+Lista `origs` obejmuje nadpis domyślny klucza. Gdy klucz go nie ma, obejmuje nadpis domyślny
+konta. Pusta lista oznacza, że wiadomość zostanie wysłana bez nadpisu. Nadawcą jest wtedy numer
+przydzielony kontu w Multiinfo. Odpowiedź nie zawiera danych konta Multiinfo ani sekretów.
+
+| HTTP | `error.code` | Przyczyna | Postępowanie |
+|---|---|---|---|
+| 401 | jak w tabeli wyżej | brak, nieprawidłowy, odwołany albo wygasły klucz | jak w tabeli wyżej |
+| 429 | `rate_limited` | przekroczony limit żądań klucza na minutę | odczekać minutę; nie ponawiać w pętli |
 
 ## 3. Wysyłka wiadomości: `POST /v1/messages`
 
@@ -194,6 +323,13 @@ Pola body żądania:
 | `validTo` | nie | ISO 8601, najwyżej 72 godziny od przyjęcia; wiadomość niedoręczona do tego czasu otrzymuje stan `expired` |
 | `costCenter` | nie | dowolny znacznik na potrzeby rozliczeń aplikacji; zwracany w odczycie wiadomości |
 | `inReplyTo` | nie | identyfikator wiadomości przychodzącej (`in_...`), na którą to odpowiedź (rozdział 5a.3); bramka przekazuje go Multiinfo jako `smsInId`; dopuszczalny tylko przy jednym odbiorcy, którym jest nadawca tej wiadomości i w tej samej usłudze, z której przyszła |
+
+Pole opcjonalne z pustym napisem `""` albo z wartością `null` bramka traktuje jak pominięte.
+Tak samo traktuje pola rozsyłki i pola odbiorców rozsyłki (rozdział 5.1). Pusty `startAt`
+oznacza zatem rozsyłkę od razu, a pusta treść odbiorcy rozsyłki oznacza treść wspólną. Pole
+wymagane z pustą wartością pozostaje błędem `400 invalid_body`, na przykład pusty numer kończy się
+komunikatem `to: Numer odbiorcy jest pusty.`. Komunikaty walidacji bramka podaje po polsku
+i poprzedza je nazwą pola.
 
 **Odpowiedź `202 Accepted`** (dla tablicy `to` - tablica takich obiektów, w kolejności numerów):
 
@@ -320,13 +456,18 @@ przyjętej za pierwszym razem. Nowa wiadomość nie powstaje. Żądanie z tym sa
 inną treścią albo numerem, jest odrzucane kodem `409 idempotency_conflict`. Przy tablicy `to`
 bramka rozszerza klucz o przyrostek `#<indeks>` dla każdego numeru.
 
+Klucz idempotencji obowiązuje w obrębie klucza API. Wartość użyta wcześniej przez integrację
+Power Automate kończy się w tym wywołaniu kodem `409 idempotency_conflict`. Integracja odrzuca
+w ten sam sposób wartość użytą wcześniej w zwykłym wywołaniu. Ten sam nagłówek przyjmuje
+utworzenie rozsyłki (rozdział 5.1).
+
 ### 3.2. Błędy wywołania
 
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
 | 400 | `invalid_body` | body żądania nie przechodzi walidacji; `message` wymienia pola | poprawić wskazane pola |
 | 400 | `invalid_phone` | numer nie daje się znormalizować: znaki inne niż cyfry, nieprawidłowa liczba cyfr, podwojony kod kraju (`4848…`); `message` podaje powód | podać numer w postaci `48601000001` |
-| 400 | `invalid_orig` | nadpis pusty, dłuższy niż 11 znaków albo ze znakami sterującymi | użyć nadpisu ze słownika konta |
+| 400 | `invalid_orig` | nadpis z samych spacji, dłuższy niż 11 znaków albo ze znakami sterującymi | użyć nadpisu ze słownika konta |
 | 400 | `too_many_parts` | treść przekracza limit części; `message` podaje, ile miejsc należy usunąć | skrócić treść albo uzgodnić wyższy limit klucza |
 | 400 | `service_required` | klucz nie ma usługi domyślnej, a `serviceId` nie podano | podać `serviceId` |
 | 400 | `valid_to_in_past`, `valid_to_too_far` | `validTo` w przeszłości albo dalej niż 72 godziny | poprawić `validTo` |
@@ -335,7 +476,8 @@ bramka rozszerza klucz o przyrostek `#<indeks>` dla każdego numeru.
 | 400 | `in_reply_to_recipient` | odbiorca odpowiedzi to ktoś inny niż nadawca wskazanej wiadomości | wysłać odpowiedź na numer nadawcy; `message` go podaje |
 | 403 | `service_not_allowed` | usługa spoza uprawnień klucza | użyć usługi przypisanej do klucza |
 | 403 | `orig_not_allowed` | nadpis spoza uprawnień klucza; `message` wymienia dozwolone | użyć jednego z wymienionych |
-| 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią wiadomości albo numerem | użyć nowego klucza idempotencji |
+| 403 | `integrations_only_key` | klucz z opcją „Tylko integracje” wysyła wyłącznie przez integracje | użyć innego klucza albo integracji z Power Automate |
+| 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią wiadomości albo numerem, a także klucz użyty wcześniej przez integrację | użyć nowego klucza idempotencji |
 | 429 | `rate_limited` | przekroczony limit żądań klucza na minutę | odczekać minutę; nie ponawiać w pętli |
 
 Odmowa po stronie Multiinfo (na przykład nieuruchomiony nadpis, kod `-14`) nie jest błędem
@@ -754,7 +896,7 @@ kolejnymi wywołaniami.
     $body = @{ defaultText = "Przypominamy o wizycie."; recipients = @(
         @{ to = "48601000001" },
         @{ to = "48605000001"; text = "Faktura 114 oczekuje na oplacenie."; clientId = "faktura-114" }
-    ); orig = "Firma Info" } | ConvertTo-Json
+    ); orig = "Firma Info" } | ConvertTo-Json -Depth 5
     $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/packages" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
     $odpowiedz.id
     ```
@@ -784,8 +926,16 @@ kolejnymi wywołaniami.
 | `startAt` | nie | ISO 8601 w przyszłości; Multiinfo rozpoczyna wysyłkę o tej godzinie |
 
 Kodowanie jest wspólne dla całej rozsyłki. Jeżeli którakolwiek treść wymaga UCS-2, wszystkie
-wiadomości są wysyłane w UCS-2, czyli po 70 znaków na część zamiast 160. Każda treść musi mieścić się
-w limicie części klucza.
+wiadomości są wysyłane w UCS-2, czyli po 70 znaków na część zamiast 160. Każda treść musi mieścić
+się w limicie części klucza w tym wspólnym kodowaniu. Treść bez polskich znaków o długości 160
+znaków zajmuje zatem trzy części, jeżeli inna treść rozsyłki zawiera polską literę. Podany
+`defaultText` liczy się zawsze, ponieważ bramka przekazuje go do Multiinfo.
+
+Body rozsyłki może liczyć do 4 MB, co mieści 5000 odbiorców z własnymi treściami. Bramka sprawdza
+klucz, zanim odczyta body, dlatego żądanie bez ważnego klucza kończy się kodem `401` niezależnie
+od rozmiaru. Nagłówek `Idempotency-Key` działa jak przy wysyłce wiadomości (rozdział 3.1):
+ponowione żądanie z tym samym kluczem i tą samą rozsyłką zwraca rozsyłkę przyjętą za pierwszym
+razem. Ten sam klucz z inną rozsyłką kończy się kodem `409 idempotency_conflict`.
 
 **Odpowiedź `202`:**
 
@@ -802,6 +952,9 @@ w limicie części klucza.
 | 400 | `too_many_parts` | treść przekracza limit części | skrócić treść |
 | 400 | `invalid_orig`, `service_required`, `start_at_in_past` | jak nazwa kodu | poprawić pole |
 | 403 | `service_not_allowed`, `orig_not_allowed` | usługa albo nadpis spoza uprawnień klucza | użyć wartości przypisanych do klucza |
+| 403 | `integrations_only_key` | klucz z opcją „Tylko integracje” wysyła wyłącznie przez integracje | użyć innego klucza albo integracji z Power Automate |
+| 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną rozsyłką, a także klucz użyty wcześniej przez integrację | użyć nowego klucza idempotencji |
+| 413 | `body_too_large` | body przekracza 4 MB | podzielić listę na kilka rozsyłek |
 | 429 | `rate_limited` | przekroczony limit żądań na minutę | odczekać minutę |
 
 ### 5.2. Stan rozsyłki: `GET /v1/packages/{id}`
@@ -1511,6 +1664,580 @@ odbiorcę: nadawcę tej wiadomości (pole `from` z `message.received`).
     Console.WriteLine(odpowiedz.RootElement.GetProperty("id"));
     ```
 
+## 5b. Integracje z Power Automate
+
+Wywołania z tego rozdziału wysyłają SMS-y za pośrednictwem integracji z Power Automate.
+Integrację tworzy administrator bramki w panelu: Integracje, Dodaj integrację, „Aplikacja wysyła
+SMS”, kafelek „Power Automate”. Opis integracji zawiera rozdział
+[Integracje z aplikacjami](integracje.md). Z tych wywołań korzysta konektor Power Automate,
+przedstawiony w artykule [Power Automate](power-automate.md). Aplikacja może z nich korzystać
+również bez konektora.
+
+Integracja określa usługę, nadpis nadawcy i limit części treści. Prowadzi własny dziennik
+i stosuje własną ochronę przed burzą. Może też zawierać listę odbiorców grupy liczącą do 500
+numerów. Na tę listę wysyła wyłącznie wywołanie z rozdziału 5b.4.
+
+Każde wywołanie wysyłające przechodzi przez mechanizmy ochronne integracji. Bramka sprawdza limit
+części i ochronę przed burzą, a następnie zapisuje wpis w dzienniku integracji. W razie błędu
+powiadamia administratora. Wyłączona integracja nie wysyła żadnych wiadomości.
+
+Aplikacja widzi wyłącznie integracje swojego klucza. Identyfikator integracji (`int_...`) jest
+stały, a zmiana nazwy integracji w panelu nie wpływa na niego.
+
+Każda z trzech wysyłek przyjmuje opcjonalne pole `requestedBy` („Zlecający”), które wskazuje
+osobę zlecającą wysyłkę, na przykład przez adres e-mail autora wpisu na liście. Bramka zapisuje
+tę informację w dzienniku integracji oraz przy wiadomości i rozsyłce, ale nie dołącza jej do
+treści SMS-a. Pole liczy najwyżej 100 znaków i nie może zawierać znaków sterujących ani
+niewidocznych znaków formatowania, na przykład końca wiersza albo znaku zmiany kierunku tekstu.
+Kolumna „Nadawca” w dzienniku integracji pokazuje `API · <zlecający> · <adres IP wywołania>`,
+a przy braku zlecającego `API · <adres IP wywołania>`.
+
+### 5b.1. Lista integracji: `GET /v1/integrations`
+
+**Przeznaczenie.** Odczyt czynnych integracji z Power Automate przypisanych do klucza. Z tego
+wywołania konektor Power Automate buduje listę w polu „Integracja”.
+
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/integrations \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    GET /v1/integrations HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/integrations');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    foreach ($odpowiedz['data'] as $w) {
+        echo $w['id'], ' ', $w['name'], PHP_EOL;
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/integrations",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    for w in odpowiedz["data"]:
+        print(w["id"], w["name"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/integrations", {
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    for (const w of odpowiedz.data) console.log(w.id, w.name);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/v1/integrations" -Headers $naglowki
+    $odpowiedz.data | ForEach-Object { "$($_.id) $($_.name)" }
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/v1/integrations"));
+    foreach (var w in odpowiedz.RootElement.GetProperty("data").EnumerateArray())
+        Console.WriteLine(w.GetProperty("id") + " " + w.GetProperty("name"));
+    ```
+
+**Odpowiedź `200`:**
+
+```json
+{
+  "data": [
+    { "id": "int_15", "name": "Biuro handlowe", "recipients": 0 },
+    { "id": "int_12", "name": "Ekipa serwisowa", "recipients": 3 }
+  ]
+}
+```
+
+| Pole | Opis |
+|---|---|
+| `id` | stały identyfikator integracji |
+| `name` | nazwa integracji nadana w panelu |
+| `recipients` | liczba numerów na liście odbiorców grupy integracji |
+
+Lista obejmuje tylko włączone integracje z Power Automate, w kolejności nazw. Nie zawiera numerów
+ani nazwisk. Te dane zostają w panelu bramki.
+
+### 5b.2. SMS do jednego numeru: `POST /v1/integrations/{id}/messages`
+
+**Przeznaczenie.** Wysłanie jednego SMS-a na jeden numer za pośrednictwem integracji. Na
+przykład klient otrzymuje potwierdzenie zlecenia serwisowego zapisanego na liście.
+
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/integrations/int_12/messages \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>" \
+      -H "Content-Type: application/json" \
+      -d '{"to":"48601000001","text":"Zlecenie 4411 przyjete. Technik dotrze jutro w godzinach 8:00-10:00.","requestedBy":"jan.nowak@firma.pl"}'
+    ```
+
+=== "HTTP"
+
+    ```http
+    POST /v1/integrations/int_12/messages HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    Content-Type: application/json
+
+    {"to": "48601000001", "text": "Zlecenie 4411 przyjete. Technik dotrze jutro w godzinach 8:00-10:00.", "requestedBy": "jan.nowak@firma.pl"}
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/integrations/int_12/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode([
+            'to' => '48601000001',
+            'text' => 'Zlecenie 4411 przyjete. Technik dotrze jutro w godzinach 8:00-10:00.',
+            'requestedBy' => 'jan.nowak@firma.pl',
+        ]),
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>', 'Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['id'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/integrations/int_12/messages",
+        data=json.dumps({"to": "48601000001", "text": "Zlecenie 4411 przyjete. Technik dotrze jutro w godzinach 8:00-10:00.", "requestedBy": "jan.nowak@firma.pl"}).encode(),
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["id"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/integrations/int_12/messages", {
+      method: "POST",
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json" },
+      body: JSON.stringify({"to": "48601000001", "text": "Zlecenie 4411 przyjete. Technik dotrze jutro w godzinach 8:00-10:00.", "requestedBy": "jan.nowak@firma.pl"}),
+    });
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.id);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $body = @{ to = "48601000001"; text = "Zlecenie 4411 przyjete. Technik dotrze jutro w godzinach 8:00-10:00."; requestedBy = "jan.nowak@firma.pl" } | ConvertTo-Json
+    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/integrations/int_12/messages" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
+    $odpowiedz.id
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Text;
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var tresc = new StringContent("""{"to": "48601000001", "text": "Zlecenie 4411 przyjete. Technik dotrze jutro w godzinach 8:00-10:00.", "requestedBy": "jan.nowak@firma.pl"}""", Encoding.UTF8, "application/json");
+    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/integrations/int_12/messages", tresc);
+    var odpowiedz = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("id"));
+    ```
+
+Pola body żądania:
+
+| Pole | Wymagane | Opis |
+|---|---|---|
+| `to` | tak | jeden numer odbiorcy, jak w rozdziale 3; pusty numer kończy wywołanie błędem `invalid_body` |
+| `text` | tak | treść wiadomości, jak w rozdziale 3 |
+| `requestedBy` | nie | zlecający, do 100 znaków |
+| `encoding`, `deliveryReport`, `validTo`, `costCenter` | nie | jak w rozdziale 3 |
+
+Pusty numer nigdy nie oznacza wysyłki do listy odbiorców integracji. Do listy wysyła wyłącznie
+wywołanie z rozdziału 5b.4.
+
+Usługę, nadpis nadawcy i limit części określa integracja. Pola `serviceId`, `orig`, `maxParts`
+i `inReplyTo` nie są w tym wywołaniu uwzględniane i bramka je pomija. Nagłówek `Idempotency-Key`
+działa jak w rozdziale 3.1.
+
+**Odpowiedź `202 Accepted`** ma ten sam kształt co odpowiedź z rozdziału 3 dla jednego numeru:
+
+```json
+{
+  "id": "msg_3f9c2a7b1e4d8c6a5b2f",
+  "status": "queued",
+  "encoding": "gsm",
+  "parts": 1,
+  "characters": 68,
+  "slots": 68,
+  "slotsRemaining": 92
+}
+```
+
+Dziennik integracji otrzymuje wpis „wysłano” z powodem „Wyślij SMS”.
+
+### 5b.3. Rozsyłka: `POST /v1/integrations/{id}/packages`
+
+**Przeznaczenie.** Rozsyłka do najwyżej 5000 odbiorców za pośrednictwem integracji, w jednym
+wywołaniu. Na przykład kierowcy floty otrzymują przypomnienie o przeglądzie, a część z nich
+własną treść.
+
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/integrations/int_12/packages \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>" \
+      -H "Content-Type: application/json" \
+      -d '{"defaultText":"Przeglad floty jutro o 8:00 w bazie przy ul. Portowej.","recipients":[{"to":"48601000001"},{"to":"48601000002","text":"Zmiana grafiku od poniedzialku.","clientId":"kierowca-14"}],"requestedBy":"kierownik.floty@firma.pl"}'
+    ```
+
+=== "HTTP"
+
+    ```http
+    POST /v1/integrations/int_12/packages HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    Content-Type: application/json
+
+    {"defaultText": "Przeglad floty jutro o 8:00 w bazie przy ul. Portowej.", "recipients": [{"to": "48601000001"}, {"to": "48601000002", "text": "Zmiana grafiku od poniedzialku.", "clientId": "kierowca-14"}], "requestedBy": "kierownik.floty@firma.pl"}
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/integrations/int_12/packages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode([
+            'defaultText' => 'Przeglad floty jutro o 8:00 w bazie przy ul. Portowej.',
+            'recipients' => [
+                [
+                    'to' => '48601000001',
+                ],
+                [
+                    'to' => '48601000002',
+                    'text' => 'Zmiana grafiku od poniedzialku.',
+                    'clientId' => 'kierowca-14',
+                ],
+            ],
+            'requestedBy' => 'kierownik.floty@firma.pl',
+        ]),
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>', 'Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['id'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/integrations/int_12/packages",
+        data=json.dumps({"defaultText": "Przeglad floty jutro o 8:00 w bazie przy ul. Portowej.", "recipients": [{"to": "48601000001"}, {"to": "48601000002", "text": "Zmiana grafiku od poniedzialku.", "clientId": "kierowca-14"}], "requestedBy": "kierownik.floty@firma.pl"}).encode(),
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["id"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/integrations/int_12/packages", {
+      method: "POST",
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json" },
+      body: JSON.stringify({"defaultText": "Przeglad floty jutro o 8:00 w bazie przy ul. Portowej.", "recipients": [{"to": "48601000001"}, {"to": "48601000002", "text": "Zmiana grafiku od poniedzialku.", "clientId": "kierowca-14"}], "requestedBy": "kierownik.floty@firma.pl"}),
+    });
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.id);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $body = @{ defaultText = "Przeglad floty jutro o 8:00 w bazie przy ul. Portowej."; recipients = @(
+        @{ to = "48601000001" },
+        @{ to = "48601000002"; text = "Zmiana grafiku od poniedzialku."; clientId = "kierowca-14" }
+    ); requestedBy = "kierownik.floty@firma.pl" } | ConvertTo-Json -Depth 5
+    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/integrations/int_12/packages" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
+    $odpowiedz.id
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Text;
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var tresc = new StringContent("""{"defaultText": "Przeglad floty jutro o 8:00 w bazie przy ul. Portowej.", "recipients": [{"to": "48601000001"}, {"to": "48601000002", "text": "Zmiana grafiku od poniedzialku.", "clientId": "kierowca-14"}], "requestedBy": "kierownik.floty@firma.pl"}""", Encoding.UTF8, "application/json");
+    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/integrations/int_12/packages", tresc);
+    var odpowiedz = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("id"));
+    ```
+
+Pola body są takie jak w rozdziale 5.1, bez `serviceId` i `orig`. Dochodzi pole `requestedBy`.
+Usługę i nadpis wyznacza integracja. Body może liczyć do 4 MB, a nagłówek `Idempotency-Key`
+działa jak w rozdziale 5.1.
+
+Limit części integracji dotyczy treści wspólnej i każdej treści odbiorcy osobno, w kodowaniu
+całej rozsyłki (rozdział 5.1). Przy ustawieniu
+„skróć i wyślij” bramka skraca każdą zbyt długą treść. Przy ustawieniu „nie wysyłaj” jedna zbyt
+długa treść odrzuca całą rozsyłkę. Komunikat błędu zaczyna się wtedy od miejsca w body:
+`defaultText:` albo `recipients.<numer pozycji od 0>:`.
+
+**Odpowiedź `202 Accepted`** ma ten sam kształt co odpowiedź z rozdziału 5.1:
+
+```json
+{
+  "id": "pkg_7c1e9a2b3d4f5a6b7c8d",
+  "status": "queued",
+  "recipients": 2,
+  "encoding": "gsm",
+  "multipart": false
+}
+```
+
+Stan rozsyłki i raport zwracają wywołania z rozdziałów 5.2-5.4. Dziennik integracji otrzymuje
+wpis „wysłano” z powodem „Wyślij rozsyłkę, 2 odbiorców”, który prowadzi do rozsyłki.
+
+### 5b.4. SMS do odbiorców grupy: `POST /v1/integrations/{id}/group`
+
+**Przeznaczenie.** Wysłanie tej samej treści do każdego numeru z listy odbiorców grupy
+integracji. Listę prowadzi administrator w panelu bramki, w szczegółach integracji, dlatego
+zmiana składu ekipy nie wymaga zmian w aplikacji ani w przepływie. Na przykład zgłoszenie awarii
+trafia jednocześnie do całej ekipy serwisowej.
+
+=== "curl"
+
+    ```bash
+    curl -s https://<TWOJA-DOMENA>/v1/integrations/int_12/group \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>" \
+      -H "Content-Type: application/json" \
+      -d '{"text":"Awaria pompy w hali B. Dyspozytor czeka na kontakt.","requestedBy":"Dyspozytornia"}'
+    ```
+
+=== "HTTP"
+
+    ```http
+    POST /v1/integrations/int_12/group HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    Content-Type: application/json
+
+    {"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt.", "requestedBy": "Dyspozytornia"}
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/integrations/int_12/group');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode([
+            'text' => 'Awaria pompy w hali B. Dyspozytor czeka na kontakt.',
+            'requestedBy' => 'Dyspozytornia',
+        ]),
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>', 'Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    foreach ($odpowiedz['messages'] as $w) {
+        echo $w['id'], ' ', $w['status'], PHP_EOL;
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/integrations/int_12/group",
+        data=json.dumps({"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt.", "requestedBy": "Dyspozytornia"}).encode(),
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    for w in odpowiedz["messages"]:
+        print(w["id"], w["status"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/integrations/int_12/group", {
+      method: "POST",
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>", "Content-Type": "application/json" },
+      body: JSON.stringify({"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt.", "requestedBy": "Dyspozytornia"}),
+    });
+    const odpowiedz = await res.json();
+    for (const w of odpowiedz.messages) console.log(w.id, w.status);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $body = @{ text = "Awaria pompy w hali B. Dyspozytor czeka na kontakt."; requestedBy = "Dyspozytornia" } | ConvertTo-Json
+    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/integrations/int_12/group" -Headers $naglowki -ContentType "application/json; charset=utf-8" -Body $body
+    $odpowiedz.messages | ForEach-Object { "$($_.id) $($_.status)" }
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Text;
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var tresc = new StringContent("""{"text": "Awaria pompy w hali B. Dyspozytor czeka na kontakt.", "requestedBy": "Dyspozytornia"}""", Encoding.UTF8, "application/json");
+    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/integrations/int_12/group", tresc);
+    var odpowiedz = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+    foreach (var w in odpowiedz.RootElement.GetProperty("messages").EnumerateArray())
+        Console.WriteLine(w.GetProperty("id") + " " + w.GetProperty("status"));
+    ```
+
+Pola body żądania:
+
+| Pole | Wymagane | Opis |
+|---|---|---|
+| `text` | tak | treść wiadomości, jak w rozdziale 3 |
+| `requestedBy` | nie | zlecający, do 100 znaków |
+| `encoding`, `deliveryReport`, `validTo`, `costCenter` | nie | jak w rozdziale 3 |
+
+Odbiorców wyznacza lista integracji. Pole `to` nie ma w tym wywołaniu znaczenia. Bramka je
+pomija, podobnie jak `serviceId`, `orig`, `maxParts` i `inReplyTo`. Wysyłka jest przyjmowana
+w całości albo wcale. Pusta lista kończy wywołanie błędem `group_empty`. Nagłówek
+`Idempotency-Key` działa jak w rozdziale 3.1.
+
+**Odpowiedź `202 Accepted`:**
+
+```json
+{
+  "integration": { "id": "int_12", "name": "Ekipa serwisowa" },
+  "recipients": 2,
+  "messages": [
+    { "id": "msg_3f9c2a7b1e4d8c6a5b2f", "status": "queued", "parts": 1 },
+    { "id": "msg_8a1b2c3d4e5f6a7b8c9d", "status": "queued", "parts": 1 }
+  ]
+}
+```
+
+Odpowiedź nie zawiera numerów członków grupy, ponieważ lista odbiorców pozostaje w bramce. Stan
+każdej wiadomości zwraca odczyt `GET /v1/messages/{id}` (rozdział 4.1). Dziennik integracji
+otrzymuje wpis „wysłano” z powodem „Wyślij SMS do grupy, 2 odbiorców”.
+
+### 5b.5. Limit części i ochrona przed burzą
+
+Limit części określa administrator w sekcji „Treść” integracji. Ustawienie nadmiaru rozstrzyga,
+w jaki sposób bramka postępuje z dłuższą treścią:
+
+- „skróć i wyślij”: bramka skraca treść do limitu i wysyła wiadomość. Skrócona treść bez polskich
+  znaków kończy się trzema kropkami, a treść z polskimi znakami znakiem „…”. Powód wpisu
+  w dzienniku zawiera dopisek „skrócono do <limit> części”.
+- „nie wysyłaj, zapisz błąd i powiadom”: bramka odrzuca wywołanie kodem `400 too_many_parts`.
+  Komunikat podaje liczbę części treści i limit integracji. Dziennik otrzymuje wpis „błąd”,
+  a administrator powiadomienie.
+
+Ochrona przed burzą zlicza w jednym oknie czasowym wywołania wysyłające integracji oraz ich
+odbiorców. Domyślnie przepuszcza 30 wywołań i 5000 odbiorców w ciągu 10 minut. Wywołanie z rozdziału
+5b.2 liczy się jako jeden odbiorca, a wywołania z rozdziałów 5b.3 i 5b.4 jako tylu odbiorców, ilu
+obejmują. Wywołanie, które przekroczyłoby którykolwiek z limitów, otrzymuje odpowiedź `429
+integration_throttled`, a bramka nie wysyła żadnej wiadomości. Komunikat podaje przekroczony limit.
+Dziennik otrzymuje wpis „limit”, a administrator jedno powiadomienie na okno. Odrzucone wywołanie
+nie zużywa limitów. Powtórzenie z tym samym kluczem idempotencji zwraca pierwotną odpowiedź, nie
+jest liczone do limitów, a dziennik otrzymuje wpis „duplikat”. Oba limity zmienia administrator w
+trybie zaawansowanym formularza integracji. Wysyłkę do wielu odbiorców zaleca się realizować jednym
+wywołaniem z rozdziału 5b.3 albo 5b.4 zamiast pętli wywołań z rozdziału 5b.2.
+
+Kod `integration_throttled` należy odróżnić od kodu `rate_limited`, który oznacza limit żądań
+klucza na minutę, wspólny dla całego API.
+
+### 5b.6. Błędy wywołań integracji
+
+| HTTP | `error.code` | Przyczyna | Postępowanie |
+|---|---|---|---|
+| 400 | `invalid_body` | pusty numer, brak treści albo pole niezgodne ze schematem; `message` wymienia pola | poprawić wskazane pola |
+| 400 | `invalid_phone` | numeru nie można znormalizować; `message` podaje powód | podać numer w postaci `48601000001` |
+| 400 | `too_many_parts` | treść dłuższa niż limit części integracji przy ustawieniu „nie wysyłaj”; `message` podaje liczbę części i limit | skrócić treść albo poprosić administratora o zmianę limitu |
+| 400 | `text_required`, `invalid_client_id`, `start_at_in_past` | rozsyłka jak w rozdziale 5.1 | jak w rozdziale 9 |
+| 400 | `valid_to_in_past`, `valid_to_too_far` | jak w rozdziale 3.2 | jak w rozdziale 3.2 |
+| 403 | `service_not_allowed`, `orig_not_allowed` | usługa albo nadpis integracji spoza uprawnień klucza | poprosić administratora o poprawienie integracji albo uprawnień klucza |
+| 404 | `integration_not_found` | brak integracji, integracja innego klucza albo innego rodzaju | sprawdzić identyfikator na liście integracji |
+| 409 | `integration_disabled` | integracja wyłączona w panelu | poprosić administratora o włączenie integracji |
+| 409 | `group_empty` | lista odbiorców grupy integracji jest pusta | poprosić administratora o uzupełnienie listy |
+| 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z innymi danymi albo użyty wcześniej w innej integracji lub w zwykłym wywołaniu API | użyć nowego klucza idempotencji |
+| 413 | `body_too_large` | body rozsyłki przekracza 4 MB | podzielić listę na kilka rozsyłek |
+| 429 | `integration_throttled` | przekroczony limit wywołań albo limit odbiorców integracji (ochrona przed burzą) | odczekać do końca okna; przy stałym ruchu poprosić administratora o zmianę limitu |
+| 429 | `rate_limited` | przekroczony limit żądań klucza na minutę | odczekać minutę; nie ponawiać w pętli |
+| 503 | `integration_unavailable` | konto Multiinfo integracji jest wstrzymane albo klucz integracji jest nieczynny; przyczynę podaje dziennik integracji w panelu bramki | przekazać administratorowi |
+
+Wywołanie wyłączonej integracji nie zostawia wpisu w dzienniku. Pozostałe błędy z tabeli poza
+`401`, `404` i `rate_limited` zostawiają wpis „błąd” albo „limit”.
+
 ## 6. Powiadomienia webhook
 
 Webhook to mechanizm powiadomień zwrotnych. Aplikacja udostępnia adres HTTP, a bramka wysyła na
@@ -1703,7 +2430,11 @@ harmonogramu wyżej.
 | Ważność wiadomości (`validTo`) | do 72 godzin od przyjęcia | `400 valid_to_too_far` |
 | Odbiorcy jednej rozsyłki | 5000 | `400 invalid_body` |
 | Numery w tablicy `to` | 500 | `400 invalid_body` |
-| Rozmiar body żądania | 512 KB | odpowiedź `413` bez pola `error.code` |
+| Liczba części treści w wywołaniu integracji z Power Automate | 1-9, ustawiana w integracji | skrócenie treści albo `400 too_many_parts`, zależnie od ustawienia integracji (5b.5) |
+| Wywołania wysyłające integracji z Power Automate | ochrona przed burzą ustawiana w integracji, domyślnie 30 na 10 minut | `429 integration_throttled` (5b.5) |
+| Odbiorcy wywołań integracji z Power Automate | ochrona przed burzą ustawiana w integracji, domyślnie 5000 na 10 minut, w tym samym oknie co wywołania | `429 integration_throttled` (5b.5) |
+| Odbiorcy grupy integracji z Power Automate | 500 | lista prowadzona w panelu bramki |
+| Rozmiar body żądania | 512 KB, a przy utworzeniu rozsyłki 4 MB | `413 body_too_large` |
 
 ## 9. Zestawienie błędów
 
@@ -1714,9 +2445,9 @@ użytkownikowi końcowemu.
 
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
-| 400 | `invalid_body` | body nie przechodzi walidacji; `message` wymienia pola | poprawić wskazane pola |
+| 400 | `invalid_body` | body nie przechodzi walidacji albo nie jest poprawnym dokumentem JSON; `message` wymienia pola po polsku | poprawić wskazane pola |
 | 400 | `invalid_phone` | numer nie daje się znormalizować: znaki inne niż cyfry, nieprawidłowa liczba cyfr, podwojony kod kraju (`4848…`); `message` podaje powód | podać numer w postaci `48601000001` |
-| 400 | `invalid_orig` | nadpis pusty, dłuższy niż 11 znaków albo ze znakami sterującymi | użyć nadpisu ze słownika konta |
+| 400 | `invalid_orig` | nadpis z samych spacji, dłuższy niż 11 znaków albo ze znakami sterującymi | użyć nadpisu ze słownika konta |
 | 400 | `invalid_client_id` | `clientId` odbiorcy rozsyłki poza wzorcem | do 20 znaków: litery, cyfry, `.`, `_`, `-` |
 | 400 | `text_required` | odbiorca rozsyłki bez treści własnej i domyślnej | dodać `defaultText` albo `text` |
 | 400 | `too_many_parts` | treść przekracza limit części; `message` podaje, ile miejsc usunąć | skrócić treść |
@@ -1730,14 +2461,20 @@ użytkownikowi końcowemu.
 | 401 | `missing_api_key`, `invalid_api_key`, `revoked_api_key`, `expired_api_key` | brak, nieprawidłowy, odwołany albo wygasły klucz | rozdział 2 |
 | 403 | `service_not_allowed` | usługa spoza uprawnień klucza | użyć usługi przypisanej do klucza |
 | 403 | `orig_not_allowed` | nadpis spoza uprawnień klucza; `message` wymienia dozwolone | użyć jednego z wymienionych |
-| 404 | `message_not_found`, `package_not_found`, `inbound_not_found` | brak obiektu albo obiekt innego klucza | sprawdzić identyfikator |
-| 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią wiadomości albo numerem | użyć nowego klucza idempotencji |
+| 403 | `integrations_only_key` | klucz z opcją „Tylko integracje” wysyła wyłącznie przez integracje z Power Automate | użyć innego klucza albo wywołań z rozdziału 5b |
+| 404 | `message_not_found`, `package_not_found`, `inbound_not_found`, `integration_not_found` | brak obiektu albo obiekt innego klucza | sprawdzić identyfikator |
+| 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią, numerem albo rozsyłką, a także klucz użyty wcześniej w innej integracji | użyć nowego klucza idempotencji |
 | 409 | `already_final`, `already_passed` | anulowanie niemożliwe (4.3) | brak |
+| 409 | `integration_disabled`, `group_empty` | integracja z Power Automate wyłączona w panelu albo bez odbiorców grupy (5b.6) | poprosić administratora o włączenie integracji albo uzupełnienie listy |
 | 409 | `package_not_completed`, `report_not_ready` | raport rozsyłki jeszcze niedostępny | powtórzyć po minucie |
+| 413 | `body_too_large` | body przekracza 512 KB, a przy utworzeniu rozsyłki 4 MB | zmniejszyć body albo podzielić rozsyłkę |
+| 415 | `unsupported_media_type` | body w formacie innym niż JSON | wysłać body z nagłówkiem `Content-Type: application/json` |
 | 429 | `rate_limited` | przekroczony limit żądań klucza na minutę | odczekać minutę |
+| 429 | `integration_throttled` | przekroczony limit wywołań albo odbiorców integracji z Power Automate (5b.5) | odczekać do końca okna albo poprosić administratora o zmianę limitu |
 | 500 | `internal`, `account_missing` | błąd wewnętrzny bramki | zgłosić administratorowi z czasem wystąpienia i identyfikatorem obiektu |
 | 502 | `provider_error` | błąd Multiinfo przy wywołaniu synchronicznym; `providerCode` w body odpowiedzi | ponowić po chwili; przy powtarzaniu przekazać `providerCode` administratorowi |
 | 503 | `account_certificate` | Multiinfo odrzuciło certyfikat bramki | przekazać administratorowi |
+| 503 | `integration_unavailable` | konto Multiinfo integracji z Power Automate jest wstrzymane albo klucz integracji jest nieczynny; przyczynę podaje dziennik integracji | przekazać administratorowi |
 | 503 | `unavailable` | bramka nie rozpoczęła pracy (tryb awaryjny, rozdział 10) | przekazać administratorowi; przyczynę pokazuje panel bramki |
 
 Odmowy Multiinfo przy wysyłce asynchronicznej nie są kodami HTTP. Pojawiają się w polach
@@ -1855,12 +2592,8 @@ curl -O https://sqlik.github.io/multiinfo-gate/openapi.json
 Adres bazowy jest w pliku zmienną `domena`. Narzędzie zapyta o nią przy imporcie. Podaj domenę,
 pod którą bramka jest wystawiona, bez `https://` na początku.
 
-Trzy typowe zastosowania:
+Dwa typowe zastosowania:
 
-- **Konektor własny w Power Automate.** W [make.powerautomate.com](https://make.powerautomate.com)
-  wybierz **Więcej → Wszystkie odkrycia → Konektory niestandardowe → Nowy konektor → Zaimportuj
-  plik OpenAPI**. Wskaż pobrany plik. Kreator sam wypełni akcje oraz pola. Zostaje dopisać klucz
-  API w zabezpieczeniach konektora. Gotowy konektor bramki jest w planach na wydanie 1.9
 - **Aplikacja w Make.** W [make.com](https://make.com) otwórz **Custom apps → Create a new app**
   i użyj opcji importu opisu OpenAPI. Powstaną z niego moduły aplikacji, które wstawisz do
   scenariusza obok pozostałych
@@ -1872,6 +2605,11 @@ Plik powstaje z tych samych schematów, na których bramka sprawdza żądania. O
 odbiegać od zachowania API. Sprawdza to test: po zmianie pola w kodzie plik należy
 przeliczyć poleceniem `npm run openapi`, w przeciwnym razie testy kończą się niepowodzeniem.
 
-Wersja 3.0 zamiast nowszej 3.1 jest wyborem świadomym. Konektory własne Power Platformu czytają
-wyłącznie formaty 2.0 oraz 3.0. Dokument nie używa niczego, czego nie ma w wersji 3.0, więc
-pozostałe narzędzia przyjmują go tak samo dobrze.
+Power Automate nie importuje tego pliku, ponieważ łącznik niestandardowy przyjmuje wyłącznie
+starszy format OpenAPI 2.0. Na potrzeby Power Automate bramka udostępnia osobny plik konektora,
+pobierany z panelu w integracji z Power Automate. Jego opis znajdziesz w artykule
+[Power Automate](power-automate.md).
+
+Plik został zapisany w wersji OpenAPI 3.0, a nie w nowszej 3.1. Wersję 3.0 obsługuje więcej
+narzędzi, w tym te, które nie wspierają jeszcze wersji 3.1. Dokument nie korzysta z żadnych
+elementów spoza wersji 3.0.

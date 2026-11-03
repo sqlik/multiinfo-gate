@@ -48,11 +48,36 @@ export function pruneUpgradeBackups(dir: string, keep = UPGRADE_BACKUPS_KEPT): s
   return removed;
 }
 
-/** Czas ostatniego zapisu bazy: plik główny albo dziennik WAL, jeśli nie został scalony. */
+/**
+ * Czas ostatniego zapisu bazy: plik główny albo dziennik WAL, jeśli nie został scalony. Pusty
+ * dziennik się nie liczy: powstaje przy otwarciu bazy w trybie WAL, a po czystym zatrzymaniu
+ * SQLite scala go i usuwa. Bez tego kopia z `update` byłaby zawsze starsza niż świeżo otwarta baza.
+ */
 function lastWrite(dbPath: string): number | null {
   if (!existsSync(dbPath)) return null;
   const wal = `${dbPath}-wal`;
-  return Math.max(statSync(dbPath).mtimeMs, existsSync(wal) ? statSync(wal).mtimeMs : 0);
+  const walStat = existsSync(wal) ? statSync(wal) : null;
+  return Math.max(statSync(dbPath).mtimeMs, walStat && walStat.size > 0 ? walStat.mtimeMs : 0);
+}
+
+/**
+ * Dziennik WAL z danymi przy starcie: poprzedni proces nie zamknął bazy czysto, na przykład
+ * `systemctl stop` po 90 s wysłał SIGKILL. Kopia samego pliku głównego (tak kopiuje `update`)
+ * nie zawiera wtedy ostatnich transakcji, a bramka przed jakimkolwiek zapisem widzi pełną bazę.
+ */
+function walHasFrames(dbPath: string): boolean {
+  const wal = `${dbPath}-wal`;
+  return existsSync(wal) && statSync(wal).size > 0;
+}
+
+/**
+ * Kopia o nazwie z tej aktualizacji jest wierna, gdy powstała po ostatnim zapisie bazy. Starsza
+ * zostaje z poprzedniej próby: po powrocie do poprzedniej wersji baza żyła dalej, więc ponowna
+ * aktualizacja potrzebuje nowej kopii, inaczej kolejny powrót zgubiłby te dane.
+ */
+function trustedCopy(copyPath: string, dbPath: string): boolean {
+  if (walHasFrames(dbPath)) return false;
+  return statSync(copyPath).mtimeMs >= (lastWrite(dbPath) ?? 0);
 }
 
 /**
@@ -88,7 +113,9 @@ export async function backupBeforeUpgrade(opts: UpgradeBackupOptions): Promise<s
 
   const path = join(opts.dir, upgradeBackupName(previous, opts.current));
   let written: string | null = null;
-  if (!existsSync(path) && !(previous === null && freshCopyExists(opts.dir, opts.db.name))) {
+  const covered = existsSync(path) ? trustedCopy(path, opts.db.name)
+    : previous === null && !walHasFrames(opts.db.name) && freshCopyExists(opts.dir, opts.db.name);
+  if (!covered) {
     try {
       mkdirSync(opts.dir, { recursive: true });
       await backupDatabaseTo(opts.db, path);

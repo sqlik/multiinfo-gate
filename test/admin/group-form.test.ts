@@ -5,12 +5,12 @@ import { groupConfigToValues, groupFormToConfig, groupFormValues, groupNeedsAdva
 
 const engine = new TemplateEngine();
 const NOW = new Date('2026-10-30T10:00:00Z');
-const base = { name: 'Dzieci', apiKeyId: '1', serviceId: '', orig: '', enabled: '1', preset: 'sms-grupa', throttleLimit: '10', throttleWindow: '10', eventLogLimit: '200', conditionMode: 'builder', mode: 'lists', senders: '601 000 001 Ania', recipients: '+48 601 000 002\n0601000003\n601000002', prefix: 'Dzieci', textMode: 'body', maxParts: '1', overflow: 'truncate' };
+const base = { name: 'Ekipa serwisowa', apiKeyId: '1', serviceId: '', orig: '', enabled: '1', preset: 'sms-grupa', throttleLimit: '10', throttleWindow: '10', eventLogLimit: '200', conditionMode: 'builder', mode: 'lists', senders: '601 000 001 Ania', recipients: '+48 601 000 002\n0601000003\n601000002', prefix: 'Serwis', textMode: 'body', maxParts: '1', overflow: 'truncate' };
 
 describe('groupFormToConfig', () => {
   it('tryb osobnych list: normalizacja, powtórzenia, prefiks zapisany jak wpisano', () => {
     const out = groupFormToConfig(groupFormValues(base), '48', engine);
-    expect(out).toMatchObject({ ok: true, config: { mode: 'lists', senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002', '48601000003'], members: [], prefix: 'Dzieci', text: { mode: 'body' }, confirm: { enabled: false }, maxParts: 1, overflow: 'truncate' } });
+    expect(out).toMatchObject({ ok: true, config: { mode: 'lists', senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002', '48601000003'], members: [], prefix: 'Serwis', text: { mode: 'body' }, confirm: { enabled: false }, maxParts: 1, overflow: 'truncate' } });
   });
   it.each([
     [{ senders: '' }, 'Podaj co najmniej jeden numer uprawniony do pisania.'],
@@ -19,7 +19,7 @@ describe('groupFormToConfig', () => {
     [{ recipients: Array.from({ length: 501 }, (_, i) => `4860${String(1000000 + i)}`).join('\n') }, 'Numery odbiorców: najwyżej 500.'],
     [{ mode: 'closed', members: '601000001' }, 'Grupa zamknięta wymaga co najmniej dwóch członków.'],
     [{ mode: 'closed', members: Array.from({ length: 501 }, (_, i) => `4860${String(1000000 + i)}`).join('\n') }, 'Numery członków: najwyżej 500.'],
-    [{ prefix: 'dla dzieci' }, 'Prefiks: jedno słowo bez spacji, do 20 znaków.'],
+    [{ prefix: 'dla serwisu' }, 'Prefiks: jedno słowo bez spacji, do 20 znaków.'],
     [{ prefix: 'x'.repeat(21) }, 'Prefiks: jedno słowo bez spacji, do 20 znaków.'],
     [{ senders: '12 Jan' }, expect.stringContaining('„12 Jan”')],
     [{ recipients: '601000002\nabc' }, expect.stringContaining('„abc”')],
@@ -43,10 +43,10 @@ describe('groupFormToConfig', () => {
 describe('groupConfigToValues i próbka', () => {
   it('odtwarza linie z nazwami, a próbka domyślna bierze pierwszego nadawcę i prefiks', () => {
     const config = (groupFormToConfig(groupFormValues(base), '48', engine) as { config: SmsGroupConfig }).config;
-    const v = groupConfigToValues(config, { name: 'Dzieci', apiKeyId: '1', serviceId: '', orig: '', enabled: true, preset: 'sms-grupa', storePayloads: false });
-    expect(v).toMatchObject({ senders: '48601000001 Ania', recipients: '48601000002\n48601000003', members: '', prefix: 'Dzieci', mode: 'lists', textMode: 'body', textTemplate: '', confirmEnabled: false, maxParts: '1', overflow: 'truncate', sampleFrom: '', sampleText: '' });
-    expect(groupSampleEvent(v, config, NOW)).toMatchObject({ from: '48601000001', text: 'Dzieci Awaria pompy w hali B, proszę o kontakt', kind: 'text', serviceId: '', receivedAt: NOW.toISOString() });
-    expect(groupSampleEvent({ ...v, sampleFrom: '+48 601 000 009', sampleText: 'dzieci: halo' }, config, NOW)).toMatchObject({ from: '48601000009', text: 'dzieci: halo' });
+    const v = groupConfigToValues(config, { name: 'Ekipa serwisowa', apiKeyId: '1', serviceId: '', orig: '', enabled: true, preset: 'sms-grupa', storePayloads: false });
+    expect(v).toMatchObject({ senders: '48601000001 Ania', recipients: '48601000002\n48601000003', members: '', prefix: 'Serwis', mode: 'lists', textMode: 'body', textTemplate: '', confirmEnabled: false, maxParts: '1', overflow: 'truncate', sampleFrom: '', sampleText: '' });
+    expect(groupSampleEvent(v, config, NOW)).toMatchObject({ from: '48601000001', text: 'Serwis Awaria pompy w hali B, proszę o kontakt', kind: 'text', serviceId: '', receivedAt: NOW.toISOString() });
+    expect(groupSampleEvent({ ...v, sampleFrom: '+48 601 000 009', sampleText: 'serwis: halo' }, config, NOW)).toMatchObject({ from: '48601000009', text: 'serwis: halo' });
     expect(groupSampleEvent({ ...v, sampleFrom: 'INFO' }, config, NOW).from).toBe('INFO');
   });
   it('próbka w grupie zamkniętej bez prefiksu: pierwszy członek i sama treść', () => {

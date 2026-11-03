@@ -5,7 +5,7 @@ import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { IntegrationEventInput, IntegrationEventsRepo } from '../store/integration-events.ts';
 import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
 import type { IntegrationRow, IntegrationsRepo } from '../store/integrations.ts';
-import { measureText } from '../text/measure.ts';
+import { measureText, type EncodingRequest } from '../text/measure.ts';
 import { InvalidPhoneError, MAX_RECIPIENTS_PER_HOOK, normalizeRecipient, splitRecipients, TooManyRecipientsError } from '../text/phone.ts';
 import { segmentText, TooManyPartsError } from '../text/segment.ts';
 import type { GroupMember, InboundConfig, MailInConfig, SmsGroupConfig } from './config.ts';
@@ -105,11 +105,14 @@ function withEnriched(payload: unknown, as: string, value: unknown): unknown {
   return { ...payload, [as]: value };
 }
 
-/** Przycięcie do `maxParts` części tym samym licznikiem, którym API dzieli wiadomości. */
-export function fitToParts(text: string, maxParts: number): { text: string; parts: number; over: boolean } {
+/**
+ * Przycięcie do `maxParts` części tym samym licznikiem, którym API dzieli wiadomości. Kodowanie
+ * podaje integracja, w której autor wybiera je sam (Power Automate); pozostałe liczą `auto`.
+ */
+export function fitToParts(text: string, maxParts: number, encoding: EncodingRequest = 'auto'): { text: string; parts: number; over: boolean } {
   const fits = (candidate: string): number | null => {
     try {
-      return segmentText(candidate, measureText(candidate, 'auto'), maxParts).parts;
+      return segmentText(candidate, measureText(candidate, encoding), maxParts).parts;
     } catch (e) {
       if (e instanceof TooManyPartsError) return null;
       throw e;
@@ -117,16 +120,21 @@ export function fitToParts(text: string, maxParts: number): { text: string; part
   };
   const whole = fits(text);
   if (whole !== null) return { text, parts: whole, over: false };
-  // Ucinamy po znakach, aż zmieści się w limicie; wielokropek liczy się jak znak.
+  // Ucinamy po znakach, aż zmieści się w limicie. Treść w GSM-7 kończą trzy kropki,
+  // bo znak wielokropka spoza alfabetu GSM przełączyłby ją na UCS-2.
   const chars = [...text];
+  const cutAt = (n: number): string => {
+    const head = chars.slice(0, n).join('');
+    return measureText(head, encoding).encoding === 'gsm' ? `${head}...` : `${head}…`;
+  };
   let lo = 0;
   let hi = chars.length;
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
-    if (fits(`${chars.slice(0, mid).join('')}…`) !== null) lo = mid;
+    if (fits(cutAt(mid)) !== null) lo = mid;
     else hi = mid - 1;
   }
-  const cut = `${chars.slice(0, lo).join('')}…`;
+  const cut = cutAt(lo);
   return { text: cut, parts: fits(cut) ?? maxParts, over: true };
 }
 

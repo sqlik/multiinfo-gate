@@ -1,12 +1,15 @@
 import { GATE_VERSION } from '../version.ts';
+import { MISSING_API_KEY } from './auth.ts';
 import { messageBodySchema } from './messages.ts';
+import { paGroupBodySchema, paMessageBodySchema } from './pa-integrations.ts';
 
 /**
  * Opis API w formacie OpenAPI 3.0. Plik `docs/openapi.json` powstaje z tego modułu poleceniem
  * `npm run openapi`, które `npm test` wywołuje samo, a osobny krok w przepływach GitHuba pilnuje,
- * że zapisany plik nie odstaje od kodu. Pola ciała wysyłki biorą się z tego samego schematu zod,
+ * że zapisany plik nie odstaje od kodu. Pola body wysyłki pochodzą z tego samego schematu zod,
  * którego używa trasa, więc nowe pole nie umknie opisowi: pole bez opisu przerywa budowanie
- * dokumentu. Wersja 3.0, a nie 3.1, bo konektory własne Power Platform czytają tylko 2.0 oraz 3.0.
+ * dokumentu. Wersja 3.0, a nie 3.1, bo 3.0 czyta więcej narzędzi. Power Automate nie przyjmuje żadnej
+ * z nich: plik konektora w Swaggerze 2.0 buduje z tego dokumentu `power-automate.ts`.
  */
 
 export interface JsonSchema {
@@ -20,6 +23,7 @@ export interface JsonSchema {
   minimum?: number;
   maximum?: number;
   minLength?: number;
+  maxLength?: number;
   minItems?: number;
   maxItems?: number;
   items?: JsonSchema;
@@ -92,11 +96,11 @@ function blad(description: string, code: string, message: string): OpenApiRespon
 const BLAD_KLUCZA = blad(
   'Klucz API brakujący, nieznany, odwołany albo wygasły: missing_api_key, invalid_api_key, revoked_api_key, expired_api_key',
   'missing_api_key',
-  'Brak nagłówka Authorization ze schematem Bearer.',
+  MISSING_API_KEY,
 );
 
 /**
- * Opisy pól ciała wysyłki. Kluczem jest nazwa pola ze schematu zod. Zod nie zna opisów,
+ * Opisy pól body wysyłki. Kluczem jest nazwa pola ze schematu zod. Zod nie zna opisów,
  * a to one są wartością tego pliku dla czytelnika, więc stoją tutaj.
  */
 const POLA_WIADOMOSCI: Record<string, JsonSchema> = {
@@ -111,7 +115,7 @@ const POLA_WIADOMOSCI: Record<string, JsonSchema> = {
   text: {
     type: 'string',
     minLength: 1,
-    description: 'Treść wiadomości. Znaki spoza alfabetu GSM, w tym polskie, są dozwolone; wpływają na kodowanie'
+    description: 'Treść wiadomości. Znaki spoza alfabetu GSM, w tym polskie, są dozwolone, ale wpływają na kodowanie'
       + ' i liczbę części.',
     example: 'Przypominamy o wizycie 26.08 o 10:00.',
   },
@@ -164,9 +168,17 @@ const POLA_WIADOMOSCI: Record<string, JsonSchema> = {
       + ' odbiorcy, którym jest nadawca tamtej wiadomości, i w tej samej usłudze, z której przyszła.',
     example: 'in_7b3d9f2a1c',
   },
+  requestedBy: {
+    type: 'string',
+    maxLength: 100,
+    description: 'Kto zlecił wysyłkę, na przykład adres e-mail osoby z formularza albo autora wpisu na liście.'
+      + ' Bramka zapisuje go w dzienniku integracji oraz przy wiadomości i rozsyłce. Nie trafia do treści SMS-a.'
+      + ' Najwyżej 100 znaków, bez znaków sterujących.',
+    example: 'jan.nowak@firma.pl',
+  },
 };
 
-/** Opis pola wysyłki po nazwie. Brak opisu przerywa budowanie, także przy ciele rozsyłki. */
+/** Opis pola wysyłki po nazwie. Brak opisu przerywa budowanie, także przy body rozsyłki. */
 function pole(nazwa: string): JsonSchema {
   const opis = POLA_WIADOMOSCI[nazwa];
   if (!opis) {
@@ -176,20 +188,46 @@ function pole(nazwa: string): JsonSchema {
 }
 
 /**
- * Właściwości ciała wysyłki wprost ze schematu trasy: nazwy pól oraz wymagalność bierze się
- * z zod, opisy z tabeli wyżej. Pole dołożone do schematu bez opisu przerywa budowanie.
+ * Właściwości body wysyłki wprost ze schematu trasy: nazwy pól oraz wymagalność pochodzą
+ * z zod, opisy z tabeli wyżej. Pole dodane do schematu bez opisu przerywa budowanie.
  */
-function cialoWysylki(): JsonSchema {
+function cialoZSchematu(shape: Record<string, { isOptional(): boolean }>, inne: Record<string, JsonSchema> = {}): JsonSchema {
   const properties: Record<string, JsonSchema> = {};
   const required: string[] = [];
-  for (const [nazwa, schemat] of Object.entries(messageBodySchema.shape)) {
-    properties[nazwa] = pole(nazwa);
+  for (const [nazwa, schemat] of Object.entries(shape)) {
+    properties[nazwa] = inne[nazwa] ?? pole(nazwa);
     if (!schemat.isOptional()) required.push(nazwa);
   }
   return { type: 'object', required, properties };
 }
 
-/** Odbiorca rozsyłki; osobny schemat, bo powtarza się w ciele i w opisie raportu. */
+const cialoWysylki = (): JsonSchema => cialoZSchematu(messageBodySchema.shape);
+
+/** Numer w „Wyślij SMS” integracji: jeden numer, bez listy. */
+const NUMER_INTEGRACJI: JsonSchema = {
+  type: 'string',
+  minLength: 1,
+  description: 'Jeden numer odbiorcy. Numer bez kodu kraju otrzymuje kod domyślny konta, dla Polski 48. Pusty numer'
+    + ' kończy wywołanie błędem invalid_body i nigdy nie oznacza wysyłki do listy odbiorców integracji.',
+  example: '48601000001',
+};
+
+/** Body wywołań integracji z Power Automate: bez usługi, nadpisu i limitu części, które wyznacza integracja. */
+const cialoWysylkiIntegracji = (): JsonSchema => cialoZSchematu(paMessageBodySchema.shape, { to: NUMER_INTEGRACJI });
+const cialoGrupyIntegracji = (): JsonSchema => cialoZSchematu(paGroupBodySchema.shape);
+
+/** Klucz powtórzenia; ten sam przy wysyłce do numerów, do grupy i przy rozsyłce. */
+const PARAMETR_IDEMPOTENCJI: OpenApiParameter = {
+  name: 'Idempotency-Key',
+  in: 'header',
+  required: false,
+  description: 'Własny klucz powtórzenia. Powtórzone żądanie z tym samym kluczem i tymi samymi danymi'
+    + ' zwraca pierwotną odpowiedź zamiast wysyłać wiadomość albo rozsyłkę drugi raz.',
+  schema: { type: 'string' },
+  example: 'zamowienie-2026-08-26-114',
+};
+
+/** Odbiorca rozsyłki; osobny schemat, bo powtarza się w body i w opisie raportu. */
 const ODBIORCA: JsonSchema = {
   type: 'object',
   required: ['to'],
@@ -234,12 +272,35 @@ const CIALO_ROZSYLKI: JsonSchema = {
     startAt: {
       type: 'string',
       format: 'date-time',
-      description: 'Termin rozpoczęcia rozsyłki w formacie ISO 8601. Musi być w przyszłości; Multiinfo rusza'
-        + ' o tej godzinie.',
+      description: 'Termin rozpoczęcia rozsyłki w formacie ISO 8601. Termin musi przypadać w przyszłości, a Multiinfo'
+        + ' rozpoczyna wysyłkę o tej godzinie. Pominięty oznacza wysyłkę od razu.',
       example: '2026-08-27T08:00:00.000Z',
     },
   },
 };
+
+/** Rozsyłka przez integrację: pola jak w zwykłej rozsyłce bez usługi i nadpisu, ze zlecającym. */
+function cialoRozsylkiIntegracji(): JsonSchema {
+  const { orig: _orig, serviceId: _serviceId, ...pola } = CIALO_ROZSYLKI.properties!;
+  return { ...CIALO_ROZSYLKI, properties: { ...pola, requestedBy: pole('requestedBy') } };
+}
+
+const PRZYJETA_ROZSYLKA: JsonSchema = {
+  type: 'object',
+  required: ['id', 'status', 'recipients', 'encoding', 'multipart'],
+  properties: {
+    id: { type: 'string', description: 'Identyfikator rozsyłki' },
+    status: { type: 'string', description: 'Stan rozsyłki zaraz po przyjęciu', example: 'queued' },
+    recipients: { type: 'integer', description: 'Liczba przyjętych odbiorców' },
+    encoding: { type: 'string', enum: ['gsm', 'ucs2'], description: 'Kodowanie całej rozsyłki' },
+    multipart: {
+      type: 'boolean',
+      description: 'Czy którakolwiek treść jest dzielona na części',
+    },
+  },
+};
+
+const PRZYKLAD_ROZSYLKI = { id: 'pkg_7c1e9a2b3d4f5a6b7c8d', status: 'queued', recipients: 2, encoding: 'gsm', multipart: false };
 
 const PRZYJETA_WIADOMOSC: JsonSchema = {
   type: 'object',
@@ -283,6 +344,95 @@ const PARAMETR_ID_ROZSYLKI: OpenApiParameter = {
   description: 'Identyfikator rozsyłki zwrócony przy jej utworzeniu',
   schema: { type: 'string', pattern: '^pkg_[A-Za-z0-9]+$' },
   example: 'pkg_7c1e9a2b3d4f5a6b7c8d',
+};
+
+const PARAMETR_ID_INTEGRACJI: OpenApiParameter = {
+  name: 'id',
+  in: 'path',
+  required: true,
+  description: 'Identyfikator integracji z Power Automate, wybranej z listy integracji klucza. Zmiana nazwy integracji w panelu'
+    + ' go nie zmienia.',
+  schema: { type: 'string', pattern: '^int_[1-9][0-9]{0,9}$' },
+  example: 'int_12',
+};
+
+/** Integracja na liście: bez numerów i nazwisk, które zostają w panelu bramki. */
+const INTEGRACJA_POWER_AUTOMATE: JsonSchema = {
+  type: 'object',
+  required: ['id', 'name', 'recipients'],
+  properties: {
+    id: {
+      type: 'string',
+      description: 'Stały identyfikator integracji. Zmiana nazwy integracji w panelu go nie zmienia',
+      example: 'int_12',
+    },
+    name: { type: 'string', description: 'Nazwa integracji nadana w panelu bramki', example: 'Ekipa serwisowa' },
+    recipients: {
+      type: 'integer',
+      description: 'Liczba numerów na liście odbiorców integracji, do których wysyła „Wyślij SMS do grupy”',
+      example: 3,
+    },
+  },
+};
+
+/** Odpowiedź wysyłki do listy odbiorców integracji: jedna wiadomość na numer, w kolejności listy. */
+const WYSYLKA_DO_GRUPY_INTEGRACJI: JsonSchema = {
+  type: 'object',
+  required: ['integration', 'recipients', 'messages'],
+  properties: {
+    integration: {
+      type: 'object',
+      description: 'Integracja, której lista odbiorców posłużyła do wysyłki',
+      required: ['id', 'name'],
+      properties: {
+        id: { type: 'string', description: 'Identyfikator integracji', example: 'int_12' },
+        name: { type: 'string', description: 'Nazwa integracji', example: 'Ekipa serwisowa' },
+      },
+    },
+    recipients: { type: 'integer', description: 'Liczba przyjętych wiadomości, po jednej na numer', example: 3 },
+    messages: {
+      type: 'array',
+      description: 'Przyjęte wiadomości. Stan każdej z nich zwraca odczyt wiadomości',
+      items: {
+        type: 'object',
+        // Bez numeru odbiorcy: lista grupy zostaje w panelu bramki.
+        required: ['id', 'status', 'parts'],
+        properties: {
+          id: { type: 'string', description: 'Identyfikator wiadomości', example: 'msg_3f9c2a7b1e4d8c6a5b2f' },
+          status: { type: 'string', description: 'Stan wiadomości, zaraz po przyjęciu queued', example: 'queued' },
+          parts: { type: 'integer', description: 'Liczba części wiadomości', example: 1 },
+        },
+      },
+    },
+  },
+};
+
+/** Błędy wspólne trzech wysyłek przez integrację: integracja, ochrona przed burzą, konto. */
+const BLEDY_INTEGRACJI: Record<string, OpenApiResponse> = {
+  '401': BLAD_KLUCZA,
+  '403': blad(
+    'Usługa albo nadpis integracji spoza uprawnień klucza: service_not_allowed, orig_not_allowed. Poprawia je'
+      + ' administrator w ustawieniach integracji',
+    'service_not_allowed',
+    'Klucz nie ma dostępu do usługi 24139.',
+  ),
+  '404': blad(
+    'Brak integracji, integracja innego klucza albo innego rodzaju; bramka nie rozróżnia tych sytuacji',
+    'integration_not_found',
+    'Nie ma integracji z Power Automate o tym identyfikatorze.',
+  ),
+  '429': blad(
+    'Przekroczony limit żądań klucza na minutę albo limit wysyłek integracji (ochrona przed burzą):'
+      + ' rate_limited, integration_throttled',
+    'integration_throttled',
+    'Integracja Ekipa serwisowa przekroczyła limit 30 wysyłek w 10 min. Spróbuj później albo poproś administratora'
+      + ' o zmianę limitu.',
+  ),
+  '503': blad(
+    'Integracja nie może teraz wysyłać, bo konto Multiinfo jest wstrzymane albo nie istnieje: integration_unavailable',
+    'integration_unavailable',
+    'Integracja Ekipa serwisowa nie może teraz wysyłać: konto wstrzymane: certyfikat wygasł.',
+  ),
 };
 
 const STATUSY_WIADOMOSCI = ['queued', 'sent', 'delivered', 'failed', 'expired', 'cancelled', 'blocked', 'throttled', 'unknown'];
@@ -360,9 +510,9 @@ const WIADOMOSC: JsonSchema = {
     providerCode: {
       type: 'integer',
       nullable: true,
-      description: 'Kod odmowy albo błędu z Multiinfo; poza błędem null',
+      description: 'Kod odmowy albo błędu z Multiinfo. Poza błędem pole jest puste',
     },
-    error: { type: 'string', nullable: true, description: 'Wyjaśnienie błędu po polsku; poza błędem null' },
+    error: { type: 'string', nullable: true, description: 'Wyjaśnienie błędu po polsku. Poza błędem pole jest puste' },
   },
 };
 
@@ -469,6 +619,43 @@ const WIERSZ_RAPORTU: JsonSchema = {
   },
 };
 
+/** Uprawnienia klucza; listy obiektów, bo listy wyboru w aplikacjach czytają pola obiektów. */
+const UPRAWNIENIA_KLUCZA: JsonSchema = {
+  type: 'object',
+  required: ['name', 'services', 'origs', 'maxParts', 'ratePerMin'],
+  properties: {
+    name: { type: 'string', description: 'Nazwa klucza nadana w panelu', example: 'Powiadomienia CRM' },
+    services: {
+      type: 'array',
+      description: 'Usługi Multiinfo, z których klucz może wysyłać',
+      items: {
+        type: 'object',
+        required: ['id', 'default'],
+        properties: {
+          id: { type: 'string', description: 'Identyfikator usługi Multiinfo', example: '24138' },
+          default: { type: 'boolean', description: 'Usługa używana, gdy wysyłka nie podaje pola serviceId' },
+        },
+      },
+    },
+    origs: {
+      type: 'array',
+      description: 'Nadpisy nadawcy, których klucz może użyć w polu orig, w kolejności alfabetycznej. Lista obejmuje'
+        + ' nadpis domyślny klucza, a gdy klucz go nie ma, nadpis domyślny konta. Pusta lista oznacza wysyłkę bez'
+        + ' nadpisu, z numerem przydzielonym kontu w Multiinfo jako nadawcą.',
+      items: {
+        type: 'object',
+        required: ['orig', 'default'],
+        properties: {
+          orig: { type: 'string', description: 'Nadpis nadawcy', example: 'Firma Info' },
+          default: { type: 'boolean', description: 'Nadpis używany, gdy wysyłka nie podaje pola orig' },
+        },
+      },
+    },
+    maxParts: { type: 'integer', description: 'Najwyższa liczba części jednej wiadomości', example: 5 },
+    ratePerMin: { type: 'integer', description: 'Limit żądań klucza na minutę', example: 60 },
+  },
+};
+
 export function buildOpenApiDocument(): OpenApiDocument {
   return {
     openapi: '3.0.3',
@@ -491,6 +678,40 @@ export function buildOpenApiDocument(): OpenApiDocument {
     }],
     security: KLUCZ,
     paths: {
+      '/v1/key': {
+        get: {
+          operationId: 'uprawnieniaKlucza',
+          summary: 'Uprawnienia klucza',
+          description: 'Zwraca uprawnienia klucza, którym wywołanie jest uwierzytelnione: usługi, nadpisy nadawcy'
+            + ' i limity. Aplikacja buduje z nich listy wyboru usługi i nadawcy albo sprawdza klucz przed pierwszą'
+            + ' wysyłką. Odpowiedź nie zawiera danych konta Multiinfo ani sekretów. Wywołanie liczy się do limitu'
+            + ' żądań klucza.',
+          security: KLUCZ,
+          responses: {
+            '200': {
+              description: 'Uprawnienia klucza',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/UprawnieniaKlucza' },
+                  example: {
+                    name: 'Powiadomienia CRM',
+                    services: [{ id: '24138', default: true }],
+                    origs: [{ orig: 'Firma Alert', default: false }, { orig: 'Firma Info', default: true }],
+                    maxParts: 5,
+                    ratePerMin: 60,
+                  },
+                },
+              },
+            },
+            '401': BLAD_KLUCZA,
+            '429': blad(
+              'Przekroczony limit żądań klucza na minutę',
+              'rate_limited',
+              'Przekroczono limit 60 żądań na minutę.',
+            ),
+          },
+        },
+      },
       '/v1/messages': {
         post: {
           operationId: 'wyslijWiadomosc',
@@ -499,15 +720,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             + ' Bramka zapisuje wiadomość w kolejce i odpowiada natychmiast. Błędny numer na dowolnej pozycji'
             + ' odrzuca całe żądanie, więc żadna wiadomość nie trafia wtedy do kolejki.',
           security: KLUCZ,
-          parameters: [{
-            name: 'Idempotency-Key',
-            in: 'header',
-            required: false,
-            description: 'Własny klucz powtórzenia. Powtórzone żądanie z tym samym kluczem i tą samą treścią'
-              + ' zwraca pierwotną odpowiedź zamiast wysyłać wiadomość drugi raz.',
-            schema: { type: 'string' },
-            example: 'zamowienie-2026-08-26-114',
-          }],
+          parameters: [PARAMETR_IDEMPOTENCJI],
           requestBody: {
             required: true,
             content: {
@@ -537,7 +750,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
               },
             },
             '400': blad(
-              'Błąd w ciele żądania: invalid_body, invalid_phone, invalid_orig, too_many_parts, service_required,'
+              'Błąd w body żądania: invalid_body, invalid_phone, invalid_orig, too_many_parts, service_required,'
                 + ' valid_to_in_past, valid_to_too_far, a przy polu inReplyTo także in_reply_to_single,'
                 + ' in_reply_to_unknown oraz in_reply_to_recipient',
               'invalid_phone',
@@ -550,7 +763,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
               'Ten klucz może użyć nadpisu: Firma Sklep.',
             ),
             '409': blad(
-              'Ten sam Idempotency-Key użyty z inną treścią albo innym numerem',
+              'Ten sam Idempotency-Key użyty z inną treścią, innym numerem albo przez integrację',
               'idempotency_conflict',
               'Ten klucz idempotencji został już użyty z inną treścią lub innym odbiorcą.',
             ),
@@ -696,6 +909,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             + ' treść oraz własny identyfikator zwracany w raporcie. Kodowanie jest wspólne dla całej rozsyłki:'
             + ' jeżeli którakolwiek treść wymaga UCS-2, wszystkie wiadomości idą w UCS-2.',
           security: KLUCZ,
+          parameters: [PARAMETR_IDEMPOTENCJI],
           requestBody: {
             required: true,
             content: {
@@ -717,32 +931,13 @@ export function buildOpenApiDocument(): OpenApiDocument {
               description: 'Rozsyłka przyjęta do kolejki',
               content: {
                 'application/json': {
-                  schema: {
-                    type: 'object',
-                    required: ['id', 'status', 'recipients', 'encoding', 'multipart'],
-                    properties: {
-                      id: { type: 'string', description: 'Identyfikator rozsyłki' },
-                      status: { type: 'string', description: 'Stan rozsyłki zaraz po przyjęciu', example: 'queued' },
-                      recipients: { type: 'integer', description: 'Liczba przyjętych odbiorców' },
-                      encoding: { type: 'string', enum: ['gsm', 'ucs2'], description: 'Kodowanie całej rozsyłki' },
-                      multipart: {
-                        type: 'boolean',
-                        description: 'Czy którakolwiek treść jest dzielona na części',
-                      },
-                    },
-                  },
-                  example: {
-                    id: 'pkg_7c1e9a2b3d4f5a6b7c8d',
-                    status: 'queued',
-                    recipients: 2,
-                    encoding: 'gsm',
-                    multipart: false,
-                  },
+                  schema: PRZYJETA_ROZSYLKA,
+                  example: PRZYKLAD_ROZSYLKI,
                 },
               },
             },
             '400': blad(
-              'Błąd w ciele żądania: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts,'
+              'Błąd w body żądania: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts,'
                 + ' invalid_orig, service_required, start_at_in_past',
               'text_required',
               'recipients.3: brak treści i brak treści domyślnej.',
@@ -752,6 +947,11 @@ export function buildOpenApiDocument(): OpenApiDocument {
               'Usługa albo nadpis spoza uprawnień klucza: service_not_allowed, orig_not_allowed',
               'service_not_allowed',
               'Klucz nie ma dostępu do usługi 24139.',
+            ),
+            '409': blad(
+              'Ten sam Idempotency-Key użyty z inną rozsyłką albo przez integrację',
+              'idempotency_conflict',
+              'Ten klucz idempotencji został już użyty z inną rozsyłką albo przez inną integrację.',
             ),
             '429': blad(
               'Przekroczony limit żądań klucza na minutę',
@@ -987,6 +1187,176 @@ export function buildOpenApiDocument(): OpenApiDocument {
           },
         },
       },
+      '/v1/integrations': {
+        get: {
+          operationId: 'listaIntegracjiPowerAutomate',
+          summary: 'Lista integracji z Power Automate',
+          description: 'Zwraca czynne integracje z Power Automate przypisane do klucza, w kolejności nazw. Integracje'
+            + ' zakłada administrator w panelu bramki: Integracje, Dodaj integrację, Aplikacja wysyła SMS, Power'
+            + ' Automate. Lista podaje nazwę i liczbę odbiorców grupy, bez numerów i nazwisk. Integracja wyłączona'
+            + ' w panelu nie występuje na liście. Z tej listy konektor Power Automate buduje pole Integracja.',
+          security: KLUCZ,
+          responses: {
+            '200': {
+              description: 'Integracje klucza',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['data'],
+                    properties: {
+                      data: { type: 'array', items: { $ref: '#/components/schemas/IntegracjaPowerAutomate' }, description: 'Integracje klucza' },
+                    },
+                  },
+                  example: { data: [{ id: 'int_12', name: 'Ekipa serwisowa', recipients: 3 }] },
+                },
+              },
+            },
+            '401': BLAD_KLUCZA,
+          },
+        },
+      },
+      '/v1/integrations/{id}/messages': {
+        post: {
+          operationId: 'wyslijSmsIntegracja',
+          summary: 'SMS przez integrację',
+          description: 'Wysyła jeden SMS na jeden numer przez integrację z Power Automate. Usługę, nadpis nadawcy, limit'
+            + ' części i ochronę przed burzą wyznacza integracja. Treść ponad limit części integracja przycina albo'
+            + ' odrzuca, zależnie od ustawienia. Każde wywołanie zostawia wpis w dzienniku integracji.',
+          security: KLUCZ,
+          parameters: [PARAMETR_ID_INTEGRACJI, PARAMETR_IDEMPOTENCJI],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: cialoWysylkiIntegracji(),
+                example: { to: '48601000001', text: 'Technik dotrze jutro między 8:00 a 10:00.', requestedBy: 'jan.nowak@firma.pl' },
+              },
+            },
+          },
+          responses: {
+            '202': {
+              description: 'Wiadomość przyjęta do kolejki',
+              content: {
+                'application/json': {
+                  schema: PRZYJETA_WIADOMOSC,
+                  example: {
+                    id: 'msg_3f9c2a7b1e4d8c6a5b2f', status: 'queued', encoding: 'gsm', parts: 1, characters: 41, slots: 41, slotsRemaining: 119,
+                  },
+                },
+              },
+            },
+            '400': blad(
+              'Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone,'
+                + ' too_many_parts, valid_to_in_past, valid_to_too_far',
+              'too_many_parts',
+              'Treść wymaga 4 części, a limit integracji to 3.',
+            ),
+            ...BLEDY_INTEGRACJI,
+            '409': blad(
+              'Integracja wyłączona w panelu albo ten sam Idempotency-Key z inną treścią: integration_disabled,'
+                + ' idempotency_conflict',
+              'integration_disabled',
+              'Integracja Ekipa serwisowa jest wyłączona w panelu bramki.',
+            ),
+          },
+        },
+      },
+      '/v1/integrations/{id}/packages': {
+        post: {
+          operationId: 'wyslijRozsylkeIntegracja',
+          summary: 'Rozsyłka przez integrację',
+          description: 'Zleca rozsyłkę do listy odbiorców, najwyżej 5000 pozycji, przez integrację z Power Automate.'
+            + ' Pola są takie jak przy zwykłej rozsyłce, bez usługi i nadpisu, które wyznacza integracja. Limit części'
+            + ' integracji dotyczy treści wspólnej i każdej treści odbiorcy osobno. Przy ustawieniu „nie wysyłaj”'
+            + ' jedna zbyt długa treść odrzuca całą rozsyłkę.',
+          security: KLUCZ,
+          parameters: [PARAMETR_ID_INTEGRACJI, PARAMETR_IDEMPOTENCJI],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: cialoRozsylkiIntegracji(),
+                example: {
+                  defaultText: 'Przegląd floty jutro o 8:00 w bazie przy ul. Portowej.',
+                  recipients: [{ to: '48601000001' }, { to: '48601000002', text: 'Zmiana grafiku od poniedziałku.', clientId: 'kierowca-14' }],
+                  requestedBy: 'kierownik.floty@firma.pl',
+                },
+              },
+            },
+          },
+          responses: {
+            '202': {
+              description: 'Rozsyłka przyjęta do kolejki',
+              content: { 'application/json': { schema: PRZYJETA_ROZSYLKA, example: PRZYKLAD_ROZSYLKI } },
+            },
+            '400': blad(
+              'Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone,'
+                + ' text_required, invalid_client_id, too_many_parts, start_at_in_past',
+              'too_many_parts',
+              'recipients.1: Treść wymaga 4 części, a limit integracji to 3.',
+            ),
+            ...BLEDY_INTEGRACJI,
+            '409': blad(
+              'Integracja wyłączona w panelu albo ten sam Idempotency-Key użyty z inną rozsyłką: integration_disabled,'
+                + ' idempotency_conflict',
+              'integration_disabled',
+              'Integracja Ekipa serwisowa jest wyłączona w panelu bramki.',
+            ),
+          },
+        },
+      },
+      '/v1/integrations/{id}/group': {
+        post: {
+          operationId: 'wyslijDoGrupyIntegracja',
+          summary: 'SMS do odbiorców grupy integracji',
+          description: 'Wysyła treść do każdego numeru z listy odbiorców integracji z Power Automate, osobną wiadomością'
+            + ' na numer. Listę prowadzi administrator w panelu bramki, w szczegółach integracji. Wysyłka jest'
+            + ' przyjmowana w całości albo wcale. Pusta lista kończy wywołanie błędem group_empty.',
+          security: KLUCZ,
+          parameters: [PARAMETR_ID_INTEGRACJI, PARAMETR_IDEMPOTENCJI],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: cialoGrupyIntegracji(),
+                example: { text: 'Awaria w hali B, zgłoszenie 4411. Proszę o kontakt z dyspozytorem.', requestedBy: 'Dyspozytornia' },
+              },
+            },
+          },
+          responses: {
+            '202': {
+              description: 'Wysyłka przyjęta do kolejki',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/WysylkaDoGrupy' },
+                  example: {
+                    integration: { id: 'int_12', name: 'Ekipa serwisowa' },
+                    recipients: 2,
+                    messages: [
+                      { id: 'msg_3f9c2a7b1e4d8c6a5b2f', to: '48601000011', status: 'queued', parts: 1 },
+                      { id: 'msg_8a1b2c3d4e5f6a7b8c9d', to: '48601000012', status: 'queued', parts: 1 },
+                    ],
+                  },
+                },
+              },
+            },
+            '400': blad(
+              'Błąd w body żądania albo treść ponad limit części integracji: invalid_body, too_many_parts,'
+                + ' valid_to_in_past, valid_to_too_far',
+              'too_many_parts',
+              'Treść wymaga 4 części, a limit integracji to 3.',
+            ),
+            ...BLEDY_INTEGRACJI,
+            '409': blad(
+              'Integracja wyłączona w panelu, pusta lista odbiorców albo ten sam Idempotency-Key z inną treścią:'
+                + ' integration_disabled, group_empty, idempotency_conflict',
+              'group_empty',
+              'Integracja Ekipa serwisowa nie ma odbiorców grupy. Listę uzupełnia administrator w panelu bramki.',
+            ),
+          },
+        },
+      },
       '/healthz': {
         get: {
           operationId: 'stanBramki',
@@ -1039,14 +1409,17 @@ export function buildOpenApiDocument(): OpenApiDocument {
           type: 'http',
           scheme: 'bearer',
           description: 'Klucz API bramki w nagłówku Authorization, w postaci Bearer mig_live_... Klucz generuje'
-            + ' administrator bramki w panelu.',
+            + ' administrator bramki w panelu. Bramka przyjmuje także sam klucz bez przedrostka Bearer.',
         },
       },
       schemas: {
+        UprawnieniaKlucza: UPRAWNIENIA_KLUCZA,
         Wiadomosc: WIADOMOSC,
         WiadomoscPrzychodzaca: WIADOMOSC_PRZYCHODZACA,
         Rozsylka: ROZSYLKA,
         WierszRaportu: WIERSZ_RAPORTU,
+        IntegracjaPowerAutomate: INTEGRACJA_POWER_AUTOMATE,
+        WysylkaDoGrupy: WYSYLKA_DO_GRUPY_INTEGRACJI,
         Blad: {
           type: 'object',
           description: 'Opis błędu',

@@ -2,7 +2,7 @@
   "name": "multiinfo-gate",
   "license": "MIT",
   "author": "Tomasz Sawko",
-  "version": "1.8.7",
+  "version": "1.9.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -39,7 +39,7 @@
     "nodemailer": "^10.1.7",
     "otplib": "^12.0.1",
     "qrcode-generator": "2.0.4",
-    "zod": "^3.25.76"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
@@ -50,5 +50,8 @@
     "@types/nodemailer": "^8.0.1",
     "typescript": "^5.7.0",
     "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "glob": "^14.0.3"
   }
 }

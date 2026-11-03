@@ -3,27 +3,27 @@ import { foldText, matchPrefix } from '../../../src/integrations/group/prefix.ts
 
 describe('matchPrefix', () => {
   it.each([
-    ['dzieci jutro', 'dzieci', 'jutro'], ['Dzieci jutro', 'dzieci', 'jutro'], ['DZIECI: jutro', 'dzieci', 'jutro'],
-    ['dzieci : jutro', 'dzieci', 'jutro'], ['Dzieci:jutro', 'dzieci', 'jutro'], ['  dzieci\njutro 8:00', 'dzieci', 'jutro 8:00'],
-    ['Żłobek: zbiórka', 'zlobek', 'zbiórka'], ['zlobek zbiórka', 'żłobek', 'zbiórka'],
+    ['serwis jutro', 'serwis', 'jutro'], ['Serwis jutro', 'serwis', 'jutro'], ['SERWIS: jutro', 'serwis', 'jutro'],
+    ['serwis : jutro', 'serwis', 'jutro'], ['Serwis:jutro', 'serwis', 'jutro'], ['  serwis\njutro 8:00', 'serwis', 'jutro 8:00'],
+    ['Łódź: odprawa', 'lodz', 'odprawa'], ['lodz odprawa', 'łódź', 'odprawa'],
   ])('%j z prefiksem %s daje treść %j', (text, prefix, body) => expect(matchPrefix(text, prefix)).toEqual({ ok: true, body }));
-  it('„dzieciak” nie pasuje do „dzieci”, a brak prefiksu to no_prefix', () => {
-    expect(matchPrefix('dzieciak jutro', 'dzieci')).toEqual({ ok: false, reason: 'no_prefix' });
-    expect(matchPrefix('jutro zbiórka', 'dzieci')).toEqual({ ok: false, reason: 'no_prefix' });
-    expect(matchPrefix('dzi', 'dzieci')).toEqual({ ok: false, reason: 'no_prefix' });
+  it('„serwisant” nie pasuje do „serwis”, a brak prefiksu to no_prefix', () => {
+    expect(matchPrefix('serwisant jutro', 'serwis')).toEqual({ ok: false, reason: 'no_prefix' });
+    expect(matchPrefix('jutro odprawa', 'serwis')).toEqual({ ok: false, reason: 'no_prefix' });
+    expect(matchPrefix('ser', 'serwis')).toEqual({ ok: false, reason: 'no_prefix' });
   });
   it('sam prefiks, także z dwukropkiem, to empty', () => {
-    expect(matchPrefix('dzieci', 'dzieci')).toEqual({ ok: false, reason: 'empty' });
-    expect(matchPrefix('Dzieci: ', 'dzieci')).toEqual({ ok: false, reason: 'empty' });
+    expect(matchPrefix('serwis', 'serwis')).toEqual({ ok: false, reason: 'empty' });
+    expect(matchPrefix('Serwis: ', 'serwis')).toEqual({ ok: false, reason: 'empty' });
   });
   it('pusty prefiks przepuszcza całą treść po przycięciu, a pustą odrzuca', () => {
-    expect(matchPrefix('  jutro zbiórka  ', '')).toEqual({ ok: true, body: 'jutro zbiórka' });
+    expect(matchPrefix('  jutro odprawa  ', '')).toEqual({ ok: true, body: 'jutro odprawa' });
     expect(matchPrefix('   ', '')).toEqual({ ok: false, reason: 'empty' });
   });
   it('treść zachowuje oryginalne znaki i wielkość liter', () => {
-    expect(matchPrefix('RODZICE Zebranie w ŚRODĘ', 'rodzice')).toEqual({ ok: true, body: 'Zebranie w ŚRODĘ' });
+    expect(matchPrefix('KIEROWNICY Narada w ŚRODĘ', 'kierownicy')).toEqual({ ok: true, body: 'Narada w ŚRODĘ' });
   });
   it('foldText zdejmuje polskie znaki i wielkość liter', () => {
-    expect(foldText('ŻŁÓBEK')).toBe('zlobek');
+    expect(foldText('ŁÓDŹ ŻERAŃ')).toBe('lodz zeran');
   });
 });

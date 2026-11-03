@@ -1,41 +1,48 @@
-import { shortId } from '../ids.ts';
-import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
-import type { PackageRow, RecipientInput, RecipientRow } from '../store/packages.ts';
-import { measureText } from '../text/measure.ts';
-import { InvalidPhoneError, normalizePhone } from '../text/phone.ts';
-import { TooManyPartsError, segmentText } from '../text/segment.ts';
-import { authenticate } from './auth.ts';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { z } from '../zod.ts';
+import type { PackageRow, RecipientRow } from '../store/packages.ts';
+import { authenticate, refuseIntegrationsOnly } from './auth.ts';
+import { dropEmptyFields } from './empty-fields.ts';
 import { ApiError } from './errors.ts';
-import { resolveOrig } from './orig.ts';
 import type { ApiDeps } from './server.ts';
+import { submitPackage } from './submit-package.ts';
 
 /** Górna granica jednej rozsyłki - powyżej niej body żądania i wywołanie package.aspx rosną bez sensu. */
 const MAX_RECIPIENTS = 5000;
 
+/**
+ * Limit body tras rozsyłki: 5000 odbiorców z własnymi treściami zajmuje około 1 MB, więc
+ * ogólny limit API (512 KB) by ich nie zmieścił. Wyższy limit dotyczy tylko tych tras.
+ */
+export const PACKAGE_BODY_LIMIT = 4 * 1024 * 1024;
+
+/**
+ * Klucz sprawdzany przed odczytem body, które na trasach rozsyłki może mieć kilka megabajtów:
+ * żądanie bez ważnego klucza kończy się na 401, zanim bramka przeczyta i sparsuje body.
+ */
+export const keyBeforeBody = (deps: Pick<ApiDeps, 'apiKeys'>) => async (request: FastifyRequest): Promise<void> => {
+  authenticate(request.headers.authorization, deps.apiKeys);
+};
+
 const recipientSchema = z.object({
-  to: z.string(),
+  to: z.string({ error: (issue) => (issue.input === undefined ? 'Numer odbiorcy jest pusty.' : undefined) }),
   text: z.string().min(1).optional(),
   clientId: z.string().optional(),
 });
 
-const bodySchema = z.object({
+/** Schemat body rozsyłki; poza trasą używa go plik konektora Power Automate. */
+export const packageBodySchema = z.object({
   serviceId: z.union([z.string(), z.number()]).optional(),
   defaultText: z.string().min(1).optional(),
-  recipients: z.array(recipientSchema).min(1).max(MAX_RECIPIENTS),
+  recipients: z.array(recipientSchema, { error: (issue) => (issue.input === undefined ? 'Lista odbiorców jest pusta.' : undefined) })
+    .min(1, 'Lista odbiorców jest pusta.')
+    .max(MAX_RECIPIENTS, `Rozsyłka może objąć najwyżej ${MAX_RECIPIENTS} odbiorców.`),
   orig: z.string().optional(),
   startAt: z.string().datetime().optional(),
   deliveryReport: z.boolean().default(true),
   encoding: z.enum(['auto', 'gsm', 'unicode']).default('auto'),
   costCenter: z.string().optional(),
 });
-
-/**
- * Identyfikator klienta idzie do Plusa w nawiasach kwadratowych przed przecinkiem
- * oddzielającym treść - nie może zawierać nic, co ten zapis rozbije.
- */
-const CLIENT_ID = /^[A-Za-z0-9._-]{1,20}$/;
-
 
 /** Nagłówek CSV; średnik jako separator, bo tak otwierają go polskie arkusze. */
 const CSV_HEADER = 'numer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas';
@@ -65,84 +72,28 @@ function wantsCsv(query: Record<string, string>, accept: string | undefined): bo
 export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void {
   const now = deps.now ?? (() => new Date());
 
-  app.post('/v1/packages', async (request, reply) => {
+  app.post('/v1/packages', { bodyLimit: PACKAGE_BODY_LIMIT, onRequest: keyBeforeBody(deps) }, async (request, reply) => {
     const auth = authenticate(request.headers.authorization, deps.apiKeys);
+    refuseIntegrationsOnly(auth);
 
     if (!deps.rateLimiter.check(auth.apiKeyId, auth.ratePerMin)) {
       throw new ApiError(429, 'rate_limited', `Przekroczono limit ${auth.ratePerMin} żądań na minutę.`);
     }
 
-    const parsed = bodySchema.safeParse(request.body);
+    const parsed = packageBodySchema.safeParse(dropEmptyFields(request.body, ['recipients']));
     if (!parsed.success) {
       throw new ApiError(400, 'invalid_body',
         parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
     }
-    const input = parsed.data;
-
-    const account = deps.accounts.get(auth.accountId);
-    if (!account) throw new ApiError(500, 'account_missing', 'Konto przypisane do klucza nie istnieje.');
-
-    const serviceId = String(input.serviceId ?? auth.defaultServiceId ?? '');
-    if (!serviceId) throw new ApiError(400, 'service_required', 'Klucz nie ma domyślnej usługi - podaj serviceId.');
-    if (!auth.allowedServiceIds.includes(serviceId)) {
-      throw new ApiError(403, 'service_not_allowed', `Klucz nie ma dostępu do usługi ${serviceId}.`);
-    }
-
-    const orig = resolveOrig(input.orig, auth, account, deps.accounts);
-
-    let startAt: Date | undefined;
-    if (input.startAt !== undefined) {
-      startAt = new Date(input.startAt);
-      if (startAt.getTime() <= now().getTime()) {
-        throw new ApiError(400, 'start_at_in_past', 'Termin rozpoczęcia rozsyłki już minął.');
-      }
-    }
-
-    // Jedno kodowanie i jeden znacznik wieloczęściowości na całą rozsyłkę: tak działa package.aspx.
-    let ucs2 = false;
-    let multipart = false;
-    const recipients: RecipientInput[] = input.recipients.map((r, index) => {
-      let dest: string;
-      try {
-        dest = normalizePhone(r.to, account.defaultCountryCode);
-      } catch (e) {
-        if (e instanceof InvalidPhoneError) throw new ApiError(400, 'invalid_phone', `recipients.${index}: ${e.message}`);
-        throw e;
-      }
-      if (r.clientId !== undefined && !CLIENT_ID.test(r.clientId)) {
-        throw new ApiError(400, 'invalid_client_id',
-          `recipients.${index}: identyfikator klienta może mieć 1-20 znaków z zakresu A-Z, a-z, 0-9, kropka, podkreślenie, myślnik.`);
-      }
-      const text = r.text ?? input.defaultText;
-      if (text === undefined) {
-        throw new ApiError(400, 'text_required', `recipients.${index}: brak treści i brak treści domyślnej.`);
-      }
-      const measurement = measureText(text, input.encoding);
-      let segmentation;
-      try {
-        segmentation = segmentText(text, measurement, auth.maxParts);
-      } catch (e) {
-        if (e instanceof TooManyPartsError) throw new ApiError(400, 'too_many_parts', `recipients.${index}: ${e.message}`);
-        throw e;
-      }
-      if (measurement.encoding === 'ucs2') ucs2 = true;
-      if (segmentation.parts > 1) multipart = true;
-      return { dest, text: r.text ?? null, clientId: r.clientId ?? null };
-    });
-
-    const encoding = ucs2 && input.encoding !== 'gsm' ? 'ucs2' : 'gsm';
-    const id = shortId('pkg');
-    const at = now();
-    deps.packages.insert({
-      id, apiKeyId: auth.apiKeyId, accountId: auth.accountId, serviceId,
-      defaultText: input.defaultText ?? null, orig: orig ?? null, costCenter: input.costCenter ?? null,
-      startAt: startAt?.toISOString() ?? null, deliveryReport: input.deliveryReport ? 1 : 0,
-      encoding, multipart: multipart ? 1 : 0, createdAt: at.toISOString(),
-    }, recipients);
-    deps.jobs.enqueue('package.create', { packageId: id }, at);
+    const { serviceId, ...input } = parsed.data;
+    const idempotencyKey = request.headers['idempotency-key'];
+    const accepted = submitPackage(deps, auth, {
+      ...input, serviceId: serviceId === undefined ? undefined : String(serviceId),
+      ...(typeof idempotencyKey === 'string' ? { idempotencyKey } : {}),
+    }, now());
 
     reply.code(202);
-    return { id, status: 'queued', recipients: recipients.length, encoding, multipart };
+    return accepted;
   });
 
   app.get<{ Params: { id: string } }>('/v1/packages/:id', async (request) => {

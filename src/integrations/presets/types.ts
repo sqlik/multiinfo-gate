@@ -15,6 +15,11 @@ export interface Preset {
   /** Jedno zdanie pod nazwą na kafelku. */
   blurb: string;
   kinds: IntegrationKind[];
+  /**
+   * Katalog kafelka, gdy różni się od wartości `kind`. Integracja z Power Automate ma własne `kind`,
+   * a administrator szuka jej wśród aplikacji wysyłających SMS, obok n8n.
+   */
+  listedUnder?: IntegrationKind;
   /** Przykładowy ładunek przychodzący (do podglądu i testu). */
   sample?: unknown;
   /** Pola ładunku z opisami po polsku - lista obok szablonu. */
