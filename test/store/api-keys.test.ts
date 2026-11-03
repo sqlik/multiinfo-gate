@@ -126,9 +126,10 @@ describe('ApiKeysRepo', () => {
     keys.update(id, {
       name: 'Nowa nazwa', defaultServiceId: '99001', defaultOrig: 'Firma',
       maxParts: 3, ratePerMin: 10, webhookUrl: 'https://a.example/h',
-      expiresAt: '2026-12-31T23:00:00.000Z', serviceIds: ['99001'], origs: ['Firma'], inboundSubscribed: 0,
+      expiresAt: '2026-12-31T23:00:00.000Z', serviceIds: ['99001'], origs: ['Firma'], inboundSubscribed: 0, integrationsOnly: 1,
     });
     const row = keys.get(id)!;
+    expect(row.integrationsOnly).toBe(1);
     expect(row.name).toBe('Nowa nazwa');
     expect(row.allowedServiceIds).toEqual(['99001']);
     expect(row.allowedOrigs).toEqual(['Firma']);
@@ -137,7 +138,8 @@ describe('ApiKeysRepo', () => {
     expect(row.expiresAt).toBe('2026-12-31T23:00:00.000Z');
     expect(keys.webhookSecret(id)).toBe('stary');
     keys.update(id, { name: 'Nowa nazwa', defaultServiceId: '99001', defaultOrig: null, maxParts: 3, ratePerMin: 10,
-      webhookUrl: null, webhookSecret: null, expiresAt: null, serviceIds: ['99001'], origs: [], inboundSubscribed: 0 });
+      webhookUrl: null, webhookSecret: null, expiresAt: null, serviceIds: ['99001'], origs: [], inboundSubscribed: 0, integrationsOnly: 0 });
+    expect(keys.get(id)!.integrationsOnly).toBe(0);
     expect(keys.webhookSecret(id)).toBeNull();
     expect(keys.get(id)!.expiresAt).toBeNull();
     expect(keys.get(id)!.allowedOrigs).toEqual([]);
@@ -188,7 +190,7 @@ describe('ApiKeysRepo.inboundSubscribers', () => {
     const { keys, accountId } = setup();
     const id = keys.insert(base(accountId, { inboundSubscribed: 0 }));
     keys.update(id, { name: 'crm', defaultServiceId: '24138', defaultOrig: null, maxParts: 9, ratePerMin: 60,
-      webhookUrl: 'https://crm.example/hook', expiresAt: null, serviceIds: ['24138'], origs: [], inboundSubscribed: 1 });
+      webhookUrl: 'https://crm.example/hook', expiresAt: null, serviceIds: ['24138'], origs: [], inboundSubscribed: 1, integrationsOnly: 0 });
     expect(keys.get(id)!.inboundSubscribed).toBe(1);
   });
 });
