@@ -59,14 +59,14 @@ export type PaMessageBody = z.infer<typeof paMessageBodySchema>;
 export type PaPackageBody = z.infer<typeof paPackageBodySchema>;
 export type PaGroupBody = z.infer<typeof paGroupBodySchema>;
 
-/** Ścieżka wywołania, akcja potoku, schemat ciała i pola z listą obiektów (puste pola w każdym elemencie). */
+/** Ścieżka wywołania, akcja potoku, schemat body i pola z listą obiektów (puste pola w każdym elemencie). */
 const ACTIONS = [
   { path: 'messages', action: 'sms', schema: paMessageBodySchema, nested: [] },
   { path: 'packages', action: 'package', schema: paPackageBodySchema, nested: ['recipients'] },
   { path: 'group', action: 'group', schema: paGroupBodySchema, nested: [] },
 ] as const;
 
-/** Zlecający z surowego ciała, także gdy reszta ciała jest błędna: dziennik pokazuje wtedy, kto wywołał. */
+/** Zlecający z surowego body, także gdy reszta body jest błędna: dziennik pokazuje wtedy, kto wywołał. */
 function requestedByOf(raw: unknown): string | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined;
   const parsed = requestedBySchema.safeParse((raw as Record<string, unknown>).requestedBy);
@@ -100,7 +100,7 @@ export function registerPaIntegrationRoutes(app: FastifyInstance, deps: ApiDeps)
       const id = parsePaIntegrationApiId(request.params.id);
       const row = id === null ? undefined : deps.integrations.getOwned(id, auth.apiKeyId, 'power_automate');
       if (!row) {
-        throw new ApiError(404, 'integration_not_found', 'Nie ma integracji Power Automate o tym identyfikatorze.');
+        throw new ApiError(404, 'integration_not_found', 'Nie ma integracji z Power Automate o tym identyfikatorze.');
       }
       // Wyłączona bez wpisu w dzienniku: tak samo milczy wyłączony webhook.
       if (row.enabled !== 1) {

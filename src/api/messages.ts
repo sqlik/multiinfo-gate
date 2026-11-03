@@ -8,7 +8,7 @@ import type { ApiDeps } from './server.ts';
 import { submitMessages } from './submit.ts';
 
 /**
- * Schemat ciała wysyłki. Poza trasą używa go opis API w formacie OpenAPI
+ * Schemat body wysyłki. Poza trasą używa go opis API w formacie OpenAPI
  * (`src/api/openapi.ts`), żeby nowe pole nie mogło umknąć opisowi.
  */
 export const messageBodySchema = z.object({

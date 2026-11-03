@@ -12,7 +12,7 @@ export interface PackagesData {
   limit: number;
   keyNames: Map<number, string>;
   accountNames: Map<number, string>;
-  /** Nazwy integracji Power Automate, z których przyszły rozsyłki. */
+  /** Nazwy integracji z Power Automate, z których przyszły rozsyłki. */
   integrationNames: Map<number, string>;
 }
 
@@ -20,7 +20,7 @@ export interface PackageDetail {
   row: PackageRow;
   accountName: string;
   keyName: string;
-  /** Integracja Power Automate, która zleciła rozsyłkę; brak dla rozsyłki z API. */
+  /** Integracja z Power Automate, która zleciła rozsyłkę; brak dla rozsyłki z API. */
   integration: { id: number; name: string } | null;
   recipients: RecipientRow[];
   /** Ilu odbiorców pokazujemy; reszta jest w CSV. */

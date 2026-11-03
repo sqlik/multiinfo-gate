@@ -6,7 +6,7 @@ export type EventResult = 'sent' | 'skipped' | 'rejected' | 'throttled' | 'error
 export interface IntegrationEventRow {
   id: number; integrationId: number; at: string; result: EventResult; reason: string | null; sourceIp: string | null;
   messageId: string | null; inboundId: string | null; deliveryId: number | null; payload: string | null; response: string | null;
-  /** Rozsyłka zlecona wywołaniem integracji Power Automate. */
+  /** Rozsyłka zlecona wywołaniem integracji z Power Automate. */
   packageId: string | null;
 }
 

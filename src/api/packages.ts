@@ -11,14 +11,14 @@ import { submitPackage } from './submit-package.ts';
 const MAX_RECIPIENTS = 5000;
 
 /**
- * Limit ciała tras rozsyłki: 5000 odbiorców z własnymi treściami zajmuje około 1 MB, więc
+ * Limit body tras rozsyłki: 5000 odbiorców z własnymi treściami zajmuje około 1 MB, więc
  * ogólny limit API (512 KB) by ich nie zmieścił. Wyższy limit dotyczy tylko tych tras.
  */
 export const PACKAGE_BODY_LIMIT = 4 * 1024 * 1024;
 
 /**
- * Klucz sprawdzany przed odczytem ciała, które na trasach rozsyłki może mieć kilka megabajtów:
- * żądanie bez ważnego klucza kończy się na 401, zanim bramka przeczyta i sparsuje ciało.
+ * Klucz sprawdzany przed odczytem body, które na trasach rozsyłki może mieć kilka megabajtów:
+ * żądanie bez ważnego klucza kończy się na 401, zanim bramka przeczyta i sparsuje body.
  */
 export const keyBeforeBody = (deps: Pick<ApiDeps, 'apiKeys'>) => async (request: FastifyRequest): Promise<void> => {
   authenticate(request.headers.authorization, deps.apiKeys);
@@ -30,7 +30,7 @@ const recipientSchema = z.object({
   clientId: z.string().optional(),
 });
 
-/** Schemat ciała rozsyłki; poza trasą używa go plik konektora Power Automate. */
+/** Schemat body rozsyłki; poza trasą używa go plik konektora Power Automate. */
 export const packageBodySchema = z.object({
   serviceId: z.union([z.string(), z.number()]).optional(),
   defaultText: z.string().min(1).optional(),

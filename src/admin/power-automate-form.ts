@@ -4,7 +4,7 @@ import { integrationNameError } from './integration-form.ts';
 
 type Body = Record<string, string | string[] | undefined>;
 
-/** Pola formularza integracji Power Automate w postaci tekstowej - tak przychodzą z przeglądarki i tak wracają po błędzie. */
+/** Pola formularza integracji z Power Automate w postaci tekstowej - tak przychodzą z przeglądarki i tak wracają po błędzie. */
 export interface PaFormValues {
   name: string; apiKeyId: string; serviceId: string; orig: string; enabled: boolean; preset: string;
   /** Lista jak w `memberLines`: jeden numer w wierszu, po numerze opcjonalna nazwa. */

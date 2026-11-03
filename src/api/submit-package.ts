@@ -22,7 +22,7 @@ export interface PackageSubmitInput {
   costCenter?: string | undefined;
   /** Limit części niższy niż klucza (integracja); wyższy niż klucza nie działa. */
   maxParts?: number | undefined;
-  /** Integracja Power Automate, która zleciła rozsyłkę; brak dla żądań z API. */
+  /** Integracja z Power Automate, która zleciła rozsyłkę; brak dla żądań z API. */
   integrationId?: number | undefined;
   /** Zlecający z przepływu Power Automate; brak dla pozostałych źródeł. */
   requestedBy?: string | undefined;
@@ -52,7 +52,7 @@ export function packageEncoding(texts: ReadonlyArray<string | undefined>, reques
 }
 
 /**
- * Wspólna droga każdej rozsyłki - z `POST /v1/packages` i z integracji Power Automate: usługa,
+ * Wspólna droga każdej rozsyłki - z `POST /v1/packages` i z integracji z Power Automate: usługa,
  * nadpis, termin, numery, treści, zapis, kolejka. Rozsyłka wchodzi w całości albo wcale.
  */
 export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input: PackageSubmitInput, now: Date): PackageAccepted {

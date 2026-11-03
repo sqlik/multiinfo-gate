@@ -51,7 +51,7 @@ export function valuesOf(row: ApiKeyRow): KeyFormValues {
 }
 
 const POWER_AUTOMATE_KEY =
-  'Klucz dla Power Automate wybiera się w formularzu integracji Power Automate: Integracje, Dodaj integrację, Aplikacja ' +
+  'Klucz dla Power Automate wybiera się w formularzu integracji z Power Automate: Integracje, Dodaj integrację, Aplikacja ' +
   'wysyła SMS, Power Automate. Ten sam klucz wkleja się w oknie połączenia konektora, a plik konektora pobiera się ' +
   'w szczegółach integracji.';
 
@@ -77,7 +77,7 @@ function keyExample(apiUrl: string | null, key: string, integrationsOnly = false
   -H "Content-Type: application/json" \\
   -d '{"to":"48601000001","text":"Test z bramki"}'`;
   const lead = integrationsOnly
-    ? 'Sprawdzenie z terminala. Polecenie wyświetla integracje Power Automate przypisane do klucza i nie wysyła SMS-a:'
+    ? 'Sprawdzenie z terminala. Polecenie wyświetla integracje z Power Automate przypisane do klucza i nie wysyła SMS-a:'
     : 'Sprawdzenie z terminala. Polecenie wysyła rzeczywisty SMS na podany numer:';
   const address = apiUrl === null
     ? '<span class="dim">Adres bramki nie został jeszcze podany. Po jego wpisaniu w panelu poniżej przykład otrzyma pełny adres.</span>'

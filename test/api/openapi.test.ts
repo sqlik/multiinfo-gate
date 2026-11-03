@@ -32,7 +32,7 @@ describe('opis API', () => {
     expect(opisane.sort()).toEqual(publiczne);
   });
 
-  it('wysyłka wymaga klucza oraz opisuje wszystkie pola ciała', () => {
+  it('wysyłka wymaga klucza oraz opisuje wszystkie pola body', () => {
     const wyslij = doc.paths['/v1/messages']!.post!;
     expect(wyslij.security).toEqual([{ bearerAuth: [] }]);
     const schema = wyslij.requestBody!.content['application/json']!.schema;
@@ -42,14 +42,14 @@ describe('opis API', () => {
     expect(schema.required!.slice().sort()).toEqual(['text', 'to']);
   });
 
-  it('każde pole ciała wysyłki ma opis po polsku', () => {
+  it('każde pole body wysyłki ma opis po polsku', () => {
     const schema = doc.paths['/v1/messages']!.post!.requestBody!.content['application/json']!.schema;
     for (const [nazwa, pole] of Object.entries(schema.properties!)) {
       expect(pole.description, nazwa).toBeTruthy();
     }
   });
 
-  it('wywołania integracji Power Automate opisują każde pole ciała, bez usługi i nadpisu, ze zlecającym', () => {
+  it('wywołania integracji z Power Automate opisują każde pole body, bez usługi i nadpisu, ze zlecającym', () => {
     const ciala = {
       '/v1/integrations/{id}/messages': paMessageBodySchema.shape,
       '/v1/integrations/{id}/packages': paPackageBodySchema.shape,

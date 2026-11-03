@@ -186,7 +186,7 @@ export const smsGroupConfigSchema = z.object({
 export type SmsGroupConfig = z.infer<typeof smsGroupConfigSchema>;
 
 /**
- * Integracja Power Automate: konektor wywołuje ją z przepływu, a bramka prowadzi każde wywołanie
+ * Integracja z Power Automate: konektor wywołuje ją z przepływu, a bramka prowadzi każde wywołanie
  * przez limit części, ochronę przed burzą i dziennik. Bez warunku i szablonu: treść, odbiorców
  * i warunki buduje się w przepływie. Lista odbiorców służy wyłącznie akcji „Wyślij SMS do grupy”
  * i może być pusta.

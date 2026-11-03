@@ -354,7 +354,7 @@ describe('szczegóły integracji', () => {
 });
 
 describe('funkcje wspólne integracji', () => {
-  it('wyłączenie, włączenie, kopia i usunięcie działają dla integracji Power Automate', async () => {
+  it('wyłączenie, włączenie, kopia i usunięcie działają dla integracji z Power Automate', async () => {
     await create();
     const row = paRow();
     expect((await post(`/integracje/${row.id}/wylacz`, {})).statusCode).toBe(302);
@@ -370,7 +370,7 @@ describe('funkcje wspólne integracji', () => {
     expect(h.integrations.get(row.id)).toBeUndefined();
   });
 
-  it('przegląd liczy integrację Power Automate z błędem w ostatniej dobie', async () => {
+  it('przegląd liczy integrację z Power Automate z błędem w ostatniej dobie', async () => {
     await create();
     h.integrationEvents.record({ integrationId: paRow().id, at: NOW, result: 'throttled', reason: 'ponad 30 w 10 min', logLimit: 200 });
     expect((await get('/przeglad')).body).toMatch(/Integracje z błędami<\/div>\s*<div class="n fail">1</);

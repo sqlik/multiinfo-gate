@@ -63,7 +63,7 @@ export interface ApiDeps {
   log?: Logger;
 }
 
-/** Limit ciała żądania API; trasy rozsyłki mają własny, wyższy (`PACKAGE_BODY_LIMIT`). */
+/** Limit body żądania API; trasy rozsyłki mają własny, wyższy (`PACKAGE_BODY_LIMIT`). */
 const API_BODY_LIMIT = 512 * 1024;
 
 /** Rozmiar w komunikacie dla autora aplikacji: „512 KB”, „4 MB”. */
@@ -91,17 +91,17 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
     if (error instanceof AuthError) {
       return reply.code(error.httpStatus).send({ error: { code: error.code, message: error.message } });
     }
-    // Błędy odczytu ciała zgłasza Fastify przed trasą: to błędy wołającego, nie bramki.
+    // Błędy odczytu body zgłasza Fastify przed trasą: to błędy wołającego, nie bramki.
     const status = (error as { statusCode?: number }).statusCode;
     if (status === 413) {
       const limit = _request.routeOptions.bodyLimit ?? API_BODY_LIMIT;
-      return reply.code(413).send({ error: { code: 'body_too_large', message: `Ciało żądania przekracza dopuszczalny rozmiar ${sizeLabel(limit)}.` } });
+      return reply.code(413).send({ error: { code: 'body_too_large', message: `Body żądania przekracza dopuszczalny rozmiar ${sizeLabel(limit)}.` } });
     }
     if (status === 415) {
-      return reply.code(415).send({ error: { code: 'unsupported_media_type', message: 'Ciało żądania musi mieć format JSON (Content-Type: application/json).' } });
+      return reply.code(415).send({ error: { code: 'unsupported_media_type', message: 'Body żądania musi mieć format JSON (Content-Type: application/json).' } });
     }
     if (status === 400) {
-      return reply.code(400).send({ error: { code: 'invalid_body', message: 'Ciało żądania jest puste albo nie jest poprawnym dokumentem JSON.' } });
+      return reply.code(400).send({ error: { code: 'invalid_body', message: 'Body żądania jest puste albo nie jest poprawnym dokumentem JSON.' } });
     }
     (deps.log ?? silentLogger).error('api.wyjatek', { method: _request.method, url: _request.url.split('?')[0], error });
     return reply.code(500).send({ error: { code: 'internal', message: 'Błąd wewnętrzny bramki.' } });

@@ -28,7 +28,7 @@ describe('gotowe ustawienia', () => {
     expect(presetsFor('sms_group').map((p) => p.id)).toEqual(['sms-grupa']);
     expect(presetsFor('power_automate').map((p) => p.id)).toEqual(['power-automate']);
   });
-  it('katalog „do SMS” pokazuje Power Automate po n8n, choć to osobny rodzaj integracji', () => {
+  it('katalog „do SMS” pokazuje Power Automate po n8n, choć integracja z Power Automate ma własne kind', () => {
     expect(catalogFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'power-automate', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'fakturownia', 'fakturownia-klient', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
     expect(catalogFor('webhook_out').map((p) => p.id)).toEqual(presetsFor('webhook_out').map((p) => p.id));
     expect(presetById('power-automate')).toMatchObject({ name: 'Power Automate', kinds: ['power_automate'], listedUnder: 'webhook_in' });
@@ -269,7 +269,7 @@ describe('gotowe ustawienia', () => {
   });
 
   it('oba ustawienia WooCommerce odsiewają żądanie próbne sklepu', () => {
-    // Ciało żądania próbnego po rozpakowaniu formularza; żaden wariant „kiedy” nie może go przepuścić.
+    // Body żądania próbnego po rozpakowaniu formularza; żaden wariant „kiedy” nie może go przepuścić.
     const proba = { webhook_id: '1' };
     for (const id of ['woocommerce', 'woocommerce-klient']) {
       const preset = presetById(id)!;

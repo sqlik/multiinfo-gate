@@ -13,7 +13,7 @@ export interface PackageRow {
   status: PackageStatus; providerCode: number | null; error: string | null;
   reportStatus: ReportStatus; reportId: string | null; reportExpiresAt: string | null; reportPath: string | null;
   createdAt: string; completedAt: string | null;
-  /** Integracja Power Automate, która zleciła rozsyłkę; `null` dla żądań z API. */
+  /** Integracja z Power Automate, która zleciła rozsyłkę; `null` dla żądań z API. */
   integrationId: number | null;
   /** Zlecający z przepływu Power Automate; `null` dla pozostałych źródeł. */
   requestedBy: string | null;

@@ -347,7 +347,7 @@
             }
           },
           "400": {
-            "description": "Błąd w ciele żądania: invalid_body, invalid_phone, invalid_orig, too_many_parts, service_required, valid_to_in_past, valid_to_too_far, a przy polu inReplyTo także in_reply_to_single, in_reply_to_unknown oraz in_reply_to_recipient",
+            "description": "Błąd w body żądania: invalid_body, invalid_phone, invalid_orig, too_many_parts, service_required, valid_to_in_past, valid_to_too_far, a przy polu inReplyTo także in_reply_to_single, in_reply_to_unknown oraz in_reply_to_recipient",
             "content": {
               "application/json": {
                 "schema": {
@@ -950,7 +950,7 @@
             }
           },
           "400": {
-            "description": "Błąd w ciele żądania: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts, invalid_orig, service_required, start_at_in_past",
+            "description": "Błąd w body żądania: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts, invalid_orig, service_required, start_at_in_past",
             "content": {
               "application/json": {
                 "schema": {
@@ -1619,8 +1619,8 @@
     "/v1/integrations": {
       "get": {
         "operationId": "listaIntegracjiPowerAutomate",
-        "summary": "Lista integracji Power Automate",
-        "description": "Zwraca czynne integracje Power Automate przypisane do klucza, w kolejności nazw. Integracje zakłada administrator w panelu bramki: Integracje, Dodaj integrację, Aplikacja wysyła SMS, Power Automate. Lista podaje nazwę i liczbę odbiorców grupy, bez numerów i nazwisk. Integracja wyłączona w panelu nie występuje na liście. Z tej listy konektor Power Automate buduje pole Integracja.",
+        "summary": "Lista integracji z Power Automate",
+        "description": "Zwraca czynne integracje z Power Automate przypisane do klucza, w kolejności nazw. Integracje zakłada administrator w panelu bramki: Integracje, Dodaj integrację, Aplikacja wysyła SMS, Power Automate. Lista podaje nazwę i liczbę odbiorców grupy, bez numerów i nazwisk. Integracja wyłączona w panelu nie występuje na liście. Z tej listy konektor Power Automate buduje pole Integracja.",
         "security": [
           {
             "bearerAuth": []
@@ -1681,7 +1681,7 @@
       "post": {
         "operationId": "wyslijSmsIntegracja",
         "summary": "SMS przez integrację",
-        "description": "Wysyła jeden SMS na jeden numer przez integrację Power Automate. Usługę, nadpis nadawcy, limit części i ochronę przed burzą wyznacza integracja. Treść ponad limit części integracja przycina albo odrzuca, zależnie od ustawienia. Każde wywołanie zostawia wpis w dzienniku integracji.",
+        "description": "Wysyła jeden SMS na jeden numer przez integrację z Power Automate. Usługę, nadpis nadawcy, limit części i ochronę przed burzą wyznacza integracja. Treść ponad limit części integracja przycina albo odrzuca, zależnie od ustawienia. Każde wywołanie zostawia wpis w dzienniku integracji.",
         "security": [
           {
             "bearerAuth": []
@@ -1692,7 +1692,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "Identyfikator integracji Power Automate z listy integracji klucza. Zmiana nazwy integracji w panelu go nie zmienia.",
+            "description": "Identyfikator integracji z Power Automate, wybranej z listy integracji klucza. Zmiana nazwy integracji w panelu go nie zmienia.",
             "schema": {
               "type": "string",
               "pattern": "^int_[1-9][0-9]{0,9}$"
@@ -1841,7 +1841,7 @@
             }
           },
           "400": {
-            "description": "Błąd w ciele żądania albo treść ponad limit części integracji: invalid_body, invalid_phone, too_many_parts, valid_to_in_past, valid_to_too_far",
+            "description": "Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone, too_many_parts, valid_to_in_past, valid_to_too_far",
             "content": {
               "application/json": {
                 "schema": {
@@ -1898,7 +1898,7 @@
                 "example": {
                   "error": {
                     "code": "integration_not_found",
-                    "message": "Nie ma integracji Power Automate o tym identyfikatorze."
+                    "message": "Nie ma integracji z Power Automate o tym identyfikatorze."
                   }
                 }
               }
@@ -1959,7 +1959,7 @@
       "post": {
         "operationId": "wyslijRozsylkeIntegracja",
         "summary": "Rozsyłka przez integrację",
-        "description": "Zleca rozsyłkę do listy odbiorców, najwyżej 5000 pozycji, przez integrację Power Automate. Pola są takie jak przy zwykłej rozsyłce, bez usługi i nadpisu, które wyznacza integracja. Limit części integracji dotyczy treści wspólnej i każdej treści odbiorcy osobno. Przy ustawieniu „nie wysyłaj” jedna zbyt długa treść odrzuca całą rozsyłkę.",
+        "description": "Zleca rozsyłkę do listy odbiorców, najwyżej 5000 pozycji, przez integrację z Power Automate. Pola są takie jak przy zwykłej rozsyłce, bez usługi i nadpisu, które wyznacza integracja. Limit części integracji dotyczy treści wspólnej i każdej treści odbiorcy osobno. Przy ustawieniu „nie wysyłaj” jedna zbyt długa treść odrzuca całą rozsyłkę.",
         "security": [
           {
             "bearerAuth": []
@@ -1970,7 +1970,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "Identyfikator integracji Power Automate z listy integracji klucza. Zmiana nazwy integracji w panelu go nie zmienia.",
+            "description": "Identyfikator integracji z Power Automate, wybranej z listy integracji klucza. Zmiana nazwy integracji w panelu go nie zmienia.",
             "schema": {
               "type": "string",
               "pattern": "^int_[1-9][0-9]{0,9}$"
@@ -2136,7 +2136,7 @@
             }
           },
           "400": {
-            "description": "Błąd w ciele żądania albo treść ponad limit części integracji: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts, start_at_in_past",
+            "description": "Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts, start_at_in_past",
             "content": {
               "application/json": {
                 "schema": {
@@ -2193,7 +2193,7 @@
                 "example": {
                   "error": {
                     "code": "integration_not_found",
-                    "message": "Nie ma integracji Power Automate o tym identyfikatorze."
+                    "message": "Nie ma integracji z Power Automate o tym identyfikatorze."
                   }
                 }
               }
@@ -2254,7 +2254,7 @@
       "post": {
         "operationId": "wyslijDoGrupyIntegracja",
         "summary": "SMS do odbiorców grupy integracji",
-        "description": "Wysyła treść do każdego numeru z listy odbiorców integracji Power Automate, osobną wiadomością na numer. Listę prowadzi administrator w panelu bramki, w szczegółach integracji. Wysyłka jest przyjmowana w całości albo wcale. Pusta lista kończy wywołanie błędem group_empty.",
+        "description": "Wysyła treść do każdego numeru z listy odbiorców integracji z Power Automate, osobną wiadomością na numer. Listę prowadzi administrator w panelu bramki, w szczegółach integracji. Wysyłka jest przyjmowana w całości albo wcale. Pusta lista kończy wywołanie błędem group_empty.",
         "security": [
           {
             "bearerAuth": []
@@ -2265,7 +2265,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "Identyfikator integracji Power Automate z listy integracji klucza. Zmiana nazwy integracji w panelu go nie zmienia.",
+            "description": "Identyfikator integracji z Power Automate, wybranej z listy integracji klucza. Zmiana nazwy integracji w panelu go nie zmienia.",
             "schema": {
               "type": "string",
               "pattern": "^int_[1-9][0-9]{0,9}$"
@@ -2372,7 +2372,7 @@
             }
           },
           "400": {
-            "description": "Błąd w ciele żądania albo treść ponad limit części integracji: invalid_body, too_many_parts, valid_to_in_past, valid_to_too_far",
+            "description": "Błąd w body żądania albo treść ponad limit części integracji: invalid_body, too_many_parts, valid_to_in_past, valid_to_too_far",
             "content": {
               "application/json": {
                 "schema": {
@@ -2429,7 +2429,7 @@
                 "example": {
                   "error": {
                     "code": "integration_not_found",
-                    "message": "Nie ma integracji Power Automate o tym identyfikatorze."
+                    "message": "Nie ma integracji z Power Automate o tym identyfikatorze."
                   }
                 }
               }

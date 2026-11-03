@@ -29,7 +29,7 @@ Integracja działa w jednym z czterech kierunków:
 | z poczty | „Mail2SMS” | bramka odczytuje skrzynkę IMAP i zamienia wiadomości od dozwolonych nadawców na SMS-y; numery wskazuje nadawca, lista nadawców albo stała lista (rozdział 5) |
 | do grupy | „SMS do grupy” | uprawniony numer wysyła SMS z prefiksem na numer bramki, bramka rozsyła treść bez prefiksu do stałej listy numerów (rozdział 5a) |
 
-Integracja Power Automate również należy do kierunku „do SMS”. Tworzy się ją za pomocą kafelka
+Integracja z Power Automate również należy do kierunku „do SMS”. Tworzy się ją za pomocą kafelka
 w katalogu „Aplikacja wysyła SMS”, jednak zamiast adresu wejściowego `/hooks/` przyjmuje ona
 wywołania konektora Power Automate (rozdział 5b).
 
@@ -76,7 +76,7 @@ Przycisk **Dodaj integrację** prowadzi przez trzy kroki:
    „SMS do grupy”.
 2. Gotowe ustawienie: kafelek z nazwą aplikacji (rozdział 7) albo „Własne” dla aplikacji spoza
    listy. SMS do grupy ma jedno ustawienie i otwiera formularz od razu. Kafelek „Power Automate”
-   w kierunku „Aplikacja wysyła SMS” otwiera formularz integracji Power Automate (rozdział 5b).
+   w kierunku „Aplikacja wysyła SMS” otwiera formularz integracji z Power Automate (rozdział 5b).
 3. Formularz. Gotowe ustawienie otwiera się w **trybie prostym**, „Własne” natychmiast
    w **zaawansowanym**. Przełącznik nad formularzem zmienia tryb w każdej chwili.
 
@@ -1072,7 +1072,7 @@ przetworzyła, wynikiem i powodem. Szczegóły wiadomości wysłanej do odbiorcy
 
 Od wersji 1.9 bramka przyjmuje zlecenia wysyłki z przepływów Microsoft Power Automate. Przepływ
 wysyła SMS za pomocą akcji konektora Multiinfo Gate, a każde wywołanie przechodzi przez
-integrację Power Automate skonfigurowaną w panelu bramki. Integracja określa nadawcę, usługę
+integrację z Power Automate skonfigurowaną w panelu bramki. Integracja określa nadawcę, usługę
 i limit części. Podobnie jak pozostałe integracje zapewnia ochronę przed burzą, prowadzi dziennik
 i powiadamia administratora.
 
@@ -1081,7 +1081,7 @@ niestandardowy. Import, tworzenie połączenia i budowę przepływów krok po kr
 artykuł [Power Automate](power-automate.md). Wywołania API, z których korzysta konektor, opisuje
 rozdział 5b [API dla aplikacji](api.md).
 
-Integracja Power Automate nie obejmuje warunku, szablonu Liquid ani próbki. Treść, odbiorców
+Integracja z Power Automate nie obejmuje warunku, szablonu Liquid ani próbki. Treść, odbiorców
 i warunki wysyłki określa się w samym przepływie. Powielenie tych ustawień w bramce utrudniłoby
 wyszukiwanie błędów, ponieważ ta sama logika znajdowałaby się w dwóch miejscach.
 
@@ -1103,7 +1103,7 @@ Power Automate”. Formularz składa się z trzech sekcji:
    i powiadom”. Limit obowiązuje SMS do jednego numeru, każdą treść w rozsyłce oraz SMS do grupy.
    Skracanie przebiega tak samo jak w rozdziale 3.5.
 
-![Formularz integracji Power Automate w trybie prostym: nazwa, klucz API, ID usługi i nadpis, lista odbiorców grupy, limit części oraz pod formularzem panel Konektor Power Automate](obrazki/power-automate-formularz.png)
+![Formularz integracji z Power Automate w trybie prostym: nazwa, klucz API, ID usługi i nadpis, lista odbiorców grupy, limit części oraz pod formularzem panel Konektor Power Automate](obrazki/power-automate-formularz.png)
 
 Tryb zaawansowany odsłania dodatkowo sekcję **Ochrona i dziennik**:
 
@@ -1136,12 +1136,12 @@ jest zapisywany, dlatego wspólny adres bramki z rozdziału 2.1 może nadal wska
 Pobranie pliku wymaga zalogowania do panelu i odbywa się wyłącznie przyciskiem w panelu. Odnośnik do
 pobrania otwarty w pasku przeglądarki nie zwraca pliku, dlatego podesłany link z obcym adresem nie
 przygotuje pliku kierującego klucz API na cudzy serwer. Plik nie zawiera klucza API ani innych
-poufnych danych. Jeden plik obsługuje wszystkie integracje Power Automate danej bramki, a właściwą
+poufnych danych. Jeden plik obsługuje wszystkie integracje z Power Automate danej bramki, a właściwą
 integrację wybiera się w akcji przepływu.
 
 ### 5b.3. Lista, szczegóły i dziennik
 
-Na liście integracji integracja Power Automate jest oznaczona kierunkiem „do SMS” i podpisem
+Na liście integracji integracja z Power Automate jest oznaczona kierunkiem „do SMS” i podpisem
 „Power Automate” pod nazwą. Przycisk **Do SMS** nad listą obejmuje również te integracje.
 Szczegóły przedstawiają konfigurację słowami: klucz, usługę, nadpis nadawcy, odbiorców grupy wraz
 z nazwami, limit części ze sposobem postępowania przy nadmiarze, limit burzy z limitem odbiorców,
@@ -1154,7 +1154,7 @@ wpis. Akcje sprawdzające stan wiadomości, stan rozsyłki i raport nie tworzą 
 dlatego adres IP pozostaje w dzienniku zawsze. Pole „Zlecający” nie przyjmuje znaków sterujących
 ani niewidocznych znaków formatowania, które mogłyby zmienić wygląd wpisu.
 
-![Szczegóły integracji Power Automate: konfiguracja opisana słowami, panel Konektor Power Automate i dziennik z wpisami „wysłano” oraz „błąd”, w kolumnie Nadawca zlecający z przepływu i adres IP wywołania](obrazki/power-automate-szczegol.png)
+![Szczegóły integracji z Power Automate: konfiguracja opisana słowami, panel Konektor Power Automate i dziennik z wpisami „wysłano” oraz „błąd”, w kolumnie Nadawca zlecający z przepływu i adres IP wywołania](obrazki/power-automate-szczegol.png)
 
 | Wynik | Powód |
 |---|---|
@@ -1333,7 +1333,7 @@ a nadmiar odrzuca. Jeżeli aplikacja ma pole na nagłówki, dodaj w bramce nagł
 SMS z przepływu n8n oraz odebrany SMS jako wyzwalacz przepływu. Ustawienie działa w obie strony.
 
 **Do SMS.** W przepływie dodaj węzeł **HTTP Request**. **Method** ustaw na `POST`, a **URL** to
-adres wejściowy integracji. Włącz **Send Body** i ustaw **Body Content Type** na `JSON`. W ciele
+adres wejściowy integracji. Włącz **Send Body** i ustaw **Body Content Type** na `JSON`. W body
 podaj dwa pola:
 
 ```json
@@ -1505,7 +1505,7 @@ Z ładunku wyżej wychodzi „Nowe zamowienie #14 na 49.00 PLN od Anna Kowalska�
 warianty treści dokładają sposób płatności albo liczbę pozycji.
 
 Warunek ustawienia sprawdza, czy ładunek ma pole `id`. Zaraz po zapisaniu webhooka sklep wysyła
-pod ten adres żądanie próbne z ciałem `webhook_id=1`. Warunek je odsiewa, więc bramka odpowiada
+pod ten adres żądanie próbne z body `webhook_id=1`. Warunek je odsiewa, więc bramka odpowiada
 kodem 200 i nie wysyła SMS-a. Bez tego warunku zamiast zamówienia zostałby wysłany SMS bez treści,
 a sklep pokazałby błąd zapisu.
 

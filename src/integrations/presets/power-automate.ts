@@ -14,7 +14,7 @@ export const powerAutomate: Preset = {
   sampleSource: 'Przepływ własny bramki, 2026-11-03',
   guide: `Integracja przyjmuje zlecenia wysyłki z przepływów Microsoft Power Automate. Przepływ wysyła SMS za pomocą akcji konektora Multiinfo Gate: „Wyślij SMS” do jednego numeru, „Wyślij rozsyłkę” do listy odbiorców przygotowanej w przepływie albo „Wyślij SMS do grupy” do listy odbiorców zapisanej w tej integracji.
 
-Konektor jest plikiem, który pobierasz w panelu „Konektor Power Automate” poniżej formularza i importujesz w Power Automate jako łącznik niestandardowy. Jeden plik obsługuje wszystkie integracje Power Automate tej bramki, a właściwą integrację wybiera się w akcji, w polu „Integracja”.
+Konektor jest plikiem, który pobierasz w panelu „Konektor Power Automate” poniżej formularza i importujesz w Power Automate jako łącznik niestandardowy. Jeden plik obsługuje wszystkie integracje z Power Automate tej bramki, a właściwą integrację wybiera się w akcji, w polu „Integracja”.
 
 Każde wywołanie przechodzi przez ustawienia tej integracji. Integracja określa nadawcę, usługę i limit części, a ochrona przed burzą zatrzymuje zapętlony przepływ. Dziennik rejestruje każde wywołanie oraz, jeżeli przepływ poda tę informację, osobę zlecającą wysyłkę.
 

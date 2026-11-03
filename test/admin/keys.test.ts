@@ -526,7 +526,7 @@ describe('klucz - tylko integracje', () => {
     const created = await create({ integrationsOnly: '1' });
     expect(created.body).toContain('curl -s https://sms.firma.pl/v1/integrations');
     expect(created.body).not.toContain('curl -s https://sms.firma.pl/v1/messages');
-    expect(created.body).toContain('Polecenie wyświetla integracje Power Automate przypisane do klucza');
+    expect(created.body).toContain('Polecenie wyświetla integracje z Power Automate przypisane do klucza');
   });
 
   it('plakietka „tylko integracje” nie łamie się na dwa wiersze', async () => {

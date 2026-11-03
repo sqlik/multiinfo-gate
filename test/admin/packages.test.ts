@@ -176,7 +176,7 @@ describe('GET /rozsylki/:id', () => {
   });
 });
 
-describe('rozsyłka z integracji Power Automate', () => {
+describe('rozsyłka z integracji z Power Automate', () => {
   function seedFromIntegration() {
     const integrationId = h.integrations.insert({
       name: 'Kierowcy floty', kind: 'power_automate', apiKeyId, serviceId: null, orig: null, preset: 'power-automate', enabled: 1,

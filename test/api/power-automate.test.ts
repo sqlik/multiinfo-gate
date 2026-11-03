@@ -135,7 +135,7 @@ describe('buildPowerAutomateConnector', () => {
     });
   });
 
-  it('każda operacja ma nazwę i opis, każdy parametr miejsce i etykietę, najwyżej jedno ciało', () => {
+  it('każda operacja ma nazwę i opis, każdy parametr miejsce i etykietę, najwyżej jedno body', () => {
     for (const o of operations.values()) {
       expect(o.summary, o.operationId).toBeTruthy();
       expect(o.description, o.operationId).toBeTruthy();
@@ -151,7 +151,7 @@ describe('buildPowerAutomateConnector', () => {
     }
   });
 
-  it('każda właściwość ciała, odpowiedzi i definicji ma etykietę oraz opis', () => {
+  it('każda właściwość body, odpowiedzi i definicji ma etykietę oraz opis', () => {
     walk(doc, '$', (obj, path) => {
       const props = obj.properties as Record<string, SwaggerSchema> | undefined;
       if (!props || typeof props !== 'object' || path.endsWith('.properties')) return;
@@ -231,7 +231,7 @@ describe('buildPowerAutomateConnector', () => {
       expect(first['x-ms-dynamic-values'], id).toEqual({
         operationId: 'ListaIntegracji', 'value-collection': 'data', 'value-path': 'id', 'value-title': 'name',
       });
-      expect(first.description, id).toContain('Integracja Power Automate');
+      expect(first.description, id).toContain('Integracja z Power Automate');
       expect(op(id).path, id).toMatch(/^\/v1\/integrations\/\{id\}\//);
     }
     expect(op('WyslijSmsDoGrupy').parameters![0]!.description).toContain('każdego numeru z listy odbiorców');

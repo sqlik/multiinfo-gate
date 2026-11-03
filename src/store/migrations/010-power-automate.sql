@@ -4,7 +4,7 @@ PRAGMA foreign_keys = ON;
 -- Dziennik integracji ma stały rozmiar, więc zlecający przy wiadomości i rozsyłce jest jedynym trwałym śladem.
 ALTER TABLE messages ADD COLUMN requested_by TEXT;
 
--- Rozsyłka zlecona przez integrację Power Automate; usunięcie integracji zostawia rozsyłkę bez powiązania.
+-- Rozsyłka zlecona przez integrację z Power Automate; usunięcie integracji zostawia rozsyłkę bez powiązania.
 ALTER TABLE packages ADD COLUMN integration_id INTEGER REFERENCES integrations(id) ON DELETE SET NULL;
 ALTER TABLE packages ADD COLUMN requested_by TEXT;
 
@@ -21,7 +21,7 @@ ALTER TABLE integration_events ADD COLUMN package_id TEXT;
 -- wklejony w Power Automate nie pozwala wysyłać z pominięciem mechanizmów ochronnych integracji.
 ALTER TABLE api_keys ADD COLUMN integrations_only INTEGER NOT NULL DEFAULT 0;
 
--- Ochrona przed burzą integracji Power Automate liczy w oknie także odbiorców: jedna rozsyłka
+-- Ochrona przed burzą integracji z Power Automate liczy w oknie także odbiorców: jedna rozsyłka
 -- może objąć 5000 numerów, więc sam limit wywołań nie chroni konta przed zapętlonym przepływem.
 ALTER TABLE integration_throttle ADD COLUMN recipients INTEGER NOT NULL DEFAULT 0;
 

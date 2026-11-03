@@ -696,7 +696,7 @@ function sectionBodyOutbound(v: IntegrationFormValues): string {
 }
 
 /**
- * Słowa sekcji ochrony zależne od rodzaju: integracja Power Automate liczy wywołania zamiast zdarzeń,
+ * Słowa sekcji ochrony zależne od rodzaju: integracja z Power Automate liczy wywołania zamiast zdarzeń,
  * nie ma próbki i wprowadza pole limitu odbiorców (`extraField`).
  */
 export interface GuardWords { unit: string; throttleHint: string; payloadHint: string; extraField?: string }
@@ -946,7 +946,7 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     if (cfg.responseRefPath) rows.push(kvRow('Identyfikator z odpowiedzi', esc(cfg.responseRefPath), true));
     rows.push(kvRow('Podpis X-MIG-Signature', cfg.sign ? 'tak' : 'nie'));
   }
-  // Integracja Power Automate nie ma warunku: warunki buduje się w przepływie.
+  // Integracja z Power Automate nie ma warunku: warunki buduje się w przepływie.
   if ('condition' in c) rows.push(kvRow(simple ? 'Warunek wysyłki' : 'Warunek', esc(simple ? simple.when : conditionWords(c.condition))));
   const perWindow = `na ${countForms(c.throttle.windowMinutes, 'minutę', 'minuty', 'minut')}`;
   rows.push(kvRow('Limit burzy', row.kind === 'power_automate'
@@ -967,7 +967,7 @@ function relatedCell(e: IntegrationEventRow): string {
 
 function eventRow(row: IntegrationRow, d: DetailEvent): string {
   const e = d.row;
-  // Integracja Power Automate nie ma próbki: treść buduje przepływ, a nie szablon bramki.
+  // Integracja z Power Automate nie ma próbki: treść buduje przepływ, a nie szablon bramki.
   const sample = row.kind === 'power_automate' ? '' : `<a href="/integracje/${esc(row.id)}/edytuj?probka=${esc(e.id)}">Użyj jako próbki</a>`;
   const payload = e.payload === null ? '' : `<details style="margin-top: 4px;">
         <summary class="dim" style="cursor: pointer; font-size: 11.5px;">ładunek${e.response === null ? '' : ' i odpowiedź'}</summary>

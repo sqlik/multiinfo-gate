@@ -13,7 +13,7 @@ import { fitToParts, resolveKeyAccount, type PipelineDeps } from './pipeline.ts'
 
 export type PowerAutomateIntegration = IntegrationRow & { kind: 'power_automate'; config: PowerAutomateConfig };
 
-/** Jedno wywołanie akcji wysyłającej konektora, już po sprawdzeniu ciała. */
+/** Jedno wywołanie akcji wysyłającej konektora, już po sprawdzeniu body. */
 export type PaCall =
   | { action: 'sms'; body: PaMessageBody }
   | { action: 'package'; body: PaPackageBody }
@@ -66,7 +66,7 @@ function seenBefore(
 }
 
 /**
- * Potok integracji Power Automate: klucz i konto, ochrona przed burzą, limit części każdej treści,
+ * Potok integracji z Power Automate: klucz i konto, ochrona przed burzą, limit części każdej treści,
  * wysyłka usługą i nadpisem integracji, wpis w dzienniku. Każde wyjście zapisuje wpis; wołający
  * zamienia wynik na odpowiedź HTTP i ewentualne powiadomienie administratora.
  */
@@ -111,7 +111,7 @@ export function runPowerAutomate(
   };
   let cut = false;
   /**
-   * Treść w limicie części integracji: przycięta albo odrzucona z miejscem w ciele żądania.
+   * Treść w limicie części integracji: przycięta albo odrzucona z miejscem w body żądania.
    * Rozsyłka liczy każdą treść w kodowaniu całej rozsyłki, bo tak wyśle ją Multiinfo.
    */
   const fit = (text: string, where = '', encoding: EncodingRequest = call.body.encoding): string => {

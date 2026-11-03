@@ -2,7 +2,7 @@ import { CONNECTOR_ARTICLE, connectorAddress } from '../../api/power-automate.ts
 import { esc } from './layout.ts';
 
 /**
- * Panel pobrania pliku konektora w formularzu i w szczegółach integracji Power Automate. Osobny
+ * Panel pobrania pliku konektora w formularzu i w szczegółach integracji z Power Automate. Osobny
  * formularz, bo HTML nie zagnieżdża formularzy, a pola integracji (numery, nazwy) nie mogą trafić
  * do pobrania. Metoda `POST`: pobrania nie wywoła podesłany link z obcym adresem. Pole jest wypełnione adresem bramki tylko wtedy, gdy ten nadaje się
  * dla Power Automate (`https://` z domeną). Adres z pola służy wyłącznie do zbudowania pliku i nie
@@ -15,7 +15,7 @@ export function powerAutomatePanel(apiUrl: string | null, back: string): string 
   return `<div class="panel" style="max-width: 760px;">
       <div class="panel-h"><div class="lab">Konektor Power Automate</div></div>
       <div style="padding: 0 16px 10px; font-size: 12.5px; line-height: 1.5;">Plik konektora pozwala wysyłać SMS-y z przepływów
-        Power Automate przez integracje Power Automate tej bramki. Jeden plik obsługuje wszystkie takie integracje.
+        Power Automate przez integracje z Power Automate tej bramki. Jeden plik obsługuje wszystkie takie integracje.
         <ol style="margin: 8px 0 0; padding-left: 18px;">
           <li>Pobierz plik konektora z publicznym adresem bramki</li>
           <li>W Power Automate zaimportuj go jako łącznik niestandardowy</li>

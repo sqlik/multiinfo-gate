@@ -6,7 +6,7 @@ import { paGroupBodySchema, paMessageBodySchema } from './pa-integrations.ts';
 /**
  * Opis API w formacie OpenAPI 3.0. Plik `docs/openapi.json` powstaje z tego modułu poleceniem
  * `npm run openapi`, które `npm test` wywołuje samo, a osobny krok w przepływach GitHuba pilnuje,
- * że zapisany plik nie odstaje od kodu. Pola ciała wysyłki biorą się z tego samego schematu zod,
+ * że zapisany plik nie odstaje od kodu. Pola body wysyłki pochodzą z tego samego schematu zod,
  * którego używa trasa, więc nowe pole nie umknie opisowi: pole bez opisu przerywa budowanie
  * dokumentu. Wersja 3.0, a nie 3.1, bo 3.0 czyta więcej narzędzi. Power Automate nie przyjmuje żadnej
  * z nich: plik konektora w Swaggerze 2.0 buduje z tego dokumentu `power-automate.ts`.
@@ -100,7 +100,7 @@ const BLAD_KLUCZA = blad(
 );
 
 /**
- * Opisy pól ciała wysyłki. Kluczem jest nazwa pola ze schematu zod. Zod nie zna opisów,
+ * Opisy pól body wysyłki. Kluczem jest nazwa pola ze schematu zod. Zod nie zna opisów,
  * a to one są wartością tego pliku dla czytelnika, więc stoją tutaj.
  */
 const POLA_WIADOMOSCI: Record<string, JsonSchema> = {
@@ -178,7 +178,7 @@ const POLA_WIADOMOSCI: Record<string, JsonSchema> = {
   },
 };
 
-/** Opis pola wysyłki po nazwie. Brak opisu przerywa budowanie, także przy ciele rozsyłki. */
+/** Opis pola wysyłki po nazwie. Brak opisu przerywa budowanie, także przy body rozsyłki. */
 function pole(nazwa: string): JsonSchema {
   const opis = POLA_WIADOMOSCI[nazwa];
   if (!opis) {
@@ -188,8 +188,8 @@ function pole(nazwa: string): JsonSchema {
 }
 
 /**
- * Właściwości ciała wysyłki wprost ze schematu trasy: nazwy pól oraz wymagalność bierze się
- * z zod, opisy z tabeli wyżej. Pole dołożone do schematu bez opisu przerywa budowanie.
+ * Właściwości body wysyłki wprost ze schematu trasy: nazwy pól oraz wymagalność pochodzą
+ * z zod, opisy z tabeli wyżej. Pole dodane do schematu bez opisu przerywa budowanie.
  */
 function cialoZSchematu(shape: Record<string, { isOptional(): boolean }>, inne: Record<string, JsonSchema> = {}): JsonSchema {
   const properties: Record<string, JsonSchema> = {};
@@ -212,7 +212,7 @@ const NUMER_INTEGRACJI: JsonSchema = {
   example: '48601000001',
 };
 
-/** Ciała wywołań integracji Power Automate: bez usługi, nadpisu i limitu części, które wyznacza integracja. */
+/** Body wywołań integracji z Power Automate: bez usługi, nadpisu i limitu części, które wyznacza integracja. */
 const cialoWysylkiIntegracji = (): JsonSchema => cialoZSchematu(paMessageBodySchema.shape, { to: NUMER_INTEGRACJI });
 const cialoGrupyIntegracji = (): JsonSchema => cialoZSchematu(paGroupBodySchema.shape);
 
@@ -227,7 +227,7 @@ const PARAMETR_IDEMPOTENCJI: OpenApiParameter = {
   example: 'zamowienie-2026-08-26-114',
 };
 
-/** Odbiorca rozsyłki; osobny schemat, bo powtarza się w ciele i w opisie raportu. */
+/** Odbiorca rozsyłki; osobny schemat, bo powtarza się w body i w opisie raportu. */
 const ODBIORCA: JsonSchema = {
   type: 'object',
   required: ['to'],
@@ -350,7 +350,7 @@ const PARAMETR_ID_INTEGRACJI: OpenApiParameter = {
   name: 'id',
   in: 'path',
   required: true,
-  description: 'Identyfikator integracji Power Automate z listy integracji klucza. Zmiana nazwy integracji w panelu'
+  description: 'Identyfikator integracji z Power Automate, wybranej z listy integracji klucza. Zmiana nazwy integracji w panelu'
     + ' go nie zmienia.',
   schema: { type: 'string', pattern: '^int_[1-9][0-9]{0,9}$' },
   example: 'int_12',
@@ -419,7 +419,7 @@ const BLEDY_INTEGRACJI: Record<string, OpenApiResponse> = {
   '404': blad(
     'Brak integracji, integracja innego klucza albo innego rodzaju; bramka nie rozróżnia tych sytuacji',
     'integration_not_found',
-    'Nie ma integracji Power Automate o tym identyfikatorze.',
+    'Nie ma integracji z Power Automate o tym identyfikatorze.',
   ),
   '429': blad(
     'Przekroczony limit żądań klucza na minutę albo limit wysyłek integracji (ochrona przed burzą):'
@@ -750,7 +750,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
               },
             },
             '400': blad(
-              'Błąd w ciele żądania: invalid_body, invalid_phone, invalid_orig, too_many_parts, service_required,'
+              'Błąd w body żądania: invalid_body, invalid_phone, invalid_orig, too_many_parts, service_required,'
                 + ' valid_to_in_past, valid_to_too_far, a przy polu inReplyTo także in_reply_to_single,'
                 + ' in_reply_to_unknown oraz in_reply_to_recipient',
               'invalid_phone',
@@ -937,7 +937,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
               },
             },
             '400': blad(
-              'Błąd w ciele żądania: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts,'
+              'Błąd w body żądania: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts,'
                 + ' invalid_orig, service_required, start_at_in_past',
               'text_required',
               'recipients.3: brak treści i brak treści domyślnej.',
@@ -1190,8 +1190,8 @@ export function buildOpenApiDocument(): OpenApiDocument {
       '/v1/integrations': {
         get: {
           operationId: 'listaIntegracjiPowerAutomate',
-          summary: 'Lista integracji Power Automate',
-          description: 'Zwraca czynne integracje Power Automate przypisane do klucza, w kolejności nazw. Integracje'
+          summary: 'Lista integracji z Power Automate',
+          description: 'Zwraca czynne integracje z Power Automate przypisane do klucza, w kolejności nazw. Integracje'
             + ' zakłada administrator w panelu bramki: Integracje, Dodaj integrację, Aplikacja wysyła SMS, Power'
             + ' Automate. Lista podaje nazwę i liczbę odbiorców grupy, bez numerów i nazwisk. Integracja wyłączona'
             + ' w panelu nie występuje na liście. Z tej listy konektor Power Automate buduje pole Integracja.',
@@ -1220,7 +1220,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
         post: {
           operationId: 'wyslijSmsIntegracja',
           summary: 'SMS przez integrację',
-          description: 'Wysyła jeden SMS na jeden numer przez integrację Power Automate. Usługę, nadpis nadawcy, limit'
+          description: 'Wysyła jeden SMS na jeden numer przez integrację z Power Automate. Usługę, nadpis nadawcy, limit'
             + ' części i ochronę przed burzą wyznacza integracja. Treść ponad limit części integracja przycina albo'
             + ' odrzuca, zależnie od ustawienia. Każde wywołanie zostawia wpis w dzienniku integracji.',
           security: KLUCZ,
@@ -1247,7 +1247,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
               },
             },
             '400': blad(
-              'Błąd w ciele żądania albo treść ponad limit części integracji: invalid_body, invalid_phone,'
+              'Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone,'
                 + ' too_many_parts, valid_to_in_past, valid_to_too_far',
               'too_many_parts',
               'Treść wymaga 4 części, a limit integracji to 3.',
@@ -1266,7 +1266,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
         post: {
           operationId: 'wyslijRozsylkeIntegracja',
           summary: 'Rozsyłka przez integrację',
-          description: 'Zleca rozsyłkę do listy odbiorców, najwyżej 5000 pozycji, przez integrację Power Automate.'
+          description: 'Zleca rozsyłkę do listy odbiorców, najwyżej 5000 pozycji, przez integrację z Power Automate.'
             + ' Pola są takie jak przy zwykłej rozsyłce, bez usługi i nadpisu, które wyznacza integracja. Limit części'
             + ' integracji dotyczy treści wspólnej i każdej treści odbiorcy osobno. Przy ustawieniu „nie wysyłaj”'
             + ' jedna zbyt długa treść odrzuca całą rozsyłkę.',
@@ -1291,7 +1291,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
               content: { 'application/json': { schema: PRZYJETA_ROZSYLKA, example: PRZYKLAD_ROZSYLKI } },
             },
             '400': blad(
-              'Błąd w ciele żądania albo treść ponad limit części integracji: invalid_body, invalid_phone,'
+              'Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone,'
                 + ' text_required, invalid_client_id, too_many_parts, start_at_in_past',
               'too_many_parts',
               'recipients.1: Treść wymaga 4 części, a limit integracji to 3.',
@@ -1310,7 +1310,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
         post: {
           operationId: 'wyslijDoGrupyIntegracja',
           summary: 'SMS do odbiorców grupy integracji',
-          description: 'Wysyła treść do każdego numeru z listy odbiorców integracji Power Automate, osobną wiadomością'
+          description: 'Wysyła treść do każdego numeru z listy odbiorców integracji z Power Automate, osobną wiadomością'
             + ' na numer. Listę prowadzi administrator w panelu bramki, w szczegółach integracji. Wysyłka jest'
             + ' przyjmowana w całości albo wcale. Pusta lista kończy wywołanie błędem group_empty.',
           security: KLUCZ,
@@ -1342,7 +1342,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
               },
             },
             '400': blad(
-              'Błąd w ciele żądania albo treść ponad limit części integracji: invalid_body, too_many_parts,'
+              'Błąd w body żądania albo treść ponad limit części integracji: invalid_body, too_many_parts,'
                 + ' valid_to_in_past, valid_to_too_far',
               'too_many_parts',
               'Treść wymaga 4 części, a limit integracji to 3.',

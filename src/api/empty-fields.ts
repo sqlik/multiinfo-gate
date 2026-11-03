@@ -8,7 +8,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Kopia ciała żądania bez właściwości równych `""` albo `null`, żeby puste pole opcjonalne
+ * Kopia body żądania bez właściwości równych `""` albo `null`, żeby puste pole opcjonalne
  * znaczyło to samo, co pole pominięte. Dla nazw z `nested` (tablice obiektów, na przykład
  * odbiorcy rozsyłki) to samo w każdym elemencie. Pola wymagane dalej sprawdza schemat.
  */

@@ -5,7 +5,7 @@ z przepływu przebiega tak samo jak każda inna akcja: autor przepływu wybiera 
 i zapisuje przepływ. Konektor jest plikiem, który pobierasz z panelu bramki i importujesz
 w Power Automate jako łącznik niestandardowy.
 
-Każda wysyłka zlecona przez konektor przechodzi przez integrację Power Automate skonfigurowaną
+Każda wysyłka zlecona przez konektor przechodzi przez integrację z Power Automate skonfigurowaną
 w panelu bramki. Integracja określa nadawcę SMS-a, usługę Multiinfo i limit długości wiadomości.
 Chroni konto przed skutkami zapętlonego przepływu i rejestruje każde wywołanie w dzienniku.
 Administrator bramki widzi zatem wysyłki z Power Automate w tym samym miejscu co wysyłki
@@ -155,20 +155,20 @@ sprawdzanie stanu wiadomości i rozsyłek, działają bez ograniczeń.
    rozdział 10.1.
 7. Kliknij **Utwórz integrację**.
 
-![Formularz integracji Power Automate w trybie prostym: nazwa, klucz API, ID usługi i nadpis, lista odbiorców grupy, limit części oraz pod formularzem panel Konektor Power Automate](obrazki/power-automate-formularz.png)
+![Formularz integracji z Power Automate w trybie prostym: nazwa, klucz API, ID usługi i nadpis, lista odbiorców grupy, limit części oraz pod formularzem panel Konektor Power Automate](obrazki/power-automate-formularz.png)
 
 Oczekiwany wynik: panel wyświetla szczegóły integracji z konfiguracją opisaną słowami oraz panel
 **Konektor Power Automate**. Na liście integracji nowa pozycja jest oznaczona kierunkiem „do SMS”
 i podpisem „Power Automate”.
 
-![Szczegóły integracji Power Automate: konfiguracja opisana słowami, panel Konektor Power Automate i dziennik z wpisami „wysłano” oraz „błąd”, w kolumnie Nadawca zlecający z przepływu i adres IP wywołania](obrazki/power-automate-szczegol.png)
+![Szczegóły integracji z Power Automate: konfiguracja opisana słowami, panel Konektor Power Automate i dziennik z wpisami „wysłano” oraz „błąd”, w kolumnie Nadawca zlecający z przepływu i adres IP wywołania](obrazki/power-automate-szczegol.png)
 
 Przełącznik **Zaawansowany** nad formularzem odsłania dodatkowo sekcję **Ochrona i dziennik**
 z limitem burzy, limitem odbiorców, pojemnością dziennika i przechowywaniem ładunków. Opis tych
 ustawień znajdziesz w rozdziale 5b [Integracji z aplikacjami](integracje.md). Jeżeli ochronę przed
 burzą zmieniono w trybie zaawansowanym, tryb prosty wyświetla jej bieżące wartości.
 
-Każda integracja Power Automate prowadzi własną listę odbiorców i własny dziennik oraz stosuje
+Każda integracja z Power Automate prowadzi własną listę odbiorców i własny dziennik oraz stosuje
 własny limit części. Dla różnych zespołów lub spraw warto utworzyć osobne integracje, także
 w ramach tego samego klucza. Jeden plik konektora obsługuje je wszystkie.
 
@@ -190,7 +190,7 @@ oraz adresu z portem innym niż 443. Popraw adres i ponownie pobierz plik.
 
 Adres z pola służy wyłącznie do przygotowania pliku i nie jest zapisywany w bramce. Plik nie
 zawiera klucza API ani innych poufnych danych, ponieważ klucz podaje się dopiero przy tworzeniu
-połączenia. Jeden plik obsługuje wszystkie integracje Power Automate danej bramki.
+połączenia. Jeden plik obsługuje wszystkie integracje z Power Automate danej bramki.
 
 Plik pobiera się wyłącznie przyciskiem **Pobierz konektor** w panelu. Odnośnik do pobrania
 otwarty w pasku przeglądarki nie zwraca pliku. Plik konektora otrzymany z innego źródła, na
@@ -258,7 +258,7 @@ oraz odnośnik **Zmień odwołanie do połączenia**.
 
 | Pole | Zawartość |
 |---|---|
-| Integracja | integracja Power Automate wybrana z listy; lista obejmuje włączone integracje klucza przypisanego do połączenia |
+| Integracja | integracja z Power Automate wybrana z listy; lista obejmuje włączone integracje klucza przypisanego do połączenia |
 | Numer odbiorcy | jeden numer, na przykład `48601000001`; numer bez kodu kraju otrzymuje kod domyślny konta, a spacje i łączniki są pomijane |
 | Treść | treść SMS-a: tekst wpisany na stałe, pola z wcześniejszych kroków przepływu albo ich połączenie |
 | Zlecający | pole opcjonalne wskazujące osobę zlecającą wysyłkę, na przykład `Dział obsługi klienta` albo adres e-mail z formularza |
@@ -312,7 +312,7 @@ Przepływy nie wymagają wówczas żadnych zmian.
 3. W polu **Klucz interfejsu API** wklej nowy klucz i kliknij **Aktualizuj**.
 
 Zawartość listy w polu „Integracja” zależy od klucza przypisanego do połączenia. Jeżeli do klucza
-nie jest przypisana żadna włączona integracja Power Automate, lista pozostaje pusta.
+nie jest przypisana żadna włączona integracja z Power Automate, lista pozostaje pusta.
 
 ## 7. Sprawdzenie stanu wiadomości
 
@@ -423,7 +423,7 @@ gotowy, uruchom akcję ponownie po dłuższym opóźnieniu.
 Przykładowy scenariusz: zgłoszenie awarii trafia jednym SMS-em do wszystkich techników ekipy
 serwisowej.
 
-1. W panelu bramki uzupełnij w integracji Power Automate sekcję **Odbiorcy grupy** (rozdział 3.2,
+1. W panelu bramki uzupełnij w integracji z Power Automate sekcję **Odbiorcy grupy** (rozdział 3.2,
    krok 5).
 2. W przepływie dodaj akcję **Wyślij SMS do grupy**.
 3. Wybierz **Integrację**, wpisz **Treść** i opcjonalnie **Zlecającego**. Akcja nie zawiera pola
@@ -529,7 +529,7 @@ kodów wraz z ich znaczeniem znajdziesz w rozdziale 5b.6 [API](api.md).
 |---|---|---|
 | kreator odrzuca plik | importowany plik nie pochodzi z panelu bramki, na przykład jest to `openapi.json` z dokumentacji API | pobrać plik z panelu bramki (rozdział 4) |
 | akcji Multiinfo Gate brakuje w wynikach wyszukiwania | wyszukiwarka wyświetla w pierwszej kolejności łączniki Microsoftu | włączyć filtr **Niestandardowe** nad wynikami |
-| lista w polu „Integracja” jest pusta | do klucza połączenia nie jest przypisana żadna włączona integracja Power Automate | sprawdzić w panelu bramki klucz i stan integracji, a w razie potrzeby wprowadzić w połączeniu inny klucz (rozdział 6.4) |
+| lista w polu „Integracja” jest pusta | do klucza połączenia nie jest przypisana żadna włączona integracja z Power Automate | sprawdzić w panelu bramki klucz i stan integracji, a w razie potrzeby wprowadzić w połączeniu inny klucz (rozdział 6.4) |
 | błąd `401` z kodem `invalid_api_key`, `revoked_api_key` albo `expired_api_key` | klucz zapisany w połączeniu jest nieprawidłowy, odwołany albo wygasł | wprowadzić w połączeniu ważny klucz (rozdział 6.4) |
 | błąd `404` z kodem `integration_not_found` | integracja wskazana w akcji została usunięta albo należy do innego klucza niż klucz połączenia | ponownie wybrać integrację z listy |
 | błąd `409` z kodem `integration_disabled` | integracja jest wyłączona w panelu bramki | poprosić administratora o włączenie integracji |

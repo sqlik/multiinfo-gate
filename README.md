@@ -47,7 +47,7 @@ pracy, pokazuje w panelu przyczynę i sposób naprawy zamiast zerwanego połącz
 kończy się stroną z identyfikatorem zdarzenia, a wpis z tym identyfikatorem trafia do dziennika.
 Typowe problemy opisuje nowy dokument „Rozwiązywanie problemów”.
 
-Wersja 1.9 wprowadza integrację Power Automate. Przepływy Microsoft Power Automate wysyłają SMS-y
+Wersja 1.9 wprowadza integrację z Power Automate. Przepływy Microsoft Power Automate wysyłają SMS-y
 za pomocą konektora bramki: do jednego numeru, w formie rozsyłki do listy przygotowanej
 w przepływie albo do listy odbiorców prowadzonej w bramce. Listę rozsyłki przepływ może zbudować
 na przykład na podstawie tabeli Excela. Konektor pobiera się z panelu i importuje w Power Automate

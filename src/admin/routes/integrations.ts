@@ -65,7 +65,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     };
   };
 
-  /** Przycisk „Do SMS” obejmuje także integracje Power Automate: obie wysyłają SMS na wywołanie aplikacji. */
+  /** Przycisk „Do SMS” obejmuje także integracje z Power Automate: obie wysyłają SMS na wywołanie aplikacji. */
   const KIND_OF_FILTER: Record<'in' | 'out' | 'mail' | 'grupa', IntegrationKind[]> = {
     in: ['webhook_in', 'power_automate'], out: ['webhook_out'], mail: ['mail_in'], grupa: ['sms_group'],
   };
@@ -445,7 +445,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
 
   interface SavedPaForm { config: PowerAutomateConfig; keyId: number; v: PaFormValues }
 
-  /** Droga POST integracji Power Automate: walidacja i zapis przez `save`. */
+  /** Droga POST integracji z Power Automate: walidacja i zapis przez `save`. */
   const handlePaForm = async (request: FastifyRequest, reply: FastifyReply, preset: Preset, row: IntegrationRow | undefined, save: (saved: SavedPaForm) => string) => {
     reply.type('text/html; charset=utf-8');
     const body = (request.body ?? {}) as Body;

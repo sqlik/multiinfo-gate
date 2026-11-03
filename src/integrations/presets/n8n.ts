@@ -33,7 +33,7 @@ export const n8n: Preset = {
     },
   },
   guide: [
-    '**Do SMS.** W przepływie dodaj węzeł **HTTP Request**. **Method** ustaw na `POST`, **URL** to adres wejściowy integracji, **Send Body** włącz, **Body Content Type** ustaw na `JSON`. W ciele podaj dwa pola: `to` z numerem oraz `text` z treścią. Wartości z poprzedniego węzła wstawia się wyrażeniem, na przykład `{{ $json.telefon }}`.',
+    '**Do SMS.** W przepływie dodaj węzeł **HTTP Request**. **Method** ustaw na `POST`, **URL** to adres wejściowy integracji, **Send Body** włącz, **Body Content Type** ustaw na `JSON`. W body podaj dwa pola: `to` z numerem oraz `text` z treścią. Wartości z poprzedniego węzła wstawia się wyrażeniem, na przykład `{{ $json.telefon }}`.',
     '',
     'Hasło ustaw w **Authentication → Generic Credential Type → Header Auth**: nazwa `Authorization`, wartość `Bearer <hasło z bramki>`.',
     '',

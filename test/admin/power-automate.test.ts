@@ -70,7 +70,7 @@ describe('strona kluczy', () => {
       }).toString(),
     });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Klucz dla Power Automate wybiera się w formularzu integracji Power Automate: Integracje, Dodaj integrację, Aplikacja wysyła SMS, Power Automate. Ten sam klucz wkleja się w oknie połączenia konektora, a plik konektora pobiera się w szczegółach integracji.');
+    expect(res.body).toContain('Klucz dla Power Automate wybiera się w formularzu integracji z Power Automate: Integracje, Dodaj integrację, Aplikacja wysyła SMS, Power Automate. Ten sam klucz wkleja się w oknie połączenia konektora, a plik konektora pobiera się w szczegółach integracji.');
     expect(res.body).toContain('w oknie połączenia konektora');
   });
 });

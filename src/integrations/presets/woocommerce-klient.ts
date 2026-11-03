@@ -5,7 +5,7 @@ const TEKST: InboundConfig['text'] = { mode: 'liquid', template: '{{ p.billing.f
 
 /**
  * Warunek wspólny dla każdego wariantu: zamówienie ma numer wewnętrzny `id`.
- * Odsiewa żądanie próbne, które sklep wysyła po zapisaniu webhooka; ma ono ciało `webhook_id=1`
+ * Odsiewa żądanie próbne, które sklep wysyła po zapisaniu webhooka; ma ono body `webhook_id=1`
  * w formacie formularza, więc bez tego warunku bramka szukałaby w nim telefonu kupującego.
  */
 const MA_ZAMOWIENIE = { path: 'id', op: 'exists' as const, value: '' };

@@ -9,7 +9,7 @@ import { buildOpenApiDocument, type JsonSchema, type OpenApiDocument } from './o
  * i dokumentacja mówiły to samo. Tu dochodzą tylko rzeczy właściwe dla Power Automate: krótkie
  * etykiety pól (`x-ms-summary`), widoczność, listy wyboru i polskie nazwy wartości.
  *
- * Każda akcja wysyłająca przechodzi przez integrację Power Automate (`/v1/integrations/{id}/...`),
+ * Każda akcja wysyłająca przechodzi przez integrację z Power Automate (`/v1/integrations/{id}/...`),
  * więc z przepływu nie ma drogi do wysyłki bez dziennika, limitu części i ochrony przed burzą.
  * Jeden plik obsługuje wszystkie integracje: integrację wybiera się w akcji.
  */
@@ -336,7 +336,7 @@ function decorate(converted: SwaggerSchema, path: string, name: string, source: 
   return out;
 }
 
-/** Schemat ciała żądania bez pól pominiętych w konektorze. */
+/** Schemat body żądania bez pól pominiętych w konektorze. */
 function requestBody(schema: JsonSchema, operationId: string): SwaggerSchema {
   const omitted = CONNECTOR_OMITTED[operationId] ?? [];
   const properties = Object.fromEntries(Object.entries(schema.properties ?? {}).filter(([name]) => !omitted.includes(name)));
@@ -349,7 +349,7 @@ function jsonSchemaOf(content: Record<string, { schema: JsonSchema }> | undefine
   return schema;
 }
 
-/** Fragmenty opisu API, z których powstaje plik: ciała żądań i schematy odpowiedzi. */
+/** Fragmenty opisu API, z których powstaje plik: body żądań i schematy odpowiedzi. */
 function apiParts(api: OpenApiDocument) {
   const op = (path: string, method: 'get' | 'post') => {
     const found = api.paths[path]?.[method];
@@ -410,10 +410,10 @@ const body = (summary: string, description: string, schema: SwaggerSchema): Swag
 const integrationParam = (description: string): SwaggerParameter =>
   pathId('Integracja', description, { 'x-ms-visibility': 'important', 'x-ms-dynamic-values': INTEGRATION_LIST });
 
-const INTEGRATION_FOR_SENDING = 'Integracja Power Automate z panelu bramki Multiinfo Gate. Wyznacza nadawcę SMS-a,'
+const INTEGRATION_FOR_SENDING = 'Integracja z Power Automate skonfigurowana w panelu bramki Multiinfo Gate. Wyznacza nadawcę SMS-a,'
   + ' usługę Multiinfo, limit długości wiadomości i ochronę przed nadmiarem wysyłek. Integracje zakłada administrator bramki';
 
-const INTEGRATION_FOR_GROUP = 'Integracja Power Automate z panelu bramki Multiinfo Gate. SMS trafi do każdego numeru'
+const INTEGRATION_FOR_GROUP = 'Integracja z Power Automate skonfigurowana w panelu bramki Multiinfo Gate. SMS trafi do każdego numeru'
   + ' z listy odbiorców tej integracji. Listę prowadzi administrator bramki w szczegółach integracji, więc zmiana składu'
   + ' ekipy nie wymaga zmiany przepływu. Gdy lista jest pusta, akcja kończy się błędem';
 
@@ -426,7 +426,7 @@ const INTEGRATION_FOR_GROUP = 'Integracja Power Automate z panelu bramki Multiin
  */
 const SENDING_ERRORS: Record<string, SwaggerResponse> = {
   '404': {
-    description: 'Nie ma takiej integracji Power Automate dla tego klucza: integration_not_found',
+    description: 'Nie ma takiej integracji z Power Automate dla tego klucza: integration_not_found',
     schema: ref('OdpowiedzBledu'),
   },
   '429': {
@@ -453,7 +453,7 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
       version: GATE_VERSION,
       description: 'Wysyłka SMS-ów przez bramkę Multiinfo Gate do platformy Multiinfo operatora Plus: do jednego'
         + ' numeru, w formie rozsyłki albo do listy odbiorców zapisanej w integracji, wraz ze sprawdzaniem stanu'
-        + ' i raportu doręczeń. Każda wysyłka przechodzi przez integrację Power Automate skonfigurowaną w panelu bramki.'
+        + ' i raportu doręczeń. Każda wysyłka przechodzi przez integrację z Power Automate skonfigurowaną w panelu bramki.'
         + ` Instrukcja: ${CONNECTOR_ARTICLE}`,
     },
     host: checked.host,
@@ -466,7 +466,7 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
         post: {
           operationId: 'WyslijSms',
           summary: 'Wyślij SMS',
-          description: 'Wysyła jedną wiadomość do jednego numeru przez integrację Power Automate. Integracja wyznacza'
+          description: 'Wysyła jedną wiadomość do jednego numeru przez integrację z Power Automate. Integracja wyznacza'
             + ' nadawcę, usługę, limit długości i ochronę przed nadmiarem wysyłek. Bramka przyjmuje wiadomość do kolejki'
             + ' i odpowiada od razu. Stan doręczenia sprawdza akcja „Sprawdź stan wiadomości”.',
           parameters: [
@@ -504,7 +504,7 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
           operationId: 'WyslijRozsylke',
           summary: 'Wyślij rozsyłkę',
           description: 'Wysyła rozsyłkę do listy do 5000 odbiorców jednym wywołaniem, bez pętli w przepływie, przez'
-            + ' integrację Power Automate. Każdy odbiorca może otrzymać własną treść i własny identyfikator, który wraca'
+            + ' integrację z Power Automate. Każdy odbiorca może otrzymać własną treść i własny identyfikator, który wraca'
             + ' w raporcie.',
           parameters: [
             integrationParam(INTEGRATION_FOR_SENDING),
@@ -559,7 +559,7 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
         post: {
           operationId: 'WyslijSmsDoGrupy',
           summary: 'Wyślij SMS do grupy',
-          description: 'Wysyła treść do każdego numeru z listy odbiorców integracji Power Automate, osobną wiadomością'
+          description: 'Wysyła treść do każdego numeru z listy odbiorców integracji z Power Automate, osobną wiadomością'
             + ' na numer. Listę prowadzi administrator w panelu bramki. Wysyłka jest przyjmowana w całości albo wcale.',
           parameters: [
             integrationParam(INTEGRATION_FOR_GROUP),
@@ -581,7 +581,7 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
         get: {
           operationId: 'ListaIntegracji',
           summary: 'Lista integracji',
-          description: 'Czynne integracje Power Automate klucza. Źródło listy „Integracja”.',
+          description: 'Czynne integracje z Power Automate klucza. Źródło listy „Integracja”.',
           'x-ms-visibility': 'internal',
           responses: { '200': { description: 'Integracje klucza', schema: ref('ListaIntegracji') }, default: ERROR },
         },

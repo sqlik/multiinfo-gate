@@ -20,7 +20,7 @@ a integracje wychodzące przekazują odebrane SMS-y i statusy do aplikacji w jej
 jest w rozdziale [Integracje z aplikacjami](integracje.md).
 
 Od wersji 1.9 przepływy Microsoft Power Automate wysyłają SMS-y za pomocą konektora bramki.
-Konektor jest plikiem pobieranym z panelu bramki i korzysta z wywołań integracji Power Automate
+Konektor jest plikiem pobieranym z panelu bramki i korzysta z wywołań integracji z Power Automate
 opisanych w rozdziale 5b. Import konektora i budowę przepływów przedstawia artykuł
 [Power Automate](power-automate.md).
 
@@ -476,7 +476,7 @@ utworzenie rozsyłki (rozdział 5.1).
 | 400 | `in_reply_to_recipient` | odbiorca odpowiedzi to ktoś inny niż nadawca wskazanej wiadomości | wysłać odpowiedź na numer nadawcy; `message` go podaje |
 | 403 | `service_not_allowed` | usługa spoza uprawnień klucza | użyć usługi przypisanej do klucza |
 | 403 | `orig_not_allowed` | nadpis spoza uprawnień klucza; `message` wymienia dozwolone | użyć jednego z wymienionych |
-| 403 | `integrations_only_key` | klucz z opcją „Tylko integracje” wysyła wyłącznie przez integracje | użyć innego klucza albo integracji Power Automate |
+| 403 | `integrations_only_key` | klucz z opcją „Tylko integracje” wysyła wyłącznie przez integracje | użyć innego klucza albo integracji z Power Automate |
 | 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią wiadomości albo numerem, a także klucz użyty wcześniej przez integrację | użyć nowego klucza idempotencji |
 | 429 | `rate_limited` | przekroczony limit żądań klucza na minutę | odczekać minutę; nie ponawiać w pętli |
 
@@ -952,7 +952,7 @@ razem. Ten sam klucz z inną rozsyłką kończy się kodem `409 idempotency_conf
 | 400 | `too_many_parts` | treść przekracza limit części | skrócić treść |
 | 400 | `invalid_orig`, `service_required`, `start_at_in_past` | jak nazwa kodu | poprawić pole |
 | 403 | `service_not_allowed`, `orig_not_allowed` | usługa albo nadpis spoza uprawnień klucza | użyć wartości przypisanych do klucza |
-| 403 | `integrations_only_key` | klucz z opcją „Tylko integracje” wysyła wyłącznie przez integracje | użyć innego klucza albo integracji Power Automate |
+| 403 | `integrations_only_key` | klucz z opcją „Tylko integracje” wysyła wyłącznie przez integracje | użyć innego klucza albo integracji z Power Automate |
 | 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną rozsyłką, a także klucz użyty wcześniej przez integrację | użyć nowego klucza idempotencji |
 | 413 | `body_too_large` | body przekracza 4 MB | podzielić listę na kilka rozsyłek |
 | 429 | `rate_limited` | przekroczony limit żądań na minutę | odczekać minutę |
@@ -1664,9 +1664,9 @@ odbiorcę: nadawcę tej wiadomości (pole `from` z `message.received`).
     Console.WriteLine(odpowiedz.RootElement.GetProperty("id"));
     ```
 
-## 5b. Integracje Power Automate
+## 5b. Integracje z Power Automate
 
-Wywołania z tego rozdziału wysyłają SMS-y za pośrednictwem integracji Power Automate.
+Wywołania z tego rozdziału wysyłają SMS-y za pośrednictwem integracji z Power Automate.
 Integrację tworzy administrator bramki w panelu: Integracje, Dodaj integrację, „Aplikacja wysyła
 SMS”, kafelek „Power Automate”. Opis integracji zawiera rozdział
 [Integracje z aplikacjami](integracje.md). Z tych wywołań korzysta konektor Power Automate,
@@ -1694,7 +1694,7 @@ a przy braku zlecającego `API · <adres IP wywołania>`.
 
 ### 5b.1. Lista integracji: `GET /v1/integrations`
 
-**Przeznaczenie.** Odczyt czynnych integracji Power Automate przypisanych do klucza. Z tego
+**Przeznaczenie.** Odczyt czynnych integracji z Power Automate przypisanych do klucza. Z tego
 wywołania konektor Power Automate buduje listę w polu „Integracja”.
 
 === "curl"
@@ -1791,7 +1791,7 @@ wywołania konektor Power Automate buduje listę w polu „Integracja”.
 | `name` | nazwa integracji nadana w panelu |
 | `recipients` | liczba numerów na liście odbiorców grupy integracji |
 
-Lista obejmuje tylko włączone integracje Power Automate, w kolejności nazw. Nie zawiera numerów
+Lista obejmuje tylko włączone integracje z Power Automate, w kolejności nazw. Nie zawiera numerów
 ani nazwisk. Te dane zostają w panelu bramki.
 
 ### 5b.2. SMS do jednego numeru: `POST /v1/integrations/{id}/messages`
@@ -2430,10 +2430,10 @@ harmonogramu wyżej.
 | Ważność wiadomości (`validTo`) | do 72 godzin od przyjęcia | `400 valid_to_too_far` |
 | Odbiorcy jednej rozsyłki | 5000 | `400 invalid_body` |
 | Numery w tablicy `to` | 500 | `400 invalid_body` |
-| Liczba części treści w wywołaniu integracji Power Automate | 1-9, ustawiana w integracji | skrócenie treści albo `400 too_many_parts`, zależnie od ustawienia integracji (5b.5) |
-| Wywołania wysyłające integracji Power Automate | ochrona przed burzą ustawiana w integracji, domyślnie 30 na 10 minut | `429 integration_throttled` (5b.5) |
-| Odbiorcy wywołań integracji Power Automate | ochrona przed burzą ustawiana w integracji, domyślnie 5000 na 10 minut, w tym samym oknie co wywołania | `429 integration_throttled` (5b.5) |
-| Odbiorcy grupy integracji Power Automate | 500 | lista prowadzona w panelu bramki |
+| Liczba części treści w wywołaniu integracji z Power Automate | 1-9, ustawiana w integracji | skrócenie treści albo `400 too_many_parts`, zależnie od ustawienia integracji (5b.5) |
+| Wywołania wysyłające integracji z Power Automate | ochrona przed burzą ustawiana w integracji, domyślnie 30 na 10 minut | `429 integration_throttled` (5b.5) |
+| Odbiorcy wywołań integracji z Power Automate | ochrona przed burzą ustawiana w integracji, domyślnie 5000 na 10 minut, w tym samym oknie co wywołania | `429 integration_throttled` (5b.5) |
+| Odbiorcy grupy integracji z Power Automate | 500 | lista prowadzona w panelu bramki |
 | Rozmiar body żądania | 512 KB, a przy utworzeniu rozsyłki 4 MB | `413 body_too_large` |
 
 ## 9. Zestawienie błędów
@@ -2461,20 +2461,20 @@ użytkownikowi końcowemu.
 | 401 | `missing_api_key`, `invalid_api_key`, `revoked_api_key`, `expired_api_key` | brak, nieprawidłowy, odwołany albo wygasły klucz | rozdział 2 |
 | 403 | `service_not_allowed` | usługa spoza uprawnień klucza | użyć usługi przypisanej do klucza |
 | 403 | `orig_not_allowed` | nadpis spoza uprawnień klucza; `message` wymienia dozwolone | użyć jednego z wymienionych |
-| 403 | `integrations_only_key` | klucz z opcją „Tylko integracje” wysyła wyłącznie przez integracje Power Automate | użyć innego klucza albo wywołań z rozdziału 5b |
+| 403 | `integrations_only_key` | klucz z opcją „Tylko integracje” wysyła wyłącznie przez integracje z Power Automate | użyć innego klucza albo wywołań z rozdziału 5b |
 | 404 | `message_not_found`, `package_not_found`, `inbound_not_found`, `integration_not_found` | brak obiektu albo obiekt innego klucza | sprawdzić identyfikator |
 | 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią, numerem albo rozsyłką, a także klucz użyty wcześniej w innej integracji | użyć nowego klucza idempotencji |
 | 409 | `already_final`, `already_passed` | anulowanie niemożliwe (4.3) | brak |
-| 409 | `integration_disabled`, `group_empty` | integracja Power Automate wyłączona w panelu albo bez odbiorców grupy (5b.6) | poprosić administratora o włączenie integracji albo uzupełnienie listy |
+| 409 | `integration_disabled`, `group_empty` | integracja z Power Automate wyłączona w panelu albo bez odbiorców grupy (5b.6) | poprosić administratora o włączenie integracji albo uzupełnienie listy |
 | 409 | `package_not_completed`, `report_not_ready` | raport rozsyłki jeszcze niedostępny | powtórzyć po minucie |
 | 413 | `body_too_large` | body przekracza 512 KB, a przy utworzeniu rozsyłki 4 MB | zmniejszyć body albo podzielić rozsyłkę |
 | 415 | `unsupported_media_type` | body w formacie innym niż JSON | wysłać body z nagłówkiem `Content-Type: application/json` |
 | 429 | `rate_limited` | przekroczony limit żądań klucza na minutę | odczekać minutę |
-| 429 | `integration_throttled` | przekroczony limit wywołań albo odbiorców integracji Power Automate (5b.5) | odczekać do końca okna albo poprosić administratora o zmianę limitu |
+| 429 | `integration_throttled` | przekroczony limit wywołań albo odbiorców integracji z Power Automate (5b.5) | odczekać do końca okna albo poprosić administratora o zmianę limitu |
 | 500 | `internal`, `account_missing` | błąd wewnętrzny bramki | zgłosić administratorowi z czasem wystąpienia i identyfikatorem obiektu |
 | 502 | `provider_error` | błąd Multiinfo przy wywołaniu synchronicznym; `providerCode` w body odpowiedzi | ponowić po chwili; przy powtarzaniu przekazać `providerCode` administratorowi |
 | 503 | `account_certificate` | Multiinfo odrzuciło certyfikat bramki | przekazać administratorowi |
-| 503 | `integration_unavailable` | konto Multiinfo integracji Power Automate jest wstrzymane albo klucz integracji jest nieczynny; przyczynę podaje dziennik integracji | przekazać administratorowi |
+| 503 | `integration_unavailable` | konto Multiinfo integracji z Power Automate jest wstrzymane albo klucz integracji jest nieczynny; przyczynę podaje dziennik integracji | przekazać administratorowi |
 | 503 | `unavailable` | bramka nie rozpoczęła pracy (tryb awaryjny, rozdział 10) | przekazać administratorowi; przyczynę pokazuje panel bramki |
 
 Odmowy Multiinfo przy wysyłce asynchronicznej nie są kodami HTTP. Pojawiają się w polach
@@ -2607,7 +2607,7 @@ przeliczyć poleceniem `npm run openapi`, w przeciwnym razie testy kończą się
 
 Power Automate nie importuje tego pliku, ponieważ łącznik niestandardowy przyjmuje wyłącznie
 starszy format OpenAPI 2.0. Na potrzeby Power Automate bramka udostępnia osobny plik konektora,
-pobierany z panelu w integracji Power Automate. Jego opis znajdziesz w artykule
+pobierany z panelu w integracji z Power Automate. Jego opis znajdziesz w artykule
 [Power Automate](power-automate.md).
 
 Plik został zapisany w wersji OpenAPI 3.0, a nie w nowszej 3.1. Wersję 3.0 obsługuje więcej

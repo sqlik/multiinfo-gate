@@ -27,7 +27,7 @@ export class IntegrationGuardsRepo {
   /**
    * Okno stałe od pierwszego zdarzenia: `limit` przechodzi, reszta odpada do końca okna.
    * `notify` tylko przy pierwszym odrzuceniu w oknie - jeden mail na burzę, nie na każdy alert.
-   * `recipients` (integracja Power Automate) dokłada w tym samym oknie limit odbiorców: wywołanie,
+   * `recipients` (integracja z Power Automate) dokłada w tym samym oknie limit odbiorców: wywołanie,
    * które by go przekroczyło, odpada i nie zużywa żadnego z limitów. `by` mówi, który limit zadziałał.
    */
   throttle(

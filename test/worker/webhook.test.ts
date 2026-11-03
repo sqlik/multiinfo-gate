@@ -96,7 +96,7 @@ describe('handleWebhook - cel w sieci wewnętrznej', () => {
 });
 
 describe('signWebhook', () => {
-  it('liczy HMAC-SHA256 po znaczniku czasu i ciele', () => {
+  it('liczy HMAC-SHA256 po znaczniku czasu i body', () => {
     const expected = createHmac('sha256', 'sekret').update('1756116000.{"a":1}').digest('hex');
     expect(signWebhook('sekret', 1756116000, '{"a":1}')).toBe(`sha256=${expected}`);
   });

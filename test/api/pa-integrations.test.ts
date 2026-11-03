@@ -120,7 +120,7 @@ describe('identyfikator integracji w API', () => {
 });
 
 describe('GET /v1/integrations', () => {
-  it('włączone integracje Power Automate klucza, po nazwie, z liczbą odbiorców, bez numerów i nazwisk', async () => {
+  it('włączone integracje z Power Automate klucza, po nazwie, z liczbą odbiorców, bez numerów i nazwisk', async () => {
     const res = await app.inject({ method: 'GET', url: '/v1/integrations', headers: auth() });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ data: [
@@ -180,7 +180,7 @@ describe('POST /v1/integrations/{id}/messages', () => {
     expect(res.json().error).toEqual({ code: 'invalid_body', message });
   });
 
-  it('serviceId i orig w ciele nie zmieniają usługi ani nadpisu integracji', async () => {
+  it('serviceId i orig w body nie zmieniają usługi ani nadpisu integracji', async () => {
     const res = await post(`/v1/integrations/int_${ekipa}/messages`, { to: '48601000001', text: 'x', serviceId: '24138', orig: 'Serwis' });
     expect(res.statusCode).toBe(202);
     expect(messages.get(res.json().id)).toMatchObject({ serviceId: '24902', orig: 'SerwisAlarm' });
@@ -258,7 +258,7 @@ describe('POST /v1/integrations/{id}/group', () => {
     expect(res.json().error.code).toBe('group_empty');
   });
 
-  it('ciało z polem to nie zmienia odbiorców', async () => {
+  it('body z polem to nie zmienia odbiorców', async () => {
     const res = await post(`/v1/integrations/int_${ekipa}/group`, { text: 'x', to: '48601999999' });
     expect(res.statusCode).toBe(202);
     expect(allMessages().map((m) => m.dest)).not.toContain('48601999999');
@@ -278,7 +278,7 @@ describe('POST /v1/integrations/{id}/packages', () => {
     expect(log(ekipa)[0]).toMatchObject({ result: 'sent', reason: 'Wyślij rozsyłkę, 2 odbiorców', packageId: body.id, messageId: null });
   });
 
-  it('5000 odbiorców z własnymi treściami: ciało ponad 512 KB przyjęte', async () => {
+  it('5000 odbiorców z własnymi treściami: body ponad 512 KB przyjęte', async () => {
     const recipients = Array.from({ length: 5000 }, (_, i) => ({ to: `48601${String(i).padStart(6, '0')}`, text: `Wizyta technika jutro w godzinach 8:00-10:00, zlecenie ZL-${i}. ${'x'.repeat(70)}`, clientId: `ZL-${i}` }));
     const payload = JSON.stringify({ recipients });
     expect(payload.length).toBeGreaterThan(512 * 1024);
@@ -438,7 +438,7 @@ describe('integracja nieznana, cudza, innego rodzaju albo wyłączona', () => {
   ])('%s: 404 integration_not_found', async (id) => {
     const res = await post(`/v1/integrations/${id}/messages`, { to: '48601000001', text: 'x' });
     expect(res.statusCode).toBe(404);
-    expect(res.json().error).toEqual({ code: 'integration_not_found', message: 'Nie ma integracji Power Automate o tym identyfikatorze.' });
+    expect(res.json().error).toEqual({ code: 'integration_not_found', message: 'Nie ma integracji z Power Automate o tym identyfikatorze.' });
   });
 
   it('integracja innego klucza i webhook pod int_<id>: 404, zero wiadomości i wpisów', async () => {
