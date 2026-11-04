@@ -105,6 +105,8 @@ export interface AdminDeps {
   log?: Logger;
   /** Wariant instalacji do poleceń na stronach pomocy; brak = oba warianty. */
   install?: InstallKind | null;
+  /** Wersja Node, na której działa bramka; domyślnie `process.version`, testy podstawiają inną. */
+  nodeVersion?: string;
 }
 
 declare module 'fastify' {

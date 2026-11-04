@@ -1184,7 +1184,7 @@ Skrypt `proxmox/ct/multiinfogate.sh` z repozytorium bramki jest napisany w forma
 [community-scripts](https://github.com/community-scripts/ProxmoxVE) i korzysta z ich silnika
 kreatora. Leży jednak w repozytorium bramki i nie wymaga niczego z ich katalogu. Skrypt wykonuje
 kolejno: pobiera szablon Debiana 13, tworzy nieuprzywilejowany kontener (1 rdzeń, 1 GB pamięci,
-4 GB dysku, adres z DHCP), instaluje Node.js 22, pobiera źródła najnowszego wydania bramki
+4 GB dysku, adres z DHCP), instaluje najnowsze wydanie Node.js 22, pobiera źródła najnowszego wydania bramki
 z GitHuba i buduje je, tworzy konto systemowe `multiinfo-gate`, generuje klucz główny,
 rejestruje usługę systemd i zakłada pierwsze konto panelu. Dockera w kontenerze nie ma.
 

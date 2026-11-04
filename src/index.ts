@@ -13,6 +13,8 @@ import { Receiver } from './inbound/receiver.ts';
 import { SourceMatcher } from './integrations/sources.ts';
 import { TemplateEngine } from './integrations/templates.ts';
 import { createLogger, type Logger } from './log.ts';
+import { nodeUpdateNeeded, plainVersion } from './runtime/node-version.ts';
+import { problemUrl } from './docs-links.ts';
 import { systemResolver } from './net/private-address.ts';
 import { Notifier } from './notifications/notifier.ts';
 import { NotificationScanner } from './notifications/scanner.ts';
@@ -53,6 +55,8 @@ export interface StartOptions {
   /** Wariant instalacji do poleceń na stronach pomocy; domyślnie rozpoznawany z systemu plików. */
   install?: InstallKind | null;
   log?: Logger;
+  /** Wersja Node do sprawdzenia poprawek bezpieczeństwa; domyślnie `process.version`. */
+  nodeVersion?: string;
 }
 
 /**
@@ -63,7 +67,7 @@ export async function startGate(config: AppConfig, opts: StartOptions = {}): Pro
   const log = opts.log ?? createLogger(config.logLevel);
   const install = opts.install === undefined ? detectInstall() : opts.install;
   try {
-    return await startNormal(config, log, install);
+    return await startNormal(config, log, install, opts.nodeVersion ?? process.version);
   } catch (error) {
     if (isListenError(error)) throw error;
     return startEmergency(config, { reason: classifyStartupError(error), id: newIncidentId() }, { install, log, error });
@@ -113,7 +117,7 @@ async function prepareDatabase(config: AppConfig, log: Logger): Promise<Database
   }
 }
 
-async function startNormal(config: AppConfig, log: Logger, install: InstallKind | null): Promise<RunningGate> {
+async function startNormal(config: AppConfig, log: Logger, install: InstallKind | null, nodeVersion: string): Promise<RunningGate> {
   const db = await prepareDatabase(config, log);
 
   const accounts = new AccountsRepo(db, config.masterKey);
@@ -177,7 +181,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
     integrationEvents, guards, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate, allowPrivateMail: config.mailAllowPrivate,
-    log, install,
+    log, install, nodeVersion,
   });
 
   // Panel domyślnie zostaje na pętli zwrotnej (MIG_ADMIN_HOST); w kontenerze o wystawieniu
@@ -230,6 +234,10 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     inboundIdleMs: config.inboundIdleMs,
     trustedProxies: config.trustedProxies.length,
   });
+  const nodeMinimum = nodeUpdateNeeded(nodeVersion);
+  if (nodeMinimum !== null) {
+    log.warn('node.bez_poprawek', { installed: plainVersion(nodeVersion), minimum: nodeMinimum, help: problemUrl('wersja-node') });
+  }
   return running;
 }
 

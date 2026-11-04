@@ -348,6 +348,32 @@ administratora Polkomtel.
 Wpis `odbior.zatrzymany` w dzienniku oznacza inną przyczynę: Multiinfo odrzuciło zapytanie
 o wiadomości. Opis zdarzeń odbioru zawiera rozdział 7.3 [Uruchomienia](uruchomienie.md).
 
+## Wersja Node.js bez poprawek bezpieczeństwa {#wersja-node}
+
+Objaw: przegląd panelu pokazuje czerwony pasek z informacją, że Node.js, na którym działa bramka,
+nie zawiera poprawek bezpieczeństwa z października 2026. Dziennik przy starcie zawiera wpis
+`node.bez_poprawek` z zainstalowaną i wymaganą wersją.
+
+Wydanie bezpieczeństwa Node.js z 21 października 2026 usuwa między innymi lukę CVE-2026-111497
+w dekoderze Brotli. Luka pozwala uruchomić obcy kod w programie, który rozpakowuje spreparowane
+dane. Według CISA jest ona aktywnie wykorzystywana. Bramka rozpakowuje dane Brotli w odpowiedziach
+serwerów, do których wysyła webhooki i zapytania uzupełniające, dlatego luka dotyczy także jej.
+Wymagana jest wersja 22.23.4 lub nowsza, a w liniach 24 i 26 odpowiednio 24.22.1 i 26.12.1.
+
+W Dockerze Node.js jest częścią obrazu bramki. Aktualizacja do najnowszego wydania według
+rozdziału [7.4 Uruchomienia](uruchomienie.md#74-aktualizacja) usuwa pasek.
+
+W kontenerze LXC Node.js jest pakietem systemu kontenera. Zaktualizuj go w konsoli kontenera,
+a następnie uruchom bramkę ponownie:
+
+```bash
+apt update && apt install --only-upgrade nodejs
+systemctl restart multiinfo-gate
+```
+
+Oczekiwany wynik: polecenie `node -v` zwraca wersję 22.23.4 lub nowszą, a pasek znika
+z przeglądu.
+
 ## Jak zgłosić problem {#zgloszenie}
 
 Problemy zgłaszasz w serwisie GitHub, w zakładce

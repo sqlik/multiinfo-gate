@@ -7,6 +7,7 @@ import { esc } from './layout.ts';
 import type { ReleaseInfo } from '../../store/settings.ts';
 import { UPDATE_DOCS_DOCKER, UPDATE_DOCS_LXC } from '../../releases/check.ts';
 import { GATE_VERSION } from '../../version.ts';
+import { problemUrl } from '../../docs-links.ts';
 
 export interface OverviewData {
   counts: { total: number; delivered: number; failed: number; cancelled: number; transit: number };
@@ -21,6 +22,8 @@ export interface OverviewData {
   integrationsTroubled: number;
   /** Nowsze wydanie z GitHuba, jeszcze nie odłożone; `null` bez paska. */
   release?: ReleaseInfo | null;
+  /** Node bez poprawek bezpieczeństwa z października 2026; `null` bez paska. */
+  node?: { installed: string; minimum: string } | null;
 }
 
 /** „1 integracja zgłosiła błąd”, „3 integracje zgłosiły błąd”, „5 integracji zgłosiło błąd”. */
@@ -63,6 +66,17 @@ function share(part: number, whole: number): string {
 
 function alerts(data: OverviewData, now: Date): string {
   const items: string[] = [];
+
+  if (data.node) {
+    items.push(`<div class="alert stop">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="sq"></div>
+        <div>Node.js ${esc(data.node.installed)}, na którym działa bramka, nie zawiera poprawek bezpieczeństwa z października 2026.
+          Wymagana jest wersja ${esc(data.node.minimum)} lub nowsza.</div>
+      </div>
+      <a href="${problemUrl('wersja-node')}" target="_blank" rel="noopener noreferrer">Jak zaktualizować</a>
+    </div>`);
+  }
 
   if (data.release) {
     const r = data.release;

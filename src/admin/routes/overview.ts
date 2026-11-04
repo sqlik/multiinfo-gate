@@ -4,6 +4,7 @@ import type { AdminDeps } from '../server.ts';
 import { overviewPage } from '../views/overview.ts';
 import { WINDOW_MS } from '../window.ts';
 import { pendingRelease } from '../../releases/check.ts';
+import { nodeUpdateNeeded, plainVersion } from '../../runtime/node-version.ts';
 
 /** Ile ostatnich niepowodzeń pokazujemy na przeglądzie. */
 const FAILURES_SHOWN = 8;
@@ -15,6 +16,8 @@ export function registerOverviewRoutes(app: FastifyInstance, deps: AdminDeps, re
     reply.type('text/html; charset=utf-8');
     const at = now();
     const since = new Date(at.getTime() - WINDOW_MS);
+    const nodeVersion = deps.nodeVersion ?? process.version;
+    const nodeMinimum = nodeUpdateNeeded(nodeVersion);
 
     return render.page(request, {
       title: 'Przegląd',
@@ -29,6 +32,7 @@ export function registerOverviewRoutes(app: FastifyInstance, deps: AdminDeps, re
         inboundToday: deps.inbound.countSince(since),
         integrationsTroubled: deps.integrations.countTroubled(since) + (deps.mailIn?.counts().failing ?? 0),
         release: pendingRelease(deps.settings),
+        node: nodeMinimum === null ? null : { installed: plainVersion(nodeVersion), minimum: nodeMinimum },
       }, at),
     });
   });

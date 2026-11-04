@@ -11,7 +11,7 @@ export const PROBLEM_ANCHORS = [
   'panel-nie-odpowiada', 'pierwsze-konto', 'logowanie-wraca', 'kod-odrzucony', 'blad-wewnetrzny',
   'klucz-glowny', 'klucz-nieprawidlowy', 'klucz-czesciowy', 'kopia-przed-aktualizacja', 'baza-z-nowszego-wydania',
   'brak-miejsca', 'uprawnienia', 'uszkodzona-baza', 'nieudana-migracja', 'awaria-startu',
-  'zajety-port', 'po-aktualizacji', 'sms-od-abonentow', 'zgloszenie',
+  'zajety-port', 'po-aktualizacji', 'sms-od-abonentow', 'wersja-node', 'zgloszenie',
 ] as const;
 
 export type ProblemAnchor = typeof PROBLEM_ANCHORS[number];

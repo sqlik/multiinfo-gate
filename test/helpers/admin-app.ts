@@ -97,7 +97,7 @@ function makeProbeStub(): ProbeStub {
  */
 export async function startAdminHarness(
   now = new Date('2026-08-25T10:00:00Z'),
-  opts: { totp?: boolean; allowPrivateWebhooks?: boolean; allowPrivateMail?: boolean; log?: Logger; install?: InstallKind | null } = {},
+  opts: { totp?: boolean; allowPrivateWebhooks?: boolean; allowPrivateMail?: boolean; log?: Logger; install?: InstallKind | null; nodeVersion?: string } = {},
 ): Promise<AdminHarness> {
   const masterKey = randomBytes(32);
   const db = openDatabase(':memory:');
@@ -158,6 +158,7 @@ export async function startAdminHarness(
     ...(opts.allowPrivateMail ? { allowPrivateMail: true } : {}),
     ...(opts.log ? { log: opts.log } : {}),
     ...(opts.install !== undefined ? { install: opts.install } : {}),
+    ...(opts.nodeVersion !== undefined ? { nodeVersion: opts.nodeVersion } : {}),
   });
   await app.ready();
 
