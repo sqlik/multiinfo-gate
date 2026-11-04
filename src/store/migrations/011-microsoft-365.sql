@@ -12,6 +12,11 @@ CREATE TABLE m365_accounts (
   redirect_uri    TEXT,
   -- Adres skrzynki: z roszczenia `email`, w razie braku z `preferred_username`; administrator może go zmienić.
   address         TEXT,
+  -- 1, gdy adres zmienił administrator; ponowne logowanie tym samym kontem go wtedy nie nadpisuje.
+  address_manual  INTEGER NOT NULL DEFAULT 0,
+  -- Tożsamość z ostatniego logowania (`preferred_username` i `oid`); rozpoznaje ponowne logowanie tym samym kontem.
+  login_name      TEXT,
+  login_oid       TEXT,
   refresh_enc     TEXT,
   state           TEXT    NOT NULL DEFAULT 'new' CHECK (state IN ('new', 'connected', 'needs_login', 'error')),
   error_code      TEXT,

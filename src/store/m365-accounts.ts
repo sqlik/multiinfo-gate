@@ -5,7 +5,7 @@ export type M365State = 'new' | 'connected' | 'needs_login' | 'error';
 
 export interface M365AccountRow {
   id: number; name: string; tenant: string; clientId: string; redirectUri: string | null; address: string | null;
-  state: M365State; errorCode: string | null; errorMessage: string | null; errorSince: string | null; notifiedAt: string | null;
+  addressManual: boolean; loginName: string | null; loginOid: string | null; state: M365State; errorCode: string | null; errorMessage: string | null; errorSince: string | null; notifiedAt: string | null;
   connectedAt: string | null; connectedBy: string | null; lastRefreshAt: string | null; createdAt: string; updatedAt: string;
 }
 
@@ -13,13 +13,13 @@ export interface M365AccountInput { name: string; tenant: string; clientId: stri
 
 interface RawAccount {
   id: number; name: string; tenant: string; client_id: string; redirect_uri: string | null; address: string | null;
-  state: M365State; error_code: string | null; error_message: string | null; error_since: string | null; notified_at: string | null;
+  address_manual: number; login_name: string | null; login_oid: string | null; state: M365State; error_code: string | null; error_message: string | null; error_since: string | null; notified_at: string | null;
   connected_at: string | null; connected_by: string | null; last_refresh_at: string | null; created_at: string; updated_at: string;
 }
 
 const toRow = (r: RawAccount): M365AccountRow => ({
   id: r.id, name: r.name, tenant: r.tenant, clientId: r.client_id, redirectUri: r.redirect_uri, address: r.address,
-  state: r.state, errorCode: r.error_code, errorMessage: r.error_message, errorSince: r.error_since, notifiedAt: r.notified_at,
+  addressManual: r.address_manual === 1, loginName: r.login_name, loginOid: r.login_oid, state: r.state, errorCode: r.error_code, errorMessage: r.error_message, errorSince: r.error_since, notifiedAt: r.notified_at,
   connectedAt: r.connected_at, connectedBy: r.connected_by, lastRefreshAt: r.last_refresh_at, createdAt: r.created_at, updatedAt: r.updated_at,
 });
 
@@ -49,7 +49,10 @@ export class M365AccountsRepo {
     return Number(info.lastInsertRowid);
   }
 
-  /** Zmiana `tenant` albo `clientId` kasuje token i ustawia `new`: stary token należy do innej aplikacji. */
+  /**
+   * Zmiana `tenant` albo `clientId` kasuje token i ustawia `new`: stary token należy do innej aplikacji.
+   * Adres i tożsamość logowania zostają, żeby ponowne logowanie tym samym kontem zachowało ręczny adres.
+   */
   update(id: number, input: M365AccountInput, at: Date): void {
     const current = this.get(id);
     if (!current) return;
@@ -64,16 +67,24 @@ export class M365AccountsRepo {
     this.db.prepare('UPDATE m365_accounts SET name = ?, updated_at = ? WHERE id = ?').run(input.name, now, id);
   }
 
+  /** Adres ustawiony przez administratora; znacznik chroni go przed nadpisaniem przy ponownym logowaniu tym samym kontem. */
   setAddress(id: number, address: string, at: Date): void {
-    this.db.prepare('UPDATE m365_accounts SET address = ?, updated_at = ? WHERE id = ?').run(address, at.toISOString(), id);
+    this.db.prepare('UPDATE m365_accounts SET address = ?, address_manual = 1, updated_at = ? WHERE id = ?').run(address, at.toISOString(), id);
   }
 
-  connected(id: number, c: { refreshToken: string; address: string; redirectUri: string; by: string }, at: Date): void {
+  connected(
+    id: number,
+    c: { refreshToken: string; address: string; addressManual: boolean; loginName: string | null; loginOid: string | null; redirectUri: string; by: string },
+    at: Date,
+  ): void {
     const now = at.toISOString();
     this.db.prepare(
-      `UPDATE m365_accounts SET refresh_enc = ?, address = ?, redirect_uri = ?, state = 'connected', connected_at = ?,
-         connected_by = ?, last_refresh_at = ?, ${CLEAR_ERROR}, updated_at = ? WHERE id = ?`,
-    ).run(encryptSecret(c.refreshToken, this.masterKey), c.address, c.redirectUri, now, c.by, now, now, id);
+      `UPDATE m365_accounts SET refresh_enc = ?, address = ?, address_manual = ?, login_name = ?, login_oid = ?, redirect_uri = ?,
+         state = 'connected', connected_at = ?, connected_by = ?, last_refresh_at = ?, ${CLEAR_ERROR}, updated_at = ? WHERE id = ?`,
+    ).run(
+      encryptSecret(c.refreshToken, this.masterKey), c.address, c.addressManual ? 1 : 0, c.loginName, c.loginOid, c.redirectUri,
+      now, c.by, now, now, id,
+    );
   }
 
   refreshed(id: number, refreshToken: string, at: Date): void {
@@ -101,6 +112,7 @@ export class M365AccountsRepo {
     this.db.prepare('UPDATE m365_accounts SET notified_at = ? WHERE id = ?').run(at.toISOString(), id);
   }
 
+  /** Kasuje token i błąd; adres i tożsamość logowania zostają na potrzeby ponownego logowania. */
   disconnect(id: number, at: Date): void {
     this.db.prepare(
       `UPDATE m365_accounts SET refresh_enc = NULL, state = 'new', connected_at = NULL, connected_by = NULL, ${CLEAR_ERROR},

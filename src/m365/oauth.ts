@@ -67,7 +67,7 @@ export const fetchToken: TokenFetch = async (url, form) => {
   return { status: res.status, body };
 };
 
-export interface IdClaims { tid?: string; email?: string; preferred_username?: string }
+export interface IdClaims { tid?: string; oid?: string; email?: string; preferred_username?: string }
 export interface TokenSet { accessToken: string; refreshToken: string; expiresAt: Date; claims: IdClaims | null }
 
 export class M365AuthError extends Error {
@@ -166,6 +166,7 @@ function claimsOf(idToken: string): IdClaims | null {
   if (!isRecord(payload)) return null;
   const claims: IdClaims = {};
   if (typeof payload.tid === 'string') claims.tid = payload.tid;
+  if (typeof payload.oid === 'string') claims.oid = payload.oid;
   if (typeof payload.email === 'string') claims.email = payload.email;
   if (typeof payload.preferred_username === 'string') claims.preferred_username = payload.preferred_username;
   return claims;

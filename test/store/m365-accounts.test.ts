@@ -18,15 +18,16 @@ beforeEach(() => {
   repo = new M365AccountsRepo(db, randomBytes(32));
 });
 
+const LOGIN = { loginName: 'alarmy@firma.pl', loginOid: 'f1e2d3c4-0000-1111-2222-333344445555', addressManual: false };
 const connect = (id: number, at = T1) =>
-  repo.connected(id, { refreshToken: TOKEN, address: 'alarmy@firma.pl', redirectUri: 'http://localhost:8081/m365/powrot', by: 'admin' }, at);
+  repo.connected(id, { refreshToken: TOKEN, address: 'alarmy@firma.pl', redirectUri: 'http://localhost:8081/m365/powrot', by: 'admin', ...LOGIN }, at);
 
 describe('M365AccountsRepo', () => {
   it('create zakłada konto w stanie new, bez adresu i bez tokenu', () => {
     const id = repo.create(INPUT, T0);
     expect(repo.get(id)).toEqual({
       id, name: 'Dyżur IT', tenant: 'firma.onmicrosoft.com', clientId: INPUT.clientId, redirectUri: null, address: null,
-      state: 'new', errorCode: null, errorMessage: null, errorSince: null, notifiedAt: null,
+      addressManual: false, loginName: null, loginOid: null, state: 'new', errorCode: null, errorMessage: null, errorSince: null, notifiedAt: null,
       connectedAt: null, connectedBy: null, lastRefreshAt: null, createdAt: T0.toISOString(), updatedAt: T0.toISOString(),
     });
     expect(repo.refreshToken(id)).toBeNull();
@@ -40,7 +41,7 @@ describe('M365AccountsRepo', () => {
     connect(id);
     expect(repo.get(id)).toMatchObject({
       state: 'connected', address: 'alarmy@firma.pl', redirectUri: 'http://localhost:8081/m365/powrot',
-      connectedAt: T1.toISOString(), connectedBy: 'admin', lastRefreshAt: T1.toISOString(),
+      loginName: 'alarmy@firma.pl', loginOid: LOGIN.loginOid, addressManual: false, connectedAt: T1.toISOString(), connectedBy: 'admin', lastRefreshAt: T1.toISOString(),
       errorCode: null, errorMessage: null, errorSince: null, notifiedAt: null,
     });
     expect(JSON.stringify(db.prepare('SELECT * FROM m365_accounts').get())).not.toContain(TOKEN);
@@ -96,11 +97,32 @@ describe('M365AccountsRepo', () => {
     expect(repo.get(id)).toMatchObject({ name: 'Dyspozytornia', state: 'connected', updatedAt: T2.toISOString() });
   });
 
-  it('setAddress zmienia adres skrzynki', () => {
+  it('setAddress zmienia adres skrzynki i oznacza go jako ustawiony ręcznie', () => {
     const id = repo.create(INPUT, T0);
     connect(id);
     repo.setAddress(id, 'dyspozytornia@firma.pl', T2);
-    expect(repo.get(id)).toMatchObject({ address: 'dyspozytornia@firma.pl', updatedAt: T2.toISOString() });
+    expect(repo.get(id)).toMatchObject({ address: 'dyspozytornia@firma.pl', addressManual: true, updatedAt: T2.toISOString() });
+  });
+
+  it('connected z addressManual zachowuje znacznik ręcznego adresu, bez niego go kasuje', () => {
+    const id = repo.create(INPUT, T0);
+    connect(id);
+    repo.setAddress(id, 'dyspozytornia@firma.pl', T1);
+    repo.connected(id, { refreshToken: TOKEN, address: 'dyspozytornia@firma.pl', redirectUri: 'http://localhost:8081/m365/powrot', by: 'admin', ...LOGIN, addressManual: true }, T2);
+    expect(repo.get(id)).toMatchObject({ address: 'dyspozytornia@firma.pl', addressManual: true });
+    connect(id, T2);
+    expect(repo.get(id)).toMatchObject({ address: 'alarmy@firma.pl', addressManual: false });
+  });
+
+  it('disconnect i zmiana aplikacji zachowują tożsamość logowania i ręczny adres', () => {
+    const id = repo.create(INPUT, T0);
+    connect(id);
+    repo.setAddress(id, 'dyspozytornia@firma.pl', T1);
+    repo.disconnect(id, T2);
+    const kept = { address: 'dyspozytornia@firma.pl', addressManual: true, loginName: 'alarmy@firma.pl', loginOid: LOGIN.loginOid };
+    expect(repo.get(id)).toMatchObject({ state: 'new', ...kept });
+    repo.update(id, { ...INPUT, clientId: '99999999-2222-3333-4444-555555555555' }, T2);
+    expect(repo.get(id)).toMatchObject({ state: 'new', ...kept });
   });
 
   it('disconnect kasuje token i błąd, konto wraca do new z zachowanym adresem', () => {

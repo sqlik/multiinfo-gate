@@ -146,8 +146,13 @@ describe('redeemCode', () => {
     expect((await redeemCode(fake(200, okBody({ id_token: 'a.!!!.b' })), REDEEM, NOW)).claims).toBeNull();
   });
 
+  it('odczytuje oid, czyli trwały identyfikator konta w katalogu', async () => {
+    const set = await redeemCode(fake(200, okBody({ id_token: idToken({ tid: GUID, oid: 'f1e2d3c4-0000-1111-2222-333344445555', preferred_username: 'alarmy@firma.pl' }) })), REDEEM, NOW);
+    expect(set.claims).toEqual({ tid: GUID, oid: 'f1e2d3c4-0000-1111-2222-333344445555', preferred_username: 'alarmy@firma.pl' });
+  });
+
   it('pomija roszczenia, które nie są napisami', async () => {
-    const set = await redeemCode(fake(200, okBody({ id_token: idToken({ tid: 5, email: 'alarmy@firma.pl' }) })), REDEEM, NOW);
+    const set = await redeemCode(fake(200, okBody({ id_token: idToken({ tid: 5, oid: 7, email: 'alarmy@firma.pl' }) })), REDEEM, NOW);
     expect(set.claims).toEqual({ email: 'alarmy@firma.pl' });
   });
 

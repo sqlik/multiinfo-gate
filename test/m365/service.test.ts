@@ -96,7 +96,7 @@ describe('create i update', () => {
 
   it('zmiana katalogu kasuje połączenie i token w pamięci', async () => {
     const id = created();
-    accounts.connected(id, { refreshToken: 'r', address: 'alarmy@firma.pl', redirectUri: REDIRECT, by: 'admin' }, T0);
+    accounts.connected(id, { refreshToken: 'r', address: 'alarmy@firma.pl', redirectUri: REDIRECT, by: 'admin', loginName: 'alarmy@firma.pl', loginOid: null, addressManual: false }, T0);
     tokens.remember(id, { accessToken: 'stary', refreshToken: 'r', expiresAt: new Date(T0.getTime() + 3600_000), claims: null });
     expect(service.update(id, { name: 'Dyżur IT', tenant: 'firma.onmicrosoft.com', clientId: CLIENT }, ADMIN, T0)).toEqual({ ok: true });
     expect(accounts.get(id)).toMatchObject({ state: 'new', tenant: 'firma.onmicrosoft.com' });
@@ -124,7 +124,7 @@ describe('startLogin i finishLogin', () => {
     const id = created();
     const url = service.startLogin(id, REDIRECT, ADMIN, T0).url;
     const r = await service.finishLogin({ state: stateOf(url), code: 'kod-1' }, ADMIN, new Date(T0.getTime() + 60_000));
-    expect(r).toEqual({ ok: true, accountId: id, address: 'alarmy@firma.pl' });
+    expect(r).toEqual({ ok: true, accountId: id, address: 'alarmy@firma.pl', login: 'Alarmy@Firma.pl', switched: false });
     expect(accounts.get(id)).toMatchObject({ state: 'connected', address: 'alarmy@firma.pl', redirectUri: REDIRECT, connectedBy: 'admin' });
     expect(accounts.refreshToken(id)).toBe('token-odswiezania-1');
     expect(forms).toHaveLength(1);
@@ -230,6 +230,73 @@ describe('startLogin i finishLogin', () => {
     service.update(id, { name: 'Dyżur IT', tenant: 'firma.onmicrosoft.com', clientId: CLIENT }, ADMIN, T0);
     expect((await service.finishLogin({ state: stateOf(url), code: 'kod-1' }, ADMIN, T0)).ok).toBe(false);
     expect(forms).toHaveLength(0);
+  });
+});
+
+describe('ponowne logowanie i adres ustawiony ręcznie', () => {
+  const OID_A = 'aaaaaaaa-0000-1111-2222-333344445555';
+  const OID_B = 'bbbbbbbb-0000-1111-2222-333344445555';
+
+  const loginAs = async (id: number, claims: Record<string, unknown>) => {
+    reply = { status: 200, body: { ...(reply.body as object), id_token: idToken({ tid: GUID, ...claims }) } };
+    const url = service.startLogin(id, REDIRECT, ADMIN, T0).url;
+    return service.finishLogin({ state: stateOf(url), code: 'kod' }, ADMIN, T0);
+  };
+
+  it('pierwsze logowanie zapisuje tożsamość i adres z roszczeń, bez zmiany konta', async () => {
+    const id = created();
+    const r = await loginAs(id, { oid: OID_A, preferred_username: 'alarmy@firma.pl' });
+    expect(r).toEqual({ ok: true, accountId: id, address: 'alarmy@firma.pl', login: 'alarmy@firma.pl', switched: false });
+    expect(accounts.get(id)).toMatchObject({ loginOid: OID_A, loginName: 'alarmy@firma.pl', addressManual: false });
+  });
+
+  it('ponowne logowanie tym samym oid zachowuje adres ustawiony ręcznie', async () => {
+    const id = created();
+    await loginAs(id, { oid: OID_A, preferred_username: 'alarmy@firma.pl' });
+    service.setAddress(id, 'dyspozytornia@firma.pl', ADMIN, T0);
+    const r = await loginAs(id, { oid: OID_A, preferred_username: 'alarmy@firma.pl' });
+    expect(r).toMatchObject({ ok: true, address: 'dyspozytornia@firma.pl', switched: false });
+    expect(accounts.get(id)).toMatchObject({ address: 'dyspozytornia@firma.pl', addressManual: true });
+  });
+
+  it('po rozłączeniu ponowne logowanie tym samym kontem nadal zachowuje adres ustawiony ręcznie', async () => {
+    const id = created();
+    await loginAs(id, { oid: OID_A, preferred_username: 'alarmy@firma.pl' });
+    service.setAddress(id, 'dyspozytornia@firma.pl', ADMIN, T0);
+    service.disconnect(id, ADMIN, T0);
+    const r = await loginAs(id, { oid: OID_A, preferred_username: 'alarmy@firma.pl' });
+    expect(r).toMatchObject({ ok: true, address: 'dyspozytornia@firma.pl', switched: false });
+  });
+
+  it('logowanie innym oid zmienia adres na adres z roszczeń, kasuje znacznik i zgłasza zmianę konta', async () => {
+    const id = created();
+    await loginAs(id, { oid: OID_A, preferred_username: 'alarmy@firma.pl' });
+    service.setAddress(id, 'dyspozytornia@firma.pl', ADMIN, T0);
+    const r = await loginAs(id, { oid: OID_B, preferred_username: 'serwis@firma.pl' });
+    expect(r).toEqual({ ok: true, accountId: id, address: 'serwis@firma.pl', login: 'serwis@firma.pl', switched: true });
+    expect(accounts.get(id)).toMatchObject({ address: 'serwis@firma.pl', addressManual: false, loginOid: OID_B, loginName: 'serwis@firma.pl' });
+    const entry = audit.list(10, 0)[0]!;
+    expect(entry).toMatchObject({ action: 'm365.zalogowano' });
+    expect(entry.meta).toMatchObject({ address: 'serwis@firma.pl', login: 'serwis@firma.pl', switched: true });
+  });
+
+  it('ten sam oid przy innej nazwie logowania oznacza to samo konto', async () => {
+    const id = created();
+    await loginAs(id, { oid: OID_A, preferred_username: 'alarmy@firma.pl' });
+    service.setAddress(id, 'dyspozytornia@firma.pl', ADMIN, T0);
+    const r = await loginAs(id, { oid: OID_A, preferred_username: 'alarmy-it@firma.pl' });
+    expect(r).toMatchObject({ ok: true, address: 'dyspozytornia@firma.pl', login: 'alarmy-it@firma.pl', switched: false });
+  });
+
+  it('bez oid konto rozpoznaje po nazwie logowania bez rozróżniania wielkości liter', async () => {
+    const id = created();
+    await loginAs(id, { preferred_username: 'Alarmy@Firma.pl' });
+    service.setAddress(id, 'dyspozytornia@firma.pl', ADMIN, T0);
+    const same = await loginAs(id, { oid: OID_A, preferred_username: 'alarmy@firma.pl' });
+    expect(same).toMatchObject({ ok: true, address: 'dyspozytornia@firma.pl', switched: false });
+    const other = await loginAs(id, { preferred_username: 'serwis@firma.pl' });
+    expect(other).toMatchObject({ ok: true, address: 'serwis@firma.pl', switched: true });
+    expect(accounts.get(id)!.addressManual).toBe(false);
   });
 });
 

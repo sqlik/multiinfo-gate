@@ -35,7 +35,13 @@ export interface M365ServiceDeps {
   integrations: IntegrationsRepo; notifications: NotificationsRepo; audit: AuditRepo;
 }
 
-type Finish = { ok: true; accountId: number; address: string } | { ok: false; accountId: number | null; error: string };
+/**
+ * Wynik powrotu z logowania. `login` jest nazwą logowania z roszczeń, a `switched` oznacza logowanie innym kontem
+ * niż poprzednio, po którym adres skrzynki pochodzi z roszczeń nowego konta.
+ */
+type Finish =
+  | { ok: true; accountId: number; address: string; login: string | null; switched: boolean }
+  | { ok: false; accountId: number | null; error: string };
 
 export class M365Service {
   /** Logowania w toku, kluczem jest `state`. Tylko w pamięci: restart bramki unieważnia rozpoczęte logowania. */
@@ -112,14 +118,22 @@ export class M365Service {
     if (GUID.test(login.tenant) && set.claims?.tid?.toLowerCase() !== login.tenant) {
       return { ok: false, accountId, error: 'Zalogowane konto należy do innego katalogu niż podany w ustawieniach konta' };
     }
-    const address = addressFromClaims(set.claims);
-    if (address === null) {
+    const claimed = addressFromClaims(set.claims);
+    if (claimed === null) {
       return { ok: false, accountId, error: 'Microsoft nie przekazał adresu konta, dlatego należy sprawdzić uprawnienia email i profile w rejestracji aplikacji' };
     }
-    this.deps.accounts.connected(accountId, { refreshToken: set.refreshToken, address, redirectUri: login.redirectUri, by: user.login }, now);
+    const identity = { loginName: set.claims?.preferred_username?.trim() || null, loginOid: set.claims?.oid?.trim().toLowerCase() || null };
+    const known = account.loginOid !== null || account.loginName !== null;
+    const same = known && sameLogin(account, identity);
+    const keep = same && account.addressManual && account.address !== null;
+    const address = keep ? account.address! : claimed;
+    this.deps.accounts.connected(accountId, {
+      refreshToken: set.refreshToken, address, addressManual: keep, ...identity, redirectUri: login.redirectUri, by: user.login,
+    }, now);
     this.deps.tokens.remember(accountId, set);
-    this.record(user, 'm365.zalogowano', accountId, { address });
-    return { ok: true, accountId, address };
+    const switched = known && !same;
+    this.record(user, 'm365.zalogowano', accountId, { address, login: identity.loginName, switched });
+    return { ok: true, accountId, address, login: identity.loginName, switched };
   }
 
   setAddress(id: number, address: string, user: PanelUser, at: Date): { ok: true } | { ok: false; error: string } {
@@ -172,6 +186,14 @@ export class M365Service {
   private dropPending(accountId: number): void {
     for (const [state, login] of this.pending) if (login.accountId === accountId) this.pending.delete(state);
   }
+}
+
+type Identity = { loginName: string | null; loginOid: string | null };
+
+/** To samo konto: równy `oid`, a gdy po którejś stronie go brak, równa nazwa logowania bez rozróżniania wielkości liter. */
+function sameLogin(before: Identity, after: Identity): boolean {
+  if (before.loginOid !== null && after.loginOid !== null) return before.loginOid === after.loginOid;
+  return before.loginName !== null && after.loginName !== null && before.loginName.toLowerCase() === after.loginName.toLowerCase();
 }
 
 /** Nazwa bez spacji na brzegach, identyfikatory małymi literami; napis oznacza błąd do pokazania w formularzu. */

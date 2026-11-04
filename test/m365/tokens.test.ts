@@ -17,7 +17,7 @@ let id: number;
 beforeEach(() => {
   accounts = new M365AccountsRepo(openDatabase(':memory:'), randomBytes(32));
   id = accounts.create(INPUT, T0);
-  accounts.connected(id, { refreshToken: OLD_REFRESH, address: 'alarmy@firma.pl', redirectUri: 'http://localhost:8081/m365/powrot', by: 'admin' }, T0);
+  accounts.connected(id, { refreshToken: OLD_REFRESH, address: 'alarmy@firma.pl', redirectUri: 'http://localhost:8081/m365/powrot', by: 'admin', loginName: 'alarmy@firma.pl', loginOid: null, addressManual: false }, T0);
 });
 
 type Reply = { status: number; body: unknown };
@@ -170,7 +170,7 @@ describe('M365Tokens.access', () => {
     const notifier = fakeNotifier();
     const tokens = new M365Tokens({ accounts, fetch: f, notifier });
     const pending = tokens.access(id, T0);
-    accounts.connected(id, { refreshToken: 'nowe-logowanie', address: 'alarmy@firma.pl', redirectUri: 'http://localhost:8081/m365/powrot', by: 'admin' }, T0);
+    accounts.connected(id, { refreshToken: 'nowe-logowanie', address: 'alarmy@firma.pl', redirectUri: 'http://localhost:8081/m365/powrot', by: 'admin', loginName: 'alarmy@firma.pl', loginOid: null, addressManual: false }, T0);
     release();
     await caught(pending);
     expect(accounts.get(id)!.state).toBe('connected');
