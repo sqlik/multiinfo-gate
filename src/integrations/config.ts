@@ -94,6 +94,9 @@ export const MAIL_IN_PASSWORD_REF = 'imap_password';
 export const MAIL_IN_INTERVALS = [30, 60, 120, 300, 900, 1800, 3600] as const;
 export type MailInInterval = (typeof MAIL_IN_INTERVALS)[number];
 export const MAIL_SECURITIES = ['tls', 'starttls', 'none'] as const;
+/** Dopuszczalne limity wieku maila w godzinach; brak limitu zapisuje się jako `null`. */
+export const MAIL_MAX_AGE_HOURS = [1, 6, 24] as const;
+export type MailMaxAgeHours = (typeof MAIL_MAX_AGE_HOURS)[number];
 export type MailSecurity = (typeof MAIL_SECURITIES)[number];
 
 /** Pozycja listy nadawców: pełny adres albo cała domena z wiodącą małpą. */
@@ -150,6 +153,8 @@ export const mailInConfigSchema = z.object({
     z.object({ action: z.literal('move'), folder: z.string().min(1).max(200) }),
   ]),
   reply: z.object({ enabled: z.boolean() }),
+  /** Mail przyjęty przez serwer wcześniej niż przed tyloma godzinami jest pomijany; brak pola w zapisie sprzed 1.10 oznacza brak limitu. */
+  maxAgeHours: z.union([z.literal(1), z.literal(6), z.literal(24)]).nullable().default(null),
 });
 export type MailInConfig = z.infer<typeof mailInConfigSchema>;
 
@@ -238,13 +243,14 @@ export const defaultOutboundConfig = (): OutboundConfig => ({
   events: ['message.received'], url: '', method: 'POST', headers: [], body: { mode: 'json', template: '' }, sign: false,
 });
 
-/** Wartości po bezpiecznej stronie: TLS, pusta lista nadawców (nikt), numery z maila i odpowiedzi wyłączone, mail zostaje w skrzynce. */
+/** Wartości po bezpiecznej stronie: TLS, pusta lista nadawców (nikt), numery z maila i odpowiedzi wyłączone, mail zostaje w skrzynce, maile starsze niż doba pomijane. */
 export const defaultMailInConfig = (): MailInConfig => ({
   condition: { mode: 'builder', rules: [] }, throttle: { limit: 10, windowMinutes: 10 }, eventLogLimit: 200,
   imap: { host: '', port: 993, security: 'tls', verifyCert: true, user: '', passRef: MAIL_IN_PASSWORD_REF, auth: { mode: 'password' } },
   folder: 'INBOX', intervalSec: 60, senders: [], requireAuthResults: false, authservId: '',
   recipientsFromMail: { enabled: false, where: 'subject' }, to: { fallback: [] }, clean: { cutFrom: [] }, fields: [],
   text: { mode: 'simple', variant: 'subject_text' }, maxParts: 1, overflow: 'truncate', after: { action: 'keep' }, reply: { enabled: false },
+  maxAgeHours: 24,
 });
 
 /** Wartości po bezpiecznej stronie: osobne listy, obie puste (nikt nie pisze), bez prefiksu, sama treść, bez potwierdzenia, jedna część i przycięcie. */

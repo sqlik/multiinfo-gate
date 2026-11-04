@@ -234,6 +234,13 @@ export class MailInPoller {
         note('skipped', 'wiadomość już przetworzona');
         continue;
       }
+      // Limit wieku (spec 6.6): stary alarm po przerwie nie wychodzi jako świeży SMS. Mail zostaje nieprzeczytany do wglądu,
+      // bez SMS-a, odpowiedzi i działania. Brak daty przyjęcia nie pomija maila, bo pominięcie byłoby ciche.
+      if (config.maxAgeHours !== null && meta.internalDate !== null && now.getTime() - meta.internalDate.getTime() > config.maxAgeHours * 3_600_000) {
+        mailIn.remember(integration.id, key, 'skipped', now);
+        note('skipped', `wiadomość starsza niż ${config.maxAgeHours} h`);
+        continue;
+      }
       if (meta.size > MAX_MAIL_BYTES) {
         mailIn.remember(integration.id, key, 'skipped', now);
         note('skipped', `wiadomość zbyt duża (${(meta.size / (1024 * 1024)).toFixed(1)} MB)`);

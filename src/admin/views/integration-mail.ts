@@ -1,4 +1,4 @@
-import { MAIL_IN_INTERVALS } from '../../integrations/config.ts';
+import { MAIL_IN_INTERVALS, MAIL_MAX_AGE_HOURS } from '../../integrations/config.ts';
 import type { M365State } from '../../store/m365-accounts.ts';
 import type { MailInPreview } from '../../integrations/pipeline.ts';
 import type { checkMailbox } from '../../worker/mail-in.ts';
@@ -47,8 +47,9 @@ function modeSwitch(ctx: FormContext, mode: 'prosty' | 'zaawansowany'): string {
   </div>`;
 }
 
-/** Pola wspólne obu sposobów logowania: folder, częstotliwość, zaległe i „Sprawdź połączenie”. */
+/** Pola wspólne obu sposobów logowania: folder, częstotliwość, limit wieku, zaległe i „Sprawdź połączenie”. */
 function mailboxCommon(v: MailFormValues): string {
+  const ages: Array<[MailFormValues['maxAgeHours'], string]> = [['', 'bez limitu'], ...MAIL_MAX_AGE_HOURS.map((h): [MailFormValues['maxAgeHours'], string] => [String(h) as MailFormValues['maxAgeHours'], `${h} h`])];
   return `<div class="field">
       <label for="folder">Folder</label>
       <input id="folder" name="folder" value="${esc(v.folder)}" placeholder="INBOX">
@@ -60,8 +61,13 @@ function mailboxCommon(v: MailFormValues): string {
       ${hint('SMS jest wysyłany natychmiast po odczytaniu wiadomości. Minimalna częstotliwość to 30 sekund, ponieważ dostawcy poczty blokują konta logujące się częściej')}
     </div>
     <div class="field">
+      <label for="maxAgeHours">Pomijaj wiadomości starsze niż</label>
+      <select id="maxAgeHours" name="maxAgeHours">${ages.map(([value, label]) => `<option value="${value}"${v.maxAgeHours === value ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>
+      ${hint('Ustawienie chroni przed wysłaniem nieaktualnych alarmów po przerwie w dostępie do skrzynki. Wiek jest liczony od chwili przyjęcia wiadomości przez serwer pocztowy. Starsza wiadomość zostaje w skrzynce nieprzeczytana i nie powoduje wysłania SMS-a. Dla alarmów zalecany jest limit 1 h, a dla zamówień i zgłoszeń wariant bez limitu')}
+    </div>
+    <div class="field">
       ${checkbox('backlog', v.backlog, 'Przetwórz także zaległe wiadomości nieprzeczytane')}
-      ${hint('Domyślnie bramka przetwarza wyłącznie wiadomości, które nadejdą po zapisaniu ustawień. Po zaznaczeniu przy najbliższym sprawdzeniu przetworzy także zaległe wiadomości nieprzeczytane, po 50 na jedno sprawdzenie. Przy dużej zaległości ochrona przed burzą zatrzyma wysyłkę na limicie integracji, a pozostałe wiadomości otrzymają w dzienniku wynik „limit”')}
+      ${hint('Domyślnie bramka przetwarza wyłącznie wiadomości, które nadejdą po zapisaniu ustawień. Po zaznaczeniu przy najbliższym sprawdzeniu przetworzy także zaległe wiadomości nieprzeczytane, po 50 na jedno sprawdzenie. Przy dużej zaległości ochrona przed burzą zatrzyma wysyłkę na limicie integracji, a pozostałe wiadomości otrzymają w dzienniku wynik „limit”. Ustawienie „Pomijaj wiadomości starsze niż” obowiązuje także dla zaległych wiadomości')}
     </div>
     <div class="field">
       <button class="btn btn-s" type="submit" name="action" value="polaczenie">Sprawdź połączenie</button>

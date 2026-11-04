@@ -59,6 +59,20 @@ describe('formularz skrzynki', () => {
     expect(JSON.stringify(h.audit.list(10, 0))).not.toContain('TajneHaslo9');
   });
 
+  it('pole „Pomijaj wiadomości starsze niż”: nowy formularz zaznacza 24 h, zapis przyjmuje wybór, a integracja bez limitu pokazuje „bez limitu”', async () => {
+    const form = (await get('/integracje/nowa?rodzaj=mail_in&ustawienie=poczta-wlasny')).body;
+    expect(form).toContain('<label for="maxAgeHours">Pomijaj wiadomości starsze niż</label>');
+    expect(form).toContain('<option value="24" selected>24 h</option>');
+    expect(form).toContain('Dla alarmów zalecany jest limit 1 h, a dla zamówień i zgłoszeń wariant bez limitu');
+    expect(form).toContain('Ustawienie „Pomijaj wiadomości starsze niż” obowiązuje także dla zaległych wiadomości');
+    expect((await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody({ maxAgeHours: '1' }) })).statusCode).toBe(302);
+    const row = h.integrations.list()[0]!;
+    expect(row.config).toMatchObject({ maxAgeHours: 1 });
+    expect((await post(`/integracje/${row.id}/edytuj`, formBody({ password: '', maxAgeHours: '' }))).statusCode).toBe(302);
+    expect(h.integrations.get(row.id)!.config).toMatchObject({ maxAgeHours: null });
+    expect((await get(`/integracje/${row.id}/edytuj`)).body).toContain('<option value="" selected>bez limitu</option>');
+  });
+
   it('błąd formularza wraca stroną z komunikatem i bez zapisu; hasło zostaje w polu, nie w komunikacie', async () => {
     const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody({ host: '' }) });
     expect(res.statusCode).toBe(400);
@@ -330,6 +344,7 @@ describe('skrzynka Microsoft 365', () => {
     expect(body).toContain(`<option value="${id}" selected>Dyżur IT · połączone</option>`);
     expect(body).toContain('name="user" value="alarmy@firma.pl"');
     expect(body).toContain('name="authMode" value="m365"');
+    expect(body).toContain('<option value="24" selected>24 h</option>');
   });
 
   it('zapis bez hasła wymusza serwer Microsoft 365 niezależnie od przesłanego serwera', async () => {

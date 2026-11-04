@@ -45,6 +45,16 @@ describe('mail_in', () => {
     expect([c.maxParts, c.overflow, c.after, c.reply]).toEqual([1, 'truncate', { action: 'keep' }, { enabled: false }]);
     expect([c.clean, c.fields, c.to]).toEqual([{ cutFrom: [] }, [], { fallback: [] }]);
     expect(c.throttle).toEqual({ limit: 10, windowMinutes: 10 });
+    expect(c.maxAgeHours).toBe(24);
+  });
+  it('skrzynka bez limitu wieku maila (zapis sprzed 1.10) wczytuje się bez limitu', () => {
+    const { maxAgeHours: _m, ...stara } = defaultMailInConfig() as Record<string, unknown>;
+    expect(parseConfig('mail_in', stara).maxAgeHours).toBeNull();
+  });
+  it('limit wieku maila przyjmuje wyłącznie 1, 6 albo 24 h albo brak limitu', () => {
+    const c = defaultMailInConfig();
+    for (const hours of [1, 6, 24, null]) expect(parseConfig('mail_in', { ...c, maxAgeHours: hours }).maxAgeHours).toBe(hours);
+    for (const hours of [0, 12, 48, '24']) expect(() => parseConfig('mail_in', { ...c, maxAgeHours: hours })).toThrow();
   });
   it('skrzynka bez sposobu logowania (zapis sprzed 1.10) wczytuje się z hasłem', () => {
     const c = defaultMailInConfig();

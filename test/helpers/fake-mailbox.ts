@@ -1,6 +1,7 @@
 import { MailboxError, type MailboxAuth, type MailboxConnect, type MailboxSession } from '../../src/integrations/mail/client.ts';
 
-export interface FakeMessage { uid: number; seen: boolean; source: string; folder: string; size: number }
+/** `internalDate` to data przyjęcia przez serwer (INTERNALDATE); `null` udaje serwer, który jej nie zwraca. */
+export interface FakeMessage { uid: number; seen: boolean; source: string; folder: string; size: number; internalDate: Date | null }
 
 /** Skrzynka w pamięci o kontrakcie `MailboxSession`; `move` zmienia folder wpisu bez zmiany UID. */
 export class FakeMailbox {
@@ -32,8 +33,8 @@ export class FakeMailbox {
     this.folderSet = new Set(opts.folders ?? ['INBOX']);
   }
 
-  add(m: { uid: number; seen: boolean; source: string; folder?: string; size?: number }): void {
-    this.items.push({ uid: m.uid, seen: m.seen, source: m.source, folder: m.folder ?? 'INBOX', size: m.size ?? Buffer.byteLength(m.source) });
+  add(m: { uid: number; seen: boolean; source: string; folder?: string; size?: number; internalDate?: Date | null }): void {
+    this.items.push({ uid: m.uid, seen: m.seen, source: m.source, folder: m.folder ?? 'INBOX', size: m.size ?? Buffer.byteLength(m.source), internalDate: m.internalDate ?? null });
     this.folderSet.add(m.folder ?? 'INBOX');
   }
 
@@ -75,7 +76,7 @@ export class FakeMailbox {
       meta: async (uids) => uids.map((uid) => {
         const m = need(uid);
         const id = /^Message-ID:\s*(<[^>]+>)/im.exec(m.source);
-        return { uid, size: m.size, messageId: id ? id[1]! : null };
+        return { uid, size: m.size, messageId: id ? id[1]! : null, internalDate: m.internalDate };
       }),
       source: async (uid) => {
         this.calls.push(`source:${uid}`);

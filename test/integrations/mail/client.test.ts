@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MailboxError, errorKindOf, errorMessageOf, guardedConnect, imapAuth, scrubError, selectableFolders, type MailboxSession, type MailboxSettings } from '../../../src/integrations/mail/client.ts';
+import { MailboxError, errorKindOf, errorMessageOf, guardedConnect, imapAuth, internalDateOf, scrubError, selectableFolders, type MailboxSession, type MailboxSettings } from '../../../src/integrations/mail/client.ts';
 import { PRIVATE_MAIL_MESSAGE } from '../../../src/net/private-address.ts';
 import { FakeMailbox, fakeConnect } from '../../helpers/fake-mailbox.ts';
 
@@ -66,14 +66,14 @@ describe('FakeMailbox', () => {
     const box = new FakeMailbox({ uidValidity: 7 });
     box.add({ uid: 1, seen: true, source: 'Subject: a\r\n\r\nx' });
     box.add({ uid: 2, seen: false, source: 'Message-ID: <b@x>\r\nSubject: b\r\n\r\ny' });
-    box.add({ uid: 3, seen: false, source: 'Subject: c\r\n\r\nz' });
+    box.add({ uid: 3, seen: false, source: 'Subject: c\r\n\r\nz', internalDate: new Date('2026-10-20T08:00:00Z') });
     const s = await fakeConnect(box)(settings, 1000);
     expect(await s.open('INBOX')).toEqual({ uidValidity: 7, uidNext: 4, unseen: 2 });
     expect(await s.unseen(1)).toEqual([2, 3]);
     expect(await s.unseen(0)).toEqual([2, 3]);
     expect(await s.unseen(3)).toEqual([]);
-    expect(await s.meta([2])).toEqual([{ uid: 2, size: expect.any(Number), messageId: '<b@x>' }]);
-    expect(await s.meta([3])).toEqual([{ uid: 3, size: expect.any(Number), messageId: null }]);
+    expect(await s.meta([2])).toEqual([{ uid: 2, size: expect.any(Number), messageId: '<b@x>', internalDate: null }]);
+    expect(await s.meta([3])).toEqual([{ uid: 3, size: expect.any(Number), messageId: null, internalDate: new Date('2026-10-20T08:00:00Z') }]);
     expect((await s.source(3)).toString()).toContain('Subject: c');
     await s.markSeen(2);
     expect(box.messages('INBOX').find((m) => m.uid === 2)?.seen).toBe(true);
@@ -107,6 +107,16 @@ describe('FakeMailbox', () => {
     await expect(s.move(5, 'X')).rejects.toMatchObject({ kind: 'folder' });
     box.resetUidValidity(8);
     expect(await s.open('INBOX')).toMatchObject({ uidValidity: 8 });
+  });
+});
+
+describe('internalDateOf', () => {
+  it('przyjmuje poprawną datę przyjęcia z imapflow, a napis, brak wartości i nieprawidłową datę zamienia na null', () => {
+    expect(internalDateOf(new Date('2026-10-20T08:00:00Z'))).toEqual(new Date('2026-10-20T08:00:00Z'));
+    // imapflow zwraca surowy napis, gdy nie potrafi odczytać daty z odpowiedzi serwera.
+    expect(internalDateOf('wczoraj rano')).toBeNull();
+    expect(internalDateOf(undefined)).toBeNull();
+    expect(internalDateOf(new Date('nie data'))).toBeNull();
   });
 });
 

@@ -463,6 +463,85 @@ describe('MailInPoller: powiadomienia i odpowiedzi', () => {
   });
 });
 
+describe('MailInPoller: limit wieku maila', () => {
+  const hoursAgo = (hours: number) => new Date(NOW.getTime() - hours * 3_600_000);
+  const smtp = () => notifications.saveSmtp({ host: 'smtp.przyklad.test', port: 465, security: 'tls', user: null, password: null, fromAddress: 'g@przyklad.test', fromName: 'G', recipients: ['admin@przyklad.test'], instanceName: 'mi', panelUrl: null }, NOW);
+
+  it('mail starszy niż limit: wpis w dzienniku, bez SMS-a, bez odpowiedzi, bez przeniesienia, mail zostaje nieprzeczytany', async () => {
+    const odp = make({ maxAgeHours: 24, after: { action: 'move', folder: 'Przetworzone' }, reply: { enabled: true } });
+    integrations.setEnabled(integ.id, false, NOW);
+    smtp();
+    await poller.tick(NOW);
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'Stary alarm', 'x', '<2@x>'), internalDate: hoursAgo(25) });
+    // Stary i zarazem zbyt duży: limit wieku działa przed rozmiarem, więc mail nie zostaje oznaczony jako przeczytany.
+    box.add({ uid: 3, seen: false, source: eml('jan@przyklad.test', 'Stary duży', 'x', '<3@x>'), internalDate: hoursAgo(30), size: MAX_MAIL_BYTES + 1 });
+    await poller.tick(at(60_000));
+    expect(smsCount()).toBe(0);
+    expect(events(odp.id)).toEqual([['skipped', 'wiadomość starsza niż 24 h'], ['skipped', 'wiadomość starsza niż 24 h']]);
+    expect(box.messages('INBOX').filter((m) => !m.seen).map((m) => m.uid)).toEqual([2, 3]);
+    expect(box.messages('Przetworzone')).toEqual([]);
+    expect(box.calls.filter((c) => /^(source|markSeen|move|remove):/.test(c))).toEqual([]);
+    expect(pendingJobs().filter((j) => j.type === 'mail' || j.type === 'mail.report')).toEqual([]);
+    expect(notified).toEqual([]);
+    expect(mailIn.outcomes(odp.id)).toEqual([{ uid: 2, outcome: 'skipped' }, { uid: 3, outcome: 'skipped' }]);
+    expect(mailIn.state(odp.id)).toMatchObject({ uidFloor: 3, error: null });
+    // Następne odpytanie nie wraca do pominiętych maili.
+    await poller.tick(at(120_000));
+    expect(events(odp.id)).toHaveLength(2);
+  });
+
+  it('mail sprzed 23 h przy limicie 24 h zostaje wysłany', async () => {
+    await poller.tick(NOW);
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'Alarm', 'x', '<2@x>'), internalDate: hoursAgo(23) });
+    await poller.tick(at(60_000));
+    expect(integ.config.maxAgeHours).toBe(24);
+    expect(smsCount()).toBe(1);
+  });
+
+  it('limit 1 h: mail sprzed 61 minut pominięty, sprzed 59 minut wysłany', async () => {
+    const odp = make({ maxAgeHours: 1 });
+    integrations.setEnabled(integ.id, false, NOW);
+    await poller.tick(NOW);
+    // Wiek liczony od chwili odpytania, a nie od pierwszego odpytania.
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'Stary', 'x', '<2@x>'), internalDate: at(60_000 - 61 * 60_000) });
+    box.add({ uid: 3, seen: false, source: eml('jan@przyklad.test', 'Świeży', 'y', '<3@x>'), internalDate: at(60_000 - 59 * 60_000) });
+    await poller.tick(at(60_000));
+    expect(deps.messages.list({ limit: 10, offset: 0 }).map((m) => m.body)).toEqual(['Świeży\ny']);
+    expect(events(odp.id)).toContainEqual(['skipped', 'wiadomość starsza niż 1 h']);
+  });
+
+  it('integracja zapisana przed 1.10 (bez pola limitu) przetwarza mail sprzed 3 dni', async () => {
+    db.prepare("UPDATE integrations SET config = json_remove(config, '$.maxAgeHours') WHERE id = ?").run(integ.id);
+    expect((integrations.get(integ.id) as MailInIntegration).config.maxAgeHours).toBeNull();
+    await poller.tick(NOW);
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'Alarm', 'x', '<2@x>'), internalDate: hoursAgo(72) });
+    await poller.tick(at(60_000));
+    expect(smsCount()).toBe(1);
+  });
+
+  it('mail bez daty przyjęcia przy limicie 1 h jest przetwarzany normalnie, nigdy nie znika po cichu', async () => {
+    const odp = make({ maxAgeHours: 1 });
+    integrations.setEnabled(integ.id, false, NOW);
+    await poller.tick(NOW);
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'Alarm', 'x', '<2@x>'), internalDate: null });
+    await poller.tick(at(60_000));
+    expect(smsCount()).toBe(1);
+    expect(mailIn.outcomes(odp.id)).toEqual([{ uid: 2, outcome: 'sent' }]);
+  });
+
+  it('jednorazowe przetworzenie zaległych też podlega limitowi', async () => {
+    box.add({ uid: 1, seen: false, source: eml('jan@przyklad.test', 'Stary', 'x', '<1@x>'), internalDate: hoursAgo(30) });
+    box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'Świeży', 'y', '<2@x>'), internalDate: hoursAgo(2) });
+    mailIn.ensureState(integ.id, NOW);
+    mailIn.setBacklog(integ.id, 1);
+    await poller.tick(NOW);
+    expect(deps.messages.list({ limit: 10, offset: 0 }).map((m) => m.body)).toEqual(['Świeży\ny']);
+    expect(events(integ.id)).toContainEqual(['skipped', 'wiadomość starsza niż 24 h']);
+    expect(box.messages('INBOX').find((m) => m.uid === 1)?.seen).toBe(false);
+    expect(mailIn.state(integ.id)).toMatchObject({ backlog: 0, uidFloor: 2 });
+  });
+});
+
 describe('MailInPoller: równoległość', () => {
   it('dwie skrzynki odpytywane równolegle, jedna wisząca nie blokuje drugiej; wisząca nie jest odpytana drugi raz', async () => {
     vi.useFakeTimers({ now: NOW });

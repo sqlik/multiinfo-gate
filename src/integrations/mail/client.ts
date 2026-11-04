@@ -13,7 +13,13 @@ export interface MailboxSettings {
   /** Rozwiązany adres IP, pod który idzie połączenie; `host` zostaje nazwą do TLS (SNI i certyfikat). */
   connectAddress?: string;
 }
-export interface MailMeta { uid: number; size: number; messageId: string | null }
+/** `internalDate`: chwila przyjęcia maila przez serwer (INTERNALDATE); `null`, gdy serwer jej nie podał albo jest nieczytelna. */
+export interface MailMeta { uid: number; size: number; messageId: string | null; internalDate: Date | null }
+
+/** Data przyjęcia z imapflow: poprawna data albo `null` (imapflow zwraca surowy napis, gdy nie umie odczytać daty). */
+export function internalDateOf(raw: Date | string | undefined): Date | null {
+  return raw instanceof Date && !Number.isNaN(raw.getTime()) ? raw : null;
+}
 
 /** Sesja ze skrzynką: wszystko, czego poller i „Sprawdź połączenie” potrzebują od IMAP. Testy podstawiają podróbkę. */
 export interface MailboxSession {
@@ -165,8 +171,8 @@ export const imapConnect: MailboxConnect = async (settings, timeoutMs) => {
     async meta(uids) {
       if (uids.length === 0) return [];
       const out: MailMeta[] = [];
-      for await (const m of client.fetch(uids.map(uidOf).join(','), { uid: true, size: true, envelope: true }, { uid: true })) {
-        out.push({ uid: m.uid, size: m.size ?? 0, messageId: m.envelope?.messageId ?? null });
+      for await (const m of client.fetch(uids.map(uidOf).join(','), { uid: true, size: true, envelope: true, internalDate: true }, { uid: true })) {
+        out.push({ uid: m.uid, size: m.size ?? 0, messageId: m.envelope?.messageId ?? null, internalDate: internalDateOf(m.internalDate) });
       }
       return out;
     },

@@ -1,4 +1,4 @@
-import { MAIL_IN_INTERVALS, MAIL_IN_PASSWORD_REF, MAIL_SECURITIES, parseConfig, type MailField, type MailInConfig, type MailInInterval, type MailSecurity } from '../integrations/config.ts';
+import { MAIL_IN_INTERVALS, MAIL_IN_PASSWORD_REF, MAIL_MAX_AGE_HOURS, MAIL_SECURITIES, parseConfig, type MailField, type MailInConfig, type MailInInterval, type MailMaxAgeHours, type MailSecurity } from '../integrations/config.ts';
 import { parseMail, type ParsedMail } from '../integrations/mail/parse.ts';
 import { M365_IMAP } from '../m365/oauth.ts';
 import type { TemplateEngine } from '../integrations/templates.ts';
@@ -18,6 +18,8 @@ export interface MailFormValues {
   /** Logowanie hasłem albo kontem Microsoft 365; w trybie `m365` pole `user` jest adresem skrzynki. */
   authMode: 'password' | 'm365'; m365AccountId: string;
   folder: string; intervalSec: string; backlog: boolean;
+  /** Limit wieku maila w godzinach; pusty napis oznacza brak limitu. */
+  maxAgeHours: '' | '1' | '6' | '24';
   /** Linia na pozycję: wzorzec, po dwukropku numery po przecinku. */
   senders: string;
   requireAuthResults: boolean;
@@ -45,6 +47,8 @@ const list = (field: string | string[] | undefined): string[] => (field === unde
 const lines = (raw: string): string[] => raw.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== '');
 const first = (field: string | string[] | undefined): string => (Array.isArray(field) ? field[0] ?? '' : field ?? '');
 const on = (field: string | string[] | undefined): boolean => ['1', 'on', 'true'].includes(first(field).trim());
+const AGE_VALUES = MAIL_MAX_AGE_HOURS.map(String);
+const ageValue = (raw: string): MailFormValues['maxAgeHours'] => (AGE_VALUES.includes(raw) ? raw as MailFormValues['maxAgeHours'] : '');
 
 export function mailFormValues(body: Body): MailFormValues {
   const s = (k: string) => first(body[k]).trim();
@@ -73,7 +77,7 @@ export function mailFormValues(body: Body): MailFormValues {
     host: s('host'), port: s('port'), security: (MAIL_SECURITIES as readonly string[]).includes(security) ? security as MailSecurity : 'tls',
     verifyCert: on(body.verifyCert), user: s('user'), password: first(body.password),
     authMode: s('authMode') === 'm365' ? 'm365' : 'password', m365AccountId: s('m365AccountId'),
-    folder: s('folder'), intervalSec: s('intervalSec'), backlog: on(body.backlog),
+    folder: s('folder'), intervalSec: s('intervalSec'), backlog: on(body.backlog), maxAgeHours: ageValue(s('maxAgeHours')),
     senders: first(body.senders), requireAuthResults: on(body.requireAuthResults), authservId: s('authservId'),
     recipientsFromMail: on(body.recipientsFromMail), recipientsWhere: s('recipientsWhere') === 'body' ? 'body' : 'subject', toFallback: first(body.toFallback),
     cutFrom: first(body.cutFrom),
@@ -101,7 +105,7 @@ export function mailConfigToValues(config: MailInConfig, base: MailFormBase): Ma
     authMode: config.imap.auth.mode,
     // Identyfikator 0 w ustawieniu „Microsoft 365” oznacza konto jeszcze niewybrane.
     m365AccountId: config.imap.auth.mode === 'm365' && config.imap.auth.accountId > 0 ? String(config.imap.auth.accountId) : '',
-    folder: config.folder, intervalSec: String(config.intervalSec), backlog: false,
+    folder: config.folder, intervalSec: String(config.intervalSec), backlog: false, maxAgeHours: config.maxAgeHours === null ? '' : ageValue(String(config.maxAgeHours)),
     senders: config.senders.map((s) => (s.recipients.length > 0 ? `${s.pattern}: ${s.recipients.join(', ')}` : s.pattern)).join('\n'),
     requireAuthResults: config.requireAuthResults, authservId: config.authservId,
     recipientsFromMail: config.recipientsFromMail.enabled, recipientsWhere: config.recipientsFromMail.where, toFallback: config.to.fallback.join('\n'),
@@ -242,6 +246,7 @@ export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine
     folder: v.folder, intervalSec: interval as MailInInterval, senders, requireAuthResults: v.requireAuthResults, authservId,
     recipientsFromMail: { enabled: v.recipientsFromMail, where: v.recipientsWhere }, to: { fallback }, clean: { cutFrom }, fields, text,
     maxParts, overflow: v.overflow, after, reply: { enabled: v.replyEnabled },
+    maxAgeHours: v.maxAgeHours === '' ? null : Number(v.maxAgeHours) as MailMaxAgeHours,
   };
   // Schemat zod jako siatka bezpieczeństwa: to, co przeszło wyżej, ma przejść i tu.
   try {

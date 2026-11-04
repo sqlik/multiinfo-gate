@@ -35,7 +35,7 @@ describe('mailConfigToValues i mailFormToConfig', () => {
       clean: { cutFrom: ['Wygenerowano automatycznie'] },
       fields: [{ name: 'kod', mode: 'between' as const, after: 'Error code:', until: '(' }, { name: 'stan', mode: 'regex' as const, pattern: 'Status: (\\w+)', flags: 'i' }],
       text: { mode: 'liquid' as const, template: '{{ fields.stan }}' }, maxParts: 3, overflow: 'reject' as const,
-      after: { action: 'move' as const, folder: 'Przetworzone' }, reply: { enabled: true },
+      after: { action: 'move' as const, folder: 'Przetworzone' }, reply: { enabled: true }, maxAgeHours: 6 as const,
       condition: { mode: 'builder' as const, rules: [{ path: 'subject', op: 'contains' as const, value: 'UPS' }] },
     };
     const values = mailConfigToValues(config, base);
@@ -50,6 +50,22 @@ describe('mailConfigToValues i mailFormToConfig', () => {
     expect(back.ok && back.password).toBeNull();
     expect(needsAdvanced(config)).toBe(true);
     expect(needsAdvanced(defaultMailInConfig())).toBe(false);
+  });
+
+  it('limit wieku maila: nowy formularz zaznacza 24 h, pusta wartość oznacza brak limitu', () => {
+    expect(mailConfigToValues(defaultMailInConfig(), base).maxAgeHours).toBe('24');
+    expect(mailConfigToValues({ ...defaultMailInConfig(), maxAgeHours: null }, base).maxAgeHours).toBe('');
+    for (const [value, hours] of [['', null], ['1', 1], ['6', 6], ['24', 24]] as const) {
+      const r = mailFormToConfig({ ...v(), maxAgeHours: value }, false, engine);
+      expect(r.ok && r.config.maxAgeHours).toBe(hours);
+      expect(mailConfigToValues(r.ok ? r.config : defaultMailInConfig(), base).maxAgeHours).toBe(value);
+    }
+  });
+
+  it('limit wieku maila z przeglądarki: wartość z listy zostaje, inna albo brak pola oznacza brak limitu', () => {
+    expect(mailFormValues({ maxAgeHours: '6' }).maxAgeHours).toBe('6');
+    expect(mailFormValues({ maxAgeHours: '12' }).maxAgeHours).toBe('');
+    expect(mailFormValues({}).maxAgeHours).toBe('');
   });
 
   it('lista nadawców: jedna pozycja na linię, numery po dwukropku rozdzielone przecinkami', () => {
