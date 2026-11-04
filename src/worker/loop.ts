@@ -74,7 +74,7 @@ export class Worker {
   }
 
   /**
-   * Tura utrzymaniowa raz na minutę: maile z kolejki powiadomień, skaner stanu, sprzątanie
+   * Tura utrzymaniowa raz na minutę: maile i SMS-y z kolejki powiadomień, skaner stanu, sprzątanie
    * idempotencji, ładunków i starych powiadomień. Każdy krok w osobnym try/catch - błąd
    * sprzątania nie może zatrzymać wysyłki.
    */
@@ -82,6 +82,7 @@ export class Worker {
     const log = this.deps.log ?? silentLogger;
     const steps: Array<[string, () => unknown]> = [
       ['powiadomienia', () => this.deps.notifier?.flush?.(now)],
+      ['powiadomienia_sms', () => this.deps.notifier?.flushSms?.(now)],
       ['skaner', () => this.deps.scanner?.scan(now)],
       ['wydania', () => { void this.deps.releases?.check(now); }],
       ['idempotencja', () => this.deps.guards?.pruneDedupBefore(new Date(now.getTime() - DAY_MS))],

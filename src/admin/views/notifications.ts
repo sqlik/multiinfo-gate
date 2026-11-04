@@ -1,4 +1,4 @@
-import { eventDescription, eventLabel, type NotificationEvent } from '../../notifications/rules.ts';
+import { eventDescription, eventLabel, SMS_ONLY_EVENTS, type NotificationEvent } from '../../notifications/rules.ts';
 import type { M365State } from '../../store/m365-accounts.ts';
 import type { RuleRow, SmsNotifySettings, SmtpAuthMode, SmtpSecurity, SmtpSettings } from '../../store/notifications.ts';
 import { M365_STATE_WORDS } from './integration-mail.ts';
@@ -159,6 +159,8 @@ function paramsCell(rule: RuleRow, raw: Record<string, string> | null | undefine
       return cell(`<input class="cell" name="afterMinutes_mailbox_failure" type="number" min="1" max="1440" value="${val('afterMinutes_mailbox_failure', String(rule.params.afterMinutes ?? 15))}"${disabled}>`, 'po ilu minutach niepowodzeń, odrzucone logowanie natychmiast');
     case 'daily_summary':
       return cell(`<input class="cell" name="hour_daily_summary" type="number" min="0" max="23" value="${val('hour_daily_summary', String(rule.params.hour ?? 8))}"${disabled}>`, 'o której godzinie');
+    case 'mail_undeliverable':
+      return '<span class="dim" style="font-size: 12px;">powiadomienie wyłącznie SMS-em</span>';
     default:
       return '<span class="dim">-</span>';
   }
@@ -168,16 +170,22 @@ function rulesTable(rules: RuleRow[], enabled: boolean, raw: Record<string, stri
   const disabled = enabled ? '' : ' disabled';
   const rows = rules.map((r) => {
     const on = raw ? raw[`enabled_${r.event}`] === '1' : r.enabled === 1;
+    const sms = raw ? raw[`sms_${r.event}`] === '1' : r.sms === 1;
     const per = raw?.[`maxPerHour_${r.event}`] ?? String(r.maxPerHour);
     const group = raw?.[`groupHours_${r.event}`] ?? String(r.groupHours);
+    // Grupowanie dotyczy wyłącznie maili, a zdarzenia tylko SMS-owe maili nie wysyłają.
+    const groupCell = SMS_ONLY_EVENTS.includes(r.event)
+      ? '<span class="dim">-</span>'
+      : `<input class="cell" name="groupHours_${esc(r.event)}" type="number" min="0" max="24" value="${esc(group)}"${disabled}>`;
     return `<tr>
       <td>
         <strong>${esc(eventLabel(r.event as NotificationEvent))}</strong>
         <div class="dim" style="font-size: 11.5px; margin-top: 2px;">${esc(eventDescription(r.event as NotificationEvent))}</div>
       </td>
       <td><input type="checkbox" name="enabled_${esc(r.event)}" value="1"${on ? ' checked' : ''}${disabled}></td>
+      <td><input type="checkbox" name="sms_${esc(r.event)}" value="1"${sms ? ' checked' : ''}${disabled}></td>
       <td><input class="cell" name="maxPerHour_${esc(r.event)}" type="number" min="1" max="100" value="${esc(per)}"${disabled}></td>
-      <td><input class="cell" name="groupHours_${esc(r.event)}" type="number" min="0" max="24" value="${esc(group)}"${disabled}></td>
+      <td>${groupCell}</td>
       <td><div class="inline" style="align-items: center; gap: 10px;">${paramsCell(r, raw, disabled)}</div></td>
     </tr>`;
   }).join('');
@@ -185,6 +193,7 @@ function rulesTable(rules: RuleRow[], enabled: boolean, raw: Record<string, stri
       <tr>
         <th style="width: 250px;">Zdarzenie</th>
         <th style="width: 90px;">Włączone</th>
+        <th style="width: 70px;">SMS</th>
         <th style="width: 140px;">Maks. na godzinę</th>
         <th style="width: 140px;">Grupuj co (h)</th>
         <th style="min-width: 340px;">Parametry</th>
@@ -198,6 +207,8 @@ export function notificationsPage(d: NotificationsPageData): string {
   const smtpError = d.error?.which === 'smtp' ? `<div class="warn">${esc(d.error.text)}</div>` : '';
   const rulesError = d.error?.which === 'rules' ? `<div class="warn">${esc(d.error.text)}</div>` : '';
   const configured = d.smtp !== null;
+  // Kanał SMS działa bez SMTP, więc reguły można ustawić przy dowolnym z dwóch kanałów.
+  const rulesEditable = configured || d.sms?.enabled === true;
   return `<div class="head">
     <div>
       <h1 class="h1">Powiadomienia</h1>
@@ -286,14 +297,18 @@ ${d.tab === 'sms' ? `      ${smsPanel(d)}` : d.tab === 'konfiguracja' ? `      <
           </div>
         </form>
         <form id="smtp-test" method="post" action="/powiadomienia/smtp/test"></form>
-      </div>` : `      <div class="panel${configured ? '' : ' dim'}" style="max-width: 1180px;">
-        ${configured ? '' : '<div class="warn">Reguły wymagają skonfigurowanego serwera SMTP. Konfiguracja znajduje się w zakładce Konfiguracja.</div>'}
+      </div>` : `      <div class="panel${rulesEditable ? '' : ' dim'}" style="max-width: 1250px;">
+        ${rulesEditable ? '' : '<div class="warn">Reguły wymagają skonfigurowanego serwera SMTP albo włączonego kanału SMS. Konfiguracja znajduje się w zakładkach Konfiguracja i SMS.</div>'}
         ${rulesError}
         <form method="post" action="/powiadomienia/reguly">
-          ${rulesTable(d.rules, configured, d.ruleValues)}
-          <div class="bar" style="padding: 12px 16px;">
-            <button class="btn btn-p" type="submit"${configured ? '' : ' disabled'}>Zapisz reguły</button>
-            <span class="hint dim" style="font-size: 11.5px;">Grupowanie 0 oznacza osobny mail dla każdego zdarzenia, do limitu na godzinę. Zdarzenia ponad limit są zliczane i podawane w następnym mailu</span>
+          ${rulesTable(d.rules, rulesEditable, d.ruleValues)}
+          <div class="bar" style="padding: 12px 16px; align-items: flex-start;">
+            <button class="btn btn-p" type="submit"${rulesEditable ? '' : ' disabled'}>Zapisz reguły</button>
+            <div class="hint dim" style="font-size: 11.5px; margin: 0;">
+              <div>Grupowanie 0 oznacza osobny mail dla każdego zdarzenia, do limitu na godzinę. Zdarzenia ponad limit są zliczane i podawane w następnym mailu</div>
+              <div>Zaznaczone pole SMS powoduje wysłanie powiadomienia także SMS-em na numery z zakładki SMS. Limit na godzinę obejmuje również SMS-y. Bramka wysyła najwyżej 10 SMS-ów powiadomień na dobę. SMS-y o koncie Microsoft 365 wymagającym logowania i o niewysłanym mailu korzystają z osobnej puli 5 na dobę</div>
+              ${d.sms?.enabled === true ? '' : '<div>Kanał SMS jest wyłączony, dlatego zaznaczone pola SMS nie powodują wysyłki</div>'}
+            </div>
           </div>
         </form>
       </div>`}

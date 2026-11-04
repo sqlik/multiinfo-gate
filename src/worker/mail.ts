@@ -81,6 +81,13 @@ export async function mailerSettings(
   return { ...settings, ...M365_SMTP, user: access.address || account.address || settings.user, password: null, accessToken: access.token };
 }
 
+/** SMTP działa przez konto Microsoft 365, które czeka na pierwsze albo ponowne logowanie. */
+function smtpAccountDown(settings: SmtpSettings, deps: WorkerDeps): boolean {
+  if (settings.authMode !== 'm365' || settings.m365AccountId === null) return false;
+  const state = deps.m365?.accounts.get(settings.m365AccountId)?.state;
+  return state === 'new' || state === 'needs_login';
+}
+
 /** Lista adresów z ładunku zadania: tablica napisów albo jeden napis; reszta to pusta lista. */
 function addressList(value: unknown): string[] {
   if (typeof value === 'string') return value.trim() === '' ? [] : [value.trim()];
@@ -114,6 +121,10 @@ export async function handleMail(job: Job, deps: WorkerDeps, now: Date): Promise
     if (delay === undefined) {
       deps.jobs.fail(job.id, reason);
       log.error('mail.porzucony', { jobId: job.id, error: e });
+      // Potwierdzenie zwrotne do nadawcy nie jest powiadomieniem. Przy zerwanym koncie SMTP przyczynę zgłosił już m365_disconnected.
+      if (to.length === 0 && !smtpAccountDown(settings, deps)) {
+        deps.notifier?.notify('mail_undeliverable', 'smtp', `Mail „${mail.subject}” niewysłany po ${job.attempts + 1} próbach: ${reason}`, now);
+      }
       return;
     }
     deps.jobs.retry(job.id, new Date(now.getTime() + delay), reason);

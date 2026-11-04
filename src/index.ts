@@ -16,7 +16,8 @@ import { createLogger, type Logger } from './log.ts';
 import { nodeUpdateNeeded, plainVersion } from './runtime/node-version.ts';
 import { problemUrl } from './docs-links.ts';
 import { systemResolver } from './net/private-address.ts';
-import { Notifier } from './notifications/notifier.ts';
+import { Notifier, subjectNamer } from './notifications/notifier.ts';
+import { sendNotificationSms } from './notifications/sms.ts';
 import { NotificationScanner } from './notifications/scanner.ts';
 import { pendingRelease, ReleaseChecker } from './releases/check.ts';
 import { AccountsRepo } from './store/accounts.ts';
@@ -144,8 +145,12 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const engine = new TemplateEngine();
   const notifications = new NotificationsRepo(db, config.masterKey);
   const settings = new SettingsRepo(db);
-  const notifier = new Notifier({ notifications, jobs, log });
   const m365Accounts = new M365AccountsRepo(db, config.masterKey);
+  const notifier = new Notifier({
+    notifications, jobs, log,
+    sms: (text, now) => sendNotificationSms({ accounts, apiKeys, messages, events, jobs, inbound, notifications }, text, now),
+    subjectName: subjectNamer({ integrations, accounts, m365Accounts }),
+  });
   const m365Tokens = new M365Tokens({ accounts: m365Accounts, fetch: fetchToken, notifier, log });
   const m365 = new M365Service({ accounts: m365Accounts, tokens: m365Tokens, fetch: fetchToken, integrations, notifications, audit });
   const scanner = new NotificationScanner({

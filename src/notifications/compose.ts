@@ -91,3 +91,17 @@ export function composeTest(s: Settings, now: Date): Mail {
       'Otrzymanie tej wiadomości potwierdza poprawność ustawień SMTP.', ...footer(s, 'daily_summary')].join('\n'),
   };
 }
+
+/** Adres e-mail w nazwie: SMS opuszcza infrastrukturę klienta, więc adresy z niego znikają (spec 8.3). */
+const EMAIL_LIKE = /[^\s@]*@[^\s@]*/g;
+const clean = (value: string | null): string => (value ?? '').replace(EMAIL_LIKE, ' ').replace(/\s+/g, ' ').trim();
+
+/**
+ * Treść SMS-a powiadomienia: instancja, etykieta zdarzenia i nazwa tematu (integracji albo konta), bez
+ * streszczenia, adresów e-mail i treści błędów. Przycięcie do jednej części GSM-7 wykonuje kanał SMS.
+ */
+export function composeSms(instanceName: string | null, event: NotificationEvent, subject: string): string {
+  const instance = clean(instanceName);
+  const topic = clean(subject);
+  return `Multiinfo Gate${instance === '' ? '' : ` ${instance}`}: ${eventLabel(event)}${topic === '' ? '' : ` - ${topic}`}. Szczegóły w panelu.`;
+}

@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { keyUsable } from '../../api/submit.ts';
 import { M365_SMTP } from '../../m365/oauth.ts';
-import { NOTIFICATION_EVENTS, type NotificationEvent } from '../../notifications/rules.ts';
+import { NOTIFICATION_EVENTS, SMS_ONLY_EVENTS, type NotificationEvent } from '../../notifications/rules.ts';
 import { sendNotificationSms } from '../../notifications/sms.ts';
 import type { RulePatch, SmtpSecurity } from '../../store/notifications.ts';
 import { InvalidPhoneError, normalizePhone } from '../../text/phone.ts';
@@ -265,13 +265,16 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps
       reply.code(400);
       return pageBody(request, 'reguly', { error: { which: 'rules', text }, ruleValues: raw });
     };
-    if (deps.notifications.smtp() === null) return fail('Najpierw skonfiguruj SMTP.');
+    if (deps.notifications.smtp() === null && deps.notifications.smsSettings()?.enabled !== true) {
+      return fail('Najpierw skonfiguruj SMTP albo włącz kanał SMS.');
+    }
 
     const patches = new Map<NotificationEvent, RulePatch>();
     for (const event of NOTIFICATION_EVENTS) {
       const current = deps.notifications.rule(event);
       const maxPerHour = intIn(raw[`maxPerHour_${event}`], 1, 100, current.maxPerHour);
-      const groupHours = intIn(raw[`groupHours_${event}`], 0, 24, current.groupHours);
+      // Zdarzenie tylko SMS-owe nie wysyła maili, więc formularz nie zawiera dla niego grupowania.
+      const groupHours = SMS_ONLY_EVENTS.includes(event) ? current.groupHours : intIn(raw[`groupHours_${event}`], 0, 24, current.groupHours);
       if (maxPerHour === null) return fail(`${event}: „maks. na godzinę” to liczba od 1 do 100.`);
       if (groupHours === null) return fail(`${event}: „grupuj co” to liczba godzin od 0 do 24.`);
       let params: Record<string, unknown> = current.params;
@@ -292,14 +295,14 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps
         if (hour === null) return fail('Podsumowanie dzienne: godzina od 0 do 23.');
         params = { hour };
       }
-      patches.set(event, { enabled: raw[`enabled_${event}`] === '1' ? 1 : 0, maxPerHour, groupHours, params });
+      patches.set(event, { enabled: raw[`enabled_${event}`] === '1' ? 1 : 0, maxPerHour, groupHours, params, sms: raw[`sms_${event}`] === '1' ? 1 : 0 });
     }
 
     const changed: string[] = [];
     for (const [event, patch] of patches) {
       const before = deps.notifications.rule(event);
-      if (JSON.stringify({ e: before.enabled, m: before.maxPerHour, g: before.groupHours, p: before.params })
-        !== JSON.stringify({ e: patch.enabled, m: patch.maxPerHour, g: patch.groupHours, p: patch.params })) changed.push(event);
+      if (JSON.stringify({ e: before.enabled, m: before.maxPerHour, g: before.groupHours, p: before.params, s: before.sms })
+        !== JSON.stringify({ e: patch.enabled, m: patch.maxPerHour, g: patch.groupHours, p: patch.params, s: patch.sms })) changed.push(event);
       deps.notifications.saveRule(event, patch);
     }
     deps.audit.record({

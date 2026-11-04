@@ -100,17 +100,23 @@ export class NotificationScanner {
     }
   }
 
-  /** Raz dziennie o zadanej godzinie w czasie polskim; od razu jako zadanie `mail`, bez grupowania. */
+  /**
+   * Raz dziennie o zadanej godzinie w czasie polskim; od razu jako zadanie `mail`, bez grupowania.
+   * Przełącznik SMS reguły dodaje krótki SMS przez kanał SMS, także bez skonfigurowanego SMTP.
+   */
   private dailySummary(now: Date): void {
     const rule = this.deps.notifications.rule('daily_summary');
     if (rule.enabled === 0) return;
     const settings = this.deps.notifications.smtp();
-    if (!settings) return;
+    const sms = rule.sms === 1 && this.deps.notifications.smsSettings()?.enabled === true;
+    if (!settings && !sms) return;
     const iso = now.toISOString();
     if (Number(warsawStamp(iso).slice(11, 13)) !== numberOr(rule.params.hour, 8)) return;
     const day = warsawDay(iso);
-    const id = this.deps.notifications.enqueue({ event: 'daily_summary', at: now, dedupKey: `daily:${day}`, summary: `Podsumowanie dzienne ${day}` });
-    if (id === null) return;
+    const id = this.deps.notifications.enqueue({
+      event: 'daily_summary', at: now, dedupKey: `daily:${day}`, summary: `Podsumowanie dzienne ${day}`, mail: settings !== null, sms,
+    });
+    if (id === null || !settings) return;
     const since = new Date(now.getTime() - DAY_MS);
     const mail = composeDaily(settings, {
       day,

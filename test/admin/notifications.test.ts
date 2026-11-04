@@ -150,6 +150,48 @@ describe('POST /powiadomienia/reguly', () => {
     expect(JSON.stringify(entry!.meta)).toContain('integration_error');
   });
 
+  it('kolumna SMS: przełącznik w każdej regule, domyślnie włączony dla zerwanego konta i niewysłanego maila', async () => {
+    await post('/powiadomienia/smtp', smtpFields());
+    const body = (await page('reguly')).body;
+    expect(body).toMatch(/<th[^>]*>SMS<\/th>/);
+    expect(body).toMatch(/name="sms_integration_error" value="1"(?! checked)/);
+    expect(body).toMatch(/name="sms_m365_disconnected" value="1" checked/);
+    expect(body).toMatch(/name="sms_mail_undeliverable" value="1" checked/);
+    expect(body).toMatch(/name="sms_daily_summary"/);
+    // Niewysłany mail idzie wyłącznie SMS-em, więc wiersz nie zawiera ustawienia grupowania maili.
+    expect(body).not.toContain('name="groupHours_mail_undeliverable"');
+    expect(body).toContain('name="groupHours_m365_disconnected"');
+  });
+
+  it('zapisuje przełączniki SMS, a dziennik zdarzeń odnotowuje regułę ze zmienionym SMS-em', async () => {
+    await post('/powiadomienia/smtp', smtpFields());
+    const res = await post('/powiadomienia/reguly', {
+      enabled_integration_error: '1', maxPerHour_integration_error: '5', groupHours_integration_error: '1', sms_integration_error: '1',
+      enabled_m365_disconnected: '1', maxPerHour_m365_disconnected: '5', groupHours_m365_disconnected: '0',
+      enabled_mail_undeliverable: '1', maxPerHour_mail_undeliverable: '1', sms_mail_undeliverable: '1',
+      days_certificate_expiring: '30, 14, 7, 1', hour_daily_summary: '8',
+    });
+    expect(res.statusCode).toBe(302);
+    const rules = new Map(h.notifications.rules().map((r) => [r.event, r]));
+    expect(rules.get('integration_error')).toMatchObject({ enabled: 1, sms: 1 });
+    expect(rules.get('m365_disconnected')).toMatchObject({ enabled: 1, sms: 0 });
+    expect(rules.get('mail_undeliverable')).toMatchObject({ enabled: 1, sms: 1, groupHours: 0 });
+    const entry = h.audit.list(10, 0).find((e) => e.action === 'powiadomienia.reguly');
+    expect(JSON.stringify(entry!.meta)).toContain('integration_error');
+    expect(JSON.stringify(entry!.meta)).toContain('m365_disconnected');
+    expect(JSON.stringify(entry!.meta)).not.toContain('mail_undeliverable');
+  });
+
+  it('bez SMTP, przy włączonym kanale SMS reguły można edytować i zapisać', async () => {
+    h.notifications.saveSmsSettings({ enabled: true, recipients: ['48601000001'], apiKeyId: null, orig: null }, NOW);
+    const body = (await page('reguly')).body;
+    expect(body).not.toContain('Reguły wymagają');
+    expect(body).not.toMatch(/name="enabled_integration_error"[^>]*disabled/);
+    const res = await post('/powiadomienia/reguly', { enabled_integration_error: '1', sms_integration_error: '1', days_certificate_expiring: '30', hour_daily_summary: '8' });
+    expect(res.statusCode).toBe(302);
+    expect(h.notifications.rule('integration_error').sms).toBe(1);
+  });
+
   it('odrzuca dni spoza zakresu i godzinę spoza doby', async () => {
     await post('/powiadomienia/smtp', smtpFields());
     const bad = await post('/powiadomienia/reguly', { days_certificate_expiring: 'abc', hour_daily_summary: '8' });

@@ -47,7 +47,7 @@ export interface WorkerDeps {
   integrations?: IntegrationsRepo;
   integrationEvents?: IntegrationEventsRepo;
   /** Powiadomienia administratora; `flush` woła tura utrzymaniowa. */
-  notifier?: AdminNotifier & { flush?(now: Date): void };
+  notifier?: AdminNotifier & { flush?(now: Date): void; flushSms?(now: Date): void };
   /** Sprawdzanie nowych wydań na GitHubie; bez niego bramka nie pyta. */
   releases?: { check(now: Date): Promise<void> | void };
   /** Ustawienie SMTP i kolejka powiadomień - zadanie `mail` i sprzątanie. */

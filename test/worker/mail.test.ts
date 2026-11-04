@@ -169,6 +169,74 @@ describe('handleMail przez konto Microsoft 365', () => {
   });
 });
 
+describe('handleMail - niewysłany mail z powiadomieniem', () => {
+  let notify: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    notify = vi.fn();
+    deps = { ...deps, notifier: { notify } } as unknown as WorkerDeps;
+    mailer.mockRejectedValue(new Error('421 Service not available'));
+  });
+  const last = (payload: Record<string, unknown>) => {
+    jobs.enqueue('mail', payload, NOW);
+    const claimed = jobs.claim(NOW, 1)[0]!;
+    return { ...claimed, attempts: MAIL_BACKOFF_MS.length };
+  };
+
+  it('porzucony mail do administratora zgłasza mail_undeliverable', async () => {
+    smtp();
+    await handleMail(last({ subject: '[Multiinfo Gate mi] Błąd integracji', text: 'x' }), deps, NOW);
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith('mail_undeliverable', 'smtp', expect.stringContaining('Błąd integracji'), NOW);
+  });
+
+  it('ponowienie nie zgłasza niczego', async () => {
+    smtp();
+    await handleMail(job(), deps, NOW);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('porzucone potwierdzenie zwrotne do nadawcy maila nie zgłasza niczego', async () => {
+    smtp();
+    await handleMail(last({ subject: 'Re: Awaria', text: 'SMS wysłany', to: ['jan@przyklad.test'] }), deps, NOW);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('SMTP przez konto Microsoft 365 wymagające logowania albo nowe: przyczynę zgłasza m365_disconnected', async () => {
+    const create = () => m365Accounts.create({ name: 'Dyżur IT', tenant: 'firma.onmicrosoft.com', clientId: '11111111-2222-3333-4444-555555555555' }, NOW);
+    const save = (id: number) => notifications.saveSmtp({
+      host: 'smtp.office365.com', port: 587, security: 'starttls', user: null, password: null, fromAddress: 'alarmy@firma.pl', fromName: 'Multiinfo Gate',
+      recipients: ['admin@firma.pl'], instanceName: 'mi', panelUrl: null, authMode: 'm365', m365AccountId: id,
+    }, NOW);
+    deps = { ...deps, m365: { tokens: { access: vi.fn() }, accounts: m365Accounts } } as unknown as WorkerDeps;
+    const id = create();
+    m365Accounts.connected(id, {
+      refreshToken: 'token-odswiezania-0', address: 'alarmy@firma.pl', addressManual: false, loginName: 'alarmy@firma.pl', loginOid: null,
+      redirectUri: 'http://localhost:8081/m365/powrot', by: 'janek',
+    }, NOW);
+    m365Accounts.failed(id, { state: 'needs_login', code: '70000', message: 'x' }, NOW);
+    save(id);
+    await handleMail(last({ subject: 'a', text: 'b' }), deps, NOW);
+    save(create());
+    await handleMail(last({ subject: 'a', text: 'b' }), deps, NOW);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('SMTP przez sprawne konto Microsoft 365: odmowa serwera zgłasza mail_undeliverable', async () => {
+    const id = m365Accounts.create({ name: 'Dyżur IT', tenant: 'firma.onmicrosoft.com', clientId: '11111111-2222-3333-4444-555555555555' }, NOW);
+    m365Accounts.connected(id, {
+      refreshToken: 'token-odswiezania-0', address: 'alarmy@firma.pl', addressManual: false, loginName: 'alarmy@firma.pl', loginOid: null,
+      redirectUri: 'http://localhost:8081/m365/powrot', by: 'janek',
+    }, NOW);
+    notifications.saveSmtp({
+      host: 'smtp.office365.com', port: 587, security: 'starttls', user: null, password: null, fromAddress: 'alarmy@firma.pl', fromName: 'Multiinfo Gate',
+      recipients: ['admin@firma.pl'], instanceName: 'mi', panelUrl: null, authMode: 'm365', m365AccountId: id,
+    }, NOW);
+    deps = { ...deps, m365: { tokens: { access: vi.fn().mockResolvedValue({ token: 't', address: 'alarmy@firma.pl' }) }, accounts: m365Accounts } } as unknown as WorkerDeps;
+    await handleMail(last({ subject: 'a', text: 'b' }), deps, NOW);
+    expect(notify).toHaveBeenCalledWith('mail_undeliverable', 'smtp', expect.any(String), NOW);
+  });
+});
+
 describe('nodemailerMailer', () => {
   const base = {
     host: 'smtp.example', port: 465, security: 'tls' as const, user: 'gate', fromAddress: 'gate@example', fromName: 'Multiinfo Gate',
