@@ -122,6 +122,11 @@ export const mailInConfigSchema = z.object({
     verifyCert: z.boolean(),
     user: z.string().max(254),
     passRef: z.literal(MAIL_IN_PASSWORD_REF),
+    /** Logowanie hasłem albo kontem Microsoft 365; brak pola w zapisie sprzed 1.10 oznacza hasło. */
+    auth: z.discriminatedUnion('mode', [
+      z.object({ mode: z.literal('password') }),
+      z.object({ mode: z.literal('m365'), accountId: z.number().int().positive() }),
+    ]).default({ mode: 'password' }),
   }),
   folder: z.string().min(1).max(200),
   intervalSec: z.number().int().refine((n): n is MailInInterval => (MAIL_IN_INTERVALS as readonly number[]).includes(n), 'częstotliwość spoza listy'),
@@ -236,7 +241,7 @@ export const defaultOutboundConfig = (): OutboundConfig => ({
 /** Wartości po bezpiecznej stronie: TLS, pusta lista nadawców (nikt), numery z maila i odpowiedzi wyłączone, mail zostaje w skrzynce. */
 export const defaultMailInConfig = (): MailInConfig => ({
   condition: { mode: 'builder', rules: [] }, throttle: { limit: 10, windowMinutes: 10 }, eventLogLimit: 200,
-  imap: { host: '', port: 993, security: 'tls', verifyCert: true, user: '', passRef: MAIL_IN_PASSWORD_REF },
+  imap: { host: '', port: 993, security: 'tls', verifyCert: true, user: '', passRef: MAIL_IN_PASSWORD_REF, auth: { mode: 'password' } },
   folder: 'INBOX', intervalSec: 60, senders: [], requireAuthResults: false, authservId: '',
   recipientsFromMail: { enabled: false, where: 'subject' }, to: { fallback: [] }, clean: { cutFrom: [] }, fields: [],
   text: { mode: 'simple', variant: 'subject_text' }, maxParts: 1, overflow: 'truncate', after: { action: 'keep' }, reply: { enabled: false },

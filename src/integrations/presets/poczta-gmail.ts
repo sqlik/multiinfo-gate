@@ -7,7 +7,7 @@ export const pocztaGmail: Preset = {
   blurb: 'Skrzynka Gmail albo Google Workspace z hasłem aplikacji',
   kinds: ['mail_in'],
   fields: [],
-  mailIn: { imap: { host: 'imap.gmail.com', port: 993, security: 'tls', verifyCert: true, user: '', passRef: 'imap_password' } },
+  mailIn: { imap: { host: 'imap.gmail.com', port: 993, security: 'tls', verifyCert: true, user: '', passRef: 'imap_password', auth: { mode: 'password' } } },
   guide: `Do logowania bramka wymaga **hasła aplikacji**, nie hasła do konta Google. Hasło aplikacji jest dostępne po włączeniu weryfikacji dwuetapowej.
 
 1. Otwórz **Konto Google**, zakładkę **Bezpieczeństwo**.

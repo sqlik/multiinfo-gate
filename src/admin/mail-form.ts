@@ -209,7 +209,7 @@ export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine
 
   let config: MailInConfig = {
     ...common,
-    imap: { host: v.host, port, security: v.security, verifyCert: v.verifyCert, user: v.user, passRef: MAIL_IN_PASSWORD_REF },
+    imap: { host: v.host, port, security: v.security, verifyCert: v.verifyCert, user: v.user, passRef: MAIL_IN_PASSWORD_REF, auth: { mode: 'password' } },
     folder: v.folder, intervalSec: interval as MailInInterval, senders, requireAuthResults: v.requireAuthResults, authservId,
     recipientsFromMail: { enabled: v.recipientsFromMail, where: v.recipientsWhere }, to: { fallback }, clean: { cutFrom }, fields, text,
     maxParts, overflow: v.overflow, after, reply: { enabled: v.replyEnabled },

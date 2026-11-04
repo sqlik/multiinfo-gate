@@ -28,7 +28,7 @@ describe('mailConfigToValues i mailFormToConfig', () => {
   it('konfiguracja pełna przechodzi w obie strony bez strat', () => {
     const config = {
       ...defaultMailInConfig(),
-      imap: { host: 'h', port: 143, security: 'starttls' as const, verifyCert: false, user: 'u', passRef: 'imap_password' as const },
+      imap: { host: 'h', port: 143, security: 'starttls' as const, verifyCert: false, user: 'u', passRef: 'imap_password' as const, auth: { mode: 'password' as const } },
       folder: 'Alarmy', intervalSec: 300 as const,
       senders: [{ pattern: 'jan@przyklad.pl', recipients: ['601000001', '601000002'] }, { pattern: '@przyklad.pl', recipients: [] }],
       requireAuthResults: true, recipientsFromMail: { enabled: true, where: 'body' as const }, to: { fallback: ['48601000009'] },

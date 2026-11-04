@@ -38,13 +38,24 @@ describe('parseConfig', () => {
 describe('mail_in', () => {
   it('domyślna konfiguracja przechodzi przez schemat i ma bezpieczne wartości', () => {
     const c = parseConfig('mail_in', defaultMailInConfig());
-    expect(c.imap).toEqual({ host: '', port: 993, security: 'tls', verifyCert: true, user: '', passRef: 'imap_password' });
+    expect(c.imap).toEqual({ host: '', port: 993, security: 'tls', verifyCert: true, user: '', passRef: 'imap_password', auth: { mode: 'password' } });
     expect([c.folder, c.intervalSec, c.senders, c.requireAuthResults]).toEqual(['INBOX', 60, [], false]);
     expect(c.recipientsFromMail).toEqual({ enabled: false, where: 'subject' });
     expect(c.text).toEqual({ mode: 'simple', variant: 'subject_text' });
     expect([c.maxParts, c.overflow, c.after, c.reply]).toEqual([1, 'truncate', { action: 'keep' }, { enabled: false }]);
     expect([c.clean, c.fields, c.to]).toEqual([{ cutFrom: [] }, [], { fallback: [] }]);
     expect(c.throttle).toEqual({ limit: 10, windowMinutes: 10 });
+  });
+  it('skrzynka bez sposobu logowania (zapis sprzed 1.10) wczytuje się z hasłem', () => {
+    const c = defaultMailInConfig();
+    const { auth: _a, ...imap } = c.imap;
+    expect(parseConfig('mail_in', { ...c, imap }).imap.auth).toEqual({ mode: 'password' });
+  });
+  it('logowanie kontem Microsoft 365 wymaga dodatniego identyfikatora konta', () => {
+    const c = defaultMailInConfig();
+    expect(parseConfig('mail_in', { ...c, imap: { ...c.imap, auth: { mode: 'm365', accountId: 3 } } }).imap.auth).toEqual({ mode: 'm365', accountId: 3 });
+    expect(() => parseConfig('mail_in', { ...c, imap: { ...c.imap, auth: { mode: 'm365', accountId: 0 } } })).toThrow();
+    expect(() => parseConfig('mail_in', { ...c, imap: { ...c.imap, auth: { mode: 'm365' } } })).toThrow();
   });
   it('odrzuca częstotliwość spoza listy, port poza zakresem i nadawcę bez małpy', () => {
     const base = defaultMailInConfig();

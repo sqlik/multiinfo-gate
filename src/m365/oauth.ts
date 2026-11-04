@@ -138,7 +138,7 @@ function rejection(status: number, body: Record<string, unknown>): M365AuthError
 }
 
 /** Opis Microsoftu bez identyfikatorów śledzenia, w jednym wierszu, przycięty. */
-function cleanDescription(d: string): string {
+export function cleanDescription(d: string): string {
   const cut = d.search(/\s*(?:Trace ID|Correlation ID|Timestamp):/);
   const text = (cut === -1 ? d : d.slice(0, cut)).replace(/\s+/g, ' ').trim();
   return text.length > MAX_MESSAGE ? `${text.slice(0, MAX_MESSAGE)}…` : text;

@@ -7,7 +7,7 @@ export const pocztaHome: Preset = {
   blurb: 'Skrzynka na hostingu home.pl, hasło skrzynki',
   kinds: ['mail_in'],
   fields: [],
-  mailIn: { imap: { host: '', port: 993, security: 'tls', verifyCert: true, user: '', passRef: 'imap_password' } },
+  mailIn: { imap: { host: '', port: 993, security: 'tls', verifyCert: true, user: '', passRef: 'imap_password', auth: { mode: 'password' } } },
   guide: `home.pl nie ma jednego wspólnego adresu serwera poczty. Każdy serwer ma własną nazwę w postaci \`serwerNNNNNN.home.pl\`.
 
 1. Zaloguj się do **Panelu klienta** home.pl i otwórz sekcję **Poczta**.
