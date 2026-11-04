@@ -215,6 +215,14 @@ describe('MessagesRepo - wątek z wiadomością przychodzącą', () => {
     expect(repo.lastTo(accountId, '24138', '48601000001', new Date('2026-08-30T00:00:00Z'))).toBeUndefined();
   });
 
+  it('lastTo pomija wiadomości systemowe, więc odpowiedź administratora na powiadomienie nie wskazuje ich w webhooku', () => {
+    const { messages: repo, accountId, apiKeyId } = setup();
+    const base = { accountId, apiKeyId, dest: '48601000001' };
+    repo.insert(messageInput({ ...base, id: 'msg_a', createdAt: '2026-08-28T10:00:00.000Z' }));
+    repo.insert({ ...messageInput({ ...base, id: 'msg_sys', createdAt: '2026-08-29T10:00:00.000Z' }), system: 1 });
+    expect(repo.lastTo(accountId, '24138', '48601000001', new Date('2026-08-22T00:00:00Z'))?.id).toBe('msg_a');
+  });
+
   it('zapisuje inReplyTo i wylicza odpowiedzi', () => {
     const { db, messages: repo, accountId, apiKeyId } = setup();
     db.prepare("INSERT INTO inbound_messages (id, account_id, service_id, mi_id, sender, dest, kind, body_hash, protocol_id, coding_scheme, received_at, created_at) VALUES ('in_1', ?, '24138', '22', '48601000001', '7968', 'text', 'h', 0, 0, '2026-08-29T07:14:00.000Z', '2026-08-29T07:14:02.000Z')").run(accountId);

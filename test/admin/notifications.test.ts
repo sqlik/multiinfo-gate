@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { startAdminHarness, type AdminHarness } from '../helpers/admin-app.ts';
+import { seedAccount, startAdminHarness, type AdminHarness } from '../helpers/admin-app.ts';
 
 const NOW = new Date('2026-11-04T10:00:00Z');
 
@@ -257,5 +257,99 @@ describe('SMTP przez konto Microsoft 365', () => {
     const shown = (await page()).body;
     expect(shown).toContain('flash-fail');
     expect(shown).toContain('Konto Microsoft 365 wymaga logowania');
+  });
+});
+
+describe('kanał SMS powiadomień', () => {
+  // Zegar harnessu: 2026-08-25T10:00:00Z.
+  const key = (name: string, over: Record<string, unknown> = {}): number => h.apiKeys.insert({
+    accountId: seedAccount(h, { name: `Konto ${name}`, login: `login_${name.length}`, origs: ['Firma Info', 'Dyzur IT'] }), name, keyHash: `argon2:${name}`,
+    keyPrefix: name.slice(0, 8), defaultServiceId: '24138', defaultOrig: null, maxParts: 5, ratePerMin: 60,
+    webhookUrl: null, webhookSecret: null, serviceIds: ['24138'], origs: ['Dyzur IT'], ...over,
+  });
+  const smsFields = (apiKeyId: number, over: Record<string, string> = {}): Record<string, string> => ({
+    enabled: '1', recipients: '601 000 001\n+48 601 000 002', apiKeyId: String(apiKeyId), orig: '', ...over,
+  });
+  const smsPage = () => h.app.inject({ method: 'GET', url: '/powiadomienia?zakladka=sms', headers: { cookie: h.cookie } });
+
+  it('zakładka SMS: klucze czynne, także „Tylko integracje”, z datą ważności, bez wygasłych i odwołanych', async () => {
+    const normal = key('Dyżur IT');
+    const only = key('Tylko integracje', { integrationsOnly: 1, expiresAt: '2026-12-31T22:59:59.999Z' });
+    key('Wygasły klucz', { expiresAt: '2026-08-01T00:00:00.000Z' });
+    const revoked = key('Odwołany klucz');
+    h.apiKeys.revoke(revoked);
+    const body = (await smsPage()).body;
+    expect(body).toContain('href="/powiadomienia?zakladka=sms"');
+    expect(body).toContain('name="recipients"');
+    expect(body).toContain(`<option value="${normal}"`);
+    expect(body).toContain(`<option value="${only}"`);
+    expect(body).not.toContain('Wygasły klucz');
+    expect(body).not.toContain('Odwołany klucz');
+    expect(body).toContain('ważny do 2026-12-31');
+    expect(body).toContain('<option value="Dyzur IT"');
+  });
+
+  it('zapis normalizuje numery, zapisuje klucz i nadpis, a dziennik zdarzeń nie zawiera numerów', async () => {
+    const id = key('Dyżur IT');
+    const res = await post('/powiadomienia/sms', smsFields(id, { orig: 'Dyzur IT' }));
+    expect(res.statusCode).toBe(302);
+    expect(h.notifications.smsSettings()).toMatchObject({ enabled: true, recipients: ['48601000001', '48601000002'], apiKeyId: id, orig: 'Dyzur IT' });
+    const entry = h.audit.list(10, 0).find((e) => e.action === 'powiadomienia.sms');
+    expect(entry).toBeTruthy();
+    expect(JSON.stringify(entry)).not.toContain('48601000001');
+    const shown = (await smsPage()).body;
+    expect(shown).toContain('48601000001');
+  });
+
+  it('kanał bez numerów nie zapisuje się jako włączony', async () => {
+    const id = key('Dyżur IT');
+    const res = await post('/powiadomienia/sms', smsFields(id, { recipients: '' }));
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('przynajmniej jednego numeru');
+    expect(h.notifications.smsSettings()).toBeNull();
+    await post('/powiadomienia/sms', smsFields(id, { recipients: '', enabled: '' }));
+    expect(h.notifications.smsSettings()!.enabled).toBe(false);
+  });
+
+  it('odrzuca więcej niż 5 numerów, numer błędny, brak klucza i nadpis spoza klucza', async () => {
+    const id = key('Dyżur IT');
+    const six = ['601000001', '601000002', '601000003', '601000004', '601000005', '601000006'].join('\n');
+    expect((await post('/powiadomienia/sms', smsFields(id, { recipients: six }))).statusCode).toBe(400);
+    expect((await post('/powiadomienia/sms', smsFields(id, { recipients: 'abc' }))).statusCode).toBe(400);
+    expect((await post('/powiadomienia/sms', smsFields(id, { apiKeyId: '' }))).statusCode).toBe(400);
+    expect((await post('/powiadomienia/sms', smsFields(id, { orig: 'Obcy' }))).statusCode).toBe(400);
+    expect(h.notifications.smsSettings()).toBeNull();
+  });
+
+  it('SMS testowy bez skonfigurowanego SMTP tworzy wiadomość systemową i pokazuje wynik', async () => {
+    const id = key('Dyżur IT');
+    await post('/powiadomienia/sms', smsFields(id));
+    const res = await post('/powiadomienia/sms/test', {});
+    expect(res.statusCode).toBe(302);
+    const rows = h.messages.list({ includeSystem: true, limit: 10, offset: 0 });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ system: 1, requestedBy: 'Powiadomienie bramki', encoding: 'gsm', parts: 1, apiKeyId: id });
+    expect((await smsPage()).body).toContain('flash-ok');
+    expect(h.audit.list(10, 0).some((e) => e.action === 'powiadomienia.sms.test')).toBe(true);
+  });
+
+  it('kanał z kluczem wygasłym: SMS testowy niewysłany z powodem i pasek na przeglądzie', async () => {
+    const id = key('Dyżur IT', { expiresAt: '2026-08-01T00:00:00.000Z' });
+    h.notifications.saveSmsSettings({ enabled: true, recipients: ['48601000001'], apiKeyId: id, orig: null }, new Date());
+    await post('/powiadomienia/sms/test', {});
+    expect(h.messages.list({ includeSystem: true, limit: 10, offset: 0 })).toEqual([]);
+    const shown = (await smsPage()).body;
+    expect(shown).toContain('flash-fail');
+    expect(shown).toContain('wygasł');
+    const overview = (await h.app.inject({ method: 'GET', url: '/przeglad', headers: { cookie: h.cookie } })).body;
+    expect(overview).toContain('Powiadomienia SMS nie działają: klucz wygasł');
+    expect(overview).toContain('href="/powiadomienia?zakladka=sms"');
+  });
+
+  it('wyłączony kanał z kluczem wygasłym nie wyświetla paska', async () => {
+    const id = key('Dyżur IT', { expiresAt: '2026-08-01T00:00:00.000Z' });
+    h.notifications.saveSmsSettings({ enabled: false, recipients: ['48601000001'], apiKeyId: id, orig: null }, new Date());
+    const overview = (await h.app.inject({ method: 'GET', url: '/przeglad', headers: { cookie: h.cookie } })).body;
+    expect(overview).not.toContain('Powiadomienia SMS nie działają');
   });
 });

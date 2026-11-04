@@ -291,6 +291,27 @@ describe('handleSend', () => {
     expect(deps.integrationEmit.integrationEvents.list(integrationId, 5)[0]).toMatchObject({ result: 'sent', messageId: id });
   });
 
+  it('wiadomość systemowa nie kolejkuje webhooka klucza ani dostawy integracji wychodzącej', async () => {
+    deps.apiKeys.setWebhook(apiKeyId, 'https://crm.example/hook', 'sekret');
+    const integrations = new IntegrationsRepo(db, masterKey);
+    integrations.insert({
+      name: 'Slack', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1,
+      config: { ...defaultOutboundConfig(), url: 'https://hooks.slack.example/x', events: ['message.sent', 'message.failed'], body: { mode: 'json', template: '{"text": "{{ status }}"}' } },
+      secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    deps.integrationEmit = { integrations, integrationEvents: new IntegrationEventsRepo(db, masterKey), guards: new IntegrationGuardsRepo(db), deliveries: deps.deliveries, jobs: deps.jobs, engine: new TemplateEngine() };
+    deps.messages.insert({
+      id: 'msg_sys', apiKeyId, accountId, serviceId: '24138', dest: '48601000001', body: 'Multiinfo Gate: SMS testowy', bodyHash: 'h',
+      encoding: 'gsm', parts: 1, slots: 27, orig: null, costCenter: null, validTo: null, idempotencyKey: null, requestedBy: 'Powiadomienie bramki', system: 1,
+    });
+    const jobId = deps.jobs.enqueue('send', { messageId: 'msg_sys', text: 'Multiinfo Gate: SMS testowy', deliveryReport: true }, NOW);
+    sendLong.mockResolvedValue({ miIds: ['8841207'], trace: TRACE });
+    await handleSend({ id: jobId, type: 'send', payload: { messageId: 'msg_sys', text: 'Multiinfo Gate: SMS testowy', deliveryReport: true }, attempts: 0, lastError: null }, deps, NOW);
+    expect(deps.messages.get('msg_sys')!.status).toBe('sent');
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
+    expect(deps.events.list('msg_sys').map((e) => e.kind)).toEqual(['sent']);
+  });
+
   it('nie kolejkuje webhooka dla klucza bez adresu', async () => {
     const { id, job } = seedMessage();
     sendLong.mockResolvedValue({ miIds: ['8841207'], trace: TRACE });

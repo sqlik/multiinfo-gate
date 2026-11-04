@@ -26,6 +26,8 @@ export interface OverviewData {
   node?: { installed: string; minimum: string } | null;
   /** Konta Microsoft 365 wymagające ponownego logowania, po jednym pasku na konto. */
   m365NeedsLogin?: Array<{ id: number; name: string }>;
+  /** Włączony kanał SMS powiadomień wskazuje klucz, który wygasł. */
+  smsKeyExpired?: boolean;
 }
 
 /** „1 integracja zgłosiła błąd”, „3 integracje zgłosiły błąd”, „5 integracji zgłosiło błąd”. */
@@ -77,6 +79,16 @@ function alerts(data: OverviewData, now: Date): string {
           Wymagana jest wersja ${esc(data.node.minimum)} lub nowsza.</div>
       </div>
       <a href="${problemUrl('wersja-node')}" target="_blank" rel="noopener noreferrer">Jak zaktualizować</a>
+    </div>`);
+  }
+
+  if (data.smsKeyExpired) {
+    items.push(`<div class="alert stop">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="sq"></div>
+        <div>Powiadomienia SMS nie działają: klucz wygasł. Kanał SMS wymaga wskazania czynnego klucza API.
+          <a href="/powiadomienia?zakladka=sms">Ustawienia kanału SMS</a></div>
+      </div>
     </div>`);
   }
 

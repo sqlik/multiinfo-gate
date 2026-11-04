@@ -5,6 +5,7 @@ import { overviewPage } from '../views/overview.ts';
 import { WINDOW_MS } from '../window.ts';
 import { pendingRelease } from '../../releases/check.ts';
 import { nodeUpdateNeeded, plainVersion } from '../../runtime/node-version.ts';
+import { keyUsable } from '../../api/submit.ts';
 
 /** Ile ostatnich niepowodzeń pokazujemy na przeglądzie. */
 const FAILURES_SHOWN = 8;
@@ -18,6 +19,9 @@ export function registerOverviewRoutes(app: FastifyInstance, deps: AdminDeps, re
     const since = new Date(at.getTime() - WINDOW_MS);
     const nodeVersion = deps.nodeVersion ?? process.version;
     const nodeMinimum = nodeUpdateNeeded(nodeVersion);
+    // Włączony kanał SMS z kluczem, którym nie można już wysyłać: odwołanie blokuje panel, więc zostaje wygaśnięcie.
+    const sms = deps.notifications.smsSettings();
+    const smsKey = sms?.enabled && sms.apiKeyId !== null ? deps.apiKeys.get(sms.apiKeyId) : undefined;
 
     return render.page(request, {
       title: 'Przegląd',
@@ -34,6 +38,7 @@ export function registerOverviewRoutes(app: FastifyInstance, deps: AdminDeps, re
         release: pendingRelease(deps.settings),
         node: nodeMinimum === null ? null : { installed: plainVersion(nodeVersion), minimum: nodeMinimum },
         m365NeedsLogin: (deps.m365Accounts?.list() ?? []).filter((a) => a.state === 'needs_login').map((a) => ({ id: a.id, name: a.name })),
+        smsKeyExpired: smsKey !== undefined && !keyUsable(smsKey, at).ok,
       }, at),
     });
   });

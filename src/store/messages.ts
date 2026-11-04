@@ -156,12 +156,13 @@ export class MessagesRepo {
 
   /**
    * Ostatnia wiadomość wysłana z tej usługi na ten numer w oknie czasu - podpowiedź dla
-   * aplikacji, na co abonent odpowiada. Multiinfo tego nie mówi.
+   * aplikacji, na co abonent odpowiada. Multiinfo tego nie mówi. Wiadomości systemowe odpadają,
+   * bo ich identyfikator trafiłby do webhooka aplikacji.
    */
   lastTo(accountId: number, serviceId: string, dest: string, since: Date): MessageRow | undefined {
     const row = this.db
       .prepare(
-        `SELECT * FROM messages WHERE account_id = ? AND service_id = ? AND dest = ? AND created_at >= ?
+        `SELECT * FROM messages WHERE account_id = ? AND service_id = ? AND dest = ? AND created_at >= ? AND system = 0
           ORDER BY created_at DESC, id DESC LIMIT 1`,
       )
       .get(accountId, serviceId, dest, since.toISOString()) as RawMessage | undefined;

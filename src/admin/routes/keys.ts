@@ -299,6 +299,13 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
         + 'Najpierw wyłącz te integracje albo przenieś je na inny klucz, potem odwołaj klucz.');
       return reply.redirect('/klucze', 302);
     }
+    // Kanał SMS powiadomień na odwołanym kluczu przestałby wysyłać bez ostrzeżenia (spec 8.1).
+    const sms = deps.notifications.smsSettings();
+    if (sms?.enabled && sms.apiKeyId === id) {
+      render.flash(request, 'warn', `Klucz ${key.name} jest używany przez kanał powiadomień SMS. `
+        + 'Najpierw wskaż w kanale inny klucz albo wyłącz kanał, potem odwołaj klucz.');
+      return reply.redirect('/klucze', 302);
+    }
 
     deps.apiKeys.revoke(id);
     // Odwołany subskrybent może gasić odbiór usługi.

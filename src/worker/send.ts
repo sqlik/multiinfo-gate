@@ -70,11 +70,14 @@ export interface WorkerDeps {
 /**
  * Kolejkuje webhook klucza i odnotowuje to w przebiegu wiadomości, jeśli klucz ma adres; do tego
  * dostawy do integracji wychodzących klucza. Oba tory niezależne - klucz może mieć jedno i drugie.
+ * Wiadomość systemowa (kanał SMS powiadomień) nie trafia do żadnego z nich: numery administratorów
+ * i treść powiadomień nie należą do aplikacji klienta.
  */
 export function notify(
-  deps: WorkerDeps, message: { id: string; apiKeyId: number; inReplyTo?: string | null }, event: WebhookEvent,
+  deps: WorkerDeps, message: { id: string; apiKeyId: number; inReplyTo?: string | null; system?: 0 | 1 }, event: WebhookEvent,
   payload: Record<string, unknown>, now: Date,
 ): void {
+  if (message.system === 1) return;
   const thread = message.inReplyTo ? { inReplyTo: message.inReplyTo } : {};
   const body = { id: message.id, ...thread, ...payload };
   if (emitWebhook(deps, message.apiKeyId, event, body, now) !== null) {

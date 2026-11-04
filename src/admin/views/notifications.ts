@@ -1,8 +1,8 @@
 import { eventDescription, eventLabel, type NotificationEvent } from '../../notifications/rules.ts';
 import type { M365State } from '../../store/m365-accounts.ts';
-import type { RuleRow, SmtpAuthMode, SmtpSecurity, SmtpSettings } from '../../store/notifications.ts';
+import type { RuleRow, SmsNotifySettings, SmtpAuthMode, SmtpSecurity, SmtpSettings } from '../../store/notifications.ts';
 import { M365_STATE_WORDS } from './integration-mail.ts';
-import { radio } from './integrations.ts';
+import { checkbox, radio } from './integrations.ts';
 import { esc } from './layout.ts';
 
 /** Pola formularza SMTP w postaci tekstowej - jak przychodzą z przeglądarki i wracają po błędzie. */
@@ -30,7 +30,19 @@ export function smtpValuesOf(s: SmtpSettings): SmtpFormValues {
   };
 }
 
-export type NotificationsTab = 'konfiguracja' | 'reguly';
+/** Pola formularza kanału SMS w postaci tekstowej. */
+export interface SmsFormValues { enabled: boolean; recipients: string; apiKeyId: string; orig: string }
+
+export const EMPTY_SMS: SmsFormValues = { enabled: false, recipients: '', apiKeyId: '', orig: '' };
+
+export function smsValuesOf(s: SmsNotifySettings): SmsFormValues {
+  return { enabled: s.enabled, recipients: s.recipients.join('\n'), apiKeyId: s.apiKeyId === null ? '' : String(s.apiKeyId), orig: s.orig ?? '' };
+}
+
+/** Klucz do wyboru w kanale SMS; `expired` tylko dla klucza zapisanego wcześniej, który wygasł. */
+export interface SmsKeyOption { id: number; name: string; accountName: string; expiresOn: string | null; origs: string[]; expired?: boolean }
+
+export type NotificationsTab = 'konfiguracja' | 'reguly' | 'sms';
 
 export interface NotificationsPageData {
   /** Zakładka: konfiguracja SMTP albo reguły; formularz i tabela nie mieszczą się obok siebie. */
@@ -39,7 +51,11 @@ export interface NotificationsPageData {
   smtpValues: SmtpFormValues;
   rules: RuleRow[];
   /** Błąd jednego z formularzy; `which` mówi, pod którym go pokazać. */
-  error?: { which: 'smtp' | 'rules'; text: string } | null;
+  error?: { which: 'smtp' | 'rules' | 'sms'; text: string } | null;
+  /** Kanał SMS powiadomień: zapisane ustawienia, wartości formularza i klucze do wyboru. */
+  sms?: SmsNotifySettings | null;
+  smsValues?: SmsFormValues;
+  smsKeys?: SmsKeyOption[];
   /** Wartości reguł do ponownego narysowania po błędzie (surowe pola). */
   ruleValues?: Record<string, string> | null;
   /** Konta Microsoft 365 do wyboru przy logowaniu kontem organizacji. */
@@ -72,6 +88,59 @@ function m365AccountField(v: SmtpFormValues, accounts: NonNullable<Notifications
     ? '<div class="hint">Konto, przez które bramka wysyła powiadomienia. Konta dodaje się i loguje na ekranie Konta Microsoft 365</div>'
     : '<div class="hint">Żadne z kont nie jest połączone, dlatego wysyłka zacznie działać po zalogowaniu konta na ekranie <a href="/microsoft-365">Konta Microsoft 365</a></div>'}
           </div>`;
+}
+
+/** Zakładka SMS: numery administratorów i klucz, w imieniu którego bramka wysyła powiadomienia (spec 8.1). */
+function smsPanel(d: NotificationsPageData): string {
+  const v = d.smsValues ?? EMPTY_SMS;
+  const keys = d.smsKeys ?? [];
+  const error = d.error?.which === 'sms' ? `<div class="warn">${esc(d.error.text)}</div>` : '';
+  const keyLabel = (k: SmsKeyOption) => `${k.name} · ${k.accountName}${k.expiresOn ? ` · ważny do ${k.expiresOn}` : ''}${k.expired ? ' · wygasł' : ''}`;
+  const chosen = keys.find((k) => String(k.id) === v.apiKeyId);
+  const origs = [...new Set(keys.flatMap((k) => k.origs))].sort();
+  const expiry = chosen?.expired
+    ? `<div class="warn">Klucz ${esc(chosen.name)} wygasł, dlatego kanał nie wysyła powiadomień. Wskaż czynny klucz API</div>`
+    : chosen?.expiresOn
+      ? `<div class="hint">Wybrany klucz jest ważny do ${esc(chosen.expiresOn)}. Po tej dacie kanał przestaje wysyłać powiadomienia, a przegląd wyświetla ostrzeżenie</div>`
+      : '';
+  return `<div class="panel" style="max-width: 760px;">
+        <div class="panel-h"><div class="lab">Kanał SMS</div>
+          ${d.sms ? `<span class="m dim">zapisano ${esc(d.sms.updatedAt.slice(0, 10))}</span>` : '<span class="dim">nieskonfigurowany</span>'}</div>
+        ${error}
+        <form class="form" method="post" action="/powiadomienia/sms">
+          <div class="field">
+            ${checkbox('enabled', v.enabled, 'Wysyłaj powiadomienia SMS')}
+            <div class="hint">Kanał SMS działa niezależnie od serwera SMTP, dlatego informuje także o awarii poczty</div>
+          </div>
+          <div class="field">
+            <label for="smsRecipients">Numery</label>
+            <textarea id="smsRecipients" name="recipients" rows="3" placeholder="48601000123">${esc(v.recipients)}</textarea>
+            <div class="hint">Jeden numer w wierszu, najwyżej 5. Numer bez numeru kierunkowego kraju otrzymuje numer kierunkowy z konta Multiinfo wybranego klucza</div>
+          </div>
+          <div class="field">
+            <label for="smsKey">Klucz API</label>
+            <select id="smsKey" name="apiKeyId">
+              <option value="">wybierz klucz</option>
+              ${keys.map((k) => `<option value="${esc(k.id)}"${String(k.id) === v.apiKeyId ? ' selected' : ''}>${esc(keyLabel(k))}</option>`).join('')}
+            </select>
+            <div class="hint">Bramka wysyła powiadomienia SMS w imieniu klucza, czyli z jego konta Multiinfo, usługi, limitów i nadpisu. Lista wiadomości oznacza te SMS-y jako „powiadomienie bramki”. Aplikacje klienta nie otrzymują ich przez API, webhook klucza ani integracje</div>
+            ${expiry}
+          </div>
+          <div class="field">
+            <label for="smsOrig">Nadpis nadawcy</label>
+            <select id="smsOrig" name="orig">
+              <option value="">domyślny klucza</option>
+              ${origs.map((o) => `<option value="${esc(o)}"${v.orig === o ? ' selected' : ''}>${esc(o)}</option>`).join('')}
+            </select>
+            <div class="hint">Musi być jednym z nadpisów wybranego klucza</div>
+          </div>
+          <div class="bar">
+            <button class="btn btn-p" type="submit">Zapisz kanał SMS</button>
+            <button class="btn btn-s" type="submit" form="sms-test"${d.sms ? '' : ' disabled'}>Wyślij SMS testowy</button>
+          </div>
+        </form>
+        <form id="sms-test" method="post" action="/powiadomienia/sms/test"></form>
+      </div>`;
 }
 
 const numbersText = (value: unknown): string => (Array.isArray(value) ? value.map((x) => String(x)).join(', ') : '');
@@ -132,7 +201,7 @@ export function notificationsPage(d: NotificationsPageData): string {
   return `<div class="head">
     <div>
       <h1 class="h1">Powiadomienia</h1>
-      <p class="sub">Maile do administratora o błędach integracji, certyfikatach, kontach i odbiorze</p>
+      <p class="sub">Maile i SMS-y do administratora o błędach integracji, certyfikatach, kontach i odbiorze</p>
     </div>
   </div>
   <div class="scroll">
@@ -140,10 +209,13 @@ export function notificationsPage(d: NotificationsPageData): string {
       <div class="seg">
         <a href="/powiadomienia"${d.tab === 'konfiguracja' ? ' class="on"' : ''}>Konfiguracja</a>
         <a href="/powiadomienia?zakladka=reguly"${d.tab === 'reguly' ? ' class="on"' : ''}>Reguły</a>
+        <a href="/powiadomienia?zakladka=sms"${d.tab === 'sms' ? ' class="on"' : ''}>SMS</a>
       </div>
-      <span class="dim" style="font-size: 12px;">${d.tab === 'konfiguracja' ? 'Serwer SMTP, nadawca i odbiorcy maili' : 'Które zdarzenia są zgłaszane mailem, jak często i z jakimi progami'}</span>
+      <span class="dim" style="font-size: 12px;">${d.tab === 'konfiguracja' ? 'Serwer SMTP, nadawca i odbiorcy maili'
+    : d.tab === 'sms' ? 'Numery administratorów i klucz API, w imieniu którego bramka wysyła powiadomienia SMS'
+      : 'Które zdarzenia są zgłaszane mailem, jak często i z jakimi progami'}</span>
     </div>
-${d.tab === 'konfiguracja' ? `      <div class="panel" style="max-width: 760px;">
+${d.tab === 'sms' ? `      ${smsPanel(d)}` : d.tab === 'konfiguracja' ? `      <div class="panel" style="max-width: 760px;">
         <div class="panel-h"><div class="lab">Serwer SMTP</div>
           ${configured ? `<span class="m dim">zapisano ${esc(d.smtp!.updatedAt.slice(0, 10))}</span>` : '<span class="dim">nieskonfigurowany</span>'}</div>
         ${smtpError}

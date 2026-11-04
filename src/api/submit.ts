@@ -28,8 +28,10 @@ export interface SubmitInput {
   integrationId?: number;
   /** Adres e-mail nadawcy wiadomości z Mail2SMS; brak dla pozostałych źródeł. */
   mailFrom?: string;
-  /** Zlecający wysyłkę z przepływu Power Automate; brak dla pozostałych źródeł. */
+  /** Zlecający wysyłkę z przepływu Power Automate albo kanał SMS powiadomień; brak dla pozostałych źródeł. */
   requestedBy?: string;
+  /** Wiadomość kanału SMS powiadomień: niewidoczna w API, webhooku klucza i integracjach wychodzących. */
+  system?: boolean;
 }
 
 export interface SubmitResult {
@@ -165,6 +167,7 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
       integrationId: input.integrationId ?? null,
       mailFrom: input.mailFrom ?? null,
       requestedBy: input.requestedBy ?? null,
+      system: input.system ? 1 : 0,
       createdAt: now.toISOString(),
     });
     deps.jobs.enqueue('send', { messageId: id, text: input.text, deliveryReport }, now);

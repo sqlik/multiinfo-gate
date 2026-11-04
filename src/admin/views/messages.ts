@@ -64,7 +64,7 @@ export function messagesPage(data: MessagesData): string {
         <td class="m dim nw">${esc(warsawStamp(m.createdAt))}</td>
         <td class="m"><a href="/wiadomosci/${esc(m.id)}">${esc(m.id)}</a></td>
         <td class="m">${esc(m.dest)}</td>
-        <td class="txt">${preview(m.body)}</td>
+        <td class="txt">${m.system === 1 ? '<span class="tag">powiadomienie bramki</span> ' : ''}${preview(m.body)}</td>
         <td><span class="enc">${esc(m.encoding === 'gsm' ? 'GSM-7' : 'UCS-2')}</span></td>
         <td class="m">${esc(m.parts)}</td>
         <td>${state(m)}</td>
