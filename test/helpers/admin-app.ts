@@ -27,7 +27,7 @@ import { M365Tokens } from '../../src/m365/tokens.ts';
 import type { TokenFetch } from '../../src/m365/oauth.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
 import type { NotificationEvent } from '../../src/notifications/rules.ts';
-import type { MailContent } from '../../src/worker/mail.ts';
+import type { MailContent, MailerSettings } from '../../src/worker/mail.ts';
 import { FakeMailbox, fakeConnect } from './fake-mailbox.ts';
 import type { InstallKind } from '../../src/config/install.ts';
 import type { Logger } from '../../src/log.ts';
@@ -63,6 +63,8 @@ export interface AdminHarness {
   notified: Array<{ event: NotificationEvent; subjectKey: string | null; summary: string }>;
   /** Maile wysłane przez panel (mail testowy) i wynik, jaki atrapa ma zwrócić. */
   mails: MailContent[];
+  /** Ustawienia przekazane mailerowi przy każdej wysyłce, w kolejności wywołań. */
+  mailSettings: MailerSettings[];
   mailError: Error | null;
   /** Wywołania `receiver.refresh()` z tras panelu - atrapa odbiornika. */
   refreshed: Array<{ retryAccount?: number }>;
@@ -132,6 +134,7 @@ export async function startAdminHarness(
   const notified: AdminHarness['notified'] = [];
   const notifier = { notify: (event: NotificationEvent, subjectKey: string | null, summary: string) => { notified.push({ event, subjectKey, summary }); } };
   const mails: MailContent[] = [];
+  const mailSettings: MailerSettings[] = [];
   const harness = { mailError: null as Error | null };
   const refreshed: Array<{ retryAccount?: number }> = [];
   const receiver = { refresh: (o: { retryAccount?: number } = {}) => { refreshed.push(o); } };
@@ -168,7 +171,7 @@ export async function startAdminHarness(
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, receiver,
     integrationEvents, guards, mailIn, mailboxConnect: fakeConnect(mailbox), engine: new TemplateEngine(), notifications, settings, notifier,
     m365, m365Accounts, m365Tokens,
-    mailer: async (_settings, mail) => { if (harness.mailError) throw harness.mailError; mails.push(mail); },
+    mailer: async (settings, mail) => { mailSettings.push(settings); if (harness.mailError) throw harness.mailError; mails.push(mail); },
     clients: clients as never, sessions, masterKey, now: () => now,
     resolve: (hostname) => resolve.value(hostname),
     ...(opts.allowPrivateWebhooks ? { allowPrivateWebhooks: true } : {}),
@@ -181,7 +184,7 @@ export async function startAdminHarness(
 
   return {
     app, db, accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, refreshed,
-    integrationEvents, guards, mailIn, mailbox, notifications, settings, notified, mails, m365Accounts, m365, m365Forms, m365Reply,
+    integrationEvents, guards, mailIn, mailbox, notifications, settings, notified, mails, mailSettings, m365Accounts, m365, m365Forms, m365Reply,
     get mailError() { return harness.mailError; },
     set mailError(e: Error | null) { harness.mailError = e; },
     sessions, userId, masterKey,

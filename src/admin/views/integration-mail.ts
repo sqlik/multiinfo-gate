@@ -23,7 +23,8 @@ export interface MailFormOptions {
   m365Accounts?: Array<{ id: number; name: string; address: string | null; state: M365State }>;
 }
 
-const M365_STATE_WORDS: Record<M365State, string> = {
+/** Stan konta Microsoft 365 na listach wyboru: skrzynki Mail2SMS i SMTP powiadomień. */
+export const M365_STATE_WORDS: Record<M365State, string> = {
   new: 'niezalogowane', connected: 'połączone', needs_login: 'wymaga logowania', error: 'błąd połączenia',
 };
 

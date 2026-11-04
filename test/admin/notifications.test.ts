@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { startAdminHarness, type AdminHarness } from '../helpers/admin-app.ts';
 
+const NOW = new Date('2026-11-04T10:00:00Z');
+
 let h: AdminHarness;
 
 beforeEach(async () => {
@@ -153,5 +155,107 @@ describe('POST /powiadomienia/reguly', () => {
     const bad = await post('/powiadomienia/reguly', { days_certificate_expiring: 'abc', hour_daily_summary: '8' });
     expect(bad.statusCode).toBe(400);
     expect((await post('/powiadomienia/reguly', { days_certificate_expiring: '30', hour_daily_summary: '25' })).statusCode).toBe(400);
+  });
+});
+
+describe('SMTP przez konto Microsoft 365', () => {
+  const account = (state: 'connected' | 'needs_login' = 'connected', name = 'Dyżur IT'): number => {
+    const id = h.m365Accounts.create({ name, tenant: 'firma.onmicrosoft.com', clientId: '11111111-2222-3333-4444-555555555555' }, NOW);
+    h.m365Accounts.connected(id, {
+      refreshToken: 'token-odswiezania-0', address: 'alarmy@firma.pl', addressManual: false, loginName: 'alarmy@firma.pl', loginOid: null,
+      redirectUri: 'http://localhost:8081/m365/powrot', by: 'janek',
+    }, NOW);
+    if (state === 'needs_login') h.m365Accounts.failed(id, { state: 'needs_login', code: '70000', message: 'x' }, NOW);
+    return id;
+  };
+  // Pola serwera celowo obce: w trybie Microsoft 365 zapis je pomija.
+  const m365Fields = (accountId: number, over: Record<string, string> = {}): Record<string, string> => smtpFields({
+    authMode: 'm365', m365AccountId: String(accountId), host: 'evil.example', port: '25', security: 'none', user: 'ktos@evil.example', password: '',
+    fromAddress: '', ...over,
+  });
+
+  it('formularz oferuje wybór sposobu logowania i listę kont Microsoft 365 z pierwszym połączonym kontem wybranym', async () => {
+    const broken = account('needs_login', 'Biuro handlowe');
+    const id = account();
+    const body = (await page()).body;
+    expect(body).toContain('Sposób logowania');
+    expect(body).toMatch(/<input type="radio" name="authMode" value="password" checked>/);
+    expect(body).toMatch(/<input type="radio" name="authMode" value="m365">/);
+    expect(body).toContain(`<option value="${broken}">Biuro handlowe · wymaga logowania</option>`);
+    expect(body).toContain(`<option value="${id}" selected>Dyżur IT · połączone</option>`);
+    expect(body).toContain('Wyślij jako');
+  });
+
+  it('bez kont formularz odsyła do dodania konta zamiast listy', async () => {
+    const body = (await page()).body;
+    expect(body).toContain('href="/microsoft-365/nowe"');
+    expect(body).not.toContain('name="m365AccountId"');
+  });
+
+  it('zapis bez hasła ustawia serwer Microsoftu, login z konta i domyślny adres nadawcy', async () => {
+    await post('/powiadomienia/smtp', smtpFields());
+    const id = account();
+    const res = await post('/powiadomienia/smtp', m365Fields(id));
+    expect(res.statusCode).toBe(302);
+    expect(h.notifications.smtp()).toMatchObject({
+      authMode: 'm365', m365AccountId: id, host: 'smtp.office365.com', port: 587, security: 'starttls', user: 'alarmy@firma.pl', fromAddress: 'alarmy@firma.pl',
+    });
+    expect(h.notifications.smtpPassword()).toBeNull();
+    const shown = (await page()).body;
+    expect(shown).toMatch(/<input type="radio" name="authMode" value="m365" checked>/);
+    expect(shown).toContain(`<option value="${id}" selected>Dyżur IT · połączone</option>`);
+  });
+
+  it('inny adres nadawcy zostaje zapisany', async () => {
+    const id = account();
+    await post('/powiadomienia/smtp', m365Fields(id, { fromAddress: 'biuro@firma.pl' }));
+    expect(h.notifications.smtp()!.fromAddress).toBe('biuro@firma.pl');
+  });
+
+  it('odrzuca konto spoza listy', async () => {
+    const res = await post('/powiadomienia/smtp', m365Fields(999));
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('Wybierz konto Microsoft 365');
+    expect(h.notifications.smtp()).toBeNull();
+  });
+
+  it('dziennik zdarzeń odnotowuje zmianę sposobu logowania, a zapis bez zmiany sposobu jej nie powtarza', async () => {
+    await post('/powiadomienia/smtp', smtpFields());
+    const id = account();
+    await post('/powiadomienia/smtp', m365Fields(id));
+    await post('/powiadomienia/smtp', m365Fields(id, { fromAddress: 'biuro@firma.pl' }));
+    const entries = h.audit.list(20, 0).filter((e) => e.action === 'powiadomienia.smtp.sposob');
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.meta).toMatchObject({ z: 'password', na: 'm365', konto: 'Dyżur IT' });
+  });
+
+  it('mail testowy przekazuje mailerowi token konta i stały serwer Microsoftu', async () => {
+    const id = account();
+    await post('/powiadomienia/smtp', m365Fields(id));
+    await post('/powiadomienia/smtp/test', {});
+    expect(h.mails).toHaveLength(1);
+    expect(h.mailSettings[0]).toMatchObject({ host: 'smtp.office365.com', port: 587, security: 'starttls', user: 'alarmy@firma.pl', password: null, accessToken: 'token-dostepu-1' });
+    expect((await page()).body).toContain('flash-ok');
+  });
+
+  it('mail testowy z odpowiedzią 5.7.139 pokazuje podpowiedź obok komunikatu serwera', async () => {
+    const id = account();
+    await post('/powiadomienia/smtp', m365Fields(id));
+    h.mailError = new Error('535 5.7.139 Authentication unsuccessful, SmtpClientAuthentication is disabled for the Mailbox');
+    await post('/powiadomienia/smtp/test', {});
+    const shown = (await page()).body;
+    expect(shown).toContain('flash-fail');
+    expect(shown).toContain('uwierzytelniony protokół SMTP');
+    expect(shown).toContain('SmtpClientAuthentication is disabled');
+  });
+
+  it('mail testowy przy koncie wymagającym logowania nie łączy się z serwerem', async () => {
+    const id = account('needs_login');
+    await post('/powiadomienia/smtp', m365Fields(id));
+    await post('/powiadomienia/smtp/test', {});
+    expect(h.mailSettings).toHaveLength(0);
+    const shown = (await page()).body;
+    expect(shown).toContain('flash-fail');
+    expect(shown).toContain('Konto Microsoft 365 wymaga logowania');
   });
 });

@@ -16,6 +16,7 @@ import type { IntegrationsRepo } from '../store/integrations.ts';
 import type { NotificationsRepo } from '../store/notifications.ts';
 import type { MailInRepo } from '../store/mail-in.ts';
 import type { Mailer } from './mail.ts';
+import type { M365MailboxDeps } from '../m365/mailbox.ts';
 import type { ClientPool } from './clients.ts';
 import { pauseForCertificate } from './certificate.ts';
 import { emitIntegrations, isOutboundEvent, type IntegrationEmitDeps } from './integrations.ts';
@@ -53,6 +54,8 @@ export interface WorkerDeps {
   notifications?: NotificationsRepo;
   /** Wysyłka maila; testy podstawiają atrapę. */
   mailer?: Mailer;
+  /** Token konta Microsoft 365 dla SMTP w trybie `m365`; bez tego taki mail czeka na ponowienie i zostaje porzucony. */
+  m365?: M365MailboxDeps;
   /** Skaner stanu (certyfikaty, konta, odbiór, podsumowanie) - tura utrzymaniowa. */
   scanner?: { scan(now: Date): void };
   /** Strażnicy integracji - sprzątanie idempotencji w turze utrzymaniowej. */
