@@ -34,6 +34,11 @@ describe('GET /powiadomienia', () => {
     expect(rules.body).toContain('Błąd integracji');
     expect(rules.body).toContain('Podsumowanie dzienne');
   });
+  it('podpis zakładki Reguły mówi o mailach i SMS-ach, bo reguła może wysłać powiadomienie także SMS-em', async () => {
+    const body = (await page('reguly')).body;
+    expect(body).toContain('Które zdarzenia są zgłaszane mailem albo SMS-em, jak często i z jakimi progami');
+  });
+
   it('ekran reguł pokazuje „Awaria skrzynki pocztowej” z parametrem minut', async () => {
     const rules = await page('reguly');
     expect(rules.body).toContain('Awaria skrzynki pocztowej');
@@ -287,7 +292,7 @@ describe('SMTP przez konto Microsoft 365', () => {
     await post('/powiadomienia/smtp/test', {});
     const shown = (await page()).body;
     expect(shown).toContain('flash-fail');
-    expect(shown).toContain('uwierzytelniony protokół SMTP');
+    expect(shown).toContain('opcja „SMTP z uwierzytelnianiem” jest wyłączona');
     expect(shown).toContain('SmtpClientAuthentication is disabled');
   });
 

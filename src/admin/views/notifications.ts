@@ -224,7 +224,7 @@ export function notificationsPage(d: NotificationsPageData): string {
       </div>
       <span class="dim" style="font-size: 12px;">${d.tab === 'konfiguracja' ? 'Serwer SMTP, nadawca i odbiorcy maili'
     : d.tab === 'sms' ? 'Numery administratorów i klucz API, w imieniu którego bramka wysyła powiadomienia SMS'
-      : 'Które zdarzenia są zgłaszane mailem, jak często i z jakimi progami'}</span>
+      : 'Które zdarzenia są zgłaszane mailem albo SMS-em, jak często i z jakimi progami'}</span>
     </div>
 ${d.tab === 'sms' ? `      ${smsPanel(d)}` : d.tab === 'konfiguracja' ? `      <div class="panel" style="max-width: 760px;">
         <div class="panel-h"><div class="lab">Serwer SMTP</div>

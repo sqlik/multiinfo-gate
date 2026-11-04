@@ -180,6 +180,13 @@ describe('lista, formularz i szczegóły', () => {
     plainText(res.body);
   });
 
+  it('instrukcja w formularzu używa nazw z polskiego portalu Entra', async () => {
+    const body = (await page('/microsoft-365/nowe')).body;
+    expect(body).toContain('Klient publiczny/natywny (mobilne i klasyczne)');
+    expect(body).toContain('Wyraź zgodę administratora dla katalogu');
+    expect(body).not.toContain('Udziel zgody administratora');
+  });
+
   it('zapis bez logowania prowadzi na szczegóły, a błędne dane wracają do formularza z komunikatem', async () => {
     const ok = await post('/microsoft-365', FORM);
     expect(ok.statusCode).toBe(303);

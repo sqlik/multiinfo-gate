@@ -3,8 +3,9 @@
 Ta instrukcja prowadzi od początku do końca. Zaczyna od przygotowań po stronie Multiinfo.
 Potem opisuje instalację bramki na serwerze i pierwszą wysyłkę. Kończy się wystawieniem API pod
 własną domeną. Rozdział 4.7 wprowadza integracje z aplikacjami (monitoring, helpdesk,
-automatyzacje) i powiadomienia administratora mailem. Ich pełny opis jest w osobnym rozdziale
-[Integracje z aplikacjami](integracje.md).
+automatyzacje) i powiadomienia administratora mailem albo SMS-em. Ich pełny opis jest w osobnym
+rozdziale [Integracje z aplikacjami](integracje.md). Rozdział 4.8 opisuje połączenie konta
+Microsoft 365, przez które bramka odczytuje skrzynkę i wysyła maile.
 
 Instrukcja zakłada, że potrafisz zalogować się na serwer przez SSH i wkleić polecenie do
 terminala. Nic więcej nie jest wymagane. Pozostałe pojęcia (Docker, tunel SSH, odwrotne proxy,
@@ -575,8 +576,9 @@ Integracja „z SMS-a” wysyła odebrane SMS-y i statusy na adres aplikacji w j
 Integracja „Mail2SMS” odczytuje skrzynkę pocztową przez IMAP i zamienia wiadomości od dozwolonych
 nadawców na SMS-y. Wymaga wyłącznie połączenia wychodzącego z maszyny bramki do serwera poczty
 na porcie 993 (albo 143). W Dockerze ani w Traefiku nie trzeba otwierać żadnego portu. Serwer
-poczty w sieci wewnętrznej wymaga `MIG_MAIL_ALLOW_PRIVATE=1` (rozdział 7.7). Integracja działa
-w imieniu klucza API z rozdziału 4.5. Załóż go najpierw.
+poczty w sieci wewnętrznej wymaga `MIG_MAIL_ALLOW_PRIVATE=1` (rozdział 7.7). Skrzynkę
+w Microsoft 365 bramka odczytuje przez konto techniczne połączone według punktu 4.8. Integracja
+działa w imieniu klucza API z rozdziału 4.5. Załóż go najpierw.
 
 Integracja z Power Automate w kierunku „Aplikacja wysyła SMS” przyjmuje zlecenia wysyłki
 z przepływów Microsoft Power Automate. Wymaga bramki dostępnej z internetu pod domeną z HTTPS,
@@ -597,13 +599,209 @@ adres webhooka klucza.
 
 ![Formularz integracji z ustawienia Uptime Kuma w trybie prostym](obrazki/integracja-formularz.png)
 
-Ekran **Powiadomienia** ma ustawienia serwera SMTP z mailem testowym i tabelę reguł. Reguły
-obejmują błędy integracji, niedostarczone webhooki, certyfikat konta na progach dni, konto
-odrzucające wysyłkę, awarię odbioru i podsumowanie dzienne. Bez SMTP reguły są wyszarzone.
-Szczegóły obu ekranów, gotowe ustawienia aplikacja po aplikacji i język szablonów opisuje
-rozdział [Integracje z aplikacjami](integracje.md).
+Ekran **Powiadomienia** zawiera trzy zakładki. Zakładka **Konfiguracja** obejmuje ustawienia
+serwera SMTP z mailem testowym. Pole **Sposób logowania** określa, czy bramka loguje się do
+serwera hasłem, czy przez konto Microsoft 365 z punktu 4.8. Wariant Microsoft 365 jest zalecany
+dla firm korzystających z Exchange Online, ponieważ Microsoft wycofuje logowanie hasłem do SMTP.
 
-![Ekran Powiadomienia, zakładka Konfiguracja: serwer SMTP, nadawca i odbiorcy](obrazki/powiadomienia.png)
+Zakładka **SMS** włącza kanał SMS, czyli powiadomienia na numery administratorów wysyłane
+w imieniu wskazanego klucza API. Kanał działa niezależnie od poczty, dlatego informuje także
+o zerwanym koncie Microsoft 365 i o mailu, którego nie udało się wysłać. Zakładka **Reguły**
+określa zgłaszane zdarzenia: błędy integracji, niedostarczone webhooki, certyfikat konta na
+progach dni, konto odrzucające wysyłkę, awarię odbioru, awarię skrzynki, konto Microsoft 365
+wymagające logowania i podsumowanie dzienne. Każda reguła może dodatkowo wysyłać SMS. Reguły
+wymagają skonfigurowanego serwera SMTP albo włączonego kanału SMS. Szczegóły tych ekranów,
+gotowe ustawienia aplikacja po aplikacji i język szablonów opisuje rozdział
+[Integracje z aplikacjami](integracje.md).
+
+![Ekran Powiadomienia, zakładka Konfiguracja: sposób logowania, serwer SMTP, nadawca i odbiorcy](obrazki/powiadomienia.png)
+
+### 4.8. Konto Microsoft 365
+
+Od wersji 1.10 bramka współpracuje z Microsoft 365 przez konto techniczne organizacji. Przez to
+konto integracja Mail2SMS odczytuje skrzynkę w Exchange Online, a bramka wysyła maile powiadomień
+i odpowiedzi do nadawców. Microsoft nie przyjmuje do IMAP hasła skrzynki i wycofuje logowanie
+hasłem do SMTP. Dlatego konto łączy się z bramką przez logowanie w przeglądarce, a hasło konta
+technicznego nie trafia do bramki.
+
+Rozdział jest przeznaczony dla administratora bramki, który współpracuje z administratorem
+Microsoft 365. Konfiguracja odbywa się wyłącznie w portalach Microsoftu i w panelu bramki, bez
+PowerShella. Każda firma rejestruje w swoim katalogu własną aplikację, dlatego bramka nie
+korzysta z żadnej usługi pośredniczącej. Skrzynki prywatne Outlook.com nie są obsługiwane.
+
+Przygotowanie obejmuje trzy etapy: konto techniczne w centrum administracyjnym Microsoft 365,
+rejestrację aplikacji w centrum administracyjnym Microsoft Entra i połączenie konta w panelu
+bramki. Dwa pierwsze etapy wykonuje administrator Microsoft 365. Użycie konta w Mail2SMS opisuje
+rozdział 5.1 [Integracji z aplikacjami](integracje.md#51-skrzynka), a wysyłkę maili powiadomień
+rozdział 9.1 tego samego artykułu.
+
+#### Konto techniczne
+
+Zalecane jest konto przeznaczone wyłącznie dla bramki, na przykład `alarmy@firma.pl`. Bramka
+otrzymuje dostęp do każdej skrzynki, do której to konto posiada uprawnienia. Dlatego konto
+techniczne nie powinno posiadać dostępu do innych skrzynek niż odczytywane przez Mail2SMS. Konto
+nie wymaga żadnej roli administracyjnej. Adres konta powinien należeć do tej samej domeny co
+adresy pracowników, którzy piszą do Mail2SMS. Bramka uznaje bowiem pocztę wewnętrzną bez wyniku
+SPF i DKIM wyłącznie od nadawców z domeny skrzynki.
+
+1. W centrum administracyjnym Microsoft 365 otwórz **Użytkownicy → Aktywni użytkownicy** i dodaj
+   użytkownika z licencją obejmującą skrzynkę Exchange Online.
+2. Nadaj kontu opisową nazwę wyświetlaną, na przykład „Alarmy SMS”. Pod tą nazwą pracownicy
+   firmy widzą w Outlooku odpowiedzi i powiadomienia wysłane przez bramkę.
+3. Otwórz konto na liście użytkowników, przejdź na kartę **Poczta** i kliknij **Zarządzaj
+   aplikacjami poczty e-mail**.
+4. Zaznacz **IMAP** oraz **SMTP z uwierzytelnianiem**, a następnie kliknij **Zapisz zmiany**.
+
+![Centrum administracyjne Microsoft 365, ustawienia aplikacji poczty konta technicznego: zaznaczone IMAP oraz SMTP z uwierzytelnianiem](obrazki/m365-aplikacje-poczty.png)
+
+Oczekiwany wynik: centrum administracyjne wyświetla komunikat „Zaktualizowano informacje
+Aplikacje poczty e-mail o skrzynce pocztowej”.
+
+Opcja **IMAP** jest potrzebna do odczytu skrzynki w Mail2SMS, a opcja **SMTP z uwierzytelnianiem**
+do wysyłki maili przez konto. Ustawienie SMTP na koncie jest nadrzędne wobec ustawienia
+organizacji. Dlatego działa także wtedy, gdy organizacja wyłączyła tę opcję dla pozostałych kont.
+Zmiana obu opcji zaczyna obowiązywać po około 30 minutach. Do tego czasu skrzynka może odrzucać
+logowanie bramki.
+
+#### Rejestracja aplikacji w Entra ID
+
+Aplikacja zarejestrowana w Entra ID pozwala bramce zalogować konto techniczne i uzyskać dostęp do
+jego skrzynki. Jest klientem publicznym, dlatego nie wymaga sekretu klienta ani pilnowania daty
+jego ważności. Rejestracja wymaga adresu przekierowania, który podaje panel bramki.
+
+1. W panelu bramki otwórz **Konta Microsoft 365 → Dodaj konto**. Skopiuj wartość pola **Adres
+   przekierowania** przyciskiem **Kopiuj** i pozostaw formularz otwarty.
+2. W centrum administracyjnym Microsoft Entra otwórz **Entra ID → Rejestracje aplikacji** i kliknij
+   **Nowa rejestracja**.
+3. Wypełnij formularz rejestracji:
+    - **Nazwa**: na przykład „Multiinfo Gate”
+    - **Obsługiwane typy kont**: **Tylko dla jednej dzierżawy**, czyli wartość domyślna
+    - **Identyfikator URI przekierowania**: platforma **Klient publiczny/natywny (mobilne
+      i klasyczne)** i adres skopiowany z panelu
+4. Kliknij **Rejestruj**. Jeżeli portal nie otworzy przeglądu nowej aplikacji, znajdziesz ją
+   w **Rejestracjach aplikacji** na karcie **Wszystkie aplikacje**.
+5. Przejdź do sekcji **Uprawnienia interfejsu API** i kliknij **Dodaj uprawnienie**. Wybierz
+   **Microsoft Graph**, a następnie **Uprawnienia delegowane**.
+6. Zaznacz sześć uprawnień: `IMAP.AccessAsUser.All`, `SMTP.Send`, `offline_access`, `openid`,
+   `email` i `profile`. Zatwierdź wybór przyciskiem **Dodaj uprawnienia**.
+7. Kliknij **Wyraź zgodę administratora dla katalogu** z nazwą organizacji i potwierdź.
+8. Przejdź do sekcji **Przegląd** i skopiuj dwie wartości: **Identyfikator aplikacji (klienta)**
+   oraz **Identyfikator katalogu (dzierżawy)**.
+
+![Formularz rejestracji aplikacji w Microsoft Entra: nazwa, typ kont Tylko dla jednej dzierżawy, platforma Klient publiczny/natywny i adres przekierowania z panelu bramki](obrazki/entra-rejestracja.png)
+
+Oczekiwany wynik: lista uprawnień zawiera sześć pozycji, a kolumna **Stan** przy każdej z nich
+podaje „Udzielono dla” z nazwą organizacji.
+
+![Uprawnienia interfejsu API w Microsoft Entra: sześć uprawnień delegowanych Microsoft Graph ze zgodą administratora udzieloną dla organizacji](obrazki/entra-uprawnienia.png)
+
+Uprawnienia `IMAP.AccessAsUser.All` i `SMTP.Send` pozwalają odczytywać pocztę i wysyłać maile
+w imieniu zalogowanego konta. Uprawnienie `offline_access` pozwala bramce odnawiać logowanie bez
+udziału administratora. Uprawnienia `openid`, `email` i `profile` przekazują bramce adres konta.
+Uprawnienie `User.Read`, dodawane przez portal domyślnie, nie jest potrzebne i można je usunąć.
+Zgoda administratora sprawia, że konto techniczne nie zatwierdza uprawnień przy logowaniu.
+
+Sekcja **Authentication (Preview)** rejestracji przedstawia wybraną platformę pod nazwą
+„Aplikacje mobilne i klasyczne”. W tej sekcji dopiszesz kolejny adres przekierowania, na przykład po zmianie
+adresu, pod którym otwierasz panel. Platforma przyjmuje zarówno adres `http://localhost` z tunelu
+SSH, jak i adres `https://` panelu wystawionego pod domeną.
+
+#### Połączenie konta w panelu
+
+1. Wróć do formularza **Nowe konto Microsoft 365** w panelu bramki.
+2. Wpisz nazwę konta, na przykład „Dyżur IT”. Pod tą nazwą konto wyświetla się na listach
+   panelu.
+3. Wklej **Identyfikator katalogu** i **Identyfikator aplikacji** skopiowane w kroku 8
+   rejestracji. Zamiast identyfikatora katalogu można podać domenę katalogu, na przykład
+   `firma.onmicrosoft.com`.
+4. Kliknij **Zapisz i zaloguj w Microsoft**. Przeglądarka otworzy stronę logowania Microsoft.
+5. Wybierz konto techniczne, a nie własne konto administratora. Jeżeli konta nie ma na liście,
+   kliknij **Użyj innego konta**.
+6. Podaj hasło konta technicznego i w razie potrzeby potwierdź logowanie drugim składnikiem.
+
+![Formularz nowego konta Microsoft 365: rozwinięta instrukcja przygotowania w Microsoft 365 i Entra ID, nazwa, identyfikatory katalogu i aplikacji oraz adres przekierowania z przyciskiem Kopiuj](obrazki/m365-formularz.png)
+
+Oczekiwany wynik: przeglądarka wraca do szczegółów konta w panelu z komunikatem „Połączono jako
+alarmy@firma.pl”. Stan konta to „Połączone”, a pole **Adres skrzynki** zawiera adres konta
+technicznego. Microsoft nie wyświetla ekranu zgody, ponieważ zgody udzielił administrator.
+
+![Szczegóły konta Microsoft 365: stan Połączone, adres skrzynki, czas logowania i ostatniego odświeżenia, odbiorcy konta oraz przyciski Zaloguj ponownie, Rozłącz i Usuń](obrazki/m365-konto.png)
+
+Jeżeli wynik jest inny:
+
+- **Microsoft wyświetla błąd AADSTS50011.** Rejestracja aplikacji nie zawiera adresu
+  przekierowania, pod którym otwarto panel. Sposób naprawy opisuje punkt
+  [Microsoft odrzuca adres przekierowania](problemy.md#m365-adres-przekierowania)
+- **Microsoft wyświetla błąd AADSTS700016.** Identyfikator aplikacji nie odpowiada żadnej
+  rejestracji w podanym katalogu. Popraw identyfikatory przyciskiem **Edytuj** w szczegółach konta
+- **Microsoft wyświetla błąd AADSTS65001 albo prosi o zgodę na uprawnienia.** Zgoda
+  administratora nie obejmuje wszystkich uprawnień. Powtórz krok 7 rejestracji
+- **Microsoft wyświetla błąd AADSTS53003.** Zasady dostępu warunkowego blokują logowanie konta
+  technicznego. Sposób naprawy opisuje punkt
+  [Dostęp warunkowy blokuje konto](problemy.md#m365-dostep-warunkowy)
+- **Panel wyświetla komunikat „Logowanie wygasło albo zostało już zakończone”.** Od rozpoczęcia
+  logowania minęło ponad 10 minut albo w tym czasie bramka została uruchomiona ponownie. Kliknij
+  **Zaloguj w Microsoft** w szczegółach konta
+- **Panel wyświetla komunikat o innym katalogu.** Logowanie odbyło się kontem z innej
+  organizacji. Zaloguj się kontem technicznym z katalogu podanego w ustawieniach konta
+
+#### Stany konta
+
+| Stan | Znaczenie | Skutek dla skrzynek i maili |
+|---|---|---|
+| Niezalogowane | konto zapisane bez logowania albo rozłączone | skrzynki nie są sprawdzane, maile nie są wysyłane |
+| Połączone | logowanie działa | normalna praca |
+| Wymaga logowania | Microsoft unieważnił logowanie, na przykład po zmianie hasła konta | skrzynki czekają na ponowne logowanie, maile nie są wysyłane, administrator otrzymuje powiadomienie |
+| Błąd połączenia | chwilowy błąd sieci albo usługi Microsoft | bramka ponawia próbę przy następnym użyciu konta |
+
+Lista kont podaje adres skrzynki, stan, czas ostatniego odświeżenia logowania i odbiorców konta.
+Odbiorcami są skrzynki Mail2SMS oraz wysyłka maili powiadomień. Szczegóły konta przedstawiają
+dodatkowo osobę i czas logowania oraz ostatni błąd z kodem AADSTS i podpowiedzią.
+
+![Lista kont Microsoft 365: konto połączone z odbiorcami oraz konto wymagające logowania](obrazki/m365-konta.png)
+
+Bramka odczytuje adres skrzynki z danych logowania. Jeżeli główny adres skrzynki różni się od
+nazwy logowania, zmień go w szczegółach konta, w panelu **Adres skrzynki**. Ponowne logowanie tym
+samym kontem zachowuje adres wpisany ręcznie. Logowanie innym kontem zastępuje go adresem nowego
+konta, a panel informuje o tej zmianie.
+
+#### Ponowne logowanie i odcięcie dostępu
+
+Microsoft unieważnia logowanie bramki po zmianie albo resecie hasła konta technicznego, po
+odwołaniu sesji w Entra ID i po cofnięciu zgody. Logowanie wygasa także po 90 dniach bez użycia.
+Skrzynka Mail2SMS korzysta z konta przy każdym sprawdzeniu, dlatego dotyczy to głównie konta
+używanego wyłącznie do rzadkich maili powiadomień. Konto przechodzi wówczas w stan „Wymaga
+logowania”. Przegląd panelu wyświetla pasek z nazwą konta i przyciskiem **Zaloguj
+ponownie**, a menu pokazuje liczbę takich kont przy pozycji **Konta Microsoft 365**. Po ponownym
+logowaniu skrzynki wznawiają pracę przy najbliższym sprawdzeniu.
+
+Reguła **Konto Microsoft 365 wymaga logowania** powiadamia administratora mailem i SMS-em. Gdy
+przez to konto wychodzą maile powiadomień, bramka wysyła wyłącznie SMS, ponieważ mail nie
+zostałby wysłany. Kanał SMS opisuje rozdział 9.5
+[Integracji z aplikacjami](integracje.md#95-powiadomienia-sms).
+
+Odwołanie sesji albo zmiana hasła nie zatrzymuje bramki natychmiast. Bramka korzysta jeszcze
+z bieżącego tokenu dostępu, który Microsoft wydaje na około półtorej godziny. Natychmiastowe
+odcięcie zapewnia przycisk **Rozłącz** w szczegółach konta. Rozłączenie usuwa token z bramki
+i ustawia stan „Niezalogowane”. Zgodę aplikacji po stronie Microsoftu cofa się w centrum
+administracyjnym Microsoft Entra.
+
+Usunięcie konta jest możliwe dopiero wtedy, gdy nie korzysta z niego żadna skrzynka Mail2SMS ani
+wysyłka maili powiadomień. W przeciwnym razie panel podaje listę tych odbiorców. Dodanie,
+logowanie, rozłączenie i usunięcie konta trafiają do dziennika zdarzeń panelu.
+
+#### Bezpieczeństwo i sieć
+
+Bramka nie przechowuje hasła konta technicznego. W bazie zapisuje wyłącznie token odświeżania
+zaszyfrowany kluczem głównym, a token dostępu pozostaje w pamięci procesu. Żaden token nie trafia
+do dziennika ani do powiadomień. Kopia bazy zawiera token w postaci zaszyfrowanej, dlatego konto
+działa po przywróceniu kopii tylko z tym samym kluczem głównym.
+
+Połączenia z Microsoftem są wychodzące. Bramka łączy się wyłącznie z `login.microsoftonline.com`
+na porcie 443, z `outlook.office365.com` na porcie 993 i z `smtp.office365.com` na porcie 587.
+Zapora na serwerze albo w sieci firmowej musi przepuszczać ten ruch. Docker ani Traefik nie
+wymagają otwarcia żadnego portu.
+
 
 ## 5. Pierwsza wysyłka
 

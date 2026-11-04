@@ -253,8 +253,8 @@ describe('nodemailerMailer', () => {
 });
 
 describe('smtpHint', () => {
-  it('5.7.139: uwierzytelniony protokół SMTP wyłączony', () => {
-    expect(smtpHint('535 5.7.139 Authentication unsuccessful, SmtpClientAuthentication is disabled for the Mailbox')).toContain('uwierzytelniony protokół SMTP');
+  it('5.7.139: opcja „SMTP z uwierzytelnianiem” wyłączona', () => {
+    expect(smtpHint('535 5.7.139 Authentication unsuccessful, SmtpClientAuthentication is disabled for the Mailbox')).toContain('opcja „SMTP z uwierzytelnianiem” jest wyłączona');
   });
   it('5.2.252 albo SendAsDenied: brak uprawnienia „Wyślij jako”', () => {
     expect(smtpHint('554 5.2.252 SendAsDenied; alarmy@firma.pl not allowed to send as biuro@firma.pl')).toContain('Wyślij jako');

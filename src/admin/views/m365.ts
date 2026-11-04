@@ -92,10 +92,10 @@ function instructions(): string {
         <ol style="margin: 0 0 8px; padding-left: 18px;">
           <li>W centrum administracyjnym Microsoft 365 załóż konto techniczne z licencją obejmującą skrzynkę, na przykład alarmy@firma.pl</li>
           <li>W ustawieniach tego konta, na karcie Poczta, w zarządzaniu aplikacjami poczty zaznacz IMAP oraz SMTP z uwierzytelnianiem</li>
-          <li>W centrum administracyjnym Microsoft Entra zarejestruj aplikację, na przykład „Multiinfo Gate”, z dostępem wyłącznie dla kont w tym katalogu organizacji</li>
-          <li>Dodaj platformę „Aplikacje mobilne i klasyczne” z adresem przekierowania podanym niżej</li>
+          <li>W centrum administracyjnym Microsoft Entra, w sekcji Rejestracje aplikacji, zarejestruj aplikację, na przykład „Multiinfo Gate”, z typem kont „Tylko dla jednej dzierżawy”</li>
+          <li>Jako identyfikator URI przekierowania wybierz platformę „Klient publiczny/natywny (mobilne i klasyczne)” i wklej adres podany niżej</li>
           <li>Dodaj uprawnienia delegowane IMAP.AccessAsUser.All, SMTP.Send, offline_access, openid, email i profile</li>
-          <li>Kliknij „Udziel zgody administratora” dla organizacji</li>
+          <li>Kliknij „Wyraź zgodę administratora dla katalogu” i potwierdź</li>
           <li>Skopiuj z przeglądu aplikacji identyfikator katalogu i identyfikator aplikacji, a następnie wklej je w polach poniżej</li>
         </ol>
         <p>Pełny opis znajdziesz w <a href="${M365_DOCS_URL}" target="_blank" rel="noopener noreferrer">dokumentacji, w rozdziale 4.8</a>.</p>

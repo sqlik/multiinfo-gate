@@ -15,6 +15,8 @@ export const PROBLEM_ANCHORS = [
   'klucz-glowny', 'klucz-nieprawidlowy', 'klucz-czesciowy', 'kopia-przed-aktualizacja', 'baza-z-nowszego-wydania',
   'brak-miejsca', 'uprawnienia', 'uszkodzona-baza', 'nieudana-migracja', 'awaria-startu',
   'zajety-port', 'po-aktualizacji', 'sms-od-abonentow', 'wersja-node', 'zgloszenie',
+  'microsoft-365', 'm365-wymaga-logowania', 'm365-adres-przekierowania', 'm365-zgoda', 'm365-dostep-warunkowy',
+  'm365-skrzynka', 'm365-smtp', 'm365-nadawca', 'm365-spam',
 ] as const;
 
 export type ProblemAnchor = typeof PROBLEM_ANCHORS[number];
