@@ -18,6 +18,8 @@ export interface HealthDeps {
   inbound?: () => InboundHealth;
   /** Integracje: włączone i z błędem w ostatniej dobie; bez funkcji pole nie występuje. */
   integrations?: () => IntegrationsHealth;
+  /** Konta Microsoft 365: wszystkie i wymagające logowania (wariant panelu); bez funkcji pole nie występuje. */
+  m365?: () => { accounts: number; needsLogin: number };
   /** Nowsze wydanie do pokazania (wariant panelu); bez funkcji pole nie występuje. */
   release?: () => ReleaseInfo | null;
   now?: () => Date;
@@ -57,6 +59,7 @@ export function registerHealthRoute(app: FastifyInstance, deps: HealthDeps, mode
       })),
       ...(inbound ? { inbound } : {}),
       ...(deps.integrations ? { integrations: deps.integrations() } : {}),
+      ...(deps.m365 ? { m365: deps.m365() } : {}),
       ...(release ? { release: { version: release.version, url: release.url } } : {}),
     };
   });

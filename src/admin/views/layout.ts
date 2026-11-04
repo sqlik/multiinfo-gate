@@ -3,8 +3,8 @@ import type { ReleaseInfo } from '../../store/settings.ts';
 import { GATE_VERSION } from '../../version.ts';
 import { FAVICON_LINK } from './favicon.ts';
 
-export type NavKey = 'przeglad' | 'wiadomosci' | 'rozsylki' | 'odebrane' | 'konta' | 'klucze' | 'integracje' | 'uzytkownicy'
-  | 'powiadomienia' | 'dziennik';
+export type NavKey = 'przeglad' | 'wiadomosci' | 'rozsylki' | 'odebrane' | 'konta' | 'microsoft-365' | 'klucze' | 'integracje'
+  | 'uzytkownicy' | 'powiadomienia' | 'dziennik';
 
 export interface NavCounts {
   wiadomosci: number;
@@ -15,6 +15,8 @@ export interface NavCounts {
   /** Integracje z choć jednym błędem w ostatniej dobie - nie liczba integracji. */
   integracje: number;
   uzytkownicy: number;
+  /** Konta Microsoft 365 wymagające ponownego logowania - nie liczba kont. */
+  m365?: number;
 }
 
 const ENTITIES: Record<string, string> = {
@@ -41,6 +43,7 @@ const NAV: Array<{ key: NavKey; label: string; group: string }> = [
   { key: 'rozsylki', label: 'Rozsyłki', group: 'Ruch' },
   { key: 'odebrane', label: 'Odebrane', group: 'Ruch' },
   { key: 'konta', label: 'Konta Multiinfo', group: 'Konfiguracja' },
+  { key: 'microsoft-365', label: 'Konta Microsoft 365', group: 'Konfiguracja' },
   { key: 'klucze', label: 'Klucze API', group: 'Konfiguracja' },
   { key: 'integracje', label: 'Integracje', group: 'Konfiguracja' },
   { key: 'uzytkownicy', label: 'Użytkownicy', group: 'Konfiguracja' },
@@ -54,6 +57,7 @@ function countOf(counts: NavCounts, key: NavKey): number | undefined {
     case 'wiadomosci': return counts.wiadomosci;
     case 'odebrane': return counts.odebrane;
     case 'konta': return counts.konta;
+    case 'microsoft-365': return counts.m365;
     case 'klucze': return counts.klucze;
     case 'integracje': return counts.integracje;
     case 'uzytkownicy': return counts.uzytkownicy;

@@ -3,6 +3,7 @@ import type { AccountsRepo } from '../store/accounts.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { IntegrationsRepo } from '../store/integrations.ts';
 import type { MailInRepo } from '../store/mail-in.ts';
+import type { M365AccountsRepo } from '../store/m365-accounts.ts';
 import type { MessagesRepo } from '../store/messages.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 import type { NavCounts } from './views/layout.ts';
@@ -17,6 +18,8 @@ export interface NavCountsDeps {
   integrations: IntegrationsRepo;
   /** Skrzynki pocztowe w błędzie liczą się razem z integracjami. */
   mailIn?: Pick<MailInRepo, 'counts'>;
+  /** Konta Microsoft 365: plakietka liczy konta wymagające ponownego logowania. */
+  m365Accounts?: Pick<M365AccountsRepo, 'list'>;
   now?: () => Date;
 }
 
@@ -27,6 +30,7 @@ export interface NavCountsDeps {
  * „Odebrane” to wiadomości, których aplikacja jeszcze nie dostała albo nie przyjęła
  * (dostawa w toku albo nieudana z ostatniej doby) - nie liczba odebranych, ta rośnie bez końca.
  * „Integracje” to integracje z błędem w ostatniej dobie - liczba integracji nic by nie mówiła.
+ * „Konta Microsoft 365” to konta wymagające ponownego logowania.
  */
 export function navCounts(deps: NavCountsDeps): NavCounts {
   const at = (deps.now ?? (() => new Date()))();
@@ -37,5 +41,6 @@ export function navCounts(deps: NavCountsDeps): NavCounts {
     klucze: deps.apiKeys.list().length,
     integracje: deps.integrations.countTroubled(new Date(at.getTime() - WINDOW_MS)) + (deps.mailIn?.counts().failing ?? 0),
     uzytkownicy: deps.users.count(),
+    m365: deps.m365Accounts?.list().filter((a) => a.state === 'needs_login').length ?? 0,
   };
 }

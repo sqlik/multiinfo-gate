@@ -21,6 +21,10 @@ import { IntegrationGuardsRepo } from '../../src/store/integration-guards.ts';
 import { MailInRepo } from '../../src/store/mail-in.ts';
 import { NotificationsRepo } from '../../src/store/notifications.ts';
 import { SettingsRepo } from '../../src/store/settings.ts';
+import { M365AccountsRepo } from '../../src/store/m365-accounts.ts';
+import { M365Service } from '../../src/m365/service.ts';
+import { M365Tokens } from '../../src/m365/tokens.ts';
+import type { TokenFetch } from '../../src/m365/oauth.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
 import type { NotificationEvent } from '../../src/notifications/rules.ts';
 import type { MailContent } from '../../src/worker/mail.ts';
@@ -50,6 +54,11 @@ export interface AdminHarness {
   mailbox: FakeMailbox;
   notifications: NotificationsRepo;
   settings: SettingsRepo;
+  m365Accounts: M365AccountsRepo;
+  m365: M365Service;
+  /** Formularze wysłane do atrapy punktu tokenów Microsoftu i odpowiedź, jaką atrapa zwraca. */
+  m365Forms: URLSearchParams[];
+  m365Reply: { value: { status: number; body: unknown } };
   /** Powiadomienia zgłoszone przez trasy panelu - atrapa notifiera. */
   notified: Array<{ event: NotificationEvent; subjectKey: string | null; summary: string }>;
   /** Maile wysłane przez panel (mail testowy) i wynik, jaki atrapa ma zwrócić. */
@@ -147,10 +156,18 @@ export async function startAdminHarness(
     closeAll: () => {},
   };
 
+  const m365Accounts = new M365AccountsRepo(db, masterKey);
+  const m365Forms: URLSearchParams[] = [];
+  const m365Reply = { value: m365TokenReply({ oid: M365_OID, preferred_username: 'alarmy@firma.pl' }) };
+  const m365Fetch: TokenFetch = async (_url, form) => { m365Forms.push(form); return m365Reply.value; };
+  const m365Tokens = new M365Tokens({ accounts: m365Accounts, fetch: m365Fetch, notifier });
+  const m365 = new M365Service({ accounts: m365Accounts, tokens: m365Tokens, fetch: m365Fetch, integrations, notifications, audit });
+
   const resolve = { value: async (_hostname: string) => ['93.184.216.34'] };
   const app = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, receiver,
     integrationEvents, guards, mailIn, mailboxConnect: fakeConnect(mailbox), engine: new TemplateEngine(), notifications, settings, notifier,
+    m365, m365Accounts,
     mailer: async (_settings, mail) => { if (harness.mailError) throw harness.mailError; mails.push(mail); },
     clients: clients as never, sessions, masterKey, now: () => now,
     resolve: (hostname) => resolve.value(hostname),
@@ -164,11 +181,26 @@ export async function startAdminHarness(
 
   return {
     app, db, accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, refreshed,
-    integrationEvents, guards, mailIn, mailbox, notifications, settings, notified, mails,
+    integrationEvents, guards, mailIn, mailbox, notifications, settings, notified, mails, m365Accounts, m365, m365Forms, m365Reply,
     get mailError() { return harness.mailError; },
     set mailError(e: Error | null) { harness.mailError = e; },
     sessions, userId, masterKey,
     cookie: `mig_session=${token}`, totpSecret, probe, invalidated, resolve,
+  };
+}
+
+/** Identyfikator `oid` konta technicznego w odpowiedzi atrapy punktu tokenów. */
+export const M365_OID = 'aaaaaaaa-0000-1111-2222-333344445555';
+
+/** Odpowiedź punktu tokenów Microsoftu z `id_token` zawierającym podane roszczenia. */
+export function m365TokenReply(claims: Record<string, unknown>): { status: number; body: unknown } {
+  const part = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  return {
+    status: 200,
+    body: {
+      token_type: 'Bearer', expires_in: 3600, access_token: 'token-dostepu-1', refresh_token: 'token-odswiezania-1',
+      id_token: `${part({ alg: 'RS256' })}.${part(claims)}.`,
+    },
   };
 }
 

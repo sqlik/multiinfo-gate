@@ -3,6 +3,9 @@ import type { StartupReason } from './startup/reason.ts';
 /** Artykuł „Rozwiązywanie problemów” w dokumentacji publicznej. */
 export const TROUBLESHOOTING_URL = 'https://sqlik.github.io/multiinfo-gate/problemy/';
 
+/** Rozdział „Konto Microsoft 365” w artykule o uruchomieniu; formularz konta odsyła do niego z instrukcji. */
+export const M365_DOCS_URL = 'https://sqlik.github.io/multiinfo-gate/uruchomienie/#48-konto-microsoft-365';
+
 /**
  * Stałe kotwice punktów artykułu (`{#…}` w docs/problemy.md); panel i dziennik odsyłają do nich wprost.
  * Zgodność z artykułem pilnuje test docs-links.

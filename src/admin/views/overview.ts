@@ -24,6 +24,8 @@ export interface OverviewData {
   release?: ReleaseInfo | null;
   /** Node bez poprawek bezpieczeństwa z października 2026; `null` bez paska. */
   node?: { installed: string; minimum: string } | null;
+  /** Konta Microsoft 365 wymagające ponownego logowania, po jednym pasku na konto. */
+  m365NeedsLogin?: Array<{ id: number; name: string }>;
 }
 
 /** „1 integracja zgłosiła błąd”, „3 integracje zgłosiły błąd”, „5 integracji zgłosiło błąd”. */
@@ -75,6 +77,20 @@ function alerts(data: OverviewData, now: Date): string {
           Wymagana jest wersja ${esc(data.node.minimum)} lub nowsza.</div>
       </div>
       <a href="${problemUrl('wersja-node')}" target="_blank" rel="noopener noreferrer">Jak zaktualizować</a>
+    </div>`);
+  }
+
+  for (const account of data.m365NeedsLogin ?? []) {
+    items.push(`<div class="alert stop">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="sq"></div>
+        <div>Konto Microsoft 365 <strong>${esc(account.name)}</strong> wymaga ponownego logowania.
+          Skrzynki Mail2SMS i maile powiadomień korzystające z tego konta czekają na logowanie.
+          <a href="/microsoft-365/${esc(account.id)}">Szczegóły konta</a></div>
+      </div>
+      <form method="post" action="/microsoft-365/${esc(account.id)}/zaloguj" style="margin: 0;">
+        <button class="btn btn-s" type="submit">Zaloguj ponownie</button>
+      </form>
     </div>`);
   }
 

@@ -28,6 +28,8 @@ import type { MailboxConnect } from '../integrations/mail/client.ts';
 import type { IntegrationsRepo } from '../store/integrations.ts';
 import type { NotificationsRepo } from '../store/notifications.ts';
 import type { SettingsRepo } from '../store/settings.ts';
+import type { M365AccountsRepo } from '../store/m365-accounts.ts';
+import type { M365Service } from '../m365/service.ts';
 import type { TemplateEngine } from '../integrations/templates.ts';
 import type { AdminNotifier } from '../notifications/rules.ts';
 import type { Mailer } from '../worker/mail.ts';
@@ -37,6 +39,7 @@ import type { ClientPool } from '../worker/clients.ts';
 import { FlashStore } from './flash.ts';
 import { registerAccountRoutes } from './routes/accounts.ts';
 import { registerAuditRoutes } from './routes/audit.ts';
+import { M365_RETURN_PATH, registerM365Routes } from './routes/m365.ts';
 import { registerKeyRoutes } from './routes/keys.ts';
 import { registerUserRoutes } from './routes/users.ts';
 import { registerDeliveryRoutes } from './routes/deliveries.ts';
@@ -107,6 +110,9 @@ export interface AdminDeps {
   install?: InstallKind | null;
   /** Wersja Node, na której działa bramka; domyślnie `process.version`, testy podstawiają inną. */
   nodeVersion?: string;
+  /** Usługi kont Microsoft 365; bez nich panel nie udostępnia ekranu kont i powrotu z logowania. */
+  m365?: M365Service;
+  m365Accounts?: M365AccountsRepo;
 }
 
 declare module 'fastify' {
@@ -126,9 +132,12 @@ const STAGE_TTL_MS = 5 * 60_000;
  */
 const STAGE_MAX_FAILURES = 5;
 
-/** Ścieżki dostępne bez sesji: ekran logowania i pliki, z których się składa. */
+/**
+ * Ścieżki dostępne bez sesji: ekran logowania i pliki, z których się składa, oraz strona pośrednia
+ * powrotu z Microsoftu, która niczego nie zapisuje i przenosi parametry do trasy wymagającej sesji.
+ */
 function isPublicPath(path: string): boolean {
-  return path === '/zaloguj' || path.startsWith('/zaloguj/') || path === '/healthz'
+  return path === '/zaloguj' || path.startsWith('/zaloguj/') || path === '/healthz' || path === M365_RETURN_PATH
     || path === '/style.css' || path === '/panel.js' || path.startsWith('/fonts/');
 }
 
@@ -172,6 +181,12 @@ const cookieOptions = {
 } as const;
 
 interface Stage { userId: number; at: number; failures: number }
+
+/** Liczby kont Microsoft 365 do /healthz panelu, bez nazw i adresów. */
+const m365Health = (repo: M365AccountsRepo) => () => {
+  const all = repo.list();
+  return { accounts: all.length, needsLogin: all.filter((a) => a.state === 'needs_login').length };
+};
 
 export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   const app = Fastify({
@@ -248,6 +263,7 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
       integrations: () => ({
         enabled: deps.integrations.countEnabled(), troubled24h: deps.integrations.countTroubled(new Date(now().getTime() - WINDOW_MS)),
       }),
+      ...(deps.m365Accounts ? { m365: m365Health(deps.m365Accounts) } : {}),
     },
     'admin',
   );
@@ -424,6 +440,7 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   registerInboundViewRoutes(app, deps, render);
   registerDeliveryRoutes(app, deps, render);
   registerAuditRoutes(app, deps, render);
+  if (deps.m365 && deps.m365Accounts) registerM365Routes(app, { ...deps, m365: deps.m365, m365Accounts: deps.m365Accounts }, render);
 
   /**
    * Sekret trzymamy do czasu potwierdzenia, żeby odświeżenie ekranu nie unieważniło

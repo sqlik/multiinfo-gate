@@ -37,6 +37,10 @@ import { JobsRepo } from './store/jobs.ts';
 import { MessageEventsRepo } from './store/message-events.ts';
 import { MessagesRepo } from './store/messages.ts';
 import { NotificationsRepo } from './store/notifications.ts';
+import { M365AccountsRepo } from './store/m365-accounts.ts';
+import { fetchToken } from './m365/oauth.ts';
+import { M365Service } from './m365/service.ts';
+import { M365Tokens } from './m365/tokens.ts';
 import { SettingsRepo } from './store/settings.ts';
 import { PackagesRepo } from './store/packages.ts';
 import { WebhookDeliveriesRepo } from './store/webhook-deliveries.ts';
@@ -141,6 +145,9 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const notifications = new NotificationsRepo(db, config.masterKey);
   const settings = new SettingsRepo(db);
   const notifier = new Notifier({ notifications, jobs, log });
+  const m365Accounts = new M365AccountsRepo(db, config.masterKey);
+  const m365Tokens = new M365Tokens({ accounts: m365Accounts, fetch: fetchToken, notifier, log });
+  const m365 = new M365Service({ accounts: m365Accounts, tokens: m365Tokens, fetch: fetchToken, integrations, notifications, audit });
   const scanner = new NotificationScanner({
     accounts, inboundServices, messages, inbound, integrations, deliveries, notifications, notifier, jobs, log,
     release: () => pendingRelease(settings), mailIn,
@@ -181,7 +188,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
     integrationEvents, guards, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate, allowPrivateMail: config.mailAllowPrivate,
-    log, install, nodeVersion,
+    log, install, nodeVersion, m365, m365Accounts,
   });
 
   // Panel domyślnie zostaje na pętli zwrotnej (MIG_ADMIN_HOST); w kontenerze o wystawieniu
