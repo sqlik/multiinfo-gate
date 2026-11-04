@@ -1,7 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defaultMailInConfig, type MailInConfig } from '../../src/integrations/config.ts';
+import { MAIL_IN_PASSWORD_REF, defaultMailInConfig, type MailInConfig } from '../../src/integrations/config.ts';
 import { MailboxError } from '../../src/integrations/mail/client.ts';
+import { M365AuthError, M365_IMAP } from '../../src/m365/oauth.ts';
+import { M365AccountsRepo } from '../../src/store/m365-accounts.ts';
 import type { ParsedMail } from '../../src/integrations/mail/parse.ts';
 import type { MailInIntegration } from '../../src/integrations/pipeline.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
@@ -531,7 +533,7 @@ describe('nextPollDelayMs, replyFor, checkMailbox', () => {
   });
 
   it('checkMailbox podaje authserv-id z ostatniej wiadomości, a null bez nagłówka', async () => {
-    const settings = { host: 'h', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', password: PASSWORD };
+    const settings = { host: 'h', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', auth: { kind: 'password' as const, password: PASSWORD } };
     box.authservId = 'mx.google.com';
     expect(await checkMailbox(fakeConnect(box), settings, 'INBOX')).toMatchObject({ ok: true, authservId: 'mx.google.com' });
     box.authservId = null;
@@ -539,18 +541,113 @@ describe('nextPollDelayMs, replyFor, checkMailbox', () => {
   });
   it('checkMailbox z sesją bez metody authservId (starsza atrapa) daje null', async () => {
     const connect: typeof fakeConnect = (b) => async (s) => { const session = await fakeConnect(b)(s, 1000); const { authservId: _x, ...rest } = session; return rest as typeof session; };
-    expect(await checkMailbox(connect(box), { host: 'h', port: 993, security: 'tls', verifyCert: true, user: 'u', password: PASSWORD }, 'INBOX')).toMatchObject({ ok: true, authservId: null });
+    expect(await checkMailbox(connect(box), { host: 'h', port: 993, security: 'tls', verifyCert: true, user: 'u', auth: { kind: 'password' as const, password: PASSWORD } }, 'INBOX')).toMatchObject({ ok: true, authservId: null });
   });
   it('checkMailbox: sukces z liczbą nieprzeczytanych i folderami; błąd logowania bez hasła w treści', async () => {
     box.add({ uid: 1, seen: false, source: 'Subject: a\r\n\r\nx' });
-    const settings = { host: 'h', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', password: PASSWORD };
+    const settings = { host: 'h', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', auth: { kind: 'password' as const, password: PASSWORD } };
     expect(await checkMailbox(fakeConnect(box), settings, 'INBOX')).toEqual({ ok: true, unseen: 1, folders: ['INBOX'], authservId: null });
     expect(box.calls).toContain('close');
     box.failConnect = new Error(`LOGIN ${PASSWORD} rejected`);
     expect(await checkMailbox(fakeConnect(box), settings, 'INBOX')).toEqual({ ok: false, kind: 'other', error: 'LOGIN *** rejected', folders: [] });
     box.failConnect = null;
-    expect(await checkMailbox(fakeConnect(box), { ...settings, password: 'x' }, 'INBOX')).toMatchObject({ ok: false, kind: 'auth' });
+    expect(await checkMailbox(fakeConnect(box), { ...settings, auth: { kind: 'password' as const, password: 'x' } }, 'INBOX')).toMatchObject({ ok: false, kind: 'auth' });
     expect(await checkMailbox(fakeConnect(box), settings, 'Niema')).toMatchObject({ ok: false, kind: 'folder' });
+  });
+});
+
+describe('MailInPoller: skrzynka Microsoft 365', () => {
+  let m365: M365AccountsRepo;
+  let tokenCalls: number;
+  let tokenError: Error | null;
+  let p: MailInPoller;
+
+  beforeEach(() => {
+    m365 = new M365AccountsRepo(db, randomBytes(32));
+    tokenCalls = 0;
+    tokenError = null;
+    const tokens = { access: async () => { tokenCalls += 1; if (tokenError) throw tokenError; return { token: 'token-dostepu-1', address: 'alarmy@firma.pl' }; } };
+    p = new MailInPoller({ ...deps, m365: { tokens, accounts: m365 } });
+  });
+
+  const account = (state: 'new' | 'connected' | 'needs_login'): number => {
+    const id = m365.create({ name: 'Dyżur IT', tenant: 'firma.onmicrosoft.com', clientId: '11111111-2222-3333-4444-555555555555' }, NOW);
+    if (state === 'new') return id;
+    m365.connected(id, {
+      refreshToken: 'r', address: 'alarmy@firma.pl', addressManual: false, loginName: 'alarmy@firma.pl', loginOid: null,
+      redirectUri: 'http://localhost:8081/m365/powrot', by: 'admin',
+    }, NOW);
+    if (state === 'needs_login') m365.failed(id, { state: 'needs_login', code: '50173', message: 'x' }, NOW);
+    return id;
+  };
+  const mailbox = (accountId: number) => make({
+    imap: { ...M365_IMAP, user: 'alarmy@firma.pl', passRef: MAIL_IN_PASSWORD_REF, auth: { mode: 'm365', accountId } },
+  }, { password: '' });
+
+  for (const [label, prepare] of [
+    ['wymagające logowania', () => account('needs_login')],
+    ['nowe, bez logowania', () => account('new')],
+    ['usunięte', () => 999],
+  ] as const) {
+    it(`konto ${label}: bez połączenia, stan account, następne odpytanie po interwale, bez mailbox_failure`, async () => {
+      const row = mailbox(prepare());
+      await p.poll(row, NOW);
+      await p.poll(row, at(60_000));
+      const state = mailIn.state(row.id)!;
+      expect(state).toMatchObject({ errorKind: 'account', error: 'Konto Microsoft 365 wymaga logowania', failures: 2 });
+      expect(Date.parse(state.nextPollAt) - at(60_000).getTime()).toBe(60_000);
+      expect(box.calls).not.toContain('connect');
+      expect(tokenCalls).toBe(0);
+      expect(notified).toEqual([]);
+      // Po czasie, po którym reguła mailbox_failure zgłasza awarię sieci, konto nadal nie daje powiadomienia skrzynki.
+      await p.poll(row, at(20 * 60_000));
+      expect(notified).toEqual([]);
+    });
+  }
+
+  it('konto połączone: logowanie XOAUTH2 tokenem dostępu na adres skrzynki, stan bez błędu', async () => {
+    const row = mailbox(account('connected'));
+    await p.poll(row, NOW);
+    expect(box.lastAuth).toEqual({ kind: 'oauth2', accessToken: box.accessToken });
+    expect(box.lastUser).toBe('alarmy@firma.pl');
+    expect(mailIn.state(row.id)).toMatchObject({ errorKind: null, error: null });
+  });
+
+  it('serwer odrzuca token przy sprawnym koncie: błąd auth z podpowiedzią, konto zostaje połączone', async () => {
+    const id = account('connected');
+    const row = mailbox(id);
+    box.accessToken = 'inny-token';
+    await p.poll(row, NOW);
+    const state = mailIn.state(row.id)!;
+    expect(state.errorKind).toBe('auth');
+    expect(state.error).toContain('wyłączony IMAP na koncie albo brak dostępu konta do skrzynki współdzielonej');
+    expect(m365.get(id)!.state).toBe('connected');
+  });
+
+  it('dostawca tokenów: needs_login daje stan account bez połączenia, błąd usługi daje stan network', async () => {
+    const row = mailbox(account('connected'));
+    tokenError = new M365AuthError('needs_login', '50173', 'Konto Microsoft 365 wymaga logowania');
+    await p.poll(row, NOW);
+    expect(mailIn.state(row.id)).toMatchObject({ errorKind: 'account', error: 'Konto Microsoft 365 wymaga logowania' });
+    expect(notified).toEqual([]);
+    tokenError = new M365AuthError('error', null, 'usługa Microsoft nie odpowiada');
+    await p.poll(row, at(60_000));
+    expect(mailIn.state(row.id)).toMatchObject({ errorKind: 'network', error: 'usługa Microsoft nie odpowiada' });
+    expect(box.calls).not.toContain('connect');
+  });
+
+  it('komunikat błędu nie zawiera tokenu dostępu', async () => {
+    const row = mailbox(account('connected'));
+    box.failConnect = new Error(`AUTHENTICATE ${box.accessToken} rejected`);
+    await p.poll(row, NOW);
+    expect(mailIn.state(row.id)!.error).toBe('AUTHENTICATE *** rejected');
+  });
+
+  it('poller bez usług Microsoft 365 traktuje skrzynkę jak konto wymagające logowania', async () => {
+    const row = mailbox(1);
+    await poller.poll(row, NOW);
+    expect(mailIn.state(row.id)).toMatchObject({ errorKind: 'account' });
+    expect(box.calls).not.toContain('connect');
   });
 });
 

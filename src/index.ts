@@ -162,6 +162,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const mailInPoller = new MailInPoller({
     accounts, apiKeys, messages, events, jobs, inbound, integrations, integrationEvents, guards, engine,
     mailIn, connect: imapConnect, resolve: systemResolver, allowPrivateMail: config.mailAllowPrivate, notifier, notifications, log,
+    m365: { tokens: m365Tokens, accounts: m365Accounts },
   });
   const worker = new Worker({
     accounts, apiKeys, messages, events, deliveries, packages, jobs, clients, inbound,
@@ -188,7 +189,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
     integrationEvents, guards, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate, allowPrivateMail: config.mailAllowPrivate,
-    log, install, nodeVersion, m365, m365Accounts,
+    log, install, nodeVersion, m365, m365Accounts, m365Tokens,
   });
 
   // Panel domyślnie zostaje na pętli zwrotnej (MIG_ADMIN_HOST); w kontenerze o wystawieniu

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { MailboxError, errorKindOf, errorMessageOf, guardedConnect, scrubError, selectableFolders, type MailboxSession, type MailboxSettings } from '../../../src/integrations/mail/client.ts';
+import { MailboxError, errorKindOf, errorMessageOf, guardedConnect, imapAuth, scrubError, selectableFolders, type MailboxSession, type MailboxSettings } from '../../../src/integrations/mail/client.ts';
 import { PRIVATE_MAIL_MESSAGE } from '../../../src/net/private-address.ts';
 import { FakeMailbox, fakeConnect } from '../../helpers/fake-mailbox.ts';
 
-const settings = { host: 'h', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', password: 'p' };
+const settings = { host: 'h', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', auth: { kind: 'password' as const, password: 'p' } };
 
 describe('scrubError', () => {
   it('usuwa hasło i login z komunikatu serwera', () => {
@@ -87,13 +87,13 @@ describe('FakeMailbox', () => {
   });
   it('błąd logowania, gdy hasło nie pasuje; failConnect rzuca podany błąd; nieznany folder to błąd folder', async () => {
     const box = new FakeMailbox({ password: 'dobre' });
-    await expect(fakeConnect(box)({ ...settings, password: 'złe' }, 1000)).rejects.toBeInstanceOf(MailboxError);
-    await expect(fakeConnect(box)({ ...settings, password: 'złe' }, 1000)).rejects.toMatchObject({ kind: 'auth' });
+    await expect(fakeConnect(box)({ ...settings, auth: { kind: 'password' as const, password: 'złe' } }, 1000)).rejects.toBeInstanceOf(MailboxError);
+    await expect(fakeConnect(box)({ ...settings, auth: { kind: 'password' as const, password: 'złe' } }, 1000)).rejects.toMatchObject({ kind: 'auth' });
     box.password = 'złe';
-    const s = await fakeConnect(box)({ ...settings, password: 'złe' }, 1000);
+    const s = await fakeConnect(box)({ ...settings, auth: { kind: 'password' as const, password: 'złe' } }, 1000);
     await expect(s.open('Niema')).rejects.toMatchObject({ kind: 'folder' });
     box.failConnect = Object.assign(new Error('ECONNREFUSED'), { code: 'ECONNREFUSED' });
-    await expect(fakeConnect(box)({ ...settings, password: 'złe' }, 1000)).rejects.toMatchObject({ code: 'ECONNREFUSED' });
+    await expect(fakeConnect(box)({ ...settings, auth: { kind: 'password' as const, password: 'złe' } }, 1000)).rejects.toMatchObject({ code: 'ECONNREFUSED' });
   });
   it('unsee, resetUidValidity, rejectMove i size nadpisany', async () => {
     const box = new FakeMailbox({ uidValidity: 7 });
@@ -110,8 +110,24 @@ describe('FakeMailbox', () => {
   });
 });
 
+describe('imapAuth', () => {
+  it('hasło przekazuje jako pass, a token dostępu jako accessToken dla XOAUTH2', () => {
+    expect(imapAuth({ ...settings, user: 'bramka@firma.pl', auth: { kind: 'password', password: 'tajne' } })).toEqual({ user: 'bramka@firma.pl', pass: 'tajne' });
+    expect(imapAuth({ ...settings, user: 'alarmy@firma.pl', auth: { kind: 'oauth2', accessToken: 'token-dostepu' } })).toEqual({ user: 'alarmy@firma.pl', accessToken: 'token-dostepu' });
+  });
+});
+
+describe('FakeMailbox z tokenem', () => {
+  it('przyjmuje token dostępu zgodny z atrapą i zapamiętuje sposób logowania', async () => {
+    const box = new FakeMailbox();
+    await fakeConnect(box)({ ...settings, auth: { kind: 'oauth2', accessToken: box.accessToken } }, 1000);
+    expect(box.lastAuth).toEqual({ kind: 'oauth2', accessToken: box.accessToken });
+    await expect(fakeConnect(box)({ ...settings, auth: { kind: 'oauth2', accessToken: 'obcy' } }, 1000)).rejects.toMatchObject({ kind: 'auth' });
+  });
+});
+
 describe('guardedConnect', () => {
-  const settings = { host: 'imap.przyklad.test', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', password: 'p' };
+  const settings = { host: 'imap.przyklad.test', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', auth: { kind: 'password' as const, password: 'p' } };
   it('odrzuca serwer w sieci wewnętrznej z komunikatem o zmiennej, nie łącząc się', async () => {
     let connected = false;
     const connect = guardedConnect(async () => { connected = true; return {} as MailboxSession; }, async () => ['10.0.0.5'], false);

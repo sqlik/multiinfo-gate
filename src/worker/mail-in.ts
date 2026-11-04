@@ -1,6 +1,7 @@
 import { MAIL_IN_PASSWORD_REF, type MailInConfig } from '../integrations/config.ts';
 import { warsawTime } from '../time/warsaw.ts';
-import { MailboxError, errorKindOf, errorMessageOf, guardedConnect, scrubError, type MailboxConnect, type MailboxSession, type MailboxSettings } from '../integrations/mail/client.ts';
+import { MailboxError, authSecret, errorKindOf, errorMessageOf, guardedConnect, scrubError, type MailboxAuth, type MailboxConnect, type MailboxSession, type MailboxSettings } from '../integrations/mail/client.ts';
+import { M365_IMAP_REFUSED, m365MailboxAuth, type M365MailboxDeps } from '../m365/mailbox.ts';
 import { systemResolver, type Resolver } from '../net/private-address.ts';
 import { parseMail, type ParsedMail } from '../integrations/mail/parse.ts';
 import { runMailIn, type MailInIntegration, type MailInOutcome, type PipelineDeps } from '../integrations/pipeline.ts';
@@ -31,20 +32,25 @@ export interface MailInDeps extends PipelineDeps {
   notifier?: AdminNotifier;
   notifications?: Pick<NotificationsRepo, 'rule' | 'smtp'>;
   log?: Logger;
+  /** Konta Microsoft 365 skrzynek logujących się tokenem; bez nich takie skrzynki czekają jak przy koncie wymagającym logowania. */
+  m365?: M365MailboxDeps;
 }
 
 /**
  * Odstęp po nieudanym odpytaniu: interwał razy 2^(failures-1), do 15 min, ale nigdy krócej niż
- * ustawiona częstotliwość; logowanie co najmniej 5 min.
+ * ustawiona częstotliwość; logowanie co najmniej 5 min. Konto Microsoft 365 wymagające logowania:
+ * zwykły interwał, bo bramka nie łączy się z serwerem, a skrzynka powinna ruszyć zaraz po zalogowaniu.
  */
 export function nextPollDelayMs(intervalSec: number, failures: number, kind: MailboxErrorKind | null): number {
   const base = intervalSec * 1000;
+  if (kind === 'account') return base;
   const grown = Math.min(base * 2 ** Math.max(0, failures - 1), Math.max(BACKOFF_CAP_MS, base));
   return kind === 'auth' ? Math.max(grown, AUTH_RETRY_MS) : grown;
 }
 
 const KIND_WORDS: Record<MailboxErrorKind, string> = {
   auth: 'logowanie odrzucone', network: 'serwer nie odpowiada', folder: 'folder niedostępny', other: 'błąd odpytania',
+  account: 'konto Microsoft 365 wymaga logowania',
 };
 
 
@@ -92,7 +98,7 @@ export async function checkMailbox(connect: MailboxConnect, settings: MailboxSet
     return { ok: true, unseen: box.unseen, folders, authservId };
   } catch (e) {
     // Lista folderów zostaje, gdy logowanie się udało, a zawiodła nazwa folderu: użytkownik od razu widzi właściwą.
-    return { ok: false, kind: errorKindOf(e), error: scrubError(errorMessageOf(e), [settings.password, settings.user]), folders };
+    return { ok: false, kind: errorKindOf(e), error: scrubError(errorMessageOf(e), [authSecret(settings.auth), settings.user]), folders };
   } finally {
     await session?.close();
   }
@@ -142,17 +148,18 @@ export class MailInPoller {
     const log = this.deps.log ?? silentLogger;
     const config = integration.config;
     mailIn.ensureState(integration.id, now);
-    const password = this.deps.integrations.secrets(integration.id)[MAIL_IN_PASSWORD_REF] ?? '';
+    let secret = '';
     let timer: NodeJS.Timeout | null = null;
     // Po przekroczeniu limitu praca kończy bieżący mail i przerywa pętlę; spóźnione połączenie jest zamykane bez pracy.
     let aborted = false;
     try {
-      if (password === '') throw new MailboxError('auth', 'brak hasła w konfiguracji');
+      const auth = await this.mailboxAuth(integration, now);
+      secret = authSecret(auth);
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => { aborted = true; reject(new MailboxError('network', `odpytanie przekroczyło ${POLL_TIMEOUT_MS / 1000} s`)); }, POLL_TIMEOUT_MS);
       });
       const work = (async () => {
-        const session = await this.deps.connect({ ...config.imap, password }, CONNECT_TIMEOUT_MS);
+        const session = await this.deps.connect({ ...config.imap, auth }, CONNECT_TIMEOUT_MS);
         try {
           if (aborted) throw new MailboxError('network', 'połączenie nawiązane po przekroczeniu limitu');
           return await this.process(session, integration, now, () => aborted);
@@ -166,7 +173,9 @@ export class MailInPoller {
       mailIn.recordPoll(integration.id, { ok: true, uidvalidity: result.uidValidity, unseen: result.unseen, at: now, nextPollAt: new Date(now.getTime() + config.intervalSec * 1000) });
     } catch (e) {
       const kind = errorKindOf(e);
-      const error = scrubError(errorMessageOf(e), [password, config.imap.user]);
+      const scrubbed = scrubError(errorMessageOf(e), [secret, config.imap.user]);
+      // Odmowa XOAUTH2 przy działającym tokenie: przyczyna leży w ustawieniach skrzynki, nie w koncie (spec 6.3).
+      const error = kind === 'auth' && config.imap.auth.mode === 'm365' ? `${M365_IMAP_REFUSED}. Odpowiedź serwera: ${scrubbed}` : scrubbed;
       const failures = (mailIn.state(integration.id)?.failures ?? 0) + 1;
       mailIn.recordPoll(integration.id, { ok: false, error, errorKind: kind, at: now, nextPollAt: new Date(now.getTime() + nextPollDelayMs(config.intervalSec, failures, kind)) });
       log.warn('skrzynka.blad', { integrationId: integration.id, kind, failures });
@@ -174,6 +183,19 @@ export class MailInPoller {
     } finally {
       if (timer) clearTimeout(timer);
     }
+  }
+
+  /** Hasło z sekretów albo token dostępu konta Microsoft 365; błąd jako MailboxError, przed połączeniem. */
+  private async mailboxAuth(integration: MailInIntegration, now: Date): Promise<MailboxAuth> {
+    const mode = integration.config.imap.auth;
+    if (mode.mode === 'm365') {
+      const got = await m365MailboxAuth(this.deps.m365, mode.accountId, now);
+      if (!got.ok) throw new MailboxError(got.kind, got.error);
+      return got.auth;
+    }
+    const password = this.deps.integrations.secrets(integration.id)[MAIL_IN_PASSWORD_REF] ?? '';
+    if (password === '') throw new MailboxError('auth', 'brak hasła w konfiguracji');
+    return { kind: 'password', password };
   }
 
   /**
@@ -308,7 +330,8 @@ export class MailInPoller {
   /** Jedno powiadomienie na awarię: logowanie od razu, reszta po `afterMinutes` trwania. */
   private notifyFailure(integration: MailInIntegration, kind: MailboxErrorKind, error: string, now: Date): void {
     const state = this.deps.mailIn.state(integration.id);
-    if (!state || state.notifiedAt !== null || state.errorSince === null) return;
+    // Konto wymagające logowania zgłasza reguła konta Microsoft 365: jedna przyczyna, jedno powiadomienie, nie po jednym na skrzynkę.
+    if (kind === 'account' || !state || state.notifiedAt !== null || state.errorSince === null) return;
     const afterMinutes = Number(this.deps.notifications?.rule('mailbox_failure').params.afterMinutes ?? DEFAULT_AFTER_MINUTES);
     const lasting = now.getTime() - Date.parse(state.errorSince) >= afterMinutes * 60_000;
     if (kind !== 'auth' && !lasting) return;

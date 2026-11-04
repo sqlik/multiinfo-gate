@@ -1,4 +1,4 @@
-import { MailboxError, type MailboxConnect, type MailboxSession } from '../../src/integrations/mail/client.ts';
+import { MailboxError, type MailboxAuth, type MailboxConnect, type MailboxSession } from '../../src/integrations/mail/client.ts';
 
 export interface FakeMessage { uid: number; seen: boolean; source: string; folder: string; size: number }
 
@@ -6,6 +6,11 @@ export interface FakeMessage { uid: number; seen: boolean; source: string; folde
 export class FakeMailbox {
   uidValidity: number;
   password: string;
+  /** Token dostępu Microsoft 365, który atrapa przyjmuje przy logowaniu XOAUTH2. */
+  accessToken = 'token-dostepu-1';
+  /** Sposób logowania i nazwa użytkownika ostatniego połączenia. */
+  lastAuth: MailboxAuth | null = null;
+  lastUser: string | null = null;
   failConnect: Error | null;
   rejectMove = false;
   /** Opóźnienie każdego połączenia; do testu, że wisząca skrzynka nie blokuje innych. */
@@ -101,6 +106,12 @@ export const fakeConnect = (box: FakeMailbox): MailboxConnect => async (settings
   box.calls.push('connect');
   if (box.delayMs > 0) await new Promise((r) => setTimeout(r, box.delayMs));
   if (box.failConnect) throw box.failConnect;
-  if (settings.password !== box.password) throw new MailboxError('auth', 'LOGIN failed: Authentication failed.');
+  box.lastAuth = settings.auth;
+  box.lastUser = settings.user;
+  if (settings.auth.kind === 'oauth2') {
+    if (settings.auth.accessToken !== box.accessToken) throw new MailboxError('auth', 'AUTHENTICATE failed.');
+  } else if (settings.auth.password !== box.password) {
+    throw new MailboxError('auth', 'LOGIN failed: Authentication failed.');
+  }
   return box.session();
 };

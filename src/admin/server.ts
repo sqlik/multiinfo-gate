@@ -30,6 +30,7 @@ import type { NotificationsRepo } from '../store/notifications.ts';
 import type { SettingsRepo } from '../store/settings.ts';
 import type { M365AccountsRepo } from '../store/m365-accounts.ts';
 import type { M365Service } from '../m365/service.ts';
+import type { M365Tokens } from '../m365/tokens.ts';
 import type { TemplateEngine } from '../integrations/templates.ts';
 import type { AdminNotifier } from '../notifications/rules.ts';
 import type { Mailer } from '../worker/mail.ts';
@@ -113,6 +114,8 @@ export interface AdminDeps {
   /** Usługi kont Microsoft 365; bez nich panel nie udostępnia ekranu kont i powrotu z logowania. */
   m365?: M365Service;
   m365Accounts?: M365AccountsRepo;
+  /** Token dostępu do „Sprawdź połączenie” skrzynki Microsoft 365; testy podstawiają dostawcę z atrapą. */
+  m365Tokens?: Pick<M365Tokens, 'access'>;
 }
 
 declare module 'fastify' {

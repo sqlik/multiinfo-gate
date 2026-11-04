@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
+import { M365_IMAP } from '../../src/m365/oauth.ts';
 
 const NOW = new Date('2026-10-21T10:00:00Z');
 let h: AdminHarness;
@@ -293,5 +294,97 @@ describe('Sprawdź połączenie i authserv-id', () => {
     const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', action: 'polaczenie', ...formBody() });
     expect(res.body).toContain('brak nagłówka w ostatniej wiadomości');
     expect(res.body).not.toContain('data-fill="#authservId"');
+  });
+});
+
+describe('skrzynka Microsoft 365', () => {
+  const account = (state: 'connected' | 'needs_login' = 'connected'): number => {
+    const id = h.m365Accounts.create({ name: 'Dyżur IT', tenant: 'firma.onmicrosoft.com', clientId: '11111111-2222-3333-4444-555555555555' }, NOW);
+    h.m365Accounts.connected(id, {
+      refreshToken: 'token-odswiezania-0', address: 'alarmy@firma.pl', addressManual: false, loginName: 'alarmy@firma.pl', loginOid: null,
+      redirectUri: 'http://localhost:8081/m365/powrot', by: 'janek',
+    }, NOW);
+    if (state === 'needs_login') h.m365Accounts.failed(id, { state: 'needs_login', code: '50173', message: 'x' }, NOW);
+    return id;
+  };
+  const m365Body = (accountId: number, over: Record<string, string> = {}) =>
+    formBody({ authMode: 'm365', m365AccountId: String(accountId), user: 'alarmy@firma.pl', password: '', host: 'evil.example', port: '143', security: 'none', ...over });
+
+  it('katalog Mail2SMS zawiera kafelek Microsoft 365', async () => {
+    const body = (await get('/integracje/nowa?rodzaj=mail_in')).body;
+    expect(body).toContain('ustawienie=poczta-m365');
+    expect(body).toContain('Microsoft 365');
+  });
+
+  it('formularz bez kont zamiast listy pokazuje odnośnik do dodania konta i nie pyta o serwer ani hasło', async () => {
+    const body = (await get('/integracje/nowa?rodzaj=mail_in&ustawienie=poczta-m365')).body;
+    expect(body).toContain('href="/microsoft-365/nowe"');
+    expect(body).toContain('Dodaj konto Microsoft 365');
+    expect(body).not.toContain('name="password"');
+    expect(body).not.toContain('Serwer IMAP');
+  });
+
+  it('formularz z połączonym kontem wybiera je domyślnie i podstawia adres skrzynki', async () => {
+    const id = account();
+    const body = (await get('/integracje/nowa?rodzaj=mail_in&ustawienie=poczta-m365')).body;
+    expect(body).toContain(`<option value="${id}" selected>Dyżur IT · połączone</option>`);
+    expect(body).toContain('name="user" value="alarmy@firma.pl"');
+    expect(body).toContain('name="authMode" value="m365"');
+  });
+
+  it('zapis bez hasła wymusza serwer Microsoft 365 niezależnie od przesłanego serwera', async () => {
+    const id = account();
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-m365', ...m365Body(id) });
+    expect(res.statusCode).toBe(302);
+    const row = h.integrations.list()[0]!;
+    expect((row.config as { imap: unknown }).imap).toEqual({ ...M365_IMAP, user: 'alarmy@firma.pl', passRef: 'imap_password', auth: { mode: 'm365', accountId: id } });
+    expect(h.integrations.secretNames(row.id)).toEqual([]);
+  });
+
+  it('zmiana konta w edycji ustawia próg od nowa', async () => {
+    const a = account();
+    const b = account();
+    await post('/integracje', { kind: 'mail_in', preset: 'poczta-m365', ...m365Body(a) });
+    const row = h.integrations.list()[0]!;
+    h.mailIn.setFloor(row.id, 5, 7);
+    expect((await post(`/integracje/${row.id}/edytuj`, m365Body(a, { name: 'Inna nazwa' }))).statusCode).toBe(302);
+    expect(h.mailIn.state(row.id)).toMatchObject({ uidFloor: 5, uidvalidity: 7 });
+    expect((await post(`/integracje/${row.id}/edytuj`, m365Body(b))).statusCode).toBe(302);
+    expect(h.mailIn.state(row.id)).toMatchObject({ uidFloor: 0, uidvalidity: 0, nextPollAt: NOW.toISOString() });
+  });
+
+  it('przejście z Microsoft 365 na hasło wymaga podania hasła, mimo że stare jest zapisane', async () => {
+    await post('/integracje', { kind: 'mail_in', preset: 'poczta-wlasny', ...formBody({ host: M365_IMAP.host }) });
+    const row = h.integrations.list()[0]!;
+    const id = account();
+    expect((await post(`/integracje/${row.id}/edytuj`, m365Body(id))).statusCode).toBe(302);
+    const back = await post(`/integracje/${row.id}/edytuj`, formBody({ host: M365_IMAP.host, user: 'alarmy@firma.pl', password: '' }));
+    expect(back.statusCode).toBe(400);
+    expect(back.body).toContain('podaj hasło ponownie');
+  });
+
+  it('Sprawdź połączenie z kontem wymagającym logowania pokazuje błąd konta bez łączenia się', async () => {
+    const id = account('needs_login');
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-m365', ...m365Body(id), action: 'polaczenie' });
+    expect(res.body).toContain('Konto Microsoft 365 wymaga logowania');
+    expect(h.mailbox.calls).not.toContain('connect');
+  });
+
+  it('Sprawdź połączenie z połączonym kontem loguje się tokenem dostępu', async () => {
+    const id = account();
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-m365', ...m365Body(id), action: 'polaczenie' });
+    expect(res.body).toContain('Połączenie nawiązane');
+    expect(h.mailbox.lastAuth).toEqual({ kind: 'oauth2', accessToken: 'token-dostepu-1' });
+    expect(h.mailbox.lastUser).toBe('alarmy@firma.pl');
+  });
+
+  it('szczegóły skrzynki z błędem konta odsyłają do konta Microsoft 365', async () => {
+    const id = account('needs_login');
+    await post('/integracje', { kind: 'mail_in', preset: 'poczta-m365', ...m365Body(id) });
+    const row = h.integrations.list()[0]!;
+    h.mailIn.recordPoll(row.id, { ok: false, error: 'Konto Microsoft 365 wymaga logowania', errorKind: 'account', at: NOW, nextPollAt: NOW });
+    const body = (await get(`/integracje/${row.id}`)).body;
+    expect(body).toContain('Konto Microsoft 365 wymaga logowania');
+    expect(body).toContain(`href="/microsoft-365/${id}"`);
   });
 });

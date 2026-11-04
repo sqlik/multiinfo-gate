@@ -5,8 +5,11 @@ import { authservIdOf } from './auth-results.ts';
 import type { MailboxErrorKind } from '../../store/mail-in.ts';
 import type { MailSecurity } from '../config.ts';
 
+/** Logowanie do skrzynki: hasłem albo tokenem dostępu Microsoft 365 (XOAUTH2). */
+export type MailboxAuth = { kind: 'password'; password: string } | { kind: 'oauth2'; accessToken: string };
+
 export interface MailboxSettings {
-  host: string; port: number; security: MailSecurity; verifyCert: boolean; user: string; password: string;
+  host: string; port: number; security: MailSecurity; verifyCert: boolean; user: string; auth: MailboxAuth;
   /** Rozwiązany adres IP, pod który idzie połączenie; `host` zostaje nazwą do TLS (SNI i certyfikat). */
   connectAddress?: string;
 }
@@ -90,6 +93,18 @@ export function scrubError(message: string, secrets: string[]): string {
   return out.length > ERROR_CHARS ? `${out.slice(0, ERROR_CHARS - 1)}…` : out;
 }
 
+/** Sekret logowania do usunięcia z komunikatów błędów: hasło albo token dostępu. */
+export function authSecret(auth: MailboxAuth): string {
+  return auth.kind === 'password' ? auth.password : auth.accessToken;
+}
+
+/** Dane logowania dla imapflow: hasło jako `pass`, token dostępu jako `accessToken` (XOAUTH2). */
+export function imapAuth(settings: MailboxSettings): { user: string; pass: string } | { user: string; accessToken: string } {
+  return settings.auth.kind === 'password'
+    ? { user: settings.user, pass: settings.auth.password }
+    : { user: settings.user, accessToken: settings.auth.accessToken };
+}
+
 const WATCHDOG_MS = 60_000;
 
 /** Foldery, które da się otworzyć: bez `\Noselect` (u Gmaila kontener `[Gmail]`). */
@@ -124,7 +139,7 @@ export const imapConnect: MailboxConnect = async (settings, timeoutMs) => {
     secure: settings.security === 'tls',
     doSTARTTLS: settings.security === 'starttls',
     tls: { rejectUnauthorized: settings.verifyCert },
-    auth: { user: settings.user, pass: settings.password },
+    auth: imapAuth(settings),
     logger: false,
     connectionTimeout: timeoutMs,
     greetingTimeout: timeoutMs,

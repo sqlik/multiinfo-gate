@@ -167,7 +167,7 @@ export async function startAdminHarness(
   const app = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, receiver,
     integrationEvents, guards, mailIn, mailboxConnect: fakeConnect(mailbox), engine: new TemplateEngine(), notifications, settings, notifier,
-    m365, m365Accounts,
+    m365, m365Accounts, m365Tokens,
     mailer: async (_settings, mail) => { if (harness.mailError) throw harness.mailError; mails.push(mail); },
     clients: clients as never, sessions, masterKey, now: () => now,
     resolve: (hostname) => resolve.value(hostname),

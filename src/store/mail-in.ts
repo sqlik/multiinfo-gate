@@ -1,6 +1,7 @@
 import type { Database } from './db.ts';
 
-export type MailboxErrorKind = 'auth' | 'network' | 'folder' | 'other';
+/** `account`: konto Microsoft 365 skrzynki wymaga logowania, bramka nie łączy się z serwerem. */
+export type MailboxErrorKind = 'auth' | 'network' | 'folder' | 'other' | 'account';
 
 /** Stan skrzynki pocztowej integracji `mail_in`: jeden wiersz na integrację. */
 export interface MailInState {

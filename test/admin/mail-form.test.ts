@@ -123,3 +123,40 @@ describe('mailFormValues i sampleMail', () => {
     expect(Date.now() - started).toBeLessThan(500);
   });
 });
+
+describe('skrzynka Microsoft 365', () => {
+  const accounts = [{ id: 3, address: 'alarmy@firma.pl' }];
+  const m365 = (over: Partial<MailFormValues> = {}): MailFormValues => ({ ...v(), password: '', authMode: 'm365', m365AccountId: '3', user: '', host: 'evil.example', port: '143', security: 'none', ...over });
+
+  it('wymusza serwer Microsoft 365, nie wymaga hasła i bierze adres skrzynki z konta', () => {
+    const r = mailFormToConfig(m365(), false, engine, accounts);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.config.imap).toEqual({
+      host: 'outlook.office365.com', port: 993, security: 'tls', verifyCert: true, user: 'alarmy@firma.pl', passRef: 'imap_password', auth: { mode: 'm365', accountId: 3 },
+    });
+    expect(r.password).toBeNull();
+  });
+
+  it('adres skrzynki współdzielonej zostaje, małymi literami, a napis bez małpy jest odrzucany', () => {
+    const shared = mailFormToConfig(m365({ user: 'Serwis@Firma.pl' }), false, engine, accounts);
+    expect(shared.ok && shared.config.imap.user).toBe('serwis@firma.pl');
+    const bad = mailFormToConfig(m365({ user: 'serwis' }), false, engine, accounts);
+    expect(!bad.ok && bad.error).toBe('Adres skrzynki musi być adresem e-mail, na przykład alarmy@firma.pl');
+  });
+
+  it('konto spoza listy kont jest odrzucane', () => {
+    const bad = mailFormToConfig(m365({ m365AccountId: '9' }), false, engine, accounts);
+    expect(!bad.ok && bad.error).toBe('Wybierz konto Microsoft 365 z listy');
+  });
+
+  it('formularz i konfiguracja przechodzą w obie strony z kontem i adresem skrzynki', () => {
+    const r = mailFormToConfig(m365({ user: 'alarmy@firma.pl' }), false, engine, accounts);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const back = mailConfigToValues(r.config, base);
+    expect(back).toMatchObject({ authMode: 'm365', m365AccountId: '3', user: 'alarmy@firma.pl' });
+    expect(mailFormValues({ authMode: 'm365', m365AccountId: '3' })).toMatchObject({ authMode: 'm365', m365AccountId: '3' });
+    expect(mailFormValues({})).toMatchObject({ authMode: 'password', m365AccountId: '' });
+  });
+});
