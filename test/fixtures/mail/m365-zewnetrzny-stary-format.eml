@@ -1,0 +1,16 @@
+MIME-Version: 1.0
+Authentication-Results: spf=pass (sender IP is 192.0.2.20)
+ smtp.mailfrom=przyklad.pl; dkim=pass (signature was verified)
+ header.d=przyklad.pl;dmarc=pass action=none
+ header.from=przyklad.pl;compauth=pass reason=100
+From: "Serwis UPS" <serwis@przyklad.pl>
+To: alarmy@firma.pl
+Subject: UPS-01 powrót zasilania
+Date: Tue, 11 Aug 2026 04:04:33 +0000
+Message-ID: <m365-zewnetrzny-stary-format@przyklad.pl>
+Content-Type: text/plain; charset="utf-8"
+X-MS-Exchange-Organization-MessageDirectionality: Incoming
+X-MS-Exchange-Organization-AuthAs: Anonymous
+X-MS-Exchange-CrossTenant-AuthAs: Anonymous
+
+Zasilanie sieciowe UPS-01 zostało przywrócone.

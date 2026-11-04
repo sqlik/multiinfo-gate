@@ -127,7 +127,7 @@ describe('mailFormValues i sampleMail', () => {
     const raw = await sampleMail({ ...v(), sampleRaw: 'From: Jan <jan@przyklad.test>\r\nSubject: Alarm\r\n\r\nTreść\r\n' }, NOW);
     expect(raw).toMatchObject({ from: 'jan@przyklad.test', subject: 'Alarm', textFull: 'Treść' });
     const fields = await sampleMail({ ...v(), sampleFrom: 'ups@przyklad.test', sampleSubject: 'Alarm', sampleText: 'Error code: E042' }, NOW);
-    expect(fields).toEqual({ from: 'ups@przyklad.test', fromName: '', subject: 'Alarm', textFull: 'Error code: E042', date: NOW.toISOString(), to: [], messageId: null, authResults: [], auto: false });
+    expect(fields).toEqual({ from: 'ups@przyklad.test', fromName: '', subject: 'Alarm', textFull: 'Error code: E042', date: NOW.toISOString(), to: [], messageId: null, authResults: [], exchangeAuthAs: null, auto: false });
     expect(await sampleMail(v(), NOW)).toBeNull();
     const named = await sampleMail({ ...v(), sampleFrom: 'Jan Kowalski <Jan@przyklad.test>', sampleSubject: 'A', sampleText: 'b' }, NOW);
     expect(named).toMatchObject({ from: 'jan@przyklad.test', fromName: 'Jan Kowalski' });

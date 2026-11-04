@@ -142,6 +142,7 @@ function sectionMailbox(v: MailFormValues, opts: MailFormOptions): string {
 }
 
 function sectionSenders(v: MailFormValues, advanced: boolean): string {
+  // Spec 6.4: w skrzynce Microsoft 365 sprawdzenie przepuszcza też pocztę wewnętrzną oznaczoną przez Exchange.
   return `<details open>
     <summary>Kto może wysyłać</summary>
     <div class="field">
@@ -151,7 +152,9 @@ function sectionSenders(v: MailFormValues, advanced: boolean): string {
     </div>
     <div class="field">
       ${checkbox('requireAuthResults', v.requireAuthResults, 'Wymagaj potwierdzenia nadawcy przez serwer (SPF/DKIM)')}
-      ${hint('Zalecane u dostawców publicznych (Gmail, home.pl, OVH). Serwery wewnętrzne zwykle nie dodają tych nagłówków i wówczas każda wiadomość zostanie odrzucona')}
+      ${hint(v.authMode === 'm365'
+    ? 'Zalecane w skrzynce Microsoft 365. Wiadomość spoza organizacji przechodzi, gdy serwer potwierdził SPF albo DKIM domeny nadawcy. Przechodzą także wiadomości wysłane wewnątrz organizacji, które Exchange oznaczył jako wewnętrzne'
+    : 'Zalecane u dostawców publicznych (Gmail, home.pl, OVH). Serwery wewnętrzne zwykle nie dodają tych nagłówków i wówczas każda wiadomość zostanie odrzucona')}
     </div>
     ${advanced ? `<div class="field">
       <label for="authservId">Nazwa serwera w nagłówku Authentication-Results</label>

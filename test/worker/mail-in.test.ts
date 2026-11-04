@@ -590,7 +590,7 @@ describe('nextPollDelayMs, replyFor, checkMailbox', () => {
   });
 
   it('treść odpowiedzi o błędzie; wysyłka udana nie dostaje odpowiedzi od ręki, tylko raport', () => {
-    const m = { from: 'a@x', fromName: '', subject: 'Awaria', textFull: '', date: '', to: [], messageId: '<1@x>', authResults: [], auto: false } satisfies ParsedMail;
+    const m = { from: 'a@x', fromName: '', subject: 'Awaria', textFull: '', date: '', to: [], messageId: '<1@x>', authResults: [], exchangeAuthAs: null, auto: false } satisfies ParsedMail;
     const c = { ...defaultMailInConfig(), maxParts: 3, throttle: { limit: 10, windowMinutes: 10 } };
     const sent = { kind: 'sent', messageIds: ['a'], recipients: ['48601000200'], invalid: [], parts: 1, text: 'x' } as const;
     expect(replyFor(sent, m, c)).toBeNull();

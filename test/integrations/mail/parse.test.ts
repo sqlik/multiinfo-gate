@@ -50,6 +50,24 @@ describe('parseMail', () => {
     expect(two.authResults).toEqual(['a; spf=fail', 'b; dkim=pass']);
   });
 
+  it('nagłówek X-MS-Exchange-Organization-AuthAs występujący dokładnie raz daje wartość małymi literami', async () => {
+    expect((await parseMail(read('m365-wewnetrzny-outlook.eml'))).exchangeAuthAs).toBe('internal');
+    expect((await parseMail(read('m365-wewnetrzny-smtp.eml'))).exchangeAuthAs).toBe('internal');
+    expect((await parseMail(read('m365-zewnetrzny-spf.eml'))).exchangeAuthAs).toBe('anonymous');
+    const folded = await parseMail(Buffer.from('From: a@firma.pl\r\nX-MS-Exchange-Organization-AuthAs:\r\n\tInternal \r\n\r\nt\r\n'));
+    expect(folded.exchangeAuthAs).toBe('internal');
+  });
+
+  it('brak nagłówka AuthAs, dwa wystąpienia albo sam nagłówek CrossTenant dają null', async () => {
+    expect((await parseMail(read('prosty-tekst.eml'))).exchangeAuthAs).toBeNull();
+    const two = 'From: a@firma.pl\r\nX-MS-Exchange-Organization-AuthAs: Internal\r\nX-MS-Exchange-Organization-AuthAs: Anonymous\r\n\r\nt\r\n';
+    expect((await parseMail(Buffer.from(two))).exchangeAuthAs).toBeNull();
+    const twoSame = 'From: a@firma.pl\r\nX-MS-Exchange-Organization-AuthAs: Internal\r\nX-MS-Exchange-Organization-AuthAs: Internal\r\n\r\nt\r\n';
+    expect((await parseMail(Buffer.from(twoSame))).exchangeAuthAs).toBeNull();
+    const crossTenant = 'From: a@firma.pl\r\nX-MS-Exchange-CrossTenant-AuthAs: Internal\r\n\r\nt\r\n';
+    expect((await parseMail(Buffer.from(crossTenant))).exchangeAuthAs).toBeNull();
+  });
+
   it('From z dwoma adresami zostaje pusty, bo takiego maila nie wysyła żaden program pocztowy', async () => {
     const src = Buffer.from('From: a@przyklad.test, b@przyklad.test\r\nSubject: x\r\nMessage-ID: <d@x>\r\n\r\ntreść\r\n');
     const m = await parseMail(src);
@@ -73,7 +91,7 @@ describe('parseMail', () => {
   it('brak nagłówków daje puste pola i datę rozbioru', async () => {
     const now = new Date('2026-10-21T10:00:00Z');
     const m = await parseMail(Buffer.from('\r\nsama treść\r\n'), now);
-    expect([m.from, m.subject, m.messageId, m.to, m.date, m.auto]).toEqual(['', '', null, [], now.toISOString(), false]);
+    expect([m.from, m.subject, m.messageId, m.to, m.date, m.auto, m.exchangeAuthAs]).toEqual(['', '', null, [], now.toISOString(), false, null]);
     expect(m.textFull).toBe('sama treść');
   });
 });

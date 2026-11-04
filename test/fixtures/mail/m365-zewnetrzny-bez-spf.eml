@@ -1,0 +1,19 @@
+MIME-Version: 1.0
+Authentication-Results: mx.microsoft.com 1; spf=none (sender IP is
+ 198.51.100.5) smtp.mailfrom=przyklad.pl; dkim=none (message not
+ signed) header.d=none;dmarc=none action=none
+ header.from=przyklad.pl;compauth=fail reason=001
+Received-SPF: None (protection.outlook.com: przyklad.pl does not
+ designate permitted sender hosts)
+From: serwis@przyklad.pl
+To: alarmy@firma.pl
+Subject: UPS-01 praca na baterii
+Date: Wed, 4 Nov 2026 09:40:28 +0000
+Message-ID: <m365-zewnetrzny-bez-spf@przyklad.pl>
+Content-Type: text/plain; charset="utf-8"
+X-MS-Exchange-Organization-MessageDirectionality: Incoming
+X-MS-Exchange-Organization-AuthSource: AM2PEPF00000002.eurprd02.prod.outlook.com
+X-MS-Exchange-Organization-AuthAs: Anonymous
+X-MS-Exchange-CrossTenant-AuthAs: Anonymous
+
+Zasilacz UPS-01 przełączył się na pracę z baterii.

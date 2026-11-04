@@ -287,6 +287,6 @@ export async function sampleMail(v: MailFormValues, now: Date): Promise<ParsedMa
   if (v.sampleFrom === '' && v.sampleSubject === '' && v.sampleText.trim() === '') return null;
   return {
     ...sampleSender(v.sampleFrom), subject: v.sampleSubject, textFull: v.sampleText.trim(), date: now.toISOString(),
-    to: [], messageId: null, authResults: [], auto: false,
+    to: [], messageId: null, authResults: [], exchangeAuthAs: null, auto: false,
   };
 }

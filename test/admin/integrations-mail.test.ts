@@ -347,6 +347,17 @@ describe('skrzynka Microsoft 365', () => {
     expect(body).toContain('<option value="24" selected>24 h</option>');
   });
 
+  it('podpowiedź przy sprawdzaniu nadawcy w skrzynce Microsoft 365 mówi o wiadomościach wewnętrznych, a przy serwerze z hasłem nie', async () => {
+    account();
+    const sentence = 'Przechodzą także wiadomości wysłane wewnątrz organizacji, które Exchange oznaczył jako wewnętrzne';
+    const m365 = (await get('/integracje/nowa?rodzaj=mail_in&ustawienie=poczta-m365')).body;
+    expect(m365).toContain(sentence);
+    expect(m365).not.toContain('Zalecane u dostawców publicznych');
+    const own = (await get('/integracje/nowa?rodzaj=mail_in&ustawienie=poczta-wlasny')).body;
+    expect(own).not.toContain(sentence);
+    expect(own).toContain('Zalecane u dostawców publicznych');
+  });
+
   it('zapis bez hasła wymusza serwer Microsoft 365 niezależnie od przesłanego serwera', async () => {
     const id = account();
     const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-m365', ...m365Body(id) });

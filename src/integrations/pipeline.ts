@@ -481,7 +481,10 @@ export async function runMailIn(deps: PipelineDeps, integration: MailInIntegrati
     note('skipped', { reason: `nadawca spoza listy: ${mail.from || 'brak adresu'}` });
     return { kind: 'skipped', reason: 'sender_not_allowed' };
   }
-  if (config.requireAuthResults && !authResultsPass(mail.authResults, domainOf(mail.from), config.authservId)) {
+  // W skrzynce Microsoft 365 mail wysłany wewnątrz organizacji nie zawiera spf=pass ani dkim=pass, ale Exchange oznacza go
+  // jako wewnętrzny; nadawca z zewnątrz tego oznaczenia nie podrobi, bo Exchange usuwa nagłówek i wstawia własny.
+  const exchangeInternal = config.imap.auth.mode === 'm365' && mail.exchangeAuthAs === 'internal';
+  if (config.requireAuthResults && !exchangeInternal && !authResultsPass(mail.authResults, domainOf(mail.from), config.authservId)) {
     note('skipped', { reason: config.authservId === '' ? 'brak potwierdzenia SPF/DKIM od serwera' : `brak potwierdzenia SPF/DKIM od serwera ${config.authservId}` });
     return { kind: 'skipped', reason: 'auth_failed' };
   }
