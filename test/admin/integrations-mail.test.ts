@@ -412,6 +412,14 @@ describe('skrzynka Microsoft 365', () => {
     expect(h.mailbox.lastUser).toBe('alarmy@firma.pl');
   });
 
+  it('Sprawdź połączenie odrzucone przez Exchange przy sprawnym koncie wymienia literówkę w adresie, IMAP i skrzynkę współdzieloną', async () => {
+    const id = account();
+    h.mailbox.accessToken = 'inny-token';
+    const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-m365', ...m365Body(id, { user: 'alarmy@frima.pl' }), action: 'polaczenie' });
+    expect(res.body).toContain('Logowanie odrzucone');
+    expect(res.body).toContain('Sprawdź pisownię adresu skrzynki i to, czy IMAP jest włączony dla konta. Dla skrzynki współdzielonej sprawdź także, czy konto posiada do niej uprawnienie pełnego dostępu');
+  });
+
   it('szczegóły skrzynki z błędem konta odsyłają do konta Microsoft 365', async () => {
     const id = account('needs_login');
     await post('/integracje', { kind: 'mail_in', preset: 'poczta-m365', ...m365Body(id) });

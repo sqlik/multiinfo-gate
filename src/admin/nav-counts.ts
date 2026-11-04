@@ -16,8 +16,8 @@ export interface NavCountsDeps {
   users: AdminUsersRepo;
   deliveries: WebhookDeliveriesRepo;
   integrations: IntegrationsRepo;
-  /** Skrzynki pocztowe w błędzie liczą się razem z integracjami. */
-  mailIn?: Pick<MailInRepo, 'counts'>;
+  /** Skrzynki pocztowe w błędzie liczą się razem z integracjami, poza czekającymi na logowanie konta Microsoft 365. */
+  mailIn?: Pick<MailInRepo, 'troubledCount'>;
   /** Konta Microsoft 365: plakietka liczy konta wymagające ponownego logowania. */
   m365Accounts?: Pick<M365AccountsRepo, 'list'>;
   now?: () => Date;
@@ -39,7 +39,7 @@ export function navCounts(deps: NavCountsDeps): NavCounts {
     odebrane: deps.deliveries.troubledInboundCount(new Date(at.getTime() - WINDOW_MS)),
     konta: deps.accounts.list().length,
     klucze: deps.apiKeys.list().length,
-    integracje: deps.integrations.countTroubled(new Date(at.getTime() - WINDOW_MS)) + (deps.mailIn?.counts().failing ?? 0),
+    integracje: deps.integrations.countTroubled(new Date(at.getTime() - WINDOW_MS)) + (deps.mailIn?.troubledCount() ?? 0),
     uzytkownicy: deps.users.count(),
     m365: deps.m365Accounts?.list().filter((a) => a.state === 'needs_login').length ?? 0,
   };

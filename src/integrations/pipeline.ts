@@ -449,6 +449,12 @@ function prepareMail(engine: TemplateEngine, config: MailInConfig, mail: ParsedM
  * warunek i burza, odbiorcy z trzech poziomów, wysyłka, wpis dziennika. Działanie na mailu
  * oraz odpowiedź do nadawcy robi wołający (poller), bo potok nie zna sesji IMAP.
  */
+/** Temat maila w podsumowaniu wpisu dziennika: ucięty do 80 znaków, a pusty jako „temat (bez tematu)”. */
+export function subjectNote(subject: string): string {
+  const t = subject.trim();
+  return t === '' ? 'temat (bez tematu)' : `temat „${t.slice(0, 80)}”`;
+}
+
 export async function runMailIn(deps: PipelineDeps, integration: MailInIntegration, mail: ParsedMail, now: Date): Promise<MailInOutcome> {
   const log = deps.log ?? silentLogger;
   const config = integration.config;
@@ -456,7 +462,7 @@ export async function runMailIn(deps: PipelineDeps, integration: MailInIntegrati
     ? JSON.stringify({ from: mail.from, from_name: mail.fromName, subject: mail.subject, text_full: mail.textFull, date: mail.date, message_id: mail.messageId })
     : null;
   // Spec 4.5: podsumowanie wpisu to nadawca (w polu źródła) oraz temat ucięty do 80 znaków, dopisany po właściwym powodzie.
-  const subject = mail.subject.trim() === '' ? 'temat (bez tematu)' : `temat „${mail.subject.trim().slice(0, 80)}”`;
+  const subject = subjectNote(mail.subject);
   const note: Noter = (result, extra = {}) =>
     deps.integrationEvents.record({
       integrationId: integration.id, at: now, result, payload: stored, logLimit: config.eventLogLimit, ...(mail.from ? { sourceIp: mail.from } : {}), ...extra,

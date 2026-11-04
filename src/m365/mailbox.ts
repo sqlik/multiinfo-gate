@@ -12,7 +12,7 @@ export interface M365MailboxDeps { tokens: Pick<M365Tokens, 'access'>; accounts:
 export const ACCOUNT_NEEDS_LOGIN = 'Konto Microsoft 365 wymaga logowania';
 
 /** Podpowiedź przy odmowie logowania XOAUTH2 mimo działającego tokenu (spec 6.3). */
-export const M365_IMAP_REFUSED = 'Microsoft odrzucił logowanie do skrzynki. Najczęstszą przyczyną jest wyłączony IMAP na koncie albo brak dostępu konta do skrzynki współdzielonej';
+export const M365_IMAP_REFUSED = 'Microsoft odrzucił logowanie do skrzynki. Najczęstszą przyczyną jest literówka w adresie skrzynki, wyłączony IMAP na koncie albo brak dostępu konta do skrzynki współdzielonej';
 
 export type M365MailboxAuth = { ok: true; auth: MailboxAuth } | { ok: false; kind: 'account' | 'network'; error: string };
 

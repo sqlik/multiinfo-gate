@@ -180,7 +180,7 @@ function stateAlert(row: M365AccountRow): string {
     return `<div class="alert stop" style="margin-bottom: 14px;">
         <div style="display: flex; align-items: center; gap: 10px;">
           <div class="sq"></div>
-          <div>Microsoft odrzucił logowanie konta. ${esc(hintFor(row.errorCode))}. Skrzynki Mail2SMS i maile powiadomień korzystające z tego konta czekają na ponowne logowanie.</div>
+          <div>${esc(hintFor(row.errorCode, 'account'))}. Skrzynki Mail2SMS i maile powiadomień korzystające z tego konta czekają na ponowne logowanie.</div>
         </div>
       </div>`;
   }

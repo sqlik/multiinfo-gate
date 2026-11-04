@@ -76,7 +76,10 @@ export class FakeMailbox {
       meta: async (uids) => uids.map((uid) => {
         const m = need(uid);
         const id = /^Message-ID:\s*(<[^>]+>)/im.exec(m.source);
-        return { uid, size: m.size, messageId: id ? id[1]! : null, internalDate: m.internalDate };
+        const head = m.source.split(/\r?\n\r?\n/)[0]!;
+        const from = /^From:.*?([^\s<>"]+@[^\s<>"]+)/im.exec(head);
+        const subject = /^Subject:[ \t]*(.*)$/im.exec(head);
+        return { uid, size: m.size, messageId: id ? id[1]! : null, internalDate: m.internalDate, from: from ? from[1]!.toLowerCase() : null, subject: subject ? subject[1]!.trim() : '' };
       }),
       source: async (uid) => {
         this.calls.push(`source:${uid}`);

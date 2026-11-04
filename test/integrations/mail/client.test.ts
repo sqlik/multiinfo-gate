@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MailboxError, errorKindOf, errorMessageOf, guardedConnect, imapAuth, internalDateOf, scrubError, selectableFolders, type MailboxSession, type MailboxSettings } from '../../../src/integrations/mail/client.ts';
+import { MailboxError, errorKindOf, errorMessageOf, guardedConnect, imapAuth, internalDateOf, metaOf, scrubError, selectableFolders, type MailboxSession, type MailboxSettings } from '../../../src/integrations/mail/client.ts';
 import { PRIVATE_MAIL_MESSAGE } from '../../../src/net/private-address.ts';
 import { FakeMailbox, fakeConnect } from '../../helpers/fake-mailbox.ts';
 
@@ -38,9 +38,12 @@ describe('errorMessageOf', () => {
     expect(errorMessageOf(Object.assign(new Error('x'), { code: 'ETIMEDOUT' }))).toBe('serwer nie odpowiada w zadanym czasie (ETIMEDOUT)');
   });
 
-  it('dokłada odpowiedź serwera do ogólnego komunikatu imapflow, a zwykły błąd zostawia bez zmian', () => {
+  it('zastępuje ogólny komunikat imapflow odpowiedzią serwera, inny komunikat uzupełnia, a zwykły błąd zostawia bez zmian', () => {
     expect(errorMessageOf(Object.assign(new Error('Command failed'), { responseText: '[AUTHENTICATIONFAILED] Niepoprawny login albo hasło' })))
-      .toBe('Command failed: [AUTHENTICATIONFAILED] Niepoprawny login albo hasło');
+      .toBe('[AUTHENTICATIONFAILED] Niepoprawny login albo hasło');
+    expect(errorMessageOf(Object.assign(new Error('Command failed'), { responseText: ' Login failed. ' }))).toBe('Login failed.');
+    expect(errorMessageOf(Object.assign(new Error('Command failed'), { responseText: '' }))).toBe('Command failed');
+    expect(errorMessageOf(Object.assign(new Error('Unexpected close'), { responseText: 'BYE serwer kończy pracę' }))).toBe('Unexpected close: BYE serwer kończy pracę');
     expect(errorMessageOf(Object.assign(new Error('x'), { responseText: '' }))).toBe('x');
     expect(errorMessageOf(new Error('connect ECONNREFUSED'))).toBe('connect ECONNREFUSED');
     expect(errorMessageOf('tekst')).toBe('tekst');
@@ -72,8 +75,8 @@ describe('FakeMailbox', () => {
     expect(await s.unseen(1)).toEqual([2, 3]);
     expect(await s.unseen(0)).toEqual([2, 3]);
     expect(await s.unseen(3)).toEqual([]);
-    expect(await s.meta([2])).toEqual([{ uid: 2, size: expect.any(Number), messageId: '<b@x>', internalDate: null }]);
-    expect(await s.meta([3])).toEqual([{ uid: 3, size: expect.any(Number), messageId: null, internalDate: new Date('2026-10-20T08:00:00Z') }]);
+    expect(await s.meta([2])).toEqual([{ uid: 2, size: expect.any(Number), messageId: '<b@x>', internalDate: null, from: null, subject: 'b' }]);
+    expect(await s.meta([3])).toEqual([{ uid: 3, size: expect.any(Number), messageId: null, internalDate: new Date('2026-10-20T08:00:00Z'), from: null, subject: 'c' }]);
     expect((await s.source(3)).toString()).toContain('Subject: c');
     await s.markSeen(2);
     expect(box.messages('INBOX').find((m) => m.uid === 2)?.seen).toBe(true);
@@ -107,6 +110,19 @@ describe('FakeMailbox', () => {
     await expect(s.move(5, 'X')).rejects.toMatchObject({ kind: 'folder' });
     box.resetUidValidity(8);
     expect(await s.open('INBOX')).toMatchObject({ uidValidity: 8 });
+  });
+});
+
+describe('metaOf', () => {
+  it('odczytuje z koperty Message-ID, nadawcę małymi literami i temat bez odstępów na brzegach', () => {
+    expect(metaOf({ uid: 7, size: 120, internalDate: new Date('2026-11-04T18:00:00Z'), envelope: {
+      messageId: '<7@x>', subject: '  Zasilanie awaryjne serwerowni ', from: [{ name: 'Jan', address: 'Jan.Nowak@Firma.PL' }],
+    } })).toEqual({ uid: 7, size: 120, messageId: '<7@x>', internalDate: new Date('2026-11-04T18:00:00Z'), from: 'jan.nowak@firma.pl', subject: 'Zasilanie awaryjne serwerowni' });
+  });
+
+  it('bez koperty i bez rozmiaru: zero, brak nadawcy, pusty temat', () => {
+    expect(metaOf({ uid: 8 })).toEqual({ uid: 8, size: 0, messageId: null, internalDate: null, from: null, subject: '' });
+    expect(metaOf({ uid: 9, envelope: { from: [{ name: 'Bez adresu' }] } })).toMatchObject({ from: null, subject: '' });
   });
 });
 

@@ -4,7 +4,7 @@ import { MailboxError, authSecret, errorKindOf, errorMessageOf, guardedConnect, 
 import { M365_IMAP_REFUSED, m365MailboxAuth, type M365MailboxDeps } from '../m365/mailbox.ts';
 import { systemResolver, type Resolver } from '../net/private-address.ts';
 import { parseMail, type ParsedMail } from '../integrations/mail/parse.ts';
-import { runMailIn, type MailInIntegration, type MailInOutcome, type PipelineDeps } from '../integrations/pipeline.ts';
+import { runMailIn, subjectNote, type MailInIntegration, type MailInOutcome, type PipelineDeps } from '../integrations/pipeline.ts';
 import { silentLogger, type Logger } from '../log.ts';
 import type { AdminNotifier } from '../notifications/rules.ts';
 import { isMailIn } from '../store/integrations.ts';
@@ -226,8 +226,12 @@ export class MailInPoller {
       if (aborted()) break;
       highest = Math.max(highest, meta.uid);
       const key: SeenKey = { messageId: meta.messageId, uidvalidity: box.uidValidity, uid: meta.uid };
+      // Wpis bez pobierania treści: nadawca i temat z koperty, w tym samym układzie co wpisy potoku.
       const note = (result: 'skipped', reason: string) =>
-        this.deps.integrationEvents.record({ integrationId: integration.id, at: now, result, reason, logLimit: config.eventLogLimit });
+        this.deps.integrationEvents.record({
+          integrationId: integration.id, at: now, result, reason: `${reason} · ${subjectNote(meta.subject)}`, logLimit: config.eventLogLimit,
+          ...(meta.from ? { sourceIp: meta.from } : {}),
+        });
       if (mailIn.seen(integration.id, key)) {
         // Ktoś celowo oznaczył mail jako nieprzeczytany albo folder odtworzono: bez działania na mailu.
         mailIn.remember(integration.id, key, 'skipped', now);

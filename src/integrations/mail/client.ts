@@ -13,8 +13,25 @@ export interface MailboxSettings {
   /** Rozwiązany adres IP, pod który idzie połączenie; `host` zostaje nazwą do TLS (SNI i certyfikat). */
   connectAddress?: string;
 }
-/** `internalDate`: chwila przyjęcia maila przez serwer (INTERNALDATE); `null`, gdy serwer jej nie podał albo jest nieczytelna. */
-export interface MailMeta { uid: number; size: number; messageId: string | null; internalDate: Date | null }
+/**
+ * `internalDate`: chwila przyjęcia maila przez serwer (INTERNALDATE); `null`, gdy serwer jej nie podał albo jest nieczytelna.
+ * `from` i `subject` z koperty: wpis w dzienniku o mailu pominiętym przed pobraniem treści wskazuje nadawcę i temat.
+ */
+export interface MailMeta { uid: number; size: number; messageId: string | null; internalDate: Date | null; from: string | null; subject: string }
+
+type FetchedMeta = {
+  uid: number; size?: number | undefined; internalDate?: Date | string | undefined;
+  envelope?: { messageId?: string | undefined; subject?: string | undefined; from?: Array<{ address?: string | undefined }> | undefined } | undefined;
+};
+
+/** Metadane z odpowiedzi FETCH imapflow: adres nadawcy małymi literami, temat bez odstępów na brzegach. */
+export function metaOf(m: FetchedMeta): MailMeta {
+  const address = m.envelope?.from?.[0]?.address;
+  return {
+    uid: m.uid, size: m.size ?? 0, messageId: m.envelope?.messageId ?? null, internalDate: internalDateOf(m.internalDate),
+    from: typeof address === 'string' && address !== '' ? address.toLowerCase() : null, subject: (m.envelope?.subject ?? '').trim(),
+  };
+}
 
 /** Data przyjęcia z imapflow: poprawna data albo `null` (imapflow zwraca surowy napis, gdy nie umie odczytać daty). */
 export function internalDateOf(raw: Date | string | undefined): Date | null {
@@ -85,7 +102,9 @@ export function errorMessageOf(e: unknown): string {
   if (CODE_WORDS[code]) return `${CODE_WORDS[code]} (${code})`;
   const message = e instanceof Error ? e.message : String(e);
   const response = typeof e === 'object' && e !== null && typeof (e as { responseText?: unknown }).responseText === 'string' ? (e as { responseText: string }).responseText.trim() : '';
-  return response === '' ? message : `${message}: ${response}`;
+  if (response === '') return message;
+  // Ogólne „Command failed” imapflow nic nie wnosi: administrator widzi samą odpowiedź serwera.
+  return message === 'Command failed' ? response : `${message}: ${response}`;
 }
 
 const ERROR_CHARS = 300;
@@ -172,7 +191,7 @@ export const imapConnect: MailboxConnect = async (settings, timeoutMs) => {
       if (uids.length === 0) return [];
       const out: MailMeta[] = [];
       for await (const m of client.fetch(uids.map(uidOf).join(','), { uid: true, size: true, envelope: true, internalDate: true }, { uid: true })) {
-        out.push({ uid: m.uid, size: m.size ?? 0, messageId: m.envelope?.messageId ?? null, internalDate: internalDateOf(m.internalDate) });
+        out.push(metaOf(m));
       }
       return out;
     },

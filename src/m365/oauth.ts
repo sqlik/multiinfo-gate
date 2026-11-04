@@ -193,9 +193,13 @@ const HINTS: Record<string, string> = {
 
 const GENERAL_HINT = `Microsoft odrzucił logowanie, dlatego ${RELOGIN}, a gdy błąd się powtórzy, sprawdzić rejestrację aplikacji w Entra ID`;
 
-/** Podpowiedź dla administratora według kodu AADSTS; nieznany kod otrzymuje podpowiedź ogólną. */
-export function hintFor(code: string | null): string {
-  return (code !== null ? HINTS[code] : undefined) ?? GENERAL_HINT;
+/**
+ * Podpowiedź dla administratora według kodu AADSTS; nieznany kod otrzymuje podpowiedź ogólną.
+ * `account`: wariant dla strony szczegółów konta, bez odesłania do szczegółów, bo przycisk jest na tej stronie.
+ */
+export function hintFor(code: string | null, place: 'notice' | 'account' = 'notice'): string {
+  const hint = (code !== null ? HINTS[code] : undefined) ?? GENERAL_HINT;
+  return place === 'account' ? hint.replace(RELOGIN, 'należy kliknąć „Zaloguj ponownie”') : hint;
 }
 
 /** Adres skrzynki konta: `email`, a w razie braku `preferred_username`, małymi literami. */

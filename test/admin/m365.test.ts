@@ -243,7 +243,16 @@ describe('lista, formularz i szczegóły', () => {
     const body = (await page(`/microsoft-365/${id}`)).body;
     expect(body).toContain('Wymaga logowania');
     expect(body).toContain('AADSTS50173');
-    expect(body).toContain('Microsoft unieważnił logowanie po zmianie hasła konta');
+    expect(body).toContain('Microsoft unieważnił logowanie po zmianie hasła konta albo odwołaniu sesji, dlatego należy kliknąć „Zaloguj ponownie”. Skrzynki Mail2SMS i maile powiadomień korzystające z tego konta czekają na ponowne logowanie.');
+    expect(body).not.toContain('w szczegółach konta');
+  });
+
+  it('nieznany kod AADSTS: podpowiedź ogólna bez powtórzonego „Microsoft odrzucił”', async () => {
+    const id = await connected();
+    h.m365Accounts.failed(id, { state: 'needs_login', code: '99999', message: 'AADSTS99999: nieznany' }, NOW);
+    const body = (await page(`/microsoft-365/${id}`)).body;
+    expect(body).toContain('Microsoft odrzucił logowanie, dlatego należy kliknąć „Zaloguj ponownie”, a gdy błąd się powtórzy');
+    expect(body.match(/Microsoft odrzucił/g)).toHaveLength(1);
   });
 
   it('edycja zmienia nazwę, a zmiana aplikacji rozłącza konto', async () => {

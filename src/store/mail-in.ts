@@ -123,6 +123,15 @@ export class MailInRepo {
     return { total: row.total, failing: row.failing ?? 0 };
   }
 
+  /**
+   * Liczba włączonych skrzynek w błędzie bez tych, które czekają na logowanie konta Microsoft 365.
+   * Licznik integracji i pasek przeglądu ich nie wliczają, bo opisuje je pasek konta.
+   */
+  troubledCount(): number {
+    const row = this.db.prepare(`SELECT COUNT(*) AS n ${ENABLED_JOIN} AND s.error IS NOT NULL AND (s.error_kind IS NULL OR s.error_kind <> 'account')`).get() as { n: number };
+    return row.n;
+  }
+
   /** Czy mail był już brany pod uwagę: po Message-ID albo po parze UIDVALIDITY i UID. */
   seen(integrationId: number, key: SeenKey): boolean {
     const byUid = this.db.prepare('SELECT 1 FROM mail_in_seen WHERE integration_id = ? AND uidvalidity = ? AND uid = ?').get(integrationId, key.uidvalidity, key.uid);

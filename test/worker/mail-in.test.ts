@@ -125,7 +125,7 @@ describe('MailInPoller: próg i zaległe', () => {
     mailIn.setFloor(integ.id, 1, 7);
     await poller.tick(at(180_000));
     expect(smsCount()).toBe(1);
-    expect(events(integ.id)[0]).toEqual(['skipped', 'wiadomość już przetworzona']);
+    expect(events(integ.id)[0]).toEqual(['skipped', 'wiadomość już przetworzona · temat „Nowe”']);
     expect(box.messages('INBOX').find((m) => m.uid === 2)?.seen).toBe(false);
     // Odtworzenie folderu u dostawcy: nowa UIDVALIDITY unieważnia UID-y, próg od nowa, Message-ID dalej chroni.
     box.resetUidValidity(8);
@@ -134,7 +134,7 @@ describe('MailInPoller: próg i zaległe', () => {
     box.add({ uid: 9, seen: false, source: eml('jan@przyklad.test', 'Nowe', 'y', '<2@x>') });
     await poller.tick(at(300_000));
     expect(smsCount()).toBe(1);
-    expect(events(integ.id)[0]).toEqual(['skipped', 'wiadomość już przetworzona']);
+    expect(events(integ.id)[0]).toEqual(['skipped', 'wiadomość już przetworzona · temat „Nowe”']);
   });
 
   it('nadawca spoza listy nie zatruwa deduplikacji: późniejszy mail z listy z tym samym Message-ID idzie normalnie', async () => {
@@ -169,7 +169,7 @@ describe('MailInPoller: próg i zaległe', () => {
     box.add({ uid: 2, seen: false, source: eml('jan@przyklad.test', 'Duży', 'x', '<2@x>'), size: MAX_MAIL_BYTES + 1 });
     await poller.tick(at(60_000));
     expect(smsCount()).toBe(0);
-    expect(events(integ.id)[0]).toEqual(['skipped', 'wiadomość zbyt duża (2.0 MB)']);
+    expect(events(integ.id)[0]).toEqual(['skipped', 'wiadomość zbyt duża (2.0 MB) · temat „Duży”']);
     expect(box.calls).not.toContain('source:2');
     expect(box.messages('INBOX').find((m) => m.uid === 2)?.seen).toBe(true);
   });
@@ -324,7 +324,7 @@ describe('MailInPoller: awarie', () => {
     await vi.advanceTimersByTimeAsync(1_000);
     await t2;
     expect(smsCount()).toBe(4);
-    expect(events(integ.id).map((e) => e[1])).not.toContain('wiadomość już przetworzona');
+    expect(events(integ.id).filter((e) => e[1]?.startsWith('wiadomość już przetworzona'))).toEqual([]);
   });
 });
 
@@ -350,7 +350,7 @@ describe('MailInPoller: powiadomienia i odpowiedzi', () => {
     expect(box.calls).toContain('markSeen:3');
     expect(mailIn.state(integ.id)).toMatchObject({ errorKind: null, uidFloor: 4 });
     await poller.tick(at(120_000));
-    expect(events(integ.id).map((e) => e[1])).not.toContain('wiadomość już przetworzona');
+    expect(events(integ.id).filter((e) => e[1]?.startsWith('wiadomość już przetworzona'))).toEqual([]);
   });
 
   it('nieczytelny mail nie zajmuje cudzego Message-ID: późniejszy czytelny mail z listy z tym samym identyfikatorem idzie normalnie', async () => {
@@ -376,7 +376,7 @@ describe('MailInPoller: powiadomienia i odpowiedzi', () => {
     deps.notifier = { notify: () => undefined };
     box.add({ uid: 3, seen: false, source: eml('jan@przyklad.test', 'Bez numeru', 'x', '<bn@x>') });
     await poller.tick(at(120_000));
-    expect(events(bez.id)[0]).toEqual(['skipped', 'wiadomość już przetworzona']);
+    expect(events(bez.id)[0]).toEqual(['skipped', 'wiadomość już przetworzona · temat „Bez numeru”']);
   });
 
   it('kolejne odpytania w jednym torze dostają bieżący czas, nie czas początku tury', async () => {
@@ -477,7 +477,9 @@ describe('MailInPoller: limit wieku maila', () => {
     box.add({ uid: 3, seen: false, source: eml('jan@przyklad.test', 'Stary duży', 'x', '<3@x>'), internalDate: hoursAgo(30), size: MAX_MAIL_BYTES + 1 });
     await poller.tick(at(60_000));
     expect(smsCount()).toBe(0);
-    expect(events(odp.id)).toEqual([['skipped', 'wiadomość starsza niż 24 h'], ['skipped', 'wiadomość starsza niż 24 h']]);
+    expect(events(odp.id)).toEqual([['skipped', 'wiadomość starsza niż 24 h · temat „Stary duży”'], ['skipped', 'wiadomość starsza niż 24 h · temat „Stary alarm”']]);
+    // Nadawca w kolumnie „Nadawca” dziennika, jak przy mailach przetworzonych: administrator wie, który alarm pominięto.
+    expect(deps.integrationEvents.list(odp.id, 10).map((e) => e.sourceIp)).toEqual(['jan@przyklad.test', 'jan@przyklad.test']);
     expect(box.messages('INBOX').filter((m) => !m.seen).map((m) => m.uid)).toEqual([2, 3]);
     expect(box.messages('Przetworzone')).toEqual([]);
     expect(box.calls.filter((c) => /^(source|markSeen|move|remove):/.test(c))).toEqual([]);
@@ -507,7 +509,17 @@ describe('MailInPoller: limit wieku maila', () => {
     box.add({ uid: 3, seen: false, source: eml('jan@przyklad.test', 'Świeży', 'y', '<3@x>'), internalDate: at(60_000 - 59 * 60_000) });
     await poller.tick(at(60_000));
     expect(deps.messages.list({ limit: 10, offset: 0 }).map((m) => m.body)).toEqual(['Świeży\ny']);
-    expect(events(odp.id)).toContainEqual(['skipped', 'wiadomość starsza niż 1 h']);
+    expect(events(odp.id)).toContainEqual(['skipped', 'wiadomość starsza niż 1 h · temat „Stary”']);
+  });
+
+  it('stary mail bez tematu i bez nadawcy: wpis „temat (bez tematu)”, kolumna nadawcy pusta', async () => {
+    const odp = make({ maxAgeHours: 1 });
+    integrations.setEnabled(integ.id, false, NOW);
+    await poller.tick(NOW);
+    box.add({ uid: 2, seen: false, source: 'To: bramka@przyklad.test\r\nMessage-ID: <2@x>\r\n\r\nx\r\n', internalDate: hoursAgo(3) });
+    await poller.tick(at(60_000));
+    expect(events(odp.id)).toEqual([['skipped', 'wiadomość starsza niż 1 h · temat (bez tematu)']]);
+    expect(deps.integrationEvents.list(odp.id, 10)[0]!.sourceIp).toBeNull();
   });
 
   it('integracja zapisana przed 1.10 (bez pola limitu) przetwarza mail sprzed 3 dni', async () => {
@@ -536,7 +548,7 @@ describe('MailInPoller: limit wieku maila', () => {
     mailIn.setBacklog(integ.id, 1);
     await poller.tick(NOW);
     expect(deps.messages.list({ limit: 10, offset: 0 }).map((m) => m.body)).toEqual(['Świeży\ny']);
-    expect(events(integ.id)).toContainEqual(['skipped', 'wiadomość starsza niż 24 h']);
+    expect(events(integ.id)).toContainEqual(['skipped', 'wiadomość starsza niż 24 h · temat „Stary”']);
     expect(box.messages('INBOX').find((m) => m.uid === 1)?.seen).toBe(false);
     expect(mailIn.state(integ.id)).toMatchObject({ backlog: 0, uidFloor: 2 });
   });
@@ -699,7 +711,7 @@ describe('MailInPoller: skrzynka Microsoft 365', () => {
     await p.poll(row, NOW);
     const state = mailIn.state(row.id)!;
     expect(state.errorKind).toBe('auth');
-    expect(state.error).toContain('wyłączony IMAP na koncie albo brak dostępu konta do skrzynki współdzielonej');
+    expect(state.error).toContain('Najczęstszą przyczyną jest literówka w adresie skrzynki, wyłączony IMAP na koncie albo brak dostępu konta do skrzynki współdzielonej. Odpowiedź serwera: AUTHENTICATE failed.');
     expect(m365.get(id)!.state).toBe('connected');
   });
 

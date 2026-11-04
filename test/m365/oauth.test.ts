@@ -315,6 +315,17 @@ describe('hintFor', () => {
   });
 });
 
+describe('hintFor na stronie konta', () => {
+  const codes = ['50173', '50133', '700082', '50076', '50079', '53003', '65001', '7000112', '700016', '50011', null];
+
+  it('bez odesłania do szczegółów konta, bo administrator już na nich jest; powiadomienie zachowuje odesłanie', () => {
+    for (const c of codes) expect(hintFor(c, 'account'), String(c)).not.toContain('w szczegółach konta');
+    expect(hintFor('50173', 'account')).toBe('Microsoft unieważnił logowanie po zmianie hasła konta albo odwołaniu sesji, dlatego należy kliknąć „Zaloguj ponownie”');
+    expect(hintFor('50173')).toBe('Microsoft unieważnił logowanie po zmianie hasła konta albo odwołaniu sesji, dlatego należy kliknąć „Zaloguj ponownie” w szczegółach konta');
+    expect(hintFor('53003', 'account')).toBe(hintFor('53003'));
+  });
+});
+
 describe('addressFromClaims', () => {
   it('woli email, potem preferred_username, zawsze małymi literami', () => {
     expect(addressFromClaims({ preferred_username: 'Alarmy@Firma.pl' })).toBe('alarmy@firma.pl');
