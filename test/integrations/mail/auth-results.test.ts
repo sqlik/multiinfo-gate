@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { authResultsPass, authservIdOf, domainOf, stripComments } from '../../../src/integrations/mail/auth-results.ts';
+import { authResultsPass, authservIdOf, domainOf, inDomain, stripComments } from '../../../src/integrations/mail/auth-results.ts';
 
 const AR = (s: string) => [`mx.przyklad.test; ${s}`];
+
+describe('inDomain', () => {
+  it('przyjmuje tę samą domenę i poddomenę bez względu na wielkość liter, odrzuca domenę podobną z nazwy i puste wartości', () => {
+    expect(inDomain('firma.pl', 'firma.pl')).toBe(true);
+    expect(inDomain('Serwis.Firma.pl', 'firma.pl')).toBe(true);
+    expect(inDomain('innafirma.pl', 'firma.pl')).toBe(false);
+    expect(inDomain('firma.pl.przyklad.pl', 'firma.pl')).toBe(false);
+    expect(inDomain('', '')).toBe(false);
+    expect(inDomain('', 'firma.pl')).toBe(false);
+    expect(inDomain('firma.pl', '')).toBe(false);
+  });
+});
 
 describe('authResultsPass', () => {
   it('dkim=pass z domeną From albo nadrzędną przepuszcza', () => {

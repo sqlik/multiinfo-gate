@@ -349,7 +349,7 @@ describe('skrzynka Microsoft 365', () => {
 
   it('podpowiedź przy sprawdzaniu nadawcy w skrzynce Microsoft 365 mówi o wiadomościach wewnętrznych, a przy serwerze z hasłem nie', async () => {
     account();
-    const sentence = 'Przechodzą także wiadomości wysłane wewnątrz organizacji, które Exchange oznaczył jako wewnętrzne';
+    const sentence = 'Wiadomość od nadawcy z domeny skrzynki przechodzi także wtedy, gdy Exchange oznaczył ją jako wysłaną wewnątrz organizacji';
     const m365 = (await get('/integracje/nowa?rodzaj=mail_in&ustawienie=poczta-m365')).body;
     expect(m365).toContain(sentence);
     expect(m365).not.toContain('Zalecane u dostawców publicznych');

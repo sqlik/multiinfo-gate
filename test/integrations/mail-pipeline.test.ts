@@ -91,6 +91,25 @@ describe('runMailIn: sprawdzenie nadawcy w skrzynce Microsoft 365', () => {
     expect(await runMailIn(deps, m365(), await fromText(source), NOW)).toEqual({ kind: 'skipped', reason: 'auth_failed' });
   });
 
+  it('oznaczenie wewnętrzne nie przepuszcza nadawcy spoza domeny skrzynki bez SPF/DKIM, na przykład przez przekaźnik SMTP', async () => {
+    const source = fixture('m365-wewnetrzny-outlook.eml').toString('utf8').replace('From: Jan Kowalski <jan.kowalski@firma.pl>', 'From: Serwis UPS <serwis@przyklad.pl>');
+    expect(source).toContain('serwis@przyklad.pl');
+    const integ = m365();
+    expect(await runMailIn(deps, integ, await fromText(source), NOW)).toEqual({ kind: 'skipped', reason: 'auth_failed' });
+    // Domena podobna z nazwy, ale inna: firma.pl.przyklad.pl ani innafirma.pl nie należą do firma.pl.
+    for (const from of ['jan@firma.pl.przyklad.pl', 'jan@innafirma.pl']) {
+      const other = fixture('m365-wewnetrzny-outlook.eml').toString('utf8').replace('jan.kowalski@firma.pl', from);
+      const outsider = make({ requireAuthResults: true, senders: [{ pattern: from, recipients: [] }], imap: integ.config.imap });
+      expect(await runMailIn(deps, outsider, await fromText(other), NOW)).toEqual({ kind: 'skipped', reason: 'auth_failed' });
+    }
+  });
+
+  it('oznaczenie wewnętrzne przepuszcza nadawcę z poddomeny domeny skrzynki', async () => {
+    const source = fixture('m365-wewnetrzny-outlook.eml').toString('utf8').replace('jan.kowalski@firma.pl', 'jan.kowalski@serwis.firma.pl');
+    const integ = make({ requireAuthResults: true, senders: [{ pattern: '@serwis.firma.pl', recipients: [] }], imap: m365().config.imap });
+    expect((await runMailIn(deps, integ, await fromText(source), NOW)).kind).toBe('sent');
+  });
+
   it('CrossTenant-AuthAs: Internal przy Organization-AuthAs: Anonymous daje odrzucenie', async () => {
     const source = fixture('m365-zewnetrzny-bez-spf.eml').toString('utf8').replace('X-MS-Exchange-CrossTenant-AuthAs: Anonymous', 'X-MS-Exchange-CrossTenant-AuthAs: Internal');
     expect(source).toContain('X-MS-Exchange-CrossTenant-AuthAs: Internal');

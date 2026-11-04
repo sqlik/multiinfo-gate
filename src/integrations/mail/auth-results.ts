@@ -7,6 +7,11 @@ export function domainOf(address: string): string {
 /** Czy `candidate` to `domain` albo jej poddomena. */
 const within = (candidate: string, domain: string): boolean => candidate === domain || candidate.endsWith(`.${domain}`);
 
+/** Czy niepusta domena `candidate` to niepusta `domain` albo jej poddomena. */
+export function inDomain(candidate: string, domain: string): boolean {
+  return candidate !== '' && domain !== '' && within(candidate.toLowerCase(), domain.toLowerCase());
+}
+
 /** Usuwa komentarze w nawiasach (CFWS, RFC 5322), także zagnieżdżone i z ukośnikiem przed nawiasem. */
 export function stripComments(header: string): string {
   let out = '';
