@@ -4,7 +4,8 @@ import type { Preset } from './types.ts';
 
 /**
  * Microsoft 365: logowanie kontem z ekranu „Konta Microsoft 365” (XOAUTH2), bez hasła w integracji.
- * `accountId: 0` oznacza konto jeszcze niewybrane; formularz podstawia pierwsze połączone.
+ * `accountId: 0` oznacza konto jeszcze niewybrane; formularz podstawia pierwsze połączone. Potwierdzenie nadawcy
+ * domyślnie włączone: w tym trybie przepuszcza także pocztę wewnętrzną z domeny skrzynki.
  */
 export const pocztaM365: Preset = {
   id: 'poczta-m365',
@@ -12,7 +13,7 @@ export const pocztaM365: Preset = {
   blurb: 'Skrzynka Microsoft 365 z logowaniem przez konto organizacji',
   kinds: ['mail_in'],
   fields: [],
-  mailIn: { imap: { ...M365_IMAP, user: '', passRef: 'imap_password', auth: { mode: 'm365', accountId: 0 } } },
+  mailIn: { imap: { ...M365_IMAP, user: '', passRef: 'imap_password', auth: { mode: 'm365', accountId: 0 } }, requireAuthResults: true },
   guide: `Bramka loguje się do skrzynki kontem technicznym dodanym na ekranie **Konta Microsoft 365**, dlatego integracja nie przechowuje hasła. Przygotowanie konta w Microsoft 365 i Entra ID opisuje rozdział 4.8 dokumentacji: ${M365_DOCS_URL}
 
 1. W centrum administracyjnym Microsoft 365, na karcie **Poczta** konta technicznego, w zarządzaniu aplikacjami poczty zaznacz **IMAP**.

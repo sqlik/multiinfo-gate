@@ -347,6 +347,14 @@ describe('skrzynka Microsoft 365', () => {
     expect(body).toContain('<option value="24" selected>24 h</option>');
   });
 
+  it('nowa skrzynka Microsoft 365 ma domyślnie zaznaczone potwierdzenie nadawcy (SPF/DKIM), inne kafelki nie', async () => {
+    account();
+    const m365 = (await get('/integracje/nowa?rodzaj=mail_in&ustawienie=poczta-m365')).body;
+    expect(m365).toContain('<input type="checkbox" name="requireAuthResults" value="1" checked>');
+    const gmail = (await get('/integracje/nowa?rodzaj=mail_in&ustawienie=poczta-gmail')).body;
+    expect(gmail).toContain('<input type="checkbox" name="requireAuthResults" value="1">');
+  });
+
   it('podpowiedź przy sprawdzaniu nadawcy w skrzynce Microsoft 365 mówi o wiadomościach wewnętrznych, a przy serwerze z hasłem nie', async () => {
     account();
     const sentence = 'Wiadomość od nadawcy z domeny skrzynki przechodzi także wtedy, gdy Exchange oznaczył ją jako wysłaną wewnątrz organizacji';
