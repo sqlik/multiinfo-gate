@@ -13,7 +13,7 @@ export const GROUP_LINES = 100;
 const PANEL_PATH: Record<NotificationEvent, string> = {
   integration_error: '/integracje', integration_throttled: '/integracje', webhook_undelivered: '/integracje',
   certificate_expiring: '/konta', account_rejecting: '/konta', inbound_failure: '/odebrane', mailbox_failure: '/integracje', daily_summary: '/przeglad',
-  release_available: '/przeglad',
+  release_available: '/przeglad', m365_disconnected: '/microsoft-365', mail_undeliverable: '/powiadomienia',
 };
 
 type Settings = Pick<SmtpSettings, 'instanceName' | 'panelUrl'>;

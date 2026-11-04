@@ -38,6 +38,17 @@ describe('MessagesRepo', () => {
     expect(messages.get('msg_1')!.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   });
 
+  it('lista pomija wiadomości systemowe, chyba że filtr wprost je obejmuje', () => {
+    const { messages, accountId, apiKeyId } = setup();
+    messages.insert(messageInput({ id: 'msg_1', accountId, apiKeyId }));
+    messages.insert(messageInput({ id: 'msg_sys', accountId, apiKeyId, system: 1 }));
+    expect(messages.list({ limit: 10, offset: 0 }).map((m) => m.id)).toEqual(['msg_1']);
+    expect(messages.list({ includeSystem: false, limit: 10, offset: 0 }).map((m) => m.id)).toEqual(['msg_1']);
+    expect(messages.list({ includeSystem: true, limit: 10, offset: 0 }).map((m) => m.id).sort()).toEqual(['msg_1', 'msg_sys']);
+    expect(messages.get('msg_sys')!.system).toBe(1);
+    expect(messages.get('msg_1')!.system).toBe(0);
+  });
+
   it('filtruje po statusie, numerze i zakresie dat', () => {
     const { messages, accountId, apiKeyId } = setup();
     messages.insert(messageInput({ id: 'msg_1', accountId, apiKeyId, dest: '48601135134' }));
