@@ -62,6 +62,23 @@ describe('buildPowerAutomateConnector', () => {
     routes = await apiServerRoutes();
   });
 
+  it('każda liczba całkowita w definicjach, parametrach i odpowiedziach ma format int32, a dokument OpenAPI API go nie dostaje', () => {
+    const integers = (node: unknown, path: string, out: Array<{ path: string; format: unknown }>): typeof out => {
+      if (Array.isArray(node)) node.forEach((item, i) => integers(item, `${path}[${i}]`, out));
+      else if (node !== null && typeof node === 'object') {
+        const record = node as Record<string, unknown>;
+        if (record.type === 'integer') out.push({ path, format: record.format });
+        for (const [key, value] of Object.entries(record)) integers(value, `${path}.${key}`, out);
+      }
+      return out;
+    };
+    const found = integers(doc, '$', []);
+    expect(found.length).toBeGreaterThan(5);
+    expect(found.filter((f) => f.format !== 'int32')).toEqual([]);
+    expect(found.some((f) => f.path.startsWith('$.definitions.'))).toBe(true);
+    expect(JSON.stringify(buildOpenApiDocument())).not.toContain('int32');
+  });
+
   it('jest dokumentem Swagger 2.0 dla adresu bramki', () => {
     expect(doc.swagger).toBe('2.0');
     expect(doc.host).toBe('sms.firma.pl');

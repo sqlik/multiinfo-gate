@@ -307,6 +307,8 @@ function convert(schema: JsonSchema, path: string, request: boolean): SwaggerSch
   for (const key of untyped ? [] : SIMPLE_KEYS) {
     if (source[key] !== undefined) (out as Record<string, unknown>)[key] = source[key];
   }
+  // Bez formatu tester łącznika w Power Automate zgłasza przy każdej liczbie całkowitej niezgodność typu z int32.
+  if (out.type === 'integer' && out.format === undefined) out.format = 'int32';
   if (source.nullable) out['x-nullable'] = true;
   if (source.items) out.items = convert(source.items, `${path}[]`, request);
   if (source.properties) {
