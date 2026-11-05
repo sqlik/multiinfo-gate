@@ -68,7 +68,9 @@ function exchangeAuthAsOf(lines: ReadonlyArray<{ key: string; line: string }>): 
 
 export async function parseMail(source: Buffer, now: Date = new Date()): Promise<ParsedMail> {
   const mail = await simpleParser(source, { skipHtmlToText: true, skipImageLinks: true, skipTextToHtml: true, skipTextLinks: true });
-  const from = addressesOf(mail.from);
+  // Kilka nagłówków From: biblioteka bierze pierwszy, a serwer mógł sprawdzić inny, dlatego nadawca zostaje pusty.
+  const fromLines = mail.headerLines.filter((h) => h.key === 'from').length;
+  const from = fromLines > 1 ? [] : addressesOf(mail.from);
   const textFull = typeof mail.text === 'string' && mail.text.trim() !== ''
     ? mail.text.trim()
     : typeof mail.html === 'string' && mail.html !== '' ? htmlToPlain(mail.html) : '';

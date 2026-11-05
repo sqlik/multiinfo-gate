@@ -534,8 +534,9 @@ jeszcze konta, formularz wyświetla zamiast listy przycisk **Dodaj konto Microso
 Adres inny niż adres konta oznacza skrzynkę współdzieloną. Konto techniczne musi posiadać do
 niej uprawnienie pełnego dostępu, które nadaje administrator w centrum administracyjnym Exchange.
 Dzięki temu jedno konto techniczne obsługuje kilka skrzynek, na przykład `alarmy@firma.pl`
-i `serwis@firma.pl`. Każda skrzynka wymaga osobnej integracji. Zmiana konta albo adresu skrzynki
-w edycji działa jak zmiana folderu.
+i `serwis@firma.pl`. Każda skrzynka wymaga osobnej integracji. Zmiana adresu skrzynki w edycji
+działa jak zmiana folderu. Zmiana samego konta przy tym samym adresie skrzynki nie zmienia miejsca,
+od którego bramka odczytuje wiadomości, dlatego bramka sprawdza także maile z czasu przerwy.
 
 Pole **Pomijaj wiadomości starsze niż** chroni przed wysłaniem nieaktualnych alarmów po przerwie
 w dostępie do skrzynki. Przerwa powstaje na przykład wtedy, gdy konto Microsoft 365 przez cały

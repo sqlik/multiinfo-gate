@@ -89,10 +89,15 @@ export class MailInRepo {
       ).run(r.at.toISOString(), r.at.toISOString(), r.unseen, r.uidvalidity, r.nextPollAt.toISOString(), integrationId);
       return;
     }
+    // Czekanie na konto Microsoft 365 nie jest awarią serwera. Przejście między czekaniem a innym błędem zaczyna
+    // awarię od nowa: licznik, początek i znacznik powiadomienia nie przechodzą na następny rodzaj.
     this.db.prepare(
-      `UPDATE mail_in_state SET failures = failures + 1, error = ?, error_kind = ?, error_since = COALESCE(error_since, ?),
-         last_poll_at = ?, next_poll_at = ? WHERE integration_id = ?`,
-    ).run(r.error, r.errorKind, r.at.toISOString(), r.at.toISOString(), r.nextPollAt.toISOString(), integrationId);
+      `UPDATE mail_in_state SET
+         failures = CASE WHEN (COALESCE(error_kind, '') = 'account') <> (@kind = 'account') THEN 1 ELSE failures + 1 END,
+         error_since = CASE WHEN (COALESCE(error_kind, '') = 'account') <> (@kind = 'account') THEN @at ELSE COALESCE(error_since, @at) END,
+         notified_at = CASE WHEN (COALESCE(error_kind, '') = 'account') <> (@kind = 'account') THEN NULL ELSE notified_at END,
+         error = @error, error_kind = @kind, last_poll_at = @at, next_poll_at = @next WHERE integration_id = @id`,
+    ).run({ error: r.error, kind: r.errorKind, at: r.at.toISOString(), next: r.nextPollAt.toISOString(), id: integrationId });
   }
 
   setFloor(integrationId: number, uidFloor: number, uidvalidity: number): void {

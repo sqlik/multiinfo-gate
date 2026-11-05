@@ -26,11 +26,22 @@ export function stripComments(header: string): string {
   return out;
 }
 
-/** Nazwa serwera (authserv-id) z nagłówka: pierwszy token przed `;`, bez wersji, małymi literami; `null`, gdy pusty. */
+/**
+ * Nazwa serwera (authserv-id) z nagłówka: pierwszy token przed `;`, bez wersji, małymi literami; `null`, gdy pusty.
+ * Nagłówek, który zaczyna się od wyniku (`spf=pass …`, starsza postać Exchange Online), nie zawiera nazwy serwera.
+ */
 export function authservIdOf(header: string): string | null {
   const head = stripComments(header).split(';')[0]!.trim();
   const id = head.split(/\s+/)[0] ?? '';
-  return id === '' ? null : id.toLowerCase();
+  return id === '' || id.includes('=') ? null : id.toLowerCase();
+}
+
+/**
+ * Jawna porażka DMARC albo compauth w którymkolwiek nagłówku. Nadawca może dopisać tylko porażkę, która szkodzi
+ * jemu samemu, dlatego liczą się wszystkie nagłówki, nie tylko pierwszy.
+ */
+export function authResultsFailDmarc(headers: string[]): boolean {
+  return headers.some((h) => /(?:^|[\s;])(?:dmarc|compauth)\s*=\s*fail\b/.test(stripComments(h).toLowerCase()));
 }
 
 /**

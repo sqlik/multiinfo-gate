@@ -14,7 +14,7 @@ import { paConfigToValues, paFormToConfig, paFormValues, type PaFormValues } fro
 import { paFormPage, type PaFormOptions } from '../views/integration-power-automate.ts';
 import { PRIVATE_MAIL_MESSAGE, PRIVATE_TARGET_MESSAGE, hostTarget, systemResolver, webhookTarget } from '../../net/private-address.ts';
 import { guardedConnect, type MailboxAuth } from '../../integrations/mail/client.ts';
-import { m365MailboxAuth } from '../../m365/mailbox.ts';
+import { imapTarget, m365MailboxAuth } from '../../m365/mailbox.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
 import { buildOutboundContext, previewOutbound } from '../../worker/integrations.ts';
 import { formToConfig, formValues, type ExistingSecrets } from '../integration-form.ts';
@@ -366,7 +366,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       } else {
         auth = { kind: 'password', password: built.password ?? (row ? deps.integrations.secrets(row.id)[MAIL_IN_PASSWORD_REF] ?? '' : '') };
       }
-      const connection: MailConnection = await checkMailbox(mailboxConnect, { ...built.config.imap, auth }, built.config.folder);
+      const connection: MailConnection = await checkMailbox(mailboxConnect, { ...imapTarget(built.config.imap), auth }, built.config.folder);
       return mailPage(request, ctx, v, { mode, connection, warnings });
     }
     if (action === 'sprawdz') {
@@ -383,15 +383,16 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }
   };
 
-  /** Stan skrzynki po zapisie: wiersz stanu, zaległe na jedno uruchomienie, nowy próg po zmianie folderu albo konta. */
+  /** Stan skrzynki po zapisie: wiersz stanu, zaległe na jedno uruchomienie, nowy próg po zmianie folderu, serwera albo adresu. */
   const afterMailSave = (id: number, v: MailFormValues, before: MailInConfig | null, after: MailInConfig, reenabled = false) => {
     const at = now();
     deps.mailIn?.ensureState(id, at);
     deps.mailIn?.setBacklog(id, v.backlog ? 1 : 0);
     // Włączenie wyłączonej skrzynki działa jak nowe włączenie (spec 5.4): maile z okresu wyłączenia zostają nietknięte.
-    // Zmiana konta Microsoft 365 albo sposobu logowania też wskazuje inną skrzynkę.
-    const moved = reenabled || (before !== null && (before.folder !== after.folder || before.imap.host !== after.imap.host || before.imap.user !== after.imap.user
-      || JSON.stringify(before.imap.auth) !== JSON.stringify(after.imap.auth)));
+    // Inny folder, serwer albo adres skrzynki wskazuje inną skrzynkę. Zmiana samego konta Microsoft 365 albo sposobu
+    // logowania przy tym samym adresie nie zmienia skrzynki, dlatego maile z przerwy nie przepadają bez wpisu.
+    const moved = reenabled || (before !== null && (before.folder !== after.folder || before.imap.host !== after.imap.host
+      || before.imap.user !== after.imap.user));
     if (moved) {
       deps.mailIn?.setFloor(id, 0, 0);
       deps.mailIn?.pollNow(id, at);

@@ -13,7 +13,7 @@ import { confirmText, type ConfirmEvent } from './group/confirm.ts';
 import { groupRecipients, groupSender } from './group/members.ts';
 import { matchPrefix } from './group/prefix.ts';
 import { matches } from './conditions.ts';
-import { authResultsPass, domainOf, inDomain } from './mail/auth-results.ts';
+import { authResultsFailDmarc, authResultsPass, domainOf, inDomain } from './mail/auth-results.ts';
 import { cleanText } from './mail/clean.ts';
 import { FieldError, extractFields } from './mail/fields.ts';
 import type { ParsedMail } from './mail/parse.ts';
@@ -452,7 +452,9 @@ function prepareMail(engine: TemplateEngine, config: MailInConfig, mail: ParsedM
 /** Temat maila w podsumowaniu wpisu dziennika: ucięty do 80 znaków, a pusty jako „temat (bez tematu)”. */
 export function subjectNote(subject: string): string {
   const t = subject.trim();
-  return t === '' ? 'temat (bez tematu)' : `temat „${t.slice(0, 80)}”`;
+  // Bez znaków sterujących i znaków kierunku tekstu, które zmieniłyby wygląd wpisu; ucięcie po znakach, nie po połówkach par zastępczych.
+  const clean = t.replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '');
+  return clean === '' ? 'temat (bez tematu)' : `temat „${Array.from(clean).slice(0, 80).join('')}”`;
 }
 
 export async function runMailIn(deps: PipelineDeps, integration: MailInIntegration, mail: ParsedMail, now: Date): Promise<MailInOutcome> {
@@ -491,7 +493,10 @@ export async function runMailIn(deps: PipelineDeps, integration: MailInIntegrati
   // jako wewnętrzny; nadawca z zewnątrz tego oznaczenia nie podrobi, bo Exchange usuwa nagłówek i wstawia własny.
   // Oznaczenie liczy się tylko dla nadawcy z domeny skrzynki: przekaźnik SMTP albo Exchange hybrydowy mogą oznaczyć
   // jako wewnętrzny mail z dowolnym From, a adres spoza organizacji wymaga potwierdzenia SPF/DKIM.
-  const exchangeInternal = config.imap.auth.mode === 'm365' && mail.exchangeAuthAs === 'internal' && inDomain(domainOf(mail.from), domainOf(config.imap.user));
+  // Mail podszyty z zewnątrz i przekierowany regułą skrzynki pracownika może otrzymać oznaczenie wewnętrzne, ale zachowuje
+  // wynik DMARC z pierwszego przyjęcia, dlatego jawna porażka DMARC albo compauth wyłącza oznaczenie.
+  const exchangeInternal = config.imap.auth.mode === 'm365' && mail.exchangeAuthAs === 'internal'
+    && inDomain(domainOf(mail.from), domainOf(config.imap.user)) && !authResultsFailDmarc(mail.authResults);
   if (config.requireAuthResults && !exchangeInternal && !authResultsPass(mail.authResults, domainOf(mail.from), config.authservId)) {
     note('skipped', { reason: config.authservId === '' ? 'brak potwierdzenia SPF/DKIM od serwera' : `brak potwierdzenia SPF/DKIM od serwera ${config.authservId}` });
     return { kind: 'skipped', reason: 'auth_failed' };

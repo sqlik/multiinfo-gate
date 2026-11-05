@@ -355,3 +355,68 @@ describe('setAddress, disconnect, remove i users', () => {
     expect(audit.list(10, 0)[0]).toMatchObject({ action: 'm365.usunieto', target: `m365:${id}` });
   });
 });
+
+describe('zmiany konta w trakcie wymiany kodu', () => {
+  let release: () => void;
+  let slow: M365Service;
+  let slowTokens: M365Tokens;
+
+  beforeEach(() => {
+    // Punkt tokenów odpowiada dopiero po `release()`: okno, w którym administrator klika w drugiej karcie.
+    const fetch: TokenFetch = () => new Promise((resolve) => { release = () => resolve(reply); });
+    slowTokens = new M365Tokens({ accounts, fetch });
+    slow = new M365Service({ accounts, tokens: slowTokens, fetch, integrations, notifications, audit });
+  });
+
+  const begin = (id: number) => slow.finishLogin({ state: stateOf(slow.startLogin(id, REDIRECT, ADMIN, T0).url), code: 'kod' }, ADMIN, T0);
+  const account = (): number => {
+    const r = slow.create({ name: 'Dyżur IT', tenant: GUID, clientId: CLIENT }, ADMIN, T0);
+    if (!r.ok) throw new Error(r.error);
+    return r.id;
+  };
+
+  it('rozłączenie zostaje w mocy: konto bez tokenu', async () => {
+    const id = account();
+    const finishing = begin(id);
+    slow.disconnect(id, ADMIN, T0);
+    release();
+    expect(await finishing).toMatchObject({ ok: false, error: expect.stringContaining('zmieniły się w trakcie logowania') });
+    expect(accounts.get(id)!.state).toBe('new');
+    expect(accounts.refreshToken(id)).toBeNull();
+  });
+
+  it('zmiana aplikacji: token starej aplikacji nie trafia do konta', async () => {
+    const id = account();
+    const finishing = begin(id);
+    expect(slow.update(id, { name: 'Dyżur IT', tenant: GUID, clientId: '99999999-2222-3333-4444-555555555555' }, ADMIN, T0).ok).toBe(true);
+    release();
+    expect((await finishing).ok).toBe(false);
+    expect(accounts.get(id)!.state).toBe('new');
+    expect(accounts.refreshToken(id)).toBeNull();
+  });
+
+  it('usunięcie konta: logowanie odrzucone, token nie zostaje w pamięci dostawcy', async () => {
+    const id = account();
+    const finishing = begin(id);
+    expect(slow.remove(id, ADMIN, T0).ok).toBe(true);
+    release();
+    expect(await finishing).toMatchObject({ ok: false, accountId: null });
+    expect(audit.list(50, 0).some((e) => e.action === 'm365.zalogowano')).toBe(false);
+    await expect(slowTokens.access(id, T0)).rejects.toThrow();
+  });
+});
+
+describe('znaki sterujące w adresie skrzynki', () => {
+  it('setAddress odrzuca adres ze znakiem sterującym', () => {
+    const id = created();
+    expect(service.setAddress(id, 'alarmy\u0001host=x@firma.pl', ADMIN, T0).ok).toBe(false);
+  });
+
+  it('roszczenia z adresem ze znakiem sterującym nie łączą konta', async () => {
+    const id = created();
+    reply = { ...reply, body: { ...(reply.body as object), id_token: idToken({ tid: GUID, preferred_username: 'alarmy\u0001x@firma.pl' }) } };
+    const r = await service.finishLogin({ state: stateOf(service.startLogin(id, REDIRECT, ADMIN, T0).url), code: 'kod' }, ADMIN, T0);
+    expect(r.ok).toBe(false);
+    expect(accounts.get(id)!.state).toBe('new');
+  });
+});

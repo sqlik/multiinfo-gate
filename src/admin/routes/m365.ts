@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { M365Service, PanelUser } from '../../m365/service.ts';
 import type { M365AccountsRepo } from '../../store/m365-accounts.ts';
 import type { Renderer } from '../render.ts';
+import { SESSION_COOKIE } from '../session.ts';
 import type { AdminDeps } from '../server.ts';
 import { clientErrorPage } from '../views/error.ts';
 import { m365DetailPage, m365FormPage, m365ListPage, m365ReturnPage, type M365FormValues } from '../views/m365.ts';
@@ -59,7 +61,9 @@ export function registerM365Routes(
 
   const userOf = (request: FastifyRequest): PanelUser => {
     const id = request.adminUserId!;
-    return { id, login: deps.users.findById(id)?.login ?? String(id) };
+    const token = request.cookies[SESSION_COOKIE] ?? '';
+    const session = createHash('sha256').update(token).digest('base64url');
+    return { id, login: deps.users.findById(id)?.login ?? String(id), session };
   };
 
   const viewOf = (id: number) => {

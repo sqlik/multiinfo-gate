@@ -176,3 +176,23 @@ describe('skrzynka Microsoft 365', () => {
     expect(mailFormValues({})).toMatchObject({ authMode: 'password', m365AccountId: '' });
   });
 });
+
+describe('adres i login skrzynki bez znaków sterujących', () => {
+  const engine = new TemplateEngine();
+  const base = { name: 'Skrzynka', apiKeyId: '1', serviceId: '', orig: '', enabled: true, preset: 'poczta-m365', storePayloads: false };
+  const accounts = [{ id: 3, address: 'alarmy@firma.pl' }];
+  const values = (v: Partial<MailFormValues>): MailFormValues => ({
+    ...mailConfigToValues(defaultMailInConfig(), base), senders: '@firma.pl', password: 'Haslo1', ...v,
+  });
+
+  for (const [label, user] of [['separator SASL \\x01', 'alarmy\x01@firma.pl'], ['znak NUL', 'alarmy\x00@firma.pl'], ['DEL', 'alarmy\x7f@firma.pl']] as const) {
+    it(`Microsoft 365: ${label} w adresie skrzynki jest odrzucony`, () => {
+      expect(mailFormToConfig(values({ authMode: 'm365', m365AccountId: '3', user, password: '' }), false, engine, accounts).ok).toBe(false);
+    });
+  }
+
+  it('hasło: znak sterujący w loginie jest odrzucony', () => {
+    const r = mailFormToConfig(values({ authMode: 'password', host: 'imap.firma.pl', port: '993', user: 'alarmy\x01x' }), false, engine, accounts);
+    expect(r).toMatchObject({ ok: false, error: 'Login skrzynki nie może zawierać znaków sterujących.' });
+  });
+});

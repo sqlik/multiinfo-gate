@@ -4,7 +4,7 @@
  */
 import type { MailboxAuth } from '../integrations/mail/client.ts';
 import type { M365AccountsRepo } from '../store/m365-accounts.ts';
-import { M365AuthError } from './oauth.ts';
+import { M365AuthError, M365_IMAP } from './oauth.ts';
 import type { M365Tokens } from './tokens.ts';
 
 export interface M365MailboxDeps { tokens: Pick<M365Tokens, 'access'>; accounts: Pick<M365AccountsRepo, 'get'> }
@@ -13,6 +13,14 @@ export const ACCOUNT_NEEDS_LOGIN = 'Konto Microsoft 365 wymaga logowania';
 
 /** Podpowiedź przy odmowie logowania XOAUTH2 mimo działającego tokenu (spec 6.3). */
 export const M365_IMAP_REFUSED = 'Microsoft odrzucił logowanie do skrzynki. Najczęstszą przyczyną jest literówka w adresie skrzynki, wyłączony IMAP na koncie albo brak dostępu konta do skrzynki współdzielonej';
+
+/**
+ * Serwer do połączenia. Skrzynka Microsoft 365 łączy się wyłącznie z serwerem Microsoftu przez TLS, niezależnie
+ * od pól serwera zapisanych w integracji, dzięki czemu token dostępu nie trafia na inny serwer.
+ */
+export function imapTarget<T extends { host: string; port: number; security: string; verifyCert: boolean; auth: { mode: string } }>(imap: T): T {
+  return imap.auth.mode === 'm365' ? { ...imap, ...M365_IMAP } : imap;
+}
 
 export type M365MailboxAuth = { ok: true; auth: MailboxAuth } | { ok: false; kind: 'account' | 'network'; error: string };
 

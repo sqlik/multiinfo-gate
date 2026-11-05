@@ -15,7 +15,8 @@ import {
 import type { M365Tokens } from './tokens.ts';
 
 export type M365User = { kind: 'integration'; id: number; name: string } | { kind: 'smtp' };
-export interface PanelUser { id: number; login: string }
+/** `session` jest skrótem tokenu sesji panelu: logowanie w Microsoft kończy wyłącznie sesja, która je rozpoczęła. */
+export interface PanelUser { id: number; login: string; session?: string }
 
 /** Czas na powrót z logowania Microsoftu. */
 export const LOGIN_TTL_MS = 600_000;
@@ -23,11 +24,18 @@ export const LOGIN_TTL_MS = 600_000;
 const MAX_NAME = 100;
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/** Znaki sterujące rozdzielają pola ciągu SASL XOAUTH2, dlatego adres skrzynki nie może ich zawierać. */
+const CONTROL = /[\x00-\x1f\x7f]/;
 
 const EXPIRED = 'Logowanie wygasło albo zostało już zakończone, dlatego należy rozpocząć je ponownie';
+const CHANGED = 'Ustawienia konta zmieniły się w trakcie logowania, dlatego należy rozpocząć je ponownie';
+const MISSING = 'Konto Microsoft 365 nie istnieje';
 
 interface PendingLogin {
-  accountId: number; userId: number; tenant: string; clientId: string; verifier: string; redirectUri: string; expiresAt: number;
+  accountId: number; userId: number; session: string | undefined; tenant: string; clientId: string; verifier: string;
+  redirectUri: string; expiresAt: number;
+  /** Numer zmiany konta z chwili rozpoczęcia; rozłączenie, zmiana aplikacji i usunięcie go zwiększają. */
+  epoch: number;
 }
 
 export interface M365ServiceDeps {
@@ -46,6 +54,8 @@ type Finish =
 export class M365Service {
   /** Logowania w toku, kluczem jest `state`. Tylko w pamięci: restart bramki unieważnia rozpoczęte logowania. */
   private readonly pending = new Map<string, PendingLogin>();
+  /** Numery zmian kont. Logowanie, które wymieniało kod w chwili rozłączenia, zmiany aplikacji albo usunięcia, przepada. */
+  private readonly epochs = new Map<number, number>();
 
   constructor(private readonly deps: M365ServiceDeps) {}
 
@@ -74,13 +84,13 @@ export class M365Service {
 
   startLogin(id: number, redirectUri: string, user: PanelUser, now: Date): { url: string } {
     const account = this.deps.accounts.get(id);
-    if (!account) throw new Error('Konto Microsoft 365 nie istnieje');
+    if (!account) throw new Error(MISSING);
     this.prune(now.getTime());
     const { verifier, challenge } = pkcePair();
-    const state = randomBytes(24).toString('base64url');
+    const state = randomBytes(32).toString('base64url');
     this.pending.set(state, {
-      accountId: id, userId: user.id, tenant: account.tenant, clientId: account.clientId, verifier, redirectUri,
-      expiresAt: now.getTime() + LOGIN_TTL_MS,
+      accountId: id, userId: user.id, session: user.session, tenant: account.tenant, clientId: account.clientId, verifier, redirectUri,
+      expiresAt: now.getTime() + LOGIN_TTL_MS, epoch: this.epoch(id),
     });
     return { url: authorizeUrl({ tenant: account.tenant, clientId: account.clientId, redirectUri, state, challenge }) };
   }
@@ -96,15 +106,16 @@ export class M365Service {
     const accountId = login.accountId;
     if (now.getTime() > login.expiresAt) return { ok: false, accountId, error: EXPIRED };
     if (login.userId !== user.id) return { ok: false, accountId, error: 'Logowanie rozpoczął inny użytkownik panelu, dlatego należy rozpocząć je ponownie' };
+    if (login.session !== user.session) {
+      return { ok: false, accountId, error: 'Logowanie rozpoczęto w innej sesji panelu, dlatego należy rozpocząć je ponownie' };
+    }
     if (q.error) {
       const detail = q.error_description ? cleanDescription(q.error_description) : q.error;
       return { ok: false, accountId, error: `Microsoft odrzucił logowanie: ${detail}` };
     }
-    const account = this.deps.accounts.get(accountId);
-    if (!account) return { ok: false, accountId: null, error: 'Konto Microsoft 365 nie istnieje' };
-    if (account.tenant !== login.tenant || account.clientId !== login.clientId) {
-      return { ok: false, accountId, error: 'Ustawienia konta zmieniły się w trakcie logowania, dlatego należy rozpocząć je ponownie' };
-    }
+    const before = this.deps.accounts.get(accountId);
+    if (!before) return { ok: false, accountId: null, error: MISSING };
+    if (before.tenant !== login.tenant || before.clientId !== login.clientId) return { ok: false, accountId, error: CHANGED };
     if (!q.code) return { ok: false, accountId, error: 'Odpowiedź Microsoftu nie zawiera kodu autoryzacji' };
     let set: TokenSet;
     try {
@@ -114,6 +125,12 @@ export class M365Service {
     } catch (err) {
       const message = err instanceof M365AuthError ? err.message : 'nieoczekiwany błąd wymiany kodu';
       return { ok: false, accountId, error: `Microsoft odrzucił logowanie: ${message}` };
+    }
+    // Wymiana kodu trwa do kilkunastu sekund. Konto rozłączone, zmienione albo usunięte w tym czasie nie dostaje tokenu.
+    const account = this.deps.accounts.get(accountId);
+    if (!account) return { ok: false, accountId: null, error: MISSING };
+    if (this.epoch(accountId) !== login.epoch || account.tenant !== login.tenant || account.clientId !== login.clientId) {
+      return { ok: false, accountId, error: CHANGED };
     }
     if (GUID.test(login.tenant) && set.claims?.tid?.toLowerCase() !== login.tenant) {
       return { ok: false, accountId, error: 'Zalogowane konto należy do innego katalogu niż podany w ustawieniach konta' };
@@ -137,9 +154,9 @@ export class M365Service {
   }
 
   setAddress(id: number, address: string, user: PanelUser, at: Date): { ok: true } | { ok: false; error: string } {
-    if (!this.deps.accounts.get(id)) return { ok: false, error: 'Konto Microsoft 365 nie istnieje' };
+    if (!this.deps.accounts.get(id)) return { ok: false, error: MISSING };
     const a = address.trim().toLowerCase();
-    if (a.length > 254 || !EMAIL.test(a)) return { ok: false, error: 'Adres skrzynki musi być adresem e-mail, na przykład alarmy@firma.pl' };
+    if (a.length > 254 || !EMAIL.test(a) || CONTROL.test(a)) return { ok: false, error: 'Adres skrzynki musi być adresem e-mail, na przykład alarmy@firma.pl' };
     this.deps.accounts.setAddress(id, a, at);
     this.record(user, 'm365.adres', id, { address: a });
     return { ok: true };
@@ -183,8 +200,14 @@ export class M365Service {
     for (const [state, login] of this.pending) if (login.expiresAt < nowMs) this.pending.delete(state);
   }
 
+  private epoch(accountId: number): number {
+    return this.epochs.get(accountId) ?? 0;
+  }
+
+  /** Porzuca logowania w toku, także te, które właśnie wymieniają kod. */
   private dropPending(accountId: number): void {
     for (const [state, login] of this.pending) if (login.accountId === accountId) this.pending.delete(state);
+    this.epochs.set(accountId, this.epoch(accountId) + 1);
   }
 }
 

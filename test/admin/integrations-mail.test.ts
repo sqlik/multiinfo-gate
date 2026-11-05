@@ -375,7 +375,7 @@ describe('skrzynka Microsoft 365', () => {
     expect(h.integrations.secretNames(row.id)).toEqual([]);
   });
 
-  it('zmiana konta w edycji ustawia próg od nowa', async () => {
+  it('zmiana konta przy tym samym adresie zostawia próg, a zmiana adresu skrzynki ustawia go od nowa', async () => {
     const a = account();
     const b = account();
     await post('/integracje', { kind: 'mail_in', preset: 'poczta-m365', ...m365Body(a) });
@@ -384,6 +384,8 @@ describe('skrzynka Microsoft 365', () => {
     expect((await post(`/integracje/${row.id}/edytuj`, m365Body(a, { name: 'Inna nazwa' }))).statusCode).toBe(302);
     expect(h.mailIn.state(row.id)).toMatchObject({ uidFloor: 5, uidvalidity: 7 });
     expect((await post(`/integracje/${row.id}/edytuj`, m365Body(b))).statusCode).toBe(302);
+    expect(h.mailIn.state(row.id)).toMatchObject({ uidFloor: 5, uidvalidity: 7 });
+    expect((await post(`/integracje/${row.id}/edytuj`, m365Body(b, { user: 'dyspozytornia@firma.pl' }))).statusCode).toBe(302);
     expect(h.mailIn.state(row.id)).toMatchObject({ uidFloor: 0, uidvalidity: 0, nextPollAt: NOW.toISOString() });
   });
 

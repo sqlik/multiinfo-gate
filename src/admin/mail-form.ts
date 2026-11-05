@@ -40,7 +40,8 @@ const EMPTY_FIELD: MailFieldValues = { name: '', mode: 'between', after: '', unt
 const SENDER_PATTERN = /^(@[^@\s]+\.[^@\s]+|[^@\s]+@[^@\s]+\.[^@\s]+)$/;
 const FIELD_NAME = /^[a-z][a-z0-9_]{0,39}$/;
 const AUTHSERV_ID = /^[a-z0-9.-]*$/;
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/** Bez znaków sterujących: adres skrzynki Microsoft 365 trafia do ciągu SASL XOAUTH2. */
+const EMAIL = /^[^@\s\x00-\x1f\x7f]+@[^@\s\x00-\x1f\x7f]+\.[^@\s\x00-\x1f\x7f]+$/;
 const FIELD_KEY = /^fields\[(\d+)\]\[(name|mode|after|until|pattern|flags)\]$/;
 
 const list = (field: string | string[] | undefined): string[] => (field === undefined ? [] : (Array.isArray(field) ? field : [field]).map(String));
@@ -168,6 +169,7 @@ function imapFrom(v: MailFormValues, hasPassword: boolean, m365: M365Choice[]): 
   if (typeof port === 'string') return port;
   if (v.user === '') return 'Podaj login skrzynki.';
   if (v.user.length > 254) return 'Login skrzynki: do 254 znaków.';
+  if (/[\x00-\x1f\x7f]/.test(v.user)) return 'Login skrzynki nie może zawierać znaków sterujących.';
   if (v.password === '' && !hasPassword) return 'Podaj hasło skrzynki.';
   return { host: v.host, port, security: v.security, verifyCert: v.verifyCert, user: v.user, passRef: MAIL_IN_PASSWORD_REF, auth: { mode: 'password' } };
 }

@@ -111,12 +111,26 @@ describe('logowanie przez stronę pośrednią', () => {
 
   it('odmowa Microsoftu kończy się komunikatem na szczegółach konta bez zmiany stanu', async () => {
     const id = created();
-    const state = stateFrom(h.m365.startLogin(id, REDIRECT, ADMIN, NOW).url);
+    const state = stateFrom((await post(`/microsoft-365/${id}/zaloguj`)).headers.location as string);
     const res = await page(`/m365/dokoncz?error=access_denied&error_description=Brak%20zgody&state=${state}`);
     expect(res.statusCode).toBe(303);
     expect(res.headers.location).toBe(`/microsoft-365/${id}`);
     expect(h.m365Accounts.get(id)!.state).toBe('new');
     expect((await page(`/microsoft-365/${id}`)).body).toContain('Microsoft odrzucił logowanie: Brak zgody');
+  });
+
+  it('logowanie kończy wyłącznie sesja panelu, która je rozpoczęła', async () => {
+    const id = created();
+    const start = await post(`/microsoft-365/${id}/zaloguj`);
+    const state = stateFrom(start.headers.location as string);
+    expect(state.length).toBeGreaterThanOrEqual(43);
+    const other = `mig_session=${h.sessions.create(h.userId)}`;
+    const res = await h.app.inject({ method: 'GET', url: `/m365/dokoncz?code=c&state=${state}`, headers: { cookie: other, host: HOST } });
+    expect(res.statusCode).toBe(303);
+    expect(h.m365Accounts.get(id)!.state).toBe('new');
+    expect(h.m365Forms).toHaveLength(0);
+    const detail = await h.app.inject({ method: 'GET', url: `/microsoft-365/${id}`, headers: { cookie: other, host: HOST } });
+    expect(detail.body).toContain('Logowanie rozpoczęto w innej sesji panelu');
   });
 
   it('nieznany state prowadzi na listę kont z komunikatem', async () => {

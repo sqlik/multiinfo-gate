@@ -78,7 +78,10 @@ export async function mailerSettings(
   const account = settings.m365AccountId === null ? undefined : m365?.accounts.get(settings.m365AccountId);
   if (!m365 || !account || account.state === 'new' || account.state === 'needs_login') throw new Error(ACCOUNT_NEEDS_LOGIN);
   const access = await m365.tokens.access(account.id, now);
-  return { ...settings, ...M365_SMTP, user: access.address || account.address || settings.user, password: null, accessToken: access.token };
+  const user = access.address || account.address || settings.user;
+  // Znak sterujący rozdzieliłby pola ciągu SASL XOAUTH2, którego nodemailer nie sprawdza.
+  if (user !== null && /[\x00-\x1f\x7f]/.test(user)) throw new Error('Adres skrzynki zawiera znaki sterujące, dlatego bramka nie loguje się do serwera SMTP');
+  return { ...settings, ...M365_SMTP, user, password: null, accessToken: access.token };
 }
 
 /** SMTP działa przez konto Microsoft 365, które czeka na pierwsze albo ponowne logowanie. */

@@ -206,7 +206,8 @@ export function hintFor(code: string | null, place: 'notice' | 'account' = 'noti
 export function addressFromClaims(c: IdClaims | null): string | null {
   for (const v of [c?.email, c?.preferred_username]) {
     const a = v?.trim().toLowerCase();
-    if (a !== undefined && a.includes('@')) return a;
+    // Znaki sterujące i odstępy rozdzieliłyby pola ciągu SASL XOAUTH2.
+    if (a !== undefined && a.includes('@') && !/[\s\x00-\x1f\x7f]/.test(a)) return a;
   }
   return null;
 }
