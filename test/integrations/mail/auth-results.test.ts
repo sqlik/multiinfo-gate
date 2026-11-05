@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authResultsPass, authservIdOf, domainOf, inDomain, stripComments } from '../../../src/integrations/mail/auth-results.ts';
+import { authResultsFailDmarc, authResultsPass, authservIdOf, domainOf, inDomain, stripComments } from '../../../src/integrations/mail/auth-results.ts';
 
 const AR = (s: string) => [`mx.przyklad.test; ${s}`];
 
@@ -55,5 +55,19 @@ describe('authResultsPass', () => {
   it('domainOf zwraca część po małpie małymi literami', () => {
     expect(domainOf('Jan@PRZYKLAD.pl')).toBe('przyklad.pl');
     expect(domainOf('bez-malpy')).toBe('');
+  });
+});
+
+describe('authResultsFailDmarc', () => {
+  it('jawna porażka DMARC albo compauth w dowolnym nagłówku', () => {
+    expect(authResultsFailDmarc(['mx.microsoft.com 1; spf=fail smtp.mailfrom=firma.pl; dmarc=fail action=none header.from=firma.pl'])).toBe(true);
+    expect(authResultsFailDmarc(['a; spf=pass', 'mx.microsoft.com 1; compauth=softfail reason=601'])).toBe(true);
+    expect(authResultsFailDmarc(['mx.microsoft.com 1; compauth=fail reason=000'])).toBe(true);
+  });
+
+  it('brak wyniku, dmarc=none, wynik w komentarzu i compauth=pass nie blokują', () => {
+    expect(authResultsFailDmarc([])).toBe(false);
+    expect(authResultsFailDmarc(['mx.microsoft.com 1; dkim=none (message not signed) header.d=none;dmarc=none action=none header.from=firma.pl;'])).toBe(false);
+    expect(authResultsFailDmarc(['mx.microsoft.com 1; spf=pass (dmarc=fail w komentarzu) smtp.mailfrom=firma.pl; compauth=pass reason=100'])).toBe(false);
   });
 });

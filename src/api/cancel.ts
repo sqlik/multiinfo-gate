@@ -13,8 +13,9 @@ export function registerCancelRoute(app: FastifyInstance, deps: ApiDeps): void {
   app.post<{ Params: { id: string } }>('/v1/messages/:id/cancel', async (request) => {
     const auth = authenticate(request.headers.authorization, deps.apiKeys);
     const message = deps.messages.get(request.params.id);
-    // Brak wiadomości i cudza wiadomość dają tę samą odpowiedź - nie potwierdzamy istnienia.
-    if (!message || message.apiKeyId !== auth.apiKeyId) {
+    // Brak wiadomości, cudza wiadomość i wiadomość systemowa (SMS powiadomienia administratora) dają tę samą
+    // odpowiedź - nie potwierdzamy istnienia.
+    if (!message || message.apiKeyId !== auth.apiKeyId || message.system === 1) {
       throw new ApiError(404, 'message_not_found', 'Nie ma wiadomości o tym identyfikatorze.');
     }
     if (FINAL.has(message.status)) {

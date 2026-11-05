@@ -358,7 +358,7 @@ Wydanie bezpieczeństwa Node.js z 21 października 2026 usuwa między innymi luk
 w dekoderze Brotli. Luka pozwala uruchomić obcy kod w programie, który rozpakowuje spreparowane
 dane. Według CISA jest ona aktywnie wykorzystywana. Bramka rozpakowuje dane Brotli w odpowiedziach
 serwerów, do których wysyła webhooki i zapytania uzupełniające, dlatego luka dotyczy także jej.
-Wymagana jest wersja 22.23.4 lub nowsza, a w liniach 24 i 26 odpowiednio 24.22.1 i 26.12.1.
+Bramka działa na Node.js z linii 22, dlatego wymagana jest wersja 22.23.4 lub nowsza z tej linii.
 
 W Dockerze Node.js jest częścią obrazu bramki. Aktualizacja do najnowszego wydania według
 rozdziału [7.4 Uruchomienia](uruchomienie.md#74-aktualizacja) usuwa pasek.

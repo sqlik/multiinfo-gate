@@ -6,7 +6,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": "^22.23.4 || ^24.22.1 || >=26.12.1"
+    "node": "^22.23.4"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && rm -rf dist/store/migrations dist/admin/public && cp -R src/store/migrations dist/store/migrations && cp -R src/admin/public dist/admin/public",

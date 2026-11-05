@@ -83,7 +83,7 @@ describe('startGate', () => {
     };
     await start('v22.23.3');
     expect(warnings.filter((w) => w.msg === 'node.bez_poprawek')).toEqual([
-      { msg: 'node.bez_poprawek', fields: { installed: '22.23.3', minimum: '22.23.4', help: problemUrl('wersja-node') } },
+      { msg: 'node.bez_poprawek', fields: { installed: '22.23.3', minimum: '22.23.4', unsupportedLine: false, help: problemUrl('wersja-node') } },
     ]);
     warnings.length = 0;
     await start('v22.23.4');

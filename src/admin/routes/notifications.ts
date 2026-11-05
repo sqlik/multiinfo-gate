@@ -77,6 +77,9 @@ function intIn(raw: string | undefined, min: number, max: number, fallback: numb
   return Number.isFinite(n) && n >= min && n <= max && String(n) === raw.trim() ? n : null;
 }
 
+/** Najkrótszy odstęp między SMS-ami testowymi kanału powiadomień. */
+const TEST_SMS_INTERVAL_MS = 60_000;
+
 export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps, render: Renderer): void {
   const now = deps.now ?? (() => new Date());
   const actorOf = (userId: number | null): string => {
@@ -236,15 +239,25 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps
     return reply.redirect('/powiadomienia?zakladka=sms', 302);
   });
 
+  // SMS testowy jest płatny i trafia na wszystkie numery kanału: najwyżej jeden na minutę, także przy podwójnym kliknięciu.
+  let lastTestAt = Number.NEGATIVE_INFINITY;
+
   app.post('/powiadomienia/sms/test', async (request, reply) => {
     const settings = deps.notifications.smsSettings();
     if (!settings) {
       render.flash(request, 'warn', 'Najpierw zapisz ustawienia kanału SMS.');
       return reply.redirect('/powiadomienia?zakladka=sms', 302);
     }
+    const at = now();
+    const waitMs = TEST_SMS_INTERVAL_MS - (at.getTime() - lastTestAt);
+    if (waitMs > 0) {
+      render.flash(request, 'warn', `SMS testowy został wysłany przed chwilą. Kolejny można wysłać za ${Math.ceil(waitMs / 1000)} s.`);
+      return reply.redirect('/powiadomienia?zakladka=sms', 302);
+    }
     const instance = deps.notifications.smtp()?.instanceName ?? '';
     const text = `Multiinfo Gate${instance === '' ? '' : ` ${instance}`}: SMS testowy kanału powiadomień.`;
-    const result = sendNotificationSms(deps, text, now());
+    const result = sendNotificationSms(deps, text, at);
+    if (result.ok) lastTestAt = at.getTime();
     deps.audit.record({
       actor: actorOf(request.adminUserId), action: 'powiadomienia.sms.test', target: 'sms',
       meta: result.ok ? { wynik: 'ok', wiadomosci: result.ids.length } : { wynik: 'blad', powod: result.reason }, ip: request.ip,

@@ -272,6 +272,14 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   );
 
   app.addHook('onRequest', async (request, reply) => {
+    // SameSite=Strict nie odróżnia sąsiednich subdomen tej samej domeny. Przeglądarka podaje pochodzenie żądania
+    // w Sec-Fetch-Site: formularz panelu wysyła same-origin, a żądanie z innej strony, także z subdomeny, odpada.
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      const site = request.headers['sec-fetch-site'];
+      if (site !== undefined && site !== 'same-origin' && site !== 'none') {
+        return reply.code(403).header('Cache-Control', 'no-store').type('text/html; charset=utf-8').send(clientErrorPage(403));
+      }
+    }
     const path = request.url.split('?')[0] ?? '';
     if (isPublicPath(path)) return;
 

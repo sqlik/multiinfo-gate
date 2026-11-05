@@ -202,12 +202,13 @@ export function m365DetailPage(v: M365AccountView, opts: { redirectUri: string |
     : '';
   const error = row.errorCode === null && row.errorMessage === null
     ? '<span class="dim">brak</span>'
-    : `${row.errorCode === null ? '' : `AADSTS${esc(row.errorCode)} · `}${esc(row.errorMessage ?? '')}`;
+    // Komunikat z podpowiedzią zaczyna się zwykle od kodu, więc kod przed nim pojawia się tylko wtedy, gdy go tam brak.
+    : `${row.errorCode === null || (row.errorMessage ?? '').startsWith(`AADSTS${row.errorCode}`) ? '' : `AADSTS${esc(row.errorCode)} · `}${esc(row.errorMessage ?? '')}`;
   const users = v.users.length === 0
     ? '<div class="dim">Konta nie używa jeszcze żadna skrzynka Mail2SMS ani wysyłka maili powiadomień.</div>'
     : `<ul style="margin: 0; padding-left: 18px;">${v.users.map((u) => `<li>${userLink(u)}</li>`).join('')}</ul>`;
   const disconnect = row.state === 'new' ? '' : `<form method="post" action="/microsoft-365/${esc(row.id)}/rozlacz"
-        data-confirm="Rozłączyć konto „${esc(row.name)}”? Skrzynki Mail2SMS i maile powiadomień korzystające z tego konta zostaną wstrzymane do ponownego logowania." data-confirm-ok="Rozłącz">
+        data-confirm="Rozłączyć konto „${esc(row.name)}”? Skrzynki Mail2SMS korzystające z tego konta zostaną wstrzymane do ponownego logowania, a maile powiadomień nie będą wysyłane." data-confirm-ok="Rozłącz">
         <button class="btn btn-s" type="submit">Rozłącz</button>
       </form>`;
 

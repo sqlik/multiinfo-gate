@@ -35,7 +35,9 @@ export function clientErrorPage(status: number): string {
   const title = tooLarge ? 'Przesłane dane są za duże' : 'Żądanie nie zostało przyjęte';
   const about = tooLarge
     ? 'Formularz albo plik przekracza dopuszczalny rozmiar.'
-    : `Panel nie mógł odczytać przesłanych danych (kod ${status}).`;
+    : status === 403
+      ? 'Panel przyjmuje formularze wyłącznie ze swoich stron. Otwórz panel bezpośrednio i powtórz działanie.'
+      : `Panel nie mógł odczytać przesłanych danych (kod ${status}).`;
   return gate(title, `<div class="help-body">
     <h1>${esc(title)}</h1>
     <p>${esc(about)}</p>

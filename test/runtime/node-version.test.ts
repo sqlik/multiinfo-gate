@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nodeUpdateNeeded, NODE_PATCHED } from '../../src/runtime/node-version.ts';
+import { nodeUpdateNeeded, NODE_PATCHED, unsupportedLine } from '../../src/runtime/node-version.ts';
 
 describe('nodeUpdateNeeded', () => {
   it('linie 22, 24 i 26 poniżej progu wymagają progu tej linii', () => {
@@ -23,6 +23,16 @@ describe('nodeUpdateNeeded', () => {
   it('przyjmuje wersję bez litery v, a wersji nieczytelnej nie uznaje za bezpieczną', () => {
     expect(nodeUpdateNeeded('22.23.3')).toBe('22.23.4');
     expect(nodeUpdateNeeded('nieznana')).toBe('22.23.4');
+  });
+  it('wersja wstępna albo nocna równa progowi nie zawiera jeszcze poprawek', () => {
+    expect(nodeUpdateNeeded('v22.23.4-rc.1')).toBe('22.23.4');
+    expect(nodeUpdateNeeded('v26.12.1-nightly20261020abcdef')).toBe('26.12.1');
+    expect(nodeUpdateNeeded('v22.23.5-rc.1')).toBeNull();
+  });
+  it('unsupportedLine odróżnia linię bez poprawek od starszej wersji tej samej linii', () => {
+    expect(unsupportedLine('v25.9.0', '22.23.4')).toBe(true);
+    expect(unsupportedLine('v20.19.0', '22.23.4')).toBe(true);
+    expect(unsupportedLine('v22.9.0', '22.23.4')).toBe(false);
   });
   it('progi są wersjami z wydania bezpieczeństwa Node z 21 października 2026', () => {
     expect(NODE_PATCHED).toEqual({ 22: '22.23.4', 24: '24.22.1', 26: '26.12.1' });

@@ -380,6 +380,14 @@ describe('kanał SMS powiadomień', () => {
     expect(h.audit.list(10, 0).some((e) => e.action === 'powiadomienia.sms.test')).toBe(true);
   });
 
+  it('drugi SMS testowy w tej samej minucie nie zostaje wysłany', async () => {
+    const id = key('Dyżur IT');
+    await post('/powiadomienia/sms', smsFields(id));
+    for (let i = 0; i < 5; i += 1) await post('/powiadomienia/sms/test', {});
+    expect(h.messages.list({ includeSystem: true, limit: 100, offset: 0 })).toHaveLength(2);
+    expect((await smsPage()).body).toContain('Kolejny można wysłać za 60 s');
+  });
+
   it('kanał z kluczem wygasłym: SMS testowy niewysłany z powodem i pasek na przeglądzie', async () => {
     const id = key('Dyżur IT', { expiresAt: '2026-08-01T00:00:00.000Z' });
     h.notifications.saveSmsSettings({ enabled: true, recipients: ['48601000001'], apiKeyId: id, orig: null }, new Date());

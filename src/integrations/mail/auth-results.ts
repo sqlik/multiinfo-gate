@@ -37,11 +37,12 @@ export function authservIdOf(header: string): string | null {
 }
 
 /**
- * Jawna porażka DMARC albo compauth w którymkolwiek nagłówku. Nadawca może dopisać tylko porażkę, która szkodzi
- * jemu samemu, dlatego liczą się wszystkie nagłówki, nie tylko pierwszy.
+ * Jawna porażka DMARC albo compauth (także `compauth=softfail`, czyli podejrzenie podszycia według Microsoftu)
+ * w którymkolwiek nagłówku. Nadawca może dopisać tylko porażkę, która szkodzi jemu samemu, dlatego liczą się
+ * wszystkie nagłówki. Brak wyniku nie blokuje: wewnętrzny mail wysłany przez SMTP ma `dmarc=none`.
  */
 export function authResultsFailDmarc(headers: string[]): boolean {
-  return headers.some((h) => /(?:^|[\s;])(?:dmarc|compauth)\s*=\s*fail\b/.test(stripComments(h).toLowerCase()));
+  return headers.some((h) => /(?:^|[\s;])(?:dmarc\s*=\s*fail|compauth\s*=\s*(?:soft)?fail)\b/.test(stripComments(h).toLowerCase()));
 }
 
 /**

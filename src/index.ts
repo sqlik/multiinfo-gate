@@ -13,7 +13,7 @@ import { Receiver } from './inbound/receiver.ts';
 import { SourceMatcher } from './integrations/sources.ts';
 import { TemplateEngine } from './integrations/templates.ts';
 import { createLogger, type Logger } from './log.ts';
-import { nodeUpdateNeeded, plainVersion } from './runtime/node-version.ts';
+import { nodeUpdateNeeded, plainVersion, unsupportedLine } from './runtime/node-version.ts';
 import { problemUrl } from './docs-links.ts';
 import { systemResolver } from './net/private-address.ts';
 import { Notifier, subjectNamer } from './notifications/notifier.ts';
@@ -249,7 +249,9 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   });
   const nodeMinimum = nodeUpdateNeeded(nodeVersion);
   if (nodeMinimum !== null) {
-    log.warn('node.bez_poprawek', { installed: plainVersion(nodeVersion), minimum: nodeMinimum, help: problemUrl('wersja-node') });
+    log.warn('node.bez_poprawek', {
+      installed: plainVersion(nodeVersion), minimum: nodeMinimum, unsupportedLine: unsupportedLine(nodeVersion, nodeMinimum), help: problemUrl('wersja-node'),
+    });
   }
   return running;
 }

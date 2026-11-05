@@ -6,6 +6,7 @@ import { M365Tokens } from '../../src/m365/tokens.ts';
 import type { Logger } from '../../src/log.ts';
 import { openDatabase } from '../../src/store/db.ts';
 import { M365AccountsRepo } from '../../src/store/m365-accounts.ts';
+import { m365DetailPage } from '../../src/admin/views/m365.ts';
 
 const T0 = new Date('2026-11-04T12:00:00Z');
 const INPUT = { name: 'Dyżur IT', tenant: 'firma.onmicrosoft.com', clientId: '11111111-2222-3333-4444-555555555555' };
@@ -200,5 +201,26 @@ describe('M365Tokens.remember i forget', () => {
     tokens.forget(id);
     expect((await tokens.access(id, T0)).token).toBe('dostep-2');
     expect(forms).toHaveLength(1);
+  });
+});
+
+describe('szczegóły konta po odrzuconym odświeżeniu', () => {
+  it('„Ostatni błąd” podaje kod AADSTS jeden raz', async () => {
+    const db = openDatabase(':memory:');
+    const accounts = new M365AccountsRepo(db, randomBytes(32));
+    const fetch: TokenFetch = async () => ({
+      status: 400,
+      body: { error: 'invalid_grant', error_codes: [50173], error_description: 'AADSTS50173: The provided grant has expired due to it being revoked. Trace ID: 1 Correlation ID: 2 Timestamp: 3' },
+    });
+    const tokens = new M365Tokens({ accounts, fetch });
+    const at = new Date('2026-11-04T12:00:00Z');
+    const id = accounts.create({ name: 'Dyżur IT', tenant: 'firma.onmicrosoft.com', clientId: '11111111-2222-3333-4444-555555555555' }, at);
+    accounts.connected(id, {
+      refreshToken: 'r', address: 'alarmy@firma.pl', addressManual: false, loginName: 'alarmy@firma.pl', loginOid: null,
+      redirectUri: 'http://localhost:8081/m365/powrot', by: 'admin',
+    }, at);
+    await tokens.access(id, at).catch(() => undefined);
+    const html = m365DetailPage({ row: accounts.get(id)!, users: [] }, { redirectUri: 'http://localhost:8081/m365/powrot' });
+    expect(html.match(/AADSTS50173/g)).toHaveLength(1);
   });
 });

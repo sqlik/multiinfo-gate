@@ -21,16 +21,24 @@ function below(version: number[], minimum: number[]): boolean {
 
 /** `null`, gdy wersja zawiera poprawki z 21 października 2026; w przeciwnym razie minimalna wersja do instalacji. */
 export function nodeUpdateNeeded(version: string): string | null {
-  const m = /^v?(\d+)\.(\d+)\.(\d+)/.exec(version.trim());
+  const m = /^v?(\d+)\.(\d+)\.(\d+)(-\S+)?/.exec(version.trim());
   if (!m) return FALLBACK;
   const current = [Number(m[1]), Number(m[2]), Number(m[3])];
+  // Wersja wstępna albo nocna (22.23.4-rc.1) poprzedza wydanie o tym numerze, więc poprawek jeszcze nie zawiera.
+  const prerelease = m[4] !== undefined;
   const major = current[0]!;
   const lines = Object.keys(NODE_PATCHED).map(Number);
   if (major > Math.max(...lines)) return null;
   const minimum = NODE_PATCHED[major];
   if (minimum === undefined) return FALLBACK;
-  return below(current, parts(minimum)) ? minimum : null;
+  const min = parts(minimum);
+  const equal = current.every((n, i) => n === min[i]);
+  return below(current, min) || (prerelease && equal) ? minimum : null;
 }
+
+/** Wersja zainstalowana należy do linii bez wydania z poprawkami (nieparzystej albo starszej niż 22). */
+export const unsupportedLine = (installed: string, minimum: string): boolean =>
+  parts(plainVersion(installed))[0] !== parts(minimum)[0];
 
 /** Numer wersji Node bez litery `v`, do komunikatów. */
 export const plainVersion = (version: string): string => version.trim().replace(/^v/, '');
