@@ -54,6 +54,27 @@ export function shortUrl(domain: string, code: string, bare: boolean): string {
 
 const unchanged = (text: string, notice: LinkNotice | null): PreparedText => ({ text, slots: [], info: null, notice });
 
+/** Treść bez skracania w postaci szablonu, na przykład dla podglądu bez klucza. */
+export const plainText = (text: string): PreparedText => unchanged(text, null);
+
+/** Ustawienia klucza odczytane raz na wywołanie, a nie raz na każdą z 5000 treści rozsyłki. */
+export function onceSettings(deps: ShortenerDeps): ShortenerDeps {
+  const cache = new Map<number, KeyLinkSettings>();
+  return {
+    linkDomains: deps.linkDomains,
+    apiKeys: {
+      linkSettings: (id: number) => {
+        let settings = cache.get(id);
+        if (settings === undefined) {
+          settings = deps.apiKeys.linkSettings(id);
+          cache.set(id, settings);
+        }
+        return settings;
+      },
+    },
+  };
+}
+
 function campaignName(raw: string | undefined): string | null {
   if (raw === undefined) return null;
   const name = raw.trim();

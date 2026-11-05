@@ -1,10 +1,10 @@
 import { sha256Hex } from '../text/hash.ts';
 import { shortId } from '../ids.ts';
 import {
-  createCodes, linkExpiry, materialize, openCampaign, packageLinksBlock, prepareLinks, storedLinksBlock,
+  createCodes, linkExpiry, materialize, onceSettings, openCampaign, packageLinksBlock, prepareLinks, storedLinksBlock,
   type LinkRequest, type LinksResponse, type PreparedText,
 } from '../links/shortener.ts';
-import type { ApiKeysRepo, KeyLinkSettings } from '../store/api-keys.ts';
+import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { PackageStatus, RecipientInput } from '../store/packages.ts';
 import { measureText, type EncodingRequest } from '../text/measure.ts';
 import { InvalidPhoneError, normalizePhone } from '../text/phone.ts';
@@ -90,10 +90,8 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
 
   const maxParts = Math.min(input.maxParts ?? auth.maxParts, auth.maxParts);
 
-  // Szablony treści: pomiar, kodowanie i limit części dotyczą treści po skróceniu. Ustawienia klucza
-  // odczytuje się raz na rozsyłkę, a nie raz na każdą z 5000 treści.
-  let settings: KeyLinkSettings | undefined;
-  const shortener = { apiKeys: { linkSettings: (id: number) => (settings ??= deps.apiKeys.linkSettings(id)) }, linkDomains: deps.linkDomains };
+  // Szablony treści: pomiar, kodowanie i limit części dotyczą treści po skróceniu.
+  const shortener = onceSettings(deps);
   const prepare = (text: string) => prepareLinks(shortener, auth.apiKeyId, text, input.links ?? {}, {});
   const defaultTemplate = input.defaultText === undefined ? undefined : input.prepared?.defaultText ?? prepare(input.defaultText);
   const ownTemplates = input.recipients.map((r, index) =>

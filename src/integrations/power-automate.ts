@@ -1,15 +1,17 @@
 import { ApiError } from '../api/errors.ts';
+import { linkRequest } from '../api/link-fields.ts';
 import type { PaGroupBody, PaMessageBody, PaPackageBody } from '../api/pa-integrations.ts';
 import type { ApiDeps } from '../api/server.ts';
 import { packageEncoding, submitPackage, type PackageAccepted } from '../api/submit-package.ts';
 import { authFromKey, submitMessages, type SubmitResult } from '../api/submit.ts';
+import { fitPrepared, onceSettings, prepareLinks, type PreparedText } from '../links/shortener.ts';
 import type { IntegrationEventInput } from '../store/integration-events.ts';
 import type { IntegrationRow } from '../store/integrations.ts';
 import { measureText, type EncodingRequest } from '../text/measure.ts';
 import { normalizePhone } from '../text/phone.ts';
 import { segmentText } from '../text/segment.ts';
 import type { PowerAutomateConfig } from './config.ts';
-import { fitToParts, resolveKeyAccount, type PipelineDeps } from './pipeline.ts';
+import { resolveKeyAccount, type PipelineDeps } from './pipeline.ts';
 
 export type PowerAutomateIntegration = IntegrationRow & { kind: 'power_automate'; config: PowerAutomateConfig };
 
@@ -108,21 +110,28 @@ export function runPowerAutomate(
     ...(integration.serviceId ? { serviceId: integration.serviceId } : {}),
     ...(integration.orig ? { orig: integration.orig } : {}),
     ...(requestedBy ? { requestedBy } : {}),
+    // Kampania bez nazwy w żądaniu otrzymuje nazwę integracji.
+    campaignFallback: integration.name,
   };
+  // Pola skracania z body akcji; ustawienie klucza ma pierwszeństwo, tak jak w API.
+  const links = linkRequest(call.body);
+  const shortener = onceSettings(deps);
+  const prepare = (text: string): PreparedText => prepareLinks(shortener, auth.apiKeyId, text, links, {});
   let cut = false;
   /**
-   * Treść w limicie części integracji: przycięta albo odrzucona z miejscem w body żądania.
+   * Szablon w limicie części integracji: przycięty albo odrzucony z miejscem w body żądania. Limit
+   * dotyczy treści po skróceniu linków, a przycięcie usuwa przecięty krótki link w całości.
    * Rozsyłka liczy każdą treść w kodowaniu całej rozsyłki, bo tak wyśle ją Multiinfo.
    */
-  const fit = (text: string, where = '', encoding: EncodingRequest = call.body.encoding): string => {
-    const fitted = fitToParts(text, config.maxParts, encoding);
-    if (!fitted.over) return text;
+  const fit = (template: PreparedText, where = '', encoding: EncodingRequest = call.body.encoding): PreparedText => {
+    const fitted = fitPrepared(template, config.maxParts, encoding);
+    if (!fitted.over) return template;
     if (config.overflow === 'reject') {
       throw new ApiError(400, 'too_many_parts',
-        `${where}Treść wymaga ${neededParts(text, encoding)} części, a limit integracji to ${config.maxParts}.`);
+        `${where}Treść wymaga ${neededParts(template.text, encoding)} części, a limit integracji to ${config.maxParts}.`);
     }
     cut = true;
-    return fitted.text;
+    return fitted.prepared;
   };
   const withCut = (reason: string): string => (cut ? `${reason}; skrócono do ${config.maxParts} części` : reason);
   /**
@@ -142,16 +151,18 @@ export function runPowerAutomate(
   try {
     if (call.action === 'package') {
       const b = call.body;
-      const encoding = packageEncoding([b.defaultText, ...b.recipients.map((r) => r.text)], b.encoding);
-      const defaultText = b.defaultText === undefined ? undefined : fit(b.defaultText, 'defaultText: ', encoding);
-      const recipients = b.recipients.map((r, i) => ({
-        to: r.to,
-        ...(r.text !== undefined ? { text: fit(r.text, `recipients.${i}: `, encoding) } : {}),
-        ...(r.clientId !== undefined ? { clientId: r.clientId } : {}),
-      }));
+      // Kodowanie z szablonów: polski znak wyłącznie w adresie skracanego linku nie przełącza rozsyłki na UCS-2.
+      const defaultTemplate = b.defaultText === undefined ? undefined : prepare(b.defaultText);
+      const ownTemplates = b.recipients.map((r) => (r.text === undefined ? undefined : prepare(r.text)));
+      const encoding = packageEncoding([defaultTemplate?.text, ...ownTemplates.map((t) => t?.text)], b.encoding);
+      const prepared = {
+        ...(defaultTemplate === undefined ? {} : { defaultText: fit(defaultTemplate, 'defaultText: ', encoding) }),
+        recipients: ownTemplates.map((t, i) => (t === undefined ? undefined : fit(t, `recipients.${i}: `, encoding))),
+      };
+      // Treści przed skróceniem trafiają do skrótu idempotencji, a szablony do wysyłki.
       const pkg = submitPackage(deps, auth, {
-        recipients, defaultText, startAt: b.startAt, deliveryReport: b.deliveryReport, encoding: b.encoding,
-        costCenter: b.costCenter, maxParts: config.maxParts, ...via,
+        recipients: b.recipients, defaultText: b.defaultText, startAt: b.startAt, deliveryReport: b.deliveryReport, encoding: b.encoding,
+        costCenter: b.costCenter, maxParts: config.maxParts, links, prepared, ...via,
         ...(meta.idempotencyKey !== undefined ? { idempotencyKey: meta.idempotencyKey } : {}),
       }, now);
       accepted(repeated ? label : `${label}, ${recipientsWord(pkg.recipients)}`, { packageId: pkg.id });
@@ -165,9 +176,9 @@ export function runPowerAutomate(
       throw new ApiError(409, 'group_empty',
         `Integracja ${integration.name} nie ma odbiorców grupy. Listę uzupełnia administrator w panelu bramki.`);
     }
-    const text = fit(b.text);
+    const prepared = fit(prepare(b.text));
     const results = submitMessages(deps, auth, {
-      to, text, encoding: b.encoding, deliveryReport: b.deliveryReport, maxParts: config.maxParts, ...via,
+      to, text: b.text, prepared, links, encoding: b.encoding, deliveryReport: b.deliveryReport, maxParts: config.maxParts, ...via,
       ...(b.validTo !== undefined ? { validTo: b.validTo } : {}),
       ...(b.costCenter !== undefined ? { costCenter: b.costCenter } : {}),
       ...(meta.idempotencyKey !== undefined ? { idempotencyKey: meta.idempotencyKey } : {}),

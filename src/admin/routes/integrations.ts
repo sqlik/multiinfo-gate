@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { matches } from '../../integrations/conditions.ts';
 import { INTEGRATION_KINDS, MAIL_IN_PASSWORD_REF, defaultInboundConfig, defaultMailInConfig, defaultPowerAutomateConfig, defaultSmsGroupConfig, type InboundConfig, type IntegrationKind, type MailInConfig, type OutboundConfig, type PowerAutomateConfig, type SmsGroupConfig } from '../../integrations/config.ts';
-import { previewInbound, previewMailIn, previewSmsGroup } from '../../integrations/pipeline.ts';
+import { previewInbound, previewMailIn, previewSmsGroup, type Shorten } from '../../integrations/pipeline.ts';
+import { prepareLinks } from '../../links/shortener.ts';
 import { checkMailbox } from '../../worker/mail-in.ts';
 import { mailConfigToValues, mailFormToConfig, mailFormValues, mailWarnings, needsAdvanced, sampleMail, type MailFormValues } from '../mail-form.ts';
 import { mailFormPage, type MailConnection, type MailFormOptions } from '../views/integration-mail.ts';
@@ -135,6 +136,8 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
   };
 
   const countryCodeOf = (accountId: number): string => deps.accounts.get(accountId)?.defaultCountryCode ?? '48';
+  /** Skracanie linków według ustawień klucza integracji, do podglądu „Sprawdź”. */
+  const shortenWith = (apiKeyId: number): Shorten => (text) => prepareLinks(deps, apiKeyId, text, {}, {});
 
   /** Wynik każdego wariantu „co w SMS-ie” na próbce ustawienia - tryb prosty pokazuje wynik, nie szablon. */
   const textPreviews = (preset: Preset): Record<string, string> => {
@@ -172,7 +175,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     });
 
   /** Podgląd „Sprawdź szablon” z próbki; błąd JSON-a próbki to błąd formularza, nie podglądu. */
-  const preview = (kind: IntegrationKind, config: IntegrationRow['config'], v: IntegrationFormValues, secretNames: string[], countryCode: string, enrichSample?: unknown):
+  const preview = (kind: IntegrationKind, config: IntegrationRow['config'], v: IntegrationFormValues, secretNames: string[], countryCode: string, shorten: Shorten, enrichSample?: unknown):
     { ok: true; preview: FormPreview } | { ok: false; error: string } => {
     let sample: unknown;
     try {
@@ -183,7 +186,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const at = now();
     if (kind === 'webhook_in') {
       const inbound = config as InboundConfig;
-      const p = previewInbound(deps.engine, inbound, sample, countryCode, at, enrichSample);
+      const p = previewInbound(deps.engine, inbound, sample, countryCode, at, enrichSample, shorten);
       return {
         ok: true,
         preview: {
@@ -242,7 +245,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
 
     if (String(body.action ?? '') === 'sprawdz') {
       const secretNames = [...new Set([...existing.names, ...Object.keys(built.secrets), ...Object.keys(built.carried)])];
-      const result = preview(kind, built.config, v, secretNames, countryCodeOf(key.accountId), ctx.preset.enrichSample);
+      const result = preview(kind, built.config, v, secretNames, countryCodeOf(key.accountId), shortenWith(key.keyId), ctx.preset.enrichSample);
       if (!result.ok) return fail(result.error);
       void title;
       return advancedPage(request, ctx, v, { preview: result.preview });
@@ -372,7 +375,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     if (action === 'sprawdz') {
       const sample = await sampleMail(v, now());
       if (sample === null) return fail('Podaj próbkę: wklej surową wiadomość albo wypełnij nadawcę, temat i treść.');
-      const preview = previewMailIn(deps.engine, built.config, sample, countryCodeOf(key.accountId), now());
+      const preview = previewMailIn(deps.engine, built.config, sample, countryCodeOf(key.accountId), now(), shortenWith(key.keyId));
       return mailPage(request, ctx, v, { mode, preview, warnings });
     }
     try {
@@ -449,7 +452,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const built = groupFormToConfig(v, countryCode, deps.engine);
     if (!built.ok) return fail(built.error);
     if (String(body.action ?? '') === 'sprawdz') {
-      const preview = previewSmsGroup(deps.engine, built.config, groupSampleEvent(v, built.config, now(), countryCode), now());
+      const preview = previewSmsGroup(deps.engine, built.config, groupSampleEvent(v, built.config, now(), countryCode), now(), shortenWith(key.keyId));
       return groupPage(request, ctx, v, { mode, preview });
     }
     try {
