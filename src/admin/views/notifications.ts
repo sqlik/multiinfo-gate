@@ -306,7 +306,7 @@ ${d.tab === 'sms' ? `      ${smsPanel(d)}` : d.tab === 'konfiguracja' ? `      <
             <button class="btn btn-p" type="submit"${rulesEditable ? '' : ' disabled'}>Zapisz reguły</button>
             <div class="hint dim" style="font-size: 11.5px; margin: 0;">
               <div>Grupowanie 0 oznacza osobny mail dla każdego zdarzenia, do limitu na godzinę. Zdarzenia ponad limit są zliczane i podawane w następnym mailu</div>
-              <div>Zaznaczone pole SMS powoduje wysłanie powiadomienia także SMS-em na numery z zakładki SMS. Limit na godzinę obejmuje również SMS-y. Bramka wysyła najwyżej 10 SMS-ów powiadomień na dobę. SMS-y o koncie Microsoft 365 wymagającym logowania i o niewysłanym mailu korzystają z osobnej puli 5 na dobę</div>
+              <div>Zaznaczone pole SMS powoduje wysłanie powiadomienia także SMS-em na numery z zakładki SMS. Limit na godzinę obejmuje również SMS-y. Bramka wysyła najwyżej 10 SMS-ów powiadomień na dobę, licząc każdy numer osobno. SMS-y o koncie Microsoft 365 wymagającym logowania i o niewysłanym mailu korzystają z osobnej puli 5 na dobę</div>
               ${d.sms?.enabled === true ? '' : '<div>Kanał SMS jest wyłączony, dlatego zaznaczone pola SMS nie powodują wysyłki</div>'}
             </div>
           </div>

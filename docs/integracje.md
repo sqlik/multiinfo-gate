@@ -2183,10 +2183,14 @@ adresów e-mail ani treści błędów, ponieważ opuszcza infrastrukturę firmy.
 
 Pole **SMS** w tabeli reguł włącza wysyłkę danego powiadomienia także SMS-em. Domyślnie jest
 zaznaczone wyłącznie przy regułach **Konto Microsoft 365 wymaga logowania** i **Mail
-z powiadomieniem niewysłany**. Limit na godzinę reguły obejmuje również SMS-y. Dodatkowo bramka
-wysyła najwyżej 10 SMS-ów powiadomień na dobę. Dwie wymienione reguły korzystają z osobnej puli
-5 SMS-ów na dobę, dzięki czemu seria innych powiadomień nie blokuje SMS-a o zerwanym koncie.
-Nadmiar trafia do logu bramki bez wysyłki.
+z powiadomieniem niewysłany**. Limit na godzinę reguły obejmuje również SMS-y i liczy
+powiadomienia niezależnie od liczby numerów. Dodatkowo bramka wysyła najwyżej 10 SMS-ów powiadomień
+na dobę. Dwie wymienione reguły korzystają z osobnej puli 5 SMS-ów na dobę, dzięki czemu seria
+innych powiadomień nie blokuje SMS-a o zerwanym koncie.
+
+Pule doby liczą każdy numer osobno. Na przykład przy trzech numerach jedno powiadomienie zużywa
+trzy SMS-y, dlatego pula 10 SMS-ów obejmuje trzy powiadomienia. Powiadomienie, które nie mieści
+się w reszcie puli, nie zostaje wysłane na żaden numer i trafia wyłącznie do logu bramki.
 
 ## 10. Bezpieczeństwo
 

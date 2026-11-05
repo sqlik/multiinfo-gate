@@ -9,17 +9,17 @@ const DAY_MS = 24 * HOUR_MS;
 
 /** Zdarzenia, dla których powstał kanał SMS: osobna pula doby, której nie wyczerpią inne powiadomienia (spec 8.4). */
 export const SMS_ALARM_EVENTS: NotificationEvent[] = ['m365_disconnected', 'mail_undeliverable'];
-/** Dobowe pule SMS-ów powiadomień dla całej bramki: reguły z włączonym SMS-em oraz zdarzenia alarmowe. */
+/** Dobowe pule SMS-ów powiadomień dla całej bramki: reguły z włączonym SMS-em oraz zdarzenia alarmowe. Każdy numer to jeden SMS. */
 export const SMS_PER_DAY = { rules: 10, alarm: 5 } as const;
 const RULE_POOL_EVENTS = NOTIFICATION_EVENTS.filter((e) => !SMS_ALARM_EVENTS.includes(e));
 
-/** Wynik wysyłki SMS-a powiadomienia; odmowa niesie powód do logu. */
-export type SmsSendResult = { ok: true } | { ok: false; reason: string };
+/** Wynik wysyłki SMS-a powiadomienia: identyfikatory wiadomości, po jednej na numer; odmowa niesie powód do logu. */
+export type SmsSendResult = { ok: true; ids: string[] } | { ok: false; reason: string };
 
 type SmsPool = keyof typeof SMS_PER_DAY;
-/** Stan jednej tury `flushSms`: wykorzystanie pul doby i pierwsza odmowa wysyłki. */
+/** Stan jednej tury `flushSms`: liczba numerów kanału, wykorzystanie pul doby w SMS-ach i pierwsza odmowa wysyłki. */
 interface SmsTurn {
-  send: (text: string, now: Date) => SmsSendResult; instance: string | null;
+  send: (text: string, now: Date) => SmsSendResult; instance: string | null; numbers: number;
   used: Record<SmsPool, number>; failure: string | null;
 }
 
@@ -83,7 +83,8 @@ export class Notifier implements AdminNotifier {
       .map((rule) => ({ rule, rows: this.deps.notifications.pendingSms(rule.event) }))
       .filter((q) => q.rows.length > 0);
     if (queued.length === 0) return;
-    if (this.deps.notifications.smsSettings()?.enabled !== true) {
+    const settings = this.deps.notifications.smsSettings();
+    if (settings?.enabled !== true) {
       for (const { rule, rows } of queued) this.dropSms(rule.event, rows, 'kanał SMS wyłączony', now);
       return;
     }
@@ -91,16 +92,19 @@ export class Notifier implements AdminNotifier {
     if (!send) return;
     const dayAgo = new Date(now.getTime() - DAY_MS);
     const turn: SmsTurn = {
-      send, instance: this.deps.notifications.smtp()?.instanceName ?? null, failure: null,
+      send, instance: this.deps.notifications.smtp()?.instanceName ?? null, numbers: settings.recipients.length, failure: null,
       used: {
-        rules: this.deps.notifications.smsSentSince(RULE_POOL_EVENTS, dayAgo),
-        alarm: this.deps.notifications.smsSentSince(SMS_ALARM_EVENTS, dayAgo),
+        rules: this.deps.notifications.smsCountSince(RULE_POOL_EVENTS, dayAgo),
+        alarm: this.deps.notifications.smsCountSince(SMS_ALARM_EVENTS, dayAgo),
       },
     };
     for (const { rule, rows } of queued) this.sendRule(rule, rows, turn, now);
   }
 
-  /** SMS-y jednej reguły: najpierw limit reguły w ostatniej godzinie, potem pula doby. */
+  /**
+   * SMS-y jednej reguły: najpierw limit reguły w ostatniej godzinie (w powiadomieniach), potem pula doby
+   * (w SMS-ach). Powiadomienie, które nie mieści się w reszcie puli, nie trafia do części numerów.
+   */
   private sendRule(rule: RuleRow, rows: QueueRow[], turn: SmsTurn, now: Date): void {
     const log = this.deps.log ?? silentLogger;
     const pool: SmsPool = SMS_ALARM_EVENTS.includes(rule.event) ? 'alarm' : 'rules';
@@ -112,16 +116,16 @@ export class Notifier implements AdminNotifier {
     for (const row of rows) {
       if (turn.failure !== null) { failed.push(row); continue; }
       if (hourBudget === 0) { overHour.push(row); continue; }
-      if (turn.used[pool] >= SMS_PER_DAY[pool]) { overDay.push(row); continue; }
+      if (turn.used[pool] + turn.numbers > SMS_PER_DAY[pool]) { overDay.push(row); continue; }
       const result = turn.send(composeSms(turn.instance, rule.event, this.deps.subjectName?.(row.subjectKey) ?? ''), now);
       if (!result.ok) {
         turn.failure = result.reason;
         failed.push(row);
         continue;
       }
-      this.deps.notifications.markSms([row.id], 'sent', now);
+      this.deps.notifications.markSms([row.id], 'sent', now, result.ids.length);
       hourBudget -= 1;
-      turn.used[pool] += 1;
+      turn.used[pool] += result.ids.length;
       sent += 1;
     }
     if (sent > 0) log.info('powiadomienie.sms_wyslane', { event: rule.event, count: sent });

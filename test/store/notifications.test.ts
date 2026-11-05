@@ -124,6 +124,13 @@ describe('kanał SMS', () => {
     expect(repo.smsSentSince(['m365_disconnected'], new Date(0))).toBe(1);
     expect(repo.smsSentSince(null, new Date(0))).toBe(2);
     expect(repo.smsSentSince(null, new Date(NOW.getTime() + 1))).toBe(0);
+    // Pule doby liczą SMS-y, czyli numery: wpis wysłany na trzy numery zużywa trzy.
+    expect(repo.smsCountSince(null, new Date(0))).toBe(2);
+    const d = repo.enqueue({ event: 'integration_error', at: NOW, summary: 'd', mail: false, sms: true })!;
+    repo.markSms([d], 'sent', NOW, 3);
+    expect(repo.smsCountSince(null, new Date(0))).toBe(5);
+    expect(repo.smsCountSince(['m365_disconnected'], new Date(0))).toBe(1);
+    expect(repo.smsSentSince(null, new Date(0))).toBe(3);
     expect(repo.pending('integration_error')).toEqual([expect.objectContaining({ id: c, status: 'pending', smsStatus: 'suppressed' })]);
   });
 

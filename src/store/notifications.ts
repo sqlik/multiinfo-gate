@@ -204,17 +204,27 @@ export class NotificationsRepo {
     return rows.map((r) => this.toQueue(r));
   }
 
-  markSms(ids: number[], status: 'sent' | 'suppressed', at: Date): void {
+  /** `count` to liczba SMS-ów wysłanych dla każdego z wpisów, czyli liczba numerów kanału. */
+  markSms(ids: number[], status: 'sent' | 'suppressed', at: Date, count = 1): void {
     if (ids.length === 0) return;
-    this.db.prepare(`UPDATE notification_queue SET sms_status = ?, sms_sent_at = ? WHERE id IN (${ids.map(() => '?').join(', ')})`)
-      .run(status, status === 'sent' ? at.toISOString() : null, ...ids);
+    this.db.prepare(`UPDATE notification_queue SET sms_status = ?, sms_sent_at = ?, sms_count = ? WHERE id IN (${ids.map(() => '?').join(', ')})`)
+      .run(status, status === 'sent' ? at.toISOString() : null, status === 'sent' ? count : 0, ...ids);
   }
 
-  /** Liczba SMS-ów wysłanych od `since` dla wskazanych zdarzeń; `null` = wszystkie zdarzenia (pula dobowa). */
+  /** Liczba powiadomień wysłanych SMS-em od `since` dla wskazanych zdarzeń (limit reguły na godzinę). */
   smsSentSince(events: NotificationEvent[] | null, since: Date): number {
+    return this.smsSum('COUNT(*)', events, since);
+  }
+
+  /** Liczba SMS-ów wysłanych od `since`, po jednym na numer; `null` = wszystkie zdarzenia (pule doby). */
+  smsCountSince(events: NotificationEvent[] | null, since: Date): number {
+    return this.smsSum('COALESCE(SUM(sms_count), 0)', events, since);
+  }
+
+  private smsSum(aggregate: string, events: NotificationEvent[] | null, since: Date): number {
     if (events !== null && events.length === 0) return 0;
     const filter = events === null ? '' : ` AND event IN (${events.map(() => '?').join(', ')})`;
-    const row = this.db.prepare(`SELECT COUNT(*) AS n FROM notification_queue WHERE sms_status = 'sent' AND sms_sent_at >= ?${filter}`)
+    const row = this.db.prepare(`SELECT ${aggregate} AS n FROM notification_queue WHERE sms_status = 'sent' AND sms_sent_at >= ?${filter}`)
       .get(since.toISOString(), ...(events ?? [])) as { n: number };
     return row.n;
   }

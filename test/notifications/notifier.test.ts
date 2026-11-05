@@ -136,7 +136,7 @@ describe('Notifier - kanał SMS', () => {
     log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
     smsNotifier = new Notifier({
       notifications, jobs, log,
-      sms: (text) => { sent.push(text); return { ok: true }; },
+      sms: (text) => { sent.push(text); return { ok: true, ids: ['m1'] }; },
       subjectName: (key) => (key === null ? '' : `Temat ${key}`),
     });
   });
@@ -249,7 +249,7 @@ describe('Notifier - kanał SMS', () => {
   it('nazwa instancji z ustawień SMTP trafia do treści, a adresy e-mail z tematu znikają', () => {
     smsOn();
     smtp();
-    const named = new Notifier({ notifications, jobs, sms: (text) => { sent.push(text); return { ok: true }; }, subjectName: () => 'alarmy@firma.pl' });
+    const named = new Notifier({ notifications, jobs, sms: (text) => { sent.push(text); return { ok: true, ids: ['m1'] }; }, subjectName: () => 'alarmy@firma.pl' });
     named.notify('mail_undeliverable', 'smtp', 'mail do admin@example niewysłany', T0);
     named.flushSms(T0);
     expect(sent).toEqual(['Multiinfo Gate bramka-test: Mail z powiadomieniem niewysłany. Szczegóły w panelu.']);

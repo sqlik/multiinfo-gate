@@ -42,6 +42,9 @@ ALTER TABLE notification_rules ADD COLUMN sms INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE notification_queue ADD COLUMN sms_status TEXT NOT NULL DEFAULT 'none';
 -- Czas wysłania SMS-a; dobowe pule powiadomień SMS liczą się od tej chwili, a nie od zdarzenia.
 ALTER TABLE notification_queue ADD COLUMN sms_sent_at TEXT;
+-- Liczba SMS-ów wysłanych dla wpisu, po jednym na numer kanału. Dobowe pule liczą SMS-y, a limit reguły na godzinę
+-- liczy powiadomienia.
+ALTER TABLE notification_queue ADD COLUMN sms_count INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX idx_notification_sms_pending ON notification_queue(sms_status, event, at);
 
 -- Ustawienia kanału SMS (jeden wiersz): odbiorcy jako tablica JSON, klucz API, w imieniu którego bramka
