@@ -37,7 +37,8 @@ describe('opis API', () => {
     expect(wyslij.security).toEqual([{ bearerAuth: [] }]);
     const schema = wyslij.requestBody!.content['application/json']!.schema;
     expect(Object.keys(schema.properties!).sort()).toEqual(
-      ['costCenter', 'deliveryReport', 'encoding', 'inReplyTo', 'maxParts', 'orig', 'serviceId', 'text', 'to', 'validTo'],
+      ['campaign', 'costCenter', 'deliveryReport', 'encoding', 'inReplyTo', 'linkDomain', 'linkValidityDays', 'maxParts', 'orig',
+        'serviceId', 'shortenLinks', 'text', 'to', 'validTo'],
     );
     expect(schema.required!.slice().sort()).toEqual(['text', 'to']);
   });

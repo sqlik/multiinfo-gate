@@ -12,6 +12,7 @@ import { MessagesRepo } from '../../src/store/messages.ts';
 import { IntegrationsRepo } from '../../src/store/integrations.ts';
 import { defaultInboundConfig } from '../../src/integrations/config.ts';
 import { accountInput } from '../store/helpers.ts';
+import { linkDeps } from '../helpers/api-deps.ts';
 
 const NOW = new Date('2026-09-02T10:00:00Z');
 let deps: Parameters<typeof submitMessages>[0];
@@ -27,7 +28,8 @@ beforeEach(() => {
   apiKeys = new ApiKeysRepo(db, key);
   apiKeyId = apiKeys.insert({ accountId, name: 'k', keyHash: 'h', keyPrefix: 'p', defaultServiceId: '24138', defaultOrig: null, maxParts: 3, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'] });
   integrationId = new IntegrationsRepo(db, key).insert({ name: 'Kuma', kind: 'webhook_in', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1, config: defaultInboundConfig(), secrets: {}, storePayloads: 0, createdAt: NOW });
-  deps = { accounts, messages: new MessagesRepo(db), events: new MessageEventsRepo(db), jobs: new JobsRepo(db), inbound: new InboundMessagesRepo(db) };
+  deps = { accounts, messages: new MessagesRepo(db), events: new MessageEventsRepo(db), jobs: new JobsRepo(db), inbound: new InboundMessagesRepo(db),
+    apiKeys, ...linkDeps(db) };
 });
 
 describe('submitMessages', () => {

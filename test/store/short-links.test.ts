@@ -144,4 +144,16 @@ describe('ShortLinksRepo', () => {
     expect(links.remaining(otherCampaignId)).toBe(1);
     expect(links.purge(AT)).toEqual([]);
   });
+
+  it('podsumowuje kody rozsyłki: liczba, domena, kampania i najwcześniejsze wygaśnięcie', () => {
+    const { links, input, campaignId } = setup();
+    expect(links.packageSummary('pkg_1')).toBeUndefined();
+    links.insert(input('kod0001', { messageId: null, packageId: 'pkg_1', seq: 1, recipientKey: 'pkg_1#1' }));
+    links.insert(input('kod0002', { messageId: null, packageId: 'pkg_1', seq: 2, recipientKey: 'pkg_1#2' }));
+    links.insert(input('kod0003', { messageId: null, packageId: 'pkg_2', seq: 1, recipientKey: 'pkg_2#1' }));
+    const row = links.get('kod0001')!;
+    expect(links.packageSummary('pkg_1')).toEqual({
+      count: 2, domainId: row.domainId, campaignId, expiresAt: row.expiresAt,
+    });
+  });
 });

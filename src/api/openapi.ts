@@ -176,6 +176,75 @@ const POLA_WIADOMOSCI: Record<string, JsonSchema> = {
       + ' Najwyżej 100 znaków, bez znaków sterujących.',
     example: 'jan.nowak@firma.pl',
   },
+  shortenLinks: {
+    type: 'boolean',
+    description: 'Skracanie linków w treści. Wartość true zamienia linki do dozwolonych domen docelowych klucza na krótkie'
+      + ' linki domeny skracacza, a wartość false pozostawia je bez zmian. Pominięte pole oznacza skracanie przy kluczu'
+      + ' w trybie Decyduje wysyłający. Ustawienie klucza ma pierwszeństwo, a blok links w odpowiedzi zgłasza,'
+      + ' że zostało zastosowane.',
+  },
+  campaign: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 100,
+    description: 'Nazwa kampanii, od 1 do 100 znaków. Grupuje wysyłki w wynikach kampanii i trafia do parametru'
+      + ' utm_campaign. Bez nazwy bramka nadaje nazwę domyślną: identyfikator rozsyłki, nazwę integracji albo nazwę'
+      + ' klucza. Kampania powstaje wyłącznie wtedy, gdy treść zawiera co najmniej jeden skrócony link.',
+    example: 'przeglad-klimatyzacji-wiosna',
+  },
+  linkDomain: {
+    type: 'string',
+    description: 'Domena skracacza spośród domen przypisanych do klucza. Pominięta oznacza domenę domyślną klucza.'
+      + ' Domena spoza klucza kończy wywołanie błędem link_domain_not_allowed.',
+    example: 'l.firma.pl',
+  },
+  linkValidityDays: {
+    type: 'integer',
+    minimum: 1,
+    maximum: 365,
+    description: 'Ważność krótkich linków w dniach, od 1 do 365. Bramka liczy ją od terminu rozpoczęcia rozsyłki albo'
+      + ' od przyjęcia żądania. Pominięte pole oznacza ważność ustawioną przy kluczu, domyślnie 90 dni.',
+  },
+};
+
+/** Wynik skracania w odpowiedzi na wysyłkę i rozsyłkę. */
+const BLOK_LINKOW: JsonSchema = {
+  type: 'object',
+  description: 'Wynik skracania linków. Bramka dołącza ten blok, gdy skraca albo pomija link oraz gdy wynik różni się'
+    + ' od wyboru wysyłającego',
+  required: ['shortened', 'domain', 'campaign', 'expiresAt', 'notice', 'skipped'],
+  properties: {
+    shortened: { type: 'integer', description: 'Liczba skróconych linków. W rozsyłce obejmuje krótkie linki wszystkich'
+      + ' odbiorców' },
+    domain: { type: 'string', nullable: true, description: 'Domena skracacza użyta w krótkich linkach', example: 'l.firma.pl' },
+    campaign: { type: 'string', nullable: true, description: 'Kampania, do której należą krótkie linki',
+      example: 'przeglad-klimatyzacji-wiosna' },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Chwila wygaśnięcia krótkich linków' },
+    notice: {
+      type: 'string',
+      nullable: true,
+      enum: ['disabled_by_key', 'forced_by_key', 'domain_unavailable'],
+      description: 'Ustawienie zastosowane zamiast wyboru wysyłającego. Wartość disabled_by_key oznacza skracanie'
+        + ' wyłączone przy kluczu, forced_by_key oznacza skracanie wymuszone przy kluczu, a domain_unavailable oznacza'
+        + ' wyłączoną domenę skracacza, przez co linki zostały wysłane bez zmian',
+    },
+    skipped: {
+      type: 'array',
+      description: 'Linki wysłane bez zmian, ponieważ ich domena nie należy do dozwolonych domen docelowych klucza',
+      items: {
+        type: 'object',
+        required: ['url', 'reason'],
+        properties: {
+          url: { type: 'string', description: 'Adres wysłany bez zmian', example: 'https://inna-firma.pl/cennik' },
+          reason: {
+            type: 'string',
+            enum: ['domain_not_allowed'],
+            description: 'Powód pominięcia. Wartość domain_not_allowed oznacza domenę spoza dozwolonych domen docelowych klucza',
+          },
+        },
+      },
+    },
+  },
 };
 
 /** Opis pola wysyłki po nazwie. Brak opisu przerywa budowanie, także przy body rozsyłki. */
@@ -269,6 +338,10 @@ const CIALO_ROZSYLKI: JsonSchema = {
     encoding: pole('encoding'),
     deliveryReport: pole('deliveryReport'),
     costCenter: pole('costCenter'),
+    shortenLinks: pole('shortenLinks'),
+    campaign: pole('campaign'),
+    linkDomain: pole('linkDomain'),
+    linkValidityDays: pole('linkValidityDays'),
     startAt: {
       type: 'string',
       format: 'date-time',
@@ -297,6 +370,7 @@ const PRZYJETA_ROZSYLKA: JsonSchema = {
       type: 'boolean',
       description: 'Czy którakolwiek treść jest dzielona na części',
     },
+    links: BLOK_LINKOW,
   },
 };
 
@@ -316,6 +390,7 @@ const PRZYJETA_WIADOMOSC: JsonSchema = {
     slots: { type: 'integer', description: 'Liczba zajętych miejsc. W kodowaniu GSM-7 znaki { } [ ] ~ ^ | \\ i euro'
       + ' zajmują po dwa miejsca' },
     slotsRemaining: { type: 'integer', description: 'Liczba wolnych miejsc w ostatniej części' },
+    links: BLOK_LINKOW,
   },
 };
 

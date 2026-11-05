@@ -2,7 +2,11 @@
 import { domainToASCII } from 'node:url';
 import type { LinkMode } from '../store/api-keys.ts';
 
-export type LinkNotice = 'disabled_by_key' | 'forced_by_key';
+/**
+ * Zgłoszenie w odpowiedzi API, że wynik różni się od wyboru wysyłającego: klucz wyłącza albo wymusza
+ * skracanie, albo domena skracacza klucza jest wyłączona i linki zostają wysłane bez zmian.
+ */
+export type LinkNotice = 'disabled_by_key' | 'forced_by_key' | 'domain_unavailable';
 
 /** Ustawienie klucza ma pierwszeństwo przed polem żądania; `notice` zgłasza, że wybór wysyłającego nie został uwzględniony. */
 export function decideShortening(mode: LinkMode, requested: boolean | undefined): { shorten: boolean; notice: LinkNotice | null } {

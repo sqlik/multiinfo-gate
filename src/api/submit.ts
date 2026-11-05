@@ -1,5 +1,9 @@
 import { shortId } from '../ids.ts';
-import type { ApiKeyRow } from '../store/api-keys.ts';
+import {
+  createCodes, linkExpiry, linksBlock, materialize, openCampaign, prepareLinks, storedLinksBlock,
+  type LinkRequest, type LinksResponse, type PreparedText,
+} from '../links/shortener.ts';
+import type { ApiKeyRow, ApiKeysRepo } from '../store/api-keys.ts';
 import { sha256Hex } from '../text/hash.ts';
 import { measureText, type Encoding, type EncodingRequest } from '../text/measure.ts';
 import { InvalidPhoneError, normalizePhone } from '../text/phone.ts';
@@ -32,13 +36,21 @@ export interface SubmitInput {
   requestedBy?: string;
   /** Wiadomość kanału SMS powiadomień: niewidoczna w API, webhooku klucza i integracjach wychodzących. */
   system?: boolean;
+  /** Pola skracania z żądania; brak oznacza „pole puste”. */
+  links?: LinkRequest;
+  /** Szablon przygotowany i przycięty przez integrację; bez niego szablon powstaje z `text`. */
+  prepared?: PreparedText;
+  /** Nazwa kampanii, gdy żądanie jej nie podaje: nazwa integracji; bez niej nazwa klucza. */
+  campaignFallback?: string;
 }
 
 export interface SubmitResult {
   id: string; status: string; encoding: Encoding; parts: number; characters: number; slots: number; slotsRemaining: number;
+  links?: LinksResponse;
 }
 
-export type SubmitDeps = Pick<ApiDeps, 'accounts' | 'messages' | 'events' | 'jobs' | 'inbound'>;
+export type SubmitDeps = Pick<ApiDeps, 'accounts' | 'messages' | 'events' | 'jobs' | 'inbound' | 'linkDomains' | 'campaigns' | 'shortLinks'>
+  & { apiKeys: Pick<ApiKeysRepo, 'linkSettings' | 'get'> };
 
 /** Kontekst uprawnień z wiersza klucza - to samo, co daje `authenticate`, ale bez nagłówka i bez `touch`. */
 export function authFromKey(row: ApiKeyRow): AuthContext {
@@ -106,11 +118,14 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
     if (ahead > MAX_VALIDITY_MS) throw new ApiError(400, 'valid_to_too_far', 'Multiinfo dopuszcza ważność najwyżej 72 godziny.');
   }
 
+  // Pomiar i podział dotyczą treści po skróceniu: szablon ma długość treści końcowej.
+  const prepared = input.prepared
+    ?? prepareLinks(deps, auth.apiKeyId, input.text, input.links ?? {}, input.system ? { system: true } : {});
   const maxParts = Math.min(input.maxParts ?? auth.maxParts, auth.maxParts);
-  const measurement = measureText(input.text, input.encoding ?? 'auto');
+  const measurement = measureText(prepared.text, input.encoding ?? 'auto');
   let segmentation;
   try {
-    segmentation = segmentText(input.text, measurement, maxParts);
+    segmentation = segmentText(prepared.text, measurement, maxParts);
   } catch (e) {
     if (e instanceof TooManyPartsError) throw new ApiError(400, 'too_many_parts', e.message);
     throw e;
@@ -147,19 +162,42 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
     return { dest, perRecipientIdem, existing };
   });
 
-  return deps.messages.transaction(() => checked.map(({ dest, perRecipientIdem, existing }): SubmitResult => {
-    if (existing) {
-      return {
-        id: existing.id, status: existing.status, encoding: existing.encoding,
-        parts: existing.parts, characters: measurement.characters,
-        slots: existing.slots, slotsRemaining: segmentation.slotsRemaining,
-      };
-    }
+  // Kampania powstaje wyłącznie dla treści z co najmniej jednym skróconym linkiem.
+  const shortening = prepared.info !== null && prepared.slots.length > 0 ? prepared.info : null;
+  const expiresAt = shortening === null ? null : linkExpiry(now, shortening.validityDays);
+  const campaignLabel = (): string =>
+    shortening?.campaign ?? input.campaignFallback ?? deps.apiKeys.get(auth.apiKeyId)?.name ?? `klucz ${auth.apiKeyId}`;
 
-    const id = shortId('msg');
-    deps.messages.insert({
-      id, apiKeyId: auth.apiKeyId, accountId: auth.accountId, serviceId, dest,
-      body: account.storeContent ? input.text : null, bodyHash: hash,
+  return deps.messages.transaction(() => {
+    // Rzutowanie: kampania powstaje wewnątrz `map`, a zawężanie typów nie widzi przypisań w funkcji zwrotnej.
+    let campaign = null as { id: number; name: string } | null;
+    let sent = 0;
+    const results = checked.map(({ dest, perRecipientIdem, existing }): SubmitResult => {
+      if (existing) {
+        const links = storedLinksBlock([prepared], storedLinks(deps, existing.id));
+        return {
+          id: existing.id, status: existing.status, encoding: existing.encoding,
+          parts: existing.parts, characters: measurement.characters,
+          slots: existing.slots, slotsRemaining: segmentation.slotsRemaining,
+          ...(links === undefined ? {} : { links }),
+        };
+      }
+
+      const id = shortId('msg');
+      let text = prepared.text;
+      if (shortening !== null) {
+        if (campaign === null) {
+          const name = campaignLabel();
+          campaign = { id: openCampaign(deps, auth.apiKeyId, name, now), name };
+        }
+        const codes = createCodes(deps, prepared, campaign.id, auth.apiKeyId,
+          { recipientKey: id, messageId: id, packageId: null, seq: null, dest, clientId: null }, now, now);
+        text = materialize(prepared, codes);
+        sent++;
+      }
+      deps.messages.insert({
+        id, apiKeyId: auth.apiKeyId, accountId: auth.accountId, serviceId, dest,
+        body: account.storeContent ? text : null, bodyHash: hash,
       encoding: measurement.encoding, parts: segmentation.parts, slots: measurement.slots,
       orig: orig ?? null, costCenter: input.costCenter ?? null,
       validTo: validTo?.toISOString() ?? null,
@@ -169,14 +207,31 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
       mailFrom: input.mailFrom ?? null,
       requestedBy: input.requestedBy ?? null,
       system: input.system ? 1 : 0,
+      campaignId: campaign?.id ?? null,
       createdAt: now.toISOString(),
     });
-    deps.jobs.enqueue('send', { messageId: id, text: input.text, deliveryReport }, now);
+    deps.jobs.enqueue('send', { messageId: id, text, deliveryReport }, now);
     deps.events.record(id, now, 'queued', null);
 
+    const links = linksBlock(prepared, campaign?.name ?? null, expiresAt);
     return {
       id, status: 'queued', encoding: measurement.encoding, parts: segmentation.parts,
       characters: measurement.characters, slots: measurement.slots, slotsRemaining: segmentation.slotsRemaining,
+      ...(links === undefined ? {} : { links }),
     };
-  }));
+    });
+    if (campaign !== null) deps.campaigns.addSent(campaign.id, sent);
+    return results;
+  });
+}
+
+/** Kody zapisanej wiadomości w skrócie, do odpowiedzi na powtórzone żądanie. */
+function storedLinks(deps: SubmitDeps, messageId: string) {
+  const rows = deps.shortLinks.forMessage(messageId);
+  const first = rows[0];
+  if (first === undefined) return undefined;
+  return {
+    count: rows.length, domain: deps.linkDomains.get(first.domainId)?.domain ?? null,
+    campaign: deps.campaigns.get(first.campaignId)?.name ?? null, expiresAt: first.expiresAt,
+  };
 }

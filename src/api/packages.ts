@@ -4,6 +4,7 @@ import type { PackageRow, RecipientRow } from '../store/packages.ts';
 import { authenticate, refuseIntegrationsOnly } from './auth.ts';
 import { dropEmptyFields } from './empty-fields.ts';
 import { ApiError } from './errors.ts';
+import { linkFieldsSchema, linkRequest } from './link-fields.ts';
 import type { ApiDeps } from './server.ts';
 import { submitPackage } from './submit-package.ts';
 
@@ -42,6 +43,7 @@ export const packageBodySchema = z.object({
   deliveryReport: z.boolean().default(true),
   encoding: z.enum(['auto', 'gsm', 'unicode']).default('auto'),
   costCenter: z.string().optional(),
+  ...linkFieldsSchema,
 });
 
 /** Nagłówek CSV; średnik jako separator, bo tak otwierają go polskie arkusze. */
@@ -85,11 +87,12 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
       throw new ApiError(400, 'invalid_body',
         parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
     }
-    const { serviceId, ...input } = parsed.data;
+    const { serviceId, shortenLinks, campaign, linkDomain, linkValidityDays, ...input } = parsed.data;
     const idempotencyKey = request.headers['idempotency-key'];
     const accepted = submitPackage(deps, auth, {
       ...input, serviceId: serviceId === undefined ? undefined : String(serviceId),
       ...(typeof idempotencyKey === 'string' ? { idempotencyKey } : {}),
+      links: linkRequest({ shortenLinks, campaign, linkDomain, linkValidityDays }),
     }, now());
 
     reply.code(202);

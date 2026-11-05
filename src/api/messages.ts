@@ -4,6 +4,7 @@ import type { MessageRow } from '../store/messages.ts';
 import { authenticate, refuseIntegrationsOnly } from './auth.ts';
 import { dropEmptyFields } from './empty-fields.ts';
 import { ApiError } from './errors.ts';
+import { linkFieldsSchema, linkRequest } from './link-fields.ts';
 import type { ApiDeps } from './server.ts';
 import { submitMessages } from './submit.ts';
 
@@ -25,6 +26,7 @@ export const messageBodySchema = z.object({
   costCenter: z.string().optional(),
   /** Wiadomość przychodząca, na którą to odpowiedź; identyfikator ma stały kształt, reszta to sprawdzenie w bazie. */
   inReplyTo: z.string().regex(/^in_[A-Za-z0-9_]{1,40}$/).optional(),
+  ...linkFieldsSchema,
 });
 
 
@@ -62,6 +64,7 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
       ...(input.costCenter !== undefined ? { costCenter: input.costCenter } : {}),
       ...(input.inReplyTo !== undefined ? { inReplyTo: input.inReplyTo } : {}),
       ...(typeof idempotencyKey === 'string' ? { idempotencyKey } : {}),
+      links: linkRequest(input),
     }, now());
 
     reply.code(202);

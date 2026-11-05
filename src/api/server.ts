@@ -16,6 +16,9 @@ import type { MessageEventsRepo } from '../store/message-events.ts';
 import type { MessagesRepo } from '../store/messages.ts';
 import type { PackagesRepo } from '../store/packages.ts';
 import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
+import type { CampaignsRepo } from '../store/campaigns.ts';
+import type { LinkDomainsRepo } from '../store/link-domains.ts';
+import type { ShortLinksRepo } from '../store/short-links.ts';
 import type { ClientPool } from '../worker/clients.ts';
 import { AuthError } from './auth.ts';
 import { registerCancelRoute } from './cancel.ts';
@@ -40,6 +43,10 @@ export interface ApiDeps {
   clients: ClientPool;
   inbound: InboundMessagesRepo;
   rateLimiter: RateLimiter;
+  /** Skracacz: domeny, kampanie i kody wysyłek z krótkimi linkami. */
+  linkDomains: LinkDomainsRepo;
+  campaigns: CampaignsRepo;
+  shortLinks: ShortLinksRepo;
   /** Integracje: `/hooks/{id}` i to, czego potok potrzebuje. */
   integrations: IntegrationsRepo;
   integrationEvents: IntegrationEventsRepo;

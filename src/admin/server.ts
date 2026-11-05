@@ -35,6 +35,9 @@ import type { TemplateEngine } from '../integrations/templates.ts';
 import type { AdminNotifier } from '../notifications/rules.ts';
 import type { Mailer } from '../worker/mail.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
+import type { CampaignsRepo } from '../store/campaigns.ts';
+import type { LinkDomainsRepo } from '../store/link-domains.ts';
+import type { ShortLinksRepo } from '../store/short-links.ts';
 import type { Resolver } from '../net/private-address.ts';
 import type { ClientPool } from '../worker/clients.ts';
 import { FlashStore } from './flash.ts';
@@ -78,6 +81,10 @@ export interface AdminDeps {
   integrations: IntegrationsRepo;
   integrationEvents: IntegrationEventsRepo;
   guards: IntegrationGuardsRepo;
+  /** Skracacz: domeny, kampanie i kody; SMS testowy kanału powiadomień przekazuje je do wspólnej drogi wysyłki. */
+  linkDomains: LinkDomainsRepo;
+  campaigns: CampaignsRepo;
+  shortLinks: ShortLinksRepo;
   /** Stan skrzynek pocztowych: formularz skrzynki, lista, szczegóły, kafelek przeglądu. */
   mailIn?: MailInRepo;
   /** Połączenie ze skrzynką do „Sprawdź połączenie”; testy podstawiają podróbkę. */

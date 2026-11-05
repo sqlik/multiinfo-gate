@@ -5,9 +5,8 @@ import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { IntegrationEventInput, IntegrationEventsRepo } from '../store/integration-events.ts';
 import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
 import type { IntegrationRow, IntegrationsRepo } from '../store/integrations.ts';
-import { measureText, type EncodingRequest } from '../text/measure.ts';
+import { fitToParts } from '../text/fit.ts';
 import { InvalidPhoneError, MAX_RECIPIENTS_PER_HOOK, normalizeRecipient, splitRecipients, TooManyRecipientsError } from '../text/phone.ts';
-import { segmentText, TooManyPartsError } from '../text/segment.ts';
 import type { GroupMember, InboundConfig, MailInConfig, SmsGroupConfig } from './config.ts';
 import { confirmText, type ConfirmEvent } from './group/confirm.ts';
 import { groupRecipients, groupSender } from './group/members.ts';
@@ -23,6 +22,9 @@ import { enrich, safeUrl, type EnrichGet } from './enrich.ts';
 import { maskPath, readPath } from './paths.ts';
 import { TemplateEngine, TemplateError } from './templates.ts';
 import type { Resolver } from '../net/private-address.ts';
+
+/** Przycięcie treści mieszka w `src/text/fit.ts`; potok udostępnia je dotychczasowym odbiorcom. */
+export { fitToParts };
 
 export interface PipelineDeps extends SubmitDeps {
   apiKeys: ApiKeysRepo;
@@ -103,39 +105,6 @@ function rawRecipients(config: InboundConfig, payload: unknown, threadSender: st
 function withEnriched(payload: unknown, as: string, value: unknown): unknown {
   if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return payload;
   return { ...payload, [as]: value };
-}
-
-/**
- * Przycięcie do `maxParts` części tym samym licznikiem, którym API dzieli wiadomości. Kodowanie
- * podaje integracja, w której autor wybiera je sam (Power Automate); pozostałe liczą `auto`.
- */
-export function fitToParts(text: string, maxParts: number, encoding: EncodingRequest = 'auto'): { text: string; parts: number; over: boolean } {
-  const fits = (candidate: string): number | null => {
-    try {
-      return segmentText(candidate, measureText(candidate, encoding), maxParts).parts;
-    } catch (e) {
-      if (e instanceof TooManyPartsError) return null;
-      throw e;
-    }
-  };
-  const whole = fits(text);
-  if (whole !== null) return { text, parts: whole, over: false };
-  // Ucinamy po znakach, aż zmieści się w limicie. Treść w GSM-7 kończą trzy kropki,
-  // bo znak wielokropka spoza alfabetu GSM przełączyłby ją na UCS-2.
-  const chars = [...text];
-  const cutAt = (n: number): string => {
-    const head = chars.slice(0, n).join('');
-    return measureText(head, encoding).encoding === 'gsm' ? `${head}...` : `${head}…`;
-  };
-  let lo = 0;
-  let hi = chars.length;
-  while (lo < hi) {
-    const mid = Math.ceil((lo + hi) / 2);
-    if (fits(cutAt(mid)) !== null) lo = mid;
-    else hi = mid - 1;
-  }
-  const cut = cutAt(lo);
-  return { text: cut, parts: fits(cut) ?? maxParts, over: true };
 }
 
 /**

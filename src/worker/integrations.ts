@@ -11,7 +11,8 @@ import type { JobsRepo } from '../store/jobs.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 
 /** Zależności wysyłki SMS dla grup; bez nich grupa zapisuje błąd zamiast rozsyłać. */
-export type SmsGroupDeps = Pick<PipelineDeps, 'accounts' | 'apiKeys' | 'messages' | 'events' | 'jobs' | 'inbound'>;
+export type SmsGroupDeps = Pick<PipelineDeps,
+  'accounts' | 'apiKeys' | 'messages' | 'events' | 'jobs' | 'inbound' | 'linkDomains' | 'campaigns' | 'shortLinks'>;
 
 export interface IntegrationEmitDeps {
   integrations: IntegrationsRepo;

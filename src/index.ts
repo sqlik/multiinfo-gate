@@ -39,6 +39,9 @@ import { MessageEventsRepo } from './store/message-events.ts';
 import { MessagesRepo } from './store/messages.ts';
 import { NotificationsRepo } from './store/notifications.ts';
 import { M365AccountsRepo } from './store/m365-accounts.ts';
+import { CampaignsRepo } from './store/campaigns.ts';
+import { LinkDomainsRepo } from './store/link-domains.ts';
+import { ShortLinksRepo } from './store/short-links.ts';
 import { fetchToken } from './m365/oauth.ts';
 import { M365Service } from './m365/service.ts';
 import { M365Tokens } from './m365/tokens.ts';
@@ -146,9 +149,13 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const notifications = new NotificationsRepo(db, config.masterKey);
   const settings = new SettingsRepo(db);
   const m365Accounts = new M365AccountsRepo(db, config.masterKey);
+  const linkDomains = new LinkDomainsRepo(db);
+  const campaigns = new CampaignsRepo(db);
+  const shortLinks = new ShortLinksRepo(db);
+  const links = { linkDomains, campaigns, shortLinks };
   const notifier = new Notifier({
     notifications, jobs, log,
-    sms: (text, now) => sendNotificationSms({ accounts, apiKeys, messages, events, jobs, inbound, notifications }, text, now),
+    sms: (text, now) => sendNotificationSms({ accounts, apiKeys, messages, events, jobs, inbound, notifications, ...links }, text, now),
     subjectName: subjectNamer({ integrations, accounts, m365Accounts }),
   });
   const m365Tokens = new M365Tokens({ accounts: m365Accounts, fetch: fetchToken, notifier, log });
@@ -158,7 +165,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     release: () => pendingRelease(settings), mailIn,
   });
   const releases = new ReleaseChecker({ settings, notifier, log, enabled: config.updateCheck });
-  const integrationEmit = { integrations, integrationEvents, guards, deliveries, jobs, engine, notifier, log, group: { accounts, apiKeys, messages, events, jobs, inbound } };
+  const integrationEmit = { integrations, integrationEvents, guards, deliveries, jobs, engine, notifier, log, group: { accounts, apiKeys, messages, events, jobs, inbound, ...links } };
 
   const backups = new BackupScheduler({
     db, dir: join(config.dataDir, 'backups'), retentionDays: config.backupRetentionDays, log,
@@ -167,7 +174,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const mailInPoller = new MailInPoller({
     accounts, apiKeys, messages, events, jobs, inbound, integrations, integrationEvents, guards, engine,
     mailIn, connect: imapConnect, resolve: systemResolver, allowPrivateMail: config.mailAllowPrivate, notifier, notifications, log,
-    m365: { tokens: m365Tokens, accounts: m365Accounts },
+    m365: { tokens: m365Tokens, accounts: m365Accounts }, ...links,
   });
   const worker = new Worker({
     accounts, apiKeys, messages, events, deliveries, packages, jobs, clients, inbound,
@@ -187,7 +194,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     inboundHealth: () => receiver.health(),
     integrations, integrationEvents, guards, engine, sources: new SourceMatcher(systemResolver),
     hookLimiter: new RateLimiter(), trustedProxies: config.trustedProxies, notifier,
-    allowPrivateWebhooks: config.webhookAllowPrivate,
+    allowPrivateWebhooks: config.webhookAllowPrivate, ...links,
   });
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
@@ -195,7 +202,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     integrationEvents, guards, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
     trustedProxies: config.trustedProxies,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate, allowPrivateMail: config.mailAllowPrivate,
-    log, install, nodeVersion, m365, m365Accounts, m365Tokens,
+    log, install, nodeVersion, m365, m365Accounts, m365Tokens, ...links,
   });
 
   // Panel domyślnie zostaje na pętli zwrotnej (MIG_ADMIN_HOST); w kontenerze o wystawieniu

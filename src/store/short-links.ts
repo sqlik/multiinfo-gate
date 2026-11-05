@@ -91,6 +91,16 @@ export class ShortLinksRepo {
     return (this.db.prepare('SELECT * FROM short_links WHERE package_id = ? AND seq = ? ORDER BY rowid').all(packageId, seq) as Raw[]).map(toRow);
   }
 
+  /** Kody rozsyłki w skrócie, do odpowiedzi na powtórzone żądanie; brak kodów daje `undefined`. */
+  packageSummary(packageId: string): { count: number; domainId: number; campaignId: number; expiresAt: string } | undefined {
+    const row = this.db
+      .prepare(`SELECT COUNT(*) AS count, MIN(domain_id) AS domain_id, MIN(campaign_id) AS campaign_id, MIN(expires_at) AS expires_at
+                FROM short_links WHERE package_id = ?`)
+      .get(packageId) as { count: number; domain_id: number | null; campaign_id: number | null; expires_at: string | null };
+    if (row.count === 0 || row.domain_id === null || row.campaign_id === null || row.expires_at === null) return undefined;
+    return { count: row.count, domainId: row.domain_id, campaignId: row.campaign_id, expiresAt: row.expires_at };
+  }
+
   /** Odbiorcy z otwarciem, zgrupowani po `recipient_key`, od najnowszego kliknięcia. */
   openers(campaignId: number, offset: number, limit: number): Array<{
     dest: string; clientId: string | null; firstOpenedAt: string; lastClickedAt: string; clicks: number; targets: string[];

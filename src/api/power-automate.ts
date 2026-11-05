@@ -182,6 +182,9 @@ const LABELS_BY_PATH: Record<string, string> = {
   'IntegracjaPowerAutomate.id': 'Identyfikator integracji',
   'IntegracjaPowerAutomate.name': 'Nazwa integracji',
   'IntegracjaPowerAutomate.recipients': 'Liczba odbiorców grupy',
+  'PrzyjetaWiadomosc.links.expiresAt': 'Linki ważne do',
+  'PrzyjetaRozsylka.links.expiresAt': 'Linki ważne do',
+  'WysylkaDoGrupy.messages[].links.expiresAt': 'Linki ważne do',
 };
 
 const LABELS_BY_NAME: Record<string, string> = {
@@ -230,6 +233,17 @@ const LABELS_BY_NAME: Record<string, string> = {
   messages: 'Wiadomości',
   code: 'Kod błędu',
   message: 'Komunikat',
+  shortenLinks: 'Skracanie linków',
+  campaign: 'Kampania',
+  linkDomain: 'Domena skracacza',
+  linkValidityDays: 'Ważność linków (dni)',
+  links: 'Krótkie linki',
+  shortened: 'Liczba skróconych linków',
+  domain: 'Domena skracacza',
+  notice: 'Ustawienie klucza',
+  skipped: 'Pominięte linki',
+  url: 'Adres',
+  reason: 'Powód',
 };
 
 /**
@@ -252,6 +266,15 @@ const DESCRIPTIONS_BY_PATH: Record<string, string> = {
   encoding: 'Automatyczne wybiera GSM-7, a przy polskich znakach Unicode. Przy GSM Multiinfo zastępuje polskie znaki'
     + ' łacińskimi odpowiednikami. Unicode zawsze koduje treść w UCS-2',
   deliveryReport: 'Wartość „Nie” oznacza rezygnację z raportu doręczenia. Stan wiadomości kończy się wtedy na sent',
+  shortenLinks: 'Wartość „Tak” zamienia linki do dozwolonych domen docelowych klucza na krótkie linki, a wartość „Nie”'
+    + ' pozostawia je bez zmian. Puste pole oznacza ustawienie klucza w bramce. Ustawienie klucza ma pierwszeństwo'
+    + ' przed wyborem w akcji',
+  campaign: 'Nazwa kampanii, od 1 do 100 znaków. Grupuje wysyłki w wynikach kampanii w panelu bramki i trafia do'
+    + ' parametru utm_campaign. Puste pole oznacza nazwę integracji',
+  linkDomain: 'Domena skracacza spośród domen przypisanych do klucza integracji, na przykład l.firma.pl. Puste pole'
+    + ' oznacza domenę domyślną klucza',
+  linkValidityDays: 'Liczba dni, przez które krótkie linki działają, od 1 do 365. Puste pole oznacza ważność ustawioną'
+    + ' przy kluczu, domyślnie 90 dni',
   'WyslijRozsylke.recipients': 'Lista odbiorców, od 1 do 5000 pozycji. Pozycje wpisuje się po kolei albo podaje całą'
     + ' listę z akcji „Wybierz”',
   'WyslijRozsylke.recipients[].to': 'Numer telefonu odbiorcy, na przykład 48601000001. Numer bez kodu kraju otrzymuje'
@@ -277,6 +300,10 @@ const VISIBILITY: Record<string, Visibility> = {
   validTo: 'advanced',
   costCenter: 'advanced',
   startAt: 'advanced',
+  shortenLinks: 'advanced',
+  campaign: 'advanced',
+  linkDomain: 'advanced',
+  linkValidityDays: 'advanced',
 };
 
 const ENCODING_NAMES = [
