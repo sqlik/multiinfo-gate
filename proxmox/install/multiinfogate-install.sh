@@ -65,6 +65,9 @@ MIG_MASTER_KEY=${master_key}
 MIG_API_PORT=8080
 MIG_ADMIN_PORT=8081
 MIG_API_HOST=0.0.0.0
+# Serwer przekierowań krótkich linków skracacza.
+MIG_LINKS_PORT=8082
+MIG_LINKS_HOST=0.0.0.0
 # Panel na adresie kontenera, żeby dało się wejść tunelem SSH przez hosta Proxmox albo przez odwrotne
 # proxy z HTTPS (rozdział 9.2). Logowania zwykłym HTTP z sieci panel i tak nie przyjmuje.
 # 127.0.0.1 chowa także ekran logowania i /healthz; wtedy tunel prowadzi do samego kontenera.

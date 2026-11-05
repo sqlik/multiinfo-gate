@@ -25,6 +25,10 @@ export interface AppConfig {
    * decyduje mapowanie portów.
    */
   adminHost: string;
+  /** Port serwera przekierowań krótkich linków (MIG_LINKS_PORT). */
+  linksPort: number;
+  /** Adres nasłuchu serwera przekierowań; domyślnie ten sam co API (MIG_LINKS_HOST). */
+  linksHost: string;
   dataDir: string;
   logLevel: LogLevel;
   backupRetentionDays: number;
@@ -119,6 +123,10 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env, interfaces: Int
     adminPort: intOr(source.MIG_ADMIN_PORT, 8081),
     apiHost: listenAddress('MIG_API_HOST', source.MIG_API_HOST || '0.0.0.0', interfaces),
     adminHost: listenAddress('MIG_ADMIN_HOST', source.MIG_ADMIN_HOST || '127.0.0.1', interfaces),
+    linksPort: intOr(source.MIG_LINKS_PORT, 8082),
+    linksHost: source.MIG_LINKS_HOST
+      ? listenAddress('MIG_LINKS_HOST', source.MIG_LINKS_HOST, interfaces)
+      : listenAddress('MIG_API_HOST', source.MIG_API_HOST || '0.0.0.0', interfaces),
     dataDir: source.MIG_DATA_DIR ?? '/data',
     logLevel: logLevelOr(source.MIG_LOG_LEVEL, 'info'),
     backupRetentionDays: intOr(source.MIG_BACKUP_RETENTION_DAYS, 14),

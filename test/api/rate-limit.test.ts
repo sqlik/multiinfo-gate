@@ -25,4 +25,18 @@ describe('RateLimiter', () => {
     expect(rl.check(1, 60)).toBe(false);
     expect(rl.check(2, 60)).toBe(true);
   });
+
+  it('przy wielu kluczach usuwa kubełki nieużywane od minuty, bo po minucie i tak są pełne', () => {
+    let t = 0;
+    const rl = new RateLimiter(() => t);
+    for (let i = 0; i < 10_000; i += 1) rl.check(`203.0.113.${i}`, 60);
+    expect(rl.size).toBe(10_000);
+    t += 30_000;
+    rl.check('aktywny', 60);
+    expect(rl.size).toBe(10_001);
+    t += 30_000;
+    for (let i = 0; i < 60; i += 1) rl.check('aktywny', 60);
+    expect(rl.size).toBe(1);
+    expect(rl.check('aktywny', 60)).toBe(false);
+  });
 });

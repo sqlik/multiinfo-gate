@@ -13,6 +13,7 @@ const variables = [...new Set([...read('src/config/env.ts').matchAll(/source\.(M
 const POMINIETE_W_COMPOSE: Record<string, string> = {
   MIG_API_HOST: 'w kontenerze API nasłuchuje na wszystkich interfejsach, port mapuje Compose',
   MIG_BACKUP_RETENTION_DAYS: 'kopie bazy w kontenerze z wartością domyślną',
+  MIG_LINKS_HOST: 'jak MIG_API_HOST: w kontenerze serwer przekierowań nasłuchuje na wszystkich interfejsach, port mapuje Compose',
 };
 const POMINIETE_W_LXC: Record<string, string> = {
   MIG_TRUSTED_PROXIES: 'ustawiana dopiero przy odwrotnym proxy na hoście (docs/uruchomienie.md, rozdział 9)',

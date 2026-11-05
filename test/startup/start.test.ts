@@ -39,7 +39,7 @@ afterEach(async () => {
 });
 
 const env = (key: Buffer, extra: Record<string, string> = {}) => ({
-  MIG_MASTER_KEY: key.toString('base64'), MIG_DATA_DIR: dir, MIG_API_PORT: '0', MIG_ADMIN_PORT: '0', ...extra,
+  MIG_MASTER_KEY: key.toString('base64'), MIG_DATA_DIR: dir, MIG_API_PORT: '0', MIG_ADMIN_PORT: '0', MIG_LINKS_PORT: '0', ...extra,
 });
 const start = (key: Buffer, extra: Record<string, string> = {}) => startGate(loadEnv(env(key, extra)), { log, install: 'docker' });
 const dbPath = () => join(dir, 'multiinfo-gate.sqlite');
@@ -68,6 +68,7 @@ describe('start bramki', () => {
     running = await start(keyB);
     expect(running.mode).toBe('emergency');
     expect(running.reason).toBe('key_mismatch');
+    expect(running.linksPort).toBeUndefined();
     const res = await fetch(`http://127.0.0.1:${running.adminPort}/zaloguj`);
     expect(res.status).toBe(503);
     expect(entries).toContainEqual(expect.objectContaining({ level: 'error', msg: 'bramka.awaria_startu', fields: expect.objectContaining({ reason: 'key_mismatch' }) }));
@@ -106,6 +107,15 @@ describe('start bramki', () => {
     await new Promise<void>((resolve) => blocker!.listen(0, '127.0.0.1', () => resolve()));
     const port = (blocker.address() as { port: number }).port;
     await expect(start(keyA, { MIG_API_HOST: '127.0.0.1', MIG_API_PORT: String(port) })).rejects.toMatchObject({ code: 'EADDRINUSE' });
+  });
+
+  it('zajęty port przekierowań kończy start błędem i zwalnia bazę dla następnego startu', async () => {
+    blocker = createServer();
+    await new Promise<void>((resolve) => blocker!.listen(0, '127.0.0.1', () => resolve()));
+    const port = (blocker.address() as { port: number }).port;
+    await expect(start(keyA, { MIG_LINKS_HOST: '127.0.0.1', MIG_LINKS_PORT: String(port) })).rejects.toMatchObject({ code: 'EADDRINUSE' });
+    running = await start(keyA);
+    expect(running.mode).toBe('normal');
   });
 
   it('świeża instalacja, która nie wystartowała, nie dostaje potem kopii pustej bazy', async () => {

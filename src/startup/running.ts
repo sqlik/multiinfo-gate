@@ -6,6 +6,9 @@ export interface RunningGate {
   adminPort: number;
   apiHost: string;
   adminHost: string;
+  /** Serwer przekierowań krótkich linków; w trybie awaryjnym nie startuje, więc pola nie ma. */
+  linksPort?: number;
+  linksHost?: string;
   mode: 'normal' | 'emergency';
   /** Przyczyna trybu awaryjnego; w pracy normalnej brak. */
   reason?: StartupReason;

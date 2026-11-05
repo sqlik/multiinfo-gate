@@ -9,6 +9,8 @@ services:
       MIG_MASTER_KEY: ${MIG_MASTER_KEY:?ustaw MIG_MASTER_KEY, 32 bajty w base64}
       MIG_API_PORT: "8080"
       MIG_ADMIN_PORT: "8081"
+      # Serwer przekierowań krótkich linków skracacza. Nasłuchuje na wszystkich interfejsach kontenera.
+      MIG_LINKS_PORT: "8082"
       # W kontenerze panel musi nasłuchiwać na wszystkich interfejsach sieci kontenera,
       # żeby mapowanie portów poniżej mogło go dostarczyć na pętlę zwrotną hosta.
       MIG_ADMIN_HOST: 0.0.0.0

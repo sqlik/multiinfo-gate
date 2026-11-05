@@ -42,6 +42,8 @@ import { M365AccountsRepo } from './store/m365-accounts.ts';
 import { CampaignsRepo } from './store/campaigns.ts';
 import { LinkDomainsRepo } from './store/link-domains.ts';
 import { ShortLinksRepo } from './store/short-links.ts';
+import { DomainChecks } from './links/domain-checks.ts';
+import { buildLinksServer } from './links/server.ts';
 import { fetchToken } from './m365/oauth.ts';
 import { M365Service } from './m365/service.ts';
 import { M365Tokens } from './m365/tokens.ts';
@@ -204,6 +206,13 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate, allowPrivateMail: config.mailAllowPrivate,
     log, install, nodeVersion, m365, m365Accounts, m365Tokens, ...links,
   });
+  // Tokeny sprawdzenia domeny wystawia panel, a odpowiada na nie serwer przekierowań.
+  const domainChecks = new DomainChecks();
+  const redirects = buildLinksServer({
+    ...links, messages, checks: domainChecks, trustedProxies: config.trustedProxies, log,
+    transaction: (fn) => db.transaction(fn)(),
+    opened: () => {},
+  });
 
   // Panel domyślnie zostaje na pętli zwrotnej (MIG_ADMIN_HOST); w kontenerze o wystawieniu
   // decyduje dodatkowo mapowanie portów w docker/docker-compose.yml.
@@ -211,10 +220,12 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   try {
     await api.listen({ port: config.apiPort, host: config.apiHost });
     await admin.listen({ port: config.adminPort, host: config.adminHost });
+    await redirects.listen({ port: config.linksPort, host: config.linksHost });
     settings.setGateVersion(GATE_VERSION, new Date());
   } catch (error) {
     await api.close();
     await admin.close();
+    await redirects.close();
     clients.closeAll();
     db.close();
     throw error;
@@ -229,8 +240,10 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const running: RunningGate = {
     apiPort: portOf(api.server.address()),
     adminPort: portOf(admin.server.address()),
+    linksPort: portOf(redirects.server.address()),
     apiHost: config.apiHost,
     adminHost: config.adminHost,
+    linksHost: config.linksHost,
     mode: 'normal',
     stop: async () => {
       // Odbiornik pierwszy: przerywa long polling, zanim zamkniemy pulę klientów i bazę.
@@ -239,6 +252,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
       worker.stop();
       await api.close();
       await admin.close();
+      await redirects.close();
       clients.closeAll();
       db.close();
       log.info('bramka.zatrzymana');
@@ -249,6 +263,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   log.info('bramka.start', {
     api: `${running.apiHost}:${running.apiPort}`,
     panel: `${running.adminHost}:${running.adminPort}`,
+    linki: `${running.linksHost}:${running.linksPort}`,
     queueDepth: jobs.depth(),
     webhookAllowPrivate: config.webhookAllowPrivate,
     inboundTimeoutMs: config.inboundTimeoutMs,
