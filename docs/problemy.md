@@ -360,11 +360,11 @@ utworzyć rozsyłkę. API Multiinfo nie pozwala sprawdzić, czy rozsyłka powsta
 nie można anulować. Dlatego bramka nie ponawia jej samoczynnie, ponieważ odbiorcy mogliby otrzymać
 SMS-y dwukrotnie.
 
-Przed ponownym zleceniem rozsyłki ustal, czy SMS-y dotarły do odbiorców. Pomocny jest numer
-kontrolny umieszczony w każdej rozsyłce, na przykład numer dyżuru IT. Jeżeli termin rozsyłki minął,
-a numer kontrolny nie otrzymał SMS-a, rozsyłkę można zlecić ponownie. W pozostałych przypadkach
-zwróć się do administratora Polkomtel. Podaj nazwę konta Multiinfo, usługę i godzinę zlecenia,
-dzięki czemu administrator sprawdzi, czy rozsyłka powstała.
+Przed ponownym zleceniem rozsyłki ustal, czy SMS-y dotarły do odbiorców. Najpewniejszym sposobem
+jest numer kontrolny umieszczony w każdej rozsyłce, na przykład numer dyżuru IT. Jeżeli termin
+rozsyłki minął, a numer kontrolny nie otrzymał SMS-a, rozsyłkę można zlecić ponownie. W wyjątkowych
+przypadkach istnienie rozsyłki może sprawdzić administrator Polkomtel, ale nie jest to standardowa
+procedura obsługi klienta Multiinfo.
 
 ## Wersja Node.js bez poprawek bezpieczeństwa {#wersja-node}
 
