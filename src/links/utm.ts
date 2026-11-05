@@ -22,17 +22,28 @@ export function withUtm(target: string, campaign: string): string {
   return `${base}${separator}${utm}${hash}`;
 }
 
-/** Wzorzec do grupowania linków indywidualnych: ostatni segment ścieżki i wartości zapytania zastąpione `{…}`. */
+/** Cyfra poza zapisem `%XX`, ponieważ zakodowana litera, na przykład `%C4%85`, nie wyróżnia odbiorcy. */
+const hasDigit = (segment: string): boolean => /\d/.test(segment.replace(/%[0-9A-Fa-f]{2}/g, ''));
+
+/** Człony ścieżki z cyfrą zastąpione `{…}`; gdy żaden człon nie zawiera cyfry, zastąpiony jest ostatni niepusty człon. */
+function pathPattern(path: string): string {
+  const segments = path.split('/');
+  if (segments.some(hasDigit)) return segments.map((s) => (hasDigit(s) ? PLACEHOLDER : s)).join('/');
+  const last = segments.length - 1;
+  if (segments[last] !== '') segments[last] = PLACEHOLDER;
+  return segments.join('/');
+}
+
+/**
+ * Wzorzec do grupowania linków indywidualnych: człony ścieżki z numerem odbiorcy (albo ostatni człon)
+ * i wartości zapytania zastąpione `{…}`. Na przykład `klient/10482/przeglad` daje `klient/{…}/przeglad`.
+ */
 export function targetPattern(url: string): string {
   const [base] = splitHash(url);
   const q = base.indexOf('?');
   const beforeQuery = q === -1 ? base : base.slice(0, q);
   const pathStart = beforeQuery.indexOf('/', beforeQuery.indexOf('://') + 3);
-  let pattern = beforeQuery;
-  if (pathStart !== -1) {
-    const path = beforeQuery.slice(pathStart).replace(/\/[^/]+$/, `/${PLACEHOLDER}`);
-    pattern = beforeQuery.slice(0, pathStart) + path;
-  }
+  const pattern = pathStart === -1 ? beforeQuery : beforeQuery.slice(0, pathStart) + pathPattern(beforeQuery.slice(pathStart));
   if (q === -1) return pattern;
   const query = base
     .slice(q + 1)

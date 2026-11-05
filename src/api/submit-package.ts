@@ -151,9 +151,10 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
           'Ten klucz idempotencji został już użyty z inną rozsyłką albo przez inną integrację.');
       }
       const summary = deps.shortLinks.packageSummary(existing.id);
+      const campaign = summary && deps.campaigns.get(summary.campaignId);
       const links = storedLinksBlock(templates, summary && {
         count: summary.count, domain: deps.linkDomains.get(summary.domainId)?.domain ?? null,
-        campaign: deps.campaigns.get(summary.campaignId)?.name ?? null, expiresAt: summary.expiresAt,
+        campaign: campaign?.name ?? null, expiresAt: summary.expiresAt, linksDisabled: (campaign?.linksDisabledAt ?? null) !== null,
       });
       return {
         id: existing.id, status: existing.status, recipients: existing.recipientsCount, encoding: existing.encoding,
@@ -169,8 +170,11 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
   const linkStart = startAt ?? now;
   const expiresAt = info === null ? null : linkExpiry(linkStart, info.validityDays);
   let codesCount = 0;
+  let linksDisabled = false;
   deps.packages.transaction(() => {
-    const campaignId = campaignName === null ? null : openCampaign(deps, auth.apiKeyId, campaignName, now);
+    const opened = campaignName === null ? null : openCampaign(deps, auth.apiKeyId, campaignName, now);
+    const campaignId = opened?.id ?? null;
+    linksDisabled = opened?.linksDisabled ?? false;
     // Treść wspólna z krótkimi linkami staje się treścią indywidualną każdego odbiorcy, a Multiinfo
     // nie otrzymuje treści z kodem zastępczym.
     const stored = recipients.map((r, index): RecipientInput => {
@@ -198,6 +202,6 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
     deps.jobs.enqueue('package.create', { packageId: id }, now);
   });
 
-  const links = packageLinksBlock(templates, codesCount, campaignName, expiresAt);
+  const links = packageLinksBlock(templates, codesCount, campaignName, expiresAt, linksDisabled);
   return { id, status: 'queued', recipients: recipients.length, encoding, multipart, ...(links === undefined ? {} : { links }) };
 }

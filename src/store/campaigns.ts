@@ -26,14 +26,14 @@ export class CampaignsRepo {
   constructor(private readonly db: Database) {}
 
   /**
-   * Zwraca identyfikator istniejącej albo nowej kampanii; przesuwa `last_sent_at`. Kolejna wysyłka zdejmuje
-   * znacznik „linki wyłączone”, bo jej linki działają; kody wyłączone wcześniej pozostają wyłączone.
+   * Zwraca identyfikator istniejącej albo nowej kampanii i przesuwa `last_sent_at`. Znacznik „linki wyłączone”
+   * pozostaje, dlatego kody kolejnej wysyłki powstają wyłączone, a przywraca je wyłącznie „Włącz linki”.
    */
   open(apiKeyId: number, name: string, at: Date): number {
     const stamp = at.toISOString();
     const row = this.db
       .prepare(`INSERT INTO campaigns (api_key_id, name, first_sent_at, last_sent_at, created_at) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT (api_key_id, name) DO UPDATE SET last_sent_at = excluded.last_sent_at, links_disabled_at = NULL
+                ON CONFLICT (api_key_id, name) DO UPDATE SET last_sent_at = excluded.last_sent_at
                 RETURNING id`)
       .get(apiKeyId, name, stamp, stamp, stamp) as { id: number };
     return row.id;

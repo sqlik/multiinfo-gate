@@ -29,7 +29,7 @@ const setup = () => {
     expiresAt: '2027-02-03T10:00:00.000Z', purgeAfter: '2027-03-05T10:00:00.000Z', createdAt: AT.toISOString(),
     ...overrides,
   });
-  return { db, links, campaignId, otherCampaignId, input };
+  return { db, links, campaigns, campaignId, otherCampaignId, input };
 };
 
 describe('ShortLinksRepo', () => {
@@ -92,6 +92,17 @@ describe('ShortLinksRepo', () => {
     expect(links.get('kod0001')!.disabledAt).toBe(t(1).toISOString());
     expect(links.get('kod0003')!.disabledAt).toBeNull();
     expect(links.enableCampaign(campaignId)).toBe(2);
+    expect(links.get('kod0001')!.disabledAt).toBeNull();
+  });
+
+  it('kod kampanii z wyłączonymi linkami powstaje wyłączony, a włączenie linków go przywraca', () => {
+    const { links, campaigns, input, campaignId, otherCampaignId } = setup();
+    campaigns.setLinksDisabled(campaignId, t(1));
+    links.insert(input('kod0001', { createdAt: t(5).toISOString() }));
+    links.insert(input('kod0002', { campaignId: otherCampaignId }));
+    expect(links.get('kod0001')!.disabledAt).toBe(t(1).toISOString());
+    expect(links.get('kod0002')!.disabledAt).toBeNull();
+    expect(links.enableCampaign(campaignId)).toBe(1);
     expect(links.get('kod0001')!.disabledAt).toBeNull();
   });
 

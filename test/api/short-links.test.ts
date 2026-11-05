@@ -118,6 +118,19 @@ describe('POST /v1/messages z krótkimi linkami', () => {
     expect(campaigns.byName(apiKeyId, 'przeglad-klimatyzacji-wiosna')!.sent).toBe(2);
   });
 
+  it('zapisuje kody wyłączone i zgłasza kampanię z wyłączonymi linkami', async () => {
+    const campaignId = campaigns.open(apiKeyId, 'przeglad-klimatyzacji-wiosna', NOW);
+    campaigns.setLinksDisabled(campaignId, NOW);
+    const payload = { to: '48601000002', text: 'Oferta https://firma.pl/a', campaign: 'przeglad-klimatyzacji-wiosna' };
+    const res = await post('/v1/messages', payload, { 'idempotency-key': 'zlecenie-18' });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().links).toMatchObject({ shortened: 1, campaign: 'przeglad-klimatyzacji-wiosna', notice: 'campaign_links_disabled' });
+    const again = await post('/v1/messages', payload, { 'idempotency-key': 'zlecenie-18' });
+    expect(again.json()).toEqual(res.json());
+    const [code] = codesIn(sendTexts()[0]!);
+    expect(shortLinks.get(code!)!.disabledAt).toBe(NOW.toISOString());
+  });
+
   it('liczy części na treści po skróceniu', async () => {
     const res = await post('/v1/messages', {
       to: '48601000001', text: 'Przegląd klimatyzacji: https://firma.pl/oferty/przeglad-klimatyzacji-wiosna-2027?klient=123456',
@@ -211,6 +224,18 @@ describe('POST /v1/packages z krótkimi linkami', () => {
     expect(res.json().links).toBeUndefined();
     expect(campaigns.byName(apiKeyId, id)).toBeUndefined();
     expect(packages.get(id)!.campaignId).toBeNull();
+  });
+
+  it('zapisuje kody wyłączone i zgłasza kampanię z wyłączonymi linkami w rozsyłce', async () => {
+    const campaignId = campaigns.open(apiKeyId, 'przeglad-klimatyzacji-wiosna', NOW);
+    campaigns.setLinksDisabled(campaignId, NOW);
+    const payload = { defaultText: 'Oferta https://firma.pl/a', recipients: [{ to: '48601000001' }], campaign: 'przeglad-klimatyzacji-wiosna' };
+    const res = await post('/v1/packages', payload, { 'idempotency-key': 'rozsylka-5' });
+    expect(res.json().links).toMatchObject({ shortened: 1, notice: 'campaign_links_disabled' });
+    const again = await post('/v1/packages', payload, { 'idempotency-key': 'rozsylka-5' });
+    expect(again.json()).toEqual(res.json());
+    const [code] = codesIn(packages.recipients(res.json().id as string)[0]!.text!);
+    expect(shortLinks.get(code!)!.disabledAt).toBe(NOW.toISOString());
   });
 
   it('zwraca przy powtórzeniu z tym samym Idempotency-Key tę samą rozsyłkę bez nowych kodów', async () => {

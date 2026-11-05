@@ -39,8 +39,21 @@ describe('withUtm', () => {
 });
 
 describe('targetPattern', () => {
-  it('zastępuje ostatni segment ścieżki i wartości zapytania', () => {
-    expect(targetPattern('https://firma.pl/klient/123/przeglad?k=9')).toBe('https://firma.pl/klient/123/{…}?k={…}');
+  it('zastępuje człon ścieżki z cyfrą i wartości zapytania', () => {
+    expect(targetPattern('https://firma.pl/klient/10482/przeglad?k=9')).toBe('https://firma.pl/klient/{…}/przeglad?k={…}');
+  });
+
+  it('zastępuje każdy człon ścieżki z cyfrą', () => {
+    expect(targetPattern('https://firma.pl/umowy/2026/KL-10482/aneks')).toBe('https://firma.pl/umowy/{…}/{…}/aneks');
+    expect(targetPattern('https://firma.pl/klient/123/')).toBe('https://firma.pl/klient/{…}/');
+  });
+
+  it('zastępuje ostatni człon ścieżki, gdy żaden człon nie zawiera cyfry', () => {
+    expect(targetPattern('https://firma.pl/oferta/przeglad')).toBe('https://firma.pl/oferta/{…}');
+  });
+
+  it('nie traktuje zakodowanego znaku jako cyfry', () => {
+    expect(targetPattern('https://firma.pl/Przegl%C4%85d/oferta')).toBe('https://firma.pl/Przegl%C4%85d/{…}');
   });
 
   it('zastępuje każdą wartość zapytania i pozostawia klucz bez wartości', () => {

@@ -170,7 +170,7 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
 
   return deps.messages.transaction(() => {
     // Rzutowanie: kampania powstaje wewnątrz `map`, a zawężanie typów nie widzi przypisań w funkcji zwrotnej.
-    let campaign = null as { id: number; name: string } | null;
+    let campaign = null as { id: number; name: string; linksDisabled: boolean } | null;
     let sent = 0;
     const results = checked.map(({ dest, perRecipientIdem, existing }): SubmitResult => {
       if (existing) {
@@ -188,7 +188,7 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
       if (shortening !== null) {
         if (campaign === null) {
           const name = campaignLabel();
-          campaign = { id: openCampaign(deps, auth.apiKeyId, name, now), name };
+          campaign = { ...openCampaign(deps, auth.apiKeyId, name, now), name };
         }
         const codes = createCodes(deps, prepared, campaign.id, auth.apiKeyId,
           { recipientKey: id, messageId: id, packageId: null, seq: null, dest, clientId: null }, now, now);
@@ -213,7 +213,7 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
     deps.jobs.enqueue('send', { messageId: id, text, deliveryReport }, now);
     deps.events.record(id, now, 'queued', null);
 
-    const links = linksBlock(prepared, campaign?.name ?? null, expiresAt);
+    const links = linksBlock(prepared, campaign?.name ?? null, expiresAt, campaign?.linksDisabled ?? false);
     return {
       id, status: 'queued', encoding: measurement.encoding, parts: segmentation.parts,
       characters: measurement.characters, slots: measurement.slots, slotsRemaining: segmentation.slotsRemaining,
@@ -230,8 +230,9 @@ function storedLinks(deps: SubmitDeps, messageId: string) {
   const rows = deps.shortLinks.forMessage(messageId);
   const first = rows[0];
   if (first === undefined) return undefined;
+  const campaign = deps.campaigns.get(first.campaignId);
   return {
     count: rows.length, domain: deps.linkDomains.get(first.domainId)?.domain ?? null,
-    campaign: deps.campaigns.get(first.campaignId)?.name ?? null, expiresAt: first.expiresAt,
+    campaign: campaign?.name ?? null, expiresAt: first.expiresAt, linksDisabled: (campaign?.linksDisabledAt ?? null) !== null,
   };
 }

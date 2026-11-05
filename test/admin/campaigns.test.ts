@@ -181,6 +181,7 @@ describe('Kampanie: wyłączenie i włączenie linków', () => {
     const before = await page(`/kampanie/${campaignId}`);
     expect(before.body).toContain(`action="/kampanie/${campaignId}/wylacz"`);
     expect(before.body).toMatch(/data-confirm="Wyłączyć linki kampanii [^"]+"/);
+    expect(before.body).toContain('także w wysłanych SMS-ach i w kolejnych wysyłkach tej kampanii');
 
     const off = await post(`/kampanie/${campaignId}/wylacz`);
     expect(off.statusCode).toBe(303);

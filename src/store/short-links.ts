@@ -27,12 +27,14 @@ const toRow = (r: Raw): ShortLinkRow => ({
 export class ShortLinksRepo {
   constructor(private readonly db: Database) {}
 
+  /** Kod kampanii z wyłączonymi linkami powstaje wyłączony z chwilą wyłączenia kampanii. */
   insert(row: ShortLinkInput): void {
     this.db
       .prepare(`INSERT INTO short_links (code, domain_id, api_key_id, campaign_id, target, utm, recipient_key, message_id, package_id,
-                  seq, dest, client_id, expires_at, purge_after, created_at)
+                  seq, dest, client_id, expires_at, disabled_at, purge_after, created_at)
                 VALUES (@code, @domainId, @apiKeyId, @campaignId, @target, @utm, @recipientKey, @messageId, @packageId,
-                  @seq, @dest, @clientId, @expiresAt, @purgeAfter, @createdAt)`)
+                  @seq, @dest, @clientId, @expiresAt, (SELECT links_disabled_at FROM campaigns WHERE id = @campaignId),
+                  @purgeAfter, @createdAt)`)
       .run(row);
   }
 

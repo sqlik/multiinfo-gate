@@ -40,13 +40,13 @@ describe('CampaignsRepo', () => {
     expect(campaigns.byName(apiKeyId, NAME)!.id).toBe(id);
   });
 
-  it('kolejna wysyłka do kampanii z wyłączonymi linkami zdejmuje znacznik, bo nowe linki działają', () => {
+  it('kolejna wysyłka do kampanii z wyłączonymi linkami zachowuje znacznik', () => {
     const { campaigns, apiKeyId } = setup();
     const id = campaigns.open(apiKeyId, NAME, AT);
     campaigns.setLinksDisabled(id, AT);
     expect(campaigns.get(id)!.linksDisabledAt).toBe(AT.toISOString());
     campaigns.open(apiKeyId, NAME, LATER);
-    expect(campaigns.get(id)!.linksDisabledAt).toBeNull();
+    expect(campaigns.get(id)!.linksDisabledAt).toBe(AT.toISOString());
   });
 
   it('liczy rozsyłki i pojedyncze wiadomości kampanii', () => {

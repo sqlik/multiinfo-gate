@@ -222,7 +222,7 @@ function actions(d: CampaignDetail): string {
   if (c.detailsPurgedAt !== null) return '';
   const toggle = c.linksDisabledAt === null
     ? `<form method="post" action="/kampanie/${esc(c.id)}/wylacz"
-        data-confirm="Wyłączyć linki kampanii ${esc(c.name)}? Wszystkie krótkie linki tej kampanii, także w wysłanych SMS-ach, będą prowadzić do strony „Link wygasł”." data-confirm-ok="Wyłącz">
+        data-confirm="Wyłączyć linki kampanii ${esc(c.name)}? Wszystkie krótkie linki tej kampanii, także w wysłanych SMS-ach i w kolejnych wysyłkach tej kampanii, będą prowadzić do strony „Link wygasł”." data-confirm-ok="Wyłącz">
         <button class="btn btn-s" type="submit">Wyłącz linki</button>
       </form>`
     : `<form method="post" action="/kampanie/${esc(c.id)}/wlacz">

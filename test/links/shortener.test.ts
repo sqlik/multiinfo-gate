@@ -211,7 +211,7 @@ describe('createCodes', () => {
   it('zapisuje osobny kod dla każdego slotu z ważnością od terminu wysyłki', () => {
     const { prepare, campaigns, shortLinks, apiKeyId, domainId } = setup();
     const p = prepare('https://firma.pl/a i ponownie https://firma.pl/a', { validityDays: 10 });
-    const campaignId = openCampaign({ campaigns, shortLinks }, apiKeyId, 'przeglad-klimatyzacji-wiosna', NOW);
+    const campaignId = openCampaign({ campaigns }, apiKeyId, 'przeglad-klimatyzacji-wiosna', NOW).id;
     const startAt = new Date(NOW.getTime() + DAY);
     const codes = createCodes({ campaigns, shortLinks }, p, campaignId, apiKeyId, recipient, startAt, NOW);
     expect(codes).toHaveLength(2);
@@ -229,10 +229,18 @@ describe('createCodes', () => {
     ]);
   });
 
+  it('zgłasza kampanię z wyłączonymi linkami przy kolejnej wysyłce', () => {
+    const { campaigns, apiKeyId } = setup();
+    const first = openCampaign({ campaigns }, apiKeyId, 'wiosna', NOW);
+    expect(first.linksDisabled).toBe(false);
+    campaigns.setLinksDisabled(first.id, NOW);
+    expect(openCampaign({ campaigns }, apiKeyId, 'wiosna', NOW)).toEqual({ id: first.id, linksDisabled: true });
+  });
+
   it('losuje ponownie, gdy kod już istnieje', () => {
     const { prepare, campaigns, shortLinks, apiKeyId } = setup();
     const p = prepare('Oferta https://firma.pl/a');
-    const campaignId = openCampaign({ campaigns, shortLinks }, apiKeyId, 'wiosna', NOW);
+    const campaignId = openCampaign({ campaigns }, apiKeyId, 'wiosna', NOW).id;
     const first = createCodes({ campaigns, shortLinks, newCode: () => 'aaaaaaa' }, p, campaignId, apiKeyId, recipient, NOW, NOW);
     expect(first).toEqual(['aaaaaaa']);
     const draws = ['aaaaaaa', 'aaaaaaa', 'bbbbbbb'];
@@ -249,6 +257,14 @@ describe('linksBlock', () => {
     expect(linksBlock(p, 'wiosna', '2027-02-03T10:00:00.000Z')).toEqual({
       shortened: 1, domain: 'l.firma.pl', campaign: 'wiosna', expiresAt: '2027-02-03T10:00:00.000Z', notice: null,
       skipped: [{ url: 'https://inna.pl/c', reason: 'domain_not_allowed' }],
+    });
+  });
+
+  it('zgłasza kampanię z wyłączonymi linkami przed ustawieniem klucza', () => {
+    const { prepare } = setup({ mode: 'always' });
+    const p = prepare('Oferta https://firma.pl/a', { shorten: false });
+    expect(linksBlock(p, 'wiosna', '2027-02-03T10:00:00.000Z', true)).toMatchObject({
+      shortened: 1, campaign: 'wiosna', notice: 'campaign_links_disabled',
     });
   });
 

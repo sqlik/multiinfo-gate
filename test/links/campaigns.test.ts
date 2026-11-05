@@ -116,6 +116,13 @@ describe('groupTargets', () => {
     ])).toEqual([{ target: 'https://firma.pl/o/{…}', kind: 'individual', opens: 11, clicks: 13 }]);
   });
 
+  it('grupuje adresy różniące się numerem w środku ścieżki', () => {
+    expect(groupTargets([
+      row('https://firma.pl/klient/10482/przeglad', 1, 1, 1),
+      row('https://firma.pl/klient/10483/przeglad', 1, 0, 0),
+    ])).toEqual([{ target: 'https://firma.pl/klient/{…}/przeglad', kind: 'individual', opens: 1, clicks: 1 }]);
+  });
+
   it('kolejność od największej liczby odbiorców', () => {
     const out = groupTargets([
       row('https://firma.pl/regulamin', 2),

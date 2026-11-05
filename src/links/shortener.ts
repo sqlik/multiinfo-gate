@@ -167,8 +167,12 @@ export function materialize(p: PreparedText, codes: readonly string[]): string {
   return text;
 }
 
-export function openCampaign(deps: Pick<LinkPersistDeps, 'campaigns'>, apiKeyId: number, name: string, now: Date): number {
-  return deps.campaigns.open(apiKeyId, name, now);
+/** `linksDisabled`: kampania ma wyłączone linki, dlatego kody tej wysyłki powstają wyłączone. */
+export function openCampaign(
+  deps: { campaigns: Pick<CampaignsRepo, 'open' | 'get'> }, apiKeyId: number, name: string, now: Date,
+): { id: number; linksDisabled: boolean } {
+  const id = deps.campaigns.open(apiKeyId, name, now);
+  return { id, linksDisabled: (deps.campaigns.get(id)?.linksDisabledAt ?? null) !== null };
 }
 
 /** Data wygaśnięcia linków: termin wysyłki (albo chwila przyjęcia) plus ważność w dniach. */
@@ -209,8 +213,10 @@ export function createCodes(
 
 function block(
   templates: readonly PreparedText[], shortened: number, domain: string | null, campaign: string | null, expiresAt: string | null,
+  linksDisabled: boolean,
 ): LinksResponse | undefined {
-  const notice = templates.find((t) => t.notice !== null)?.notice ?? null;
+  // Wyłączone linki kampanii mają pierwszeństwo, ponieważ krótkie linki nie prowadzą do celu.
+  const notice = linksDisabled && shortened > 0 ? 'campaign_links_disabled' : templates.find((t) => t.notice !== null)?.notice ?? null;
   const seen = new Set<string>();
   const skipped: SkippedLink[] = [];
   for (const t of templates) {
@@ -226,23 +232,23 @@ function block(
 }
 
 /** Blok odpowiedzi API dla jednej wiadomości. */
-export function linksBlock(p: PreparedText, campaign: string | null, expiresAt: string | null): LinksResponse | undefined {
-  return block([p], p.slots.length, p.info?.domain ?? null, campaign, expiresAt);
+export function linksBlock(p: PreparedText, campaign: string | null, expiresAt: string | null, linksDisabled = false): LinksResponse | undefined {
+  return block([p], p.slots.length, p.info?.domain ?? null, campaign, expiresAt, linksDisabled);
 }
 
 /** Blok odpowiedzi API dla rozsyłki: `shortened` to liczba kodów wszystkich odbiorców. */
 export function packageLinksBlock(
-  templates: readonly PreparedText[], shortened: number, campaign: string | null, expiresAt: string | null,
+  templates: readonly PreparedText[], shortened: number, campaign: string | null, expiresAt: string | null, linksDisabled = false,
 ): LinksResponse | undefined {
   const domain = templates.find((t) => t.slots.length > 0)?.info?.domain ?? null;
-  return block(templates, shortened, domain, campaign, expiresAt);
+  return block(templates, shortened, domain, campaign, expiresAt, linksDisabled);
 }
 
-/** Blok odpowiedzi na powtórzone żądanie: liczby z zapisanych kodów, zgłoszenia z szablonu. */
+/** Blok odpowiedzi na powtórzone żądanie: liczby z zapisanych kodów, zgłoszenia z szablonu i bieżącego stanu kampanii. */
 export function storedLinksBlock(
   templates: readonly PreparedText[],
-  stored: { count: number; domain: string | null; campaign: string | null; expiresAt: string | null } | undefined,
+  stored: { count: number; domain: string | null; campaign: string | null; expiresAt: string | null; linksDisabled: boolean } | undefined,
 ): LinksResponse | undefined {
-  if (stored === undefined) return block(templates, 0, null, null, null);
-  return block(templates, stored.count, stored.domain, stored.campaign, stored.expiresAt);
+  if (stored === undefined) return block(templates, 0, null, null, null, false);
+  return block(templates, stored.count, stored.domain, stored.campaign, stored.expiresAt, stored.linksDisabled);
 }
