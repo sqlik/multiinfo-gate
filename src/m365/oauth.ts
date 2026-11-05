@@ -1,5 +1,5 @@
 /**
- * Klient OAuth Microsoftu dla konta technicznego Microsoft 365: aplikacja publiczna z PKCE,
+ * Klient OAuth Microsoftu dla skrzynki bramki w Microsoft 365: aplikacja publiczna z PKCE,
  * bez sekretu klienta (spec 5.1). Moduł nie trzyma stanu; tokeny przechowuje dostawca tokenów.
  * Bramka łączy się wyłącznie z login.microsoftonline.com, a identyfikator katalogu przechodzi
  * walidację, zanim trafi do ścieżki adresu.
@@ -184,12 +184,12 @@ const HINTS: Record<string, string> = {
   '700082': `Logowanie wygasło po 90 dniach bez użycia, dlatego ${RELOGIN}`,
   '50076': 'Zasady katalogu wymagają uwierzytelniania wieloskładnikowego, dlatego należy kliknąć „Zaloguj ponownie” i potwierdzić logowanie drugim składnikiem',
   '50079': 'Zasady katalogu wymagają uwierzytelniania wieloskładnikowego, dlatego należy kliknąć „Zaloguj ponownie” i potwierdzić logowanie drugim składnikiem',
-  '53003': 'Zasady dostępu warunkowego w Entra ID blokują logowanie, dlatego należy poprosić administratora Microsoft 365 o wyłączenie konta technicznego z tych zasad',
+  '53003': 'Zasady dostępu warunkowego w Entra ID blokują logowanie, dlatego należy poprosić administratora Microsoft 365 o wyłączenie skrzynki bramki z tych zasad',
   '65001': 'Zgoda na uprawnienia aplikacji została cofnięta, dlatego należy w Entra ID ponownie udzielić zgody administratora, a następnie kliknąć „Zaloguj ponownie”',
   '7000112': 'Aplikacja została wyłączona w Entra ID, dlatego należy ją ponownie włączyć we właściwościach w sekcji Aplikacje dla przedsiębiorstw',
   '700016': 'Katalog nie zawiera aplikacji o podanym identyfikatorze, dlatego należy sprawdzić identyfikator aplikacji i identyfikator katalogu w ustawieniach konta',
   '50011': 'Rejestracja aplikacji nie zawiera adresu przekierowania bramki, dlatego należy dopisać w Entra ID adres podany w formularzu konta',
-  '50105': 'Aplikacja w Entra ID wymaga przypisania, a konto nie jest do niej przypisane, dlatego należy dodać konto techniczne w sekcji Użytkownicy i grupy aplikacji w Aplikacjach dla przedsiębiorstw',
+  '50105': 'Aplikacja w Entra ID wymaga przypisania, a konto nie jest do niej przypisane, dlatego należy przypisać skrzynkę bramki w sekcji Użytkownicy i grupy aplikacji w Aplikacjach dla przedsiębiorstw',
 };
 
 const GENERAL_HINT = `Microsoft odrzucił logowanie, dlatego ${RELOGIN}, a gdy błąd się powtórzy, sprawdzić rejestrację aplikacji w Entra ID`;

@@ -334,6 +334,9 @@ describe('skrzynka Microsoft 365', () => {
     const body = (await get('/integracje/nowa?rodzaj=mail_in&ustawienie=poczta-m365')).body;
     expect(body).toContain('href="/microsoft-365/nowe"');
     expect(body).toContain('Dodaj konto Microsoft 365');
+    expect(body).toContain('Dodaj konto na ekranie Konta Microsoft 365 i zaloguj je adresem skrzynki bramki');
+    expect(body).toContain('</strong> oznacza adres tego konta');
+    expect(body).not.toMatch(/techniczn/i);
     expect(body).not.toContain('name="password"');
     expect(body).not.toContain('Serwer IMAP');
   });
@@ -437,7 +440,7 @@ describe('skrzynka Microsoft 365', () => {
     h.mailbox.accessToken = 'inny-token';
     const res = await post('/integracje', { kind: 'mail_in', preset: 'poczta-m365', ...m365Body(id, { user: 'alarmy@frima.pl' }), action: 'polaczenie' });
     expect(res.body).toContain('Logowanie odrzucone');
-    expect(res.body).toContain('Sprawdź pisownię adresu skrzynki oraz ustawienie IMAP na karcie Poczta konta technicznego. Dla skrzynki współdzielonej sprawdź także, czy konto posiada do niej uprawnienie pełnego dostępu');
+    expect(res.body).toContain('Sprawdź pisownię adresu skrzynki oraz ustawienie IMAP na karcie Poczta skrzynki bramki. Dla skrzynki współdzielonej sprawdź także, czy skrzynka bramki posiada do niej uprawnienie pełnego dostępu');
   });
 
   it('szczegóły skrzynki z błędem konta odsyłają do konta Microsoft 365', async () => {

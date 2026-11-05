@@ -311,6 +311,7 @@ describe('hintFor', () => {
       const h = hintFor(c);
       expect(h.length, String(c)).toBeGreaterThan(20);
       expect(h, String(c)).not.toMatch(/\.$|[\u2014\u2013]|, i |\(|;/);
+      expect(h, String(c)).not.toMatch(/techniczn/i);
     }
   });
 });

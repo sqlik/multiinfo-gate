@@ -56,8 +56,8 @@ Każda wysyłka przechodzi przez integrację z limitem części, ochroną przed 
 który wskazuje również osobę zlecającą wysyłkę.
 
 Wersja 1.10 wprowadza obsługę skrzynek Microsoft 365. Mail2SMS odczytuje skrzynkę w Exchange
-Online przez konto techniczne organizacji. Konto loguje się w przeglądarce, dlatego bramka nie
-przechowuje jego hasła. Przez to samo konto bramka wysyła maile powiadomień, ponieważ Microsoft wycofuje
+Online przez skrzynkę przeznaczoną dla bramki. Skrzynka loguje się w przeglądarce, dlatego bramka
+nie przechowuje jej hasła. Przez tę samą skrzynkę bramka wysyła maile powiadomień, ponieważ Microsoft wycofuje
 logowanie hasłem do SMTP. Nowe ustawienie pomija wiadomości starsze niż wybrany limit, dzięki
 czemu po przerwie w dostępie do skrzynki nieaktualny alarm nie trafia na telefon. Administrator
 otrzymuje powiadomienia także SMS-em, również wtedy, gdy poczta nie działa.

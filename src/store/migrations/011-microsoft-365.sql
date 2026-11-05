@@ -1,6 +1,6 @@
 PRAGMA foreign_keys = ON;
 
--- Konto techniczne Microsoft 365 połączone logowaniem w przeglądarce. Token odświeżania wyłącznie zaszyfrowany
+-- Konto Microsoft 365 (skrzynka bramki) połączone logowaniem w przeglądarce. Token odświeżania wyłącznie zaszyfrowany
 -- kluczem głównym; token dostępu bramka trzyma tylko w pamięci. Zmiana katalogu albo aplikacji kasuje token,
 -- bo należy on do innej rejestracji aplikacji.
 CREATE TABLE m365_accounts (

@@ -49,7 +49,7 @@ const loginLabel = (row: M365AccountRow) =>
 
 export function m365ListPage(views: M365AccountView[]): string {
   const rows = views.length === 0
-    ? '<tr><td class="dim" colspan="6">Brak kont Microsoft 365. Dodaj konto techniczne, aby Mail2SMS odczytywał skrzynkę w Microsoft 365 albo bramka wysyłała przez nie maile powiadomień.</td></tr>'
+    ? '<tr><td class="dim" colspan="6">Brak kont Microsoft 365. Dodaj konto i zaloguj je adresem skrzynki bramki, aby Mail2SMS odczytywał pocztę w Microsoft 365 albo bramka wysyłała przez nią maile powiadomień.</td></tr>'
     : views.map((v) => `<tr>
       <td><strong>${esc(v.row.name)}</strong></td>
       <td class="m">${v.row.address === null ? '<span class="dim">brak</span>' : esc(v.row.address)}</td>
@@ -62,7 +62,7 @@ export function m365ListPage(views: M365AccountView[]): string {
   return `<div class="head">
     <div>
       <h1 class="h1">Konta Microsoft 365</h1>
-      <p class="sub">Konta techniczne, przez które bramka odczytuje skrzynki Mail2SMS i wysyła maile powiadomień</p>
+      <p class="sub">Skrzynki bramki w Microsoft 365, przez które Mail2SMS odczytuje pocztę, a bramka wysyła maile powiadomień</p>
     </div>
     <a class="btn btn-p" href="/microsoft-365/nowe">Dodaj konto</a>
   </div>
@@ -90,13 +90,13 @@ function instructions(): string {
       <div class="guide" style="font-size: 12.5px; line-height: 1.55; padding-bottom: 10px;">
         <p>Przed dodaniem konta wykonaj w portalach Microsoftu poniższe kroki albo przekaż je administratorowi Microsoft 365:</p>
         <ol style="margin: 0 0 8px; padding-left: 18px;">
-          <li>W centrum administracyjnym Microsoft 365 załóż konto techniczne z licencją obejmującą skrzynkę, na przykład alarmy@firma.pl</li>
-          <li>W ustawieniach tego konta, na karcie Poczta, w zarządzaniu aplikacjami poczty zaznacz IMAP oraz SMTP z uwierzytelnianiem</li>
+          <li>W centrum administracyjnym Microsoft 365 załóż skrzynkę bramki jako zwykłego użytkownika z licencją Exchange Online, na przykład alarmy@firma.pl, a nie jako skrzynkę współdzieloną</li>
+          <li>W ustawieniach tego użytkownika, na karcie Poczta, w zarządzaniu aplikacjami poczty zaznacz IMAP oraz SMTP z uwierzytelnianiem</li>
           <li>W centrum administracyjnym Microsoft Entra, w sekcji Rejestracje aplikacji, zarejestruj aplikację, na przykład „Multiinfo Gate”, z typem kont „Tylko dla jednej dzierżawy”</li>
           <li>W polu „Identyfikator URI przekierowania” wybierz platformę „Klient publiczny/natywny (mobilne i klasyczne)” i wklej adres podany niżej</li>
           <li>Dodaj uprawnienia delegowane IMAP.AccessAsUser.All, SMTP.Send, offline_access, openid, email i profile</li>
           <li>Kliknij „Wyraź zgodę administratora dla katalogu” i potwierdź</li>
-          <li>W sekcji Aplikacje dla przedsiębiorstw otwórz tę aplikację, we właściwościach ustaw „Wymagane jest przypisanie?” na „Tak”, a następnie w sekcji Użytkownicy i grupy przypisz wyłącznie konto techniczne</li>
+          <li>W sekcji Aplikacje dla przedsiębiorstw otwórz tę aplikację, we właściwościach ustaw „Wymagane jest przypisanie?” na „Tak”, a następnie w sekcji Użytkownicy i grupy przypisz wyłącznie skrzynkę bramki</li>
           <li>Skopiuj z przeglądu aplikacji identyfikator katalogu i identyfikator aplikacji, a następnie wklej je w polach poniżej</li>
         </ol>
         <p>Pełny opis znajdziesz w <a href="${M365_DOCS_URL}" target="_blank" rel="noopener noreferrer">dokumentacji, w rozdziale 4.8</a>.</p>
@@ -135,7 +135,7 @@ export function m365FormPage(opts: {
   return `<div class="head">
     <div>
       <h1 class="h1">${esc(title)}</h1>
-      <p class="sub">Konto techniczne łączy się z bramką przez logowanie w przeglądarce, bez hasła zapisanego w bramce</p>
+      <p class="sub">Bramka łączy się ze skrzynką przez logowanie w przeglądarce, bez hasła zapisanego w bramce</p>
     </div>
   </div>
   <div class="scroll">

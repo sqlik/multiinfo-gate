@@ -576,8 +576,8 @@ Integracja „z SMS-a” wysyła odebrane SMS-y i statusy na adres aplikacji w j
 Integracja „Mail2SMS” odczytuje skrzynkę pocztową przez IMAP i zamienia wiadomości od dozwolonych
 nadawców na SMS-y. Wymaga wyłącznie połączenia wychodzącego z maszyny bramki do serwera poczty
 na porcie 993 (albo 143). W Dockerze ani w Traefiku nie trzeba otwierać żadnego portu. Serwer
-poczty w sieci wewnętrznej wymaga `MIG_MAIL_ALLOW_PRIVATE=1` (rozdział 7.7). Skrzynkę
-w Microsoft 365 bramka odczytuje przez konto techniczne połączone według punktu 4.8. Integracja
+poczty w sieci wewnętrznej wymaga `MIG_MAIL_ALLOW_PRIVATE=1` (rozdział 7.7). Do skrzynki
+w Microsoft 365 bramka loguje się kontem Microsoft 365 połączonym według punktu 4.8. Integracja
 działa w imieniu klucza API z rozdziału 4.5. Załóż go najpierw.
 
 Integracja z Power Automate w kierunku „Aplikacja wysyła SMS” przyjmuje zlecenia wysyłki
@@ -619,55 +619,58 @@ gotowe ustawienia aplikacja po aplikacji i język szablonów opisuje rozdział
 
 ### 4.8. Konto Microsoft 365
 
-Od wersji 1.10 bramka współpracuje z Microsoft 365 przez konto techniczne organizacji. Przez to
-konto integracja Mail2SMS odczytuje skrzynkę w Exchange Online, a bramka wysyła maile powiadomień
-i odpowiedzi do nadawców. Microsoft nie przyjmuje do IMAP hasła skrzynki i wycofuje logowanie
-hasłem do SMTP. Dlatego konto łączy się z bramką przez logowanie w przeglądarce, a hasło konta
-technicznego nie trafia do bramki.
+Od wersji 1.10 bramka współpracuje z Microsoft 365 przez skrzynkę pocztową przeznaczoną wyłącznie
+dla niej, nazywaną dalej skrzynką bramki. Przez tę skrzynkę integracja Mail2SMS odczytuje pocztę
+w Exchange Online, a bramka wysyła maile powiadomień i odpowiedzi do nadawców. Microsoft nie
+przyjmuje do IMAP hasła skrzynki i wycofuje logowanie hasłem do SMTP. Dlatego skrzynka łączy się
+z bramką przez logowanie w przeglądarce, a jej hasło nie trafia do bramki.
 
 Rozdział jest przeznaczony dla administratora bramki, który współpracuje z administratorem
 Microsoft 365. Konfiguracja odbywa się wyłącznie w portalach Microsoftu i w panelu bramki, bez
 PowerShella. Każda firma rejestruje w swoim katalogu własną aplikację, dlatego bramka nie
 korzysta z żadnej usługi pośredniczącej. Skrzynki prywatne Outlook.com nie są obsługiwane.
 
-Przygotowanie obejmuje trzy etapy: konto techniczne w centrum administracyjnym Microsoft 365,
-rejestrację aplikacji z przypisaniem konta technicznego w centrum administracyjnym Microsoft Entra i
-połączenie konta w panelu bramki. Dwa pierwsze etapy wykonuje administrator Microsoft 365. Użycie
-konta w Mail2SMS opisuje rozdział 5.1 [Integracji z aplikacjami](integracje.md#51-skrzynka), a
-wysyłkę maili powiadomień rozdział 9.1 tego samego artykułu.
+Przygotowanie obejmuje trzy etapy: skrzynkę bramki w centrum administracyjnym Microsoft 365,
+rejestrację aplikacji z przypisaniem skrzynki bramki w centrum administracyjnym Microsoft Entra i
+połączenie skrzynki z bramką w panelu. Dwa pierwsze etapy wykonuje administrator Microsoft 365.
+Użycie skrzynki w Mail2SMS opisuje rozdział 5.1 [Integracji z
+aplikacjami](integracje.md#51-skrzynka), a wysyłkę maili powiadomień rozdział 9.1 tego samego
+artykułu.
 
-#### Konto techniczne
+#### Skrzynka bramki
 
-Zalecane jest konto przeznaczone wyłącznie dla bramki, na przykład `alarmy@firma.pl`. Bramka
-otrzymuje dostęp do każdej skrzynki, do której to konto posiada uprawnienia. Dlatego konto
-techniczne nie powinno posiadać dostępu do innych skrzynek niż odczytywane przez Mail2SMS. Konto
-nie wymaga żadnej roli administracyjnej. Adres konta powinien należeć do tej samej domeny co
-adresy pracowników, którzy piszą do Mail2SMS. Bramka uznaje bowiem pocztę wewnętrzną bez wyniku
-SPF i DKIM wyłącznie od nadawców z domeny skrzynki.
+Skrzynka bramki jest zwykłą skrzynką użytkownika z licencją obejmującą Exchange Online, na przykład
+`alarmy@firma.pl`. Skrzynka współdzielona nie wystarcza, ponieważ nie pozwala na logowanie. Bramka
+otrzymuje dostęp do każdej skrzynki, do której skrzynka bramki posiada uprawnienia. Dlatego skrzynka
+bramki nie powinna posiadać dostępu do innych skrzynek niż odczytywane przez Mail2SMS. Jej
+użytkownik nie wymaga żadnej roli administracyjnej. Adres skrzynki bramki powinien należeć do tej
+samej domeny co adresy pracowników, którzy piszą do Mail2SMS. Bramka uznaje bowiem pocztę wewnętrzną
+bez wyniku SPF i DKIM wyłącznie od nadawców z domeny skrzynki.
 
 1. W centrum administracyjnym Microsoft 365 otwórz **Użytkownicy → Aktywni użytkownicy** i dodaj
    użytkownika z licencją obejmującą skrzynkę Exchange Online.
-2. Nadaj kontu opisową nazwę wyświetlaną, na przykład „Alarmy SMS”. Pod tą nazwą pracownicy
+2. Nadaj użytkownikowi opisową nazwę wyświetlaną, na przykład „Alarmy SMS”. Pod tą nazwą pracownicy
    firmy widzą w Outlooku odpowiedzi i powiadomienia wysłane przez bramkę.
-3. Otwórz konto na liście użytkowników, przejdź na kartę **Poczta** i kliknij **Zarządzaj
+3. Otwórz użytkownika na liście, przejdź na kartę **Poczta** i kliknij **Zarządzaj
    aplikacjami poczty e-mail**.
 4. Zaznacz **IMAP** oraz **SMTP z uwierzytelnianiem**, a następnie kliknij **Zapisz zmiany**.
 
-![Centrum administracyjne Microsoft 365, ustawienia aplikacji poczty konta technicznego: zaznaczone IMAP oraz SMTP z uwierzytelnianiem](obrazki/m365-aplikacje-poczty.png)
+![Centrum administracyjne Microsoft 365, ustawienia aplikacji poczty skrzynki bramki: zaznaczone IMAP oraz SMTP z uwierzytelnianiem](obrazki/m365-aplikacje-poczty.png)
 
 Oczekiwany wynik: centrum administracyjne wyświetla komunikat „Zaktualizowano informacje
 Aplikacje poczty e-mail o skrzynce pocztowej”.
 
 Opcja **IMAP** jest potrzebna do odczytu skrzynki w Mail2SMS, a opcja **SMTP z uwierzytelnianiem**
-do wysyłki maili przez konto. Ustawienie SMTP na koncie jest nadrzędne wobec ustawienia
-organizacji. Dlatego działa także wtedy, gdy organizacja wyłączyła tę opcję dla pozostałych kont.
+do wysyłki maili przez skrzynkę bramki. Ustawienie SMTP na skrzynce jest nadrzędne wobec
+ustawienia organizacji. Dlatego działa także wtedy, gdy organizacja wyłączyła tę opcję dla
+pozostałych skrzynek.
 Zmiana obu opcji zaczyna obowiązywać po około 30 minutach. Do tego czasu skrzynka może odrzucać
 logowanie bramki.
 
 #### Rejestracja aplikacji w Entra ID
 
-Aplikacja zarejestrowana w Entra ID pozwala bramce zalogować konto techniczne i uzyskać dostęp do
-jego skrzynki. Aplikacja działa jako klient publiczny, czyli bez sekretu klienta. Sekret klienta
+Aplikacja zarejestrowana w Entra ID pozwala bramce zalogować się adresem skrzynki bramki i uzyskać
+do niej dostęp. Aplikacja działa jako klient publiczny, czyli bez sekretu klienta. Sekret klienta
 jest hasłem aplikacji, które wygasa najpóźniej po 24 miesiącach i wymaga odnawiania, dlatego
 bramka z niego nie korzysta. Rejestracja wymaga adresu przekierowania, który podaje panel bramki.
 
@@ -703,7 +706,8 @@ podaje „Udzielono dla” z nazwą organizacji.
 Uprawnienia `IMAP.AccessAsUser.All` i `SMTP.Send` pozwalają odczytywać pocztę i wysyłać maile
 w imieniu zalogowanego konta. Uprawnienie `offline_access` pozwala bramce odnawiać logowanie bez
 udziału administratora. Uprawnienia `openid`, `email` i `profile` przekazują bramce adres konta.
-Zgoda administratora sprawia, że konto techniczne nie zatwierdza uprawnień przy logowaniu.
+Zgoda administratora sprawia, że przy logowaniu skrzynki bramki Microsoft nie prosi o zatwierdzenie
+uprawnień.
 
 Sekcja **Authentication (Preview)** rejestracji przedstawia wybraną platformę pod nazwą
 „Aplikacje mobilne i klasyczne”. W tej sekcji dopiszesz kolejny adres przekierowania, na przykład po zmianie
@@ -714,23 +718,23 @@ Adresy `127.0.0.1` i `localhost` są jednak dla Microsoftu różnymi adresami. R
 zawierać wyłącznie adresy, pod którymi otwierasz panel. Dlatego po wystawieniu panelu pod domeną
 usuń adres tunelu, jeżeli z niego nie korzystasz.
 
-#### Przypisanie konta technicznego
+#### Przypisanie skrzynki bramki
 
 Zgoda administratora obejmuje wszystkie konta w katalogu. Dlatego bez dodatkowego ustawienia przez
 aplikację może zalogować się każde konto organizacji, na przykład własne konto administratora
 wybrane omyłkowo przy logowaniu w panelu. Ustawienie „Wymagane jest przypisanie” ogranicza
-aplikację do kont przypisanych przez administratora Microsoft 365.
+aplikację do kont przypisanych przez administratora Microsoft 365, czyli do skrzynki bramki.
 
 1. W centrum administracyjnym Microsoft Entra otwórz **Entra ID → Aplikacje dla przedsiębiorstw**
    i wyszukaj aplikację po nazwie nadanej przy rejestracji.
 2. Otwórz aplikację i przejdź do sekcji **Właściwości**. Ustaw **Wymagane jest przypisanie?** na
    **Tak** i kliknij **Zapisz**.
 3. Przejdź do sekcji **Użytkownicy i grupy** i kliknij **Dodaj użytkownika/grupę**.
-4. Kliknij **Niczego nie wybrano**, zaznacz konto techniczne, a następnie kliknij **Wybierz**
-   i **Przypisz**.
+4. Kliknij **Niczego nie wybrano**, zaznacz skrzynkę bramki, na przykład „Alarmy SMS”, a następnie
+   kliknij **Wybierz** i **Przypisz**.
 5. Jeżeli lista zawiera inne konta, zaznacz je i kliknij **Usuń przypisanie**.
 
-Oczekiwany wynik: lista w sekcji **Użytkownicy i grupy** zawiera wyłącznie konto techniczne.
+Oczekiwany wynik: lista w sekcji **Użytkownicy i grupy** zawiera wyłącznie skrzynkę bramki.
 Microsoft odrzuca logowanie każdego innego konta błędem AADSTS50105.
 
 #### Połączenie konta w panelu
@@ -745,13 +749,13 @@ Microsoft odrzuca logowanie każdego innego konta błędem AADSTS50105.
     ![Formularz nowego konta Microsoft 365: rozwinięta instrukcja przygotowania w Microsoft 365 i Entra ID, nazwa, identyfikatory katalogu i aplikacji oraz adres przekierowania z przyciskiem Kopiuj](obrazki/m365-formularz.png)
 
 4. Kliknij **Zapisz i zaloguj w Microsoft**. Przeglądarka otworzy stronę logowania Microsoft.
-5. Wybierz konto techniczne, a nie własne konto administratora. Jeżeli konta nie ma na liście,
-   kliknij **Użyj innego konta**.
-6. Podaj hasło konta technicznego i w razie potrzeby potwierdź logowanie drugim składnikiem.
+5. Wybierz adres skrzynki bramki, a nie własne konto administratora. Jeżeli adresu nie ma na
+   liście, kliknij **Użyj innego konta**.
+6. Podaj hasło skrzynki bramki i w razie potrzeby potwierdź logowanie drugim składnikiem.
 
 Oczekiwany wynik: przeglądarka wraca do szczegółów konta w panelu z komunikatem „Połączono jako
-alarmy@firma.pl”. Konto otrzymuje stan „Połączone”, a pole **Adres skrzynki** zawiera adres konta
-technicznego. Microsoft nie wyświetla ekranu zgody, ponieważ zgody udzielił administrator.
+alarmy@firma.pl”. Konto otrzymuje stan „Połączone”, a pole **Adres skrzynki** zawiera adres skrzynki
+bramki. Microsoft nie wyświetla ekranu zgody, ponieważ zgody udzielił administrator.
 
 ![Szczegóły konta Microsoft 365: stan Połączone, adres skrzynki, czas logowania i ostatniego odświeżenia, odbiorcy konta oraz przyciski Zaloguj ponownie, Rozłącz i Usuń](obrazki/m365-konto.png)
 
@@ -761,20 +765,20 @@ Jeżeli wynik jest inny:
   przekierowania, pod którym otwarto panel. Sposób naprawy opisuje punkt
   [Microsoft odrzuca adres przekierowania](problemy.md#m365-adres-przekierowania)
 - **Microsoft wyświetla błąd AADSTS50105.** Wybrane konto nie jest przypisane do aplikacji.
-  Zaloguj się kontem technicznym albo przypisz je według punktu
-  [Przypisanie konta technicznego](#przypisanie-konta-technicznego)
+  Zaloguj się adresem skrzynki bramki albo przypisz ją według punktu
+  [Przypisanie skrzynki bramki](#przypisanie-skrzynki-bramki)
 - **Microsoft wyświetla błąd AADSTS700016.** Identyfikator aplikacji nie odpowiada żadnej
   rejestracji w podanym katalogu. Popraw identyfikatory przyciskiem **Edytuj** w szczegółach konta
 - **Microsoft wyświetla błąd AADSTS65001 albo prosi o zgodę na uprawnienia.** Zgoda
   administratora nie obejmuje wszystkich uprawnień. Powtórz krok 7 rejestracji
-- **Microsoft wyświetla błąd AADSTS53003.** Zasady dostępu warunkowego blokują logowanie konta
-  technicznego. Sposób naprawy opisuje punkt
+- **Microsoft wyświetla błąd AADSTS53003.** Zasady dostępu warunkowego blokują logowanie skrzynki
+  bramki. Sposób naprawy opisuje punkt
   [Dostęp warunkowy blokuje konto](problemy.md#m365-dostep-warunkowy)
 - **Panel wyświetla komunikat „Logowanie wygasło albo zostało już zakończone”.** Od rozpoczęcia
   logowania minęło ponad 10 minut albo w tym czasie bramka została uruchomiona ponownie. Kliknij
   **Zaloguj w Microsoft** albo **Zaloguj ponownie** w szczegółach konta
 - **Panel wyświetla komunikat o innym katalogu.** Logowanie odbyło się kontem z innej
-  organizacji. Zaloguj się kontem technicznym z katalogu podanego w ustawieniach konta
+  organizacji. Zaloguj się adresem skrzynki bramki z katalogu podanego w ustawieniach konta
 
 #### Stany konta
 
@@ -798,7 +802,7 @@ konta, a panel informuje o tej zmianie.
 
 #### Ponowne logowanie i odcięcie dostępu
 
-Microsoft unieważnia logowanie bramki po zmianie albo resecie hasła konta technicznego, po
+Microsoft unieważnia logowanie bramki po zmianie albo resecie hasła skrzynki bramki, po
 odwołaniu sesji w Entra ID i po cofnięciu zgody. Logowanie nieużywane przez 90 dni również
 wygasa, dlatego bramka co tydzień odświeża logowanie konta, z którego w tym czasie nie
 korzystała. Po unieważnieniu logowania konto przechodzi w stan „Wymaga logowania”. Przegląd
@@ -826,7 +830,7 @@ Po zalogowaniu Microsoft przekazuje bramce dwa tokeny, czyli cyfrowe przepustki 
 Token dostępu otwiera skrzynkę i serwer SMTP przez około godzinę. Token odświeżania pozwala bramce
 pobierać kolejne tokeny dostępu bez udziału administratora.
 
-Bramka nie przechowuje hasła konta technicznego. W bazie zapisuje wyłącznie token odświeżania
+Bramka nie przechowuje hasła skrzynki bramki. W bazie zapisuje wyłącznie token odświeżania
 zaszyfrowany kluczem głównym, a token dostępu pozostaje w pamięci procesu. Żaden token nie trafia
 do dziennika ani do powiadomień. Kopia bazy zawiera token w postaci zaszyfrowanej, dlatego konto
 działa po przywróceniu kopii tylko z tym samym kluczem głównym.

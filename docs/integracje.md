@@ -487,7 +487,7 @@ przyszła wiadomość.
 
 Przycisk **Dodaj integrację**, kierunek „Z poczty”, następnie kafelek z nazwą dostawcy. Kafelek
 uzupełnia serwer, port i zabezpieczenie, a obok formularza wyświetla instrukcję, gdzie uzyskać
-hasło. Przy Microsoft 365 instrukcja opisuje przygotowanie konta technicznego.
+hasło. Przy Microsoft 365 instrukcja opisuje przygotowanie skrzynki bramki.
 
 ![Wybór dostawcy poczty: kafelki Microsoft 365, Gmail, home.pl, OVH i Własny serwer](obrazki/poczta-katalog.png)
 
@@ -500,8 +500,8 @@ hasło. Przy Microsoft 365 instrukcja opisuje przygotowanie konta technicznego.
 | Własny serwer | do wpisania | hasło skrzynki według dostawcy albo administratora serwera |
 
 Kafelek **Microsoft 365** obsługuje skrzynki w Exchange Online. Microsoft nie przyjmuje do IMAP
-hasła skrzynki ani hasła aplikacji, dlatego bramka loguje się kontem technicznym połączonym na
-ekranie **Konta Microsoft 365**. Przygotowanie tego konta w Microsoft 365 i Entra ID opisuje
+hasła skrzynki ani hasła aplikacji, dlatego bramka loguje się kontem Microsoft 365 połączonym
+na ekranie **Konta Microsoft 365**. Przygotowanie skrzynki bramki w Microsoft 365 i Entra ID opisuje
 rozdział 4.8 [Uruchomienia](uruchomienie.md#48-konto-microsoft-365). Skrzynki prywatne
 Outlook.com nie są obsługiwane.
 
@@ -532,9 +532,9 @@ jeszcze konta, formularz wyświetla zamiast listy przycisk **Dodaj konto Microso
 
 ![Formularz Mail2SMS z kafelka Microsoft 365: konto Microsoft 365 ze stanem, adres skrzynki, folder, częstotliwość i limit wieku wiadomości](obrazki/poczta-m365.png)
 
-Adres inny niż adres konta oznacza skrzynkę współdzieloną. Konto techniczne musi posiadać do
+Adres inny niż adres konta oznacza skrzynkę współdzieloną. Skrzynka bramki musi posiadać do
 niej uprawnienie pełnego dostępu, które nadaje administrator w centrum administracyjnym Exchange.
-Dzięki temu jedno konto techniczne obsługuje kilka skrzynek, na przykład `alarmy@firma.pl`
+Dzięki temu jedna skrzynka bramki obsługuje kilka skrzynek, na przykład `alarmy@firma.pl`
 i `serwis@firma.pl`. Każda skrzynka wymaga osobnej integracji. Zmiana adresu skrzynki w edycji
 działa jak zmiana folderu. Zmiana samego konta przy tym samym adresie skrzynki nie zmienia miejsca,
 od którego bramka odczytuje wiadomości, dlatego bramka sprawdza także maile z czasu przerwy.
@@ -2068,16 +2068,15 @@ do SMTP.
 
 ![Ekran Powiadomienia, zakładka Konfiguracja w wariancie Microsoft 365: sposób logowania, konto Microsoft 365, nadawca i odbiorcy](obrazki/powiadomienia-m365.png)
 
-W wariancie Microsoft 365 puste pole adresu nadawcy oznacza adres skrzynki konta. Inny adres
-wymaga, aby konto posiadało do niego uprawnienie „Wyślij jako”. Odbiorca z tej samej organizacji
-widzi w Outlooku jako nadawcę nazwę wyświetlaną konta technicznego z katalogu, a nie wartość pola
-**Nazwa wyświetlana nadawcy**. Dlatego zalecane jest nadanie kontu opisowej nazwy, na przykład
-„Alarmy SMS”.
-Potwierdzenia zwrotne Mail2SMS korzystają z tych samych ustawień, więc w tym wariancie nadawca
-otrzymuje odpowiedź z konta technicznego.
+W wariancie Microsoft 365 puste pole adresu nadawcy oznacza adres skrzynki bramki. Inny adres
+wymaga, aby skrzynka bramki posiadała do niego uprawnienie „Wyślij jako”. Odbiorca z tej samej
+organizacji widzi w Outlooku jako nadawcę nazwę wyświetlaną skrzynki bramki z katalogu, a nie
+wartość pola **Nazwa wyświetlana nadawcy**. Dlatego zalecane jest nadanie skrzynce bramki opisowej
+nazwy, na przykład „Alarmy SMS”. Potwierdzenia zwrotne Mail2SMS korzystają z tych samych ustawień,
+więc w tym wariancie nadawca otrzymuje odpowiedź ze skrzynki bramki.
 
-Przy wysyłce przez Microsoft 365 zalecane jest włączenie podpisu DKIM dla domeny konta
-technicznego. Bez podpisu maile przekazywane dalej, na przykład do prywatnej skrzynki
+Przy wysyłce przez Microsoft 365 zalecane jest włączenie podpisu DKIM dla domeny skrzynki
+bramki. Bez podpisu maile przekazywane dalej, na przykład do prywatnej skrzynki
 administratora, mogą trafiać do spamu albo docierać z opóźnieniem. Administrator, który
 przekazuje pocztę do innej skrzynki, powinien też dopisać adres nadawcy bramki do listy
 bezpiecznych nadawców.
@@ -2091,7 +2090,7 @@ Znane odmowy serwera Microsoft 365 panel uzupełnia podpowiedzią:
 
 | Odpowiedź serwera | Znaczenie | Rozwiązanie |
 |---|---|---|
-| `535 5.7.139` | opcja „SMTP z uwierzytelnianiem” wyłączona dla konta albo organizacji | zaznaczyć opcję na karcie Poczta konta technicznego i odczekać około 30 minut |
+| `535 5.7.139` | opcja „SMTP z uwierzytelnianiem” wyłączona dla konta albo organizacji | zaznaczyć opcję na karcie Poczta skrzynki bramki i odczekać około 30 minut |
 | `554 5.2.252`, `SendAsDenied` | konto nie posiada uprawnienia „Wyślij jako” dla adresu nadawcy | wpisać adres skrzynki konta albo poprosić administratora Microsoft 365 o uprawnienie |
 | `535 5.7.3` | serwer odrzucił token konta | zalogować konto ponownie na ekranie Konta Microsoft 365 |
 

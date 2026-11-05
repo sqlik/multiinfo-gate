@@ -17,7 +17,7 @@ albo zespołu handlowego. Od wersji 1.8.7 bramka sama zapisuje kopię bazy przed
 nie może rozpocząć pracy, pokazuje w panelu przyczynę i sposób naprawy. Od wersji 1.9 bramka
 wprowadza konektor do Microsoft Power Automate, który umożliwia wysyłkę SMS-ów z przepływów: do
 jednego numeru, w formie rozsyłki albo do listy odbiorców prowadzonej w bramce. Od wersji 1.10
-Mail2SMS odczytuje także skrzynki Microsoft 365 przez konto techniczne organizacji, a bramka
+Mail2SMS odczytuje także skrzynki Microsoft 365 przez skrzynkę przeznaczoną dla bramki, a bramka
 powiadamia administratora również SMS-em.
 
 ![Przegląd: liczniki wiadomości wychodzących i odebranych z ostatniej doby, stan połączeń z Multiinfo i ostatnie niepowodzenia](obrazki/przeglad.png)

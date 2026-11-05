@@ -377,7 +377,7 @@ z przeglądu.
 ## Microsoft 365 {#microsoft-365}
 
 Punkty poniżej dotyczą konta Microsoft 365, skrzynek Mail2SMS w Microsoft 365 i wysyłki maili
-przez konto techniczne. Przygotowanie konta opisuje punkt 4.8
+przez skrzynkę bramki. Przygotowanie skrzynki bramki opisuje punkt 4.8
 [Uruchomienia](uruchomienie.md#48-konto-microsoft-365). Kody błędów AADSTS pochodzą od
 Microsoftu. Panel podaje je w szczegółach konta, a Microsoft wyświetla je na stronie logowania.
 
@@ -389,8 +389,8 @@ z konta nie są sprawdzane.
 
 ![Przegląd panelu z paskiem o koncie Microsoft 365 wymagającym ponownego logowania i przyciskiem Zaloguj ponownie](obrazki/przeglad-m365.png)
 
-Microsoft unieważnił logowanie bramki. Najczęstszymi przyczynami są zmiana albo reset hasła konta
-technicznego oraz odwołanie sesji w Entra ID. Kod błędu w szczegółach konta wskazuje przyczynę:
+Microsoft unieważnił logowanie bramki. Najczęstszymi przyczynami są zmiana albo reset hasła skrzynki
+bramki oraz odwołanie sesji w Entra ID. Kod błędu w szczegółach konta wskazuje przyczynę:
 
 | Kod | Przyczyna | Rozwiązanie |
 |---|---|---|
@@ -402,7 +402,7 @@ technicznego oraz odwołanie sesji w Entra ID. Kod błędu w szczegółach konta
 | AADSTS7000112 | aplikacja wyłączona w Entra ID | włączyć aplikację we właściwościach w sekcji Aplikacje dla przedsiębiorstw |
 
 Ponowne logowanie rozpoczyna przycisk **Zaloguj ponownie** na pasku przeglądu albo
-w szczegółach konta. Zaloguj się kontem technicznym, a nie własnym kontem administratora.
+w szczegółach konta. Zaloguj się adresem skrzynki bramki, a nie własnym kontem administratora.
 
 Oczekiwany wynik: stan konta zmienia się na „Połączone”, pasek znika z przeglądu, a skrzynki
 wznawiają pracę przy najbliższym sprawdzeniu.
@@ -439,11 +439,11 @@ adresem, na przykład przez tunel z rozdziału 4.1 Uruchomienia.
 
 ### Microsoft prosi o zgodę na uprawnienia {#m365-zgoda}
 
-Objaw: strona logowania Microsoft prosi konto techniczne o zgodę na uprawnienia albo wyświetla
+Objaw: przy logowaniu skrzynki bramki strona Microsoft prosi o zgodę na uprawnienia albo wyświetla
 błąd AADSTS65001. Ten sam kod może też pojawić się w szczegółach konta po zerwaniu logowania.
 
-Zgoda administratora nie obejmuje wszystkich uprawnień aplikacji albo została cofnięta. Konto
-techniczne bez roli administracyjnej nie udziela zgody samodzielnie, a zasady organizacji zwykle
+Zgoda administratora nie obejmuje wszystkich uprawnień aplikacji albo została cofnięta. Użytkownik
+skrzynki bramki bez roli administracyjnej nie udziela zgody samodzielnie, a zasady organizacji zwykle
 na to nie pozwalają.
 
 Rozwiązanie: w centrum administracyjnym Microsoft Entra otwórz rejestrację aplikacji i przejdź do
@@ -458,12 +458,12 @@ przebiega bez ekranu zgody.
 
 Objaw: logowanie kończy się błędem AADSTS53003 na stronie Microsoft albo w szczegółach konta.
 
-Zasady dostępu warunkowego w Entra ID blokują logowanie konta technicznego. Takie zasady
+Zasady dostępu warunkowego w Entra ID blokują logowanie skrzynki bramki. Takie zasady
 ograniczają na przykład logowanie do urządzeń zarządzanych przez firmę albo do wybranych
 lokalizacji. Bramka odnawia logowanie z adresu IP serwera, na którym działa. Dlatego zasada
 lokalizacji może ją zablokować także wtedy, gdy logowanie w przeglądarce się powiodło.
 
-Rozwiązanie: poproś administratora Microsoft 365 o wyłączenie konta technicznego z zasady, która
+Rozwiązanie: poproś administratora Microsoft 365 o wyłączenie skrzynki bramki z zasady, która
 blokuje logowanie, albo o dopuszczenie adresu IP serwera bramki. Nazwę zasady przedstawia
 dziennik logowania konta w centrum administracyjnym Microsoft Entra. Po zmianie zasady kliknij
 w panelu **Zaloguj ponownie**.
@@ -477,10 +477,10 @@ Konto działa, ale Exchange odmawia dostępu do skrzynki. Odpowiedź serwera wsk
 
 | Odpowiedź serwera | Przyczyna | Rozwiązanie |
 |---|---|---|
-| `User is authenticated but not connected.` | IMAP wyłączony na koncie technicznym | zaznaczyć IMAP na karcie Poczta konta i odczekać około 30 minut |
+| `User is authenticated but not connected.` | IMAP wyłączony w skrzynce bramki | zaznaczyć IMAP na karcie Poczta skrzynki bramki i odczekać około 30 minut |
 | `Login failed.` | skrzynka o podanym adresie nie istnieje, na przykład z powodu literówki | poprawić pole Adres skrzynki w integracji |
 
-Przy skrzynce współdzielonej sprawdź także, czy konto techniczne posiada do niej uprawnienie
+Przy skrzynce współdzielonej sprawdź także, czy skrzynka bramki posiada do niej uprawnienie
 pełnego dostępu. Po usunięciu przyczyny kliknij **Sprawdź teraz** w szczegółach integracji.
 
 Oczekiwany wynik: stan skrzynki przedstawia czas ostatniego sprawdzenia bez błędu.
@@ -491,8 +491,8 @@ Objaw: przycisk **Wyślij mail testowy** w wariancie Microsoft 365 kończy się 
 `535 5.7.139 Authentication unsuccessful, SmtpClientAuthentication is disabled for the Mailbox`
 z podpowiedzią panelu.
 
-Opcja „SMTP z uwierzytelnianiem” jest wyłączona dla konta technicznego. Rozwiązanie:
-w centrum administracyjnym Microsoft 365 otwórz konto, przejdź na kartę **Poczta**, kliknij
+Opcja „SMTP z uwierzytelnianiem” jest wyłączona w skrzynce bramki. Rozwiązanie:
+w centrum administracyjnym Microsoft 365 otwórz użytkownika skrzynki bramki, przejdź na kartę **Poczta**, kliknij
 **Zarządzaj aplikacjami poczty e-mail** i zaznacz **SMTP z uwierzytelnianiem**. Zmiana zaczyna
 obowiązywać po około 30 minutach, dlatego mail testowy wyślij ponownie po tym czasie.
 
@@ -512,8 +512,8 @@ wewnętrzna nie zawiera. Taka sytuacja występuje na przykład przy skrzynce
 `alarmy@firma.onmicrosoft.com` i pracownikach z adresami `@firma.pl`.
 
 Rozwiązanie: sprawdź w dzienniku adres nadawcy i porównaj jego domenę z adresem skrzynki. Gdy
-domeny się różnią, utwórz konto techniczne z adresem w domenie pracowników i wskaż je
-w integracji. Gdy pracownicy korzystają z kilku domen, wiadomości z pozostałych domen wymagają
+domeny się różnią, utwórz skrzynkę bramki z adresem w domenie pracowników, połącz ją na ekranie
+**Konta Microsoft 365** i wskaż w integracji. Gdy pracownicy korzystają z kilku domen, wiadomości z pozostałych domen wymagają
 wyłączenia przełącznika **Wymagaj potwierdzenia nadawcy przez serwer (SPF/DKIM)**. Lista
 nadawców nadal ogranicza wtedy dozwolone adresy, ale osoba znająca adres z listy może go
 podrobić.
@@ -529,7 +529,7 @@ administratora. Przekazanie łamie sprawdzenie SPF, a bez podpisu DKIM serwer do
 potwierdzić nadawcy. Bramka przekazała mail do Microsoft 365 poprawnie, dlatego jej ustawienia
 nie wymagają zmian.
 
-Rozwiązanie: włącz w Microsoft 365 podpis DKIM dla domeny konta technicznego. Odbiorca, który
+Rozwiązanie: włącz w Microsoft 365 podpis DKIM dla domeny skrzynki bramki. Odbiorca, który
 przekazuje pocztę dalej, powinien dopisać adres nadawcy bramki do listy bezpiecznych nadawców
 w skrzynce docelowej.
 

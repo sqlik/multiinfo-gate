@@ -82,7 +82,7 @@ function sectionM365Mailbox(v: MailFormValues, opts: MailFormOptions): string {
   const account = accounts.length === 0
     ? `<div class="field">
       <label>Konto Microsoft 365</label>
-      <div class="notice">Panel nie zawiera jeszcze konta Microsoft 365. Skrzynka wymaga konta technicznego dodanego i zalogowanego na ekranie Konta Microsoft 365.</div>
+      <div class="notice">Panel nie zawiera jeszcze konta Microsoft 365. Dodaj konto na ekranie Konta Microsoft 365 i zaloguj je adresem skrzynki bramki.</div>
       <div><a class="btn btn-s" href="/microsoft-365/nowe">Dodaj konto Microsoft 365</a></div>
     </div>`
     : `<div class="field">
@@ -318,7 +318,7 @@ function connectionPanel(c: MailConnection, advanced: boolean, m365: boolean): s
     </div>`;
   }
   const titles = { auth: m365
-    ? ['Logowanie odrzucone', 'Sprawdź pisownię adresu skrzynki oraz ustawienie IMAP na karcie Poczta konta technicznego. Dla skrzynki współdzielonej sprawdź także, czy konto posiada do niej uprawnienie pełnego dostępu. Zmiana ustawienia IMAP zaczyna obowiązywać po około 30 minutach']
+    ? ['Logowanie odrzucone', 'Sprawdź pisownię adresu skrzynki oraz ustawienie IMAP na karcie Poczta skrzynki bramki. Dla skrzynki współdzielonej sprawdź także, czy skrzynka bramki posiada do niej uprawnienie pełnego dostępu. Zmiana ustawienia IMAP zaczyna obowiązywać po około 30 minutach']
     : ['Logowanie odrzucone', 'Sprawdź login i hasło. W Gmailu wymagane jest hasło aplikacji, nie hasło do konta. W Google Workspace dostęp IMAP musi być włączony przez administratora'],
     account: ['Konto Microsoft 365 wymaga logowania', 'Zaloguj konto na ekranie Konta Microsoft 365, a następnie ponownie sprawdź połączenie'],
     network: ['Serwer nie odpowiada', 'Sprawdź nazwę serwera, port i zabezpieczenie oraz czy z maszyny bramki można nawiązać połączenie z serwerem poczty'],

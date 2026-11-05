@@ -85,7 +85,7 @@ function m365AccountField(v: SmtpFormValues, accounts: NonNullable<Notifications
   if (accounts.length === 0) {
     return `<div class="field">
             <label>Konto Microsoft 365</label>
-            <div class="notice">Panel nie zawiera jeszcze konta Microsoft 365. Wysyłka wymaga konta technicznego dodanego i zalogowanego na ekranie Konta Microsoft 365.</div>
+            <div class="notice">Panel nie zawiera jeszcze konta Microsoft 365. Dodaj konto na ekranie Konta Microsoft 365 i zaloguj je adresem skrzynki bramki.</div>
             <div><a class="btn btn-s" href="/microsoft-365/nowe">Dodaj konto Microsoft 365</a></div>
           </div>`;
   }
@@ -254,7 +254,7 @@ ${d.tab === 'sms' ? `      ${smsPanel(d)}` : d.tab === 'konfiguracja' ? `      <
           <div class="field">
             <label>Sposób logowania</label>
             <div class="choices">${radio('authMode', 'password', v.authMode, 'Hasło')}${radio('authMode', 'm365', v.authMode, 'Microsoft 365')}</div>
-            <div class="hint">Wariant Microsoft 365 wysyła powiadomienia przez konto techniczne organizacji, bez hasła zapisanego w bramce</div>
+            <div class="hint">Wariant Microsoft 365 wysyła powiadomienia przez skrzynkę bramki w Microsoft 365, bez hasła zapisanego w bramce</div>
           </div>
           <div data-show="authMode=m365">
           ${m365AccountField(v, d.m365Accounts ?? [])}

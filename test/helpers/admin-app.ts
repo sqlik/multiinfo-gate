@@ -192,7 +192,7 @@ export async function startAdminHarness(
   };
 }
 
-/** Identyfikator `oid` konta technicznego w odpowiedzi atrapy punktu tokenów. */
+/** Identyfikator `oid` skrzynki bramki w odpowiedzi atrapy punktu tokenów. */
 export const M365_OID = 'aaaaaaaa-0000-1111-2222-333344445555';
 
 /** Odpowiedź punktu tokenów Microsoftu z `id_token` zawierającym podane roszczenia. */

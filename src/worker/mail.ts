@@ -56,7 +56,7 @@ export const nodemailerMailer: Mailer = async (s, mail) => {
 
 /** Podpowiedzi do odpowiedzi serwera SMTP Microsoftu (spec 7.3), sprawdzane w tej kolejności. */
 const SMTP_HINTS: Array<[RegExp, string]> = [
-  [/\b5\.7\.139\b/, 'Microsoft odrzucił logowanie, ponieważ opcja „SMTP z uwierzytelnianiem” jest wyłączona dla konta albo dla całej organizacji. Opcję włącza administrator Microsoft 365 na karcie Poczta konta technicznego'],
+  [/\b5\.7\.139\b/, 'Microsoft odrzucił logowanie, ponieważ opcja „SMTP z uwierzytelnianiem” jest wyłączona dla konta albo dla całej organizacji. Opcję włącza administrator Microsoft 365 na karcie Poczta skrzynki bramki'],
   [/\b5\.2\.252\b|SendAsDenied/i, 'Konto nie posiada uprawnienia „Wyślij jako” dla adresu nadawcy. Należy wpisać jako adres nadawcy adres skrzynki konta albo poprosić administratora Microsoft 365 o nadanie uprawnienia'],
   [/\b5\.7\.3\b/, 'Microsoft odrzucił token konta. Należy zalogować konto przyciskiem „Zaloguj ponownie” na ekranie Konta Microsoft 365'],
 ];

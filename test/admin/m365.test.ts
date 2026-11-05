@@ -202,7 +202,12 @@ describe('lista, formularz i szczegóły', () => {
     expect(body).toContain('Wyraź zgodę administratora dla katalogu');
     expect(body).not.toContain('Udziel zgody administratora');
     expect(body).toContain('„Wymagane jest przypisanie?” na „Tak”');
-    expect(body).toContain('w sekcji Użytkownicy i grupy przypisz wyłącznie konto techniczne');
+    expect(body).toContain('w sekcji Użytkownicy i grupy przypisz wyłącznie skrzynkę bramki');
+    expect(body).toContain('załóż skrzynkę bramki jako zwykłego użytkownika z licencją Exchange Online');
+    expect(body).toContain('Bramka łączy się ze skrzynką przez logowanie w przeglądarce, bez hasła zapisanego w bramce');
+    // Uwaga Tomka 2026-11-05: „konto techniczne” sugeruje osobny rodzaj konta, a jest to zwykła skrzynka użytkownika.
+    expect(body).not.toMatch(/techniczn/i);
+    expect((await page('/microsoft-365')).body).not.toMatch(/techniczn/i);
   });
 
   it('zapis bez logowania prowadzi na szczegóły, a błędne dane wracają do formularza z komunikatem', async () => {
