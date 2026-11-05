@@ -118,7 +118,7 @@ function makeProbeStub(): ProbeStub {
  */
 export async function startAdminHarness(
   now = new Date('2026-08-25T10:00:00Z'),
-  opts: { totp?: boolean; allowPrivateWebhooks?: boolean; allowPrivateMail?: boolean; log?: Logger; install?: InstallKind | null; nodeVersion?: string; trustedProxies?: string[];
+  opts: { totp?: boolean; allowPrivateWebhooks?: boolean; allowPrivateMail?: boolean; allowPrivateLinks?: boolean; log?: Logger; install?: InstallKind | null; nodeVersion?: string; trustedProxies?: string[];
     linksServer?: Pick<LinksServerState, 'problem'> } = {},
 ): Promise<AdminHarness> {
   const masterKey = randomBytes(32);
@@ -193,6 +193,7 @@ export async function startAdminHarness(
     resolve: (hostname) => resolve.value(hostname),
     ...(opts.allowPrivateWebhooks ? { allowPrivateWebhooks: true } : {}),
     ...(opts.allowPrivateMail ? { allowPrivateMail: true } : {}),
+    ...(opts.allowPrivateLinks ? { allowPrivateLinks: true } : {}),
     ...(opts.log ? { log: opts.log } : {}),
     ...(opts.install !== undefined ? { install: opts.install } : {}),
     ...(opts.nodeVersion !== undefined ? { nodeVersion: opts.nodeVersion } : {}),

@@ -28,6 +28,7 @@ export function registerLinkRoutes(app: FastifyInstance, deps: AdminDeps, render
     linkDomains: deps.linkDomains, shortLinks: deps.shortLinks, audit: deps.audit, checks: deps.domainChecks,
     ...(deps.resolve ? { resolve: deps.resolve } : {}),
     ...(deps.domainFetch ? { fetch: deps.domainFetch } : {}),
+    ...(deps.allowPrivateLinks ? { allowPrivate: true } : {}),
   });
 
   const userOf = (request: FastifyRequest): PanelUser => {

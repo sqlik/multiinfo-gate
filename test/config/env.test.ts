@@ -44,6 +44,13 @@ describe('loadEnv - sprawdzanie wydań', () => {
   });
 });
 
+describe('loadEnv - sprawdzenie domeny skracacza w sieci wewnętrznej', () => {
+  it('MIG_LINKS_ALLOW_PRIVATE domyślnie wyłączone, 1 włącza', () => {
+    expect(loadEnv(base, {}).linksAllowPrivate).toBe(false);
+    expect(loadEnv({ ...base, MIG_LINKS_ALLOW_PRIVATE: '1' }, {}).linksAllowPrivate).toBe(true);
+  });
+});
+
 describe('loadEnv - serwer IMAP w sieci wewnętrznej', () => {
   it('MIG_MAIL_ALLOW_PRIVATE domyślnie wyłączone, 1 włącza', () => {
     expect(loadEnv(base, {}).mailAllowPrivate).toBe(false);

@@ -124,6 +124,8 @@ export interface AdminDeps {
   allowPrivateWebhooks?: boolean;
   /** MIG_MAIL_ALLOW_PRIVATE: zgoda na serwer IMAP w sieci wewnętrznej. */
   allowPrivateMail?: boolean;
+  /** MIG_LINKS_ALLOW_PRIVATE: zgoda na sprawdzenie domeny skracacza z adresem w sieci wewnętrznej. */
+  allowPrivateLinks?: boolean;
   /** Dziennik błędów panelu (`panel.wyjatek`); bez niego wpisy przepadają. */
   log?: Logger;
   /** Wariant instalacji do poleceń na stronach pomocy; brak = oba warianty. */

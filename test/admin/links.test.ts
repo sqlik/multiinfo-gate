@@ -197,7 +197,19 @@ describe('Skracacz linków: sprawdzenie domeny', () => {
     const detail = await page(`/skracacz/${id}`);
     expect(detail.body).toContain('adres w sieci wewnętrznej 192.168.1.20');
     expect(detail.body).toContain('Krok sprawdzenia: rozwiązanie nazwy');
+    expect(detail.body).toContain('albo ustaw zmienną MIG_LINKS_ALLOW_PRIVATE=1 w środowisku bramki');
     plainText(detail.body);
+  });
+
+  it('MIG_LINKS_ALLOW_PRIVATE=1: sprawdzenie łączy się z adresem w sieci wewnętrznej', async () => {
+    h = await startAdminHarness(NOW, { allowPrivateLinks: true });
+    const id = await created();
+    h.resolve.value = async () => ['192.168.1.20'];
+    redirectServer();
+    await post(`/skracacz/${id}/sprawdz`);
+    const detail = await page(`/skracacz/${id}`);
+    expect(detail.body).toContain('Domena odpowiada');
+    expect(detail.body).not.toContain('adres w sieci wewnętrznej');
   });
 
   it.each([

@@ -13,7 +13,7 @@ type Net = { resolve: NonNullable<DomainServiceDeps['resolve']>; fetch: NonNulla
 /** Błąd `fetch` z Node: `TypeError: fetch failed` z przyczyną z kodem gniazda albo TLS. */
 const fetchFailed = (code: string) => Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error(code), { code }) });
 
-function setup() {
+function setup(opts: { allowPrivate?: boolean } = {}) {
   const f = redirectFixture();
   const audit = new AuditRepo(f.db);
   const checks = new DomainChecks();
@@ -34,6 +34,7 @@ function setup() {
   const service = new LinkDomainService({
     linkDomains: f.linkDomains, shortLinks: f.shortLinks, audit, checks,
     resolve: (host) => net.resolve(host), fetch: ((input, init) => net.fetch(input, init)) as typeof fetch,
+    ...(opts.allowPrivate ? { allowPrivate: true } : {}),
   });
   const entries = () => f.db.prepare('SELECT actor, action, target, meta FROM audit_log ORDER BY id').all() as
     Array<{ actor: string; action: string; target: string; meta: string | null }>;
@@ -196,6 +197,14 @@ describe('LinkDomainService: sprawdzenie domeny', () => {
     s.net.resolve = async () => ['fd00::5'];
     expect(await s.service.check(s.domainId, ADMIN, NOW)).toEqual({ ok: false, step: 'dns', detail: 'private fd00::5' });
     expect(s.calls).toHaveLength(0);
+  });
+
+  it('MIG_LINKS_ALLOW_PRIVATE=1: domena z adresem w sieci wewnętrznej przechodzi pełne sprawdzenie', async () => {
+    const s = setup({ allowPrivate: true });
+    s.net.resolve = async () => ['192.168.1.20'];
+    expect(await s.service.check(s.domainId, ADMIN, NOW)).toEqual({ ok: true });
+    expect(s.calls).toHaveLength(1);
+    expect(s.calls[0]!.url).toMatch(/^https:\/\/l\.firma\.pl\/\.well-known\/multiinfo-gate\//);
   });
 
   it('nazwa bez adresów to krok dns', async () => {

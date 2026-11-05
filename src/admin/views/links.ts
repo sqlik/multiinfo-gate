@@ -100,7 +100,8 @@ export function checkMessage(domain: string, step: DomainCheckStep, detail: stri
         return `Domena ${domain} wskazuje z serwera bramki adres w sieci wewnętrznej ${detail.slice(8)}. Bramka nie łączy się `
           + 'przy sprawdzeniu z adresami wewnętrznymi, tak samo jak przy webhookach. Odbiorcy otwierają linki z internetu, dlatego '
           + 'publiczny rekord DNS domeny powinien wskazywać publiczny adres serwera. Gdy serwer bramki korzysta z wewnętrznego '
-          + 'serwera DNS, sprawdź krótki link z telefonu w sieci komórkowej.';
+          + 'serwera DNS, sprawdź krótki link z telefonu w sieci komórkowej albo ustaw zmienną MIG_LINKS_ALLOW_PRIVATE=1 '
+          + 'w środowisku bramki.';
       }
       return `Nie można ustalić adresu domeny ${domain}. Sprawdź u dostawcy DNS rekord A albo CNAME tej domeny.`;
     case 'connect':

@@ -20,6 +20,8 @@ export interface DomainServiceDeps {
   /** Rozwiązywanie nazw wspólne z webhookami; testy podstawiają atrapę. */
   resolve?: Resolver;
   fetch?: typeof fetch;
+  /** MIG_LINKS_ALLOW_PRIVATE: zgoda na sprawdzenie domeny, która wskazuje adres w sieci wewnętrznej. */
+  allowPrivate?: boolean;
 }
 
 /** Błąd z tekstem do pokazania w panelu. */
@@ -197,7 +199,7 @@ export class LinkDomainService {
     // Jak przy webhookach i IMAP: bramka nie łączy się z adresami w sieci wewnętrznej, dlatego sprawdzenie
     // nie może służyć do badania serwerów wewnętrznych. Odbiorcy otwierają linki z internetu.
     const inside = addresses.find(isPrivateAddress);
-    if (inside !== undefined) return { ok: false, step: 'dns', detail: `private ${inside}` };
+    if (inside !== undefined && this.deps.allowPrivate !== true) return { ok: false, step: 'dns', detail: `private ${inside}` };
     try {
       const response = await this.fetch(`https://${domain}/.well-known/multiinfo-gate/${token}`, {
         redirect: 'manual', signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
