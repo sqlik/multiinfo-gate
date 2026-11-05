@@ -356,8 +356,9 @@ informuje, że bramka nie ponawia rozsyłki. Dziennik zawiera wpis `rozsylka.nie
 Bramka przekazała rozsyłkę do Multiinfo, ale nie otrzymała potwierdzenia jej utworzenia. Najczęściej
 Multiinfo nie odpowiedziało w wyznaczonym czasie albo bramka zatrzymała się w trakcie oczekiwania.
 Limit czasu rośnie z liczbą odbiorców i dla 5000 odbiorców wynosi 3 minuty. Multiinfo mogło mimo to
-utworzyć rozsyłkę, a jego API nie pozwala tego sprawdzić ani anulować rozsyłki. Dlatego bramka nie
-ponawia jej samoczynnie, ponieważ odbiorcy mogliby otrzymać SMS-y dwukrotnie.
+utworzyć rozsyłkę. API Multiinfo nie pozwala sprawdzić, czy rozsyłka powstała, a utworzonej rozsyłki
+nie można anulować. Dlatego bramka nie ponawia jej samoczynnie, ponieważ odbiorcy mogliby otrzymać
+SMS-y dwukrotnie.
 
 Przed ponownym zleceniem rozsyłki ustal, czy SMS-y dotarły do odbiorców. Pomocny jest numer
 kontrolny umieszczony w każdej rozsyłce, na przykład numer dyżuru IT. Jeżeli termin rozsyłki minął,
