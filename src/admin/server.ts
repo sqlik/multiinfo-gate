@@ -13,7 +13,7 @@ import type { AdminUsersRepo } from '../store/admin-users.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { AuditRepo } from '../store/audit.ts';
 import { registerHealthRoute, type InboundHealth } from '../api/health.ts';
-import { secureContext } from './secure-context.ts';
+import { healthDetailsAllowed, secureContext } from './secure-context.ts';
 import { pendingRelease } from '../releases/check.ts';
 import type { JobsRepo } from '../store/jobs.ts';
 import type { MessageEventsRepo } from '../store/message-events.ts';
@@ -95,6 +95,8 @@ export interface AdminDeps {
   receiver?: { refresh(opts?: { retryAccount?: number }): void };
   /** Stan odbiornika do /healthz; bez niego pole nie występuje. */
   inboundHealth?: () => InboundHealth;
+  /** MIG_TRUSTED_PROXIES: odwrotne proxy, od których /healthz panelu przyjmuje żądanie HTTPS ze szczegółami. */
+  trustedProxies?: string[];
   clients: ClientPool;
   sessions: SessionStore;
   masterKey: Buffer;
@@ -254,13 +256,13 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
     reply.code(404).header('Cache-Control', 'no-store').type('text/html; charset=utf-8').send(notFoundPage());
   });
 
-  // Szczegółowy stan dla monitoringu, bez sesji, ale tylko w kontekście bezpiecznym (pętla zwrotna,
-  // tunel SSH, HTTPS za proxy) - tam, gdzie da się też zalogować. Z sieci bez TLS zostaje sam status,
-  // bo nazwy kont i daty certyfikatów nie są dla każdego, kto widzi port panelu (np. LXC na eth0).
+  // Szczegółowy stan dla monitoringu, bez sesji, ale tylko z pętli zwrotnej albo od zaufanego proxy z HTTPS.
+  // Z sieci zostaje sam status, bo nazwy kont i daty certyfikatów nie są dla każdego, kto widzi port panelu
+  // (np. LXC na eth0), a nagłówki Host i X-Forwarded-Proto ustawia sam klient.
   registerHealthRoute(
     app,
     {
-      accounts: deps.accounts, queueDepth: () => deps.jobs.depth(), now, detailsAllowed: secureContext,
+      accounts: deps.accounts, queueDepth: () => deps.jobs.depth(), now, detailsAllowed: healthDetailsAllowed(deps.trustedProxies ?? []),
       release: () => pendingRelease(deps.settings),
       ...(deps.inboundHealth ? { inbound: deps.inboundHealth } : {}),
       integrations: () => ({

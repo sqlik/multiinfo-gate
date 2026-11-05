@@ -108,7 +108,7 @@ function makeProbeStub(): ProbeStub {
  */
 export async function startAdminHarness(
   now = new Date('2026-08-25T10:00:00Z'),
-  opts: { totp?: boolean; allowPrivateWebhooks?: boolean; allowPrivateMail?: boolean; log?: Logger; install?: InstallKind | null; nodeVersion?: string } = {},
+  opts: { totp?: boolean; allowPrivateWebhooks?: boolean; allowPrivateMail?: boolean; log?: Logger; install?: InstallKind | null; nodeVersion?: string; trustedProxies?: string[] } = {},
 ): Promise<AdminHarness> {
   const masterKey = randomBytes(32);
   const db = openDatabase(':memory:');
@@ -172,7 +172,7 @@ export async function startAdminHarness(
     integrationEvents, guards, mailIn, mailboxConnect: fakeConnect(mailbox), engine: new TemplateEngine(), notifications, settings, notifier,
     m365, m365Accounts, m365Tokens,
     mailer: async (settings, mail) => { mailSettings.push(settings); if (harness.mailError) throw harness.mailError; mails.push(mail); },
-    clients: clients as never, sessions, masterKey, now: () => now,
+    clients: clients as never, sessions, masterKey, now: () => now, trustedProxies: opts.trustedProxies ?? [],
     resolve: (hostname) => resolve.value(hostname),
     ...(opts.allowPrivateWebhooks ? { allowPrivateWebhooks: true } : {}),
     ...(opts.allowPrivateMail ? { allowPrivateMail: true } : {}),

@@ -1213,8 +1213,11 @@ zawiera treści wiadomości, haseł ani pełnych kluczy. Zdarzenia warte uwagi:
 
 Wydania są numerowane według schematu `1.2.3`. Pierwsza liczba zmienia się przy zmianach
 niezgodnych wstecz, druga przy nowych możliwościach, trzecia przy poprawkach. Numer bieżącej
-wersji pokazuje maszt panelu oraz `/healthz` na porcie panelu. Lista wydań z opisem zmian jest
-pod adresem `https://github.com/sqlik/multiinfo-gate/releases`.
+wersji pokazuje maszt panelu. W wierszu poleceń numer podaje pole `version` w odpowiedzi
+`/healthz` na porcie panelu. Panel dołącza to pole wyłącznie do zapytań z adresu pętli zwrotnej,
+czyli wysłanych z wnętrza kontenera bramki, oraz do zapytań HTTPS od odwrotnego proxy wpisanego
+w `MIG_TRUSTED_PROXIES`. Zapytanie z innego adresu otrzymuje sam stan. Listę wydań z opisem zmian
+znajdziesz pod adresem `https://github.com/sqlik/multiinfo-gate/releases`.
 
 O nowym wydaniu bramka informuje sama. Raz na dobę odpytuje serwis GitHub o najnowsze wydanie
 i porównuje je z zainstalowanym. Gdy jest nowsze, na ekranie przeglądu pojawia się pasek
@@ -1253,8 +1256,11 @@ docker compose up -d
 
 Polecenia wykonują kolejno: przejście do katalogu z plikami Compose, pobranie nowych plików
 uruchomieniowych i dokumentacji, pobranie nowego obrazu, uruchomienie. Oczekiwany wynik:
-`curl http://127.0.0.1:8080/healthz` odpowiada `{"status":"ok"}`, a
-`curl http://127.0.0.1:8081/healthz` pokazuje w polu `version` nowy numer.
+`curl http://127.0.0.1:8080/healthz` odpowiada `{"status":"ok"}`, a polecenie
+`docker compose exec multiinfo-gate wget -qO- http://127.0.0.1:8081/healthz` pokazuje w polu
+`version` nowy numer. Polecenie `docker compose exec` odpytuje panel z wnętrza kontenera.
+Zapytanie wysłane z serwera trafia do kontenera przez sieć Dockera, dlatego otrzymuje sam stan
+bez numeru wersji.
 
 Kopię sprawdza polecenie `docker compose exec multiinfo-gate ls /data/backups`. Oczekiwany wynik
 zawiera plik `przed-aktualizacja-<WERSJA>.sqlite` z numerem poprzedniej wersji. Przy aktualizacji
@@ -1288,8 +1294,8 @@ docker compose up -d
 ```
 
 Ostatnie polecenie tworzy kontener z obrazu poprzedniej wersji i uruchamia go na przywróconej
-kopii. Oczekiwany wynik: `curl http://127.0.0.1:8081/healthz` pokazuje w polu `version` poprzedni
-numer.
+kopii. Oczekiwany wynik: `docker compose exec multiinfo-gate wget -qO- http://127.0.0.1:8081/healthz`
+pokazuje w polu `version` poprzedni numer.
 
 Przy budowaniu ze źródeł (`docker-compose.build.yml`) zamiast `docker compose pull` wykonujesz
 `docker compose up -d --build`. Przy powrocie zamiast zmiany `MIG_WERSJA` wykonaj
@@ -1336,7 +1342,7 @@ Zmienne ustawia się w `docker/.env` (klucz główny, domena) albo w sekcji `env
 | `MIG_MAIL_ALLOW_PRIVATE` | `0` | `1` pozwala na serwer IMAP w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów). Zmienna osobna od `MIG_WEBHOOK_ALLOW_PRIVATE`, ponieważ serwer poczty w sieci firmowej to częstszy przypadek niż aplikacja odbierająca webhooki |
 | `MIG_INBOUND_TIMEOUT_MS` | `10000` | Ile milisekund Multiinfo może wstrzymywać odpowiedź na zapytanie o wiadomości przychodzące (1-60000). Przy wartości domyślnej odbiór trwa zwykle poniżej sekundy, najwyżej ok. 10 s, kosztem sześciu pytań na minutę na usługę. Maksimum `60000` (long polling z dokumentacji Multiinfo) zmniejsza liczbę pytań, ale wiadomość, która nadejdzie między dwoma pytaniami, czeka do końca następnego - opóźnienie odbioru sięga wtedy minuty. Mała wartość razem z `MIG_INBOUND_IDLE_MS` daje odpytywanie okresowe |
 | `MIG_INBOUND_IDLE_MS` | `0` | Przerwa po pustej odpowiedzi, zanim bramka wyśle kolejne zapytanie, `0` oznacza zapytanie natychmiastowe |
-| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku), od których API ufa nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Ustawiana w `docker/.env`: `172.16.0.0/12` dla Caddy i Traefika w Dockerze, `127.0.0.1` dla nginx na serwerze (rozdział 6). Potrzebna, gdy integracje mają listę dozwolonych źródeł albo dziennik ma pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)) |
+| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku), od których API ufa nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Ustawiana w `docker/.env`: `172.16.0.0/12` dla Caddy i Traefika w Dockerze, `127.0.0.1` dla nginx na serwerze (rozdział 6). Potrzebna, gdy integracje korzystają z listy dozwolonych źródeł albo dziennik powinien pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)). Proxy z tej listy przekazujące żądanie HTTPS otrzymuje też szczegóły `/healthz` panelu (punkt 7.4) |
 | `MIG_UPDATE_CHECK` | `1` | Raz na dobę sprawdzać w serwisie GitHub, czy jest nowsze wydanie, i pokazywać je na przeglądzie (rozdział 7.4); `0` wyłącza, np. w sieci bez dostępu do internetu |
 | `MIG_WERSJA` | `1` | Tag obrazu do pobrania: `1`, `1.1` albo `1.1.0` (rozdział 7.4) |
 | `MIG_DOMENA` | - | Domena bramki dla wariantu Caddy i Traefik |
@@ -1469,11 +1475,15 @@ informacją, a próbę zalogowania odrzuca. Do panelu prowadzą dwie drogi:
   komputera w sieci, nadal za hasłem i drugim składnikiem
 
 Bez logowania z sieci widać jedynie ekran logowania i `http://<ADRES-KONTENERA>:8081/healthz`
-z samym polem `status`. Szczegóły (wersja, kolejka, konta Multiinfo z dniami do końca
-certyfikatu) panel podaje wyłącznie tam, gdzie możliwe jest logowanie, czyli tunelem albo przez
-HTTPS. Gdy nawet ekran logowania w sieci jest niepożądany, ponieważ kontener działa
-w sieci z obcymi urządzeniami. Wtedy w pliku `/etc/multiinfo-gate/env` wpisz
-`MIG_ADMIN_HOST=127.0.0.1` i wykonaj `systemctl restart multiinfo-gate`. Do panelu wchodzisz
+z samym polem `status`. Szczegóły, czyli wersję, kolejkę i konta Multiinfo z dniami do końca
+certyfikatu, panel podaje wyłącznie zapytaniom z adresu pętli zwrotnej. Warunek spełnia na
+przykład polecenie `curl http://127.0.0.1:8081/healthz` wykonane w kontenerze. Odwrotne proxy
+otrzymuje szczegóły, gdy przekazuje żądanie HTTPS, a jego adres znajduje się
+w `MIG_TRUSTED_PROXIES`.
+
+Gdy nawet ekran logowania w sieci jest niepożądany, na przykład w sieci z obcymi urządzeniami,
+wpisz w pliku `/etc/multiinfo-gate/env` wiersz `MIG_ADMIN_HOST=127.0.0.1` i wykonaj
+`systemctl restart multiinfo-gate`. Do panelu wchodzisz
 wtedy tunelem do samego kontenera według punktu 4.1. Wymaga to włączenia w nim serwera SSH:
 `systemctl enable --now ssh` i hasło `root` ustawione poleceniem `passwd`, albo dostęp SSH
 z ustawień zaawansowanych kreatora.
