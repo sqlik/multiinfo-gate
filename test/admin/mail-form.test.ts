@@ -158,12 +158,12 @@ describe('skrzynka Microsoft 365', () => {
     const shared = mailFormToConfig(m365({ user: 'Serwis@Firma.pl' }), false, engine, accounts);
     expect(shared.ok && shared.config.imap.user).toBe('serwis@firma.pl');
     const bad = mailFormToConfig(m365({ user: 'serwis' }), false, engine, accounts);
-    expect(!bad.ok && bad.error).toBe('Adres skrzynki musi być adresem e-mail, na przykład alarmy@firma.pl');
+    expect(!bad.ok && bad.error).toBe('Adres skrzynki musi być adresem e-mail, na przykład alarmy@firma.pl.');
   });
 
   it('konto spoza listy kont jest odrzucane', () => {
     const bad = mailFormToConfig(m365({ m365AccountId: '9' }), false, engine, accounts);
-    expect(!bad.ok && bad.error).toBe('Wybierz konto Microsoft 365 z listy');
+    expect(!bad.ok && bad.error).toBe('Wybierz konto Microsoft 365 z listy.');
   });
 
   it('formularz i konfiguracja przechodzą w obie strony z kontem i adresem skrzynki', () => {

@@ -172,7 +172,7 @@ export class M365Service {
   remove(id: number, user: PanelUser, _at: Date): { ok: true } | { ok: false; error: string; users: M365User[] } {
     const users = this.users(id);
     if (users.length > 0) {
-      return { ok: false, error: 'Konto jest używane przez integracje albo ustawienia SMTP, dlatego nie można go usunąć', users };
+      return { ok: false, error: 'Nie można usunąć konta, ponieważ korzystają z niego', users };
     }
     const name = this.deps.accounts.get(id)?.name;
     this.deps.accounts.remove(id);

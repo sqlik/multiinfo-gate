@@ -197,6 +197,8 @@ describe('lista, formularz i szczegóły', () => {
   it('instrukcja w formularzu używa nazw z polskiego portalu Entra', async () => {
     const body = (await page('/microsoft-365/nowe')).body;
     expect(body).toContain('Klient publiczny/natywny (mobilne i klasyczne)');
+    expect(body).toContain('Przed dodaniem konta wykonaj w portalach Microsoftu poniższe kroki albo przekaż je administratorowi Microsoft 365:');
+    expect(body).toContain('W polu „Identyfikator URI przekierowania” wybierz platformę');
     expect(body).toContain('Wyraź zgodę administratora dla katalogu');
     expect(body).not.toContain('Udziel zgody administratora');
   });
@@ -230,6 +232,9 @@ describe('lista, formularz i szczegóły', () => {
     let body = (await page(`/microsoft-365/${id}`)).body;
     expect(body).toContain('Zalogowano jako');
     expect(body).toContain('alarmy@firma.pl');
+    expect(body).toContain('<div>Ostatnie logowanie</div>');
+    expect(body).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} <span class="dim">· janek<\/span>/);
+    expect(body).not.toContain('Zalogował');
     expect(body).not.toContain('<span class="dim">ustawiony ręcznie</span>');
     expect(body).toContain('Zaloguj ponownie');
     expect(body).toContain(`action="/microsoft-365/${id}/rozlacz"`);
@@ -304,7 +309,7 @@ describe('lista, formularz i szczegóły', () => {
     expect(res.statusCode).toBe(303);
     expect(res.headers.location).toBe(`/microsoft-365/${id}`);
     expect(h.m365Accounts.get(id)).toBeDefined();
-    expect((await page(`/microsoft-365/${id}`)).body).toContain('Alarmy serwisu');
+    expect((await page(`/microsoft-365/${id}`)).body).toContain('Nie można usunąć konta, ponieważ korzystają z niego: integracja Alarmy serwisu.');
   });
 
   it('usunięcie nieużywanego konta prowadzi na listę', async () => {

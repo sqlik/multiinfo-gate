@@ -175,7 +175,7 @@ export function registerM365Routes(
       return reply.redirect('/microsoft-365', 303);
     }
     const names = r.users.map((u) => (u.kind === 'integration' ? `integracja ${u.name}` : 'wysyłka maili powiadomień'));
-    render.flash(request, 'fail', `${r.error}. Konta używa: ${names.join(', ')}`);
+    render.flash(request, 'fail', `${r.error}: ${names.join(', ')}.`);
     return reply.redirect(`/microsoft-365/${id}`, 303);
   });
 

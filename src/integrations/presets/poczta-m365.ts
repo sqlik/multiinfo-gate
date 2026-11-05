@@ -19,7 +19,7 @@ export const pocztaM365: Preset = {
 1. W centrum administracyjnym Microsoft 365, na karcie **Poczta** konta technicznego, w zarządzaniu aplikacjami poczty zaznacz **IMAP**.
 2. Dodaj konto na ekranie **Konta Microsoft 365** i zaloguj je przyciskiem **Zaloguj w Microsoft**.
 3. W formularzu wybierz konto z listy. Pole **Adres skrzynki** zawiera wtedy adres tego konta.
-4. Aby odczytywać skrzynkę współdzieloną, wpisz jej adres w polu **Adres skrzynki**. Konto techniczne potrzebuje do niej uprawnienia pełnego dostępu.
+4. Aby odczytywać skrzynkę współdzieloną, wpisz jej adres w polu **Adres skrzynki**. Konto techniczne wymaga do niej uprawnienia pełnego dostępu.
 
 Zmiana ustawienia IMAP na koncie zaczyna obowiązywać po około 30 minutach.`,
   sampleSource: 'Logowanie XOAUTH2 do outlook.office365.com:993 kontem technicznym, sprawdzone w tenancie testowym 2026-11-04',

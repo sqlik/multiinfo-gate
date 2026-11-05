@@ -487,11 +487,11 @@ przyszła wiadomość.
 
 Przycisk **Dodaj integrację**, kierunek „Z poczty”, następnie kafelek z nazwą dostawcy. Kafelek
 uzupełnia serwer, port i zabezpieczenie, a obok formularza wyświetla instrukcję, gdzie uzyskać
-hasło.
+hasło. Przy Microsoft 365 instrukcja opisuje przygotowanie konta technicznego.
 
 ![Wybór dostawcy poczty: kafelki Microsoft 365, Gmail, home.pl, OVH i Własny serwer](obrazki/poczta-katalog.png)
 
-| Kafelek | Serwer | Hasło |
+| Kafelek | Serwer | Logowanie |
 |---|---|---|
 | Microsoft 365 | `outlook.office365.com`, port 993, TLS, bez możliwości zmiany | brak hasła, bramka loguje się kontem Microsoft 365 z rozdziału 4.8 [Uruchomienia](uruchomienie.md#48-konto-microsoft-365) |
 | Gmail | `imap.gmail.com`, port 993, TLS | hasło aplikacji, dostępne po włączeniu weryfikacji dwuetapowej w koncie Google; hasło do konta nie jest przyjmowane |
@@ -524,7 +524,7 @@ firmowej. Połączenie bez sprawdzania certyfikatu jest podatne na podsłuch.
 
 W skrzynce Microsoft 365 sekcja **Skrzynka** zawiera zamiast serwera, loginu i hasła dwa pola.
 Pole **Konto Microsoft 365** wskazuje konto, którym bramka loguje się do skrzynki. Lista podaje
-przy nazwie konta jego stan, a wartość domyślna to pierwsze połączone konto. Puste pole **Adres
+przy nazwie konta jego stan, a domyślnie wybrane jest pierwsze połączone konto. Puste pole **Adres
 skrzynki** oznacza adres wybranego konta, który formularz wyświetla w polu jako podpowiedź. Serwer,
 port i zabezpieczenie są stałe:
 `outlook.office365.com`, port 993, TLS ze sprawdzaniem certyfikatu. Gdy panel nie zawiera
@@ -960,8 +960,8 @@ limit 1 h.
 - Nazwa serwera w nagłówku Authentication-Results zamyka drogę podrobionym nagłówkom SPF/DKIM.
   Bez nagłówka serwera wiadomość jest odrzucana (rozdział 5.2)
 - Skrzynka Microsoft 365 nie wymaga hasła. Token odświeżania konta jest zaszyfrowany kluczem
-  głównym, a token dostępu pozostaje wyłącznie w pamięci. Bramka łączy się wtedy tylko
-  z `outlook.office365.com` na porcie 993, niezależnie od danych w formularzu
+  głównym, a token dostępu pozostaje wyłącznie w pamięci. Do skrzynki bramka łączy się wtedy
+  wyłącznie z `outlook.office365.com` na porcie 993, niezależnie od danych w formularzu
 
 ## 5a. SMS do grupy
 
@@ -2071,7 +2071,8 @@ do SMTP.
 W wariancie Microsoft 365 puste pole adresu nadawcy oznacza adres skrzynki konta. Inny adres
 wymaga, aby konto posiadało do niego uprawnienie „Wyślij jako”. Odbiorca z tej samej organizacji
 widzi w Outlooku jako nadawcę nazwę wyświetlaną konta technicznego z katalogu, a nie wartość pola
-**Nazwa wyświetlana nadawcy**. Dlatego warto nadać kontu opisową nazwę, na przykład „Alarmy SMS”.
+**Nazwa wyświetlana nadawcy**. Dlatego zalecane jest nadanie kontu opisowej nazwy, na przykład
+„Alarmy SMS”.
 Potwierdzenia zwrotne Mail2SMS korzystają z tych samych ustawień, więc w tym wariancie nadawca
 otrzymuje odpowiedź z konta technicznego.
 
@@ -2169,7 +2170,7 @@ Po zapisaniu użyj przycisku **Wyślij SMS testowy**. Bramka wysyła próbną wi
 numery kanału, a wynik doręczenia przedstawia lista wiadomości.
 
 Bramka wysyła powiadomienie SMS w imieniu wskazanego klucza, czyli z jego konta Multiinfo, usługi,
-limitów i nadpisu. Kanał przyjmuje każdy aktywny klucz, także klucz z opcją **Tylko integracje**.
+limitów i nadpisu. Kanał przyjmuje każdy czynny klucz, także klucz z opcją **Tylko integracje**.
 Lista wiadomości oznacza takie SMS-y plakietką „powiadomienie bramki”. Aplikacje klienta nie
 otrzymują ich przez API, webhook klucza ani integracje, dlatego numery administratorów i treść
 powiadomień nie opuszczają bramki. Odpowiedź administratora na SMS powiadomienia bramka zapisuje

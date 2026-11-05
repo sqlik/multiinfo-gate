@@ -389,7 +389,7 @@ z konta nie są sprawdzane.
 
 ![Przegląd panelu z paskiem o koncie Microsoft 365 wymagającym ponownego logowania i przyciskiem Zaloguj ponownie](obrazki/przeglad-m365.png)
 
-Microsoft unieważnił logowanie bramki. Najczęstsze przyczyny to zmiana albo reset hasła konta
+Microsoft unieważnił logowanie bramki. Najczęstszymi przyczynami są zmiana albo reset hasła konta
 technicznego oraz odwołanie sesji w Entra ID. Kod błędu w szczegółach konta wskazuje przyczynę:
 
 | Kod | Przyczyna | Rozwiązanie |

@@ -88,12 +88,12 @@ function instructions(): string {
   return `<details>
       <summary>Przygotowanie w Microsoft 365 i Entra ID</summary>
       <div class="guide" style="font-size: 12.5px; line-height: 1.55; padding-bottom: 10px;">
-        <p>Przed dodaniem konta administrator Microsoft 365 wykonuje następujące kroki:</p>
+        <p>Przed dodaniem konta wykonaj w portalach Microsoftu poniższe kroki albo przekaż je administratorowi Microsoft 365:</p>
         <ol style="margin: 0 0 8px; padding-left: 18px;">
           <li>W centrum administracyjnym Microsoft 365 załóż konto techniczne z licencją obejmującą skrzynkę, na przykład alarmy@firma.pl</li>
           <li>W ustawieniach tego konta, na karcie Poczta, w zarządzaniu aplikacjami poczty zaznacz IMAP oraz SMTP z uwierzytelnianiem</li>
           <li>W centrum administracyjnym Microsoft Entra, w sekcji Rejestracje aplikacji, zarejestruj aplikację, na przykład „Multiinfo Gate”, z typem kont „Tylko dla jednej dzierżawy”</li>
-          <li>Jako identyfikator URI przekierowania wybierz platformę „Klient publiczny/natywny (mobilne i klasyczne)” i wklej adres podany niżej</li>
+          <li>W polu „Identyfikator URI przekierowania” wybierz platformę „Klient publiczny/natywny (mobilne i klasyczne)” i wklej adres podany niżej</li>
           <li>Dodaj uprawnienia delegowane IMAP.AccessAsUser.All, SMTP.Send, offline_access, openid, email i profile</li>
           <li>Kliknij „Wyraź zgodę administratora dla katalogu” i potwierdź</li>
           <li>Skopiuj z przeglądu aplikacji identyfikator katalogu i identyfikator aplikacji, a następnie wklej je w polach poniżej</li>
@@ -188,7 +188,7 @@ function stateAlert(row: M365AccountRow): string {
     return `<div class="alert" style="margin-bottom: 14px;">
         <div style="display: flex; align-items: center; gap: 10px;">
           <div class="sq"></div>
-          <div>Ostatnie odświeżenie logowania nie powiodło się z powodu błędu sieci albo usługi Microsoft. Bramka ponowi próbę przy następnym użyciu konta.</div>
+          <div>Ostatnie odświeżenie logowania nie powiodło się z powodu błędu sieci albo usługi Microsoftu. Bramka ponowi próbę przy następnym użyciu konta.</div>
         </div>
       </div>`;
   }
@@ -234,7 +234,7 @@ export function m365DetailPage(v: M365AccountView, opts: { redirectUri: string |
           <div>Stan</div><div>${statePill(row.state)}</div>
           <div>Zalogowano jako</div><div class="m">${row.loginName === null ? '<span class="dim">brak</span>' : esc(row.loginName)}</div>
           <div>Adres skrzynki</div><div class="m">${row.address === null ? '<span class="dim">brak</span>' : esc(row.address)}${row.addressManual ? ' <span class="dim">ustawiony ręcznie</span>' : ''}</div>
-          <div>Zalogował</div><div>${row.connectedAt === null ? '<span class="dim">brak</span>' : `${esc(row.connectedBy ?? '')} <span class="dim">${esc(warsawStamp(row.connectedAt))}</span>`}</div>
+          <div>Ostatnie logowanie</div><div>${row.connectedAt === null ? '<span class="dim">brak</span>' : `${esc(warsawStamp(row.connectedAt))}${row.connectedBy ? ` <span class="dim">· ${esc(row.connectedBy)}</span>` : ''}`}</div>
           <div>Ostatnie odświeżenie</div><div class="m">${stamp(row.lastRefreshAt)}</div>
           <div>Ostatni błąd</div><div class="m" style="word-break: break-word;">${error}</div>
           <div>Identyfikator katalogu</div><div class="m">${esc(row.tenant)}</div>

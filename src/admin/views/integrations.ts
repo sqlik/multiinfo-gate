@@ -226,7 +226,7 @@ export function choosePresetPage(kind: IntegrationKind, presets: Preset[]): stri
     <div>
       <div class="crumb"><a href="/integracje">Integracje</a> / <a href="/integracje/nowa">nowa</a> / ${esc(kindLabel(kind))}</div>
       <h1 class="h1">${mail ? 'Gdzie znajduje się skrzynka?' : 'Z jaką aplikacją?'}</h1>
-      <p class="sub">${mail ? 'Ustawienie uzupełnia serwer i port. Hasło i listę nadawców podaje się w formularzu' : 'Ustawienie wypełnia formularz. Każdą wartość można później zmienić'}</p>
+      <p class="sub">${mail ? 'Ustawienie uzupełnia serwer i port. Dane logowania i listę nadawców podaje się w formularzu' : 'Ustawienie wypełnia formularz. Każdą wartość można później zmienić'}</p>
     </div>
   </div>
   <div class="scroll">

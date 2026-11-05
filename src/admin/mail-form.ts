@@ -164,10 +164,10 @@ export interface M365Choice { id: number; address: string | null }
 function imapFrom(v: MailFormValues, hasPassword: boolean, m365: M365Choice[]): MailInConfig['imap'] | string {
   if (v.authMode === 'm365') {
     const account = m365.find((a) => String(a.id) === v.m365AccountId);
-    if (!account) return 'Wybierz konto Microsoft 365 z listy';
+    if (!account) return 'Wybierz konto Microsoft 365 z listy.';
     // Pusty adres oznacza skrzynkę samego konta; inny adres wskazuje skrzynkę współdzieloną, do której konto posiada dostęp.
     const user = (v.user === '' ? account.address ?? '' : v.user).toLowerCase();
-    if (user.length > 254 || !EMAIL.test(user)) return 'Adres skrzynki musi być adresem e-mail, na przykład alarmy@firma.pl';
+    if (user.length > 254 || !EMAIL.test(user)) return 'Adres skrzynki musi być adresem e-mail, na przykład alarmy@firma.pl.';
     return { ...M365_IMAP, user, passRef: MAIL_IN_PASSWORD_REF, auth: { mode: 'm365', accountId: account.id } };
   }
   if (v.host === '') return 'Podaj serwer IMAP.';

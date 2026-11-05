@@ -318,7 +318,7 @@ function connectionPanel(c: MailConnection, advanced: boolean, m365: boolean): s
     </div>`;
   }
   const titles = { auth: m365
-    ? ['Logowanie odrzucone', 'Sprawdź pisownię adresu skrzynki i to, czy IMAP jest włączony dla konta. Dla skrzynki współdzielonej sprawdź także, czy konto posiada do niej uprawnienie pełnego dostępu. Zmiana ustawienia IMAP zaczyna obowiązywać po około 30 minutach']
+    ? ['Logowanie odrzucone', 'Sprawdź pisownię adresu skrzynki oraz ustawienie IMAP na karcie Poczta konta technicznego. Dla skrzynki współdzielonej sprawdź także, czy konto posiada do niej uprawnienie pełnego dostępu. Zmiana ustawienia IMAP zaczyna obowiązywać po około 30 minutach']
     : ['Logowanie odrzucone', 'Sprawdź login i hasło. W Gmailu wymagane jest hasło aplikacji, nie hasło do konta. W Google Workspace dostęp IMAP musi być włączony przez administratora'],
     account: ['Konto Microsoft 365 wymaga logowania', 'Zaloguj konto na ekranie Konta Microsoft 365, a następnie ponownie sprawdź połączenie'],
     network: ['Serwer nie odpowiada', 'Sprawdź nazwę serwera, port i zabezpieczenie oraz czy z maszyny bramki można nawiązać połączenie z serwerem poczty'],
