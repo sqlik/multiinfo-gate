@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from '../zod.ts';
+import { messageLinks } from '../links/campaigns.ts';
 import type { MessageRow } from '../store/messages.ts';
 import { authenticate, refuseIntegrationsOnly } from './auth.ts';
 import { dropEmptyFields } from './empty-fields.ts';
@@ -78,7 +79,8 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
     if (!message || message.apiKeyId !== auth.apiKeyId || message.system === 1) {
       throw new ApiError(404, 'message_not_found', 'Nie ma wiadomości o tym identyfikatorze.');
     }
-    return present(message);
+    const links = messageLinks(deps, message);
+    return links === undefined ? present(message) : { ...present(message), links };
   });
 
   app.get<{ Querystring: Record<string, string> }>('/v1/messages', async (request) => {

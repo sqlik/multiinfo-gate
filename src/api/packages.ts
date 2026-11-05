@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from '../zod.ts';
+import { packageLinks } from '../links/campaigns.ts';
 import type { PackageRow, RecipientRow } from '../store/packages.ts';
 import { authenticate, refuseIntegrationsOnly } from './auth.ts';
 import { dropEmptyFields } from './empty-fields.ts';
@@ -106,7 +107,9 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
     if (!pkg || pkg.apiKeyId !== auth.apiKeyId) {
       throw new ApiError(404, 'package_not_found', 'Nie ma rozsyłki o tym identyfikatorze.');
     }
-    return present(pkg, pkg.reportStatus === 'ready' ? deps.packages.recipientSummary(pkg.id) : null);
+    const view = present(pkg, pkg.reportStatus === 'ready' ? deps.packages.recipientSummary(pkg.id) : null);
+    const links = packageLinks(deps, pkg);
+    return links === undefined ? view : { ...view, links };
   });
 
   const owned = (id: string, authorization: string | undefined): PackageRow => {

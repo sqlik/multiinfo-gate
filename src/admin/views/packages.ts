@@ -33,6 +33,8 @@ export interface PackageDetail {
   /** Ilu odbiorców pokazujemy; reszta jest w CSV. */
   shown: number;
   summary: { delivered: number; failed: number; other: number } | null;
+  /** Kampania krótkich linków rozsyłki; brak, gdy rozsyłka nie zawiera skróconych linków. */
+  campaign?: { id: number; name: string } | null;
 }
 
 const stamp = (iso: string | null) => (iso === null ? '-' : warsawStamp(iso));
@@ -173,6 +175,7 @@ export function packagePage(d: PackageDetail): string {
         <div class="kv">
           ${d.integration === null ? '' : `<div>Integracja</div><div><a href="/integracje/${esc(d.integration.id)}">${esc(d.integration.name)}</a></div>`}
           ${p.requestedBy === null ? '' : `<div>Zlecający</div><div>${esc(p.requestedBy)}</div>`}
+          ${!d.campaign ? '' : `<div>Kampania</div><div><a href="/kampanie/${esc(d.campaign.id)}">${esc(d.campaign.name)}</a></div>`}
           <div>ID usługi</div><div class="m">${esc(p.serviceId)}</div>
           <div>Nadpis</div><div class="m">${esc(p.orig ?? '-')}</div>
           <div>Kodowanie</div><div class="m">${esc(p.encoding === 'gsm' ? 'GSM-7' : 'UCS-2')}${p.multipart === 1 ? ' · wieloczęściowa' : ''}</div>

@@ -25,12 +25,15 @@ const toRow = (r: Raw): CampaignRow => ({
 export class CampaignsRepo {
   constructor(private readonly db: Database) {}
 
-  /** Zwraca identyfikator istniejącej albo nowej kampanii; przesuwa `last_sent_at`. */
+  /**
+   * Zwraca identyfikator istniejącej albo nowej kampanii; przesuwa `last_sent_at`. Kolejna wysyłka zdejmuje
+   * znacznik „linki wyłączone”, bo jej linki działają; kody wyłączone wcześniej pozostają wyłączone.
+   */
   open(apiKeyId: number, name: string, at: Date): number {
     const stamp = at.toISOString();
     const row = this.db
       .prepare(`INSERT INTO campaigns (api_key_id, name, first_sent_at, last_sent_at, created_at) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT (api_key_id, name) DO UPDATE SET last_sent_at = excluded.last_sent_at
+                ON CONFLICT (api_key_id, name) DO UPDATE SET last_sent_at = excluded.last_sent_at, links_disabled_at = NULL
                 RETURNING id`)
       .get(apiKeyId, name, stamp, stamp, stamp) as { id: number };
     return row.id;
@@ -53,6 +56,14 @@ export class CampaignsRepo {
       .prepare(`SELECT * FROM campaigns${where} ORDER BY last_sent_at DESC, id DESC LIMIT ? OFFSET ?`)
       .all(...params, opts.limit + 1, opts.offset) as Raw[]).map(toRow);
     return { rows: rows.slice(0, opts.limit), hasMore: rows.length > opts.limit };
+  }
+
+  /** Liczba rozsyłek i pojedynczych wiadomości z krótkimi linkami kampanii. */
+  sources(id: number): { packages: number; messages: number } {
+    return this.db
+      .prepare(`SELECT (SELECT COUNT(*) FROM packages WHERE campaign_id = @id) AS packages,
+                       (SELECT COUNT(*) FROM messages WHERE campaign_id = @id) AS messages`)
+      .get({ id }) as { packages: number; messages: number };
   }
 
   addSent(id: number, recipients: number): void {

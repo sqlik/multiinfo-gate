@@ -80,7 +80,8 @@ describe('opis API', () => {
   });
 
   it('każde pole odpowiedzi odczytu ma opis po polsku', () => {
-    for (const nazwa of ['Wiadomosc', 'WiadomoscPrzychodzaca', 'Rozsylka', 'WierszRaportu', 'IntegracjaPowerAutomate', 'WysylkaDoGrupy']) {
+    for (const nazwa of ['Wiadomosc', 'WiadomoscPrzychodzaca', 'Rozsylka', 'WierszRaportu', 'IntegracjaPowerAutomate', 'WysylkaDoGrupy',
+      'Kampania', 'SzczegolyKampanii']) {
       const schema = doc.components.schemas[nazwa]!;
       for (const [pole, opis] of Object.entries(schema.properties!)) {
         expect(opis.description, `${nazwa}.${pole}`).toBeTruthy();

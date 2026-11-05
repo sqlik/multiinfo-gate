@@ -546,6 +546,68 @@ function lista(pozycja: JsonSchema, opis: string): JsonSchema {
   };
 }
 
+/** Pola bloku `links` w odczycie wiadomości i rozsyłki. Po retencji liczby, domena i wygaśnięcie przyjmują wartość null. */
+const POLA_LINKOW_ODCZYTU: Record<string, JsonSchema> = {
+  campaign: { type: 'string', description: 'Kampania, do której należą krótkie linki', example: 'przeglad-klimatyzacji-wiosna' },
+  domain: { type: 'string', nullable: true, description: 'Domena skracacza użyta w krótkich linkach', example: 'l.firma.pl' },
+  expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Chwila wygaśnięcia krótkich linków' },
+  shortened: {
+    type: 'integer', nullable: true,
+    description: 'Liczba krótkich linków. W rozsyłce obejmuje krótkie linki wszystkich odbiorców',
+  },
+  opens: {
+    type: 'integer', nullable: true,
+    description: 'Liczba odbiorców, którzy otworzyli co najmniej jeden krótki link. W wiadomości przyjmuje wartość 0 albo 1',
+  },
+  clicks: {
+    type: 'integer', nullable: true,
+    description: 'Liczba wejść w krótkie linki bez wejść automatów, na przykład podglądu linku w komunikatorze',
+  },
+  firstOpenedAt: {
+    type: 'string', format: 'date-time', nullable: true,
+    description: 'Chwila pierwszego otwarcia krótkiego linku. Gdy nikt nie otworzył linku, wartość wynosi null',
+  },
+  detailsPurged: {
+    type: 'boolean',
+    description: 'Czy bramka usunęła szczegóły krótkich linków zgodnie z retencją, 30 dni po wygaśnięciu linków. Liczby,'
+      + ' domena i chwila wygaśnięcia przyjmują wtedy wartość null',
+  },
+};
+
+const LINKI_ROZSYLKI: JsonSchema = {
+  type: 'object',
+  description: 'Krótkie linki rozsyłki. Blok występuje tylko w rozsyłce, w której bramka skróciła linki. Odbiorców, którzy'
+    + ' otworzyli link, zwraca odczyt kampanii',
+  required: Object.keys(POLA_LINKOW_ODCZYTU),
+  properties: POLA_LINKOW_ODCZYTU,
+};
+
+const LINKI_WIADOMOSCI: JsonSchema = {
+  type: 'object',
+  description: 'Krótkie linki wiadomości. Blok występuje w odczycie pojedynczej wiadomości, w której bramka skróciła linki',
+  required: [...Object.keys(POLA_LINKOW_ODCZYTU), 'shortLinks'],
+  properties: {
+    ...POLA_LINKOW_ODCZYTU,
+    shortLinks: {
+      type: 'array',
+      description: 'Krótkie linki w kolejności wystąpienia w treści. Po retencji lista jest pusta',
+      items: {
+        type: 'object',
+        required: ['url', 'target', 'clicks', 'firstOpenedAt'],
+        properties: {
+          url: { type: 'string', description: 'Krótki link wysłany w SMS-ie', example: 'https://l.firma.pl/aB3xK9q' },
+          target: { type: 'string', description: 'Adres docelowy bez parametrów UTM', example: 'https://firma.pl/przeglad' },
+          clicks: { type: 'integer', description: 'Liczba wejść w ten link bez wejść automatów' },
+          firstOpenedAt: {
+            type: 'string', format: 'date-time', nullable: true,
+            description: 'Chwila pierwszego otwarcia tego linku. Gdy odbiorca nie otworzył linku, wartość wynosi null',
+          },
+        },
+      },
+    },
+  },
+};
+
 const WIADOMOSC: JsonSchema = {
   type: 'object',
   description: 'Wiadomość wysłana tym kluczem',
@@ -588,6 +650,7 @@ const WIADOMOSC: JsonSchema = {
       description: 'Kod odmowy albo błędu z Multiinfo. Poza błędem pole jest puste',
     },
     error: { type: 'string', nullable: true, description: 'Wyjaśnienie błędu po polsku. Poza błędem pole jest puste' },
+    links: LINKI_WIADOMOSCI,
   },
 };
 
@@ -667,7 +730,126 @@ const ROZSYLKA: JsonSchema = {
         other: { type: 'integer', description: 'Liczba pozostałych, na przykład wciąż w drodze' },
       },
     },
+    links: LINKI_ROZSYLKI,
   },
+};
+
+/** Liczby kampanii wspólne dla listy i szczegółów. Liczby zbiorcze zostają po retencji szczegółów odbiorców. */
+const POLA_KAMPANII: Record<string, JsonSchema> = {
+  name: {
+    type: 'string',
+    description: 'Nazwa kampanii z pola campaign. Gdy wysyłka nie zawiera tego pola, bramka nadaje nazwę domyślną:'
+      + ' identyfikator rozsyłki, nazwę integracji albo nazwę klucza',
+    example: 'przeglad-klimatyzacji-wiosna',
+  },
+  firstSentAt: { type: 'string', format: 'date-time', description: 'Chwila pierwszej wysyłki z krótkim linkiem' },
+  lastSentAt: { type: 'string', format: 'date-time', description: 'Chwila ostatniej wysyłki z krótkim linkiem' },
+  sent: { type: 'integer', description: 'Liczba wysłanych SMS-ów z krótkimi linkami', example: 1240 },
+  opens: { type: 'integer', description: 'Liczba odbiorców, którzy otworzyli co najmniej jeden krótki link', example: 312 },
+  clicks: { type: 'integer', description: 'Liczba wejść w krótkie linki bez wejść automatów', example: 455 },
+  bots: {
+    type: 'integer',
+    description: 'Liczba wejść automatów, na przykład podglądu linku w komunikatorze albo skanera poczty. Bramka nie wlicza'
+      + ' ich do otwarć ani kliknięć',
+    example: 41,
+  },
+  linksDisabledAt: {
+    type: 'string', format: 'date-time', nullable: true,
+    description: 'Chwila wyłączenia linków kampanii w panelu bramki. Gdy linki działają, wartość wynosi null',
+  },
+};
+
+const KAMPANIA: JsonSchema = {
+  type: 'object',
+  description: 'Kampania krótkich linków wysłanych tym kluczem',
+  required: Object.keys(POLA_KAMPANII),
+  properties: POLA_KAMPANII,
+};
+
+const SZCZEGOLY_KAMPANII: JsonSchema = {
+  type: 'object',
+  description: 'Kampania z liczbami, linkami i stroną odbiorców, którzy otworzyli link',
+  required: [...Object.keys(POLA_KAMPANII), 'packages', 'messages', 'delivered', 'detailsPurgedAt', 'domain', 'expiresAt', 'utm',
+    'links', 'openers'],
+  properties: {
+    ...POLA_KAMPANII,
+    packages: { type: 'integer', description: 'Liczba rozsyłek z krótkimi linkami w kampanii' },
+    messages: { type: 'integer', description: 'Liczba pojedynczych wiadomości z krótkimi linkami w kampanii' },
+    delivered: {
+      type: 'integer', nullable: true,
+      description: 'Liczba doręczonych SMS-ów z krótkimi linkami według raportów doręczenia. Gdy żadna wysyłka kampanii nie'
+        + ' zamawiała raportu doręczenia, wartość wynosi null',
+    },
+    detailsPurgedAt: {
+      type: 'string', format: 'date-time', nullable: true,
+      description: 'Chwila usunięcia szczegółów odbiorców zgodnie z retencją, 30 dni po wygaśnięciu linków. Liczby kampanii'
+        + ' pozostają bez zmian',
+    },
+    domain: { type: 'string', nullable: true, description: 'Domena skracacza ostatniej wysyłki. Po retencji null', example: 'l.firma.pl' },
+    expiresAt: {
+      type: 'string', format: 'date-time', nullable: true,
+      description: 'Chwila wygaśnięcia ostatnich ważnych linków kampanii. Po retencji null',
+    },
+    utm: {
+      type: 'boolean', nullable: true,
+      description: 'Czy bramka dopisuje do adresów docelowych parametry utm_source=sms, utm_medium=sms i utm_campaign'
+        + ' z nazwą kampanii. Po retencji null',
+    },
+    links: {
+      type: 'array',
+      description: 'Adresy docelowe od największej liczby odbiorców. Linki indywidualne o wspólnej budowie tworzą jeden wiersz,'
+        + ' w którym część zmienną zastępuje znacznik {…}',
+      items: {
+        type: 'object',
+        required: ['target', 'kind', 'opens', 'clicks'],
+        properties: {
+          target: { type: 'string', description: 'Adres docelowy albo wzorzec adresów indywidualnych', example: 'https://firma.pl/oferta/{…}' },
+          kind: {
+            type: 'string', enum: ['shared', 'individual'],
+            description: 'Rodzaj linku: shared oznacza adres wysłany więcej niż jednemu odbiorcy, individual adres jednego odbiorcy',
+          },
+          opens: { type: 'integer', description: 'Liczba odbiorców, którzy otworzyli link' },
+          clicks: { type: 'integer', description: 'Liczba wejść w link bez wejść automatów' },
+        },
+      },
+    },
+    openers: {
+      type: 'object',
+      description: 'Strona odbiorców, którzy otworzyli link, od najnowszego kliknięcia. Po retencji lista jest pusta',
+      required: ['data', 'hasMore'],
+      properties: {
+        data: {
+          type: 'array',
+          description: 'Odbiorcy na tej stronie',
+          items: {
+            type: 'object',
+            required: ['to', 'clientId', 'firstOpenedAt', 'lastClickedAt', 'clicks', 'targets'],
+            properties: {
+              to: { type: 'string', description: 'Numer odbiorcy', example: '48601000001' },
+              clientId: { type: 'string', nullable: true, description: 'Własny identyfikator odbiorcy podany przy rozsyłce' },
+              firstOpenedAt: { type: 'string', format: 'date-time', description: 'Chwila pierwszego otwarcia' },
+              lastClickedAt: { type: 'string', format: 'date-time', description: 'Chwila ostatniego kliknięcia' },
+              clicks: { type: 'integer', description: 'Liczba wejść odbiorcy w krótkie linki' },
+              targets: {
+                type: 'array', items: { type: 'string' },
+                description: 'Adresy docelowe linków, które odbiorca otworzył, w kolejności alfabetycznej',
+              },
+            },
+          },
+        },
+        hasMore: { type: 'boolean', description: 'Czy za tą stroną są dalsi odbiorcy' },
+      },
+    },
+  },
+};
+
+const PARAMETR_NAZWY_KAMPANII: OpenApiParameter = {
+  name: 'name',
+  in: 'path',
+  required: true,
+  description: 'Nazwa kampanii zakodowana w adresie, na przykład spacja jako %20, a ukośnik jako %2F',
+  schema: { type: 'string', minLength: 1, maxLength: 100 },
+  example: 'przeglad-klimatyzacji-wiosna',
 };
 
 const WIERSZ_RAPORTU: JsonSchema = {
@@ -1199,6 +1381,51 @@ export function buildOpenApiDocument(): OpenApiDocument {
           },
         },
       },
+      '/v1/campaigns': {
+        get: {
+          operationId: 'listaKampanii',
+          summary: 'Lista kampanii',
+          description: 'Zwraca kampanie krótkich linków wysłanych tym kluczem, od ostatniej wysyłki, z liczbą wysłanych SMS-ów,'
+            + ' otwarć i kliknięć. Strona ma domyślnie 25 pozycji, najwyżej 200. Następną stronę pobiera się przez offset,'
+            + ' dopóki hasMore jest prawdziwe.',
+          security: KLUCZ,
+          parameters: PARAMETRY_STRONICOWANIA,
+          responses: {
+            '200': {
+              description: 'Strona wyników',
+              content: { 'application/json': { schema: lista({ $ref: '#/components/schemas/Kampania' }, 'Strona kampanii') } },
+            },
+            '401': BLAD_KLUCZA,
+          },
+        },
+      },
+      '/v1/campaigns/{name}': {
+        get: {
+          operationId: 'odczytajKampanie',
+          summary: 'Wyniki kampanii',
+          description: 'Zwraca liczby kampanii, adresy docelowe z otwarciami i kliknięciami oraz stronę odbiorców, którzy'
+            + ' otworzyli link. Strona odbiorców ma domyślnie 50 pozycji, najwyżej 200. Kolejne strony pobiera się przez'
+            + ' offset, dopóki openers.hasMore jest prawdziwe.',
+          security: KLUCZ,
+          parameters: [
+            PARAMETR_NAZWY_KAMPANII,
+            { ...PARAMETRY_STRONICOWANIA[0]!, description: 'Liczba odbiorców na stronie', schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } },
+            { ...PARAMETRY_STRONICOWANIA[1]!, description: 'Liczba odbiorców pominiętych od początku listy' },
+          ],
+          responses: {
+            '200': {
+              description: 'Wyniki kampanii',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/SzczegolyKampanii' } } },
+            },
+            '401': BLAD_KLUCZA,
+            '404': blad(
+              'Brak kampanii albo kampania innego klucza; bramka nie rozróżnia tych dwóch sytuacji',
+              'campaign_not_found',
+              'Nie ma kampanii o tej nazwie.',
+            ),
+          },
+        },
+      },
       '/v1/inbound': {
         get: {
           operationId: 'listaWiadomosciPrzychodzacych',
@@ -1520,6 +1747,8 @@ export function buildOpenApiDocument(): OpenApiDocument {
         WiadomoscPrzychodzaca: WIADOMOSC_PRZYCHODZACA,
         Rozsylka: ROZSYLKA,
         WierszRaportu: WIERSZ_RAPORTU,
+        Kampania: KAMPANIA,
+        SzczegolyKampanii: SZCZEGOLY_KAMPANII,
         IntegracjaPowerAutomate: INTEGRACJA_POWER_AUTOMATE,
         WysylkaDoGrupy: WYSYLKA_DO_GRUPY_INTEGRACJI,
         Blad: {

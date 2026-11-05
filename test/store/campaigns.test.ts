@@ -40,6 +40,27 @@ describe('CampaignsRepo', () => {
     expect(campaigns.byName(apiKeyId, NAME)!.id).toBe(id);
   });
 
+  it('kolejna wysyłka do kampanii z wyłączonymi linkami zdejmuje znacznik, bo nowe linki działają', () => {
+    const { campaigns, apiKeyId } = setup();
+    const id = campaigns.open(apiKeyId, NAME, AT);
+    campaigns.setLinksDisabled(id, AT);
+    expect(campaigns.get(id)!.linksDisabledAt).toBe(AT.toISOString());
+    campaigns.open(apiKeyId, NAME, LATER);
+    expect(campaigns.get(id)!.linksDisabledAt).toBeNull();
+  });
+
+  it('liczy rozsyłki i pojedyncze wiadomości kampanii', () => {
+    const { campaigns, messages, packages, apiKeyId, accountId } = setup();
+    const id = campaigns.open(apiKeyId, NAME, AT);
+    messages.insert(messageInput({ id: 'msg_1', apiKeyId, accountId, campaignId: id }));
+    messages.insert(messageInput({ id: 'msg_2', apiKeyId, accountId, campaignId: null }));
+    packages.insert({
+      id: 'pkg_1', apiKeyId, accountId, serviceId: '24138', defaultText: null, orig: null, costCenter: null, startAt: null,
+      deliveryReport: 1, encoding: 'gsm', multipart: 0, createdAt: AT.toISOString(), campaignId: id,
+    }, [{ dest: '48601000001', text: 'a', clientId: null, links: 1 }]);
+    expect(campaigns.sources(id)).toEqual({ packages: 1, messages: 1 });
+  });
+
   it('ta sama nazwa przy innym kluczu to osobna kampania', () => {
     const { campaigns, apiKeyId, otherKeyId } = setup();
     expect(campaigns.open(apiKeyId, NAME, AT)).not.toBe(campaigns.open(otherKeyId, NAME, AT));

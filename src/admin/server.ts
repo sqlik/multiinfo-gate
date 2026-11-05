@@ -50,6 +50,7 @@ import { registerUserRoutes } from './routes/users.ts';
 import { registerDeliveryRoutes } from './routes/deliveries.ts';
 import { registerInboundViewRoutes } from './routes/inbound.ts';
 import { registerIntegrationRoutes } from './routes/integrations.ts';
+import { registerCampaignRoutes } from './routes/campaigns.ts';
 import { registerLinkRoutes } from './routes/links.ts';
 import { registerMessageViewRoutes } from './routes/messages.ts';
 import { registerNotificationRoutes } from './routes/notifications.ts';
@@ -463,6 +464,7 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   registerUserRoutes(app, deps, render);
   registerOverviewRoutes(app, deps, render);
   registerPackageViewRoutes(app, deps, render);
+  registerCampaignRoutes(app, deps, render);
   registerMessageViewRoutes(app, deps, render);
   registerInboundViewRoutes(app, deps, render);
   registerDeliveryRoutes(app, deps, render);

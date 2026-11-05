@@ -21,6 +21,7 @@ import type { LinkDomainsRepo } from '../store/link-domains.ts';
 import type { ShortLinksRepo } from '../store/short-links.ts';
 import type { ClientPool } from '../worker/clients.ts';
 import { AuthError } from './auth.ts';
+import { registerCampaignRoutes } from './campaigns.ts';
 import { registerCancelRoute } from './cancel.ts';
 import { ApiError } from './errors.ts';
 import { registerHealthRoute, type InboundHealth } from './health.ts';
@@ -118,6 +119,7 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
   registerKeyInfoRoute(app, deps);
   registerCancelRoute(app, deps);
   registerPackageRoutes(app, deps);
+  registerCampaignRoutes(app, deps);
   registerPaIntegrationRoutes(app, deps);
   registerInboundRoutes(app, deps);
   registerHookRoutes(app, deps);

@@ -244,6 +244,8 @@ a.tile:hover { border-color: var(--edge); }
            letter-spacing: -0.02em; margin-top: 7px; }
 .tile .n.ok { color: var(--ok); }
 .tile .n.fail { color: var(--fail); }
+.tile .n.sig { color: var(--signal); }
+.tile .n.dim { color: var(--muted); }
 .tile .d { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
 /* Ostrzeżenie o stanie bramki. Nazwa różni się od `.warn`, które niesie błąd formularza. */
 .alert { display: flex; align-items: center; justify-content: space-between; gap: 14px;
@@ -329,3 +331,19 @@ details.panel > summary { cursor: pointer; font-size: 12.5px; }
        white-space: pre-wrap; word-break: break-all; margin: 6px 0 10px; }
 /* Podpowiedź o pierwszym koncie nad formularzem logowania: oddzielona linią, żeby nie zlewała się z polami. */
 .gate-card .help-body + form { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--rule); }
+
+/* Kampanie: wykres kliknięć rysowany po stronie serwera, z nocą 22:00-7:00 na jaśniejszym tle. */
+.chart { padding: 12px 14px 6px; }
+.chart-svg { display: block; width: 100%; height: auto; }
+.chart-svg .bar { fill: var(--signal); }
+.chart-svg .bar-night { fill: #D9B9A4; }
+.chart-svg .night { fill: #F6F1EC; }
+.chart-svg .axis { stroke: var(--rule); }
+.chart-svg text { fill: var(--faint); font-family: 'IBM Plex Mono', monospace; font-size: 10px; }
+.legend { display: flex; gap: 16px; font-size: 11.5px; color: var(--muted); padding: 0 14px 10px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.legend .lg-bar { background: var(--signal); }
+.legend .lg-night { background: #D9B9A4; }
+.cols-links { grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr); }
+td.url { word-break: break-all; }
+th.r, td.r { text-align: right; }

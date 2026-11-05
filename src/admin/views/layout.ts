@@ -3,7 +3,7 @@ import type { ReleaseInfo } from '../../store/settings.ts';
 import { GATE_VERSION } from '../../version.ts';
 import { FAVICON_LINK } from './favicon.ts';
 
-export type NavKey = 'przeglad' | 'wiadomosci' | 'rozsylki' | 'odebrane' | 'konta' | 'microsoft-365' | 'klucze' | 'integracje' | 'skracacz'
+export type NavKey = 'przeglad' | 'wiadomosci' | 'rozsylki' | 'kampanie' | 'odebrane' | 'konta' | 'microsoft-365' | 'klucze' | 'integracje' | 'skracacz'
   | 'uzytkownicy' | 'powiadomienia' | 'dziennik';
 
 export interface NavCounts {
@@ -41,6 +41,7 @@ const NAV: Array<{ key: NavKey; label: string; group: string }> = [
   { key: 'przeglad', label: 'Przegląd', group: 'Ruch' },
   { key: 'wiadomosci', label: 'Wiadomości', group: 'Ruch' },
   { key: 'rozsylki', label: 'Rozsyłki', group: 'Ruch' },
+  { key: 'kampanie', label: 'Kampanie', group: 'Ruch' },
   { key: 'odebrane', label: 'Odebrane', group: 'Ruch' },
   { key: 'konta', label: 'Konta Multiinfo', group: 'Konfiguracja' },
   { key: 'microsoft-365', label: 'Konta Microsoft 365', group: 'Konfiguracja' },

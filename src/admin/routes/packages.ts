@@ -7,6 +7,13 @@ import { packagePage, packagesPage } from '../views/packages.ts';
 
 const PAGE_SIZE = 25;
 
+/** Odnośnik do kampanii krótkich linków; brak dla wysyłki bez skróconych linków. */
+export function campaignLink(deps: Pick<AdminDeps, 'campaigns'>, campaignId: number | null): { id: number; name: string } | null {
+  if (campaignId === null) return null;
+  const campaign = deps.campaigns.get(campaignId);
+  return campaign === undefined ? null : { id: campaign.id, name: campaign.name };
+}
+
 /** Tylu odbiorców pokazujemy w szczególe; pełna lista jest w CSV. */
 const RECIPIENTS_SHOWN = 200;
 
@@ -48,6 +55,7 @@ export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps,
         recipients: deps.packages.recipients(row.id, RECIPIENTS_SHOWN),
         shown: RECIPIENTS_SHOWN,
         summary: row.reportStatus === 'ready' ? deps.packages.recipientSummary(row.id) : null,
+        campaign: campaignLink(deps, row.campaignId),
       }),
     });
   });

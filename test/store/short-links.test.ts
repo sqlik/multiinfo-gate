@@ -166,4 +166,33 @@ describe('ShortLinksRepo', () => {
       count: 2, domainId: row.domainId, campaignId, expiresAt: row.expiresAt,
     });
   });
+
+  it('kampania w skrócie: domena ostatniego kodu, najpóźniejsze wygaśnięcie i dopisywanie UTM', () => {
+    const { db, links, input, campaignId, otherCampaignId } = setup();
+    expect(links.campaignSummary(campaignId)).toBeUndefined();
+    const other = new LinkDomainsRepo(db).create({ domain: 'firma-link.pl', displayName: 'Firma Serwis', homeUrl: null, bareLinks: false }, AT);
+    links.insert(input('kod0001', { expiresAt: '2027-03-01T10:00:00.000Z', utm: 0 }));
+    links.insert(input('kod0002', { domainId: other, expiresAt: '2027-02-01T10:00:00.000Z', utm: 1, createdAt: t(5).toISOString() }));
+    links.insert(input('kod0003', { campaignId: otherCampaignId, utm: 0 }));
+    expect(links.campaignSummary(campaignId)).toEqual({ domain: 'firma-link.pl', expiresAt: '2027-03-01T10:00:00.000Z', utm: true });
+    expect(links.campaignSummary(otherCampaignId)).toMatchObject({ domain: 'l.firma.pl', utm: false });
+  });
+
+  it('liczby rozsyłki: kody, odbiorcy z otwarciem, kliknięcia ludzi i pierwsze otwarcie', () => {
+    const { links, input } = setup();
+    expect(links.packageStats('pkg_1')).toBeUndefined();
+    const pkg = (code: string, seq: number) => input(code, { messageId: null, packageId: 'pkg_1', seq, recipientKey: `pkg_1#${seq}` });
+    links.insert(pkg('kod0001', 1));
+    links.insert(pkg('kod0002', 1));
+    links.insert(pkg('kod0003', 2));
+    links.insert(pkg('kod0004', 3));
+    links.click('kod0002', t(9), false);
+    links.click('kod0001', t(3), false);
+    links.click('kod0001', t(4), false);
+    links.click('kod0003', t(7), false);
+    links.click('kod0004', t(1), true);
+    expect(links.packageStats('pkg_1')).toEqual({
+      count: 4, opens: 2, clicks: 4, firstOpenedAt: t(3).toISOString(), domain: 'l.firma.pl', expiresAt: '2027-02-03T10:00:00.000Z',
+    });
+  });
 });

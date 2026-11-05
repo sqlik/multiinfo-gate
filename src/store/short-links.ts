@@ -73,8 +73,11 @@ export class ShortLinksRepo {
       .run(at.toISOString(), campaignId).changes;
   }
 
+  /** Przywraca kody kampanii z pominięciem kodów anulowanych wiadomości, które pozostają wyłączone. */
   enableCampaign(campaignId: number): number {
-    return this.db.prepare('UPDATE short_links SET disabled_at = NULL WHERE campaign_id = ? AND disabled_at IS NOT NULL')
+    return this.db
+      .prepare(`UPDATE short_links SET disabled_at = NULL WHERE campaign_id = ? AND disabled_at IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.id = short_links.message_id AND m.status = 'cancelled')`)
       .run(campaignId).changes;
   }
 
@@ -99,6 +102,39 @@ export class ShortLinksRepo {
       .get(packageId) as { count: number; domain_id: number | null; campaign_id: number | null; expires_at: string | null };
     if (row.count === 0 || row.domain_id === null || row.campaign_id === null || row.expires_at === null) return undefined;
     return { count: row.count, domainId: row.domain_id, campaignId: row.campaign_id, expiresAt: row.expires_at };
+  }
+
+  /**
+   * Kody kampanii w skrócie: domena najnowszego kodu, najpóźniejsze wygaśnięcie i dopisywanie UTM przez
+   * którykolwiek kod. Kampania bez kodów, na przykład po retencji, daje `undefined`.
+   */
+  campaignSummary(campaignId: number): { domain: string; expiresAt: string; utm: boolean } | undefined {
+    const row = this.db
+      .prepare(`SELECT (SELECT d.domain FROM short_links s JOIN link_domains d ON d.id = s.domain_id WHERE s.campaign_id = @id
+                        ORDER BY s.created_at DESC, s.rowid DESC LIMIT 1) AS domain,
+                       MAX(expires_at) AS expires_at, MAX(utm) AS utm
+                FROM short_links WHERE campaign_id = @id`)
+      .get({ id: campaignId }) as { domain: string | null; expires_at: string | null; utm: 0 | 1 | null };
+    if (row.domain === null || row.expires_at === null) return undefined;
+    return { domain: row.domain, expiresAt: row.expires_at, utm: row.utm === 1 };
+  }
+
+  /** Liczby rozsyłki z jej kodów: odbiorcy z otwarciem i kliknięcia ludzi; rozsyłka bez kodów daje `undefined`. */
+  packageStats(packageId: string): {
+    count: number; opens: number; clicks: number; firstOpenedAt: string | null; domain: string; expiresAt: string;
+  } | undefined {
+    const row = this.db
+      .prepare(`SELECT COUNT(*) AS count, COUNT(DISTINCT CASE WHEN s.first_opened_at IS NOT NULL THEN s.recipient_key END) AS opens,
+                  COALESCE(SUM(s.clicks), 0) AS clicks, MIN(s.first_opened_at) AS first_opened_at, MIN(d.domain) AS domain,
+                  MAX(s.expires_at) AS expires_at
+                FROM short_links s JOIN link_domains d ON d.id = s.domain_id WHERE s.package_id = ?`)
+      .get(packageId) as {
+        count: number; opens: number; clicks: number; first_opened_at: string | null; domain: string | null; expires_at: string | null;
+      };
+    if (row.count === 0 || row.domain === null || row.expires_at === null) return undefined;
+    return {
+      count: row.count, opens: row.opens, clicks: row.clicks, firstOpenedAt: row.first_opened_at, domain: row.domain, expiresAt: row.expires_at,
+    };
   }
 
   /** Odbiorcy z otwarciem, zgrupowani po `recipient_key`, od najnowszego kliknięcia. */

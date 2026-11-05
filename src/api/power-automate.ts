@@ -185,6 +185,9 @@ const LABELS_BY_PATH: Record<string, string> = {
   'PrzyjetaWiadomosc.links.expiresAt': 'Linki ważne do',
   'PrzyjetaRozsylka.links.expiresAt': 'Linki ważne do',
   'WysylkaDoGrupy.messages[].links.expiresAt': 'Linki ważne do',
+  'Wiadomosc.links.expiresAt': 'Linki ważne do',
+  'Wiadomosc.links.shortLinks[].url': 'Krótki link',
+  'Rozsylka.links.expiresAt': 'Linki ważne do',
 };
 
 const LABELS_BY_NAME: Record<string, string> = {
@@ -244,6 +247,12 @@ const LABELS_BY_NAME: Record<string, string> = {
   skipped: 'Pominięte linki',
   url: 'Adres',
   reason: 'Powód',
+  opens: 'Odbiorcy z otwarciem',
+  clicks: 'Kliknięcia',
+  firstOpenedAt: 'Pierwsze otwarcie',
+  detailsPurged: 'Szczegóły usunięte po retencji',
+  shortLinks: 'Lista krótkich linków',
+  target: 'Adres docelowy',
 };
 
 /**
