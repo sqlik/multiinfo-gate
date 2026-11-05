@@ -1,7 +1,9 @@
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { defaultMailInConfig, type MailInConfig } from '../../src/integrations/config.ts';
-import type { ParsedMail } from '../../src/integrations/mail/parse.ts';
+import { parseMail, type ParsedMail } from '../../src/integrations/mail/parse.ts';
+import { M365_IMAP } from '../../src/m365/oauth.ts';
 import { previewMailIn, runMailIn, type MailInIntegration } from '../../src/integrations/pipeline.ts';
 import { TemplateEngine } from '../../src/integrations/templates.ts';
 import { openDatabase } from '../../src/store/db.ts';
@@ -39,7 +41,7 @@ beforeEach(() => {
 
 const mail = (over: Partial<ParsedMail> = {}): ParsedMail => ({
   from: 'jan@przyklad.test', fromName: 'Jan', subject: 'Awaria', textFull: 'Serwer padł\n\nPozdrawiam\nJan', date: NOW.toISOString(),
-  to: ['bramka@przyklad.test'], messageId: '<m1@przyklad.test>', authResults: [], auto: false, ...over,
+  to: ['bramka@przyklad.test'], messageId: '<m1@przyklad.test>', authResults: [], exchangeAuthAs: null, auto: false, ...over,
 });
 let seq = 0;
 const make = (config: Partial<MailInConfig>, storePayloads: 0 | 1 = 0) => {
@@ -53,6 +55,67 @@ const make = (config: Partial<MailInConfig>, storePayloads: 0 | 1 = 0) => {
 };
 const events = (id: number) => deps.integrationEvents.list(id, 10).map((e) => [e.result, e.reason]);
 const lastBody = (out: { kind: string; messageIds?: string[] }) => deps.messages.get((out as { messageIds: string[] }).messageIds[0]!)!.body;
+
+describe('runMailIn: sprawdzenie nadawcy w skrzynce Microsoft 365', () => {
+  const fixture = (name: string) => readFileSync(new URL(`../fixtures/mail/${name}`, import.meta.url));
+  const parsed = (name: string) => parseMail(fixture(name), NOW);
+  const fromText = (text: string) => parseMail(Buffer.from(text), NOW);
+  const senders = [{ pattern: '@firma.pl', recipients: [] }, { pattern: '@przyklad.pl', recipients: [] }];
+  const m365 = () => make({ requireAuthResults: true, senders, imap: { ...M365_IMAP, user: 'alarmy@firma.pl', passRef: 'imap_password', auth: { mode: 'm365', accountId: 1 } } });
+  const password = () => make({ requireAuthResults: true, senders, imap: { ...defaultMailInConfig().imap, host: 'imap.firma.pl', user: 'alarmy@firma.pl' } });
+
+  it('mail wewnętrzny z Outlooka bez Authentication-Results i mail wewnętrzny z SMTP z dkim=none przechodzą', async () => {
+    const integ = m365();
+    expect((await runMailIn(deps, integ, await parsed('m365-wewnetrzny-outlook.eml'), NOW)).kind).toBe('sent');
+    expect((await runMailIn(deps, integ, await parsed('m365-wewnetrzny-smtp.eml'), NOW)).kind).toBe('sent');
+  });
+
+  it('te same maile w skrzynce logowanej hasłem są odrzucone jak dotąd', async () => {
+    const integ = password();
+    expect(await runMailIn(deps, integ, await parsed('m365-wewnetrzny-outlook.eml'), NOW)).toEqual({ kind: 'skipped', reason: 'auth_failed' });
+    expect(await runMailIn(deps, integ, await parsed('m365-wewnetrzny-smtp.eml'), NOW)).toEqual({ kind: 'skipped', reason: 'auth_failed' });
+  });
+
+  it('mail z zewnątrz bez spf=pass, oznaczony przez Exchange jako Anonymous, jest odrzucony', async () => {
+    expect(await runMailIn(deps, m365(), await parsed('m365-zewnetrzny-bez-spf.eml'), NOW)).toEqual({ kind: 'skipped', reason: 'auth_failed' });
+  });
+
+  it('mail z zewnątrz z spf=pass przechodzi w obu postaciach nagłówka Authentication-Results', async () => {
+    const integ = m365();
+    expect((await runMailIn(deps, integ, await parsed('m365-zewnetrzny-spf.eml'), NOW)).kind).toBe('sent');
+    expect((await runMailIn(deps, integ, await parsed('m365-zewnetrzny-stary-format.eml'), NOW)).kind).toBe('sent');
+  });
+
+  it('dwa nagłówki AuthAs (Internal i Anonymous) dają odrzucenie', async () => {
+    const source = fixture('m365-zewnetrzny-bez-spf.eml').toString('utf8').replace('X-MS-Exchange-Organization-AuthAs: Anonymous', 'X-MS-Exchange-Organization-AuthAs: Internal\r\nX-MS-Exchange-Organization-AuthAs: Anonymous');
+    expect(await runMailIn(deps, m365(), await fromText(source), NOW)).toEqual({ kind: 'skipped', reason: 'auth_failed' });
+  });
+
+  it('oznaczenie wewnętrzne nie przepuszcza nadawcy spoza domeny skrzynki bez SPF/DKIM, na przykład przez przekaźnik SMTP', async () => {
+    const source = fixture('m365-wewnetrzny-outlook.eml').toString('utf8').replace('From: Jan Kowalski <jan.kowalski@firma.pl>', 'From: Serwis UPS <serwis@przyklad.pl>');
+    expect(source).toContain('serwis@przyklad.pl');
+    const integ = m365();
+    expect(await runMailIn(deps, integ, await fromText(source), NOW)).toEqual({ kind: 'skipped', reason: 'auth_failed' });
+    // Domena podobna z nazwy, ale inna: firma.pl.przyklad.pl ani innafirma.pl nie należą do firma.pl.
+    for (const from of ['jan@firma.pl.przyklad.pl', 'jan@innafirma.pl']) {
+      const other = fixture('m365-wewnetrzny-outlook.eml').toString('utf8').replace('jan.kowalski@firma.pl', from);
+      const outsider = make({ requireAuthResults: true, senders: [{ pattern: from, recipients: [] }], imap: integ.config.imap });
+      expect(await runMailIn(deps, outsider, await fromText(other), NOW)).toEqual({ kind: 'skipped', reason: 'auth_failed' });
+    }
+  });
+
+  it('oznaczenie wewnętrzne przepuszcza nadawcę z poddomeny domeny skrzynki', async () => {
+    const source = fixture('m365-wewnetrzny-outlook.eml').toString('utf8').replace('jan.kowalski@firma.pl', 'jan.kowalski@serwis.firma.pl');
+    const integ = make({ requireAuthResults: true, senders: [{ pattern: '@serwis.firma.pl', recipients: [] }], imap: m365().config.imap });
+    expect((await runMailIn(deps, integ, await fromText(source), NOW)).kind).toBe('sent');
+  });
+
+  it('CrossTenant-AuthAs: Internal przy Organization-AuthAs: Anonymous daje odrzucenie', async () => {
+    const source = fixture('m365-zewnetrzny-bez-spf.eml').toString('utf8').replace('X-MS-Exchange-CrossTenant-AuthAs: Anonymous', 'X-MS-Exchange-CrossTenant-AuthAs: Internal');
+    expect(source).toContain('X-MS-Exchange-CrossTenant-AuthAs: Internal');
+    expect(await runMailIn(deps, m365(), await fromText(source), NOW)).toEqual({ kind: 'skipped', reason: 'auth_failed' });
+  });
+});
 
 describe('runMailIn', () => {
   it('z authservId wiadomość z nagłówkiem innego serwera jest pomijana z powodem z nazwą', async () => {

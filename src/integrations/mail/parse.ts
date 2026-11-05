@@ -15,6 +15,12 @@ export interface ParsedMail {
   messageId: string | null;
   /** Każdy nagłówek `Authentication-Results` w całości, w kolejności z maila. */
   authResults: string[];
+  /**
+   * Wartość `X-MS-Exchange-Organization-AuthAs` małymi literami („internal”, „anonymous”), gdy nagłówek występuje
+   * dokładnie raz; w przeciwnym razie `null`. Exchange Online usuwa ten nagłówek z poczty z zewnątrz i wstawia
+   * własny. `X-MS-Exchange-CrossTenant-AuthAs` nie jest czytany, bo może opisywać tenant nadawcy.
+   */
+  exchangeAuthAs: string | null;
   /** Mail automatyczny (RFC 3834): autoresponder, urządzenie, lista dyskusyjna; bramka na taki nie odpisuje. */
   auto: boolean;
 }
@@ -49,9 +55,22 @@ function isAutomatic(headers: Map<string, unknown>): boolean {
   return headers.has('x-auto-response-suppress');
 }
 
+const AUTH_AS = 'x-ms-exchange-organization-authas';
+
+/** Wartość nagłówka AuthAs z surowych linii nagłówków: tylko przy jednym wystąpieniu, bez zawinięć, małymi literami. */
+function exchangeAuthAsOf(lines: ReadonlyArray<{ key: string; line: string }>): string | null {
+  const found = lines.filter((h) => h.key === AUTH_AS);
+  if (found.length !== 1) return null;
+  const line = found[0]!.line;
+  const value = line.slice(line.indexOf(':') + 1).replace(/\s+/g, ' ').trim().toLowerCase();
+  return value === '' ? null : value;
+}
+
 export async function parseMail(source: Buffer, now: Date = new Date()): Promise<ParsedMail> {
   const mail = await simpleParser(source, { skipHtmlToText: true, skipImageLinks: true, skipTextToHtml: true, skipTextLinks: true });
-  const from = addressesOf(mail.from);
+  // Kilka nagłówków From: biblioteka bierze pierwszy, a serwer mógł sprawdzić inny, dlatego nadawca zostaje pusty.
+  const fromLines = mail.headerLines.filter((h) => h.key === 'from').length;
+  const from = fromLines > 1 ? [] : addressesOf(mail.from);
   const textFull = typeof mail.text === 'string' && mail.text.trim() !== ''
     ? mail.text.trim()
     : typeof mail.html === 'string' && mail.html !== '' ? htmlToPlain(mail.html) : '';
@@ -66,6 +85,7 @@ export async function parseMail(source: Buffer, now: Date = new Date()): Promise
     to: addressesOf(mail.to).map((a) => a.address),
     messageId: mail.messageId ?? null,
     authResults,
+    exchangeAuthAs: exchangeAuthAsOf(mail.headerLines),
     auto: isAutomatic(mail.headers as Map<string, unknown>),
   };
 }

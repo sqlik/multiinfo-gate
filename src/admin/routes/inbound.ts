@@ -48,7 +48,7 @@ export function registerInboundViewRoutes(app: FastifyInstance, deps: AdminDeps,
       ...(filters.od === null ? {} : { sender: senderFilter(filters.od, filters.konto) }),
       ...(filters.dzienOd === null ? {} : { since: startOfWarsawDay(filters.dzienOd) }),
       ...(filters.dzienDo === null ? {} : { until: endOfWarsawDay(filters.dzienDo) }),
-      limit: PAGE_SIZE + 1, offset,
+      includeSystem: true, limit: PAGE_SIZE + 1, offset,
     });
     return render.page(request, {
       title: 'Odebrane', active: 'odebrane',

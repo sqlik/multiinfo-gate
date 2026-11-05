@@ -7,7 +7,7 @@ export const pocztaOvh: Preset = {
   blurb: 'Skrzynka w usłudze OVH MX Plan, hasło skrzynki',
   kinds: ['mail_in'],
   fields: [],
-  mailIn: { imap: { host: 'imap.mail.ovh.net', port: 993, security: 'tls', verifyCert: true, user: '', passRef: 'imap_password' } },
+  mailIn: { imap: { host: 'imap.mail.ovh.net', port: 993, security: 'tls', verifyCert: true, user: '', passRef: 'imap_password', auth: { mode: 'password' } } },
   guide: `Skrzynka z usługi **MX Plan** (poczta przy domenie albo hostingu) łączy się z serwerem \`imap.mail.ovh.net\` na porcie 993 z TLS. Starsza nazwa \`ssl0.ovh.net\` nadal działa.
 
 1. Login to pełny adres skrzynki, np. \`alarmy@firma.pl\`.

@@ -13,8 +13,11 @@ import { Receiver } from './inbound/receiver.ts';
 import { SourceMatcher } from './integrations/sources.ts';
 import { TemplateEngine } from './integrations/templates.ts';
 import { createLogger, type Logger } from './log.ts';
+import { nodeUpdateNeeded, plainVersion, unsupportedLine } from './runtime/node-version.ts';
+import { problemUrl } from './docs-links.ts';
 import { systemResolver } from './net/private-address.ts';
-import { Notifier } from './notifications/notifier.ts';
+import { Notifier, subjectNamer } from './notifications/notifier.ts';
+import { sendNotificationSms } from './notifications/sms.ts';
 import { NotificationScanner } from './notifications/scanner.ts';
 import { pendingRelease, ReleaseChecker } from './releases/check.ts';
 import { AccountsRepo } from './store/accounts.ts';
@@ -35,6 +38,10 @@ import { JobsRepo } from './store/jobs.ts';
 import { MessageEventsRepo } from './store/message-events.ts';
 import { MessagesRepo } from './store/messages.ts';
 import { NotificationsRepo } from './store/notifications.ts';
+import { M365AccountsRepo } from './store/m365-accounts.ts';
+import { fetchToken } from './m365/oauth.ts';
+import { M365Service } from './m365/service.ts';
+import { M365Tokens } from './m365/tokens.ts';
 import { SettingsRepo } from './store/settings.ts';
 import { PackagesRepo } from './store/packages.ts';
 import { WebhookDeliveriesRepo } from './store/webhook-deliveries.ts';
@@ -53,6 +60,8 @@ export interface StartOptions {
   /** Wariant instalacji do poleceń na stronach pomocy; domyślnie rozpoznawany z systemu plików. */
   install?: InstallKind | null;
   log?: Logger;
+  /** Wersja Node do sprawdzenia poprawek bezpieczeństwa; domyślnie `process.version`. */
+  nodeVersion?: string;
 }
 
 /**
@@ -63,7 +72,7 @@ export async function startGate(config: AppConfig, opts: StartOptions = {}): Pro
   const log = opts.log ?? createLogger(config.logLevel);
   const install = opts.install === undefined ? detectInstall() : opts.install;
   try {
-    return await startNormal(config, log, install);
+    return await startNormal(config, log, install, opts.nodeVersion ?? process.version);
   } catch (error) {
     if (isListenError(error)) throw error;
     return startEmergency(config, { reason: classifyStartupError(error), id: newIncidentId() }, { install, log, error });
@@ -113,7 +122,7 @@ async function prepareDatabase(config: AppConfig, log: Logger): Promise<Database
   }
 }
 
-async function startNormal(config: AppConfig, log: Logger, install: InstallKind | null): Promise<RunningGate> {
+async function startNormal(config: AppConfig, log: Logger, install: InstallKind | null, nodeVersion: string): Promise<RunningGate> {
   const db = await prepareDatabase(config, log);
 
   const accounts = new AccountsRepo(db, config.masterKey);
@@ -136,7 +145,14 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const engine = new TemplateEngine();
   const notifications = new NotificationsRepo(db, config.masterKey);
   const settings = new SettingsRepo(db);
-  const notifier = new Notifier({ notifications, jobs, log });
+  const m365Accounts = new M365AccountsRepo(db, config.masterKey);
+  const notifier = new Notifier({
+    notifications, jobs, log,
+    sms: (text, now) => sendNotificationSms({ accounts, apiKeys, messages, events, jobs, inbound, notifications }, text, now),
+    subjectName: subjectNamer({ integrations, accounts, m365Accounts }),
+  });
+  const m365Tokens = new M365Tokens({ accounts: m365Accounts, fetch: fetchToken, notifier, log });
+  const m365 = new M365Service({ accounts: m365Accounts, tokens: m365Tokens, fetch: fetchToken, integrations, notifications, audit });
   const scanner = new NotificationScanner({
     accounts, inboundServices, messages, inbound, integrations, deliveries, notifications, notifier, jobs, log,
     release: () => pendingRelease(settings), mailIn,
@@ -151,12 +167,13 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const mailInPoller = new MailInPoller({
     accounts, apiKeys, messages, events, jobs, inbound, integrations, integrationEvents, guards, engine,
     mailIn, connect: imapConnect, resolve: systemResolver, allowPrivateMail: config.mailAllowPrivate, notifier, notifications, log,
+    m365: { tokens: m365Tokens, accounts: m365Accounts },
   });
   const worker = new Worker({
     accounts, apiKeys, messages, events, deliveries, packages, jobs, clients, inbound,
     reportsDir: join(config.dataDir, 'reports'), log, allowPrivateWebhooks: config.webhookAllowPrivate,
     integrationEmit, integrations, integrationEvents, guards, notifier, notifications, scanner, releases,
-    mailIn: mailInPoller, mailInRepo: mailIn,
+    mailIn: mailInPoller, mailInRepo: mailIn, m365: { tokens: m365Tokens, accounts: m365Accounts }, m365KeepAlive: m365Tokens,
   });
 
   const receiver = new Receiver({
@@ -176,8 +193,9 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
     integrationEvents, guards, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
+    trustedProxies: config.trustedProxies,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate, allowPrivateMail: config.mailAllowPrivate,
-    log, install,
+    log, install, nodeVersion, m365, m365Accounts, m365Tokens,
   });
 
   // Panel domyślnie zostaje na pętli zwrotnej (MIG_ADMIN_HOST); w kontenerze o wystawieniu
@@ -230,6 +248,12 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     inboundIdleMs: config.inboundIdleMs,
     trustedProxies: config.trustedProxies.length,
   });
+  const nodeMinimum = nodeUpdateNeeded(nodeVersion);
+  if (nodeMinimum !== null) {
+    log.warn('node.bez_poprawek', {
+      installed: plainVersion(nodeVersion), minimum: nodeMinimum, unsupportedLine: unsupportedLine(nodeVersion, nodeMinimum), help: problemUrl('wersja-node'),
+    });
+  }
   return running;
 }
 

@@ -9,16 +9,20 @@ export interface InboundRow {
   relatedMessageId: string | null; receivedAt: string; createdAt: string;
   /** Identyfikator zgłoszenia zwrócony przez obcą aplikację i integracja wychodząca, która go pozyskała. */
   externalRef: string | null; externalIntegrationId: number | null;
+  /** 1 = odpowiedź na SMS powiadomienia bramki; widoczna tylko w panelu. */
+  system: 0 | 1;
 }
 
 /** Odebrana wiadomość przy zapisie: identyfikator zgłoszenia dochodzi później, po dostawie. */
-export type InboundInput = Omit<InboundRow, 'externalRef' | 'externalIntegrationId'>;
+export type InboundInput = Omit<InboundRow, 'externalRef' | 'externalIntegrationId' | 'system'> & { system?: 0 | 1 };
 
 export interface InboundFilter {
   accountId?: number;
   /** Usługi, do których pytający ma dostęp; pusta lista to pusta odpowiedź, brak pola nie zawęża. */
   serviceIds?: string[];
   sender?: string; since?: string; until?: string;
+  /** Odpowiedzi na SMS-y powiadomień tylko na życzenie panelu; API ich nie widzi. */
+  includeSystem?: boolean;
   limit: number; offset: number;
 }
 
@@ -27,14 +31,14 @@ interface Raw {
   kind: InboundKind; body: string | null; body_hash: string;
   protocol_id: number; coding_scheme: number; connector_id: string | null;
   related_message_id: string | null; received_at: string; created_at: string;
-  external_ref: string | null; external_integration_id: number | null;
+  external_ref: string | null; external_integration_id: number | null; system: 0 | 1;
 }
 
 const toRow = (r: Raw): InboundRow => ({
   id: r.id, accountId: r.account_id, serviceId: r.service_id, miId: r.mi_id, sender: r.sender, dest: r.dest,
   kind: r.kind, body: r.body, bodyHash: r.body_hash, protocolId: r.protocol_id, codingScheme: r.coding_scheme,
   connectorId: r.connector_id, relatedMessageId: r.related_message_id, receivedAt: r.received_at, createdAt: r.created_at,
-  externalRef: r.external_ref, externalIntegrationId: r.external_integration_id,
+  externalRef: r.external_ref, externalIntegrationId: r.external_integration_id, system: r.system,
 });
 
 /** Wiadomości przychodzące od abonentów, odebrane z Multiinfo. */
@@ -54,12 +58,12 @@ export class InboundMessagesRepo {
       .prepare(
         `INSERT OR IGNORE INTO inbound_messages (
            id, account_id, service_id, mi_id, sender, dest, kind, body, body_hash,
-           protocol_id, coding_scheme, connector_id, related_message_id, received_at, created_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           protocol_id, coding_scheme, connector_id, related_message_id, received_at, created_at, system
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         i.id, i.accountId, i.serviceId, i.miId, i.sender, i.dest, i.kind, i.body, i.bodyHash,
-        i.protocolId, i.codingScheme, i.connectorId, i.relatedMessageId, i.receivedAt, i.createdAt,
+        i.protocolId, i.codingScheme, i.connectorId, i.relatedMessageId, i.receivedAt, i.createdAt, i.system ?? 0,
       );
     return info.changes === 1;
   }
@@ -72,6 +76,7 @@ export class InboundMessagesRepo {
   list(f: InboundFilter): InboundRow[] {
     const where: string[] = [];
     const params: Array<string | number> = [];
+    if (f.includeSystem !== true) where.push('system = 0');
     if (f.accountId !== undefined) { where.push('account_id = ?'); params.push(f.accountId); }
     if (f.serviceIds !== undefined) {
       if (f.serviceIds.length === 0) return [];

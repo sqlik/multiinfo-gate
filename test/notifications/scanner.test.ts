@@ -141,6 +141,18 @@ describe('NotificationScanner - podsumowanie dzienne', () => {
     expect(mails()).toHaveLength(1);
   });
 
+  it('podsumowanie dzienne z przełącznikiem SMS: wpis także do kanału SMS, a bez SMTP wyłącznie SMS', () => {
+    notifications.saveRule('daily_summary', { enabled: 1, maxPerHour: 1, groupHours: 0, params: { hour: 12 }, sms: 1 });
+    notifications.saveSmsSettings({ enabled: true, recipients: ['48601000001'], apiKeyId: null, orig: null }, T0);
+    scanner.scan(T0);
+    expect(jobs.depth()).toBe(0);
+    expect(notifications.pendingSms('daily_summary')).toHaveLength(1);
+    smtp();
+    scanner.scan(new Date('2026-09-03T10:00:00Z'));
+    expect(mails()).toHaveLength(1);
+    expect(notifications.pendingSms('daily_summary')).toHaveLength(2);
+  });
+
   it('podsumowanie dzienne wymienia skrzynki pocztowe i te w błędzie', () => {
     enable(12);
     smtp();

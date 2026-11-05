@@ -13,7 +13,7 @@ import { confirmText, type ConfirmEvent } from './group/confirm.ts';
 import { groupRecipients, groupSender } from './group/members.ts';
 import { matchPrefix } from './group/prefix.ts';
 import { matches } from './conditions.ts';
-import { authResultsPass, domainOf } from './mail/auth-results.ts';
+import { authResultsFailDmarc, authResultsPass, domainOf, inDomain } from './mail/auth-results.ts';
 import { cleanText } from './mail/clean.ts';
 import { FieldError, extractFields } from './mail/fields.ts';
 import type { ParsedMail } from './mail/parse.ts';
@@ -449,6 +449,14 @@ function prepareMail(engine: TemplateEngine, config: MailInConfig, mail: ParsedM
  * warunek i burza, odbiorcy z trzech poziomów, wysyłka, wpis dziennika. Działanie na mailu
  * oraz odpowiedź do nadawcy robi wołający (poller), bo potok nie zna sesji IMAP.
  */
+/** Temat maila w podsumowaniu wpisu dziennika: ucięty do 80 znaków, a pusty jako „temat (bez tematu)”. */
+export function subjectNote(subject: string): string {
+  const t = subject.trim();
+  // Bez znaków sterujących i znaków kierunku tekstu, które zmieniłyby wygląd wpisu; ucięcie po znakach, nie po połówkach par zastępczych.
+  const clean = t.replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '');
+  return clean === '' ? 'temat (bez tematu)' : `temat „${Array.from(clean).slice(0, 80).join('')}”`;
+}
+
 export async function runMailIn(deps: PipelineDeps, integration: MailInIntegration, mail: ParsedMail, now: Date): Promise<MailInOutcome> {
   const log = deps.log ?? silentLogger;
   const config = integration.config;
@@ -456,7 +464,7 @@ export async function runMailIn(deps: PipelineDeps, integration: MailInIntegrati
     ? JSON.stringify({ from: mail.from, from_name: mail.fromName, subject: mail.subject, text_full: mail.textFull, date: mail.date, message_id: mail.messageId })
     : null;
   // Spec 4.5: podsumowanie wpisu to nadawca (w polu źródła) oraz temat ucięty do 80 znaków, dopisany po właściwym powodzie.
-  const subject = mail.subject.trim() === '' ? 'temat (bez tematu)' : `temat „${mail.subject.trim().slice(0, 80)}”`;
+  const subject = subjectNote(mail.subject);
   const note: Noter = (result, extra = {}) =>
     deps.integrationEvents.record({
       integrationId: integration.id, at: now, result, payload: stored, logLimit: config.eventLogLimit, ...(mail.from ? { sourceIp: mail.from } : {}), ...extra,
@@ -481,7 +489,15 @@ export async function runMailIn(deps: PipelineDeps, integration: MailInIntegrati
     note('skipped', { reason: `nadawca spoza listy: ${mail.from || 'brak adresu'}` });
     return { kind: 'skipped', reason: 'sender_not_allowed' };
   }
-  if (config.requireAuthResults && !authResultsPass(mail.authResults, domainOf(mail.from), config.authservId)) {
+  // W skrzynce Microsoft 365 mail wysłany wewnątrz organizacji nie zawiera spf=pass ani dkim=pass, ale Exchange oznacza go
+  // jako wewnętrzny; nadawca z zewnątrz tego oznaczenia nie podrobi, bo Exchange usuwa nagłówek i wstawia własny.
+  // Oznaczenie liczy się tylko dla nadawcy z domeny skrzynki: przekaźnik SMTP albo Exchange hybrydowy mogą oznaczyć
+  // jako wewnętrzny mail z dowolnym From, a adres spoza organizacji wymaga potwierdzenia SPF/DKIM.
+  // Mail podszyty z zewnątrz i przekierowany regułą skrzynki pracownika może otrzymać oznaczenie wewnętrzne, ale zachowuje
+  // wynik DMARC z pierwszego przyjęcia, dlatego jawna porażka DMARC albo compauth wyłącza oznaczenie.
+  const exchangeInternal = config.imap.auth.mode === 'm365' && mail.exchangeAuthAs === 'internal'
+    && inDomain(domainOf(mail.from), domainOf(config.imap.user)) && !authResultsFailDmarc(mail.authResults);
+  if (config.requireAuthResults && !exchangeInternal && !authResultsPass(mail.authResults, domainOf(mail.from), config.authservId)) {
     note('skipped', { reason: config.authservId === '' ? 'brak potwierdzenia SPF/DKIM od serwera' : `brak potwierdzenia SPF/DKIM od serwera ${config.authservId}` });
     return { kind: 'skipped', reason: 'auth_failed' };
   }

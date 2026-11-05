@@ -135,6 +135,25 @@ describe('GET /v1/inbound', () => {
   });
 });
 
+describe('odpowiedź administratora na SMS powiadomienia bramki', () => {
+  it('nie pojawia się w liście ani pod swoim identyfikatorem', async () => {
+    seed('in_1');
+    seed('in_sys', { system: 1 });
+    expect(ids(await get('/v1/inbound'))).toEqual(['in_1']);
+    expect((await get('/v1/inbound/in_sys')).statusCode).toBe(404);
+  });
+
+  it('nie przyjmuje odpowiedzi przez inReplyTo', async () => {
+    seed('in_sys', { system: 1 });
+    const res = await app.inject({
+      method: 'POST', url: '/v1/messages', headers: { authorization: `Bearer ${keyA}` },
+      payload: { to: ['48601000001'], text: 'Odpowiedź', inReplyTo: 'in_sys' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('in_reply_to_unknown');
+  });
+});
+
 describe('GET /v1/inbound/{id}', () => {
   it('zwraca wiadomość z usługi klucza', async () => {
     seed('in_1');

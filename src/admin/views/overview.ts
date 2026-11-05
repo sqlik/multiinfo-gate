@@ -7,6 +7,8 @@ import { esc } from './layout.ts';
 import type { ReleaseInfo } from '../../store/settings.ts';
 import { UPDATE_DOCS_DOCKER, UPDATE_DOCS_LXC } from '../../releases/check.ts';
 import { GATE_VERSION } from '../../version.ts';
+import { problemUrl } from '../../docs-links.ts';
+import { unsupportedLine } from '../../runtime/node-version.ts';
 
 export interface OverviewData {
   counts: { total: number; delivered: number; failed: number; cancelled: number; transit: number };
@@ -21,6 +23,12 @@ export interface OverviewData {
   integrationsTroubled: number;
   /** Nowsze wydanie z GitHuba, jeszcze nie odłożone; `null` bez paska. */
   release?: ReleaseInfo | null;
+  /** Node bez poprawek bezpieczeństwa z października 2026; `null` bez paska. */
+  node?: { installed: string; minimum: string } | null;
+  /** Konta Microsoft 365 wymagające ponownego logowania, po jednym pasku na konto. */
+  m365NeedsLogin?: Array<{ id: number; name: string }>;
+  /** Powód, dla którego włączony kanał SMS powiadomień nie wysyła, albo `null`. */
+  smsProblem?: string | null;
 }
 
 /** „1 integracja zgłosiła błąd”, „3 integracje zgłosiły błąd”, „5 integracji zgłosiło błąd”. */
@@ -63,6 +71,44 @@ function share(part: number, whole: number): string {
 
 function alerts(data: OverviewData, now: Date): string {
   const items: string[] = [];
+
+  if (data.node) {
+    items.push(`<div class="alert stop">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="sq"></div>
+        <div>${unsupportedLine(data.node.installed, data.node.minimum)
+          ? `Node.js ${esc(data.node.installed)}, na którym działa bramka, należy do linii, która nie otrzymuje poprawek bezpieczeństwa.
+          Wymagana jest wersja ${esc(data.node.minimum)} lub nowsza z linii ${esc(data.node.minimum.split('.')[0]!)}.`
+          : `Node.js ${esc(data.node.installed)}, na którym działa bramka, nie zawiera poprawek bezpieczeństwa z października 2026.
+          Wymagana jest wersja ${esc(data.node.minimum)} lub nowsza.`}</div>
+      </div>
+      <a href="${problemUrl('wersja-node')}" target="_blank" rel="noopener noreferrer">Jak zaktualizować</a>
+    </div>`);
+  }
+
+  if (data.smsProblem) {
+    items.push(`<div class="alert stop">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="sq"></div>
+        <div>Powiadomienia SMS nie działają: ${esc(data.smsProblem)}.
+          <a href="/powiadomienia?zakladka=sms">Ustawienia kanału SMS</a></div>
+      </div>
+    </div>`);
+  }
+
+  for (const account of data.m365NeedsLogin ?? []) {
+    items.push(`<div class="alert stop">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="sq"></div>
+        <div>Konto Microsoft 365 <strong>${esc(account.name)}</strong> wymaga ponownego logowania.
+          Skrzynki Mail2SMS korzystające z tego konta czekają na logowanie, a bramka nie wysyła przez nie maili powiadomień.
+          <a href="/microsoft-365/${esc(account.id)}">Szczegóły konta</a></div>
+      </div>
+      <form method="post" action="/microsoft-365/${esc(account.id)}/zaloguj" style="margin: 0;">
+        <button class="btn btn-s" type="submit">Zaloguj ponownie</button>
+      </form>
+    </div>`);
+  }
 
   if (data.release) {
     const r = data.release;

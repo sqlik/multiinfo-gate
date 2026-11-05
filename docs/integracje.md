@@ -11,10 +11,11 @@ dozwolonych nadawców i zamienia je na SMS-y (Mail2SMS, rozdział 5). Od wersji 
 jest także grupa numerów: uprawniony numer wysyła SMS na numer bramki, a bramka rozsyła treść
 do stałej listy (SMS do grupy, rozdział 5a). Od wersji 1.9 integracją jest również Power Automate.
 Przepływy Microsoft Power Automate wysyłają za jej pośrednictwem SMS-y, korzystając z konektora
-bramki (rozdział 5b).
+bramki (rozdział 5b). Od wersji 1.10 Mail2SMS odczytuje także skrzynki Microsoft 365, a bramka
+powiadamia administratora również SMS-em. Opis tych funkcji zawierają rozdziały 5.1 i 9.5.
 
 Ten rozdział opisuje cztery kierunki, język szablonów, gotowe ustawienia dla popularnych aplikacji,
-dziennik integracji oraz powiadomienia dla administratora wysyłane mailem. Wysyłkę przez pełne
+dziennik integracji oraz powiadomienia dla administratora wysyłane mailem i SMS-em. Wysyłkę przez pełne
 API z kluczem w nagłówku opisuje rozdział [API dla aplikacji](api.md). Integracje są dla
 przypadków, w których aplikacja nie potrafi tego API użyć.
 
@@ -486,21 +487,23 @@ przyszła wiadomość.
 
 Przycisk **Dodaj integrację**, kierunek „Z poczty”, następnie kafelek z nazwą dostawcy. Kafelek
 uzupełnia serwer, port i zabezpieczenie, a obok formularza wyświetla instrukcję, gdzie uzyskać
-hasło.
+hasło. Przy Microsoft 365 instrukcja opisuje przygotowanie skrzynki bramki.
 
-![Wybór dostawcy poczty: kafelki Gmail, home.pl, OVH i Własny serwer](obrazki/poczta-katalog.png)
+![Wybór dostawcy poczty: kafelki Microsoft 365, Gmail, home.pl, OVH i Własny serwer](obrazki/poczta-katalog.png)
 
-| Kafelek | Serwer | Hasło |
+| Kafelek | Serwer | Logowanie |
 |---|---|---|
+| Microsoft 365 | `outlook.office365.com`, port 993, TLS, bez możliwości zmiany | brak hasła, bramka loguje się kontem Microsoft 365 z rozdziału 4.8 [Uruchomienia](uruchomienie.md#48-konto-microsoft-365) |
 | Gmail | `imap.gmail.com`, port 993, TLS | hasło aplikacji, dostępne po włączeniu weryfikacji dwuetapowej w koncie Google; hasło do konta nie jest przyjmowane |
 | home.pl | nazwa z Panelu klienta w postaci `serwerNNNNNN.home.pl`, port 993, TLS | hasło skrzynki z Panelu klienta, nie hasło do Panelu |
 | OVH | `imap.mail.ovh.net`, port 993, TLS | hasło skrzynki z panelu OVHcloud; usługa Email Pro ma własną nazwę serwera |
 | Własny serwer | do wpisania | hasło skrzynki według dostawcy albo administratora serwera |
 
-Skrzynek Outlook.com i Microsoft 365 nie ma na liście. Od września 2024 roku Microsoft nie
-przyjmuje do IMAP hasła ani hasła aplikacji, a wyłącznie logowanie OAuth2. Obsługa tego
-logowania wejdzie w osobnym wydaniu. Do tego czasu wiadomości z Outlooka można kierować na
-skrzynkę u innego dostawcy albo ustawić w Outlooku przekazywanie do takiej skrzynki.
+Kafelek **Microsoft 365** obsługuje skrzynki w Exchange Online. Microsoft nie przyjmuje do IMAP
+hasła skrzynki ani hasła aplikacji, dlatego bramka loguje się kontem Microsoft 365 połączonym
+na ekranie **Konta Microsoft 365**. Przygotowanie skrzynki bramki w Microsoft 365 i Entra ID opisuje
+rozdział 4.8 [Uruchomienia](uruchomienie.md#48-konto-microsoft-365). Skrzynki prywatne
+Outlook.com nie są obsługiwane.
 
 Formularz w trybie prostym ma sekcje ułożone od najważniejszej. Sekcja **Skrzynka** zawiera
 serwer, port, zabezpieczenie, login, hasło, folder i częstotliwość sprawdzania.
@@ -519,6 +522,37 @@ Tryb zaawansowany udostępnia pole **Sprawdzaj certyfikat serwera**. Należy je 
 wyłącznie dla serwera z własnym certyfikatem bez zaufanego urzędu, dostępnego wewnątrz sieci
 firmowej. Połączenie bez sprawdzania certyfikatu jest podatne na podsłuch.
 
+W skrzynce Microsoft 365 sekcja **Skrzynka** zawiera zamiast serwera, loginu i hasła dwa pola.
+Pole **Konto Microsoft 365** wskazuje konto, którym bramka loguje się do skrzynki. Lista podaje
+przy nazwie konta jego stan, a domyślnie wybrane jest pierwsze połączone konto. Puste pole **Adres
+skrzynki** oznacza adres wybranego konta, który formularz wyświetla w polu jako podpowiedź. Serwer,
+port i zabezpieczenie są stałe:
+`outlook.office365.com`, port 993, TLS ze sprawdzaniem certyfikatu. Gdy panel nie zawiera
+jeszcze konta, formularz wyświetla zamiast listy przycisk **Dodaj konto Microsoft 365**.
+
+![Formularz Mail2SMS z kafelka Microsoft 365: konto Microsoft 365 ze stanem, adres skrzynki, folder, częstotliwość i limit wieku wiadomości](obrazki/poczta-m365.png)
+
+Adres inny niż adres konta oznacza skrzynkę współdzieloną. Skrzynka bramki musi posiadać do
+niej uprawnienie pełnego dostępu, które nadaje administrator w centrum administracyjnym Exchange.
+Dzięki temu jedna skrzynka bramki obsługuje kilka skrzynek, na przykład `alarmy@firma.pl`
+i `serwis@firma.pl`. Każda skrzynka wymaga osobnej integracji. Zmiana adresu skrzynki w edycji
+działa jak zmiana folderu. Zmiana samego konta przy tym samym adresie skrzynki nie zmienia miejsca,
+od którego bramka odczytuje wiadomości, dlatego bramka sprawdza także maile z czasu przerwy.
+
+Pole **Pomijaj wiadomości starsze niż** chroni przed wysłaniem nieaktualnych alarmów po przerwie
+w dostępie do skrzynki. Przerwa powstaje na przykład wtedy, gdy konto Microsoft 365 przez cały
+weekend czeka na ponowne logowanie albo serwer poczty jest niedostępny. Po jej zakończeniu bramka
+przetworzyłaby zaległe wiadomości, a alarm sprzed doby dotarłby na telefon jako świeży SMS. Pole
+przyjmuje wartości: bez limitu, 1 h, 6 h i 24 h. Wiek jest liczony od chwili przyjęcia wiadomości
+przez serwer pocztowy, a nie od daty ustawionej przez nadawcę.
+
+Wiadomość starsza niż limit pozostaje w skrzynce nieprzeczytana, dzięki czemu administrator
+może ją obejrzeć. Nie powoduje wysłania SMS-a ani odpowiedzi do nadawcy, a dziennik otrzymuje
+wpis „pominięto” z powodem „wiadomość starsza niż 1 h”. Dla alarmów zalecany jest limit 1 h,
+a dla zamówień i zgłoszeń wariant bez limitu. Nowe integracje otrzymują domyślnie limit 24 h.
+Integracje utworzone przed wersją 1.10 działają bez limitu, dopóki administrator go nie ustawi.
+Ustawienie dotyczy wszystkich dostawców poczty, nie tylko Microsoft 365.
+
 Częstotliwość sprawdzania wybiera się z listy od 30 sekund do 60 minut. Wartość domyślna to
 jedna minuta. Minimalna częstotliwość wynosi 30 sekund, ponieważ dostawcy poczty blokują
 konta logujące się częściej. SMS jest wysyłany natychmiast po odczytaniu wiadomości, więc
@@ -529,7 +563,8 @@ nieprzeczytane pozostają nietknięte. Jeżeli mają zostać przetworzone równi
 zaznaczyć pole **Przetwórz także zaległe wiadomości nieprzeczytane**. Działa ono jednorazowo,
 przy najbliższym sprawdzeniu, po 50 wiadomości na jedno sprawdzenie. Przy dużej zaległości
 ochrona przed burzą zatrzyma wysyłkę na limicie integracji, a pozostałe wiadomości otrzymają
-w dzienniku wynik „limit”. Zmiana folderu w edycji działa jak ponowne włączenie: bramka znów
+w dzienniku wynik „limit”. Limit wieku z pola **Pomijaj wiadomości starsze niż** obowiązuje
+także dla zaległych wiadomości. Zmiana folderu w edycji działa jak ponowne włączenie: bramka znów
 rozpoczyna od wiadomości, które nadejdą po zapisaniu. Tak samo działa włączenie wcześniej
 wyłączonej skrzynki: wiadomości z okresu wyłączenia nie są przetwarzane.
 
@@ -538,6 +573,8 @@ folder, wyświetla liczbę wiadomości nieprzeczytanych i listę folderów skrzy
 nazwy folderu wpisuje ją do pola. Przycisk niczego nie przetwarza ani nie zapisuje. Dla
 zapisanej skrzynki używa zapisanego hasła, dopóki serwer, port, zabezpieczenie i login
 pozostają bez zmian. Po zmianie któregokolwiek z tych pól hasło należy podać ponownie.
+W skrzynce Microsoft 365 przycisk najpierw odnawia logowanie konta, a błąd konta pokazuje jako
+błąd konta, nie skrzynki.
 
 ![Wynik „Sprawdź połączenie”: połączenie działa, liczba nieprzeczytanych i lista folderów do kliknięcia](obrazki/poczta-polaczenie.png)
 
@@ -588,6 +625,15 @@ Nagłówek dodany przez samego nadawcę znajduje się niżej i nie jest brany po
 przełącznika osoba znająca adres z listy może go podrobić w nagłówku `From`. Przełącznik jest
 zalecany u dostawców publicznych: Gmail, home.pl, OVH. Serwery wewnętrzne zwykle nie dodają
 tych nagłówków i wówczas każda wiadomość zostanie odrzucona. Domyślnie wyłączony.
+
+W skrzynce Microsoft 365 przełącznik jest domyślnie włączony i uwzględnia pocztę wewnętrzną.
+Exchange Online nie dopisuje wyniku SPF ani DKIM do wiadomości wysłanej wewnątrz organizacji,
+na przykład przez pracownika z Outlooka. Taką wiadomość Exchange oznacza jako wewnętrzną
+nagłówkiem `X-MS-Exchange-Organization-AuthAs: Internal`. Bramka przepuszcza ją, gdy adres
+nadawcy należy do domeny skrzynki, a nagłówek występuje w wiadomości dokładnie raz. Nadawca
+spoza organizacji nie może podrobić tego oznaczenia, ponieważ Exchange usuwa taki nagłówek
+z poczty przychodzącej i wstawia własny. Wiadomość z zewnątrz przechodzi wyłącznie po
+potwierdzeniu SPF albo DKIM, tak jak u pozostałych dostawców.
 
 Pole **Nazwa serwera w nagłówku Authentication-Results** (tryb zaawansowany) wzmacnia to
 sprawdzenie. Serwer skrzynki podpisuje swój nagłówek własną nazwą, na przykład `mx.google.com`.
@@ -848,7 +894,7 @@ rozpoczyna się od tematu wiadomości skróconego do 80 znaków. Powody właści
 
 | Wynik | Powód |
 |---|---|
-| pominięto | nadawca spoza listy, brak potwierdzenia SPF/DKIM od serwera, wiadomość zbyt duża, wiadomość już przetworzona, warunek niespełniony |
+| pominięto | nadawca spoza listy, brak potwierdzenia SPF/DKIM od serwera, wiadomość starsza niż limit wieku, wiadomość zbyt duża, wiadomość już przetworzona, warunek niespełniony |
 | limit | nadmiar ponad limit burzy |
 | błąd | brak numeru odbiorcy, nieprawidłowy numer, pusta treść, treść ponad limit części przy „nie wysyłaj”, błąd szablonu albo wycinka, nieczytelna wiadomość |
 | wysłano | SMS zakolejkowany; przy numerach z wiadomości z informacją o pominiętych nieprawidłowych |
@@ -867,10 +913,12 @@ komunikatu.
 | logowanie | hasło: w Gmailu musi to być hasło aplikacji, w home.pl i OVH hasło skrzynki; login to zwykle pełny adres; w Google Workspace administrator mógł wyłączyć dostęp IMAP |
 | sieć | komunikat wskazuje przyczynę: odrzucone połączenie na porcie, nazwa nieznana w DNS, brak odpowiedzi, certyfikat bez zaufanego urzędu, wygasły albo wystawiony na inną nazwę; połączenie można sprawdzić z maszyny bramki, na przykład `nc -vz imap.firma.pl 993`; przy własnym certyfikacie bez zaufanego urzędu pomaga wyłączenie sprawdzania certyfikatu w trybie zaawansowanym; serwer w sieci wewnętrznej bez `MIG_MAIL_ALLOW_PRIVATE=1` daje komunikat o tej zmiennej (rozdział 5.1) |
 | folder | nazwa folderu musi być dokładnie taka, jak na liście ze „Sprawdź połączenie”; folder docelowy przeniesienia bywa tylko do odczytu |
+| konto Microsoft 365 | konto wymaga ponownego logowania; stan skrzynki zawiera odnośnik do konta, a przycisk **Zaloguj ponownie** w szczegółach konta przywraca pracę skrzynki przy najbliższym sprawdzeniu |
+| logowanie w skrzynce Microsoft 365 | konto działa, ale Exchange odrzuca logowanie do skrzynki; przyczyną bywa wyłączony IMAP na koncie, literówka w adresie skrzynki albo brak uprawnienia pełnego dostępu do skrzynki współdzielonej; zmiana opcji IMAP obowiązuje po około 30 minutach |
 | inny | pełny komunikat serwera w stanie skrzynki |
 
 Po błędzie bramka ponawia sprawdzenie z rosnącym odstępem, od ustawionej częstotliwości do
-15 minut. Błąd logowania nie jest ponawiany częściej niż co 5 minut, aby bramka nie
+15 minut. Skrzynka, której konto Microsoft 365 wymaga logowania, czeka bez prób połączenia. Błąd logowania nie jest ponawiany częściej niż co 5 minut, aby bramka nie
 zablokowała konta pocztowego kolejnymi nieudanymi próbami. Po udanym sprawdzeniu obowiązuje
 ustawiona częstotliwość.
 
@@ -879,6 +927,16 @@ administratora. Błąd logowania zgłasza natychmiast, ponieważ nie ustąpi sam
 sieci, folderu albo inny zgłasza, gdy trwa dłużej niż zadana liczba minut, domyślnie 15. Jedna
 awaria to jedna wiadomość. Powrót do pracy nie generuje wiadomości; stan jest widoczny
 w panelu. Podsumowanie dzienne zawiera liczbę skrzynek i liczbę skrzynek w błędzie.
+
+Skrzynka czekająca na logowanie konta Microsoft 365 nie generuje tej wiadomości. Przyczynę
+zgłasza wtedy reguła **Konto Microsoft 365 wymaga logowania**, raz dla konta, a nie osobno dla
+każdej skrzynki.
+
+Wiadomości, które nadeszły w czasie awarii, pozostają w skrzynce nieprzeczytane. Po powrocie do
+pracy bramka przetwarza je przy najbliższym sprawdzeniu, z pominięciem wiadomości starszych niż
+limit z pola **Pomijaj wiadomości starsze niż**, opisanego w rozdziale 5.1. Integracja bez
+limitu wyśle SMS-y także dla wiadomości sprzed wielu godzin, dlatego dla alarmów zalecany jest
+limit 1 h.
 
 ### 5.10. Bezpieczeństwo
 
@@ -901,6 +959,9 @@ w panelu. Podsumowanie dzienne zawiera liczbę skrzynek i liczbę skrzynek w bł
   jest nawiązywane z adresem, który przeszedł sprawdzenie (rozdział 5.1)
 - Nazwa serwera w nagłówku Authentication-Results zamyka drogę podrobionym nagłówkom SPF/DKIM.
   Bez nagłówka serwera wiadomość jest odrzucana (rozdział 5.2)
+- Skrzynka Microsoft 365 nie wymaga hasła. Token odświeżania konta jest zaszyfrowany kluczem
+  głównym, a token dostępu pozostaje wyłącznie w pamięci. Do skrzynki bramka łączy się wtedy
+  wyłącznie z `outlook.office365.com` na porcie 993, niezależnie od danych w formularzu
 
 ## 5a. SMS do grupy
 
@@ -1980,8 +2041,10 @@ listę jego integracji.
 ## 9. Powiadomienia administratora
 
 Bramka wysyła mailem powiadomienia o błędach integracji, niedostarczonych webhookach,
-certyfikatach, kontach, odbiorze, awariach skrzynek pocztowych i nowych wydaniach bramki. Ekran **Powiadomienia** w grupie „Konfiguracja” ma dwie
-zakładki: **Konfiguracja** z formularzem SMTP i **Reguły** z tabelą zdarzeń.
+certyfikatach, kontach, odbiorze, awariach skrzynek pocztowych i nowych wydaniach bramki. Od
+wersji 1.10 może je wysyłać również SMS-em. Ekran **Powiadomienia** w grupie „Konfiguracja”
+zawiera trzy zakładki: **Konfiguracja** z formularzem SMTP, **Reguły** z tabelą zdarzeń oraz
+**SMS** z ustawieniami kanału SMS.
 
 ![Ekran Powiadomienia, zakładka Konfiguracja: formularz SMTP z przyciskiem maila testowego](obrazki/powiadomienia.png)
 
@@ -1995,29 +2058,65 @@ jednym adresie w wierszu, do 20. Nazwa instancji trafia do tematu każdego maila
 bramki. Adres panelu jest opcjonalny. Bramka umieszcza go w powiadomieniach jako odnośnik do
 właściwego ekranu. Hasło jest zaszyfrowane kluczem głównym.
 
+Pole **Sposób logowania** przyjmuje dwie wartości. Wartość **Hasło** odpowiada polom opisanym
+wyżej. Wartość **Microsoft 365** zastępuje serwer, port, szyfrowanie, login i hasło wyborem konta
+z ekranu **Konta Microsoft 365**, opisanego w rozdziale 4.8
+[Uruchomienia](uruchomienie.md#48-konto-microsoft-365). Bramka wysyła wtedy maile przez
+`smtp.office365.com` na porcie 587 ze STARTTLS i loguje się tokenem konta. Wariant jest
+zalecany dla firm korzystających z Exchange Online, ponieważ Microsoft wycofuje logowanie hasłem
+do SMTP.
+
+![Ekran Powiadomienia, zakładka Konfiguracja w wariancie Microsoft 365: sposób logowania, konto Microsoft 365, nadawca i odbiorcy](obrazki/powiadomienia-m365.png)
+
+W wariancie Microsoft 365 puste pole adresu nadawcy oznacza adres skrzynki bramki. Inny adres
+wymaga, aby skrzynka bramki posiadała do niego uprawnienie „Wyślij jako”. Odbiorca z tej samej
+organizacji widzi w Outlooku jako nadawcę nazwę wyświetlaną skrzynki bramki z katalogu, a nie
+wartość pola **Nazwa wyświetlana nadawcy**. Dlatego zalecane jest nadanie skrzynce bramki opisowej
+nazwy, na przykład „Alarmy SMS”. Potwierdzenia zwrotne Mail2SMS korzystają z tych samych ustawień,
+więc w tym wariancie nadawca otrzymuje odpowiedź ze skrzynki bramki.
+
+Przy wysyłce przez Microsoft 365 zalecane jest włączenie podpisu DKIM dla domeny skrzynki
+bramki. Bez podpisu maile przekazywane dalej, na przykład do prywatnej skrzynki
+administratora, mogą trafiać do spamu albo docierać z opóźnieniem. Administrator, który
+przekazuje pocztę do innej skrzynki, powinien też dopisać adres nadawcy bramki do listy
+bezpiecznych nadawców.
+
 Po zapisaniu użyj przycisku **Wyślij mail testowy**. Wynik pojawia się na pasku u góry. Przy
-błędzie widać pełny komunikat serwera SMTP. Z niego wynika, czy przyczyną jest hasło, port czy
-certyfikat. Bez zapisanego SMTP tabela reguł jest wyszarzona, a zgłoszone zdarzenia czekają
-w kolejce do 30 dni.
+błędzie pasek wyświetla pełny komunikat serwera SMTP. Z niego wynika, czy przyczyną jest hasło,
+port czy certyfikat. Bez zapisanego SMTP i bez włączonego kanału SMS tabela reguł jest
+wyszarzona. Zgłoszone zdarzenia czekają wtedy na mail w kolejce, a po 30 dniach bramka je usuwa.
+
+Znane odmowy serwera Microsoft 365 panel uzupełnia podpowiedzią:
+
+| Odpowiedź serwera | Znaczenie | Rozwiązanie |
+|---|---|---|
+| `535 5.7.139` | opcja „SMTP z uwierzytelnianiem” wyłączona dla konta albo organizacji | zaznaczyć opcję na karcie Poczta skrzynki bramki i odczekać około 30 minut |
+| `554 5.2.252`, `SendAsDenied` | konto nie posiada uprawnienia „Wyślij jako” dla adresu nadawcy | wpisać adres skrzynki konta albo poprosić administratora Microsoft 365 o uprawnienie |
+| `535 5.7.3` | serwer odrzucił token konta | zalogować konto ponownie na ekranie Konta Microsoft 365 |
 
 Maile wysyła worker zadaniem `mail`. Przy błędzie ponawia po 1, 5 i 15 minutach. Potem rezygnuje
-z wysyłki z wpisem w logu bramki.
+z wysyłki z wpisem w logu bramki, a reguła **Mail z powiadomieniem niewysłany** zgłasza to
+SMS-em. Gdy konto Microsoft 365 wymaga logowania, zadanie kończy się błędem bez łączenia
+z serwerem, a ponowienia przebiegają tak samo.
 
 ### 9.2. Reguły
 
-| Zdarzenie | Domyślnie | Maks. na godzinę | Grupowanie | Parametry |
-|---|---|---|---|---|
-| Błąd integracji (pusta treść, brak numeru, błąd szablonu, odrzucone uwierzytelnienie, błąd ładunku) | włączone | 5 | co 1 h | - |
-| Limit burzy przekroczony | włączone | 5 | brak | - |
-| Webhook niedostarczony po wszystkich ponowieniach | włączone | 5 | co 1 h | - |
-| Certyfikat konta wygasa | włączone | 1 | brak | dni przed wygaśnięciem: 30, 14, 7, 1 |
-| Konto Multiinfo odrzuca wysyłkę (certyfikat, uwierzytelnienie, wstrzymanie) | włączone | 1 | brak | - |
-| Awaria odbioru (odpytywanie usługi kończy się błędem dłużej niż podany czas) | włączone | 1 | brak | po minutach: 15 |
-| Awaria skrzynki pocztowej (logowanie do IMAP nieudane albo serwer poczty niedostępny dłużej niż podany czas) | włączone | 5 | brak | po minutach: 15 |
-| Podsumowanie dzienne (SMS-y, błędy, stan integracji, skrzynek i kont z ostatniej doby) | wyłączone | 1 | brak | godzina: 8 |
-| Nowe wydanie bramki (w serwisie GitHub dostępne jest nowsze wydanie niż zainstalowane) | włączone | 1 | brak | - |
+| Zdarzenie | Domyślnie | SMS | Maks. na godzinę | Grupowanie | Parametry |
+|---|---|---|---|---|---|
+| Błąd integracji (pusta treść, brak numeru, błąd szablonu, odrzucone uwierzytelnienie, błąd ładunku) | włączone | wyłączony | 5 | co 1 h | - |
+| Limit burzy przekroczony | włączone | wyłączony | 5 | brak | - |
+| Webhook niedostarczony po wszystkich ponowieniach | włączone | wyłączony | 5 | co 1 h | - |
+| Certyfikat konta wygasa | włączone | wyłączony | 1 | brak | dni przed wygaśnięciem: 30, 14, 7, 1 |
+| Konto Multiinfo odrzuca wysyłkę (certyfikat, uwierzytelnienie, wstrzymanie) | włączone | wyłączony | 1 | brak | - |
+| Awaria odbioru (odpytywanie usługi kończy się błędem dłużej niż podany czas) | włączone | wyłączony | 1 | brak | po minutach: 15 |
+| Awaria skrzynki pocztowej (logowanie do IMAP nieudane albo serwer poczty niedostępny dłużej niż podany czas) | włączone | wyłączony | 5 | brak | po minutach: 15 |
+| Podsumowanie dzienne (SMS-y, błędy, stan integracji, skrzynek i kont z ostatniej doby) | wyłączone | wyłączony | 1 | brak | godzina: 8 |
+| Nowe wydanie bramki (w serwisie GitHub dostępne jest nowsze wydanie niż zainstalowane) | włączone | wyłączony | 1 | brak | - |
+| Konto Microsoft 365 wymaga logowania (Microsoft odrzucił token konta, na przykład po zmianie hasła albo odwołaniu sesji) | włączone | włączony | 5 | brak | - |
+| Mail z powiadomieniem niewysłany (mail do administratora nie został wysłany mimo wszystkich ponowień) | włączone | włączony | 1 | nie dotyczy | powiadomienie wyłącznie SMS-em |
 
-Każdą regułę można wyłączyć, zmienić jej limit na godzinę i grupowanie. Limit burzy zgłasza się
+Każdą regułę można wyłączyć, zmienić jej limit na godzinę i grupowanie. Pole **SMS** włącza
+wysyłkę powiadomienia także SMS-em, zgodnie z rozdziałem 9.5. Limit burzy zgłasza się
 raz na okno na integrację (rozdział 3.7). Certyfikat, konto, odbiór i skrzynka zgłaszają się
 raz na przyczynę: ten sam próg dni albo ta sama trwająca awaria nie dają drugiego maila. Błąd
 logowania do skrzynki jest zgłaszany natychmiast, pozostałe awarie skrzynki po zadanej liczbie
@@ -2026,7 +2125,13 @@ zgłasza się raz na numer wydania. Mail zawiera numer nowego i zainstalowanego 
 odnośnik do opisu zmian i do instrukcji aktualizacji (rozdział 7.4 [Uruchomienia](uruchomienie.md)).
 Gdy jest nowsze wydanie, wspomina o nim także podsumowanie dzienne.
 
-![Ekran Powiadomienia, zakładka Reguły: tabela zdarzeń z włączeniem, limitem na godzinę, grupowaniem i parametrami](obrazki/powiadomienia-reguly.png)
+Konto Microsoft 365 zgłasza się raz na zerwanie logowania. Po ponownym logowaniu kolejne zerwanie
+powoduje nowe powiadomienie. Gdy przez to konto wychodzą maile powiadomień, bramka wysyła wyłącznie
+SMS, ponieważ mail nie zostałby wysłany. Reguła **Mail z powiadomieniem niewysłany** zgłasza
+mail, którego worker nie wysłał mimo wszystkich ponowień. Reguła milczy, gdy przyczyną jest
+konto Microsoft 365 wymagające logowania, ponieważ tę przyczynę zgłosiła już reguła konta.
+
+![Ekran Powiadomienia, zakładka Reguły: tabela zdarzeń z włączeniem, polem SMS, limitem na godzinę, grupowaniem i parametrami](obrazki/powiadomienia-reguly.png)
 
 ### 9.3. Grupowanie i limity
 
@@ -2043,6 +2148,57 @@ Mail to zwykły tekst po polsku, bez HTML. Temat zawiera nazwę instancji, na pr
 rodzaj błędu, czas i identyfikator wiadomości. Gdy podano adres panelu, trafia też odnośnik do
 właściwego ekranu. Nigdy nie trafia treść SMS-a, ładunek aplikacji, sekret ani pełny numer
 telefonu.
+
+### 9.5. Powiadomienia SMS
+
+Kanał SMS wysyła powiadomienia na numery administratorów, niezależnie od serwera SMTP. Jest
+przeznaczony przede wszystkim dla zdarzeń, o których mail nie może poinformować: zerwanego konta
+Microsoft 365, przez które bramka wysyła pocztę, oraz maila z powiadomieniem, którego nie udało
+się wysłać. Ustawienia znajdują się w zakładce **SMS** ekranu **Powiadomienia**.
+
+| Pole | Znaczenie |
+|---|---|
+| Wysyłaj powiadomienia SMS | włącza kanał SMS |
+| Numery | od jednego do pięciu numerów, jeden w wierszu; numer bez numeru kierunkowego kraju otrzymuje numer kierunkowy z konta Multiinfo wybranego klucza |
+| Klucz API | klucz, w imieniu którego bramka wysyła SMS-y |
+| Nadpis nadawcy | jeden z nadpisów wybranego klucza albo nadpis domyślny klucza |
+
+![Ekran Powiadomienia, zakładka SMS: włączony kanał, numery administratorów, klucz API, nadpis nadawcy i przycisk Wyślij SMS testowy](obrazki/powiadomienia-sms.png)
+
+Po zapisaniu użyj przycisku **Wyślij SMS testowy**. Bramka wysyła próbną wiadomość na wszystkie
+numery kanału, a wynik doręczenia przedstawia lista wiadomości.
+
+Bramka wysyła powiadomienie SMS w imieniu wskazanego klucza, czyli z jego konta Multiinfo, usługi,
+limitów i nadpisu. Kanał przyjmuje każdy czynny klucz, także klucz z opcją **Tylko integracje**.
+Lista wiadomości oznacza takie SMS-y plakietką „powiadomienie bramki”. Aplikacje klienta nie
+otrzymują ich przez API, webhook klucza ani integracje, dlatego numery administratorów i treść
+powiadomień nie opuszczają bramki. Odpowiedź administratora na SMS powiadomienia bramka zapisuje
+na ekranie **Odebrane** z plakietką „odpowiedź na powiadomienie bramki”. Tej odpowiedzi również nie
+przekazuje aplikacjom ani integracjom, w tym integracjom SMS do grupy.
+
+Odwołanie klucza wskazanego we włączonym kanale jest zablokowane. Bramka blokuje również usunięcie
+z tego klucza nadpisu, z którym kanał wysyła powiadomienia. Pozostałe przyczyny, na przykład
+wygaśnięcie klucza albo wstrzymanie konta Multiinfo, przegląd sygnalizuje paskiem „Powiadomienia
+SMS nie działają” z opisem przyczyny. To samo ostrzeżenie wyświetla zakładka SMS. Zakładka
+przedstawia także ostatnią odmowę wysyłki, którą usuwa następna udana wysyłka albo zapis ustawień
+kanału.
+
+Treść powiadomienia składa się z nazwy instancji, nazwy zdarzenia oraz nazwy konta albo
+integracji. Na przykład po zerwaniu konta „Dyżur IT” administrator otrzymuje SMS
+`Multiinfo Gate Firma: Konto Microsoft 365 wymaga logowania - Dyżur IT. Szczegóły w panelu.`
+Powiadomienie mieści się w jednej części SMS-a, a dłuższą treść bramka skraca. SMS nie zawiera
+adresów e-mail ani treści błędów, ponieważ opuszcza infrastrukturę firmy.
+
+Pole **SMS** w tabeli reguł włącza wysyłkę danego powiadomienia także SMS-em. Domyślnie jest
+zaznaczone wyłącznie przy regułach **Konto Microsoft 365 wymaga logowania** i **Mail
+z powiadomieniem niewysłany**. Limit na godzinę reguły obejmuje również SMS-y i liczy
+powiadomienia niezależnie od liczby numerów. Dodatkowo bramka wysyła najwyżej 10 SMS-ów powiadomień
+na dobę. Dwie wymienione reguły korzystają z osobnej puli 5 SMS-ów na dobę, dzięki czemu seria
+innych powiadomień nie blokuje SMS-a o zerwanym koncie.
+
+Pule doby liczą każdy numer osobno. Na przykład przy trzech numerach jedno powiadomienie zużywa
+trzy SMS-y, dlatego pula 10 SMS-ów obejmuje trzy powiadomienia. Powiadomienie, które nie mieści
+się w reszcie puli, nie zostaje wysłane na żaden numer i trafia wyłącznie do logu bramki.
 
 ## 10. Bezpieczeństwo
 

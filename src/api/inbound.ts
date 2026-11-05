@@ -66,7 +66,7 @@ export function registerInboundRoutes(app: FastifyInstance, deps: ApiDeps): void
     const auth = authenticate(request.headers.authorization, deps.apiKeys);
     const row = deps.inbound.get(request.params.id);
     // Brak i cudza wiadomość dają tę samą odpowiedź - nie potwierdzamy istnienia.
-    if (!row || row.accountId !== auth.accountId || !auth.allowedServiceIds.includes(row.serviceId)) {
+    if (!row || row.system === 1 || row.accountId !== auth.accountId || !auth.allowedServiceIds.includes(row.serviceId)) {
       throw new ApiError(404, 'inbound_not_found', 'Nie ma wiadomości przychodzącej o tym identyfikatorze.');
     }
     return presentInbound(row);

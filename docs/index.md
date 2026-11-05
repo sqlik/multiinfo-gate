@@ -16,7 +16,9 @@ SMS wysłany na numer bramki trafia do stałej grupy numerów (SMS do grupy): ek
 albo zespołu handlowego. Od wersji 1.8.7 bramka sama zapisuje kopię bazy przed aktualizacją. Gdy
 nie może rozpocząć pracy, pokazuje w panelu przyczynę i sposób naprawy. Od wersji 1.9 bramka
 wprowadza konektor do Microsoft Power Automate, który umożliwia wysyłkę SMS-ów z przepływów: do
-jednego numeru, w formie rozsyłki albo do listy odbiorców prowadzonej w bramce.
+jednego numeru, w formie rozsyłki albo do listy odbiorców prowadzonej w bramce. Od wersji 1.10
+Mail2SMS odczytuje także skrzynki Microsoft 365 przez skrzynkę przeznaczoną dla bramki, a bramka
+powiadamia administratora również SMS-em.
 
 ![Przegląd: liczniki wiadomości wychodzących i odebranych z ostatniej doby, stan połączeń z Multiinfo i ostatnie niepowodzenia](obrazki/przeglad.png)
 
@@ -32,13 +34,13 @@ zamiast certyfikatów, oraz panel do zarządzania kontami, kluczami i podglądu 
 - [API dla aplikacji](api.md) - każde wywołanie z przykładem w siedmiu wariantach (curl, HTTP, PHP,
   Python, Node.js, PowerShell, C#), webhooki, błędy, limity
 - [Integracje z aplikacjami](integracje.md) - adres wejściowy dla aplikacji z własnym formatem,
-  Mail2SMS ze skrzynki IMAP, SMS do grupy, szablony Liquid, gotowe ustawienia (Uptime Kuma, Grafana, Zabbix,
-  WooCommerce, Fakturownia, FreeScout, Freshdesk, Bitrix24, Slack, ntfy, Gmail, home.pl, OVH),
-  powiadomienia administratora mailem
+  Mail2SMS ze skrzynki IMAP i Microsoft 365, SMS do grupy, szablony Liquid, gotowe ustawienia (Uptime Kuma,
+  Grafana, Zabbix, WooCommerce, Fakturownia, FreeScout, Freshdesk, Bitrix24, Slack, ntfy, Gmail, home.pl, OVH,
+  Microsoft 365), powiadomienia administratora mailem i SMS-em
 - [Power Automate](power-automate.md) - konektor do Microsoft Power Automate: integracja w panelu,
   import pliku, pierwszy przepływ, rozsyłka z Excela, rozwiązywanie problemów
 - [Rozwiązywanie problemów](problemy.md) - objaw, sprawdzenie i naprawa: panel, logowanie, tryb
-  awaryjny, aktualizacja, zgłaszanie problemów
+  awaryjny, aktualizacja, Microsoft 365, zgłaszanie problemów
 - [Przykład w PHP](https://github.com/sqlik/multiinfo-gate/tree/main/examples/php) - strona
   testowa i kod do skopiowania, w repozytorium
 

@@ -3,8 +3,9 @@
 Ta instrukcja prowadzi od początku do końca. Zaczyna od przygotowań po stronie Multiinfo.
 Potem opisuje instalację bramki na serwerze i pierwszą wysyłkę. Kończy się wystawieniem API pod
 własną domeną. Rozdział 4.7 wprowadza integracje z aplikacjami (monitoring, helpdesk,
-automatyzacje) i powiadomienia administratora mailem. Ich pełny opis jest w osobnym rozdziale
-[Integracje z aplikacjami](integracje.md).
+automatyzacje) i powiadomienia administratora mailem albo SMS-em. Pełny opis przedstawia osobny
+rozdział [Integracje z aplikacjami](integracje.md). Rozdział 4.8 opisuje połączenie konta
+Microsoft 365, przez które bramka odczytuje skrzynkę i wysyła maile.
 
 Instrukcja zakłada, że potrafisz zalogować się na serwer przez SSH i wkleić polecenie do
 terminala. Nic więcej nie jest wymagane. Pozostałe pojęcia (Docker, tunel SSH, odwrotne proxy,
@@ -575,8 +576,9 @@ Integracja „z SMS-a” wysyła odebrane SMS-y i statusy na adres aplikacji w j
 Integracja „Mail2SMS” odczytuje skrzynkę pocztową przez IMAP i zamienia wiadomości od dozwolonych
 nadawców na SMS-y. Wymaga wyłącznie połączenia wychodzącego z maszyny bramki do serwera poczty
 na porcie 993 (albo 143). W Dockerze ani w Traefiku nie trzeba otwierać żadnego portu. Serwer
-poczty w sieci wewnętrznej wymaga `MIG_MAIL_ALLOW_PRIVATE=1` (rozdział 7.7). Integracja działa
-w imieniu klucza API z rozdziału 4.5. Załóż go najpierw.
+poczty w sieci wewnętrznej wymaga `MIG_MAIL_ALLOW_PRIVATE=1` (rozdział 7.7). Do skrzynki
+w Microsoft 365 bramka loguje się kontem Microsoft 365 połączonym według punktu 4.8. Integracja
+działa w imieniu klucza API z rozdziału 4.5. Załóż go najpierw.
 
 Integracja z Power Automate w kierunku „Aplikacja wysyła SMS” przyjmuje zlecenia wysyłki
 z przepływów Microsoft Power Automate. Wymaga bramki dostępnej z internetu pod domeną z HTTPS,
@@ -597,13 +599,247 @@ adres webhooka klucza.
 
 ![Formularz integracji z ustawienia Uptime Kuma w trybie prostym](obrazki/integracja-formularz.png)
 
-Ekran **Powiadomienia** ma ustawienia serwera SMTP z mailem testowym i tabelę reguł. Reguły
-obejmują błędy integracji, niedostarczone webhooki, certyfikat konta na progach dni, konto
-odrzucające wysyłkę, awarię odbioru i podsumowanie dzienne. Bez SMTP reguły są wyszarzone.
-Szczegóły obu ekranów, gotowe ustawienia aplikacja po aplikacji i język szablonów opisuje
-rozdział [Integracje z aplikacjami](integracje.md).
+Ekran **Powiadomienia** zawiera trzy zakładki. Zakładka **Konfiguracja** obejmuje ustawienia
+serwera SMTP z mailem testowym. Pole **Sposób logowania** określa, czy bramka loguje się do
+serwera hasłem, czy przez konto Microsoft 365 z punktu 4.8. Wariant Microsoft 365 jest zalecany
+dla firm korzystających z Exchange Online, ponieważ Microsoft wycofuje logowanie hasłem do SMTP.
 
-![Ekran Powiadomienia, zakładka Konfiguracja: serwer SMTP, nadawca i odbiorcy](obrazki/powiadomienia.png)
+Zakładka **SMS** włącza kanał SMS, czyli powiadomienia na numery administratorów wysyłane
+w imieniu wskazanego klucza API. Kanał działa niezależnie od poczty, dlatego informuje także
+o zerwanym koncie Microsoft 365 i o mailu, którego nie udało się wysłać. Zakładka **Reguły**
+określa zgłaszane zdarzenia: błędy integracji, przekroczony limit burzy, niedostarczone webhooki,
+certyfikat konta na progach dni, konto odrzucające wysyłkę, awarię odbioru, awarię skrzynki,
+konto Microsoft 365 wymagające logowania, niewysłany mail z powiadomieniem, nowe wydanie bramki
+i podsumowanie dzienne. Każda reguła może dodatkowo wysyłać SMS. Reguły
+wymagają skonfigurowanego serwera SMTP albo włączonego kanału SMS. Szczegóły tych ekranów,
+gotowe ustawienia aplikacja po aplikacji i język szablonów opisuje rozdział
+[Integracje z aplikacjami](integracje.md).
+
+![Ekran Powiadomienia, zakładka Konfiguracja: sposób logowania, serwer SMTP, nadawca i odbiorcy](obrazki/powiadomienia.png)
+
+### 4.8. Konto Microsoft 365
+
+Od wersji 1.10 bramka współpracuje z Microsoft 365 przez skrzynkę pocztową przeznaczoną wyłącznie
+dla niej, nazywaną dalej skrzynką bramki. Przez tę skrzynkę integracja Mail2SMS odczytuje pocztę
+w Exchange Online, a bramka wysyła maile powiadomień i odpowiedzi do nadawców. Microsoft nie
+przyjmuje do IMAP hasła skrzynki i wycofuje logowanie hasłem do SMTP. Dlatego skrzynka łączy się
+z bramką przez logowanie w przeglądarce, a jej hasło nie trafia do bramki.
+
+Rozdział jest przeznaczony dla administratora bramki, który współpracuje z administratorem
+Microsoft 365. Konfiguracja odbywa się wyłącznie w portalach Microsoftu i w panelu bramki, bez
+PowerShella. Każda firma rejestruje w swoim katalogu własną aplikację, dlatego bramka nie
+korzysta z żadnej usługi pośredniczącej. Skrzynki prywatne Outlook.com nie są obsługiwane.
+
+Przygotowanie obejmuje trzy etapy: skrzynkę bramki w centrum administracyjnym Microsoft 365,
+rejestrację aplikacji z przypisaniem skrzynki bramki w centrum administracyjnym Microsoft Entra i
+połączenie skrzynki z bramką w panelu. Dwa pierwsze etapy wykonuje administrator Microsoft 365.
+Użycie skrzynki w Mail2SMS opisuje rozdział 5.1 [Integracji z
+aplikacjami](integracje.md#51-skrzynka), a wysyłkę maili powiadomień rozdział 9.1 tego samego
+artykułu.
+
+#### Skrzynka bramki
+
+Skrzynka bramki jest zwykłą skrzynką użytkownika z licencją obejmującą Exchange Online, na przykład
+`alarmy@firma.pl`. Skrzynka współdzielona nie wystarcza, ponieważ nie pozwala na logowanie. Bramka
+otrzymuje dostęp do każdej skrzynki, do której skrzynka bramki posiada uprawnienia. Dlatego skrzynka
+bramki nie powinna posiadać dostępu do innych skrzynek niż odczytywane przez Mail2SMS. Jej
+użytkownik nie wymaga żadnej roli administracyjnej. Adres skrzynki bramki powinien należeć do tej
+samej domeny co adresy pracowników, którzy piszą do Mail2SMS. Bramka uznaje bowiem pocztę wewnętrzną
+bez wyniku SPF i DKIM wyłącznie od nadawców z domeny skrzynki.
+
+1. W centrum administracyjnym Microsoft 365 otwórz **Użytkownicy → Aktywni użytkownicy** i dodaj
+   użytkownika z licencją obejmującą skrzynkę Exchange Online.
+2. Nadaj użytkownikowi opisową nazwę wyświetlaną, na przykład „Alarmy SMS”. Pod tą nazwą pracownicy
+   firmy widzą w Outlooku odpowiedzi i powiadomienia wysłane przez bramkę.
+3. Otwórz użytkownika na liście, przejdź na kartę **Poczta** i kliknij **Zarządzaj
+   aplikacjami poczty e-mail**.
+4. Zaznacz **IMAP** oraz **SMTP z uwierzytelnianiem**, a następnie kliknij **Zapisz zmiany**.
+
+![Centrum administracyjne Microsoft 365, ustawienia aplikacji poczty skrzynki bramki: zaznaczone IMAP oraz SMTP z uwierzytelnianiem](obrazki/m365-aplikacje-poczty.png)
+
+Oczekiwany wynik: centrum administracyjne wyświetla komunikat „Zaktualizowano informacje
+Aplikacje poczty e-mail o skrzynce pocztowej”.
+
+Opcja **IMAP** jest potrzebna do odczytu skrzynki w Mail2SMS, a opcja **SMTP z uwierzytelnianiem**
+do wysyłki maili przez skrzynkę bramki. Ustawienie SMTP na skrzynce jest nadrzędne wobec
+ustawienia organizacji. Dlatego działa także wtedy, gdy organizacja wyłączyła tę opcję dla
+pozostałych skrzynek.
+Zmiana obu opcji zaczyna obowiązywać po około 30 minutach. Do tego czasu skrzynka może odrzucać
+logowanie bramki.
+
+#### Rejestracja aplikacji w Entra ID
+
+Aplikacja zarejestrowana w Entra ID pozwala bramce zalogować się adresem skrzynki bramki i uzyskać
+do niej dostęp. Aplikacja działa jako klient publiczny, czyli bez sekretu klienta. Sekret klienta
+jest hasłem aplikacji, które wygasa najpóźniej po 24 miesiącach i wymaga odnawiania, dlatego
+bramka z niego nie korzysta. Rejestracja wymaga adresu przekierowania, który podaje panel bramki.
+
+1. W panelu bramki otwórz **Konta Microsoft 365 → Dodaj konto**. Skopiuj wartość pola **Adres
+   przekierowania** przyciskiem **Kopiuj** i pozostaw formularz otwarty.
+2. W centrum administracyjnym Microsoft Entra otwórz **Entra ID → Rejestracje aplikacji** i kliknij
+   **Nowa rejestracja**.
+3. Wypełnij formularz rejestracji:
+    - **Nazwa**: na przykład „Multiinfo Gate”
+    - **Obsługiwane typy kont**: **Tylko dla jednej dzierżawy**, czyli wartość domyślna
+    - **Identyfikator URI przekierowania**: platforma **Klient publiczny/natywny (mobilne
+      i klasyczne)** i adres skopiowany z panelu
+
+    ![Formularz rejestracji aplikacji w Microsoft Entra: nazwa, typ kont Tylko dla jednej dzierżawy, platforma Klient publiczny/natywny i adres przekierowania z panelu bramki](obrazki/entra-rejestracja.png)
+
+4. Kliknij **Rejestruj**. Jeżeli portal nie otworzy przeglądu nowej aplikacji, znajdziesz ją
+   w **Rejestracjach aplikacji** na karcie **Wszystkie aplikacje**.
+5. Przejdź do sekcji **Uprawnienia interfejsu API** i kliknij **Dodaj uprawnienie**. Wybierz
+   **Microsoft Graph**, a następnie **Uprawnienia delegowane**.
+6. Zaznacz sześć uprawnień: `IMAP.AccessAsUser.All`, `SMTP.Send`, `offline_access`, `openid`,
+   `email` i `profile`. Zatwierdź wybór przyciskiem **Dodaj uprawnienia**. Następnie usuń
+   uprawnienie `User.Read`, które portal dodaje domyślnie. Portal ostrzega wtedy, że zakres jest
+   wymagany, ale bramka działa bez niego.
+7. Kliknij **Wyraź zgodę administratora dla katalogu** z nazwą organizacji i potwierdź.
+8. Przejdź do sekcji **Przegląd** i skopiuj dwie wartości: **Identyfikator aplikacji (klienta)**
+   oraz **Identyfikator katalogu (dzierżawy)**.
+
+Oczekiwany wynik: lista uprawnień zawiera sześć wymienionych uprawnień, a kolumna **Stan** przy każdej z nich
+podaje „Udzielono dla” z nazwą organizacji.
+
+![Uprawnienia interfejsu API w Microsoft Entra: sześć uprawnień delegowanych Microsoft Graph ze zgodą administratora udzieloną dla organizacji](obrazki/entra-uprawnienia.png)
+
+Uprawnienia `IMAP.AccessAsUser.All` i `SMTP.Send` pozwalają odczytywać pocztę i wysyłać maile
+w imieniu zalogowanego konta. Uprawnienie `offline_access` pozwala bramce odnawiać logowanie bez
+udziału administratora. Uprawnienia `openid`, `email` i `profile` przekazują bramce adres konta.
+Zgoda administratora sprawia, że przy logowaniu skrzynki bramki Microsoft nie prosi o zatwierdzenie
+uprawnień.
+
+Sekcja **Authentication (Preview)** rejestracji przedstawia wybraną platformę pod nazwą
+„Aplikacje mobilne i klasyczne”. W tej sekcji dopiszesz kolejny adres przekierowania, na przykład po zmianie
+adresu, pod którym otwierasz panel. Platforma przyjmuje zarówno adres `http://127.0.0.1` z tunelu
+SSH, jak i adres `https://` panelu wystawionego pod domeną. W adresie `http://127.0.0.1` Microsoft
+nie porównuje numeru portu, dlatego tunel na innym porcie lokalnym nie wymaga zmiany rejestracji.
+Adresy `127.0.0.1` i `localhost` są jednak dla Microsoftu różnymi adresami. Rejestracja powinna
+zawierać wyłącznie adresy, pod którymi otwierasz panel. Dlatego po wystawieniu panelu pod domeną
+usuń adres tunelu, jeżeli z niego nie korzystasz.
+
+#### Przypisanie skrzynki bramki
+
+Zgoda administratora obejmuje wszystkie konta w katalogu. Dlatego bez dodatkowego ustawienia przez
+aplikację może zalogować się każde konto organizacji, na przykład własne konto administratora
+wybrane omyłkowo przy logowaniu w panelu. Ustawienie „Wymagane jest przypisanie” ogranicza
+aplikację do kont przypisanych przez administratora Microsoft 365, czyli do skrzynki bramki.
+
+1. W centrum administracyjnym Microsoft Entra otwórz **Entra ID → Aplikacje dla przedsiębiorstw**
+   i wyszukaj aplikację po nazwie nadanej przy rejestracji.
+2. Otwórz aplikację i przejdź do sekcji **Właściwości**. Ustaw **Wymagane jest przypisanie?** na
+   **Tak** i kliknij **Zapisz**.
+3. Przejdź do sekcji **Użytkownicy i grupy** i kliknij **Dodaj użytkownika/grupę**.
+4. Kliknij **Niczego nie wybrano**, zaznacz skrzynkę bramki, na przykład „Alarmy SMS”, a następnie
+   kliknij **Wybierz** i **Przypisz**.
+5. Jeżeli lista zawiera inne konta, zaznacz je i kliknij **Usuń przypisanie**.
+
+Oczekiwany wynik: lista w sekcji **Użytkownicy i grupy** zawiera wyłącznie skrzynkę bramki.
+Microsoft odrzuca logowanie każdego innego konta błędem AADSTS50105.
+
+#### Połączenie konta w panelu
+
+1. Wróć do formularza **Nowe konto Microsoft 365** w panelu bramki.
+2. Wpisz nazwę konta, na przykład „Dyżur IT”. Pod tą nazwą konto wyświetla się na listach
+   panelu.
+3. Wklej **Identyfikator katalogu** i **Identyfikator aplikacji** skopiowane w kroku 8
+   rejestracji. Zamiast identyfikatora katalogu można podać domenę katalogu, na przykład
+   `firma.onmicrosoft.com`.
+
+    ![Formularz nowego konta Microsoft 365: rozwinięta instrukcja przygotowania w Microsoft 365 i Entra ID, nazwa, identyfikatory katalogu i aplikacji oraz adres przekierowania z przyciskiem Kopiuj](obrazki/m365-formularz.png)
+
+4. Kliknij **Zapisz i zaloguj w Microsoft**. Przeglądarka otworzy stronę logowania Microsoft.
+5. Wybierz adres skrzynki bramki, a nie własne konto administratora. Jeżeli adresu nie ma na
+   liście, kliknij **Użyj innego konta**.
+6. Podaj hasło skrzynki bramki i w razie potrzeby potwierdź logowanie drugim składnikiem.
+
+Oczekiwany wynik: przeglądarka wraca do szczegółów konta w panelu z komunikatem „Połączono jako
+alarmy@firma.pl”. Konto otrzymuje stan „Połączone”, a pole **Adres skrzynki** zawiera adres skrzynki
+bramki. Microsoft nie wyświetla ekranu zgody, ponieważ zgody udzielił administrator.
+
+![Szczegóły konta Microsoft 365: stan Połączone, adres skrzynki, czas logowania i ostatniego odświeżenia, odbiorcy konta oraz przyciski Zaloguj ponownie, Rozłącz i Usuń](obrazki/m365-konto.png)
+
+Jeżeli wynik jest inny:
+
+- **Microsoft wyświetla błąd AADSTS50011.** Rejestracja aplikacji nie zawiera adresu
+  przekierowania, pod którym otwarto panel. Sposób naprawy opisuje punkt
+  [Microsoft odrzuca adres przekierowania](problemy.md#m365-adres-przekierowania)
+- **Microsoft wyświetla błąd AADSTS50105.** Wybrane konto nie jest przypisane do aplikacji.
+  Zaloguj się adresem skrzynki bramki albo przypisz ją według punktu
+  [Przypisanie skrzynki bramki](#przypisanie-skrzynki-bramki)
+- **Microsoft wyświetla błąd AADSTS700016.** Identyfikator aplikacji nie odpowiada żadnej
+  rejestracji w podanym katalogu. Popraw identyfikatory przyciskiem **Edytuj** w szczegółach konta
+- **Microsoft wyświetla błąd AADSTS65001 albo prosi o zgodę na uprawnienia.** Zgoda
+  administratora nie obejmuje wszystkich uprawnień. Powtórz krok 7 rejestracji
+- **Microsoft wyświetla błąd AADSTS53003.** Zasady dostępu warunkowego blokują logowanie skrzynki
+  bramki. Sposób naprawy opisuje punkt
+  [Dostęp warunkowy blokuje konto](problemy.md#m365-dostep-warunkowy)
+- **Panel wyświetla komunikat „Logowanie wygasło albo zostało już zakończone”.** Od rozpoczęcia
+  logowania minęło ponad 10 minut albo w tym czasie bramka została uruchomiona ponownie. Kliknij
+  **Zaloguj w Microsoft** albo **Zaloguj ponownie** w szczegółach konta
+- **Panel wyświetla komunikat o innym katalogu.** Logowanie odbyło się kontem z innej
+  organizacji. Zaloguj się adresem skrzynki bramki z katalogu podanego w ustawieniach konta
+
+#### Stany konta
+
+| Stan | Znaczenie | Skutek dla skrzynek i maili |
+|---|---|---|
+| Niezalogowane | konto zapisane bez logowania albo rozłączone | skrzynki nie są sprawdzane, maile nie są wysyłane |
+| Połączone | logowanie działa | normalna praca |
+| Wymaga logowania | Microsoft unieważnił logowanie, na przykład po zmianie hasła konta | skrzynki czekają na ponowne logowanie, maile nie są wysyłane, administrator otrzymuje powiadomienie |
+| Błąd połączenia | chwilowy błąd sieci albo usługi Microsoftu | bramka ponawia próbę przy następnym użyciu konta |
+
+Lista kont podaje adres skrzynki, stan, czas ostatniego odświeżenia logowania i odbiorców konta.
+Odbiorcami są skrzynki Mail2SMS oraz wysyłka maili powiadomień. Szczegóły konta przedstawiają
+dodatkowo osobę i czas logowania oraz ostatni błąd z kodem AADSTS i podpowiedzią.
+
+![Lista kont Microsoft 365: konto połączone z odbiorcami oraz konto wymagające logowania](obrazki/m365-konta.png)
+
+Bramka odczytuje adres skrzynki z danych logowania. Jeżeli główny adres skrzynki różni się od
+nazwy logowania, zmień go w szczegółach konta, w panelu **Adres skrzynki**. Ponowne logowanie tym
+samym kontem zachowuje adres wpisany ręcznie. Logowanie innym kontem zastępuje go adresem nowego
+konta, a panel informuje o tej zmianie.
+
+#### Ponowne logowanie i odcięcie dostępu
+
+Microsoft unieważnia logowanie bramki po zmianie albo resecie hasła skrzynki bramki, po
+odwołaniu sesji w Entra ID i po cofnięciu zgody. Logowanie nieużywane przez 90 dni również
+wygasa, dlatego bramka co tydzień odświeża logowanie konta, z którego w tym czasie nie
+korzystała. Po unieważnieniu logowania konto przechodzi w stan „Wymaga logowania”. Przegląd
+panelu wyświetla pasek z nazwą konta i przyciskiem **Zaloguj ponownie**, a menu pokazuje liczbę takich kont przy pozycji **Konta Microsoft 365**. Po ponownym
+logowaniu skrzynki wznawiają pracę przy najbliższym sprawdzeniu.
+
+Reguła **Konto Microsoft 365 wymaga logowania** powiadamia administratora mailem i SMS-em. Gdy
+przez to konto wychodzą maile powiadomień, bramka wysyła wyłącznie SMS, ponieważ mail nie
+zostałby wysłany. Kanał SMS opisuje rozdział 9.5
+[Integracji z aplikacjami](integracje.md#95-powiadomienia-sms).
+
+Odwołanie sesji albo zmiana hasła nie zatrzymuje bramki natychmiast. Bramka korzysta jeszcze
+z bieżącego tokenu dostępu, który Microsoft wydaje na około godzinę. Natychmiastowe
+odcięcie zapewnia przycisk **Rozłącz** w szczegółach konta. Rozłączenie usuwa token z bramki
+i ustawia stan „Niezalogowane”. Zgodę aplikacji po stronie Microsoftu cofa się w centrum
+administracyjnym Microsoft Entra.
+
+Usunięcie konta jest możliwe dopiero wtedy, gdy nie korzysta z niego żadna skrzynka Mail2SMS ani
+wysyłka maili powiadomień. W przeciwnym razie panel podaje listę tych odbiorców. Dodanie,
+logowanie, rozłączenie i usunięcie konta trafiają do dziennika zdarzeń panelu.
+
+#### Bezpieczeństwo i sieć
+
+Po zalogowaniu Microsoft przekazuje bramce dwa tokeny, czyli cyfrowe przepustki zamiast hasła.
+Token dostępu otwiera skrzynkę i serwer SMTP przez około godzinę. Token odświeżania pozwala bramce
+pobierać kolejne tokeny dostępu bez udziału administratora.
+
+Bramka nie przechowuje hasła skrzynki bramki. W bazie zapisuje wyłącznie token odświeżania
+zaszyfrowany kluczem głównym, a token dostępu pozostaje w pamięci procesu. Żaden token nie trafia
+do dziennika ani do powiadomień. Kopia bazy zawiera token w postaci zaszyfrowanej, dlatego konto
+działa po przywróceniu kopii tylko z tym samym kluczem głównym.
+
+Połączenia z Microsoftem są wychodzące. Bramka łączy się wyłącznie z `login.microsoftonline.com`
+na porcie 443, z `outlook.office365.com` na porcie 993 i z `smtp.office365.com` na porcie 587.
+Zapora na serwerze albo w sieci firmowej musi przepuszczać ten ruch. Docker ani Traefik nie
+wymagają otwarcia żadnego portu.
+
 
 ## 5. Pierwsza wysyłka
 
@@ -1015,8 +1251,12 @@ zawiera treści wiadomości, haseł ani pełnych kluczy. Zdarzenia warte uwagi:
 
 Wydania są numerowane według schematu `1.2.3`. Pierwsza liczba zmienia się przy zmianach
 niezgodnych wstecz, druga przy nowych możliwościach, trzecia przy poprawkach. Numer bieżącej
-wersji pokazuje maszt panelu oraz `/healthz` na porcie panelu. Lista wydań z opisem zmian jest
-pod adresem `https://github.com/sqlik/multiinfo-gate/releases`.
+wersji pokazuje maszt panelu. W wierszu poleceń numer podaje polecenie
+`docker compose exec multiinfo-gate grep '"version"' package.json` wykonane w katalogu
+`~/multiinfo-gate/docker`. Odpowiedź `/healthz` na porcie panelu zawiera numer wersji wyłącznie
+przy zapytaniach z adresu pętli zwrotnej oraz przy zapytaniach HTTPS od odwrotnego proxy wpisanego
+w `MIG_TRUSTED_PROXIES`. Zapytanie z innego adresu otrzymuje sam stan. Listę wydań z opisem zmian
+znajdziesz pod adresem `https://github.com/sqlik/multiinfo-gate/releases`.
 
 O nowym wydaniu bramka informuje sama. Raz na dobę odpytuje serwis GitHub o najnowsze wydanie
 i porównuje je z zainstalowanym. Gdy jest nowsze, na ekranie przeglądu pojawia się pasek
@@ -1055,8 +1295,8 @@ docker compose up -d
 
 Polecenia wykonują kolejno: przejście do katalogu z plikami Compose, pobranie nowych plików
 uruchomieniowych i dokumentacji, pobranie nowego obrazu, uruchomienie. Oczekiwany wynik:
-`curl http://127.0.0.1:8080/healthz` odpowiada `{"status":"ok"}`, a
-`curl http://127.0.0.1:8081/healthz` pokazuje w polu `version` nowy numer.
+`curl http://127.0.0.1:8080/healthz` odpowiada `{"status":"ok"}`, a polecenie
+`docker compose exec multiinfo-gate grep '"version"' package.json` pokazuje nowy numer.
 
 Kopię sprawdza polecenie `docker compose exec multiinfo-gate ls /data/backups`. Oczekiwany wynik
 zawiera plik `przed-aktualizacja-<WERSJA>.sqlite` z numerem poprzedniej wersji. Przy aktualizacji
@@ -1090,8 +1330,8 @@ docker compose up -d
 ```
 
 Ostatnie polecenie tworzy kontener z obrazu poprzedniej wersji i uruchamia go na przywróconej
-kopii. Oczekiwany wynik: `curl http://127.0.0.1:8081/healthz` pokazuje w polu `version` poprzedni
-numer.
+kopii. Oczekiwany wynik: `docker compose exec multiinfo-gate grep '"version"' package.json`
+pokazuje poprzedni numer.
 
 Przy budowaniu ze źródeł (`docker-compose.build.yml`) zamiast `docker compose pull` wykonujesz
 `docker compose up -d --build`. Przy powrocie zamiast zmiany `MIG_WERSJA` wykonaj
@@ -1138,7 +1378,7 @@ Zmienne ustawia się w `docker/.env` (klucz główny, domena) albo w sekcji `env
 | `MIG_MAIL_ALLOW_PRIVATE` | `0` | `1` pozwala na serwer IMAP w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów). Zmienna osobna od `MIG_WEBHOOK_ALLOW_PRIVATE`, ponieważ serwer poczty w sieci firmowej to częstszy przypadek niż aplikacja odbierająca webhooki |
 | `MIG_INBOUND_TIMEOUT_MS` | `10000` | Ile milisekund Multiinfo może wstrzymywać odpowiedź na zapytanie o wiadomości przychodzące (1-60000). Przy wartości domyślnej odbiór trwa zwykle poniżej sekundy, najwyżej ok. 10 s, kosztem sześciu pytań na minutę na usługę. Maksimum `60000` (long polling z dokumentacji Multiinfo) zmniejsza liczbę pytań, ale wiadomość, która nadejdzie między dwoma pytaniami, czeka do końca następnego - opóźnienie odbioru sięga wtedy minuty. Mała wartość razem z `MIG_INBOUND_IDLE_MS` daje odpytywanie okresowe |
 | `MIG_INBOUND_IDLE_MS` | `0` | Przerwa po pustej odpowiedzi, zanim bramka wyśle kolejne zapytanie, `0` oznacza zapytanie natychmiastowe |
-| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku), od których API ufa nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Ustawiana w `docker/.env`: `172.16.0.0/12` dla Caddy i Traefika w Dockerze, `127.0.0.1` dla nginx na serwerze (rozdział 6). Potrzebna, gdy integracje mają listę dozwolonych źródeł albo dziennik ma pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)) |
+| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku), od których API ufa nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Ustawiana w `docker/.env`: `172.16.0.0/12` dla Caddy i Traefika w Dockerze, `127.0.0.1` dla nginx na serwerze (rozdział 6). Potrzebna, gdy integracje korzystają z listy dozwolonych źródeł albo dziennik powinien pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)). Proxy z tej listy przekazujące żądanie HTTPS otrzymuje też szczegóły `/healthz` panelu (punkt 7.4) |
 | `MIG_UPDATE_CHECK` | `1` | Raz na dobę sprawdzać w serwisie GitHub, czy jest nowsze wydanie, i pokazywać je na przeglądzie (rozdział 7.4); `0` wyłącza, np. w sieci bez dostępu do internetu |
 | `MIG_WERSJA` | `1` | Tag obrazu do pobrania: `1`, `1.1` albo `1.1.0` (rozdział 7.4) |
 | `MIG_DOMENA` | - | Domena bramki dla wariantu Caddy i Traefik |
@@ -1184,7 +1424,7 @@ Skrypt `proxmox/ct/multiinfogate.sh` z repozytorium bramki jest napisany w forma
 [community-scripts](https://github.com/community-scripts/ProxmoxVE) i korzysta z ich silnika
 kreatora. Leży jednak w repozytorium bramki i nie wymaga niczego z ich katalogu. Skrypt wykonuje
 kolejno: pobiera szablon Debiana 13, tworzy nieuprzywilejowany kontener (1 rdzeń, 1 GB pamięci,
-4 GB dysku, adres z DHCP), instaluje Node.js 22, pobiera źródła najnowszego wydania bramki
+4 GB dysku, adres z DHCP), instaluje najnowsze wydanie Node.js 22, pobiera źródła najnowszego wydania bramki
 z GitHuba i buduje je, tworzy konto systemowe `multiinfo-gate`, generuje klucz główny,
 rejestruje usługę systemd i zakłada pierwsze konto panelu. Dockera w kontenerze nie ma.
 
@@ -1271,11 +1511,14 @@ informacją, a próbę zalogowania odrzuca. Do panelu prowadzą dwie drogi:
   komputera w sieci, nadal za hasłem i drugim składnikiem
 
 Bez logowania z sieci widać jedynie ekran logowania i `http://<ADRES-KONTENERA>:8081/healthz`
-z samym polem `status`. Szczegóły (wersja, kolejka, konta Multiinfo z dniami do końca
-certyfikatu) panel podaje wyłącznie tam, gdzie możliwe jest logowanie, czyli tunelem albo przez
-HTTPS. Gdy nawet ekran logowania w sieci jest niepożądany, ponieważ kontener działa
-w sieci z obcymi urządzeniami. Wtedy w pliku `/etc/multiinfo-gate/env` wpisz
-`MIG_ADMIN_HOST=127.0.0.1` i wykonaj `systemctl restart multiinfo-gate`. Do panelu wchodzisz
+z samym polem `status`. Szczegóły, czyli wersję, kolejkę i konta Multiinfo z dniami do końca
+certyfikatu, panel podaje wyłącznie zapytaniom z adresu pętli zwrotnej, na którym w kontenerze
+LXC nie nasłuchuje. Otrzymuje je także odwrotne proxy, które przekazuje żądanie HTTPS, a jego adres
+znajduje się w `MIG_TRUSTED_PROXIES`. Numer wersji podaje maszt panelu.
+
+Gdy nawet ekran logowania w sieci jest niepożądany, na przykład w sieci z obcymi urządzeniami,
+wpisz w pliku `/etc/multiinfo-gate/env` wiersz `MIG_ADMIN_HOST=127.0.0.1` i wykonaj
+`systemctl restart multiinfo-gate`. Do panelu wchodzisz
 wtedy tunelem do samego kontenera według punktu 4.1. Wymaga to włączenia w nim serwera SSH:
 `systemctl enable --now ssh` i hasło `root` ustawione poleceniem `passwd`, albo dostęp SSH
 z ustawień zaawansowanych kreatora.

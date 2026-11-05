@@ -358,3 +358,18 @@ describe('ślady integracji', () => {
     expect((await page('/wiadomosci/m_bez')).body).not.toContain('Zlecający');
   });
 });
+
+describe('GET /wiadomosci - powiadomienia bramki', () => {
+  it('lista pokazuje wiadomość systemową z oznaczeniem, a szczegóły ze zlecającym', async () => {
+    h.messages.insert({
+      id: 'msg_sys', apiKeyId, accountId, serviceId: '24138', dest: '48601000001', body: 'Multiinfo Gate: SMS testowy', bodyHash: 'h',
+      encoding: 'gsm', parts: 1, slots: 27, orig: null, costCenter: null, validTo: null, idempotencyKey: null,
+      requestedBy: 'Powiadomienie bramki', system: 1, createdAt: NOW.toISOString(),
+    });
+    const list = (await page('/wiadomosci')).body;
+    expect(list).toContain('href="/wiadomosci/msg_sys"');
+    expect(list).toContain('<span class="tag">powiadomienie bramki</span>');
+    const detail = (await page('/wiadomosci/msg_sys')).body;
+    expect(detail).toContain('Powiadomienie bramki');
+  });
+});

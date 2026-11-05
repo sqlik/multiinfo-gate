@@ -7,6 +7,11 @@ export function domainOf(address: string): string {
 /** Czy `candidate` to `domain` albo jej poddomena. */
 const within = (candidate: string, domain: string): boolean => candidate === domain || candidate.endsWith(`.${domain}`);
 
+/** Czy niepusta domena `candidate` to niepusta `domain` albo jej poddomena. */
+export function inDomain(candidate: string, domain: string): boolean {
+  return candidate !== '' && domain !== '' && within(candidate.toLowerCase(), domain.toLowerCase());
+}
+
 /** Usuwa komentarze w nawiasach (CFWS, RFC 5322), także zagnieżdżone i z ukośnikiem przed nawiasem. */
 export function stripComments(header: string): string {
   let out = '';
@@ -21,11 +26,23 @@ export function stripComments(header: string): string {
   return out;
 }
 
-/** Nazwa serwera (authserv-id) z nagłówka: pierwszy token przed `;`, bez wersji, małymi literami; `null`, gdy pusty. */
+/**
+ * Nazwa serwera (authserv-id) z nagłówka: pierwszy token przed `;`, bez wersji, małymi literami; `null`, gdy pusty.
+ * Nagłówek, który zaczyna się od wyniku (`spf=pass …`, starsza postać Exchange Online), nie zawiera nazwy serwera.
+ */
 export function authservIdOf(header: string): string | null {
   const head = stripComments(header).split(';')[0]!.trim();
   const id = head.split(/\s+/)[0] ?? '';
-  return id === '' ? null : id.toLowerCase();
+  return id === '' || id.includes('=') ? null : id.toLowerCase();
+}
+
+/**
+ * Jawna porażka DMARC albo compauth (także `compauth=softfail`, czyli podejrzenie podszycia według Microsoftu)
+ * w którymkolwiek nagłówku. Nadawca może dopisać tylko porażkę, która szkodzi jemu samemu, dlatego liczą się
+ * wszystkie nagłówki. Brak wyniku nie blokuje: wewnętrzny mail wysłany przez SMTP ma `dmarc=none`.
+ */
+export function authResultsFailDmarc(headers: string[]): boolean {
+  return headers.some((h) => /(?:^|[\s;])(?:dmarc\s*=\s*fail|compauth\s*=\s*(?:soft)?fail)\b/.test(stripComments(h).toLowerCase()));
 }
 
 /**

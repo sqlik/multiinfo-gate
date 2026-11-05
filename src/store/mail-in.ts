@@ -1,6 +1,7 @@
 import type { Database } from './db.ts';
 
-export type MailboxErrorKind = 'auth' | 'network' | 'folder' | 'other';
+/** `account`: konto Microsoft 365 skrzynki wymaga logowania, bramka nie łączy się z serwerem. */
+export type MailboxErrorKind = 'auth' | 'network' | 'folder' | 'other' | 'account';
 
 /** Stan skrzynki pocztowej integracji `mail_in`: jeden wiersz na integrację. */
 export interface MailInState {
@@ -88,10 +89,15 @@ export class MailInRepo {
       ).run(r.at.toISOString(), r.at.toISOString(), r.unseen, r.uidvalidity, r.nextPollAt.toISOString(), integrationId);
       return;
     }
+    // Czekanie na konto Microsoft 365 nie jest awarią serwera. Przejście między czekaniem a innym błędem zaczyna
+    // awarię od nowa: licznik, początek i znacznik powiadomienia nie przechodzą na następny rodzaj.
     this.db.prepare(
-      `UPDATE mail_in_state SET failures = failures + 1, error = ?, error_kind = ?, error_since = COALESCE(error_since, ?),
-         last_poll_at = ?, next_poll_at = ? WHERE integration_id = ?`,
-    ).run(r.error, r.errorKind, r.at.toISOString(), r.at.toISOString(), r.nextPollAt.toISOString(), integrationId);
+      `UPDATE mail_in_state SET
+         failures = CASE WHEN (COALESCE(error_kind, '') = 'account') <> (@kind = 'account') THEN 1 ELSE failures + 1 END,
+         error_since = CASE WHEN (COALESCE(error_kind, '') = 'account') <> (@kind = 'account') THEN @at ELSE COALESCE(error_since, @at) END,
+         notified_at = CASE WHEN (COALESCE(error_kind, '') = 'account') <> (@kind = 'account') THEN NULL ELSE notified_at END,
+         error = @error, error_kind = @kind, last_poll_at = @at, next_poll_at = @next WHERE integration_id = @id`,
+    ).run({ error: r.error, kind: r.errorKind, at: r.at.toISOString(), next: r.nextPollAt.toISOString(), id: integrationId });
   }
 
   setFloor(integrationId: number, uidFloor: number, uidvalidity: number): void {
@@ -120,6 +126,15 @@ export class MailInRepo {
   counts(): { total: number; failing: number } {
     const row = this.db.prepare(`SELECT COUNT(*) AS total, SUM(CASE WHEN s.error IS NOT NULL THEN 1 ELSE 0 END) AS failing ${ENABLED_JOIN}`).get() as { total: number; failing: number | null };
     return { total: row.total, failing: row.failing ?? 0 };
+  }
+
+  /**
+   * Liczba włączonych skrzynek w błędzie bez tych, które czekają na logowanie konta Microsoft 365.
+   * Licznik integracji i pasek przeglądu ich nie wliczają, bo opisuje je pasek konta.
+   */
+  troubledCount(): number {
+    const row = this.db.prepare(`SELECT COUNT(*) AS n ${ENABLED_JOIN} AND s.error IS NOT NULL AND (s.error_kind IS NULL OR s.error_kind <> 'account')`).get() as { n: number };
+    return row.n;
   }
 
   /** Czy mail był już brany pod uwagę: po Message-ID albo po parze UIDVALIDITY i UID. */

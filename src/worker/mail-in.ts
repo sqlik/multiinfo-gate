@@ -1,9 +1,10 @@
 import { MAIL_IN_PASSWORD_REF, type MailInConfig } from '../integrations/config.ts';
 import { warsawTime } from '../time/warsaw.ts';
-import { MailboxError, errorKindOf, errorMessageOf, guardedConnect, scrubError, type MailboxConnect, type MailboxSession, type MailboxSettings } from '../integrations/mail/client.ts';
+import { MailboxError, authSecret, errorKindOf, errorMessageOf, guardedConnect, scrubError, type MailboxAuth, type MailboxConnect, type MailboxSession, type MailboxSettings } from '../integrations/mail/client.ts';
+import { M365_IMAP_REFUSED, imapTarget, m365MailboxAuth, type M365MailboxDeps } from '../m365/mailbox.ts';
 import { systemResolver, type Resolver } from '../net/private-address.ts';
 import { parseMail, type ParsedMail } from '../integrations/mail/parse.ts';
-import { runMailIn, type MailInIntegration, type MailInOutcome, type PipelineDeps } from '../integrations/pipeline.ts';
+import { runMailIn, subjectNote, type MailInIntegration, type MailInOutcome, type PipelineDeps } from '../integrations/pipeline.ts';
 import { silentLogger, type Logger } from '../log.ts';
 import type { AdminNotifier } from '../notifications/rules.ts';
 import { isMailIn } from '../store/integrations.ts';
@@ -12,7 +13,11 @@ import type { NotificationsRepo } from '../store/notifications.ts';
 import type { MailContent } from './mail.ts';
 import { REPORT_FIRST_DELAY_MS, reportPayload } from './mail-report.ts';
 
+/** Maile pobierane w całości w jednym odpytaniu. */
 export const MAX_PER_POLL = 50;
+/** Maile oglądane po samych metadanych w jednym odpytaniu oraz wielkość jednej partii metadanych. */
+export const MAX_SCAN_PER_POLL = 1000;
+const META_BATCH = 200;
 export const MAX_MAIL_BYTES = 2 * 1024 * 1024;
 export const CONNECT_TIMEOUT_MS = 15_000;
 export const POLL_TIMEOUT_MS = 60_000;
@@ -31,20 +36,25 @@ export interface MailInDeps extends PipelineDeps {
   notifier?: AdminNotifier;
   notifications?: Pick<NotificationsRepo, 'rule' | 'smtp'>;
   log?: Logger;
+  /** Konta Microsoft 365 skrzynek logujących się tokenem; bez nich takie skrzynki czekają jak przy koncie wymagającym logowania. */
+  m365?: M365MailboxDeps;
 }
 
 /**
  * Odstęp po nieudanym odpytaniu: interwał razy 2^(failures-1), do 15 min, ale nigdy krócej niż
- * ustawiona częstotliwość; logowanie co najmniej 5 min.
+ * ustawiona częstotliwość; logowanie co najmniej 5 min. Konto Microsoft 365 wymagające logowania:
+ * zwykły interwał, bo bramka nie łączy się z serwerem, a skrzynka powinna ruszyć zaraz po zalogowaniu.
  */
 export function nextPollDelayMs(intervalSec: number, failures: number, kind: MailboxErrorKind | null): number {
   const base = intervalSec * 1000;
+  if (kind === 'account') return base;
   const grown = Math.min(base * 2 ** Math.max(0, failures - 1), Math.max(BACKOFF_CAP_MS, base));
   return kind === 'auth' ? Math.max(grown, AUTH_RETRY_MS) : grown;
 }
 
 const KIND_WORDS: Record<MailboxErrorKind, string> = {
   auth: 'logowanie odrzucone', network: 'serwer nie odpowiada', folder: 'folder niedostępny', other: 'błąd odpytania',
+  account: 'konto Microsoft 365 wymaga logowania',
 };
 
 
@@ -92,7 +102,7 @@ export async function checkMailbox(connect: MailboxConnect, settings: MailboxSet
     return { ok: true, unseen: box.unseen, folders, authservId };
   } catch (e) {
     // Lista folderów zostaje, gdy logowanie się udało, a zawiodła nazwa folderu: użytkownik od razu widzi właściwą.
-    return { ok: false, kind: errorKindOf(e), error: scrubError(errorMessageOf(e), [settings.password, settings.user]), folders };
+    return { ok: false, kind: errorKindOf(e), error: scrubError(errorMessageOf(e), [authSecret(settings.auth), settings.user]), folders };
   } finally {
     await session?.close();
   }
@@ -142,17 +152,18 @@ export class MailInPoller {
     const log = this.deps.log ?? silentLogger;
     const config = integration.config;
     mailIn.ensureState(integration.id, now);
-    const password = this.deps.integrations.secrets(integration.id)[MAIL_IN_PASSWORD_REF] ?? '';
+    let secret = '';
     let timer: NodeJS.Timeout | null = null;
     // Po przekroczeniu limitu praca kończy bieżący mail i przerywa pętlę; spóźnione połączenie jest zamykane bez pracy.
     let aborted = false;
     try {
-      if (password === '') throw new MailboxError('auth', 'brak hasła w konfiguracji');
+      const auth = await this.mailboxAuth(integration, now);
+      secret = authSecret(auth);
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => { aborted = true; reject(new MailboxError('network', `odpytanie przekroczyło ${POLL_TIMEOUT_MS / 1000} s`)); }, POLL_TIMEOUT_MS);
       });
       const work = (async () => {
-        const session = await this.deps.connect({ ...config.imap, password }, CONNECT_TIMEOUT_MS);
+        const session = await this.deps.connect({ ...imapTarget(config.imap), auth }, CONNECT_TIMEOUT_MS);
         try {
           if (aborted) throw new MailboxError('network', 'połączenie nawiązane po przekroczeniu limitu');
           return await this.process(session, integration, now, () => aborted);
@@ -166,14 +177,32 @@ export class MailInPoller {
       mailIn.recordPoll(integration.id, { ok: true, uidvalidity: result.uidValidity, unseen: result.unseen, at: now, nextPollAt: new Date(now.getTime() + config.intervalSec * 1000) });
     } catch (e) {
       const kind = errorKindOf(e);
-      const error = scrubError(errorMessageOf(e), [password, config.imap.user]);
-      const failures = (mailIn.state(integration.id)?.failures ?? 0) + 1;
+      const scrubbed = scrubError(errorMessageOf(e), [secret, config.imap.user]);
+      // Odmowa XOAUTH2 przy działającym tokenie: przyczyna leży w ustawieniach skrzynki, nie w koncie (spec 6.3).
+      const error = kind === 'auth' && config.imap.auth.mode === 'm365' ? `${M365_IMAP_REFUSED}. Odpowiedź serwera: ${scrubbed}` : scrubbed;
+      const before = mailIn.state(integration.id);
+      // Jak w recordPoll: przejście między czekaniem na konto a innym błędem liczy się od pierwszej próby.
+      const fresh = !before || (before.errorKind === 'account') !== (kind === 'account');
+      const failures = fresh ? 1 : before.failures + 1;
       mailIn.recordPoll(integration.id, { ok: false, error, errorKind: kind, at: now, nextPollAt: new Date(now.getTime() + nextPollDelayMs(config.intervalSec, failures, kind)) });
       log.warn('skrzynka.blad', { integrationId: integration.id, kind, failures });
       this.notifyFailure(integration, kind, error, now);
     } finally {
       if (timer) clearTimeout(timer);
     }
+  }
+
+  /** Hasło z sekretów albo token dostępu konta Microsoft 365; błąd jako MailboxError, przed połączeniem. */
+  private async mailboxAuth(integration: MailInIntegration, now: Date): Promise<MailboxAuth> {
+    const mode = integration.config.imap.auth;
+    if (mode.mode === 'm365') {
+      const got = await m365MailboxAuth(this.deps.m365, mode.accountId, now);
+      if (!got.ok) throw new MailboxError(got.kind, got.error);
+      return got.auth;
+    }
+    const password = this.deps.integrations.secrets(integration.id)[MAIL_IN_PASSWORD_REF] ?? '';
+    if (password === '') throw new MailboxError('auth', 'brak hasła w konfiguracji');
+    return { kind: 'password', password };
   }
 
   /**
@@ -195,64 +224,86 @@ export class MailInPoller {
     }
     // Zaległe na życzenie albo folder odtworzony przy włączonych zaległych: od początku.
     const floor = state.backlog === 1 || validityChanged ? 0 : state.uidFloor;
-    const uids = (await session.unseen(floor)).slice(0, MAX_PER_POLL);
-    const metas = (await session.meta(uids)).sort((a, b) => a.uid - b.uid);
+    // Do limitu MAX_PER_POLL liczą się tylko maile pobierane w całości. Pominięcia po samych metadanych (mail przetworzony,
+    // starszy niż limit wieku) nie zajmują miejsc, dlatego zaległość po przerwie nie opóźnia świeżego alarmu.
+    const uids = (await session.unseen(floor)).slice(0, MAX_SCAN_PER_POLL);
     let actionError: Error | null = null;
     let highest = floor;
-    for (const meta of metas) {
-      // Po przekroczeniu limitu reszta czeka na następne odpytanie; próg wskazuje ostatni obejrzany mail.
-      if (aborted()) break;
-      highest = Math.max(highest, meta.uid);
-      const key: SeenKey = { messageId: meta.messageId, uidvalidity: box.uidValidity, uid: meta.uid };
-      const note = (result: 'skipped', reason: string) =>
-        this.deps.integrationEvents.record({ integrationId: integration.id, at: now, result, reason, logLimit: config.eventLogLimit });
-      if (mailIn.seen(integration.id, key)) {
-        // Ktoś celowo oznaczył mail jako nieprzeczytany albo folder odtworzono: bez działania na mailu.
-        mailIn.remember(integration.id, key, 'skipped', now);
-        note('skipped', 'wiadomość już przetworzona');
-        continue;
-      }
-      if (meta.size > MAX_MAIL_BYTES) {
-        mailIn.remember(integration.id, key, 'skipped', now);
-        note('skipped', `wiadomość zbyt duża (${(meta.size / (1024 * 1024)).toFixed(1)} MB)`);
-        actionError = (await this.afterAction(session, config, meta.uid)) ?? actionError;
-        continue;
-      }
-      // Zapis przed pobraniem i wysyłką: awaria w połowie kosztuje jeden niedosłany SMS, nie dubel.
-      mailIn.remember(integration.id, key, 'skipped', now);
-      // Jeden zepsuty mail nie zatrzymuje partii ani nie znika po cichu: wpis błędu, wynik failed, działanie jak dla odrzuconego.
-      const failMail = async (e: unknown, label: string, forgetMessageId: boolean): Promise<void> => {
-        if (e instanceof MailboxError && e.kind !== 'other') throw e;
-        mailIn.setOutcome(integration.id, key, 'failed');
-        // Nadawca maila, którego nie dało się odczytać, nie został sprawdzony: jego Message-ID nie może blokować późniejszego prawdziwego maila.
-        // Po sprawdzeniu nadawcy identyfikator zostaje, bo SMS mógł już pójść i powtórka tego maila nie może dać dubla.
-        if (forgetMessageId) mailIn.forgetMessageId(integration.id, key);
-        const message = scrubError(errorMessageOf(e), [config.imap.user]);
-        this.deps.integrationEvents.record({ integrationId: integration.id, at: now, result: 'error', reason: `${label}: ${message}`, logLimit: config.eventLogLimit });
-        try {
-          this.deps.notifier?.notify('integration_error', `integration:${integration.id}`, `${integration.name}: ${label}: ${message}`, now);
-        } catch {
-          // Powiadomienie to dodatek; jego awaria nie może zatrzymać partii.
+    let fetched = 0;
+    scan: for (let i = 0; i < uids.length; i += META_BATCH) {
+      const metas = (await session.meta(uids.slice(i, i + META_BATCH))).sort((a, b) => a.uid - b.uid);
+      for (const meta of metas) {
+        // Po przekroczeniu limitu czasu albo liczby maili reszta czeka na następne odpytanie; próg wskazuje ostatni obejrzany mail.
+        if (aborted() || fetched >= MAX_PER_POLL) break scan;
+        highest = Math.max(highest, meta.uid);
+        const key: SeenKey = { messageId: meta.messageId, uidvalidity: box.uidValidity, uid: meta.uid };
+        // Wpis bez pobierania treści: nadawca i temat z koperty, w tym samym układzie co wpisy potoku.
+        const note = (result: 'skipped', reason: string) =>
+          this.deps.integrationEvents.record({
+            integrationId: integration.id, at: now, result, reason: `${reason} · ${subjectNote(meta.subject)}`, logLimit: config.eventLogLimit,
+            ...(meta.from ? { sourceIp: meta.from } : {}),
+          });
+        if (mailIn.seen(integration.id, key)) {
+          // Ktoś celowo oznaczył mail jako nieprzeczytany albo folder odtworzono: bez działania na mailu.
+          mailIn.remember(integration.id, key, 'skipped', now);
+          note('skipped', 'wiadomość już przetworzona');
+          continue;
         }
-        actionError = (await this.afterAction(session, config, meta.uid)) ?? actionError;
-      };
-      let mail: ParsedMail;
-      try {
-        mail = await parseMail(await session.source(meta.uid), now);
-      } catch (e) {
-        await failMail(e, 'nieczytelna wiadomość', true);
-        continue;
-      }
-      try {
-        const outcome = await runMailIn(this.deps, integration, mail, now);
-        mailIn.setOutcome(integration.id, key, seenOutcomeOf(outcome));
-        // Mail odrzucony przed potwierdzeniem nadawcy (spoza listy albo bez SPF/DKIM) nie zajmuje cudzego Message-ID.
-        if (outcome.kind === 'skipped' && (outcome.reason === 'sender_not_allowed' || outcome.reason === 'auth_failed')) mailIn.forgetMessageId(integration.id, key);
-        this.notifyOutcome(integration, outcome, now);
-        actionError = (await this.afterAction(session, config, meta.uid)) ?? actionError;
-        this.reply(integration, outcome, mail, now);
-      } catch (e) {
-        await failMail(e, 'błąd przetwarzania wiadomości', false);
+        // Limit wieku (spec 6.6): stary alarm po przerwie nie wychodzi jako świeży SMS. Mail zostaje nieprzeczytany do wglądu,
+        // bez SMS-a, odpowiedzi i działania. Brak daty przyjęcia nie pomija maila, bo pominięcie byłoby ciche.
+        if (config.maxAgeHours !== null && meta.internalDate !== null && now.getTime() - meta.internalDate.getTime() > config.maxAgeHours * 3_600_000) {
+          mailIn.remember(integration.id, key, 'skipped', now);
+          mailIn.forgetMessageId(integration.id, key);
+          note('skipped', `wiadomość starsza niż ${config.maxAgeHours} h`);
+          continue;
+        }
+        if (meta.size > MAX_MAIL_BYTES) {
+          mailIn.remember(integration.id, key, 'skipped', now);
+          mailIn.forgetMessageId(integration.id, key);
+          note('skipped', `wiadomość zbyt duża (${(meta.size / (1024 * 1024)).toFixed(1)} MB)`);
+          actionError = (await this.afterAction(session, config, meta.uid)) ?? actionError;
+          continue;
+        }
+        // Zapis przed pobraniem i wysyłką: awaria w połowie kosztuje jeden niedosłany SMS, nie dubel.
+        fetched += 1;
+        mailIn.remember(integration.id, key, 'skipped', now);
+        // Jeden zepsuty mail nie zatrzymuje partii ani nie znika po cichu: wpis błędu, wynik failed, działanie jak dla odrzuconego.
+        const failMail = async (e: unknown, label: string, forgetMessageId: boolean): Promise<void> => {
+          if (e instanceof MailboxError && e.kind !== 'other') throw e;
+          mailIn.setOutcome(integration.id, key, 'failed');
+          // Nadawca maila, którego nie dało się odczytać, nie został sprawdzony: jego Message-ID nie może blokować późniejszego prawdziwego maila.
+          // Po sprawdzeniu nadawcy identyfikator zostaje, bo SMS mógł już pójść i powtórka tego maila nie może dać dubla.
+          if (forgetMessageId) mailIn.forgetMessageId(integration.id, key);
+          const message = scrubError(errorMessageOf(e), [config.imap.user]);
+          this.deps.integrationEvents.record({ integrationId: integration.id, at: now, result: 'error', reason: `${label}: ${message}`, logLimit: config.eventLogLimit });
+          try {
+            this.deps.notifier?.notify('integration_error', `integration:${integration.id}`, `${integration.name}: ${label}: ${message}`, now);
+          } catch {
+            // Powiadomienie to dodatek; jego awaria nie może zatrzymać partii.
+          }
+          actionError = (await this.afterAction(session, config, meta.uid)) ?? actionError;
+        };
+        let mail: ParsedMail;
+        try {
+          mail = await parseMail(await session.source(meta.uid), now);
+        } catch (e) {
+          await failMail(e, 'nieczytelna wiadomość', true);
+          continue;
+        }
+        try {
+          const outcome = await runMailIn(this.deps, integration, mail, now);
+          mailIn.setOutcome(integration.id, key, seenOutcomeOf(outcome));
+          // Mail odrzucony przed potwierdzeniem nadawcy (integracja niedostępna, nadawca spoza listy albo bez SPF/DKIM)
+          // nie zajmuje cudzego Message-ID. Message-ID zostaje wyłącznie po sprawdzeniu nadawcy.
+          const unchecked = outcome.kind === 'unavailable'
+            || (outcome.kind === 'skipped' && (outcome.reason === 'sender_not_allowed' || outcome.reason === 'auth_failed'));
+          if (unchecked) mailIn.forgetMessageId(integration.id, key);
+          this.notifyOutcome(integration, outcome, now);
+          actionError = (await this.afterAction(session, config, meta.uid)) ?? actionError;
+          this.reply(integration, outcome, mail, now);
+        } catch (e) {
+          await failMail(e, 'błąd przetwarzania wiadomości', false);
+        }
       }
     }
     // Próg przesuwa się na najwyższy obejrzany UID: mail oznaczony ponownie jako nieprzeczytany
@@ -308,7 +359,8 @@ export class MailInPoller {
   /** Jedno powiadomienie na awarię: logowanie od razu, reszta po `afterMinutes` trwania. */
   private notifyFailure(integration: MailInIntegration, kind: MailboxErrorKind, error: string, now: Date): void {
     const state = this.deps.mailIn.state(integration.id);
-    if (!state || state.notifiedAt !== null || state.errorSince === null) return;
+    // Konto wymagające logowania zgłasza reguła konta Microsoft 365: jedna przyczyna, jedno powiadomienie, nie po jednym na skrzynkę.
+    if (kind === 'account' || !state || state.notifiedAt !== null || state.errorSince === null) return;
     const afterMinutes = Number(this.deps.notifications?.rule('mailbox_failure').params.afterMinutes ?? DEFAULT_AFTER_MINUTES);
     const lasting = now.getTime() - Date.parse(state.errorSince) >= afterMinutes * 60_000;
     if (kind !== 'auth' && !lasting) return;

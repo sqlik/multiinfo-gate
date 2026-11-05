@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadEnv } from '../src/config/env.ts';
+import { problemUrl } from '../src/docs-links.ts';
 import { startGate } from '../src/index.ts';
 
 let dir: string;
@@ -67,6 +68,26 @@ describe('startGate', () => {
     await running.stop();
     running = null;
     expect(Date.now() - started).toBeLessThan(5000);
+  });
+
+  it('Node bez poprawek z października 2026 daje ostrzeżenie w dzienniku przy starcie, Node z poprawkami nie', async () => {
+    const warnings: Array<{ msg: string; fields?: Record<string, unknown> }> = [];
+    const log = { error() {}, info() {}, debug() {}, warn: (msg: string, fields?: Record<string, unknown>) => { warnings.push({ msg, ...(fields ? { fields } : {}) }); } };
+    const start = async (nodeVersion: string) => {
+      dir = mkdtempSync(join(tmpdir(), 'mig-start-'));
+      const config = loadEnv({ MIG_MASTER_KEY: randomBytes(32).toString('base64'), MIG_DATA_DIR: dir, MIG_API_PORT: '0', MIG_ADMIN_PORT: '0' });
+      running = await startGate(config, { log, nodeVersion });
+      await running.stop();
+      running = null;
+      rmSync(dir, { recursive: true, force: true });
+    };
+    await start('v22.23.3');
+    expect(warnings.filter((w) => w.msg === 'node.bez_poprawek')).toEqual([
+      { msg: 'node.bez_poprawek', fields: { installed: '22.23.3', minimum: '22.23.4', unsupportedLine: false, help: problemUrl('wersja-node') } },
+    ]);
+    warnings.length = 0;
+    await start('v22.23.4');
+    expect(warnings.filter((w) => w.msg === 'node.bez_poprawek')).toEqual([]);
   });
 
   it('nie startuje bez klucza głównego', () => {

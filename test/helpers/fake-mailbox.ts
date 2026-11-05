@@ -1,11 +1,17 @@
-import { MailboxError, type MailboxConnect, type MailboxSession } from '../../src/integrations/mail/client.ts';
+import { MailboxError, type MailboxAuth, type MailboxConnect, type MailboxSession } from '../../src/integrations/mail/client.ts';
 
-export interface FakeMessage { uid: number; seen: boolean; source: string; folder: string; size: number }
+/** `internalDate` to data przyjęcia przez serwer (INTERNALDATE); `null` udaje serwer, który jej nie zwraca. */
+export interface FakeMessage { uid: number; seen: boolean; source: string; folder: string; size: number; internalDate: Date | null }
 
 /** Skrzynka w pamięci o kontrakcie `MailboxSession`; `move` zmienia folder wpisu bez zmiany UID. */
 export class FakeMailbox {
   uidValidity: number;
   password: string;
+  /** Token dostępu Microsoft 365, który atrapa przyjmuje przy logowaniu XOAUTH2. */
+  accessToken = 'token-dostepu-1';
+  /** Sposób logowania i nazwa użytkownika ostatniego połączenia. */
+  lastAuth: MailboxAuth | null = null;
+  lastUser: string | null = null;
   failConnect: Error | null;
   rejectMove = false;
   /** Opóźnienie każdego połączenia; do testu, że wisząca skrzynka nie blokuje innych. */
@@ -27,8 +33,8 @@ export class FakeMailbox {
     this.folderSet = new Set(opts.folders ?? ['INBOX']);
   }
 
-  add(m: { uid: number; seen: boolean; source: string; folder?: string; size?: number }): void {
-    this.items.push({ uid: m.uid, seen: m.seen, source: m.source, folder: m.folder ?? 'INBOX', size: m.size ?? Buffer.byteLength(m.source) });
+  add(m: { uid: number; seen: boolean; source: string; folder?: string; size?: number; internalDate?: Date | null }): void {
+    this.items.push({ uid: m.uid, seen: m.seen, source: m.source, folder: m.folder ?? 'INBOX', size: m.size ?? Buffer.byteLength(m.source), internalDate: m.internalDate ?? null });
     this.folderSet.add(m.folder ?? 'INBOX');
   }
 
@@ -70,7 +76,10 @@ export class FakeMailbox {
       meta: async (uids) => uids.map((uid) => {
         const m = need(uid);
         const id = /^Message-ID:\s*(<[^>]+>)/im.exec(m.source);
-        return { uid, size: m.size, messageId: id ? id[1]! : null };
+        const head = m.source.split(/\r?\n\r?\n/)[0]!;
+        const from = /^From:.*?([^\s<>"]+@[^\s<>"]+)/im.exec(head);
+        const subject = /^Subject:[ \t]*(.*)$/im.exec(head);
+        return { uid, size: m.size, messageId: id ? id[1]! : null, internalDate: m.internalDate, from: from ? from[1]!.toLowerCase() : null, subject: subject ? subject[1]!.trim() : '' };
       }),
       source: async (uid) => {
         this.calls.push(`source:${uid}`);
@@ -101,6 +110,12 @@ export const fakeConnect = (box: FakeMailbox): MailboxConnect => async (settings
   box.calls.push('connect');
   if (box.delayMs > 0) await new Promise((r) => setTimeout(r, box.delayMs));
   if (box.failConnect) throw box.failConnect;
-  if (settings.password !== box.password) throw new MailboxError('auth', 'LOGIN failed: Authentication failed.');
+  box.lastAuth = settings.auth;
+  box.lastUser = settings.user;
+  if (settings.auth.kind === 'oauth2') {
+    if (settings.auth.accessToken !== box.accessToken) throw new MailboxError('auth', 'AUTHENTICATE failed.');
+  } else if (settings.auth.password !== box.password) {
+    throw new MailboxError('auth', 'LOGIN failed: Authentication failed.');
+  }
   return box.session();
 };

@@ -93,6 +93,17 @@ describe('MailInRepo: stan skrzynki', () => {
     expect(repo.counts()).toEqual({ total: 0, failing: 0 });
   });
 
+  it('troubledCount pomija skrzynki czekające na logowanie konta Microsoft 365, a counts liczy je jako błąd', () => {
+    repo.ensureState(id, NOW);
+    repo.recordPoll(id, { ok: false, error: 'Konto Microsoft 365 wymaga logowania', errorKind: 'account', at: NOW, nextPollAt: NOW });
+    expect(repo.troubledCount()).toBe(0);
+    expect(repo.counts()).toEqual({ total: 1, failing: 1 });
+    repo.recordPoll(id, { ok: false, error: 'Login failed.', errorKind: 'auth', at: NOW, nextPollAt: NOW });
+    expect(repo.troubledCount()).toBe(1);
+    integrations.setEnabled(id, false, NOW);
+    expect(repo.troubledCount()).toBe(0);
+  });
+
   it('usunięcie integracji kasuje jej stan i przetworzone maile', () => {
     repo.ensureState(id, NOW);
     repo.remember(id, { messageId: null, uidvalidity: 7, uid: 1 }, 'sent', NOW);

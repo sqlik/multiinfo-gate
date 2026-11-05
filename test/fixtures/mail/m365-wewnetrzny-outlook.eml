@@ -1,0 +1,19 @@
+MIME-Version: 1.0
+Received: from AS8PR01MB0001.eurprd01.prod.exchangelabs.com
+ ([fe80::1]) by AS8PR01MB0001.eurprd01.prod.exchangelabs.com
+ ([fe80::1%3]) with mapi id 15.21.0592.007; Wed, 4 Nov 2026
+ 09:44:17 +0000
+From: Jan Kowalski <jan.kowalski@firma.pl>
+To: Alarmy <alarmy@firma.pl>
+Subject: Awaria klimatyzacji w serwerowni
+Date: Wed, 4 Nov 2026 10:44:16 +0100
+Message-ID: <m365-wewnetrzny-outlook@AS8PR01MB0001.eurprd01.prod.exchangelabs.com>
+Content-Language: pl-PL
+X-MS-Exchange-Organization-AuthAs: Internal
+X-MS-Exchange-Organization-AuthMechanism: 04
+X-MS-Exchange-Organization-AuthSource:
+	AS8PR01MB0001.eurprd01.prod.exchangelabs.com
+X-MS-Exchange-Organization-SCL: 1
+Content-Type: text/plain; charset="utf-8"
+
+Temperatura w serwerowni przekroczyła 30 stopni.

@@ -30,6 +30,8 @@ export function registerMessageViewRoutes(app: FastifyInstance, deps: AdminDeps,
       const rows = deps.messages.list({
         ...(status === null ? {} : { status }),
         ...(to === null ? {} : { dest: to }),
+        // Panel pokazuje także wiadomości kanału SMS powiadomień, z oznaczeniem na liście.
+        includeSystem: true,
         limit: PAGE_SIZE + 1,
         offset,
       });

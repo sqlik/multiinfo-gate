@@ -56,16 +56,18 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 describe('Worker.tick - tura utrzymaniowa', () => {
   it('raz na odstęp woła flush, skaner i sprzątanie; błąd jednego kroku nie zatrzymuje reszty ani zadań', async () => {
     const flushN = vi.fn();
+    const flushSms = vi.fn();
     const scan = vi.fn(() => { throw new Error('skaner padł'); });
     const prune = vi.fn(() => 0);
     const error = vi.fn();
-    deps.notifier = { notify: vi.fn(), flush: flushN };
+    deps.notifier = { notify: vi.fn(), flush: flushN, flushSms };
     deps.scanner = { scan };
     deps.guards = { pruneDedupBefore: prune } as never;
     deps.log = { error, warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
     const worker = new Worker(deps, { now: () => clock, maintenanceMs: 60_000 });
     await worker.tick();
     expect(flushN).toHaveBeenCalledWith(clock);
+    expect(flushSms).toHaveBeenCalledWith(clock);
     expect(prune).toHaveBeenCalledWith(new Date(clock.getTime() - 86_400_000));
     expect(error).toHaveBeenCalledWith('worker.utrzymanie_blad', expect.objectContaining({ step: 'skaner' }));
     clock = new Date(clock.getTime() + 30_000);
@@ -85,6 +87,14 @@ describe('Worker.tick - sprawdzanie wydań', () => {
     await worker.tick();
     expect(tick).toHaveBeenCalledWith(clock);
     expect(pruneSeenBefore).toHaveBeenCalledWith(new Date(clock.getTime() - 180 * 86_400_000));
+  });
+
+  it('tura utrzymaniowa podtrzymuje konta Microsoft 365, a odrzucona obietnica nie zatrzymuje tury', async () => {
+    const keepAlive = vi.fn(async () => { throw new Error('sieć'); });
+    deps.m365KeepAlive = { keepAlive };
+    const worker = new Worker(deps, { now: () => clock, maintenanceMs: 60_000 });
+    await worker.tick();
+    expect(keepAlive).toHaveBeenCalledWith(clock);
   });
 
   it('tura utrzymaniowa woła sprawdzenie wydań z bieżącym czasem', async () => {

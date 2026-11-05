@@ -549,3 +549,20 @@ describe('klucz - tylko integracje', () => {
     expect(edit.body).toMatch(/name="integrationsOnly"[^>]*checked/);
   });
 });
+
+describe('klucz kanału SMS powiadomień', () => {
+  it('odwołanie klucza wskazanego we włączonym kanale SMS jest zablokowane, a po wyłączeniu kanału możliwe', async () => {
+    await create();
+    const key = h.apiKeys.list()[0]!;
+    h.notifications.saveSmsSettings({ enabled: true, recipients: ['48601000001'], apiKeyId: key.id, orig: null }, new Date());
+    await h.app.inject({ url: `/klucze/${key.id}/odwolaj`, ...form({}) });
+    expect(h.apiKeys.get(key.id)!.revokedAt).toBeNull();
+    const list = await h.app.inject({ method: 'GET', url: '/klucze', headers: { cookie: h.cookie } });
+    expect(list.body).toContain('kanał powiadomień SMS');
+    expect(h.audit.list(10, 0).some((e) => e.action === 'klucz.odwolanie')).toBe(false);
+
+    h.notifications.saveSmsSettings({ enabled: false, recipients: ['48601000001'], apiKeyId: key.id, orig: null }, new Date());
+    await h.app.inject({ url: `/klucze/${key.id}/odwolaj`, ...form({}) });
+    expect(h.apiKeys.get(key.id)!.revokedAt).not.toBeNull();
+  });
+});

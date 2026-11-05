@@ -55,6 +55,13 @@ jako łącznik niestandardowy.
 Każda wysyłka przechodzi przez integrację z limitem części, ochroną przed burzą i dziennikiem,
 który wskazuje również osobę zlecającą wysyłkę.
 
+Wersja 1.10 wprowadza obsługę skrzynek Microsoft 365. Mail2SMS odczytuje skrzynkę w Exchange
+Online przez skrzynkę przeznaczoną dla bramki. Skrzynka loguje się w przeglądarce, dlatego bramka
+nie przechowuje jej hasła. Przez tę samą skrzynkę bramka wysyła maile powiadomień, ponieważ Microsoft wycofuje
+logowanie hasłem do SMTP. Nowe ustawienie pomija wiadomości starsze niż wybrany limit, dzięki
+czemu po przerwie w dostępie do skrzynki nieaktualny alarm nie trafia na telefon. Administrator
+otrzymuje powiadomienia także SMS-em, również wtedy, gdy poczta nie działa.
+
 ## Co trzeba mieć
 
 - Konto Multiinfo z użytkownikiem API i certyfikatem (`.pfx` z hasłem)
@@ -79,9 +86,9 @@ Strona dokumentacji: [sqlik.github.io/multiinfo-gate](https://sqlik.github.io/mu
 
 - [Uruchomienie krok po kroku](https://sqlik.github.io/multiinfo-gate/uruchomienie/) - od konta Multiinfo do pierwszego SMS-a i wystawienia API na świat
 - [API dla aplikacji](https://sqlik.github.io/multiinfo-gate/api/) - każde wywołanie z przykładem w siedmiu wariantach (curl, HTTP, PHP, Python, Node.js, PowerShell, C#), webhooki, błędy, limity
-- [Integracje z aplikacjami](https://sqlik.github.io/multiinfo-gate/integracje/) - adres wejściowy dla aplikacji z własnym formatem, szablony Liquid, gotowe ustawienia, powiadomienia administratora mailem
+- [Integracje z aplikacjami](https://sqlik.github.io/multiinfo-gate/integracje/) - adres wejściowy dla aplikacji z własnym formatem, Mail2SMS, szablony Liquid, gotowe ustawienia, powiadomienia administratora mailem i SMS-em
 - [Power Automate](https://sqlik.github.io/multiinfo-gate/power-automate/) - konektor do Microsoft Power Automate: integracja w panelu, import pliku, pierwszy przepływ, rozsyłka z Excela, rozwiązywanie problemów
-- [Rozwiązywanie problemów](https://sqlik.github.io/multiinfo-gate/problemy/) - objaw, sprawdzenie i naprawa: panel, logowanie, tryb awaryjny, aktualizacja, zgłaszanie problemów
+- [Rozwiązywanie problemów](https://sqlik.github.io/multiinfo-gate/problemy/) - objaw, sprawdzenie i naprawa: panel, logowanie, tryb awaryjny, aktualizacja, Microsoft 365, zgłaszanie problemów
 - [Przykład w PHP](examples/php/) - strona testowa i kod do skopiowania
 
 Źródłem strony są pliki w katalogu [`docs/`](docs/). Przykłady z zakładkami czytają się w nich

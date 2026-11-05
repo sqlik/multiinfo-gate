@@ -1,5 +1,6 @@
-import { MAIL_IN_INTERVALS, MAIL_IN_PASSWORD_REF, MAIL_SECURITIES, parseConfig, type MailField, type MailInConfig, type MailInInterval, type MailSecurity } from '../integrations/config.ts';
+import { MAIL_IN_INTERVALS, MAIL_IN_PASSWORD_REF, MAIL_MAX_AGE_HOURS, MAIL_SECURITIES, parseConfig, type MailField, type MailInConfig, type MailInInterval, type MailMaxAgeHours, type MailSecurity } from '../integrations/config.ts';
 import { parseMail, type ParsedMail } from '../integrations/mail/parse.ts';
+import { M365_IMAP } from '../m365/oauth.ts';
 import type { TemplateEngine } from '../integrations/templates.ts';
 import { commonFromValues } from './integration-form.ts';
 import type { RuleValues } from './views/integrations.ts';
@@ -14,7 +15,11 @@ export interface MailFormValues {
   throttleLimit: string; throttleWindow: string; eventLogLimit: string;
   conditionMode: 'builder' | 'liquid'; rules: RuleValues[]; conditionExpr: string;
   host: string; port: string; security: MailSecurity; verifyCert: boolean; user: string; password: string;
+  /** Logowanie hasłem albo kontem Microsoft 365; w trybie `m365` pole `user` jest adresem skrzynki. */
+  authMode: 'password' | 'm365'; m365AccountId: string;
   folder: string; intervalSec: string; backlog: boolean;
+  /** Limit wieku maila w godzinach; pusty napis oznacza brak limitu. */
+  maxAgeHours: '' | '1' | '6' | '24';
   /** Linia na pozycję: wzorzec, po dwukropku numery po przecinku. */
   senders: string;
   requireAuthResults: boolean;
@@ -35,12 +40,16 @@ const EMPTY_FIELD: MailFieldValues = { name: '', mode: 'between', after: '', unt
 const SENDER_PATTERN = /^(@[^@\s]+\.[^@\s]+|[^@\s]+@[^@\s]+\.[^@\s]+)$/;
 const FIELD_NAME = /^[a-z][a-z0-9_]{0,39}$/;
 const AUTHSERV_ID = /^[a-z0-9.-]*$/;
+/** Bez znaków sterujących: adres skrzynki Microsoft 365 trafia do ciągu SASL XOAUTH2. */
+const EMAIL = /^[^@\s\x00-\x1f\x7f]+@[^@\s\x00-\x1f\x7f]+\.[^@\s\x00-\x1f\x7f]+$/;
 const FIELD_KEY = /^fields\[(\d+)\]\[(name|mode|after|until|pattern|flags)\]$/;
 
 const list = (field: string | string[] | undefined): string[] => (field === undefined ? [] : (Array.isArray(field) ? field : [field]).map(String));
 const lines = (raw: string): string[] => raw.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== '');
 const first = (field: string | string[] | undefined): string => (Array.isArray(field) ? field[0] ?? '' : field ?? '');
 const on = (field: string | string[] | undefined): boolean => ['1', 'on', 'true'].includes(first(field).trim());
+const AGE_VALUES = MAIL_MAX_AGE_HOURS.map(String);
+const ageValue = (raw: string): MailFormValues['maxAgeHours'] => (AGE_VALUES.includes(raw) ? raw as MailFormValues['maxAgeHours'] : '');
 
 export function mailFormValues(body: Body): MailFormValues {
   const s = (k: string) => first(body[k]).trim();
@@ -68,7 +77,8 @@ export function mailFormValues(body: Body): MailFormValues {
     conditionExpr: first(body.conditionExpr),
     host: s('host'), port: s('port'), security: (MAIL_SECURITIES as readonly string[]).includes(security) ? security as MailSecurity : 'tls',
     verifyCert: on(body.verifyCert), user: s('user'), password: first(body.password),
-    folder: s('folder'), intervalSec: s('intervalSec'), backlog: on(body.backlog),
+    authMode: s('authMode') === 'm365' ? 'm365' : 'password', m365AccountId: s('m365AccountId'),
+    folder: s('folder'), intervalSec: s('intervalSec'), backlog: on(body.backlog), maxAgeHours: ageValue(s('maxAgeHours')),
     senders: first(body.senders), requireAuthResults: on(body.requireAuthResults), authservId: s('authservId'),
     recipientsFromMail: on(body.recipientsFromMail), recipientsWhere: s('recipientsWhere') === 'body' ? 'body' : 'subject', toFallback: first(body.toFallback),
     cutFrom: first(body.cutFrom),
@@ -85,15 +95,25 @@ export function mailFormValues(body: Body): MailFormValues {
 
 export type MailFormBase = Pick<MailFormValues, 'name' | 'apiKeyId' | 'serviceId' | 'orig' | 'enabled' | 'preset' | 'storePayloads'>;
 
-export function mailConfigToValues(config: MailInConfig, base: MailFormBase): MailFormValues {
+/**
+ * Konfiguracja na wartości formularza. Adres skrzynki równy adresowi wybranego konta Microsoft 365 wraca jako
+ * puste pole, ponieważ puste pole oznacza adres konta i po zmianie konta nie zostaje adres poprzedniego.
+ */
+export function mailConfigToValues(config: MailInConfig, base: MailFormBase, m365: M365Choice[] = []): MailFormValues {
+  const auth = config.imap.auth;
+  const accountAddress = auth.mode === 'm365' ? m365.find((a) => a.id === auth.accountId)?.address ?? null : null;
   return {
     ...base,
     throttleLimit: String(config.throttle.limit), throttleWindow: String(config.throttle.windowMinutes), eventLogLimit: String(config.eventLogLimit),
     conditionMode: config.condition.mode,
     rules: config.condition.mode === 'builder' ? config.condition.rules.map((r) => ({ path: r.path, op: r.op, value: r.value })) : [],
     conditionExpr: config.condition.mode === 'liquid' ? config.condition.expr : '',
-    host: config.imap.host, port: String(config.imap.port), security: config.imap.security, verifyCert: config.imap.verifyCert, user: config.imap.user, password: '',
-    folder: config.folder, intervalSec: String(config.intervalSec), backlog: false,
+    host: config.imap.host, port: String(config.imap.port), security: config.imap.security, verifyCert: config.imap.verifyCert,
+    user: accountAddress !== null && accountAddress.toLowerCase() === config.imap.user.toLowerCase() ? '' : config.imap.user, password: '',
+    authMode: config.imap.auth.mode,
+    // Identyfikator 0 w ustawieniu „Microsoft 365” oznacza konto jeszcze niewybrane.
+    m365AccountId: config.imap.auth.mode === 'm365' && config.imap.auth.accountId > 0 ? String(config.imap.auth.accountId) : '',
+    folder: config.folder, intervalSec: String(config.intervalSec), backlog: false, maxAgeHours: config.maxAgeHours === null ? '' : ageValue(String(config.maxAgeHours)),
     senders: config.senders.map((s) => (s.recipients.length > 0 ? `${s.pattern}: ${s.recipients.join(', ')}` : s.pattern)).join('\n'),
     requireAuthResults: config.requireAuthResults, authservId: config.authservId,
     recipientsFromMail: config.recipientsFromMail.enabled, recipientsWhere: config.recipientsFromMail.where, toFallback: config.to.fallback.join('\n'),
@@ -137,19 +157,41 @@ function fieldFrom(f: MailFieldValues): MailField | string {
   return { name: f.name, mode: 'regex', pattern: f.pattern, ...(f.flags !== '' ? { flags: f.flags } : {}) };
 }
 
-/** Wartości formularza na konfigurację skrzynki; hasło osobno, bo idzie do sekretów. Błąd jako zdanie po polsku. */
-export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine: TemplateEngine): MailFormToConfig {
+/** Konto Microsoft 365 do wyboru w formularzu skrzynki: identyfikator i adres skrzynki konta. */
+export interface M365Choice { id: number; address: string | null }
+
+/** Połączenie z serwerem: dowolny serwer z hasłem albo stały serwer Microsoft 365 z kontem z panelu. */
+function imapFrom(v: MailFormValues, hasPassword: boolean, m365: M365Choice[]): MailInConfig['imap'] | string {
+  if (v.authMode === 'm365') {
+    const account = m365.find((a) => String(a.id) === v.m365AccountId);
+    if (!account) return 'Wybierz konto Microsoft 365 z listy.';
+    // Pusty adres oznacza skrzynkę samego konta; inny adres wskazuje skrzynkę współdzieloną, do której konto posiada dostęp.
+    const user = (v.user === '' ? account.address ?? '' : v.user).toLowerCase();
+    if (user.length > 254 || !EMAIL.test(user)) return 'Adres skrzynki musi być adresem e-mail, na przykład alarmy@firma.pl.';
+    return { ...M365_IMAP, user, passRef: MAIL_IN_PASSWORD_REF, auth: { mode: 'm365', accountId: account.id } };
+  }
+  if (v.host === '') return 'Podaj serwer IMAP.';
+  if (v.host.length > 253) return 'Serwer IMAP: nazwa do 253 znaków.';
+  const port = int(v.port, 1, 65535, 'Port');
+  if (typeof port === 'string') return port;
+  if (v.user === '') return 'Podaj login skrzynki.';
+  if (v.user.length > 254) return 'Login skrzynki: do 254 znaków.';
+  if (/[\x00-\x1f\x7f]/.test(v.user)) return 'Login skrzynki nie może zawierać znaków sterujących.';
+  if (v.password === '' && !hasPassword) return 'Podaj hasło skrzynki.';
+  return { host: v.host, port, security: v.security, verifyCert: v.verifyCert, user: v.user, passRef: MAIL_IN_PASSWORD_REF, auth: { mode: 'password' } };
+}
+
+/**
+ * Wartości formularza na konfigurację skrzynki; hasło osobno, bo idzie do sekretów. Błąd jako zdanie po polsku.
+ * W trybie Microsoft 365 hasło nie istnieje (`password: null`), a serwer jest stały niezależnie od przesłanego.
+ */
+export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine: TemplateEngine, m365: M365Choice[] = []): MailFormToConfig {
   const fail = (error: string): MailFormToConfig => ({ ok: false, error });
   const common = commonFromValues(v, engine);
   if (typeof common === 'string') return fail(common);
 
-  if (v.host === '') return fail('Podaj serwer IMAP.');
-  if (v.host.length > 253) return fail('Serwer IMAP: nazwa do 253 znaków.');
-  const port = int(v.port, 1, 65535, 'Port');
-  if (typeof port === 'string') return fail(port);
-  if (v.user === '') return fail('Podaj login skrzynki.');
-  if (v.user.length > 254) return fail('Login skrzynki: do 254 znaków.');
-  if (v.password === '' && !hasPassword) return fail('Podaj hasło skrzynki.');
+  const imap = imapFrom(v, hasPassword, m365);
+  if (typeof imap === 'string') return fail(imap);
   if (v.folder === '') return fail('Podaj folder skrzynki, np. INBOX.');
   if (v.folder.length > 200) return fail('Folder: nazwa do 200 znaków.');
   const interval = Number.parseInt(v.intervalSec, 10);
@@ -209,10 +251,11 @@ export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine
 
   let config: MailInConfig = {
     ...common,
-    imap: { host: v.host, port, security: v.security, verifyCert: v.verifyCert, user: v.user, passRef: MAIL_IN_PASSWORD_REF },
+    imap,
     folder: v.folder, intervalSec: interval as MailInInterval, senders, requireAuthResults: v.requireAuthResults, authservId,
     recipientsFromMail: { enabled: v.recipientsFromMail, where: v.recipientsWhere }, to: { fallback }, clean: { cutFrom }, fields, text,
     maxParts, overflow: v.overflow, after, reply: { enabled: v.replyEnabled },
+    maxAgeHours: v.maxAgeHours === '' ? null : Number(v.maxAgeHours) as MailMaxAgeHours,
   };
   // Schemat zod jako siatka bezpieczeństwa: to, co przeszło wyżej, ma przejść i tu.
   try {
@@ -220,7 +263,7 @@ export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine
   } catch (e) {
     return fail(`Konfiguracja nie przeszła sprawdzenia: ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`);
   }
-  return { ok: true, config, password: v.password !== '' ? v.password : null };
+  return { ok: true, config, password: v.authMode === 'password' && v.password !== '' ? v.password : null };
 }
 
 /** Zdania ostrzeżeń dla konfiguracji, która przechodzi, ale wymaga świadomości administratora. */
@@ -253,6 +296,6 @@ export async function sampleMail(v: MailFormValues, now: Date): Promise<ParsedMa
   if (v.sampleFrom === '' && v.sampleSubject === '' && v.sampleText.trim() === '') return null;
   return {
     ...sampleSender(v.sampleFrom), subject: v.sampleSubject, textFull: v.sampleText.trim(), date: now.toISOString(),
-    to: [], messageId: null, authResults: [], auto: false,
+    to: [], messageId: null, authResults: [], exchangeAuthAs: null, auto: false,
   };
 }

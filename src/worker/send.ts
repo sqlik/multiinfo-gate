@@ -16,6 +16,7 @@ import type { IntegrationsRepo } from '../store/integrations.ts';
 import type { NotificationsRepo } from '../store/notifications.ts';
 import type { MailInRepo } from '../store/mail-in.ts';
 import type { Mailer } from './mail.ts';
+import type { M365MailboxDeps } from '../m365/mailbox.ts';
 import type { ClientPool } from './clients.ts';
 import { pauseForCertificate } from './certificate.ts';
 import { emitIntegrations, isOutboundEvent, type IntegrationEmitDeps } from './integrations.ts';
@@ -46,13 +47,17 @@ export interface WorkerDeps {
   integrations?: IntegrationsRepo;
   integrationEvents?: IntegrationEventsRepo;
   /** Powiadomienia administratora; `flush` woła tura utrzymaniowa. */
-  notifier?: AdminNotifier & { flush?(now: Date): void };
+  notifier?: AdminNotifier & { flush?(now: Date): void; flushSms?(now: Date): void };
   /** Sprawdzanie nowych wydań na GitHubie; bez niego bramka nie pyta. */
   releases?: { check(now: Date): Promise<void> | void };
+  /** Odświeżenie kont Microsoft 365 bezczynnych od tygodnia, zanim Microsoft unieważni token odświeżania. */
+  m365KeepAlive?: { keepAlive(now: Date): Promise<void> };
   /** Ustawienie SMTP i kolejka powiadomień - zadanie `mail` i sprzątanie. */
   notifications?: NotificationsRepo;
   /** Wysyłka maila; testy podstawiają atrapę. */
   mailer?: Mailer;
+  /** Token konta Microsoft 365 dla SMTP w trybie `m365`; bez tego taki mail czeka na ponowienie i zostaje porzucony. */
+  m365?: M365MailboxDeps;
   /** Skaner stanu (certyfikaty, konta, odbiór, podsumowanie) - tura utrzymaniowa. */
   scanner?: { scan(now: Date): void };
   /** Strażnicy integracji - sprzątanie idempotencji w turze utrzymaniowej. */
@@ -67,11 +72,14 @@ export interface WorkerDeps {
 /**
  * Kolejkuje webhook klucza i odnotowuje to w przebiegu wiadomości, jeśli klucz ma adres; do tego
  * dostawy do integracji wychodzących klucza. Oba tory niezależne - klucz może mieć jedno i drugie.
+ * Wiadomość systemowa (kanał SMS powiadomień) nie trafia do żadnego z nich: numery administratorów
+ * i treść powiadomień nie należą do aplikacji klienta.
  */
 export function notify(
-  deps: WorkerDeps, message: { id: string; apiKeyId: number; inReplyTo?: string | null }, event: WebhookEvent,
+  deps: WorkerDeps, message: { id: string; apiKeyId: number; inReplyTo?: string | null; system?: 0 | 1 }, event: WebhookEvent,
   payload: Record<string, unknown>, now: Date,
 ): void {
+  if (message.system === 1) return;
   const thread = message.inReplyTo ? { inReplyTo: message.inReplyTo } : {};
   const body = { id: message.id, ...thread, ...payload };
   if (emitWebhook(deps, message.apiKeyId, event, body, now) !== null) {

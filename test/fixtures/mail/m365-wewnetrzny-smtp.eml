@@ -1,0 +1,22 @@
+MIME-Version: 1.0
+Received: from GVXPR01MB0002.eurprd01.prod.exchangelabs.com
+ (2603:10a6:150:215::6) by GV4PR01MB0003.eurprd01.prod.exchangelabs.com with
+ HTTPS; Wed, 4 Nov 2026 09:38:41 +0000
+Authentication-Results: mx.microsoft.com 1; dkim=none (message not signed)
+ header.d=none;dmarc=none action=none header.from=firma.pl;
+From: alarmy@firma.pl
+To: <alarmy@firma.pl>
+Subject: Kopia zapasowa nie powiodła się
+Message-ID: <m365-wewnetrzny-smtp@firma.pl>
+Date: Wed, 4 Nov 2026 09:38:36 +0000
+Content-Type: text/plain; charset="utf-8"
+X-MS-Exchange-Organization-AuthSource: GV4PR01MB0003.eurprd01.prod.exchangelabs.com
+X-MS-Exchange-Organization-AuthAs: Internal
+X-MS-Exchange-Organization-AuthMechanism: 14
+X-MS-Exchange-Organization-MessageDirectionality: Originating
+X-MS-Exchange-Organization-SCL: 1
+X-MS-Exchange-CrossTenant-AuthSource: GV4PR01MB0003.eurprd01.prod.exchangelabs.com
+X-MS-Exchange-CrossTenant-AuthAs: Internal
+X-MS-Exchange-CrossTenant-FromEntityHeader: Hosted
+
+Zadanie kopii zapasowej serwera plików zakończyło się błędem.

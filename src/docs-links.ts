@@ -3,6 +3,9 @@ import type { StartupReason } from './startup/reason.ts';
 /** Artykuł „Rozwiązywanie problemów” w dokumentacji publicznej. */
 export const TROUBLESHOOTING_URL = 'https://sqlik.github.io/multiinfo-gate/problemy/';
 
+/** Rozdział „Konto Microsoft 365” w artykule o uruchomieniu; formularz konta odsyła do niego z instrukcji. */
+export const M365_DOCS_URL = 'https://sqlik.github.io/multiinfo-gate/uruchomienie/#48-konto-microsoft-365';
+
 /**
  * Stałe kotwice punktów artykułu (`{#…}` w docs/problemy.md); panel i dziennik odsyłają do nich wprost.
  * Zgodność z artykułem pilnuje test docs-links.
@@ -11,7 +14,9 @@ export const PROBLEM_ANCHORS = [
   'panel-nie-odpowiada', 'pierwsze-konto', 'logowanie-wraca', 'kod-odrzucony', 'blad-wewnetrzny',
   'klucz-glowny', 'klucz-nieprawidlowy', 'klucz-czesciowy', 'kopia-przed-aktualizacja', 'baza-z-nowszego-wydania',
   'brak-miejsca', 'uprawnienia', 'uszkodzona-baza', 'nieudana-migracja', 'awaria-startu',
-  'zajety-port', 'po-aktualizacji', 'sms-od-abonentow', 'zgloszenie',
+  'zajety-port', 'po-aktualizacji', 'sms-od-abonentow', 'wersja-node', 'zgloszenie',
+  'microsoft-365', 'm365-wymaga-logowania', 'm365-adres-przekierowania', 'm365-zgoda', 'm365-dostep-warunkowy',
+  'm365-skrzynka', 'm365-smtp', 'm365-nadawca', 'm365-spam',
 ] as const;
 
 export type ProblemAnchor = typeof PROBLEM_ANCHORS[number];

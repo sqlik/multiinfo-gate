@@ -13,7 +13,8 @@ import { keyUsable } from '../../api/submit.ts';
 import { paConfigToValues, paFormToConfig, paFormValues, type PaFormValues } from '../power-automate-form.ts';
 import { paFormPage, type PaFormOptions } from '../views/integration-power-automate.ts';
 import { PRIVATE_MAIL_MESSAGE, PRIVATE_TARGET_MESSAGE, hostTarget, systemResolver, webhookTarget } from '../../net/private-address.ts';
-import { guardedConnect } from '../../integrations/mail/client.ts';
+import { guardedConnect, type MailboxAuth } from '../../integrations/mail/client.ts';
+import { imapTarget, m365MailboxAuth } from '../../m365/mailbox.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
 import { buildOutboundContext, previewOutbound } from '../../worker/integrations.ts';
 import { formToConfig, formValues, type ExistingSecrets } from '../integration-form.ts';
@@ -261,10 +262,22 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }
   };
 
-  /** Wartości formularza skrzynki z wiersza albo z ustawienia. */
-  const mailValuesOf = (preset: Preset, row?: IntegrationRow): MailFormValues => (row
-    ? mailConfigToValues(row.config as MailInConfig, { name: row.name, apiKeyId: String(row.apiKeyId), serviceId: row.serviceId ?? '', orig: row.orig ?? '', enabled: row.enabled === 1, preset: row.preset, storePayloads: row.storePayloads === 1 })
-    : mailConfigToValues({ ...defaultMailInConfig(), ...preset.mailIn }, { name: preset.id === 'poczta-wlasny' ? '' : preset.name, apiKeyId: '', serviceId: '', orig: '', enabled: true, preset: preset.id, storePayloads: false }));
+  /** Konta Microsoft 365 do wyboru w formularzu skrzynki. */
+  const m365Accounts = () => (deps.m365Accounts?.list() ?? []).map((a) => ({ id: a.id, name: a.name, address: a.address, state: a.state }));
+
+  /**
+   * Wartości formularza skrzynki z wiersza albo z ustawienia. Nowa skrzynka Microsoft 365 dostaje pierwsze
+   * połączone konto i jego adres skrzynki (spec 6.1).
+   */
+  const mailValuesOf = (preset: Preset, row?: IntegrationRow): MailFormValues => {
+    if (row) {
+      return mailConfigToValues(row.config as MailInConfig, { name: row.name, apiKeyId: String(row.apiKeyId), serviceId: row.serviceId ?? '', orig: row.orig ?? '', enabled: row.enabled === 1, preset: row.preset, storePayloads: row.storePayloads === 1 }, m365Accounts());
+    }
+    const v = mailConfigToValues({ ...defaultMailInConfig(), ...preset.mailIn }, { name: preset.id === 'poczta-wlasny' ? '' : preset.name, apiKeyId: '', serviceId: '', orig: '', enabled: true, preset: preset.id, storePayloads: false });
+    if (v.authMode !== 'm365' || v.m365AccountId !== '') return v;
+    const first = m365Accounts().find((a) => a.state === 'connected');
+    return first ? { ...v, m365AccountId: String(first.id) } : v;
+  };
 
   /** Trzy pola próbki z ładunku wpisu dziennika skrzynki (JSON z `runMailIn`); ładunek spoza tego kształtu daje pustą próbkę. */
   const mailSampleOf = (payload: string): Pick<MailFormValues, 'sampleFrom' | 'sampleSubject' | 'sampleText'> | null => {
@@ -291,7 +304,9 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
   const mailPage = (request: FastifyRequest, ctx: FormContext, v: MailFormValues, opts: Omit<MailFormOptions, 'hasPassword' | 'smtpConfigured'>) =>
     render.page(request, {
       title: ctx.row ? ctx.row.name : 'Nowa skrzynka', active: 'integracje',
-      body: mailFormPage(ctx, v, { ...opts, hasPassword: ctx.secretNames.includes(MAIL_IN_PASSWORD_REF), smtpConfigured: deps.notifications.smtp() !== null }),
+      body: mailFormPage(ctx, v, {
+        ...opts, hasPassword: ctx.secretNames.includes(MAIL_IN_PASSWORD_REF), smtpConfigured: deps.notifications.smtp() !== null, m365Accounts: m365Accounts(),
+      }),
     });
 
   interface SavedMailForm { config: MailInConfig; password: string | null; keyId: number; v: MailFormValues }
@@ -320,15 +335,16 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     };
     const key = keyCheck(v, row?.apiKeyId);
     if (!key.ok) return fail(key.error);
-    const built = mailFormToConfig(v, hasPassword, deps.engine);
+    const built = mailFormToConfig(v, hasPassword, deps.engine, m365Accounts());
     if (!built.ok) return fail(built.error);
     // Zapisane hasło wolno użyć tylko wobec tego samego serwera i loginu: inaczej zmiana serwera w formularzu
-    // wysłałaby hasło, którego panel nigdy nie pokazuje, do obcego serwera.
-    if (row && built.password === null) {
+    // wysłałaby hasło, którego panel nigdy nie pokazuje, do obcego serwera. Skrzynka Microsoft 365 hasła nie używa,
+    // a po powrocie do hasła stare hasło mogło należeć do innego serwera, dlatego wtedy też należy je podać.
+    if (row && built.password === null && built.config.imap.auth.mode === 'password') {
       const saved = (row.config as MailInConfig).imap;
       const next = built.config.imap;
       // Wyłączenie sprawdzania certyfikatu też się liczy: bez niego hasło da się podsłuchać w drodze.
-      if (saved.host !== next.host || saved.port !== next.port || saved.security !== next.security || saved.user !== next.user || (saved.verifyCert && !next.verifyCert)) {
+      if (saved.auth.mode !== 'password' || saved.host !== next.host || saved.port !== next.port || saved.security !== next.security || saved.user !== next.user || (saved.verifyCert && !next.verifyCert)) {
         return fail('Zmieniono serwer, port, zabezpieczenie, sprawdzanie certyfikatu albo login: podaj hasło ponownie.');
       }
     }
@@ -340,8 +356,17 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }
 
     if (action === 'polaczenie') {
-      const password = built.password ?? (row ? deps.integrations.secrets(row.id)[MAIL_IN_PASSWORD_REF] ?? '' : '');
-      const connection: MailConnection = await checkMailbox(mailboxConnect, { ...built.config.imap, password }, built.config.folder);
+      const imapMode = built.config.imap.auth;
+      let auth: MailboxAuth;
+      if (imapMode.mode === 'm365') {
+        // Token pobierany tak jak w pollerze; konto wymagające logowania kończy sprawdzenie bez łączenia się z serwerem.
+        const got = await m365MailboxAuth(deps.m365Tokens && deps.m365Accounts ? { tokens: deps.m365Tokens, accounts: deps.m365Accounts } : undefined, imapMode.accountId, now());
+        if (!got.ok) return mailPage(request, ctx, v, { mode, connection: { ok: false, kind: got.kind, error: got.error, folders: [] }, warnings });
+        auth = got.auth;
+      } else {
+        auth = { kind: 'password', password: built.password ?? (row ? deps.integrations.secrets(row.id)[MAIL_IN_PASSWORD_REF] ?? '' : '') };
+      }
+      const connection: MailConnection = await checkMailbox(mailboxConnect, { ...imapTarget(built.config.imap), auth }, built.config.folder);
       return mailPage(request, ctx, v, { mode, connection, warnings });
     }
     if (action === 'sprawdz') {
@@ -358,13 +383,16 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }
   };
 
-  /** Stan skrzynki po zapisie: wiersz stanu, zaległe na jedno uruchomienie, nowy próg po zmianie folderu albo konta. */
+  /** Stan skrzynki po zapisie: wiersz stanu, zaległe na jedno uruchomienie, nowy próg po zmianie folderu, serwera albo adresu. */
   const afterMailSave = (id: number, v: MailFormValues, before: MailInConfig | null, after: MailInConfig, reenabled = false) => {
     const at = now();
     deps.mailIn?.ensureState(id, at);
     deps.mailIn?.setBacklog(id, v.backlog ? 1 : 0);
     // Włączenie wyłączonej skrzynki działa jak nowe włączenie (spec 5.4): maile z okresu wyłączenia zostają nietknięte.
-    const moved = reenabled || (before !== null && (before.folder !== after.folder || before.imap.host !== after.imap.host || before.imap.user !== after.imap.user));
+    // Inny folder, serwer albo adres skrzynki wskazuje inną skrzynkę. Zmiana samego konta Microsoft 365 albo sposobu
+    // logowania przy tym samym adresie nie zmienia skrzynki, dlatego maile z przerwy nie przepadają bez wpisu.
+    const moved = reenabled || (before !== null && (before.folder !== after.folder || before.imap.host !== after.imap.host
+      || before.imap.user !== after.imap.user));
     if (moved) {
       deps.mailIn?.setFloor(id, 0, 0);
       deps.mailIn?.pollNow(id, at);
@@ -559,12 +587,12 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       return handleMailForm(request, reply, preset, undefined, ({ config, password, keyId, v }) => {
         const id = deps.integrations.insert({
           name: v.name, kind, apiKeyId: keyId, serviceId: v.serviceId || null, orig: v.orig || null, preset: preset.id,
-          enabled: v.enabled ? 1 : 0, config, secrets: { [MAIL_IN_PASSWORD_REF]: password ?? '' }, storePayloads: v.storePayloads ? 1 : 0, createdAt: now(),
+          enabled: v.enabled ? 1 : 0, config, secrets: password === null ? {} : { [MAIL_IN_PASSWORD_REF]: password }, storePayloads: v.storePayloads ? 1 : 0, createdAt: now(),
         });
         afterMailSave(id, v, null, config);
         deps.audit.record({
           actor: actorOf(request.adminUserId), action: 'integracja.utworzenie', target: `integracja:${id}`,
-          meta: { nazwa: v.name, rodzaj: kind, ustawienie: preset.id, klucz: keyId, wlaczona: v.enabled, sekrety: [MAIL_IN_PASSWORD_REF] },
+          meta: { nazwa: v.name, rodzaj: kind, ustawienie: preset.id, klucz: keyId, wlaczona: v.enabled, sekrety: password === null ? [] : [MAIL_IN_PASSWORD_REF] },
           ip: request.ip,
         });
         render.flash(request, 'ok', `Skrzynka ${v.name} utworzona. Pierwsze sprawdzenie nastąpi w ciągu chwili.`);

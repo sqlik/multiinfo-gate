@@ -1,28 +1,150 @@
 import { silentLogger, type Logger } from '../log.ts';
 import type { JobsRepo } from '../store/jobs.ts';
-import type { NotificationsRepo, QueueRow } from '../store/notifications.ts';
-import { composeGroup, composeSingle } from './compose.ts';
-import type { AdminNotifier, NotificationEvent } from './rules.ts';
+import type { NotificationsRepo, QueueRow, RuleRow } from '../store/notifications.ts';
+import { composeGroup, composeSingle, composeSms } from './compose.ts';
+import { NOTIFICATION_EVENTS, SMS_ONLY_EVENTS, type AdminNotifier, type NotificationEvent } from './rules.ts';
 
 const HOUR_MS = 3_600_000;
+const DAY_MS = 24 * HOUR_MS;
 
-export interface NotifierDeps { notifications: NotificationsRepo; jobs: JobsRepo; log?: Logger }
+/** Zdarzenia, dla których powstał kanał SMS: osobna pula doby, której nie wyczerpią inne powiadomienia (spec 8.4). */
+export const SMS_ALARM_EVENTS: NotificationEvent[] = ['m365_disconnected', 'mail_undeliverable'];
+/** Dobowe pule SMS-ów powiadomień dla całej bramki: reguły z włączonym SMS-em oraz zdarzenia alarmowe. Każdy numer to jeden SMS. */
+export const SMS_PER_DAY = { rules: 10, alarm: 5 } as const;
+const RULE_POOL_EVENTS = NOTIFICATION_EVENTS.filter((e) => !SMS_ALARM_EVENTS.includes(e));
+
+/** Wynik wysyłki SMS-a powiadomienia: identyfikatory wiadomości, po jednej na numer; odmowa niesie powód do logu. */
+export type SmsSendResult = { ok: true; ids: string[] } | { ok: false; reason: string };
+
+type SmsPool = keyof typeof SMS_PER_DAY;
+/** Stan jednej tury `flushSms`: liczba numerów kanału, wykorzystanie pul doby w SMS-ach i pierwsza odmowa wysyłki. */
+interface SmsTurn {
+  send: (text: string, now: Date) => SmsSendResult; instance: string | null; numbers: number;
+  used: Record<SmsPool, number>; failure: string | null; delivered: boolean;
+}
+
+export interface NotifierDeps {
+  notifications: NotificationsRepo; jobs: JobsRepo; log?: Logger;
+  /** Kanał SMS (`sendNotificationSms`); bez niego oczekujące SMS-y czekają. */
+  sms?: (text: string, now: Date) => SmsSendResult;
+  /** Nazwa integracji albo konta z klucza tematu; temat SMS-a nigdy nie pochodzi ze streszczenia. */
+  subjectName?: (subjectKey: string | null) => string;
+}
+
+interface Named { get(id: number): { name: string } | undefined }
+
+/** Nazwa tematu z klucza `integration:<id>`, `mailbox:<id>`, `account:<id>` albo `m365:<id>`; inny klucz daje pusty napis. */
+export function subjectNamer(repos: { integrations: Named; accounts: Named; m365Accounts: Named }): (subjectKey: string | null) => string {
+  return (subjectKey) => {
+    const match = /^(integration|mailbox|account|m365):(\d+)$/.exec(subjectKey ?? '');
+    if (!match) return '';
+    const id = Number(match[2]);
+    const repo = match[1] === 'account' ? repos.accounts : match[1] === 'm365' ? repos.m365Accounts : repos.integrations;
+    return repo.get(id)?.name ?? '';
+  };
+}
 
 /**
- * Powiadomienia administratora: `notify` odkłada wpis do kolejki w bazie, `flush` (co minutę
- * z workera) zamienia oczekujące wpisy na zadania `mail` według reguł. Liczniki i bufor
- * grupowania są w tabeli, więc restart nic nie gubi, a bez SMTP wpisy po prostu czekają.
+ * Powiadomienia administratora: `notify` odkłada wpis do kolejki w bazie ze stanem każdego kanału,
+ * `flush` (co minutę z workera) zamienia oczekujące wpisy na zadania `mail` według reguł, a `flushSms`
+ * wysyła SMS-y w granicach limitu reguły i dobowych pul. Liczniki i bufor grupowania są w tabeli,
+ * więc restart nic nie gubi, a bez SMTP wpisy mailowe czekają.
  */
 export class Notifier implements AdminNotifier {
   constructor(private readonly deps: NotifierDeps) {}
 
   notify(event: NotificationEvent, subjectKey: string | null, summary: string, now: Date, dedupKey?: string): void {
-    if (this.deps.notifications.rule(event).enabled === 0) return;
+    const rule = this.deps.notifications.rule(event);
+    if (rule.enabled === 0) return;
+    const mail = !SMS_ONLY_EVENTS.includes(event) && !this.aboutSmtpAccount(event, subjectKey);
+    const sms = rule.sms === 1 && this.deps.notifications.smsSettings()?.enabled === true;
+    if (!mail && !sms) return;
     this.deps.notifications.enqueue({
-      event, at: now, summary,
+      event, at: now, summary, mail, sms,
       ...(subjectKey !== null ? { subjectKey } : {}),
       ...(dedupKey !== undefined ? { dedupKey } : {}),
     });
+  }
+
+  /** Zerwane konto Microsoft 365, przez które wychodzi SMTP: droga mailowa z definicji nie zadziała (spec 7.2). */
+  private aboutSmtpAccount(event: NotificationEvent, subjectKey: string | null): boolean {
+    if (event !== 'm365_disconnected') return false;
+    const smtp = this.deps.notifications.smtp();
+    return smtp?.authMode === 'm365' && smtp.m365AccountId !== null && subjectKey === `m365:${smtp.m365AccountId}`;
+  }
+
+  /**
+   * SMS-y oczekujące w kolejce, niezależnie od SMTP. Każdy wpis kończy turę jako wysłany albo pominięty:
+   * ponad limit reguły w ostatniej godzinie, ponad pulę doby, przy wyłączonym kanale albo po odmowie wysyłki.
+   * Odmowa wynika z ustawień kanału (klucz, numery, nadpis), więc kolejne wpisy tej tury nie próbują ponownie.
+   */
+  flushSms(now: Date): void {
+    const queued = this.deps.notifications.rules()
+      .map((rule) => ({ rule, rows: this.deps.notifications.pendingSms(rule.event) }))
+      .filter((q) => q.rows.length > 0);
+    if (queued.length === 0) return;
+    const settings = this.deps.notifications.smsSettings();
+    if (settings?.enabled !== true) {
+      for (const { rule, rows } of queued) this.dropSms(rule.event, rows, 'kanał SMS wyłączony', now);
+      return;
+    }
+    const send = this.deps.sms;
+    if (!send) return;
+    const dayAgo = new Date(now.getTime() - DAY_MS);
+    const turn: SmsTurn = {
+      send, instance: this.deps.notifications.smtp()?.instanceName ?? null, numbers: settings.recipients.length, failure: null, delivered: false,
+      used: {
+        rules: this.deps.notifications.smsCountSince(RULE_POOL_EVENTS, dayAgo),
+        alarm: this.deps.notifications.smsCountSince(SMS_ALARM_EVENTS, dayAgo),
+      },
+    };
+    for (const { rule, rows } of queued) this.sendRule(rule, rows, turn, now);
+    // Ostatnia odmowa zostaje w ustawieniach kanału, a panel ją pokazuje; udana wysyłka ją usuwa.
+    if (turn.failure !== null) this.deps.notifications.setSmsFailure(turn.failure, now);
+    else if (turn.delivered && settings.lastFailure !== null) this.deps.notifications.setSmsFailure(null, now);
+  }
+
+  /**
+   * SMS-y jednej reguły: najpierw limit reguły w ostatniej godzinie (w powiadomieniach), potem pula doby
+   * (w SMS-ach). Powiadomienie, które nie mieści się w reszcie puli, nie trafia do części numerów.
+   */
+  private sendRule(rule: RuleRow, rows: QueueRow[], turn: SmsTurn, now: Date): void {
+    const log = this.deps.log ?? silentLogger;
+    const pool: SmsPool = SMS_ALARM_EVENTS.includes(rule.event) ? 'alarm' : 'rules';
+    let hourBudget = Math.max(0, rule.maxPerHour - this.deps.notifications.smsSentSince([rule.event], new Date(now.getTime() - HOUR_MS)));
+    let sent = 0;
+    const overHour: QueueRow[] = [];
+    const overDay: QueueRow[] = [];
+    const failed: QueueRow[] = [];
+    for (const row of rows) {
+      if (turn.failure !== null) { failed.push(row); continue; }
+      if (hourBudget === 0) { overHour.push(row); continue; }
+      if (turn.used[pool] + turn.numbers > SMS_PER_DAY[pool]) { overDay.push(row); continue; }
+      const result = turn.send(composeSms(turn.instance, rule.event, this.deps.subjectName?.(row.subjectKey) ?? ''), now);
+      if (!result.ok) {
+        turn.failure = result.reason;
+        failed.push(row);
+        continue;
+      }
+      this.deps.notifications.markSms([row.id], 'sent', now, result.ids.length);
+      hourBudget -= 1;
+      turn.used[pool] += result.ids.length;
+      turn.delivered = true;
+      sent += 1;
+    }
+    if (sent > 0) log.info('powiadomienie.sms_wyslane', { event: rule.event, count: sent });
+    this.dropSms(rule.event, overHour, 'limit reguły', now);
+    this.dropSms(rule.event, overDay, 'limit doby', now);
+    if (failed.length > 0) {
+      this.deps.notifications.markSms(failed.map((r) => r.id), 'suppressed', now);
+      log.error('powiadomienie.sms_niewyslane', { event: rule.event, powod: turn.failure, count: failed.length });
+    }
+  }
+
+  private dropSms(event: NotificationEvent, rows: QueueRow[], powod: string, now: Date): void {
+    if (rows.length === 0) return;
+    this.deps.notifications.markSms(rows.map((r) => r.id), 'suppressed', now);
+    (this.deps.log ?? silentLogger).warn('powiadomienie.sms_pominiete', { event, powod, count: rows.length });
   }
 
   flush(now: Date): void {

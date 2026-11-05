@@ -48,6 +48,19 @@ describe('GET /przeglad - integracje', () => {
     expect(res.body).toMatch(/Integracje<span class="ct">1<\/span><\/a>/);
   });
 
+  it('skrzynka czekająca na logowanie konta Microsoft 365 nie liczy się do integracji z błędami, bo opisuje ją pasek konta', async () => {
+    const id = h.integrations.insert({
+      name: 'Alarmy serwerowni', kind: 'mail_in', apiKeyId, serviceId: null, orig: null, preset: 'poczta-m365', enabled: 1,
+      config: defaultMailInConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    h.mailIn.ensureState(id, NOW);
+    h.mailIn.recordPoll(id, { ok: false, error: 'Konto Microsoft 365 wymaga logowania', errorKind: 'account', at: NOW, nextPollAt: NOW });
+    const res = await page('/przeglad');
+    expect(res.body).toMatch(/Integracje z błędami<\/div>\s*<div class="n">0</);
+    expect(res.body).not.toContain('zgłosiła błąd');
+    expect(res.body).toMatch(/Integracje<\/a>/);
+  });
+
   it('bez błędów kafelek pokazuje zero bez ostrzeżenia', async () => {
     const res = await page('/przeglad');
     expect(res.body).toMatch(/Integracje z błędami<\/div>\s*<div class="n">0</);

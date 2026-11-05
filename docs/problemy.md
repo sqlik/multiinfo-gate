@@ -348,6 +348,191 @@ administratora Polkomtel.
 Wpis `odbior.zatrzymany` w dzienniku oznacza inną przyczynę: Multiinfo odrzuciło zapytanie
 o wiadomości. Opis zdarzeń odbioru zawiera rozdział 7.3 [Uruchomienia](uruchomienie.md).
 
+## Wersja Node.js bez poprawek bezpieczeństwa {#wersja-node}
+
+Objaw: przegląd panelu pokazuje czerwony pasek z informacją, że Node.js, na którym działa bramka,
+nie zawiera poprawek bezpieczeństwa z października 2026. Dziennik przy starcie zawiera wpis
+`node.bez_poprawek` z zainstalowaną i wymaganą wersją.
+
+Wydanie bezpieczeństwa Node.js z 21 października 2026 usuwa między innymi lukę CVE-2026-111497
+w dekoderze Brotli. Luka pozwala uruchomić obcy kod w programie, który rozpakowuje spreparowane
+dane. Według CISA jest ona aktywnie wykorzystywana. Bramka rozpakowuje dane Brotli w odpowiedziach
+serwerów, do których wysyła webhooki i zapytania uzupełniające, dlatego luka dotyczy także jej.
+Bramka działa na Node.js z linii 22, dlatego wymagana jest wersja 22.23.4 lub nowsza z tej linii.
+
+W Dockerze Node.js jest częścią obrazu bramki. Aktualizacja do najnowszego wydania według
+rozdziału [7.4 Uruchomienia](uruchomienie.md#74-aktualizacja) usuwa pasek.
+
+W kontenerze LXC Node.js jest pakietem systemu kontenera. Zaktualizuj go w konsoli kontenera,
+a następnie uruchom bramkę ponownie:
+
+```bash
+apt update && apt install --only-upgrade nodejs
+systemctl restart multiinfo-gate
+```
+
+Oczekiwany wynik: polecenie `node -v` zwraca wersję 22.23.4 lub nowszą, a pasek znika
+z przeglądu.
+
+## Microsoft 365 {#microsoft-365}
+
+Punkty poniżej dotyczą konta Microsoft 365, skrzynek Mail2SMS w Microsoft 365 i wysyłki maili
+przez skrzynkę bramki. Przygotowanie skrzynki bramki opisuje punkt 4.8
+[Uruchomienia](uruchomienie.md#48-konto-microsoft-365). Kody błędów AADSTS pochodzą od
+Microsoftu. Panel podaje je w szczegółach konta, a Microsoft wyświetla je na stronie logowania.
+
+### Konto Microsoft 365 wymaga logowania {#m365-wymaga-logowania}
+
+Objaw: przegląd panelu wyświetla pasek z informacją, że konto Microsoft 365 wymaga ponownego
+logowania. Administrator otrzymuje powiadomienie mailem albo SMS-em, a skrzynki korzystające
+z konta nie są sprawdzane.
+
+![Przegląd panelu z paskiem o koncie Microsoft 365 wymagającym ponownego logowania i przyciskiem Zaloguj ponownie](obrazki/przeglad-m365.png)
+
+Microsoft unieważnił logowanie bramki. Najczęstszymi przyczynami są zmiana albo reset hasła skrzynki
+bramki oraz odwołanie sesji w Entra ID. Kod błędu w szczegółach konta wskazuje przyczynę:
+
+| Kod | Przyczyna | Rozwiązanie |
+|---|---|---|
+| AADSTS50173, AADSTS50133 | zmiana hasła konta albo odwołanie sesji | kliknąć „Zaloguj ponownie” i zalogować konto aktualnym hasłem |
+| AADSTS700082 | logowanie wygasło po 90 dniach bez użycia | kliknąć „Zaloguj ponownie” |
+| AADSTS50076, AADSTS50079 | zasady katalogu wymagają drugiego składnika | kliknąć „Zaloguj ponownie” i potwierdzić logowanie drugim składnikiem |
+| AADSTS53003 | zasady dostępu warunkowego blokują logowanie | postąpić według punktu [Dostęp warunkowy blokuje konto](#m365-dostep-warunkowy) |
+| AADSTS65001 | cofnięta zgoda na uprawnienia aplikacji | postąpić według punktu [Microsoft prosi o zgodę na uprawnienia](#m365-zgoda) |
+| AADSTS7000112 | aplikacja wyłączona w Entra ID | włączyć aplikację we właściwościach w sekcji Aplikacje dla przedsiębiorstw |
+
+Ponowne logowanie rozpoczyna przycisk **Zaloguj ponownie** na pasku przeglądu albo
+w szczegółach konta. Zaloguj się adresem skrzynki bramki, a nie własnym kontem administratora.
+
+Oczekiwany wynik: stan konta zmienia się na „Połączone”, pasek znika z przeglądu, a skrzynki
+wznawiają pracę przy najbliższym sprawdzeniu.
+
+Wiadomości, które nadeszły w czasie przerwy, bramka przetwarza po ponownym logowaniu. Wiadomości
+starsze niż limit ustawiony w integracji pozostają w skrzynce bez wysyłki SMS-a. Opis limitu
+znajdziesz w rozdziale 5.1 [Integracji z aplikacjami](integracje.md#51-skrzynka).
+
+### Microsoft odrzuca adres przekierowania {#m365-adres-przekierowania}
+
+Objaw: po kliknięciu **Zapisz i zaloguj w Microsoft** albo **Zaloguj ponownie** strona logowania
+Microsoft wyświetla błąd AADSTS50011. Komunikat informuje, że adres przekierowania nie pasuje do
+adresów skonfigurowanych dla aplikacji.
+
+Panel tworzy adres przekierowania z adresu, pod którym jest otwarty. Panel otwarty pod inną nazwą
+tworzy adres, którego nie ma w rejestracji aplikacji. Na przykład adres `http://localhost:8081`
+wymaga osobnego wpisu, nawet gdy rejestracja zawiera już `http://127.0.0.1:8081`. Numer portu przy
+adresach `127.0.0.1` i `localhost` nie ma znaczenia, ponieważ Microsoft go nie porównuje. Szczegóły
+konta ostrzegają o różnicy adresów jeszcze przed logowaniem. Panel nie otrzymuje samego błędu,
+ponieważ Microsoft nie przekierowuje przeglądarki na adres spoza rejestracji.
+
+Aby dopisać adres do rejestracji:
+
+1. W szczegółach konta kliknij **Edytuj** i skopiuj adres przekierowania przyciskiem **Kopiuj**.
+2. W centrum administracyjnym Microsoft Entra otwórz rejestrację aplikacji i przejdź do sekcji
+   **Authentication (Preview)**.
+3. Przy platformie „Aplikacje mobilne i klasyczne” kliknij **Edytuj**, wklej skopiowany adres
+   w pustym polu i kliknij **Konfiguruj**.
+4. Wróć do szczegółów konta w panelu i kliknij **Zaloguj ponownie**.
+
+Oczekiwany wynik: Microsoft wyświetla stronę wyboru konta, a po logowaniu przeglądarka wraca do
+panelu. Zamiast dopisywania kolejnych adresów możesz też otwierać panel zawsze pod tym samym
+adresem, na przykład przez tunel z rozdziału 4.1 Uruchomienia.
+
+### Microsoft prosi o zgodę na uprawnienia {#m365-zgoda}
+
+Objaw: przy logowaniu skrzynki bramki strona Microsoft prosi o zgodę na uprawnienia albo wyświetla
+błąd AADSTS65001. Ten sam kod może też pojawić się w szczegółach konta po zerwaniu logowania.
+
+Zgoda administratora nie obejmuje wszystkich uprawnień aplikacji albo została cofnięta. Użytkownik
+skrzynki bramki bez roli administracyjnej nie udziela zgody samodzielnie, a zasady organizacji zwykle
+na to nie pozwalają.
+
+Rozwiązanie: w centrum administracyjnym Microsoft Entra otwórz rejestrację aplikacji i przejdź do
+sekcji **Uprawnienia interfejsu API**. Sprawdź, czy lista zawiera sześć uprawnień wymienionych
+w punkcie 4.8 Uruchomienia. Kliknij **Wyraź zgodę administratora dla katalogu** i potwierdź,
+a następnie kliknij w panelu **Zaloguj ponownie**.
+
+Oczekiwany wynik: przy każdym uprawnieniu widnieje udzielona zgoda dla organizacji, a logowanie
+przebiega bez ekranu zgody.
+
+### Dostęp warunkowy blokuje konto {#m365-dostep-warunkowy}
+
+Objaw: logowanie kończy się błędem AADSTS53003 na stronie Microsoft albo w szczegółach konta.
+
+Zasady dostępu warunkowego w Entra ID blokują logowanie skrzynki bramki. Takie zasady
+ograniczają na przykład logowanie do urządzeń zarządzanych przez firmę albo do wybranych
+lokalizacji. Bramka odnawia logowanie z adresu IP serwera, na którym działa. Dlatego zasada
+lokalizacji może ją zablokować także wtedy, gdy logowanie w przeglądarce się powiodło.
+
+Rozwiązanie: poproś administratora Microsoft 365 o wyłączenie skrzynki bramki z zasady, która
+blokuje logowanie, albo o dopuszczenie adresu IP serwera bramki. Nazwę zasady przedstawia
+dziennik logowania konta w centrum administracyjnym Microsoft Entra. Po zmianie zasady kliknij
+w panelu **Zaloguj ponownie**.
+
+### Skrzynka Microsoft 365 odrzuca logowanie {#m365-skrzynka}
+
+Objaw: konto Microsoft 365 jest w stanie „Połączone”, ale skrzynka Mail2SMS zgłasza błąd
+logowania. Stan skrzynki zawiera komunikat „Logowanie odrzucone” i odpowiedź serwera Exchange.
+
+Konto działa, ale Exchange odmawia dostępu do skrzynki. Odpowiedź serwera wskazuje przyczynę:
+
+| Odpowiedź serwera | Przyczyna | Rozwiązanie |
+|---|---|---|
+| `User is authenticated but not connected.` | IMAP wyłączony w skrzynce bramki | zaznaczyć IMAP na karcie Poczta skrzynki bramki i odczekać około 30 minut |
+| `Login failed.` | skrzynka o podanym adresie nie istnieje, na przykład z powodu literówki | poprawić pole Adres skrzynki w integracji |
+
+Przy skrzynce współdzielonej sprawdź także, czy skrzynka bramki posiada do niej uprawnienie
+pełnego dostępu. Po usunięciu przyczyny kliknij **Sprawdź teraz** w szczegółach integracji.
+
+Oczekiwany wynik: stan skrzynki przedstawia czas ostatniego sprawdzenia bez błędu.
+
+### Mail testowy kończy się błędem 535 5.7.139 {#m365-smtp}
+
+Objaw: przycisk **Wyślij mail testowy** w wariancie Microsoft 365 kończy się komunikatem
+`535 5.7.139 Authentication unsuccessful, SmtpClientAuthentication is disabled for the Mailbox`
+z podpowiedzią panelu.
+
+Opcja „SMTP z uwierzytelnianiem” jest wyłączona w skrzynce bramki. Rozwiązanie:
+w centrum administracyjnym Microsoft 365 otwórz użytkownika skrzynki bramki, przejdź na kartę **Poczta**, kliknij
+**Zarządzaj aplikacjami poczty e-mail** i zaznacz **SMTP z uwierzytelnianiem**. Zmiana zaczyna
+obowiązywać po około 30 minutach, dlatego mail testowy wyślij ponownie po tym czasie.
+
+Oczekiwany wynik: panel potwierdza wysłanie maila testowego. Pozostałe odpowiedzi serwera
+Microsoft 365 opisuje rozdział 9.1 [Integracji z aplikacjami](integracje.md#91-smtp).
+
+### Wiadomość pracownika zostaje pominięta {#m365-nadawca}
+
+Objaw: wiadomość wysłana przez pracownika firmy na skrzynkę Microsoft 365 nie powoduje wysłania
+SMS-a. Dziennik integracji zawiera wpis „pominięto” z powodem „brak potwierdzenia SPF/DKIM od
+serwera”.
+
+Exchange Online nie dopisuje wyniku SPF ani DKIM do poczty wysłanej wewnątrz organizacji, tylko
+oznacza ją jako wewnętrzną. Bramka uznaje to oznaczenie wyłącznie dla nadawcy z domeny skrzynki.
+Wiadomość od pracownika z innej domeny wymaga więc potwierdzenia SPF albo DKIM, którego poczta
+wewnętrzna nie zawiera. Taka sytuacja występuje na przykład przy skrzynce
+`alarmy@firma.onmicrosoft.com` i pracownikach z adresami `@firma.pl`.
+
+Rozwiązanie: sprawdź w dzienniku adres nadawcy i porównaj jego domenę z adresem skrzynki. Gdy
+domeny się różnią, utwórz skrzynkę bramki z adresem w domenie pracowników, połącz ją na ekranie
+**Konta Microsoft 365** i wskaż w integracji. Gdy pracownicy korzystają z kilku domen, wiadomości z pozostałych domen wymagają
+wyłączenia przełącznika **Wymagaj potwierdzenia nadawcy przez serwer (SPF/DKIM)**. Lista
+nadawców nadal ogranicza wtedy dozwolone adresy, ale osoba znająca adres z listy może go
+podrobić.
+
+### Powiadomienia przez Microsoft 365 trafiają do spamu {#m365-spam}
+
+Objaw: mail testowy albo powiadomienie wysłane przez konto Microsoft 365 trafia do folderu spamu
+albo dociera z opóźnieniem. Śledzenie wiadomości w centrum administracyjnym Exchange potwierdza
+doręczenie.
+
+Problem dotyczy zwykle skrzynki, która przekazuje pocztę dalej, na przykład do prywatnej skrzynki
+administratora. Przekazanie łamie sprawdzenie SPF, a bez podpisu DKIM serwer docelowy nie może
+potwierdzić nadawcy. Bramka przekazała mail do Microsoft 365 poprawnie, dlatego jej ustawienia
+nie wymagają zmian.
+
+Rozwiązanie: włącz w Microsoft 365 podpis DKIM dla domeny skrzynki bramki. Odbiorca, który
+przekazuje pocztę dalej, powinien dopisać adres nadawcy bramki do listy bezpiecznych nadawców
+w skrzynce docelowej.
+
 ## Jak zgłosić problem {#zgloszenie}
 
 Problemy zgłaszasz w serwisie GitHub, w zakładce

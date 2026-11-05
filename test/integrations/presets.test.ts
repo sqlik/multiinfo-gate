@@ -24,7 +24,7 @@ describe('gotowe ustawienia', () => {
     expect(presetById('brak')).toBeUndefined();
     expect(presetsFor('webhook_in').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'uptime-kuma', 'grafana', 'zabbix', 'woocommerce', 'woocommerce-klient', 'fakturownia', 'fakturownia-klient', 'home-assistant', 'freescout-zgloszenie', 'freshdesk-zgloszenie', 'custom']);
     expect(presetsFor('webhook_out').map((p) => p.id)).toEqual(['prosty-json', 'n8n', 'home-assistant', 'freescout', 'freshdesk', 'slack', 'ntfy', 'bitrix24', 'custom']);
-    expect(presetsFor('mail_in').map((p) => p.id)).toEqual(['poczta-gmail', 'poczta-home', 'poczta-ovh', 'poczta-wlasny']);
+    expect(presetsFor('mail_in').map((p) => p.id)).toEqual(['poczta-m365', 'poczta-gmail', 'poczta-home', 'poczta-ovh', 'poczta-wlasny']);
     expect(presetsFor('sms_group').map((p) => p.id)).toEqual(['sms-grupa']);
     expect(presetsFor('power_automate').map((p) => p.id)).toEqual(['power-automate']);
   });
@@ -59,6 +59,10 @@ describe('gotowe ustawienia', () => {
     expect(presetById('poczta-gmail')?.guide).toContain('kosz');
     // Outlook.com i Microsoft 365 nie przyjmują hasła do IMAP od 2024-09-16: nie ma kafelka, dokumentacja mówi dlaczego.
     expect(presetById('poczta-outlook')).toBeUndefined();
+    const m365 = presetById('poczta-m365');
+    expect(m365?.name).toBe('Microsoft 365');
+    expect(m365?.mailIn?.imap).toMatchObject({ host: 'outlook.office365.com', port: 993, security: 'tls', verifyCert: true, auth: { mode: 'm365' } });
+    expect(m365?.guide).toContain('uruchomienie/#48-konto-microsoft-365');
   });
   it('wartości z ładunku w adresie zapytania uzupełniającego są kodowane', () => {
     for (const preset of PRESETS) {

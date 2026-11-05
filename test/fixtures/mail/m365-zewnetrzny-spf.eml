@@ -1,0 +1,20 @@
+MIME-Version: 1.0
+Authentication-Results: mx.microsoft.com 1; spf=pass (sender IP is
+ 192.0.2.10) smtp.mailfrom=przyklad.pl; dkim=pass (signature was verified)
+ header.d=przyklad.pl;dmarc=pass action=none
+ header.from=przyklad.pl;compauth=pass reason=100
+Received-SPF: Pass (protection.outlook.com: domain of przyklad.pl designates
+ 192.0.2.10 as permitted sender) receiver=protection.outlook.com;
+From: "Serwis UPS" <serwis@przyklad.pl>
+To: alarmy@firma.pl
+Subject: UPS-01 praca na baterii
+Date: Wed, 04 Nov 2026 10:44:42 +0100
+Message-ID: <m365-zewnetrzny-spf@przyklad.pl>
+Content-Type: text/plain; charset="utf-8"
+X-MS-Exchange-Organization-MessageDirectionality: Incoming
+X-MS-Exchange-Organization-AuthSource: AM2PEPF00000001.eurprd02.prod.outlook.com
+X-MS-Exchange-Organization-AuthAs: Anonymous
+X-MS-Exchange-CrossTenant-AuthAs: Anonymous
+X-MS-Exchange-CrossTenant-FromEntityHeader: Internet
+
+Zasilacz UPS-01 przełączył się na pracę z baterii.

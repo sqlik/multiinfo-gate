@@ -3,9 +3,10 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { defaultSmsGroupConfig } from '../../src/integrations/config.ts';
+import { defaultMailInConfig, defaultSmsGroupConfig } from '../../src/integrations/config.ts';
 import { AccountsRepo } from '../../src/store/accounts.ts';
 import { applyMigrations, NewerDatabaseError, openDatabase, openDatabaseRaw } from '../../src/store/db.ts';
+import { NotificationsRepo } from '../../src/store/notifications.ts';
 import { accountInput } from './helpers.ts';
 
 describe('migracja 006', () => {
@@ -19,7 +20,7 @@ describe('migracja 006', () => {
     expect(cols('messages')).toContain('integration_id');
     expect(cols('inbound_messages')).toEqual(expect.arrayContaining(['external_ref', 'external_integration_id']));
     expect(cols('webhook_deliveries')).toEqual(expect.arrayContaining(['integration_id', 'method', 'headers_enc', 'response_ref']));
-    expect(db.pragma('user_version', { simple: true })).toBe(10);
+    expect(db.pragma('user_version', { simple: true })).toBe(11);
   });
 });
 
@@ -43,7 +44,6 @@ describe('migracja 010', () => {
   it('010 dokłada zlecającego przy wiadomości i rozsyłce, integrację rozsyłki i rozsyłkę wpisu dziennika', () => {
     const db = openDatabase(':memory:');
     const cols = (t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((c) => c.name);
-    expect(db.pragma('user_version', { simple: true })).toBe(10);
     expect(cols('messages')).toContain('requested_by');
     expect(cols('packages')).toEqual(expect.arrayContaining(['integration_id', 'requested_by']));
     expect(cols('integration_events')).toContain('package_id');
@@ -88,7 +88,7 @@ describe('migracja 010 na bazie 1.8.7 z danymi', () => {
     old.close();
 
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(10);
+    expect(db.pragma('user_version', { simple: true })).toBe(11);
     expect(db.prepare('SELECT id, integration_id, mail_from, requested_by FROM messages').all())
       .toEqual([{ id: 'msg_1', integration_id: integrationId, mail_from: 'dyspozytor@firma.pl', requested_by: null }]);
     expect(db.prepare('SELECT id, integration_id, requested_by, idempotency_key FROM packages').all())
@@ -105,6 +105,73 @@ describe('migracja 010 na bazie 1.8.7 z danymi', () => {
 
     const before = readFileSync(path);
     expect(() => openDatabase(path, { migrations: NINE })).toThrow(NewerDatabaseError);
+    expect(readFileSync(path).equals(before)).toBe(true);
+  });
+});
+
+describe('migracja 011', () => {
+  const cols = (db: ReturnType<typeof openDatabase>, t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((c) => c.name);
+  it('zakłada konta Microsoft 365 i ustawienia kanału SMS, dokłada kolumny sposobu logowania SMTP, SMS w regułach i kolejce, wiadomości systemowe', () => {
+    const db = openDatabase(':memory:');
+    expect(db.pragma('user_version', { simple: true })).toBe(11);
+    expect(cols(db, 'm365_accounts')).toEqual(expect.arrayContaining([
+      'id', 'name', 'tenant', 'client_id', 'redirect_uri', 'address', 'refresh_enc', 'state', 'error_code', 'error_message',
+      'error_since', 'notified_at', 'connected_at', 'connected_by', 'last_refresh_at', 'created_at', 'updated_at',
+    ]));
+    expect(cols(db, 'sms_notify_settings')).toEqual(expect.arrayContaining(['id', 'enabled', 'recipients', 'api_key_id', 'orig', 'updated_at']));
+    expect(cols(db, 'smtp_settings')).toEqual(expect.arrayContaining(['auth_mode', 'm365_account_id']));
+    expect(cols(db, 'notification_rules')).toContain('sms');
+    expect(cols(db, 'notification_queue')).toContain('sms_status');
+    expect(cols(db, 'messages')).toContain('system');
+  });
+  it('konta Microsoft 365 wskazanego w ustawieniach SMTP nie można usunąć', () => {
+    const db = openDatabase(':memory:');
+    const fks = db.prepare('PRAGMA foreign_key_list(smtp_settings)').all() as Array<{ table: string; from: string; on_delete: string }>;
+    expect(fks).toContainEqual(expect.objectContaining({ table: 'm365_accounts', from: 'm365_account_id', on_delete: 'RESTRICT' }));
+  });
+});
+
+const TEN = [...NINE, '010-power-automate.sql'];
+
+describe('migracja 011 na bazie 1.9.0 z danymi', () => {
+  let root: string;
+  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'mig-011-')); });
+  afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+
+  it('ustawienia SMTP, integracja Mail2SMS, wiadomości, reguły i kolejka zostają, a 1.9.0 odmawia startu na bazie po migracji', () => {
+    const path = join(root, 'gate.sqlite');
+    const old = openDatabaseRaw(path);
+    applyMigrations(old, { migrations: TEN });
+    expect(old.pragma('user_version', { simple: true })).toBe(10);
+    const accountId = new AccountsRepo(old, randomBytes(32)).insert(accountInput());
+    old.prepare(`INSERT INTO api_keys (account_id, name, key_hash, key_prefix, max_parts, rate_per_min, created_at) VALUES (?, 'k', 'h', 'p', 3, 60, '2026-01-01')`).run(accountId);
+    const apiKeyId = (old.prepare('SELECT id FROM api_keys').get() as { id: number }).id;
+    const config = JSON.stringify(defaultMailInConfig());
+    old.prepare(`INSERT INTO integrations (name, kind, api_key_id, preset, config, created_at, updated_at) VALUES ('Alarmy serwisu', 'mail_in', ?, 'poczta', ?, 'x', 'x')`).run(apiKeyId, config);
+    old.prepare(`INSERT INTO smtp_settings (id, host, port, security, user, password_enc, from_address, recipients, instance_name, updated_at)
+                 VALUES (1, 'smtp.firma.pl', 587, 'starttls', 'bramka@firma.pl', NULL, 'bramka@firma.pl', 'it@firma.pl', 'bramka', '2026-01-01')`).run();
+    old.prepare(`INSERT INTO messages (id, api_key_id, account_id, service_id, dest, body_hash, encoding, parts, slots, created_at)
+                 VALUES ('msg_1', ?, ?, '24138', '48601000001', 'h', 'gsm', 1, 5, '2026-01-01')`).run(apiKeyId, accountId);
+    old.prepare(`INSERT INTO notification_rules (event, enabled, max_per_hour, group_hours, params) VALUES ('mailbox_failure', 1, 5, 0, '{"afterMinutes":15}')`).run();
+    old.prepare(`INSERT INTO notification_queue (event, at, summary) VALUES ('mailbox_failure', '2026-01-01', 'Skrzynka nie odpowiada')`).run();
+    old.close();
+
+    const db = openDatabase(path);
+    expect(db.pragma('user_version', { simple: true })).toBe(11);
+    const notifications = new NotificationsRepo(db, randomBytes(32));
+    expect(notifications.smtp()).toMatchObject({ host: 'smtp.firma.pl', authMode: 'password', m365AccountId: null });
+    expect(db.prepare('SELECT config FROM integrations').get()).toEqual({ config });
+    expect(db.prepare('SELECT id, system FROM messages').all()).toEqual([{ id: 'msg_1', system: 0 }]);
+    expect(notifications.rule('mailbox_failure')).toMatchObject({ enabled: 1, sms: 0 });
+    expect(notifications.rule('m365_disconnected')).toMatchObject({ enabled: 1, sms: 1 });
+    expect(notifications.pending('mailbox_failure')).toEqual([expect.objectContaining({ status: 'pending', smsStatus: 'none' })]);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM m365_accounts').get()).toEqual({ n: 0 });
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    db.close();
+
+    const before = readFileSync(path);
+    expect(() => openDatabase(path, { migrations: TEN })).toThrow(NewerDatabaseError);
     expect(readFileSync(path).equals(before)).toBe(true);
   });
 });

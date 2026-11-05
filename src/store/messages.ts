@@ -22,6 +22,8 @@ export interface MessageRow {
   mailFrom: string | null;
   /** Zlecający wysyłkę z przepływu Power Automate; `null` dla pozostałych źródeł. */
   requestedBy: string | null;
+  /** SMS kanału powiadomień administratora: niewidoczny w API, webhooku klucza i integracjach wychodzących. */
+  system: 0 | 1;
 }
 
 export interface MessageInput {
@@ -36,11 +38,14 @@ export interface MessageInput {
   integrationId?: number | null;
   mailFrom?: string | null;
   requestedBy?: string | null;
+  system?: 0 | 1;
 }
 
 export interface MessageFilter {
   apiKeyId?: number; status?: string; dest?: string;
   from?: string; until?: string; limit: number; offset: number;
+  /** Wiadomości systemowe na liście; domyślnie pominięte. */
+  includeSystem?: boolean;
 }
 
 export interface StatusPatch {
@@ -62,7 +67,7 @@ interface RawMessage {
   idempotency_key: string | null;
   created_at: string; sent_at: string | null; final_at: string | null;
   trace: string | null; in_reply_to: string | null; integration_id: number | null; mail_from: string | null;
-  requested_by: string | null;
+  requested_by: string | null; system: 0 | 1;
 }
 
 /** Statusy, po których wiadomość nie zmieni już stanu i trafia na listę nieudanych. */
@@ -101,6 +106,7 @@ function toRow(r: RawMessage): MessageRow {
     integrationId: r.integration_id,
     mailFrom: r.mail_from,
     requestedBy: r.requested_by,
+    system: r.system,
   };
 }
 
@@ -120,8 +126,8 @@ export class MessagesRepo {
       .prepare(
         `INSERT INTO messages (
            id, api_key_id, account_id, service_id, dest, body, body_hash,
-           encoding, parts, slots, orig, cost_center, valid_to, idempotency_key, in_reply_to, integration_id, mail_from, requested_by, created_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           encoding, parts, slots, orig, cost_center, valid_to, idempotency_key, in_reply_to, integration_id, mail_from, requested_by, system, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                    COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))`,
       )
       .run(
@@ -143,18 +149,21 @@ export class MessagesRepo {
         input.integrationId ?? null,
         input.mailFrom ?? null,
         input.requestedBy ?? null,
+        input.system ?? 0,
         input.createdAt ?? null,
       );
   }
 
   /**
    * Ostatnia wiadomość wysłana z tej usługi na ten numer w oknie czasu - podpowiedź dla
-   * aplikacji, na co abonent odpowiada. Multiinfo tego nie mówi.
+   * aplikacji, na co abonent odpowiada. Multiinfo tego nie mówi. Wiadomości systemowe odpadają,
+   * bo ich identyfikator trafiłby do webhooka aplikacji.
    */
-  lastTo(accountId: number, serviceId: string, dest: string, since: Date): MessageRow | undefined {
+  /** `includeSystem` rozpoznaje odpowiedź administratora na SMS powiadomienia bramki. */
+  lastTo(accountId: number, serviceId: string, dest: string, since: Date, options: { includeSystem?: boolean } = {}): MessageRow | undefined {
     const row = this.db
       .prepare(
-        `SELECT * FROM messages WHERE account_id = ? AND service_id = ? AND dest = ? AND created_at >= ?
+        `SELECT * FROM messages WHERE account_id = ? AND service_id = ? AND dest = ? AND created_at >= ?${options.includeSystem ? '' : ' AND system = 0'}
           ORDER BY created_at DESC, id DESC LIMIT 1`,
       )
       .get(accountId, serviceId, dest, since.toISOString()) as RawMessage | undefined;
@@ -176,6 +185,7 @@ export class MessagesRepo {
     const where: string[] = [];
     const params: Array<string | number> = [];
 
+    if (filter.includeSystem !== true) where.push('system = 0');
     if (filter.apiKeyId !== undefined) {
       where.push('api_key_id = ?');
       params.push(filter.apiKeyId);

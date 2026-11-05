@@ -237,9 +237,15 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
     const v = formValues(body);
     const checked = check(choice, v, now());
     const targetError = checked.ok ? await webhookError(checked.webhookUrl) : null;
-    if (!checked.ok || targetError !== null) {
+    // Kanał SMS powiadomień wysyła z nadpisem tego klucza: edycja, która go zabiera, zatrzymałaby kanał bez ostrzeżenia.
+    const sms = deps.notifications.smsSettings();
+    const smsError = checked.ok && sms?.enabled && sms.apiKeyId === key.id && sms.orig !== null
+      && !v.origs.includes(sms.orig) && checked.defaultOrig !== sms.orig
+      ? `Kanał powiadomień SMS wysyła z nadpisem ${sms.orig} tego klucza. Najpierw wybierz w kanale inny nadpis albo wyłącz kanał, a następnie usuń nadpis z klucza.`
+      : null;
+    if (!checked.ok || targetError !== null || smsError !== null) {
       reply.code(400);
-      const error = checked.ok ? targetError! : checked.error;
+      const error = checked.ok ? (targetError ?? smsError!) : checked.error;
       return render.page(request, {
         title: `Klucz ${key.name}`, active: 'klucze', body: editKeyPage(choice, key, error, v, deps.integrations.listForKey(key.id)),
       });
@@ -297,6 +303,13 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
     if (live.length > 0) {
       render.flash(request, 'warn', `Klucz ${key.name} ma włączone integracje (${live.map((i) => i.name).join(', ')}). `
         + 'Najpierw wyłącz te integracje albo przenieś je na inny klucz, potem odwołaj klucz.');
+      return reply.redirect('/klucze', 302);
+    }
+    // Kanał SMS powiadomień na odwołanym kluczu przestałby wysyłać bez ostrzeżenia (spec 8.1).
+    const sms = deps.notifications.smsSettings();
+    if (sms?.enabled && sms.apiKeyId === id) {
+      render.flash(request, 'warn', `Klucz ${key.name} jest używany przez kanał powiadomień SMS. `
+        + 'Najpierw wskaż w kanale inny klucz albo wyłącz kanał, potem odwołaj klucz.');
       return reply.redirect('/klucze', 302);
     }
 

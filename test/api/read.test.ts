@@ -274,3 +274,25 @@ describe('GET /healthz', () => {
     expect(res.json()).toEqual({ status: 'degraded' });
   });
 });
+
+describe('wiadomości systemowe (kanał SMS powiadomień)', () => {
+  const seedSystem = (id: string) => messages.insert({
+    id, apiKeyId: apiKeyAId, accountId, serviceId: '24138', dest: '48601000001', body: 'Multiinfo Gate: SMS testowy', bodyHash: 'h',
+    encoding: 'gsm', parts: 1, slots: 27, orig: null, costCenter: null, validTo: null, idempotencyKey: null,
+    requestedBy: 'Powiadomienie bramki', system: 1, createdAt: NOW.toISOString(),
+  });
+
+  it('odczyt wiadomości systemowej kluczem, w imieniu którego wyszła, daje 404', async () => {
+    seedSystem('msg_sys1');
+    const res = await get('/v1/messages/msg_sys1');
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.code).toBe('message_not_found');
+  });
+
+  it('lista wiadomości klucza pomija wiadomości systemowe', async () => {
+    seed('msg_a1', apiKeyAId, accountId);
+    seedSystem('msg_sys1');
+    const body = (await get('/v1/messages')).json();
+    expect(body.data.map((m: { id: string }) => m.id)).toEqual(['msg_a1']);
+  });
+});

@@ -13,7 +13,7 @@ import type { AdminUsersRepo } from '../store/admin-users.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { AuditRepo } from '../store/audit.ts';
 import { registerHealthRoute, type InboundHealth } from '../api/health.ts';
-import { secureContext } from './secure-context.ts';
+import { healthDetailsAllowed, secureContext } from './secure-context.ts';
 import { pendingRelease } from '../releases/check.ts';
 import type { JobsRepo } from '../store/jobs.ts';
 import type { MessageEventsRepo } from '../store/message-events.ts';
@@ -28,6 +28,9 @@ import type { MailboxConnect } from '../integrations/mail/client.ts';
 import type { IntegrationsRepo } from '../store/integrations.ts';
 import type { NotificationsRepo } from '../store/notifications.ts';
 import type { SettingsRepo } from '../store/settings.ts';
+import type { M365AccountsRepo } from '../store/m365-accounts.ts';
+import type { M365Service } from '../m365/service.ts';
+import type { M365Tokens } from '../m365/tokens.ts';
 import type { TemplateEngine } from '../integrations/templates.ts';
 import type { AdminNotifier } from '../notifications/rules.ts';
 import type { Mailer } from '../worker/mail.ts';
@@ -37,6 +40,7 @@ import type { ClientPool } from '../worker/clients.ts';
 import { FlashStore } from './flash.ts';
 import { registerAccountRoutes } from './routes/accounts.ts';
 import { registerAuditRoutes } from './routes/audit.ts';
+import { M365_RETURN_PATH, registerM365Routes } from './routes/m365.ts';
 import { registerKeyRoutes } from './routes/keys.ts';
 import { registerUserRoutes } from './routes/users.ts';
 import { registerDeliveryRoutes } from './routes/deliveries.ts';
@@ -91,6 +95,8 @@ export interface AdminDeps {
   receiver?: { refresh(opts?: { retryAccount?: number }): void };
   /** Stan odbiornika do /healthz; bez niego pole nie występuje. */
   inboundHealth?: () => InboundHealth;
+  /** MIG_TRUSTED_PROXIES: odwrotne proxy, od których /healthz panelu przyjmuje żądanie HTTPS ze szczegółami. */
+  trustedProxies?: string[];
   clients: ClientPool;
   sessions: SessionStore;
   masterKey: Buffer;
@@ -105,6 +111,13 @@ export interface AdminDeps {
   log?: Logger;
   /** Wariant instalacji do poleceń na stronach pomocy; brak = oba warianty. */
   install?: InstallKind | null;
+  /** Wersja Node, na której działa bramka; domyślnie `process.version`, testy podstawiają inną. */
+  nodeVersion?: string;
+  /** Usługi kont Microsoft 365; bez nich panel nie udostępnia ekranu kont i powrotu z logowania. */
+  m365?: M365Service;
+  m365Accounts?: M365AccountsRepo;
+  /** Token dostępu do „Sprawdź połączenie” skrzynki Microsoft 365; testy podstawiają dostawcę z atrapą. */
+  m365Tokens?: Pick<M365Tokens, 'access'>;
 }
 
 declare module 'fastify' {
@@ -124,9 +137,12 @@ const STAGE_TTL_MS = 5 * 60_000;
  */
 const STAGE_MAX_FAILURES = 5;
 
-/** Ścieżki dostępne bez sesji: ekran logowania i pliki, z których się składa. */
+/**
+ * Ścieżki dostępne bez sesji: ekran logowania i pliki, z których się składa, oraz strona pośrednia
+ * powrotu z Microsoftu, która niczego nie zapisuje i przenosi parametry do trasy wymagającej sesji.
+ */
 function isPublicPath(path: string): boolean {
-  return path === '/zaloguj' || path.startsWith('/zaloguj/') || path === '/healthz'
+  return path === '/zaloguj' || path.startsWith('/zaloguj/') || path === '/healthz' || path === M365_RETURN_PATH
     || path === '/style.css' || path === '/panel.js' || path.startsWith('/fonts/');
 }
 
@@ -170,6 +186,12 @@ const cookieOptions = {
 } as const;
 
 interface Stage { userId: number; at: number; failures: number }
+
+/** Liczby kont Microsoft 365 do /healthz panelu, bez nazw i adresów. */
+const m365Health = (repo: M365AccountsRepo) => () => {
+  const all = repo.list();
+  return { accounts: all.length, needsLogin: all.filter((a) => a.state === 'needs_login').length };
+};
 
 export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   const app = Fastify({
@@ -234,23 +256,32 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
     reply.code(404).header('Cache-Control', 'no-store').type('text/html; charset=utf-8').send(notFoundPage());
   });
 
-  // Szczegółowy stan dla monitoringu, bez sesji, ale tylko w kontekście bezpiecznym (pętla zwrotna,
-  // tunel SSH, HTTPS za proxy) - tam, gdzie da się też zalogować. Z sieci bez TLS zostaje sam status,
-  // bo nazwy kont i daty certyfikatów nie są dla każdego, kto widzi port panelu (np. LXC na eth0).
+  // Szczegółowy stan dla monitoringu, bez sesji, ale tylko z pętli zwrotnej albo od zaufanego proxy z HTTPS.
+  // Z sieci zostaje sam status, bo nazwy kont i daty certyfikatów nie są dla każdego, kto widzi port panelu
+  // (np. LXC na eth0), a nagłówki Host i X-Forwarded-Proto ustawia sam klient.
   registerHealthRoute(
     app,
     {
-      accounts: deps.accounts, queueDepth: () => deps.jobs.depth(), now, detailsAllowed: secureContext,
+      accounts: deps.accounts, queueDepth: () => deps.jobs.depth(), now, detailsAllowed: healthDetailsAllowed(deps.trustedProxies ?? []),
       release: () => pendingRelease(deps.settings),
       ...(deps.inboundHealth ? { inbound: deps.inboundHealth } : {}),
       integrations: () => ({
         enabled: deps.integrations.countEnabled(), troubled24h: deps.integrations.countTroubled(new Date(now().getTime() - WINDOW_MS)),
       }),
+      ...(deps.m365Accounts ? { m365: m365Health(deps.m365Accounts) } : {}),
     },
     'admin',
   );
 
   app.addHook('onRequest', async (request, reply) => {
+    // SameSite=Strict nie odróżnia sąsiednich subdomen tej samej domeny. Przeglądarka podaje pochodzenie żądania
+    // w Sec-Fetch-Site: formularz panelu wysyła same-origin, a żądanie z innej strony, także z subdomeny, odpada.
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      const site = request.headers['sec-fetch-site'];
+      if (site !== undefined && site !== 'same-origin' && site !== 'none') {
+        return reply.code(403).header('Cache-Control', 'no-store').type('text/html; charset=utf-8').send(clientErrorPage(403));
+      }
+    }
     const path = request.url.split('?')[0] ?? '';
     if (isPublicPath(path)) return;
 
@@ -422,6 +453,7 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   registerInboundViewRoutes(app, deps, render);
   registerDeliveryRoutes(app, deps, render);
   registerAuditRoutes(app, deps, render);
+  if (deps.m365 && deps.m365Accounts) registerM365Routes(app, { ...deps, m365: deps.m365, m365Accounts: deps.m365Accounts }, render);
 
   /**
    * Sekret trzymamy do czasu potwierdzenia, żeby odświeżenie ekranu nie unieważniło

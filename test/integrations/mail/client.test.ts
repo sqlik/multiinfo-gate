@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { MailboxError, errorKindOf, errorMessageOf, guardedConnect, scrubError, selectableFolders, type MailboxSession, type MailboxSettings } from '../../../src/integrations/mail/client.ts';
+import { MailboxError, errorKindOf, errorMessageOf, guardedConnect, imapAuth, internalDateOf, metaOf, scrubError, selectableFolders, type MailboxSession, type MailboxSettings } from '../../../src/integrations/mail/client.ts';
 import { PRIVATE_MAIL_MESSAGE } from '../../../src/net/private-address.ts';
 import { FakeMailbox, fakeConnect } from '../../helpers/fake-mailbox.ts';
 
-const settings = { host: 'h', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', password: 'p' };
+const settings = { host: 'h', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', auth: { kind: 'password' as const, password: 'p' } };
 
 describe('scrubError', () => {
   it('usuwa hasło i login z komunikatu serwera', () => {
@@ -38,9 +38,12 @@ describe('errorMessageOf', () => {
     expect(errorMessageOf(Object.assign(new Error('x'), { code: 'ETIMEDOUT' }))).toBe('serwer nie odpowiada w zadanym czasie (ETIMEDOUT)');
   });
 
-  it('dokłada odpowiedź serwera do ogólnego komunikatu imapflow, a zwykły błąd zostawia bez zmian', () => {
+  it('zastępuje ogólny komunikat imapflow odpowiedzią serwera, inny komunikat uzupełnia, a zwykły błąd zostawia bez zmian', () => {
     expect(errorMessageOf(Object.assign(new Error('Command failed'), { responseText: '[AUTHENTICATIONFAILED] Niepoprawny login albo hasło' })))
-      .toBe('Command failed: [AUTHENTICATIONFAILED] Niepoprawny login albo hasło');
+      .toBe('[AUTHENTICATIONFAILED] Niepoprawny login albo hasło');
+    expect(errorMessageOf(Object.assign(new Error('Command failed'), { responseText: ' Login failed. ' }))).toBe('Login failed.');
+    expect(errorMessageOf(Object.assign(new Error('Command failed'), { responseText: '' }))).toBe('Command failed');
+    expect(errorMessageOf(Object.assign(new Error('Unexpected close'), { responseText: 'BYE serwer kończy pracę' }))).toBe('Unexpected close: BYE serwer kończy pracę');
     expect(errorMessageOf(Object.assign(new Error('x'), { responseText: '' }))).toBe('x');
     expect(errorMessageOf(new Error('connect ECONNREFUSED'))).toBe('connect ECONNREFUSED');
     expect(errorMessageOf('tekst')).toBe('tekst');
@@ -66,14 +69,14 @@ describe('FakeMailbox', () => {
     const box = new FakeMailbox({ uidValidity: 7 });
     box.add({ uid: 1, seen: true, source: 'Subject: a\r\n\r\nx' });
     box.add({ uid: 2, seen: false, source: 'Message-ID: <b@x>\r\nSubject: b\r\n\r\ny' });
-    box.add({ uid: 3, seen: false, source: 'Subject: c\r\n\r\nz' });
+    box.add({ uid: 3, seen: false, source: 'Subject: c\r\n\r\nz', internalDate: new Date('2026-10-20T08:00:00Z') });
     const s = await fakeConnect(box)(settings, 1000);
     expect(await s.open('INBOX')).toEqual({ uidValidity: 7, uidNext: 4, unseen: 2 });
     expect(await s.unseen(1)).toEqual([2, 3]);
     expect(await s.unseen(0)).toEqual([2, 3]);
     expect(await s.unseen(3)).toEqual([]);
-    expect(await s.meta([2])).toEqual([{ uid: 2, size: expect.any(Number), messageId: '<b@x>' }]);
-    expect(await s.meta([3])).toEqual([{ uid: 3, size: expect.any(Number), messageId: null }]);
+    expect(await s.meta([2])).toEqual([{ uid: 2, size: expect.any(Number), messageId: '<b@x>', internalDate: null, from: null, subject: 'b' }]);
+    expect(await s.meta([3])).toEqual([{ uid: 3, size: expect.any(Number), messageId: null, internalDate: new Date('2026-10-20T08:00:00Z'), from: null, subject: 'c' }]);
     expect((await s.source(3)).toString()).toContain('Subject: c');
     await s.markSeen(2);
     expect(box.messages('INBOX').find((m) => m.uid === 2)?.seen).toBe(true);
@@ -87,13 +90,13 @@ describe('FakeMailbox', () => {
   });
   it('błąd logowania, gdy hasło nie pasuje; failConnect rzuca podany błąd; nieznany folder to błąd folder', async () => {
     const box = new FakeMailbox({ password: 'dobre' });
-    await expect(fakeConnect(box)({ ...settings, password: 'złe' }, 1000)).rejects.toBeInstanceOf(MailboxError);
-    await expect(fakeConnect(box)({ ...settings, password: 'złe' }, 1000)).rejects.toMatchObject({ kind: 'auth' });
+    await expect(fakeConnect(box)({ ...settings, auth: { kind: 'password' as const, password: 'złe' } }, 1000)).rejects.toBeInstanceOf(MailboxError);
+    await expect(fakeConnect(box)({ ...settings, auth: { kind: 'password' as const, password: 'złe' } }, 1000)).rejects.toMatchObject({ kind: 'auth' });
     box.password = 'złe';
-    const s = await fakeConnect(box)({ ...settings, password: 'złe' }, 1000);
+    const s = await fakeConnect(box)({ ...settings, auth: { kind: 'password' as const, password: 'złe' } }, 1000);
     await expect(s.open('Niema')).rejects.toMatchObject({ kind: 'folder' });
     box.failConnect = Object.assign(new Error('ECONNREFUSED'), { code: 'ECONNREFUSED' });
-    await expect(fakeConnect(box)({ ...settings, password: 'złe' }, 1000)).rejects.toMatchObject({ code: 'ECONNREFUSED' });
+    await expect(fakeConnect(box)({ ...settings, auth: { kind: 'password' as const, password: 'złe' } }, 1000)).rejects.toMatchObject({ code: 'ECONNREFUSED' });
   });
   it('unsee, resetUidValidity, rejectMove i size nadpisany', async () => {
     const box = new FakeMailbox({ uidValidity: 7 });
@@ -110,8 +113,47 @@ describe('FakeMailbox', () => {
   });
 });
 
+describe('metaOf', () => {
+  it('odczytuje z koperty Message-ID, nadawcę małymi literami i temat bez odstępów na brzegach', () => {
+    expect(metaOf({ uid: 7, size: 120, internalDate: new Date('2026-11-04T18:00:00Z'), envelope: {
+      messageId: '<7@x>', subject: '  Zasilanie awaryjne serwerowni ', from: [{ name: 'Jan', address: 'Jan.Nowak@Firma.PL' }],
+    } })).toEqual({ uid: 7, size: 120, messageId: '<7@x>', internalDate: new Date('2026-11-04T18:00:00Z'), from: 'jan.nowak@firma.pl', subject: 'Zasilanie awaryjne serwerowni' });
+  });
+
+  it('bez koperty i bez rozmiaru: zero, brak nadawcy, pusty temat', () => {
+    expect(metaOf({ uid: 8 })).toEqual({ uid: 8, size: 0, messageId: null, internalDate: null, from: null, subject: '' });
+    expect(metaOf({ uid: 9, envelope: { from: [{ name: 'Bez adresu' }] } })).toMatchObject({ from: null, subject: '' });
+  });
+});
+
+describe('internalDateOf', () => {
+  it('przyjmuje poprawną datę przyjęcia z imapflow, a napis, brak wartości i nieprawidłową datę zamienia na null', () => {
+    expect(internalDateOf(new Date('2026-10-20T08:00:00Z'))).toEqual(new Date('2026-10-20T08:00:00Z'));
+    // imapflow zwraca surowy napis, gdy nie potrafi odczytać daty z odpowiedzi serwera.
+    expect(internalDateOf('wczoraj rano')).toBeNull();
+    expect(internalDateOf(undefined)).toBeNull();
+    expect(internalDateOf(new Date('nie data'))).toBeNull();
+  });
+});
+
+describe('imapAuth', () => {
+  it('hasło przekazuje jako pass, a token dostępu jako accessToken dla XOAUTH2', () => {
+    expect(imapAuth({ ...settings, user: 'bramka@firma.pl', auth: { kind: 'password', password: 'tajne' } })).toEqual({ user: 'bramka@firma.pl', pass: 'tajne' });
+    expect(imapAuth({ ...settings, user: 'alarmy@firma.pl', auth: { kind: 'oauth2', accessToken: 'token-dostepu' } })).toEqual({ user: 'alarmy@firma.pl', accessToken: 'token-dostepu' });
+  });
+});
+
+describe('FakeMailbox z tokenem', () => {
+  it('przyjmuje token dostępu zgodny z atrapą i zapamiętuje sposób logowania', async () => {
+    const box = new FakeMailbox();
+    await fakeConnect(box)({ ...settings, auth: { kind: 'oauth2', accessToken: box.accessToken } }, 1000);
+    expect(box.lastAuth).toEqual({ kind: 'oauth2', accessToken: box.accessToken });
+    await expect(fakeConnect(box)({ ...settings, auth: { kind: 'oauth2', accessToken: 'obcy' } }, 1000)).rejects.toMatchObject({ kind: 'auth' });
+  });
+});
+
 describe('guardedConnect', () => {
-  const settings = { host: 'imap.przyklad.test', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', password: 'p' };
+  const settings = { host: 'imap.przyklad.test', port: 993, security: 'tls' as const, verifyCert: true, user: 'u', auth: { kind: 'password' as const, password: 'p' } };
   it('odrzuca serwer w sieci wewnętrznej z komunikatem o zmiennej, nie łącząc się', async () => {
     let connected = false;
     const connect = guardedConnect(async () => { connected = true; return {} as MailboxSession; }, async () => ['10.0.0.5'], false);

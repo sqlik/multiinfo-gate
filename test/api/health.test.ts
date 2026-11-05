@@ -36,7 +36,7 @@ describe('GET /healthz - integracje', () => {
 
   it('wariant bez szczegółów nie zdradza integracji', async () => {
     seed('Kuma', 1);
-    const res = await h.app.inject({ method: 'GET', url: '/healthz', headers: { host: '10.10.10.159:8081' } });
+    const res = await h.app.inject({ method: 'GET', url: '/healthz', remoteAddress: '10.10.10.77', headers: { host: '10.10.10.159:8081' } });
     expect(res.json()).toEqual({ status: 'ok' });
   });
 
@@ -47,7 +47,7 @@ describe('GET /healthz - integracje', () => {
     body = (await h.app.inject({ method: 'GET', url: '/healthz' })).json();
     expect(body.release).toEqual({ version: '9.9.9', url: 'https://github.com/sqlik/multiinfo-gate/releases/tag/v9.9.9' });
     expect(body.status).toBe('ok');
-    const res = await h.app.inject({ method: 'GET', url: '/healthz', headers: { host: '10.10.10.159:8081' } });
+    const res = await h.app.inject({ method: 'GET', url: '/healthz', remoteAddress: '10.10.10.77', headers: { host: '10.10.10.159:8081' } });
     expect(res.json()).toEqual({ status: 'ok' });
   });
 });

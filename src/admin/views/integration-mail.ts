@@ -1,4 +1,5 @@
-import { MAIL_IN_INTERVALS } from '../../integrations/config.ts';
+import { MAIL_IN_INTERVALS, MAIL_MAX_AGE_HOURS } from '../../integrations/config.ts';
+import type { M365State } from '../../store/m365-accounts.ts';
 import type { MailInPreview } from '../../integrations/pipeline.ts';
 import type { checkMailbox } from '../../worker/mail-in.ts';
 import type { MailFieldValues, MailFormValues } from '../mail-form.ts';
@@ -18,7 +19,14 @@ export interface MailFormOptions {
   note?: string;
   /** SMTP nieskonfigurowane: odpowiedzi do nadawcy nie zadziałają. */
   smtpConfigured: boolean;
+  /** Konta Microsoft 365 do wyboru w skrzynce logującej się kontem organizacji. */
+  m365Accounts?: Array<{ id: number; name: string; address: string | null; state: M365State }>;
 }
+
+/** Stan konta Microsoft 365 na listach wyboru: skrzynki Mail2SMS i SMTP powiadomień. */
+export const M365_STATE_WORDS: Record<M365State, string> = {
+  new: 'niezalogowane', connected: 'połączone', needs_login: 'wymaga logowania', error: 'błąd połączenia',
+};
 
 const MAX_FIELD_ROWS = 20;
 const SPARE_FIELD_ROWS = 2;
@@ -40,7 +48,69 @@ function modeSwitch(ctx: FormContext, mode: 'prosty' | 'zaawansowany'): string {
   </div>`;
 }
 
+/** Pola wspólne obu sposobów logowania: folder, częstotliwość, limit wieku, zaległe i „Sprawdź połączenie”. */
+function mailboxCommon(v: MailFormValues): string {
+  const ages: Array<[MailFormValues['maxAgeHours'], string]> = [['', 'bez limitu'], ...MAIL_MAX_AGE_HOURS.map((h): [MailFormValues['maxAgeHours'], string] => [String(h) as MailFormValues['maxAgeHours'], `${h} h`])];
+  return `<div class="field">
+      <label for="folder">Folder</label>
+      <input id="folder" name="folder" value="${esc(v.folder)}" placeholder="INBOX">
+      ${hint('Bramka przetwarza wyłącznie wiadomości nieprzeczytane. Skrzynka albo folder powinny być przeznaczone dla bramki: wiadomość otwarta w programie pocztowym zostaje oznaczona jako przeczytana i nie zostanie przetworzona')}
+    </div>
+    <div class="field">
+      <label for="intervalSec">Częstotliwość sprawdzania</label>
+      <select id="intervalSec" name="intervalSec">${MAIL_IN_INTERVALS.map((sec) => `<option value="${sec}"${v.intervalSec === String(sec) ? ' selected' : ''}>co ${esc(intervalWords(sec))}</option>`).join('')}</select>
+      ${hint('SMS jest wysyłany natychmiast po odczytaniu wiadomości. Minimalna częstotliwość to 30 sekund, ponieważ dostawcy poczty blokują konta logujące się częściej')}
+    </div>
+    <div class="field">
+      <label for="maxAgeHours">Pomijaj wiadomości starsze niż</label>
+      <select id="maxAgeHours" name="maxAgeHours">${ages.map(([value, label]) => `<option value="${value}"${v.maxAgeHours === value ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>
+      ${hint('Ustawienie chroni przed wysłaniem nieaktualnych alarmów po przerwie w dostępie do skrzynki. Wiek jest liczony od chwili przyjęcia wiadomości przez serwer pocztowy. Starsza wiadomość zostaje w skrzynce nieprzeczytana i nie powoduje wysłania SMS-a. Dla alarmów zalecany jest limit 1 h, a dla zamówień i zgłoszeń wariant bez limitu')}
+    </div>
+    <div class="field">
+      ${checkbox('backlog', v.backlog, 'Przetwórz także zaległe wiadomości nieprzeczytane')}
+      ${hint('Domyślnie bramka przetwarza wyłącznie wiadomości, które nadejdą po zapisaniu ustawień. Po zaznaczeniu przy najbliższym sprawdzeniu przetworzy także zaległe wiadomości nieprzeczytane, po 50 na jedno sprawdzenie. Przy dużej zaległości ochrona przed burzą zatrzyma wysyłkę na limicie integracji, a pozostałe wiadomości otrzymają w dzienniku wynik „limit”. Ustawienie „Pomijaj wiadomości starsze niż” obowiązuje także dla zaległych wiadomości')}
+    </div>
+    <div class="field">
+      <button class="btn btn-s" type="submit" name="action" value="polaczenie">Sprawdź połączenie</button>
+      ${hint('Bramka loguje się, otwiera folder i wyświetla liczbę wiadomości nieprzeczytanych oraz listę folderów. Niczego nie przetwarza ani nie zapisuje')}
+    </div>`;
+}
+
+/** Skrzynka Microsoft 365: konto z ekranu „Konta Microsoft 365” zamiast serwera, loginu i hasła (spec 6.1). */
+function sectionM365Mailbox(v: MailFormValues, opts: MailFormOptions): string {
+  const accounts = opts.m365Accounts ?? [];
+  const account = accounts.length === 0
+    ? `<div class="field">
+      <label>Konto Microsoft 365</label>
+      <div class="notice">Panel nie zawiera jeszcze konta Microsoft 365. Dodaj konto na ekranie Konta Microsoft 365 i zaloguj je adresem skrzynki bramki.</div>
+      <div><a class="btn btn-s" href="/microsoft-365/nowe">Dodaj konto Microsoft 365</a></div>
+    </div>`
+    : `<div class="field">
+      <label for="m365AccountId">Konto Microsoft 365</label>
+      <select id="m365AccountId" name="m365AccountId">${accounts.map((a) =>
+    `<option value="${esc(a.id)}"${String(a.id) === v.m365AccountId ? ' selected' : ''}${a.address ? ` data-address="${esc(a.address)}"` : ''}>${esc(a.name)} · ${esc(M365_STATE_WORDS[a.state])}</option>`).join('')}</select>
+      ${accounts.some((a) => a.state === 'connected')
+    ? hint('Konto, którym bramka loguje się do skrzynki. Konta dodaje się i loguje na ekranie Konta Microsoft 365')
+    : `<div class="hint">Żadne z kont nie jest połączone, dlatego skrzynka zacznie działać po zalogowaniu konta na ekranie <a href="/microsoft-365">Konta Microsoft 365</a></div>`}
+    </div>`;
+  // Podpowiedź pola pokazuje adres wybranego konta; skrypt panelu podmienia ją po zmianie konta na liście.
+  const chosen = accounts.find((a) => String(a.id) === v.m365AccountId) ?? accounts[0];
+  const placeholder = chosen?.address ?? 'alarmy@firma.pl';
+  return `<details open>
+    <summary>Skrzynka</summary>
+    <input type="hidden" name="authMode" value="m365">
+    ${account}
+    <div class="field">
+      <label for="user">Adres skrzynki</label>
+      <input id="user" name="user" value="${esc(v.user)}" placeholder="${esc(placeholder)}" data-address-of="m365AccountId" data-placeholder="alarmy@firma.pl" autocomplete="off">
+      ${hint('Puste pole oznacza adres wybranego konta. Inny adres oznacza skrzynkę współdzieloną, do której konto posiada uprawnienie pełnego dostępu')}
+    </div>
+    ${mailboxCommon(v)}
+  </details>`;
+}
+
 function sectionMailbox(v: MailFormValues, opts: MailFormOptions): string {
+  if (v.authMode === 'm365') return sectionM365Mailbox(v, opts);
   const advanced = opts.mode === 'zaawansowany';
   const securities: Array<[MailFormValues['security'], string]> = [['tls', 'TLS (połączenie szyfrowane od początku, zwykle port 993)'], ['starttls', 'STARTTLS (szyfrowanie włączane po powitaniu serwera, zwykle port 143)'], ['none', 'brak (bez szyfrowania, port 143)']];
   return `<details open>
@@ -71,28 +141,12 @@ function sectionMailbox(v: MailFormValues, opts: MailFormOptions): string {
       <input id="password" name="password" type="password" value="${esc(v.password)}" autocomplete="new-password"${opts.hasPassword ? '' : ' required'}>
       ${hint(opts.hasPassword ? 'Hasło jest zapisane. Puste pole zachowuje dotychczasowe' : 'Hasło jest przechowywane w postaci zaszyfrowanej i nie można go odczytać w panelu. W Gmailu jest to hasło aplikacji')}
     </div>
-    <div class="field">
-      <label for="folder">Folder</label>
-      <input id="folder" name="folder" value="${esc(v.folder)}" placeholder="INBOX">
-      ${hint('Bramka przetwarza wyłącznie wiadomości nieprzeczytane. Skrzynka albo folder powinny być przeznaczone dla bramki: wiadomość otwarta w programie pocztowym zostaje oznaczona jako przeczytana i nie zostanie przetworzona')}
-    </div>
-    <div class="field">
-      <label for="intervalSec">Częstotliwość sprawdzania</label>
-      <select id="intervalSec" name="intervalSec">${MAIL_IN_INTERVALS.map((sec) => `<option value="${sec}"${v.intervalSec === String(sec) ? ' selected' : ''}>co ${esc(intervalWords(sec))}</option>`).join('')}</select>
-      ${hint('SMS jest wysyłany natychmiast po odczytaniu wiadomości. Minimalna częstotliwość to 30 sekund, ponieważ dostawcy poczty blokują konta logujące się częściej')}
-    </div>
-    <div class="field">
-      ${checkbox('backlog', v.backlog, 'Przetwórz także zaległe wiadomości nieprzeczytane')}
-      ${hint('Domyślnie bramka przetwarza wyłącznie wiadomości, które nadejdą po zapisaniu ustawień. Po zaznaczeniu przy najbliższym sprawdzeniu przetworzy także zaległe wiadomości nieprzeczytane, po 50 na jedno sprawdzenie. Przy dużej zaległości ochrona przed burzą zatrzyma wysyłkę na limicie integracji, a pozostałe wiadomości otrzymają w dzienniku wynik „limit”')}
-    </div>
-    <div class="field">
-      <button class="btn btn-s" type="submit" name="action" value="polaczenie">Sprawdź połączenie</button>
-      ${hint('Bramka loguje się, otwiera folder i wyświetla liczbę wiadomości nieprzeczytanych oraz listę folderów. Niczego nie przetwarza ani nie zapisuje')}
-    </div>
+    ${mailboxCommon(v)}
   </details>`;
 }
 
 function sectionSenders(v: MailFormValues, advanced: boolean): string {
+  // Spec 6.4: w skrzynce Microsoft 365 sprawdzenie przepuszcza też pocztę wewnętrzną z domeny skrzynki oznaczoną przez Exchange.
   return `<details open>
     <summary>Kto może wysyłać</summary>
     <div class="field">
@@ -102,7 +156,9 @@ function sectionSenders(v: MailFormValues, advanced: boolean): string {
     </div>
     <div class="field">
       ${checkbox('requireAuthResults', v.requireAuthResults, 'Wymagaj potwierdzenia nadawcy przez serwer (SPF/DKIM)')}
-      ${hint('Zalecane u dostawców publicznych (Gmail, home.pl, OVH). Serwery wewnętrzne zwykle nie dodają tych nagłówków i wówczas każda wiadomość zostanie odrzucona')}
+      ${hint(v.authMode === 'm365'
+    ? 'Zalecane w skrzynce Microsoft 365. Wiadomość przechodzi, gdy serwer potwierdził SPF albo DKIM domeny nadawcy. Wiadomość od nadawcy z domeny skrzynki przechodzi także wtedy, gdy Exchange oznaczył ją jako wysłaną wewnątrz organizacji'
+    : 'Zalecane u dostawców publicznych (Gmail, home.pl, OVH). Serwery wewnętrzne zwykle nie dodają tych nagłówków i wówczas każda wiadomość zostanie odrzucona')}
     </div>
     ${advanced ? `<div class="field">
       <label for="authservId">Nazwa serwera w nagłówku Authentication-Results</label>
@@ -250,7 +306,7 @@ function sectionSample(v: MailFormValues): string {
   </details>`;
 }
 
-function connectionPanel(c: MailConnection, advanced: boolean): string {
+function connectionPanel(c: MailConnection, advanced: boolean, m365: boolean): string {
   const folders = c.folders.map((f) => `<button class="btn btn-s" type="button" data-fill="#folder" data-value="${esc(f)}" style="padding: 3px 9px; font-size: 12px;">${esc(f)}</button>`).join(' ');
   if (c.ok) {
     return `<div class="panel" style="max-width: 760px;">
@@ -261,7 +317,10 @@ function connectionPanel(c: MailConnection, advanced: boolean): string {
       : `<span class="m">${esc(c.authservId)}</span><div class="hint">Pole jest w trybie zaawansowanym</div>`}</div></div>
     </div>`;
   }
-  const titles = { auth: ['Logowanie odrzucone', 'Sprawdź login i hasło. W Gmailu wymagane jest hasło aplikacji, nie hasło do konta. W Google Workspace dostęp IMAP musi być włączony przez administratora'],
+  const titles = { auth: m365
+    ? ['Logowanie odrzucone', 'Sprawdź pisownię adresu skrzynki oraz ustawienie IMAP na karcie Poczta skrzynki bramki. Dla skrzynki współdzielonej sprawdź także, czy skrzynka bramki posiada do niej uprawnienie pełnego dostępu. Zmiana ustawienia IMAP zaczyna obowiązywać po około 30 minutach']
+    : ['Logowanie odrzucone', 'Sprawdź login i hasło. W Gmailu wymagane jest hasło aplikacji, nie hasło do konta. W Google Workspace dostęp IMAP musi być włączony przez administratora'],
+    account: ['Konto Microsoft 365 wymaga logowania', 'Zaloguj konto na ekranie Konta Microsoft 365, a następnie ponownie sprawdź połączenie'],
     network: ['Serwer nie odpowiada', 'Sprawdź nazwę serwera, port i zabezpieczenie oraz czy z maszyny bramki można nawiązać połączenie z serwerem poczty'],
     folder: ['Folder nie istnieje', 'Wpisz nazwę folderu dokładnie tak, jak podaje ją serwer. Kliknięcie nazwy na liście poniżej wpisuje ją do pola'],
     other: ['Błąd połączenia', 'Serwer odpowiedział błędem. Komunikat poniżej'] } as const;
@@ -296,7 +355,7 @@ export function mailFormPage(ctx: FormContext, v: MailFormValues, opts: MailForm
   const edit = ctx.row !== undefined;
   const action = edit ? `/integracje/${ctx.row!.id}/edytuj` : '/integracje';
   const guide = ctx.preset.guide === '' ? '' : `<details class="panel" style="max-width: 760px; padding: 0;">
-      <summary style="padding: 12px 16px;">Dane serwera IMAP: ${esc(ctx.preset.name)}</summary>
+      <summary style="padding: 12px 16px;">${v.authMode === 'm365' ? 'Przygotowanie skrzynki' : 'Dane serwera IMAP'}: ${esc(ctx.preset.name)}</summary>
       <div class="guide" style="padding: 0 16px 12px; font-size: 12.5px; line-height: 1.55;">${guideHtml(ctx.preset.guide)}</div>
     </details>`;
   const warnings = (opts.warnings ?? []).map((w) => `<div class="notice">${esc(w)}</div>`).join('');
@@ -313,7 +372,7 @@ export function mailFormPage(ctx: FormContext, v: MailFormValues, opts: MailForm
     ${opts.note ? `<div class="warn">${esc(opts.note)}</div>` : ''}
     ${opts.error ? `<div class="warn">${esc(opts.error)}</div>` : ''}
     ${guide}
-    ${opts.connection ? connectionPanel(opts.connection, opts.mode === 'zaawansowany') : ''}
+    ${opts.connection ? connectionPanel(opts.connection, opts.mode === 'zaawansowany', v.authMode === 'm365') : ''}
     ${opts.preview ? previewPanel(opts.preview) : ''}
     <div class="panel" style="max-width: 760px;">
       <form class="form" method="post" action="${action}" autocomplete="off">

@@ -51,6 +51,17 @@ function inCidr(ip: bigint, entry: string): boolean {
   return (ip & mask) === (baseN & mask);
 }
 
+/** Czy adres należy do listy adresów IP i zakresów CIDR; nazwy hostów pomija (MIG_TRUSTED_PROXIES ich nie przyjmuje). */
+export function addressInList(entries: string[], ip: string): boolean {
+  const client = toBigInt(ip);
+  if (client === null) return false;
+  return entries.some((entry) => {
+    const kind = parseSourceEntry(entry)?.kind;
+    const value = entry.trim();
+    return (kind === 'ip' && toBigInt(value) === client) || (kind === 'cidr' && inCidr(client, value));
+  });
+}
+
 /**
  * Lista źródeł integracji: adresy, zakresy i nazwy (DDNS dla NAS-a bez stałego adresu).
  * Nazwy rozwiązywane przy żądaniu z buforem, bo każde żądanie z Uptime Kumy nie może czekać na DNS.

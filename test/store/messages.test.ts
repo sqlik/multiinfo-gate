@@ -38,6 +38,17 @@ describe('MessagesRepo', () => {
     expect(messages.get('msg_1')!.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   });
 
+  it('lista pomija wiadomości systemowe, chyba że filtr wprost je obejmuje', () => {
+    const { messages, accountId, apiKeyId } = setup();
+    messages.insert(messageInput({ id: 'msg_1', accountId, apiKeyId }));
+    messages.insert(messageInput({ id: 'msg_sys', accountId, apiKeyId, system: 1 }));
+    expect(messages.list({ limit: 10, offset: 0 }).map((m) => m.id)).toEqual(['msg_1']);
+    expect(messages.list({ includeSystem: false, limit: 10, offset: 0 }).map((m) => m.id)).toEqual(['msg_1']);
+    expect(messages.list({ includeSystem: true, limit: 10, offset: 0 }).map((m) => m.id).sort()).toEqual(['msg_1', 'msg_sys']);
+    expect(messages.get('msg_sys')!.system).toBe(1);
+    expect(messages.get('msg_1')!.system).toBe(0);
+  });
+
   it('filtruje po statusie, numerze i zakresie dat', () => {
     const { messages, accountId, apiKeyId } = setup();
     messages.insert(messageInput({ id: 'msg_1', accountId, apiKeyId, dest: '48601135134' }));
@@ -202,6 +213,14 @@ describe('MessagesRepo - wątek z wiadomością przychodzącą', () => {
     expect(repo.lastTo(accountId, '24138', '48601000001', since)?.id).toBe('msg_b');
     expect(repo.lastTo(accountId, '24138', '48605000001', since)).toBeUndefined();
     expect(repo.lastTo(accountId, '24138', '48601000001', new Date('2026-08-30T00:00:00Z'))).toBeUndefined();
+  });
+
+  it('lastTo pomija wiadomości systemowe, więc odpowiedź administratora na powiadomienie nie wskazuje ich w webhooku', () => {
+    const { messages: repo, accountId, apiKeyId } = setup();
+    const base = { accountId, apiKeyId, dest: '48601000001' };
+    repo.insert(messageInput({ ...base, id: 'msg_a', createdAt: '2026-08-28T10:00:00.000Z' }));
+    repo.insert({ ...messageInput({ ...base, id: 'msg_sys', createdAt: '2026-08-29T10:00:00.000Z' }), system: 1 });
+    expect(repo.lastTo(accountId, '24138', '48601000001', new Date('2026-08-22T00:00:00Z'))?.id).toBe('msg_a');
   });
 
   it('zapisuje inReplyTo i wylicza odpowiedzi', () => {

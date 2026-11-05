@@ -28,14 +28,14 @@ describe('mailConfigToValues i mailFormToConfig', () => {
   it('konfiguracja pełna przechodzi w obie strony bez strat', () => {
     const config = {
       ...defaultMailInConfig(),
-      imap: { host: 'h', port: 143, security: 'starttls' as const, verifyCert: false, user: 'u', passRef: 'imap_password' as const },
+      imap: { host: 'h', port: 143, security: 'starttls' as const, verifyCert: false, user: 'u', passRef: 'imap_password' as const, auth: { mode: 'password' as const } },
       folder: 'Alarmy', intervalSec: 300 as const,
       senders: [{ pattern: 'jan@przyklad.pl', recipients: ['601000001', '601000002'] }, { pattern: '@przyklad.pl', recipients: [] }],
       requireAuthResults: true, recipientsFromMail: { enabled: true, where: 'body' as const }, to: { fallback: ['48601000009'] },
       clean: { cutFrom: ['Wygenerowano automatycznie'] },
       fields: [{ name: 'kod', mode: 'between' as const, after: 'Error code:', until: '(' }, { name: 'stan', mode: 'regex' as const, pattern: 'Status: (\\w+)', flags: 'i' }],
       text: { mode: 'liquid' as const, template: '{{ fields.stan }}' }, maxParts: 3, overflow: 'reject' as const,
-      after: { action: 'move' as const, folder: 'Przetworzone' }, reply: { enabled: true },
+      after: { action: 'move' as const, folder: 'Przetworzone' }, reply: { enabled: true }, maxAgeHours: 6 as const,
       condition: { mode: 'builder' as const, rules: [{ path: 'subject', op: 'contains' as const, value: 'UPS' }] },
     };
     const values = mailConfigToValues(config, base);
@@ -50,6 +50,22 @@ describe('mailConfigToValues i mailFormToConfig', () => {
     expect(back.ok && back.password).toBeNull();
     expect(needsAdvanced(config)).toBe(true);
     expect(needsAdvanced(defaultMailInConfig())).toBe(false);
+  });
+
+  it('limit wieku maila: nowy formularz zaznacza 24 h, pusta wartość oznacza brak limitu', () => {
+    expect(mailConfigToValues(defaultMailInConfig(), base).maxAgeHours).toBe('24');
+    expect(mailConfigToValues({ ...defaultMailInConfig(), maxAgeHours: null }, base).maxAgeHours).toBe('');
+    for (const [value, hours] of [['', null], ['1', 1], ['6', 6], ['24', 24]] as const) {
+      const r = mailFormToConfig({ ...v(), maxAgeHours: value }, false, engine);
+      expect(r.ok && r.config.maxAgeHours).toBe(hours);
+      expect(mailConfigToValues(r.ok ? r.config : defaultMailInConfig(), base).maxAgeHours).toBe(value);
+    }
+  });
+
+  it('limit wieku maila z przeglądarki: wartość z listy zostaje, inna albo brak pola oznacza brak limitu', () => {
+    expect(mailFormValues({ maxAgeHours: '6' }).maxAgeHours).toBe('6');
+    expect(mailFormValues({ maxAgeHours: '12' }).maxAgeHours).toBe('');
+    expect(mailFormValues({}).maxAgeHours).toBe('');
   });
 
   it('lista nadawców: jedna pozycja na linię, numery po dwukropku rozdzielone przecinkami', () => {
@@ -111,7 +127,7 @@ describe('mailFormValues i sampleMail', () => {
     const raw = await sampleMail({ ...v(), sampleRaw: 'From: Jan <jan@przyklad.test>\r\nSubject: Alarm\r\n\r\nTreść\r\n' }, NOW);
     expect(raw).toMatchObject({ from: 'jan@przyklad.test', subject: 'Alarm', textFull: 'Treść' });
     const fields = await sampleMail({ ...v(), sampleFrom: 'ups@przyklad.test', sampleSubject: 'Alarm', sampleText: 'Error code: E042' }, NOW);
-    expect(fields).toEqual({ from: 'ups@przyklad.test', fromName: '', subject: 'Alarm', textFull: 'Error code: E042', date: NOW.toISOString(), to: [], messageId: null, authResults: [], auto: false });
+    expect(fields).toEqual({ from: 'ups@przyklad.test', fromName: '', subject: 'Alarm', textFull: 'Error code: E042', date: NOW.toISOString(), to: [], messageId: null, authResults: [], exchangeAuthAs: null, auto: false });
     expect(await sampleMail(v(), NOW)).toBeNull();
     const named = await sampleMail({ ...v(), sampleFrom: 'Jan Kowalski <Jan@przyklad.test>', sampleSubject: 'A', sampleText: 'b' }, NOW);
     expect(named).toMatchObject({ from: 'jan@przyklad.test', fromName: 'Jan Kowalski' });
@@ -121,5 +137,62 @@ describe('mailFormValues i sampleMail', () => {
     const long = await sampleMail({ ...v(), sampleFrom: `${' '.repeat(30_000)}a`, sampleSubject: 'A', sampleText: 'b' }, NOW);
     expect(long).toMatchObject({ from: 'a', fromName: '' });
     expect(Date.now() - started).toBeLessThan(500);
+  });
+});
+
+describe('skrzynka Microsoft 365', () => {
+  const accounts = [{ id: 3, address: 'alarmy@firma.pl' }];
+  const m365 = (over: Partial<MailFormValues> = {}): MailFormValues => ({ ...v(), password: '', authMode: 'm365', m365AccountId: '3', user: '', host: 'evil.example', port: '143', security: 'none', ...over });
+
+  it('wymusza serwer Microsoft 365, nie wymaga hasła i bierze adres skrzynki z konta', () => {
+    const r = mailFormToConfig(m365(), false, engine, accounts);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.config.imap).toEqual({
+      host: 'outlook.office365.com', port: 993, security: 'tls', verifyCert: true, user: 'alarmy@firma.pl', passRef: 'imap_password', auth: { mode: 'm365', accountId: 3 },
+    });
+    expect(r.password).toBeNull();
+  });
+
+  it('adres skrzynki współdzielonej zostaje, małymi literami, a napis bez małpy jest odrzucany', () => {
+    const shared = mailFormToConfig(m365({ user: 'Serwis@Firma.pl' }), false, engine, accounts);
+    expect(shared.ok && shared.config.imap.user).toBe('serwis@firma.pl');
+    const bad = mailFormToConfig(m365({ user: 'serwis' }), false, engine, accounts);
+    expect(!bad.ok && bad.error).toBe('Adres skrzynki musi być adresem e-mail, na przykład alarmy@firma.pl.');
+  });
+
+  it('konto spoza listy kont jest odrzucane', () => {
+    const bad = mailFormToConfig(m365({ m365AccountId: '9' }), false, engine, accounts);
+    expect(!bad.ok && bad.error).toBe('Wybierz konto Microsoft 365 z listy.');
+  });
+
+  it('formularz i konfiguracja przechodzą w obie strony z kontem i adresem skrzynki', () => {
+    const r = mailFormToConfig(m365({ user: 'alarmy@firma.pl' }), false, engine, accounts);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const back = mailConfigToValues(r.config, base);
+    expect(back).toMatchObject({ authMode: 'm365', m365AccountId: '3', user: 'alarmy@firma.pl' });
+    expect(mailFormValues({ authMode: 'm365', m365AccountId: '3' })).toMatchObject({ authMode: 'm365', m365AccountId: '3' });
+    expect(mailFormValues({})).toMatchObject({ authMode: 'password', m365AccountId: '' });
+  });
+});
+
+describe('adres i login skrzynki bez znaków sterujących', () => {
+  const engine = new TemplateEngine();
+  const base = { name: 'Skrzynka', apiKeyId: '1', serviceId: '', orig: '', enabled: true, preset: 'poczta-m365', storePayloads: false };
+  const accounts = [{ id: 3, address: 'alarmy@firma.pl' }];
+  const values = (v: Partial<MailFormValues>): MailFormValues => ({
+    ...mailConfigToValues(defaultMailInConfig(), base), senders: '@firma.pl', password: 'Haslo1', ...v,
+  });
+
+  for (const [label, user] of [['separator SASL \\x01', 'alarmy\x01@firma.pl'], ['znak NUL', 'alarmy\x00@firma.pl'], ['DEL', 'alarmy\x7f@firma.pl']] as const) {
+    it(`Microsoft 365: ${label} w adresie skrzynki jest odrzucony`, () => {
+      expect(mailFormToConfig(values({ authMode: 'm365', m365AccountId: '3', user, password: '' }), false, engine, accounts).ok).toBe(false);
+    });
+  }
+
+  it('hasło: znak sterujący w loginie jest odrzucony', () => {
+    const r = mailFormToConfig(values({ authMode: 'password', host: 'imap.firma.pl', port: '993', user: 'alarmy\x01x' }), false, engine, accounts);
+    expect(r).toMatchObject({ ok: false, error: 'Login skrzynki nie może zawierać znaków sterujących.' });
   });
 });

@@ -5,12 +5,38 @@ import { authservIdOf } from './auth-results.ts';
 import type { MailboxErrorKind } from '../../store/mail-in.ts';
 import type { MailSecurity } from '../config.ts';
 
+/** Logowanie do skrzynki: hasłem albo tokenem dostępu Microsoft 365 (XOAUTH2). */
+export type MailboxAuth = { kind: 'password'; password: string } | { kind: 'oauth2'; accessToken: string };
+
 export interface MailboxSettings {
-  host: string; port: number; security: MailSecurity; verifyCert: boolean; user: string; password: string;
+  host: string; port: number; security: MailSecurity; verifyCert: boolean; user: string; auth: MailboxAuth;
   /** Rozwiązany adres IP, pod który idzie połączenie; `host` zostaje nazwą do TLS (SNI i certyfikat). */
   connectAddress?: string;
 }
-export interface MailMeta { uid: number; size: number; messageId: string | null }
+/**
+ * `internalDate`: chwila przyjęcia maila przez serwer (INTERNALDATE); `null`, gdy serwer jej nie podał albo jest nieczytelna.
+ * `from` i `subject` z koperty: wpis w dzienniku o mailu pominiętym przed pobraniem treści wskazuje nadawcę i temat.
+ */
+export interface MailMeta { uid: number; size: number; messageId: string | null; internalDate: Date | null; from: string | null; subject: string }
+
+type FetchedMeta = {
+  uid: number; size?: number | undefined; internalDate?: Date | string | undefined;
+  envelope?: { messageId?: string | undefined; subject?: string | undefined; from?: Array<{ address?: string | undefined }> | undefined } | undefined;
+};
+
+/** Metadane z odpowiedzi FETCH imapflow: adres nadawcy małymi literami, temat bez odstępów na brzegach. */
+export function metaOf(m: FetchedMeta): MailMeta {
+  const address = m.envelope?.from?.[0]?.address;
+  return {
+    uid: m.uid, size: m.size ?? 0, messageId: m.envelope?.messageId ?? null, internalDate: internalDateOf(m.internalDate),
+    from: typeof address === 'string' && address !== '' ? address.toLowerCase() : null, subject: (m.envelope?.subject ?? '').trim(),
+  };
+}
+
+/** Data przyjęcia z imapflow: poprawna data albo `null` (imapflow zwraca surowy napis, gdy nie umie odczytać daty). */
+export function internalDateOf(raw: Date | string | undefined): Date | null {
+  return raw instanceof Date && !Number.isNaN(raw.getTime()) ? raw : null;
+}
 
 /** Sesja ze skrzynką: wszystko, czego poller i „Sprawdź połączenie” potrzebują od IMAP. Testy podstawiają podróbkę. */
 export interface MailboxSession {
@@ -76,7 +102,9 @@ export function errorMessageOf(e: unknown): string {
   if (CODE_WORDS[code]) return `${CODE_WORDS[code]} (${code})`;
   const message = e instanceof Error ? e.message : String(e);
   const response = typeof e === 'object' && e !== null && typeof (e as { responseText?: unknown }).responseText === 'string' ? (e as { responseText: string }).responseText.trim() : '';
-  return response === '' ? message : `${message}: ${response}`;
+  if (response === '') return message;
+  // Ogólne „Command failed” imapflow nic nie wnosi: administrator widzi samą odpowiedź serwera.
+  return message === 'Command failed' ? response : `${message}: ${response}`;
 }
 
 const ERROR_CHARS = 300;
@@ -88,6 +116,18 @@ export function scrubError(message: string, secrets: string[]): string {
   // Spec 12: komunikat serwera bez żadnych adresów e-mail (login już zdjęty wyżej, inne adresy też nie są potrzebne).
   out = out.replace(/[^\s@<>"'()]+@[^\s@<>"'()]+/g, '***');
   return out.length > ERROR_CHARS ? `${out.slice(0, ERROR_CHARS - 1)}…` : out;
+}
+
+/** Sekret logowania do usunięcia z komunikatów błędów: hasło albo token dostępu. */
+export function authSecret(auth: MailboxAuth): string {
+  return auth.kind === 'password' ? auth.password : auth.accessToken;
+}
+
+/** Dane logowania dla imapflow: hasło jako `pass`, token dostępu jako `accessToken` (XOAUTH2). */
+export function imapAuth(settings: MailboxSettings): { user: string; pass: string } | { user: string; accessToken: string } {
+  return settings.auth.kind === 'password'
+    ? { user: settings.user, pass: settings.auth.password }
+    : { user: settings.user, accessToken: settings.auth.accessToken };
 }
 
 const WATCHDOG_MS = 60_000;
@@ -124,7 +164,7 @@ export const imapConnect: MailboxConnect = async (settings, timeoutMs) => {
     secure: settings.security === 'tls',
     doSTARTTLS: settings.security === 'starttls',
     tls: { rejectUnauthorized: settings.verifyCert },
-    auth: { user: settings.user, pass: settings.password },
+    auth: imapAuth(settings),
     logger: false,
     connectionTimeout: timeoutMs,
     greetingTimeout: timeoutMs,
@@ -150,8 +190,8 @@ export const imapConnect: MailboxConnect = async (settings, timeoutMs) => {
     async meta(uids) {
       if (uids.length === 0) return [];
       const out: MailMeta[] = [];
-      for await (const m of client.fetch(uids.map(uidOf).join(','), { uid: true, size: true, envelope: true }, { uid: true })) {
-        out.push({ uid: m.uid, size: m.size ?? 0, messageId: m.envelope?.messageId ?? null });
+      for await (const m of client.fetch(uids.map(uidOf).join(','), { uid: true, size: true, envelope: true, internalDate: true }, { uid: true })) {
+        out.push(metaOf(m));
       }
       return out;
     },
