@@ -397,8 +397,63 @@ describe('kanał SMS powiadomień', () => {
     expect(shown).toContain('flash-fail');
     expect(shown).toContain('wygasł');
     const overview = (await h.app.inject({ method: 'GET', url: '/przeglad', headers: { cookie: h.cookie } })).body;
-    expect(overview).toContain('Powiadomienia SMS nie działają: klucz wygasł');
+    expect(overview).toContain('Powiadomienia SMS nie działają: klucz API „Dyżur IT” wygasł 2026-08-01');
     expect(overview).toContain('href="/powiadomienia?zakladka=sms"');
+  });
+
+  const overviewBody = async () => (await h.app.inject({ method: 'GET', url: '/przeglad', headers: { cookie: h.cookie } })).body;
+
+  it('edycja klucza, która zabiera nadpis używany przez włączony kanał SMS, zostaje odrzucona', async () => {
+    const id = key('Dyżur IT', { origs: ['Firma Info', 'Dyzur IT'] });
+    h.notifications.saveSmsSettings({ enabled: true, recipients: ['48601000001'], apiKeyId: id, orig: 'Dyzur IT' }, new Date());
+    const res = await post(`/klucze/${id}/edytuj`, {
+      name: 'Dyżur IT', serviceIds: '24138', defaultServiceId: '24138', origs: 'Firma Info', defaultOrig: '',
+      maxParts: '5', ratePerMin: '60', webhookUrl: '', webhookSecret: '', expiresOn: '', noExpiry: '1',
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('Kanał powiadomień SMS wysyła z nadpisem Dyzur IT');
+    expect(h.apiKeys.get(id)!.allowedOrigs).toContain('Dyzur IT');
+  });
+
+  it('ta sama edycja przy wyłączonym kanale przechodzi', async () => {
+    const id = key('Dyżur IT', { origs: ['Firma Info', 'Dyzur IT'] });
+    h.notifications.saveSmsSettings({ enabled: false, recipients: ['48601000001'], apiKeyId: id, orig: 'Dyzur IT' }, new Date());
+    const res = await post(`/klucze/${id}/edytuj`, {
+      name: 'Dyżur IT', serviceIds: '24138', defaultServiceId: '24138', origs: 'Firma Info', defaultOrig: '',
+      maxParts: '5', ratePerMin: '60', webhookUrl: '', webhookSecret: '', expiresOn: '', noExpiry: '1',
+    });
+    expect(res.statusCode).toBe(302);
+    expect(h.apiKeys.get(id)!.allowedOrigs).not.toContain('Dyzur IT');
+  });
+
+  it('kanał z kontem wstrzymanym albo nadpisem usuniętym ze słownika konta: pasek na przeglądzie i ostrzeżenie w zakładce SMS', async () => {
+    const id = key('Dyżur IT');
+    const accountId = h.apiKeys.get(id)!.accountId;
+    h.notifications.saveSmsSettings({ enabled: true, recipients: ['48601000001'], apiKeyId: id, orig: 'Dyzur IT' }, new Date());
+    expect(await overviewBody()).not.toContain('Powiadomienia SMS nie działają');
+    h.accounts.setOrigs(accountId, [{ orig: 'Firma Info', label: null }]);
+    expect(await overviewBody()).toContain('Powiadomienia SMS nie działają: klucz API „Dyżur IT” nie może już użyć nadpisu „Dyzur IT”');
+    expect((await smsPage()).body).toContain('Kanał nie wysyła powiadomień: klucz API „Dyżur IT” nie może już użyć nadpisu „Dyzur IT”');
+    h.accounts.pause(accountId, 'Multiinfo odrzuca login (kod 2)');
+    expect(await overviewBody()).toContain('Powiadomienia SMS nie działają: konto Multiinfo „Konto Dyżur IT” jest wstrzymane');
+  });
+
+  it('ostatnia odmowa wysyłki: zakładka SMS i przegląd ją pokazują, udany SMS testowy ją usuwa', async () => {
+    const id = key('Dyżur IT');
+    h.notifications.saveSmsSettings({ enabled: true, recipients: ['48601000001'], apiKeyId: id, orig: null }, new Date());
+    h.notifications.setSmsFailure('Konto nie istnieje', new Date('2026-08-25T09:30:00Z'));
+    expect((await smsPage()).body).toContain('Ostatnia odmowa wysyłki 2026-08-25 11:30:00: „Konto nie istnieje”');
+    expect(await overviewBody()).toContain('Powiadomienia SMS nie działają: ostatnia wysyłka została odrzucona z komunikatem „Konto nie istnieje”');
+    await post('/powiadomienia/sms/test', {});
+    expect(h.notifications.smsSettings()?.lastFailure).toBeNull();
+    expect(await overviewBody()).not.toContain('Powiadomienia SMS nie działają');
+  });
+
+  it('nieudany SMS testowy zostaje zapisany jako ostatnia odmowa', async () => {
+    const id = key('Dyżur IT', { expiresAt: '2026-08-01T00:00:00.000Z' });
+    h.notifications.saveSmsSettings({ enabled: true, recipients: ['48601000001'], apiKeyId: id, orig: null }, new Date());
+    await post('/powiadomienia/sms/test', {});
+    expect(h.notifications.smsSettings()?.lastFailure?.reason).toContain('wygasł');
   });
 
   it('wyłączony kanał z kluczem wygasłym nie wyświetla paska', async () => {

@@ -97,9 +97,20 @@ describe('kanał SMS', () => {
   it('ustawienia kanału SMS: brak to null, zapis i odczyt z listą odbiorców', () => {
     expect(repo.smsSettings()).toBeNull();
     repo.saveSmsSettings({ enabled: true, recipients: ['48601000001', '48601000002'], apiKeyId: null, orig: 'Serwis' }, NOW);
-    expect(repo.smsSettings()).toEqual({ enabled: true, recipients: ['48601000001', '48601000002'], apiKeyId: null, orig: 'Serwis', updatedAt: NOW.toISOString() });
+    expect(repo.smsSettings()).toEqual({ enabled: true, recipients: ['48601000001', '48601000002'], apiKeyId: null, orig: 'Serwis', updatedAt: NOW.toISOString(), lastFailure: null });
     repo.saveSmsSettings({ enabled: false, recipients: [], apiKeyId: null, orig: null }, NOW);
     expect(repo.smsSettings()).toMatchObject({ enabled: false, recipients: [], orig: null });
+  });
+
+  it('ostatnia odmowa kanału SMS: zapis, usunięcie i zerowanie przy zapisie ustawień', () => {
+    repo.saveSmsSettings({ enabled: true, recipients: ['48601000001'], apiKeyId: null, orig: null }, NOW);
+    repo.setSmsFailure('klucz API wygasł', NOW);
+    expect(repo.smsSettings()?.lastFailure).toEqual({ at: NOW.toISOString(), reason: 'klucz API wygasł' });
+    repo.setSmsFailure(null, NOW);
+    expect(repo.smsSettings()?.lastFailure).toBeNull();
+    repo.setSmsFailure('klucz API wygasł', NOW);
+    repo.saveSmsSettings({ enabled: true, recipients: ['48601000001'], apiKeyId: null, orig: null }, NOW);
+    expect(repo.smsSettings()?.lastFailure).toBeNull();
   });
 
   it('enqueue tylko na SMS: mail none, SMS pending; pending pomija wpis, pendingSms go zwraca', () => {

@@ -53,7 +53,11 @@ export interface EnqueueInput {
   mail?: boolean; sms?: boolean;
 }
 
-export interface SmsNotifySettings { enabled: boolean; recipients: string[]; apiKeyId: number | null; orig: string | null; updatedAt: string }
+export interface SmsNotifySettings {
+  enabled: boolean; recipients: string[]; apiKeyId: number | null; orig: string | null; updatedAt: string;
+  /** Ostatnia odmowa wysyłki; `null` po udanej wysyłce albo zapisie ustawień. */
+  lastFailure: { at: string; reason: string } | null;
+}
 
 interface RawSmtp {
   host: string; port: number; security: SmtpSecurity; user: string | null; password_enc: string | null;
@@ -65,7 +69,10 @@ interface RawQueue {
   id: number; event: NotificationEvent; at: string; subject_key: string | null; dedup_key: string | null;
   summary: string; status: ChannelStatus; sent_at: string | null; sms_status: ChannelStatus;
 }
-interface RawSms { enabled: 0 | 1; recipients: string; api_key_id: number | null; orig: string | null; updated_at: string }
+interface RawSms {
+  enabled: 0 | 1; recipients: string; api_key_id: number | null; orig: string | null; updated_at: string;
+  last_failure: string | null; last_failure_at: string | null;
+}
 
 const SUMMARY_CHARS = 500;
 
@@ -232,14 +239,24 @@ export class NotificationsRepo {
   smsSettings(): SmsNotifySettings | null {
     const r = this.db.prepare('SELECT * FROM sms_notify_settings WHERE id = 1').get() as RawSms | undefined;
     if (!r) return null;
-    return { enabled: r.enabled === 1, recipients: JSON.parse(r.recipients) as string[], apiKeyId: r.api_key_id, orig: r.orig, updatedAt: r.updated_at };
+    return {
+      enabled: r.enabled === 1, recipients: JSON.parse(r.recipients) as string[], apiKeyId: r.api_key_id, orig: r.orig, updatedAt: r.updated_at,
+      lastFailure: r.last_failure === null || r.last_failure_at === null ? null : { at: r.last_failure_at, reason: r.last_failure },
+    };
   }
 
-  saveSmsSettings(input: Omit<SmsNotifySettings, 'updatedAt'>, at: Date): void {
+  /** Zapis ustawień usuwa ostatnią odmowę, bo administrator mógł właśnie usunąć jej przyczynę. */
+  saveSmsSettings(input: Omit<SmsNotifySettings, 'updatedAt' | 'lastFailure'>, at: Date): void {
     this.db.prepare(
       `INSERT INTO sms_notify_settings (id, enabled, recipients, api_key_id, orig, updated_at) VALUES (1, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET enabled = excluded.enabled, recipients = excluded.recipients, api_key_id = excluded.api_key_id,
-         orig = excluded.orig, updated_at = excluded.updated_at`,
+         orig = excluded.orig, updated_at = excluded.updated_at, last_failure = NULL, last_failure_at = NULL`,
     ).run(input.enabled ? 1 : 0, JSON.stringify(input.recipients), input.apiKeyId, input.orig, at.toISOString());
+  }
+
+  /** Ostatnia odmowa wysyłki SMS-a powiadomienia; `null` ją usuwa. */
+  setSmsFailure(reason: string | null, at: Date): void {
+    this.db.prepare('UPDATE sms_notify_settings SET last_failure = ?, last_failure_at = ? WHERE id = 1')
+      .run(reason, reason === null ? null : at.toISOString());
   }
 }

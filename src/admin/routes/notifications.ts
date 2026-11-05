@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { keyUsable } from '../../api/submit.ts';
 import { M365_SMTP } from '../../m365/oauth.ts';
 import { NOTIFICATION_EVENTS, SMS_ONLY_EVENTS, type NotificationEvent } from '../../notifications/rules.ts';
-import { sendNotificationSms } from '../../notifications/sms.ts';
+import { sendNotificationSms, smsChannelProblem } from '../../notifications/sms.ts';
 import type { RulePatch, SmtpSecurity } from '../../store/notifications.ts';
 import { InvalidPhoneError, normalizePhone } from '../../text/phone.ts';
 import { lastValidDay } from '../../time/warsaw.ts';
@@ -113,7 +113,7 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps
       title: 'Powiadomienia', active: 'powiadomienia',
       body: notificationsPage({
         tab, smtp, smtpValues: smtp ? smtpValuesOf(smtp) : EMPTY_SMTP, rules: deps.notifications.rules(), m365Accounts: m365Accounts(),
-        sms, smsValues: sms ? smsValuesOf(sms) : EMPTY_SMS, smsKeys: smsKeys(), ...over,
+        sms, smsValues: sms ? smsValuesOf(sms) : EMPTY_SMS, smsKeys: smsKeys(), smsProblem: sms?.enabled ? smsChannelProblem(deps, now()) : null, ...over,
       }),
     });
   };
@@ -258,6 +258,9 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps
     const text = `Multiinfo Gate${instance === '' ? '' : ` ${instance}`}: SMS testowy kanału powiadomień.`;
     const result = sendNotificationSms(deps, text, at);
     if (result.ok) lastTestAt = at.getTime();
+    // Wynik testu trafia także do ostatniej odmowy: udany SMS ją usuwa, odrzucony ją zapisuje.
+    if (!result.ok) deps.notifications.setSmsFailure(result.reason, at);
+    else if (settings.lastFailure !== null) deps.notifications.setSmsFailure(null, at);
     deps.audit.record({
       actor: actorOf(request.adminUserId), action: 'powiadomienia.sms.test', target: 'sms',
       meta: result.ok ? { wynik: 'ok', wiadomosci: result.ids.length } : { wynik: 'blad', powod: result.reason }, ip: request.ip,

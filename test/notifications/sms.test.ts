@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { sendNotificationSms, SYSTEM_REQUESTER, type SmsSendDeps } from '../../src/notifications/sms.ts';
+import { sendNotificationSms, smsChannelProblem, SYSTEM_REQUESTER, type SmsSendDeps } from '../../src/notifications/sms.ts';
 import { openDatabase } from '../../src/store/db.ts';
 import { AccountsRepo } from '../../src/store/accounts.ts';
-import { ApiKeysRepo, type ApiKeyInput } from '../../src/store/api-keys.ts';
+import { ApiKeysRepo, type ApiKeyInput, type ApiKeyPatch } from '../../src/store/api-keys.ts';
 import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
@@ -38,6 +38,14 @@ const key = (over: Partial<ApiKeyInput> = {}): number => deps.apiKeys.insert({
 const channel = (apiKeyId: number | null, over: Partial<{ recipients: string[]; orig: string | null; enabled: boolean }> = {}) =>
   deps.notifications.saveSmsSettings({ enabled: true, recipients: ['48601000001', '48601000002'], apiKeyId, orig: null, ...over }, NOW);
 const sent = () => deps.messages.list({ includeSystem: true, limit: 50, offset: 0 });
+const patchKey = (id: number, over: Partial<ApiKeyPatch>) => {
+  const k = deps.apiKeys.get(id)!;
+  deps.apiKeys.update(id, {
+    name: k.name, defaultServiceId: k.defaultServiceId, defaultOrig: k.defaultOrig, maxParts: k.maxParts, ratePerMin: k.ratePerMin,
+    webhookUrl: k.webhookUrl, expiresAt: k.expiresAt, serviceIds: k.allowedServiceIds, origs: k.allowedOrigs,
+    inboundSubscribed: k.inboundSubscribed, integrationsOnly: k.integrationsOnly, ...over,
+  });
+};
 
 describe('sendNotificationSms', () => {
   it('wysyła w imieniu klucza wiadomość systemową GSM-7 w jednej części na numery z ustawień', () => {
@@ -100,5 +108,55 @@ describe('sendNotificationSms', () => {
     const result = sendNotificationSms(deps, 'Test', NOW);
     expect(result.ok).toBe(false);
     expect(sent()).toEqual([]);
+  });
+});
+
+describe('smsChannelProblem', () => {
+  it('czynny kanał nie zgłasza problemu, także z nadpisem domyślnym konta', () => {
+    channel(key(), { orig: 'Dyzur IT' });
+    expect(smsChannelProblem(deps, NOW)).toBeNull();
+    channel(key({ name: 'Biuro handlowe', keyHash: 'argon2:bbb', keyPrefix: 'b1b2c3d4' }));
+    expect(smsChannelProblem(deps, NOW)).toBeNull();
+  });
+
+  it('brak ustawień, klucza albo numerów', () => {
+    expect(smsChannelProblem(deps, NOW)).toBe('kanał nie wskazuje klucza API');
+    channel(null);
+    expect(smsChannelProblem(deps, NOW)).toBe('kanał nie wskazuje klucza API');
+    channel(key(), { recipients: [] });
+    expect(smsChannelProblem(deps, NOW)).toBe('kanał nie zawiera numerów');
+  });
+
+  it('klucz odwołany albo wygasły', () => {
+    const revoked = key();
+    deps.apiKeys.revoke(revoked);
+    channel(revoked);
+    expect(smsChannelProblem(deps, NOW)).toBe('klucz API „Dyżur IT” został odwołany');
+    channel(key({ name: 'Biuro handlowe', keyHash: 'argon2:bbb', keyPrefix: 'b1b2c3d4', expiresAt: '2026-11-01T00:00:00.000Z' }));
+    expect(smsChannelProblem(deps, NOW)).toBe('klucz API „Biuro handlowe” wygasł 2026-11-01');
+  });
+
+  it('konto Multiinfo klucza wstrzymane', () => {
+    channel(key());
+    deps.accounts.pause(accountId, 'Multiinfo odrzuca login (kod 2)');
+    expect(smsChannelProblem(deps, NOW)).toBe('konto Multiinfo „Firma Info” jest wstrzymane');
+  });
+
+  it('nadpis kanału usunięty z klucza albo ze słownika konta', () => {
+    const id = key({ origs: ['Dyzur IT'] });
+    channel(id, { orig: 'Dyzur IT' });
+    patchKey(id, { origs: [] });
+    expect(smsChannelProblem(deps, NOW)).toBe('klucz API „Dyżur IT” nie może już użyć nadpisu „Dyzur IT”');
+    const other = key({ name: 'Biuro handlowe', keyHash: 'argon2:bbb', keyPrefix: 'b1b2c3d4', origs: ['Dyzur IT'] });
+    channel(other, { orig: 'Dyzur IT' });
+    deps.accounts.setOrigs(accountId, [{ orig: 'Firma Info', label: null }]);
+    expect(smsChannelProblem(deps, NOW)).toBe('klucz API „Biuro handlowe” nie może już użyć nadpisu „Dyzur IT”');
+  });
+
+  it('klucz bez dostępu do swojej domyślnej usługi', () => {
+    const id = key();
+    channel(id);
+    patchKey(id, { serviceIds: ['25000'] });
+    expect(smsChannelProblem(deps, NOW)).toBe('klucz API „Dyżur IT” nie ma dostępu do usługi 24138');
   });
 });

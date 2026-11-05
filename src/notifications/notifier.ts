@@ -20,7 +20,7 @@ type SmsPool = keyof typeof SMS_PER_DAY;
 /** Stan jednej tury `flushSms`: liczba numerów kanału, wykorzystanie pul doby w SMS-ach i pierwsza odmowa wysyłki. */
 interface SmsTurn {
   send: (text: string, now: Date) => SmsSendResult; instance: string | null; numbers: number;
-  used: Record<SmsPool, number>; failure: string | null;
+  used: Record<SmsPool, number>; failure: string | null; delivered: boolean;
 }
 
 export interface NotifierDeps {
@@ -92,13 +92,16 @@ export class Notifier implements AdminNotifier {
     if (!send) return;
     const dayAgo = new Date(now.getTime() - DAY_MS);
     const turn: SmsTurn = {
-      send, instance: this.deps.notifications.smtp()?.instanceName ?? null, numbers: settings.recipients.length, failure: null,
+      send, instance: this.deps.notifications.smtp()?.instanceName ?? null, numbers: settings.recipients.length, failure: null, delivered: false,
       used: {
         rules: this.deps.notifications.smsCountSince(RULE_POOL_EVENTS, dayAgo),
         alarm: this.deps.notifications.smsCountSince(SMS_ALARM_EVENTS, dayAgo),
       },
     };
     for (const { rule, rows } of queued) this.sendRule(rule, rows, turn, now);
+    // Ostatnia odmowa zostaje w ustawieniach kanału, a panel ją pokazuje; udana wysyłka ją usuwa.
+    if (turn.failure !== null) this.deps.notifications.setSmsFailure(turn.failure, now);
+    else if (turn.delivered && settings.lastFailure !== null) this.deps.notifications.setSmsFailure(null, now);
   }
 
   /**
@@ -126,6 +129,7 @@ export class Notifier implements AdminNotifier {
       this.deps.notifications.markSms([row.id], 'sent', now, result.ids.length);
       hourBudget -= 1;
       turn.used[pool] += result.ids.length;
+      turn.delivered = true;
       sent += 1;
     }
     if (sent > 0) log.info('powiadomienie.sms_wyslane', { event: rule.event, count: sent });

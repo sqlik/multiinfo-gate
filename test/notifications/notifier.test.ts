@@ -246,6 +246,19 @@ describe('Notifier - kanał SMS', () => {
     expect(log.error).toHaveBeenCalledWith('powiadomienie.sms_niewyslane', expect.objectContaining({ event: 'm365_disconnected', powod: 'klucz wygasł', count: 2 }));
   });
 
+  it('odmowa wysyłki zostaje zapisana w ustawieniach kanału, a następna udana wysyłka ją usuwa', () => {
+    smsOn();
+    let answer: { ok: true; ids: string[] } | { ok: false; reason: string } = { ok: false, reason: 'klucz API „Dyżur IT” nie może użyć nadpisu „Dyzur IT”' };
+    const channel = new Notifier({ notifications, jobs, log, sms: () => answer });
+    channel.notify('m365_disconnected', 'm365:1', 'x', T0);
+    channel.flushSms(T0);
+    expect(notifications.smsSettings()?.lastFailure).toEqual({ at: T0.toISOString(), reason: 'klucz API „Dyżur IT” nie może użyć nadpisu „Dyzur IT”' });
+    answer = { ok: true, ids: ['m1'] };
+    channel.notify('m365_disconnected', 'm365:2', 'x', at(5));
+    channel.flushSms(at(5));
+    expect(notifications.smsSettings()?.lastFailure).toBeNull();
+  });
+
   it('nazwa instancji z ustawień SMTP trafia do treści, a adresy e-mail z tematu znikają', () => {
     smsOn();
     smtp();

@@ -2171,9 +2171,14 @@ Bramka wysyła powiadomienie SMS w imieniu wskazanego klucza, czyli z jego konta
 limitów i nadpisu. Kanał przyjmuje każdy aktywny klucz, także klucz z opcją **Tylko integracje**.
 Lista wiadomości oznacza takie SMS-y plakietką „powiadomienie bramki”. Aplikacje klienta nie
 otrzymują ich przez API, webhook klucza ani integracje, dlatego numery administratorów i treść
-powiadomień nie opuszczają bramki. Odwołanie klucza wskazanego we włączonym kanale jest
-zablokowane. Po wygaśnięciu klucza kanał przestaje wysyłać, a przegląd wyświetla pasek
-„Powiadomienia SMS nie działają: klucz wygasł”.
+powiadomień nie opuszczają bramki.
+
+Odwołanie klucza wskazanego we włączonym kanale jest zablokowane. Bramka blokuje również usunięcie
+z tego klucza nadpisu, z którym kanał wysyła powiadomienia. Pozostałe przyczyny, na przykład
+wygaśnięcie klucza albo wstrzymanie konta Multiinfo, przegląd sygnalizuje paskiem „Powiadomienia
+SMS nie działają” z opisem przyczyny. To samo ostrzeżenie wyświetla zakładka SMS. Zakładka
+przedstawia także ostatnią odmowę wysyłki, którą usuwa następna udana wysyłka albo zapis ustawień
+kanału.
 
 Treść powiadomienia składa się z nazwy instancji, nazwy zdarzenia oraz nazwy konta albo
 integracji. Na przykład po zerwaniu konta „Dyżur IT” administrator otrzymuje SMS

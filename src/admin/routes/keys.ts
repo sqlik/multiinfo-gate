@@ -237,9 +237,15 @@ export function registerKeyRoutes(app: FastifyInstance, deps: AdminDeps, render:
     const v = formValues(body);
     const checked = check(choice, v, now());
     const targetError = checked.ok ? await webhookError(checked.webhookUrl) : null;
-    if (!checked.ok || targetError !== null) {
+    // Kanał SMS powiadomień wysyła z nadpisem tego klucza: edycja, która go zabiera, zatrzymałaby kanał bez ostrzeżenia.
+    const sms = deps.notifications.smsSettings();
+    const smsError = checked.ok && sms?.enabled && sms.apiKeyId === key.id && sms.orig !== null
+      && !v.origs.includes(sms.orig) && checked.defaultOrig !== sms.orig
+      ? `Kanał powiadomień SMS wysyła z nadpisem ${sms.orig} tego klucza. Najpierw wybierz w kanale inny nadpis albo wyłącz kanał, a następnie usuń nadpis z klucza.`
+      : null;
+    if (!checked.ok || targetError !== null || smsError !== null) {
       reply.code(400);
-      const error = checked.ok ? targetError! : checked.error;
+      const error = checked.ok ? (targetError ?? smsError!) : checked.error;
       return render.page(request, {
         title: `Klucz ${key.name}`, active: 'klucze', body: editKeyPage(choice, key, error, v, deps.integrations.listForKey(key.id)),
       });

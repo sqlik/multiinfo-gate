@@ -55,7 +55,10 @@ CREATE TABLE sms_notify_settings (
   recipients  TEXT    NOT NULL DEFAULT '[]',
   api_key_id  INTEGER REFERENCES api_keys(id) ON DELETE SET NULL,
   orig        TEXT,
-  updated_at  TEXT    NOT NULL
+  updated_at  TEXT    NOT NULL,
+  -- Ostatnia odmowa wysyłki powiadomienia SMS; następna udana wysyłka albo zapis ustawień ją usuwa.
+  last_failure    TEXT,
+  last_failure_at TEXT
 );
 
 -- Wiadomość systemowa: SMS kanału powiadomień wysłany w imieniu klucza. Nie pojawia się w API, webhooku

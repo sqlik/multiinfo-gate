@@ -2,6 +2,7 @@ import { eventDescription, eventLabel, SMS_ONLY_EVENTS, type NotificationEvent }
 import type { M365State } from '../../store/m365-accounts.ts';
 import type { RuleRow, SmsNotifySettings, SmtpAuthMode, SmtpSecurity, SmtpSettings } from '../../store/notifications.ts';
 import { M365_STATE_WORDS } from './integration-mail.ts';
+import { warsawStamp } from '../../time/warsaw.ts';
 import { checkbox, radio } from './integrations.ts';
 import { esc } from './layout.ts';
 
@@ -56,6 +57,8 @@ export interface NotificationsPageData {
   sms?: SmsNotifySettings | null;
   smsValues?: SmsFormValues;
   smsKeys?: SmsKeyOption[];
+  /** Powód, dla którego zapisany i włączony kanał nie wyśle powiadomienia, albo `null`. */
+  smsProblem?: string | null;
   /** Wartości reguł do ponownego narysowania po błędzie (surowe pola). */
   ruleValues?: Record<string, string> | null;
   /** Konta Microsoft 365 do wyboru przy logowaniu kontem organizacji. */
@@ -103,10 +106,15 @@ function smsPanel(d: NotificationsPageData): string {
     : chosen?.expiresOn
       ? `<div class="hint">Wybrany klucz jest ważny do ${esc(chosen.expiresOn)}. Po tej dacie kanał przestaje wysyłać powiadomienia, a przegląd wyświetla ostrzeżenie</div>`
       : '';
+  // Wygasły klucz ma własne ostrzeżenie przy polu klucza.
+  const problem = d.sms?.enabled && d.smsProblem && !chosen?.expired
+    ? `<div class="warn">Kanał nie wysyła powiadomień: ${esc(d.smsProblem)}</div>` : '';
+  const failure = d.sms?.lastFailure
+    ? `<div class="warn">Ostatnia odmowa wysyłki ${esc(warsawStamp(d.sms.lastFailure.at))}: „${esc(d.sms.lastFailure.reason.replace(/\.$/, ''))}”</div>` : '';
   return `<div class="panel" style="max-width: 760px;">
         <div class="panel-h"><div class="lab">Kanał SMS</div>
           ${d.sms ? `<span class="m dim">zapisano ${esc(d.sms.updatedAt.slice(0, 10))}</span>` : '<span class="dim">nieskonfigurowany</span>'}</div>
-        ${error}
+        ${error}${problem}${failure}
         <form class="form" method="post" action="/powiadomienia/sms">
           <div class="field">
             ${checkbox('enabled', v.enabled, 'Wysyłaj powiadomienia SMS')}
