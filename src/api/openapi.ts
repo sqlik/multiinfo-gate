@@ -226,7 +226,8 @@ const BLOK_LINKOW: JsonSchema = {
       enum: ['disabled_by_key', 'forced_by_key', 'domain_unavailable', 'campaign_links_disabled'],
       description: 'Ustawienie albo stan kampanii, które zmieniają wynik wybrany przez wysyłającego. Wartość disabled_by_key'
         + ' oznacza skracanie wyłączone przy kluczu, forced_by_key oznacza skracanie wymuszone przy kluczu, a domain_unavailable'
-        + ' oznacza wyłączoną domenę skracacza, przez co linki zostały wysłane bez zmian. Wartość campaign_links_disabled oznacza'
+        + ' oznacza wyłączoną domenę skracacza albo niedziałający serwer krótkich linków, przez co linki zostały wysłane bez zmian.'
+        + ' Wartość campaign_links_disabled oznacza'
         + ' kampanię z wyłączonymi linkami, dlatego krótkie linki tej wysyłki prowadzą do strony „Link wygasł” do czasu'
         + ' włączenia linków kampanii w panelu',
     },

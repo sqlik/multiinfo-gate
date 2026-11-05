@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../src/api/errors.ts';
 import { isCode } from '../../src/links/codes.ts';
 import {
-  createCodes, fitPrepared, linksBlock, materialize, openCampaign, prepareLinks, shortUrl,
+  createCodes, fitPrepared, linksBlock, materialize, onceSettings, openCampaign, prepareLinks, shortUrl,
   type LinkRequest, type PreparedText,
 } from '../../src/links/shortener.ts';
 import { AccountsRepo } from '../../src/store/accounts.ts';
@@ -143,6 +143,38 @@ describe('prepareLinks', () => {
     expect(errorCode(() => prepare('Oferta https://firma.pl/o', { campaign: 'x'.repeat(101) }))).toBe('invalid_campaign');
     expect(errorCode(() => prepare('Oferta https://firma.pl/o', { campaign: '   ' }))).toBe('invalid_campaign');
     expect(errorCode(() => prepare('Oferta https://firma.pl/o', { campaign: 'x'.repeat(100) }))).toBeUndefined();
+  });
+
+  it('serwer krótkich linków nie działa: linki bez zmian i zgłoszenie domain_unavailable, także przy kluczu „Zawsze”', () => {
+    for (const mode of ['sender', 'always'] as const) {
+      const { apiKeyId, deps } = setup({ mode });
+      const down = { ...deps, linksServer: { available: () => false } };
+      expect(prepareLinks(down, apiKeyId, 'Oferta https://firma.pl/o', {}, {}), mode).toEqual({
+        text: 'Oferta https://firma.pl/o', slots: [], info: null, notice: 'domain_unavailable',
+      });
+      expect(prepareLinks(down, apiKeyId, 'Oferta https://firma.pl/o', { shorten: true, campaign: 'wiosna' }, {}).notice, mode)
+        .toBe('domain_unavailable');
+    }
+  });
+
+  it('serwer krótkich linków nie działa: domena spoza klucza i błędna nazwa kampanii nadal kończą się błędem', () => {
+    const { apiKeyId, deps } = setup();
+    const down = { ...deps, linksServer: { available: () => false } };
+    expect(errorCode(() => prepareLinks(down, apiKeyId, 'Oferta https://firma.pl/o', { domain: 'obca-domena.pl' }, {})))
+      .toBe('link_domain_not_allowed');
+    expect(errorCode(() => prepareLinks(down, apiKeyId, 'Oferta https://firma.pl/o', { campaign: ' ' }, {}))).toBe('invalid_campaign');
+  });
+
+  it('działający serwer krótkich linków nie zmienia wyniku', () => {
+    const { apiKeyId, deps } = setup();
+    const up = { ...deps, linksServer: { available: () => true } };
+    expect(prepareLinks(up, apiKeyId, 'Oferta https://firma.pl/o', {}, {}).text).toBe('Oferta https://l.firma.pl/0000000');
+  });
+
+  it('onceSettings zachowuje stan serwera krótkich linków', () => {
+    const { apiKeyId, deps } = setup();
+    const once = onceSettings({ ...deps, linksServer: { available: () => false } });
+    expect(prepareLinks(once, apiKeyId, 'Oferta https://firma.pl/o', {}, {}).notice).toBe('domain_unavailable');
   });
 
   it('nie zmienia SMS-a powiadomień bramki i nie odczytuje ustawień klucza', () => {

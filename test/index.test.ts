@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -109,6 +110,35 @@ describe('startGate', () => {
     await running.stop();
     running = null;
     await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toThrow();
+  });
+
+  it('zajęty port serwera przekierowań nie zatrzymuje bramki: API i panel działają, a dziennik podaje przyczynę', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'mig-start-'));
+    const blocker = createServer();
+    await new Promise<void>((resolve) => blocker.listen(0, '127.0.0.1', resolve));
+    const busy = (blocker.address() as AddressInfo).port;
+    const entries: Array<{ level: string; msg: string; fields?: Record<string, unknown> }> = [];
+    const push = (level: string) => (msg: string, fields?: Record<string, unknown>) => { entries.push({ level, msg, ...(fields ? { fields } : {}) }); };
+    const log = { error: push('error'), warn: push('warn'), info: push('info'), debug() {} };
+    try {
+      running = await startFromEnv({
+        MIG_MASTER_KEY: randomBytes(32).toString('base64'), MIG_DATA_DIR: dir,
+        MIG_API_PORT: '0', MIG_ADMIN_PORT: '0', MIG_LINKS_PORT: String(busy), MIG_API_HOST: '127.0.0.1',
+      }, { log });
+      expect(running.mode).toBe('normal');
+      expect(running.linksPort).toBeUndefined();
+      expect((await fetch(`http://127.0.0.1:${running.apiPort}/healthz`)).status).toBe(200);
+      expect((await fetch(`http://127.0.0.1:${running.adminPort}/healthz`)).status).toBe(200);
+      expect(entries.filter((e) => e.level === 'error')).toEqual([{
+        level: 'error', msg: 'linki.serwer_nie_dziala',
+        fields: { host: '127.0.0.1', port: busy, code: 'EADDRINUSE', help: problemUrl('serwer-krotkich-linkow') },
+      }]);
+      expect(entries.find((e) => e.msg === 'bramka.start')?.fields).toMatchObject({ linki: 'nie działa' });
+      await running.stop();
+      running = null;
+    } finally {
+      await new Promise<void>((resolve) => blocker.close(() => resolve()));
+    }
   });
 
   it('nie startuje bez klucza głównego', () => {

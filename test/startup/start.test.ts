@@ -109,13 +109,18 @@ describe('start bramki', () => {
     await expect(start(keyA, { MIG_API_HOST: '127.0.0.1', MIG_API_PORT: String(port) })).rejects.toMatchObject({ code: 'EADDRINUSE' });
   });
 
-  it('zajęty port przekierowań kończy start błędem i zwalnia bazę dla następnego startu', async () => {
+  it('zajęty port przekierowań nie zatrzymuje startu, a zatrzymanie bramki zwalnia bazę dla następnego startu', async () => {
+    // Decyzja z 2026-11-06: serwer krótkich linków nie może odebrać klientowi wysyłki SMS-ów po aktualizacji.
     blocker = createServer();
     await new Promise<void>((resolve) => blocker!.listen(0, '127.0.0.1', () => resolve()));
     const port = (blocker.address() as { port: number }).port;
-    await expect(start(keyA, { MIG_LINKS_HOST: '127.0.0.1', MIG_LINKS_PORT: String(port) })).rejects.toMatchObject({ code: 'EADDRINUSE' });
+    running = await start(keyA, { MIG_LINKS_HOST: '127.0.0.1', MIG_LINKS_PORT: String(port) });
+    expect(running.mode).toBe('normal');
+    expect(running.linksPort).toBeUndefined();
+    await running.stop();
     running = await start(keyA);
     expect(running.mode).toBe('normal');
+    expect(running.linksPort).toBeGreaterThan(0);
   });
 
   it('świeża instalacja, która nie wystartowała, nie dostaje potem kopii pustej bazy', async () => {

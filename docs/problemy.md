@@ -65,6 +65,9 @@ Zatrzymaj ten program albo zmień port bramki zmienną `MIG_API_PORT` albo `MIG_
 (rozdział 7.7 [Uruchomienia](uruchomienie.md)). Zajęty port to jedyna awaria startu, przy której
 bramka nie pokazuje strony z przyczyną, bo strony nie ma na czym podać.
 
+Zajęty port serwera krótkich linków, domyślnie 8082, nie zatrzymuje bramki. Opis znajdziesz
+w punkcie [Serwer krótkich linków nie działa](#serwer-krotkich-linkow).
+
 ## Nie znam loginu i hasła do panelu {#pierwsze-konto}
 
 Objaw: ekran logowania odrzuca dane, na przykład `admin` i `admin`.
@@ -573,6 +576,31 @@ Wynik pozytywny potwierdza więc całą drogę za jednym razem.
 
 Domena niesprawdzona albo z nieudanym sprawdzeniem może zostać użyta przy kluczu. Sprawdzenie nie
 blokuje pracy, ponieważ w niektórych sieciach wynik negatywny nie oznacza awarii.
+
+## Serwer krótkich linków nie działa {#serwer-krotkich-linkow}
+
+Objaw: przegląd panelu i element **Skracacz linków** wyświetlają pasek „Serwer krótkich linków nie
+działa”. Dziennik zawiera wpis `linki.serwer_nie_dziala` z adresem, portem i kodem błędu.
+
+Serwer krótkich linków przyjmuje kliknięcia odbiorców na osobnym porcie, domyślnie 8082. Gdy bramka
+nie może uruchomić nasłuchu na tym porcie, pozostałe funkcje działają bez zmian: API, panel, wysyłka
+i odbiór. Do czasu usunięcia przyczyny bramka nie skraca linków i wysyła je w pełnej postaci,
+a odpowiedź API zawiera wtedy zgłoszenie `domain_unavailable`. Krótkie linki wysłane wcześniej nie
+otwierają się, dopóki serwer nie działa.
+
+Najczęstszą przyczyną jest inny program, który zajmuje port 8082. Dziennik podaje wtedy kod
+`EADDRINUSE`. Program, który zajmuje port, wskazuje polecenie:
+
+```bash
+sudo ss -ltnp | grep ':8082'
+```
+
+W kontenerze LXC pracujesz jako `root`, więc wpisz polecenie bez `sudo`.
+
+Zatrzymaj ten program albo zmień port serwera krótkich linków zmienną `MIG_LINKS_PORT`. Opis
+zmiennej zawiera rozdział 7.7 [Uruchomienia](uruchomienie.md). Po zmianie portu skieruj na nowy numer
+serwer pośredniczący domen skracacza, a następnie uruchom bramkę ponownie. Pasek znika, gdy serwer
+krótkich linków zacznie działać.
 
 ## Jak zgłosić problem {#zgloszenie}
 

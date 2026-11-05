@@ -1,3 +1,4 @@
+import type { LinksServerState } from '../links/server-state.ts';
 import { randomBytes } from 'node:crypto';
 import type { InstallKind } from '../config/install.ts';
 import { problemUrl } from '../docs-links.ts';
@@ -88,6 +89,8 @@ export interface AdminDeps {
   linkDomains: LinkDomainsRepo;
   campaigns: CampaignsRepo;
   shortLinks: ShortLinksRepo;
+  /** Stan serwera przekierowań: przyczyna pokazywana na przeglądzie i w elemencie „Skracacz linków”. */
+  linksServer?: Pick<LinksServerState, 'available' | 'problem'>;
   /** Tokeny sprawdzenia domeny skracacza, wspólne z serwerem przekierowań, który na nie odpowiada. */
   domainChecks: DomainChecks;
   /** Pobranie tokenu przy sprawdzeniu domeny; testy podstawiają atrapę. Nazwę rozwiązuje `resolve`. */

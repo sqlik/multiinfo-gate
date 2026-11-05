@@ -13,6 +13,7 @@ import { segmentText } from '../text/segment.ts';
 import { CODE_LENGTH, PLACEHOLDER_CODE, newCode as randomCode } from './codes.ts';
 import { findLinks, hostOf } from './detect.ts';
 import { decideShortening, normalizeDomain, targetAllowed, type LinkNotice } from './policy.ts';
+import type { LinksServerState } from './server-state.ts';
 
 const DAY_MS = 86_400_000;
 /** Kod i adres docelowy zostają w bazie 30 dni po wygaśnięciu linku. */
@@ -32,7 +33,11 @@ export interface LinkInfo {
 }
 /** Szablon: treść z `shortUrl(domain, PLACEHOLDER_CODE)` w miejscu każdego skracanego linku. `info` null, gdy nic nie jest skracane. */
 export interface PreparedText { text: string; slots: LinkSlot[]; info: LinkInfo | null; notice: LinkNotice | null }
-export type ShortenerDeps = { apiKeys: Pick<ApiKeysRepo, 'linkSettings'>; linkDomains: Pick<LinkDomainsRepo, 'get' | 'byDomain'> };
+export type ShortenerDeps = {
+  apiKeys: Pick<ApiKeysRepo, 'linkSettings'>; linkDomains: Pick<LinkDomainsRepo, 'get' | 'byDomain'>;
+  /** Stan serwera przekierowań; bez niego bramka przyjmuje, że serwer działa. */
+  linksServer?: Pick<LinksServerState, 'available'>;
+};
 export interface LinkPersistDeps {
   campaigns: Pick<CampaignsRepo, 'open' | 'addTarget'>;
   shortLinks: Pick<ShortLinksRepo, 'insert' | 'exists'>;
@@ -62,6 +67,7 @@ export function onceSettings(deps: ShortenerDeps): ShortenerDeps {
   const cache = new Map<number, KeyLinkSettings>();
   return {
     linkDomains: deps.linkDomains,
+    ...(deps.linksServer ? { linksServer: deps.linksServer } : {}),
     apiKeys: {
       linkSettings: (id: number) => {
         let settings = cache.get(id);
@@ -108,7 +114,8 @@ export function prepareLinks(deps: ShortenerDeps, apiKeyId: number, text: string
   const decision = decideShortening(settings.mode, req.shorten);
   if (!decision.shorten) return unchanged(text, decision.notice);
   const domain = pickDomain(deps, settings, req.domain);
-  if (domain === null) return unchanged(text, 'domain_unavailable');
+  // Krótki link bez działającego serwera przekierowań nigdzie nie prowadzi, dlatego link zostaje w pełnej postaci.
+  if (domain === null || deps.linksServer?.available() === false) return unchanged(text, 'domain_unavailable');
 
   const bare = domain.bareLinks === 1;
   const short = shortUrl(domain.domain, PLACEHOLDER_CODE, bare);

@@ -1,3 +1,4 @@
+import type { LinksServerState } from '../links/server-state.ts';
 import fastifyFormbody from '@fastify/formbody';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { EnrichGet } from '../integrations/enrich.ts';
@@ -48,6 +49,8 @@ export interface ApiDeps {
   linkDomains: LinkDomainsRepo;
   campaigns: CampaignsRepo;
   shortLinks: ShortLinksRepo;
+  /** Stan serwera przekierowań; gdy nie działa, wysyłki zostawiają linki w pełnej postaci. */
+  linksServer?: Pick<LinksServerState, 'available'>;
   /** Integracje: `/hooks/{id}` i to, czego potok potrzebuje. */
   integrations: IntegrationsRepo;
   integrationEvents: IntegrationEventsRepo;

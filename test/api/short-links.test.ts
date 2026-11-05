@@ -28,6 +28,8 @@ let jobs: JobsRepo;
 let messages: MessagesRepo;
 let packages: PackagesRepo;
 let campaigns: CampaignsRepo;
+/** Stan serwera krótkich linków widziany przez API; testy zajętego portu ustawiają false. */
+let linksServerUp = true;
 let shortLinks: ShortLinksRepo;
 
 beforeEach(async () => {
@@ -62,6 +64,7 @@ beforeEach(async () => {
   app = buildApiServer({
     accounts, apiKeys, messages, events: new MessageEventsRepo(db), jobs, packages, clients: {} as never,
     inbound: new InboundMessagesRepo(db), rateLimiter: new RateLimiter(), now: () => NOW, ...deps,
+    linksServer: { available: () => linksServerUp },
   });
   await app.ready();
 });
@@ -150,6 +153,23 @@ describe('POST /v1/messages z krótkimi linkami', () => {
     expect(res.json().links).toBeUndefined();
     expect(campaigns.byName(apiKeyId, 'wiosna')).toBeUndefined();
     expect(messages.get(res.json().id)!.campaignId).toBeNull();
+  });
+
+  it('serwer krótkich linków nie działa: wiadomość i rozsyłka z pełnymi linkami, bez kodów i ze zgłoszeniem domain_unavailable', async () => {
+    linksServerUp = false;
+    try {
+      const message = await post('/v1/messages', { to: '48601000001', text: 'Oferta https://firma.pl/a', campaign: 'wiosna' });
+      expect(message.statusCode).toBe(202);
+      expect(message.json().links).toMatchObject({ shortened: 0, notice: 'domain_unavailable' });
+      const pkg = await post('/v1/packages', { recipients: [{ to: '48601000001' }, { to: '48601000002' }], defaultText: 'Oferta https://firma.pl/b' });
+      expect(pkg.statusCode).toBe(202);
+      expect(pkg.json().links).toMatchObject({ shortened: 0, notice: 'domain_unavailable' });
+      expect(sendTexts()).toEqual(['Oferta https://firma.pl/a']);
+      expect(packages.get(pkg.json().id)!.defaultText).toBe('Oferta https://firma.pl/b');
+      expect(campaigns.byName(apiKeyId, 'wiosna')).toBeUndefined();
+    } finally {
+      linksServerUp = true;
+    }
   });
 
   it('odrzuca domenę skracacza spoza domen klucza', async () => {

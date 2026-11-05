@@ -1,3 +1,5 @@
+import type { LinksServerProblem } from '../../links/server-state.ts';
+import { linksServerAlert } from './links.ts';
 import type { AccountRow } from '../../store/accounts.ts';
 import type { MessageRow } from '../../store/messages.ts';
 import { describeSubstatus } from '../../multiinfo/status.ts';
@@ -29,6 +31,8 @@ export interface OverviewData {
   m365NeedsLogin?: Array<{ id: number; name: string }>;
   /** Powód, dla którego włączony kanał SMS powiadomień nie wysyła, albo `null`. */
   smsProblem?: string | null;
+  /** Nieudany nasłuch serwera krótkich linków; `null` bez paska. */
+  linksServer?: LinksServerProblem | null;
 }
 
 /** „1 integracja zgłosiła błąd”, „3 integracje zgłosiły błąd”, „5 integracji zgłosiło błąd”. */
@@ -85,6 +89,9 @@ function alerts(data: OverviewData, now: Date): string {
       <a href="${problemUrl('wersja-node')}" target="_blank" rel="noopener noreferrer">Jak zaktualizować</a>
     </div>`);
   }
+
+  const linksServer = linksServerAlert(data.linksServer ?? null);
+  if (linksServer !== '') items.push(linksServer);
 
   if (data.smsProblem) {
     items.push(`<div class="alert stop">

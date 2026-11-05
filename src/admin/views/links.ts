@@ -1,5 +1,6 @@
 import { LINKS_DOCS_URL, problemUrl } from '../../docs-links.ts';
 import { parseCheckDetail, type DomainCheckStep } from '../../links/domains.ts';
+import type { LinksServerProblem } from '../../links/server-state.ts';
 import type { LinkDomainRow } from '../../store/link-domains.ts';
 import { warsawStamp } from '../../time/warsaw.ts';
 import { esc } from './layout.ts';
@@ -32,7 +33,23 @@ export function keyCount(n: number): string {
   return `${n} kluczy`;
 }
 
-export function linkDomainListPage(views: LinkDomainView[]): string {
+/** Czerwony pasek na przeglądzie i w elemencie „Skracacz linków”, gdy serwer przekierowań nie nasłuchuje. */
+export function linksServerAlert(problem: LinksServerProblem | null): string {
+  if (problem === null) return '';
+  const cause = problem.code === 'EADDRINUSE'
+    ? `port ${problem.port} zajmuje inny program.`
+    : `bramka nie może nasłuchiwać na adresie ${problem.host}:${problem.port}. System zgłasza błąd ${problem.code}.`;
+  return `<div class="alert stop">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="sq"></div>
+        <div>Serwer krótkich linków nie działa, ponieważ ${esc(cause)}
+          Do czasu usunięcia przyczyny bramka wysyła linki w pełnej postaci, bez skracania.</div>
+      </div>
+      <a href="${problemUrl('serwer-krotkich-linkow')}" target="_blank" rel="noopener noreferrer">Jak rozwiązać</a>
+    </div>`;
+}
+
+export function linkDomainListPage(views: LinkDomainView[], problem: LinksServerProblem | null = null): string {
   const rows = views.length === 0
     ? '<tr><td class="dim" colspan="6">Brak domen skracacza. Dodaj domenę, aby bramka zamieniała linki w SMS-ach na krótkie linki tej domeny.</td></tr>'
     : views.map((v) => `<tr>
@@ -58,6 +75,7 @@ export function linkDomainListPage(views: LinkDomainView[]): string {
     <a class="btn btn-p" href="/skracacz/nowa">Dodaj domenę</a>
   </div>
   <div class="scroll">
+    ${linksServerAlert(problem)}
     <div class="panel">
       <table>
         <tr>

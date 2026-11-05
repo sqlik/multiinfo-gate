@@ -43,6 +43,7 @@ import { CampaignsRepo } from './store/campaigns.ts';
 import { LinkDomainsRepo } from './store/link-domains.ts';
 import { ShortLinksRepo } from './store/short-links.ts';
 import { DomainChecks } from './links/domain-checks.ts';
+import { LinksServerState } from './links/server-state.ts';
 import { emitLinkOpened } from './links/events.ts';
 import { buildLinksServer } from './links/server.ts';
 import { fetchToken } from './m365/oauth.ts';
@@ -155,7 +156,9 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const linkDomains = new LinkDomainsRepo(db);
   const campaigns = new CampaignsRepo(db);
   const shortLinks = new ShortLinksRepo(db);
-  const links = { linkDomains, campaigns, shortLinks };
+  // Stan serwera przekierowań trafia razem z repozytoriami skracacza do każdej drogi wysyłki i do panelu.
+  const linksServer = new LinksServerState();
+  const links = { linkDomains, campaigns, shortLinks, linksServer };
   const notifier = new Notifier({
     notifications, jobs, log,
     sms: (text, now) => sendNotificationSms({ accounts, apiKeys, messages, events, jobs, inbound, notifications, ...links }, text, now),
@@ -222,7 +225,6 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   try {
     await api.listen({ port: config.apiPort, host: config.apiHost });
     await admin.listen({ port: config.adminPort, host: config.adminHost });
-    await redirects.listen({ port: config.linksPort, host: config.linksHost });
     settings.setGateVersion(GATE_VERSION, new Date());
   } catch (error) {
     await api.close();
@@ -231,6 +233,25 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     clients.closeAll();
     db.close();
     throw error;
+  }
+  // Serwer przekierowań, którego nie da się uruchomić, nie zatrzymuje bramki: wysyłka działa bez skracania,
+  // a panel i dziennik podają przyczynę, na przykład port zajęty przez inny program.
+  try {
+    await redirects.listen({ port: config.linksPort, host: config.linksHost });
+  } catch (error) {
+    // Inny błąd niż nasłuch, na przykład wadliwa wtyczka serwera, jest błędem programu i zatrzymuje start jak dotąd.
+    if (!isListenError(error)) {
+      await api.close();
+      await admin.close();
+      await redirects.close();
+      clients.closeAll();
+      db.close();
+      throw error;
+    }
+    const code = (error as { code?: unknown }).code;
+    const problem = { host: config.linksHost, port: config.linksPort, code: typeof code === 'string' ? code : 'nieznany' };
+    linksServer.failed(problem);
+    log.error('linki.serwer_nie_dziala', { ...problem, help: problemUrl('serwer-krotkich-linkow') });
   }
   backups.start();
   worker.start();
@@ -242,7 +263,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const running: RunningGate = {
     apiPort: portOf(api.server.address()),
     adminPort: portOf(admin.server.address()),
-    linksPort: portOf(redirects.server.address()),
+    ...(linksServer.available() ? { linksPort: portOf(redirects.server.address()) } : {}),
     apiHost: config.apiHost,
     adminHost: config.adminHost,
     linksHost: config.linksHost,
@@ -265,7 +286,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   log.info('bramka.start', {
     api: `${running.apiHost}:${running.apiPort}`,
     panel: `${running.adminHost}:${running.adminPort}`,
-    linki: `${running.linksHost}:${running.linksPort}`,
+    linki: linksServer.available() ? `${running.linksHost}:${running.linksPort}` : 'nie działa',
     queueDepth: jobs.depth(),
     webhookAllowPrivate: config.webhookAllowPrivate,
     inboundTimeoutMs: config.inboundTimeoutMs,

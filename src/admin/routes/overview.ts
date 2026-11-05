@@ -42,6 +42,7 @@ export function registerOverviewRoutes(app: FastifyInstance, deps: AdminDeps, re
         node: nodeMinimum === null ? null : { installed: plainVersion(nodeVersion), minimum: nodeMinimum },
         m365NeedsLogin: (deps.m365Accounts?.list() ?? []).filter((a) => a.state === 'needs_login').map((a) => ({ id: a.id, name: a.name })),
         smsProblem: smsProblem ?? (sms?.enabled && sms.lastFailure ? lastFailureText(sms.lastFailure.reason) : null),
+        linksServer: deps.linksServer?.problem() ?? null,
       }, at),
     });
   });

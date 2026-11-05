@@ -1,3 +1,4 @@
+import type { LinksServerState } from '../../src/links/server-state.ts';
 import { randomBytes } from 'node:crypto';
 import type { CertificateView } from '../../src/multiinfo/client.ts';
 import { authenticator } from 'otplib';
@@ -117,7 +118,8 @@ function makeProbeStub(): ProbeStub {
  */
 export async function startAdminHarness(
   now = new Date('2026-08-25T10:00:00Z'),
-  opts: { totp?: boolean; allowPrivateWebhooks?: boolean; allowPrivateMail?: boolean; log?: Logger; install?: InstallKind | null; nodeVersion?: string; trustedProxies?: string[] } = {},
+  opts: { totp?: boolean; allowPrivateWebhooks?: boolean; allowPrivateMail?: boolean; log?: Logger; install?: InstallKind | null; nodeVersion?: string; trustedProxies?: string[];
+    linksServer?: Pick<LinksServerState, 'problem'> } = {},
 ): Promise<AdminHarness> {
   const masterKey = randomBytes(32);
   const db = openDatabase(':memory:');
@@ -194,6 +196,7 @@ export async function startAdminHarness(
     ...(opts.log ? { log: opts.log } : {}),
     ...(opts.install !== undefined ? { install: opts.install } : {}),
     ...(opts.nodeVersion !== undefined ? { nodeVersion: opts.nodeVersion } : {}),
+    ...(opts.linksServer ? { linksServer: opts.linksServer } : {}),
   });
   await app.ready();
 

@@ -62,7 +62,7 @@ export function registerLinkRoutes(app: FastifyInstance, deps: AdminDeps, render
 
   app.get('/skracacz', async (request, reply) => {
     const views = deps.linkDomains.list().map((row) => ({ row, keys: deps.linkDomains.keysUsing(row.id).length }));
-    return html(reply).send(render.page(request, { title: 'Skracacz linków', active: 'skracacz', body: linkDomainListPage(views) }));
+    return html(reply).send(render.page(request, { title: 'Skracacz linków', active: 'skracacz', body: linkDomainListPage(views, deps.linksServer?.problem() ?? null) }));
   });
 
   app.get('/skracacz/nowa', async (request, reply) => html(reply).send(formPage(request, {
