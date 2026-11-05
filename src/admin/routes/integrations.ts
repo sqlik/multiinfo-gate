@@ -271,12 +271,12 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
    */
   const mailValuesOf = (preset: Preset, row?: IntegrationRow): MailFormValues => {
     if (row) {
-      return mailConfigToValues(row.config as MailInConfig, { name: row.name, apiKeyId: String(row.apiKeyId), serviceId: row.serviceId ?? '', orig: row.orig ?? '', enabled: row.enabled === 1, preset: row.preset, storePayloads: row.storePayloads === 1 });
+      return mailConfigToValues(row.config as MailInConfig, { name: row.name, apiKeyId: String(row.apiKeyId), serviceId: row.serviceId ?? '', orig: row.orig ?? '', enabled: row.enabled === 1, preset: row.preset, storePayloads: row.storePayloads === 1 }, m365Accounts());
     }
     const v = mailConfigToValues({ ...defaultMailInConfig(), ...preset.mailIn }, { name: preset.id === 'poczta-wlasny' ? '' : preset.name, apiKeyId: '', serviceId: '', orig: '', enabled: true, preset: preset.id, storePayloads: false });
     if (v.authMode !== 'm365' || v.m365AccountId !== '') return v;
     const first = m365Accounts().find((a) => a.state === 'connected');
-    return first ? { ...v, m365AccountId: String(first.id), user: first.address ?? '' } : v;
+    return first ? { ...v, m365AccountId: String(first.id) } : v;
   };
 
   /** Trzy pola próbki z ładunku wpisu dziennika skrzynki (JSON z `runMailIn`); ładunek spoza tego kształtu daje pustą próbkę. */

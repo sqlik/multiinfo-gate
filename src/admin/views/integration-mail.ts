@@ -88,19 +88,22 @@ function sectionM365Mailbox(v: MailFormValues, opts: MailFormOptions): string {
     : `<div class="field">
       <label for="m365AccountId">Konto Microsoft 365</label>
       <select id="m365AccountId" name="m365AccountId">${accounts.map((a) =>
-    `<option value="${esc(a.id)}"${String(a.id) === v.m365AccountId ? ' selected' : ''}>${esc(a.name)} · ${esc(M365_STATE_WORDS[a.state])}</option>`).join('')}</select>
+    `<option value="${esc(a.id)}"${String(a.id) === v.m365AccountId ? ' selected' : ''}${a.address ? ` data-address="${esc(a.address)}"` : ''}>${esc(a.name)} · ${esc(M365_STATE_WORDS[a.state])}</option>`).join('')}</select>
       ${accounts.some((a) => a.state === 'connected')
     ? hint('Konto, którym bramka loguje się do skrzynki. Konta dodaje się i loguje na ekranie Konta Microsoft 365')
     : `<div class="hint">Żadne z kont nie jest połączone, dlatego skrzynka zacznie działać po zalogowaniu konta na ekranie <a href="/microsoft-365">Konta Microsoft 365</a></div>`}
     </div>`;
+  // Podpowiedź pola pokazuje adres wybranego konta; skrypt panelu podmienia ją po zmianie konta na liście.
+  const chosen = accounts.find((a) => String(a.id) === v.m365AccountId) ?? accounts[0];
+  const placeholder = chosen?.address ?? 'alarmy@firma.pl';
   return `<details open>
     <summary>Skrzynka</summary>
     <input type="hidden" name="authMode" value="m365">
     ${account}
     <div class="field">
       <label for="user">Adres skrzynki</label>
-      <input id="user" name="user" value="${esc(v.user)}" placeholder="alarmy@firma.pl" autocomplete="off">
-      ${hint('Domyślnie adres wybranego konta, a puste pole oznacza ten sam adres. Inny adres oznacza skrzynkę współdzieloną, do której konto posiada uprawnienie pełnego dostępu')}
+      <input id="user" name="user" value="${esc(v.user)}" placeholder="${esc(placeholder)}" data-address-of="m365AccountId" data-placeholder="alarmy@firma.pl" autocomplete="off">
+      ${hint('Puste pole oznacza adres wybranego konta. Inny adres oznacza skrzynkę współdzieloną, do której konto posiada uprawnienie pełnego dostępu')}
     </div>
     ${mailboxCommon(v)}
   </details>`;

@@ -87,7 +87,7 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps
     return deps.users.findById(userId)?.login ?? String(userId);
   };
 
-  const m365Accounts = () => (deps.m365Accounts?.list() ?? []).map((a) => ({ id: a.id, name: a.name, state: a.state }));
+  const m365Accounts = () => (deps.m365Accounts?.list() ?? []).map((a) => ({ id: a.id, name: a.name, address: a.address, state: a.state }));
   const m365 = deps.m365Tokens && deps.m365Accounts ? { tokens: deps.m365Tokens, accounts: deps.m365Accounts } : undefined;
 
   /**
@@ -112,7 +112,7 @@ export function registerNotificationRoutes(app: FastifyInstance, deps: AdminDeps
     return render.page(request, {
       title: 'Powiadomienia', active: 'powiadomienia',
       body: notificationsPage({
-        tab, smtp, smtpValues: smtp ? smtpValuesOf(smtp) : EMPTY_SMTP, rules: deps.notifications.rules(), m365Accounts: m365Accounts(),
+        tab, smtp, smtpValues: smtp ? smtpValuesOf(smtp, m365Accounts()) : EMPTY_SMTP, rules: deps.notifications.rules(), m365Accounts: m365Accounts(),
         sms, smsValues: sms ? smsValuesOf(sms) : EMPTY_SMS, smsKeys: smsKeys(), smsProblem: sms?.enabled ? smsChannelProblem(deps, now()) : null, ...over,
       }),
     });

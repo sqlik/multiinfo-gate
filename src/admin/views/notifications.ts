@@ -19,14 +19,18 @@ export const EMPTY_SMTP: SmtpFormValues = {
   recipients: '', instanceName: '', panelUrl: '',
 };
 
-/** W trybie Microsoft 365 pola serwera zostają puste: serwer Microsoftu nie jest ustawieniem administratora. */
-export function smtpValuesOf(s: SmtpSettings): SmtpFormValues {
+/**
+ * W trybie Microsoft 365 pola serwera zostają puste: serwer Microsoftu nie jest ustawieniem administratora.
+ * Adres nadawcy równy adresowi wybranego konta wraca jako puste pole, które oznacza adres konta.
+ */
+export function smtpValuesOf(s: SmtpSettings, m365: Array<{ id: number; address: string | null }> = []): SmtpFormValues {
+  const accountAddress = s.authMode === 'm365' ? m365.find((a) => a.id === s.m365AccountId)?.address ?? null : null;
   const server = s.authMode === 'm365'
     ? { host: '', port: '587', security: 'starttls' as const, plainOk: false, user: '' }
     : { host: s.host, port: String(s.port), security: s.security, plainOk: s.security === 'none', user: s.user ?? '' };
   return {
     authMode: s.authMode, m365AccountId: s.m365AccountId === null ? '' : String(s.m365AccountId), ...server,
-    fromAddress: s.fromAddress, fromName: s.fromName, recipients: s.recipients.join('\n'), instanceName: s.instanceName,
+    fromAddress: accountAddress !== null && accountAddress.toLowerCase() === s.fromAddress.toLowerCase() ? '' : s.fromAddress, fromName: s.fromName, recipients: s.recipients.join('\n'), instanceName: s.instanceName,
     panelUrl: s.panelUrl ?? '',
   };
 }
@@ -62,7 +66,7 @@ export interface NotificationsPageData {
   /** Wartości reguł do ponownego narysowania po błędzie (surowe pola). */
   ruleValues?: Record<string, string> | null;
   /** Konta Microsoft 365 do wyboru przy logowaniu kontem organizacji. */
-  m365Accounts?: Array<{ id: number; name: string; state: M365State }>;
+  m365Accounts?: Array<{ id: number; name: string; address: string | null; state: M365State }>;
 }
 
 const SECURITY: Array<{ value: SmtpSecurity; label: string }> = [
@@ -72,6 +76,11 @@ const SECURITY: Array<{ value: SmtpSecurity; label: string }> = [
 ];
 
 /** Konto Microsoft 365 do wysyłki; bez kont odnośnik do ich dodania (spec 7.1). */
+/** Bez zapisanego konta lista wskazuje pierwsze połączone, jak formularz skrzynki Mail2SMS. */
+function chosenAccountId(v: SmtpFormValues, accounts: NonNullable<NotificationsPageData['m365Accounts']>): string {
+  return v.m365AccountId !== '' ? v.m365AccountId : String(accounts.find((a) => a.state === 'connected')?.id ?? '');
+}
+
 function m365AccountField(v: SmtpFormValues, accounts: NonNullable<NotificationsPageData['m365Accounts']>): string {
   if (accounts.length === 0) {
     return `<div class="field">
@@ -80,10 +89,9 @@ function m365AccountField(v: SmtpFormValues, accounts: NonNullable<Notifications
             <div><a class="btn btn-s" href="/microsoft-365/nowe">Dodaj konto Microsoft 365</a></div>
           </div>`;
   }
-  // Bez zapisanego konta lista wskazuje pierwsze połączone, jak formularz skrzynki Mail2SMS.
-  const chosen = v.m365AccountId !== '' ? v.m365AccountId : String(accounts.find((a) => a.state === 'connected')?.id ?? '');
+  const chosen = chosenAccountId(v, accounts);
   const options = accounts.map((a) =>
-    `<option value="${esc(a.id)}"${String(a.id) === chosen ? ' selected' : ''}>${esc(a.name)} · ${esc(M365_STATE_WORDS[a.state])}</option>`).join('');
+    `<option value="${esc(a.id)}"${String(a.id) === chosen ? ' selected' : ''}${a.address ? ` data-address="${esc(a.address)}"` : ''}>${esc(a.name)} · ${esc(M365_STATE_WORDS[a.state])}</option>`).join('');
   return `<div class="field">
             <label for="m365AccountId">Konto Microsoft 365</label>
             <select id="m365AccountId" name="m365AccountId">${options}</select>
@@ -215,6 +223,10 @@ export function notificationsPage(d: NotificationsPageData): string {
   const smtpError = d.error?.which === 'smtp' ? `<div class="warn">${esc(d.error.text)}</div>` : '';
   const rulesError = d.error?.which === 'rules' ? `<div class="warn">${esc(d.error.text)}</div>` : '';
   const configured = d.smtp !== null;
+  // Podpowiedź adresu nadawcy w trybie Microsoft 365 to adres wybranego konta; skrypt panelu śledzi zmianę wyboru.
+  const accounts = d.m365Accounts ?? [];
+  const fromAccount = v.authMode === 'm365' ? accounts.find((a) => String(a.id) === chosenAccountId(v, accounts)) : undefined;
+  const fromPlaceholder = fromAccount?.address ?? 'bramka@firma.example';
   // Kanał SMS działa bez SMTP, więc reguły można ustawić przy dowolnym z dwóch kanałów.
   const rulesEditable = configured || d.sms?.enabled === true;
   return `<div class="head">
@@ -277,7 +289,7 @@ ${d.tab === 'sms' ? `      ${smsPanel(d)}` : d.tab === 'konfiguracja' ? `      <
           </div>
           <div class="field">
             <label for="fromAddress">Adres nadawcy</label>
-            <input id="fromAddress" name="fromAddress" value="${esc(v.fromAddress)}" placeholder="bramka@firma.example">
+            <input id="fromAddress" name="fromAddress" value="${esc(v.fromAddress)}" placeholder="${esc(fromPlaceholder)}" data-address-of="m365AccountId" data-address-when="authMode=m365" data-placeholder="bramka@firma.example">
             <div class="hint" data-show="authMode=m365">Puste pole oznacza adres skrzynki wybranego konta. Inny adres wymaga, aby konto posiadało do niego uprawnienie „Wyślij jako”</div>
           </div>
           <div class="field">

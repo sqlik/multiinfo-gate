@@ -124,3 +124,24 @@
   for (var r = 0; r < inputs.length; r += 1) inputs[r].addEventListener('change', apply);
   apply();
 })();
+
+// Podpowiedź pola adresu z wybranego konta: element z data-address-of="idListy" pokazuje w podpowiedzi adres
+// zaznaczonej pozycji (data-address). Bez adresu albo przy niespełnionym warunku data-address-when="nazwa=wartość"
+// wraca do data-placeholder. Bez skryptu podpowiedź ustawia serwer według zapisanego wyboru.
+(function () {
+  var fields = document.querySelectorAll('[data-address-of]');
+  if (fields.length === 0) return;
+  var apply = function () {
+    for (var i = 0; i < fields.length; i += 1) {
+      var field = fields[i];
+      var select = document.getElementById(field.getAttribute('data-address-of'));
+      var option = select && select.selectedIndex >= 0 ? select.options[select.selectedIndex] : null;
+      var when = (field.getAttribute('data-address-when') || '').split('=');
+      var checked = when.length === 2 ? document.querySelector('input[name="' + when[0] + '"]:checked') : null;
+      var active = when.length !== 2 || (checked !== null && checked.value === when[1]);
+      var address = active && option ? option.getAttribute('data-address') : null;
+      field.placeholder = address || field.getAttribute('data-placeholder') || '';
+    }
+  };
+  document.addEventListener('change', apply);
+})();

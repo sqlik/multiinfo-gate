@@ -221,6 +221,17 @@ describe('SMTP przez konto Microsoft 365', () => {
     fromAddress: '', ...over,
   });
 
+  it('adres nadawcy równy adresowi konta: puste pole i adres konta w podpowiedzi pola, inny adres zostaje w polu', async () => {
+    const id = account();
+    await post('/powiadomienia/smtp', m365Fields(id));
+    expect(h.notifications.smtp()?.fromAddress).toBe('alarmy@firma.pl');
+    const body = (await page()).body;
+    expect(body).toContain('<input id="fromAddress" name="fromAddress" value="" placeholder="alarmy@firma.pl" data-address-of="m365AccountId" data-address-when="authMode=m365" data-placeholder="bramka@firma.example">');
+    expect(body).toContain(`<option value="${id}" selected data-address="alarmy@firma.pl">`);
+    await post('/powiadomienia/smtp', m365Fields(id, { fromAddress: 'powiadomienia@firma.pl' }));
+    expect((await page()).body).toContain('<input id="fromAddress" name="fromAddress" value="powiadomienia@firma.pl" placeholder="alarmy@firma.pl"');
+  });
+
   it('formularz oferuje wybór sposobu logowania i listę kont Microsoft 365 z pierwszym połączonym kontem wybranym', async () => {
     const broken = account('needs_login', 'Biuro handlowe');
     const id = account();
@@ -228,8 +239,8 @@ describe('SMTP przez konto Microsoft 365', () => {
     expect(body).toContain('Sposób logowania');
     expect(body).toMatch(/<input type="radio" name="authMode" value="password" checked>/);
     expect(body).toMatch(/<input type="radio" name="authMode" value="m365">/);
-    expect(body).toContain(`<option value="${broken}">Biuro handlowe · wymaga logowania</option>`);
-    expect(body).toContain(`<option value="${id}" selected>Dyżur IT · połączone</option>`);
+    expect(body).toContain(`<option value="${broken}" data-address="alarmy@firma.pl">Biuro handlowe · wymaga logowania</option>`);
+    expect(body).toContain(`<option value="${id}" selected data-address="alarmy@firma.pl">Dyżur IT · połączone</option>`);
     expect(body).toContain('Wyślij jako');
   });
 
@@ -250,7 +261,7 @@ describe('SMTP przez konto Microsoft 365', () => {
     expect(h.notifications.smtpPassword()).toBeNull();
     const shown = (await page()).body;
     expect(shown).toMatch(/<input type="radio" name="authMode" value="m365" checked>/);
-    expect(shown).toContain(`<option value="${id}" selected>Dyżur IT · połączone</option>`);
+    expect(shown).toContain(`<option value="${id}" selected data-address="alarmy@firma.pl">Dyżur IT · połączone</option>`);
   });
 
   it('inny adres nadawcy zostaje zapisany', async () => {

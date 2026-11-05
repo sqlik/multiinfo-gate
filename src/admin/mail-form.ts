@@ -95,14 +95,21 @@ export function mailFormValues(body: Body): MailFormValues {
 
 export type MailFormBase = Pick<MailFormValues, 'name' | 'apiKeyId' | 'serviceId' | 'orig' | 'enabled' | 'preset' | 'storePayloads'>;
 
-export function mailConfigToValues(config: MailInConfig, base: MailFormBase): MailFormValues {
+/**
+ * Konfiguracja na wartości formularza. Adres skrzynki równy adresowi wybranego konta Microsoft 365 wraca jako
+ * puste pole, ponieważ puste pole oznacza adres konta i po zmianie konta nie zostaje adres poprzedniego.
+ */
+export function mailConfigToValues(config: MailInConfig, base: MailFormBase, m365: M365Choice[] = []): MailFormValues {
+  const auth = config.imap.auth;
+  const accountAddress = auth.mode === 'm365' ? m365.find((a) => a.id === auth.accountId)?.address ?? null : null;
   return {
     ...base,
     throttleLimit: String(config.throttle.limit), throttleWindow: String(config.throttle.windowMinutes), eventLogLimit: String(config.eventLogLimit),
     conditionMode: config.condition.mode,
     rules: config.condition.mode === 'builder' ? config.condition.rules.map((r) => ({ path: r.path, op: r.op, value: r.value })) : [],
     conditionExpr: config.condition.mode === 'liquid' ? config.condition.expr : '',
-    host: config.imap.host, port: String(config.imap.port), security: config.imap.security, verifyCert: config.imap.verifyCert, user: config.imap.user, password: '',
+    host: config.imap.host, port: String(config.imap.port), security: config.imap.security, verifyCert: config.imap.verifyCert,
+    user: accountAddress !== null && accountAddress.toLowerCase() === config.imap.user.toLowerCase() ? '' : config.imap.user, password: '',
     authMode: config.imap.auth.mode,
     // Identyfikator 0 w ustawieniu „Microsoft 365” oznacza konto jeszcze niewybrane.
     m365AccountId: config.imap.auth.mode === 'm365' && config.imap.auth.accountId > 0 ? String(config.imap.auth.accountId) : '',

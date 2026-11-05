@@ -524,8 +524,9 @@ firmowej. Połączenie bez sprawdzania certyfikatu jest podatne na podsłuch.
 
 W skrzynce Microsoft 365 sekcja **Skrzynka** zawiera zamiast serwera, loginu i hasła dwa pola.
 Pole **Konto Microsoft 365** wskazuje konto, którym bramka loguje się do skrzynki. Lista podaje
-przy nazwie konta jego stan, a wartość domyślna to pierwsze połączone konto. Pole **Adres
-skrzynki** domyślnie zawiera adres wybranego konta. Serwer, port i zabezpieczenie są stałe:
+przy nazwie konta jego stan, a wartość domyślna to pierwsze połączone konto. Puste pole **Adres
+skrzynki** oznacza adres wybranego konta, który formularz wyświetla w polu jako podpowiedź. Serwer,
+port i zabezpieczenie są stałe:
 `outlook.office365.com`, port 993, TLS ze sprawdzaniem certyfikatu. Gdy panel nie zawiera
 jeszcze konta, formularz wyświetla zamiast listy przycisk **Dodaj konto Microsoft 365**.
 

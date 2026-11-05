@@ -338,11 +338,11 @@ describe('skrzynka Microsoft 365', () => {
     expect(body).not.toContain('Serwer IMAP');
   });
 
-  it('formularz z połączonym kontem wybiera je domyślnie i podstawia adres skrzynki', async () => {
+  it('formularz z połączonym kontem wybiera je domyślnie, a adres skrzynki podaje w podpowiedzi pustego pola', async () => {
     const id = account();
     const body = (await get('/integracje/nowa?rodzaj=mail_in&ustawienie=poczta-m365')).body;
-    expect(body).toContain(`<option value="${id}" selected>Dyżur IT · połączone</option>`);
-    expect(body).toContain('name="user" value="alarmy@firma.pl"');
+    expect(body).toContain(`<option value="${id}" selected data-address="alarmy@firma.pl">Dyżur IT · połączone</option>`);
+    expect(body).toContain('name="user" value="" placeholder="alarmy@firma.pl"');
     expect(body).toContain('name="authMode" value="m365"');
     expect(body).toContain('<option value="24" selected>24 h</option>');
   });
@@ -387,6 +387,24 @@ describe('skrzynka Microsoft 365', () => {
     expect(h.mailIn.state(row.id)).toMatchObject({ uidFloor: 5, uidvalidity: 7 });
     expect((await post(`/integracje/${row.id}/edytuj`, m365Body(b, { user: 'dyspozytornia@firma.pl' }))).statusCode).toBe(302);
     expect(h.mailIn.state(row.id)).toMatchObject({ uidFloor: 0, uidvalidity: 0, nextPollAt: NOW.toISOString() });
+  });
+
+  it('edycja skrzynki konta: puste pole adresu, adres wybranego konta w podpowiedzi pola i przy każdym koncie listy', async () => {
+    const a = account();
+    const b = account();
+    h.m365Accounts.setAddress(b, 'serwis@firma.pl', NOW);
+    await post('/integracje', { kind: 'mail_in', preset: 'poczta-m365', ...m365Body(a) });
+    const row = h.integrations.list()[0]!;
+    const body = (await get(`/integracje/${row.id}/edytuj`)).body;
+    expect(body).toContain('<input id="user" name="user" value="" placeholder="alarmy@firma.pl" data-address-of="m365AccountId"');
+    expect(body).toContain(`<option value="${b}" data-address="serwis@firma.pl">`);
+  });
+
+  it('edycja skrzynki współdzielonej zostawia jej adres w polu', async () => {
+    const a = account();
+    await post('/integracje', { kind: 'mail_in', preset: 'poczta-m365', ...m365Body(a, { user: 'dyspozytornia@firma.pl' }) });
+    const row = h.integrations.list()[0]!;
+    expect((await get(`/integracje/${row.id}/edytuj`)).body).toContain('<input id="user" name="user" value="dyspozytornia@firma.pl" placeholder="alarmy@firma.pl"');
   });
 
   it('przejście z Microsoft 365 na hasło wymaga podania hasła, mimo że stare jest zapisane', async () => {
