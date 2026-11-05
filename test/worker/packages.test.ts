@@ -12,6 +12,7 @@ import { SEND_BACKOFF_MS } from '../../src/worker/send.ts';
 import { openDatabase } from '../../src/store/db.ts';
 import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
+import { CampaignsRepo } from '../../src/store/campaigns.ts';
 import { MessagesRepo } from '../../src/store/messages.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
 import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
@@ -64,12 +65,14 @@ beforeEach(() => {
 
 afterEach(() => rmSync(join(reportsDir, '..'), { recursive: true, force: true }));
 
-function seed(patch: Partial<{ startAt: string | null; orig: string | null; encoding: 'gsm' | 'ucs2'; multipart: 0 | 1 }> = {}) {
+function seed(patch: Partial<{
+  startAt: string | null; orig: string | null; encoding: 'gsm' | 'ucs2'; multipart: 0 | 1; campaignId: number | null; deliveryReport: 0 | 1;
+}> = {}) {
   const id = 'pkg_1';
   deps.packages.insert({
     id, apiKeyId, accountId, serviceId: '24138', defaultText: 'Domyślna', orig: patch.orig ?? 'Firma Info',
-    costCenter: null, startAt: patch.startAt ?? null, deliveryReport: 1, encoding: patch.encoding ?? 'gsm',
-    multipart: patch.multipart ?? 0, createdAt: NOW.toISOString(),
+    costCenter: null, startAt: patch.startAt ?? null, deliveryReport: patch.deliveryReport ?? 1, encoding: patch.encoding ?? 'gsm',
+    multipart: patch.multipart ?? 0, createdAt: NOW.toISOString(), campaignId: patch.campaignId ?? null,
   }, [
     { dest: '48601135134', text: null, clientId: null },
     { dest: '48501052442', text: 'Indywidualna', clientId: 'faktura-114' },
@@ -83,6 +86,99 @@ function job(type: 'package.create' | 'package.poll' | 'package.report', attempt
 }
 
 const lastWebhook = () => JSON.parse(deps.deliveries.listRecent(1)[0]!.payload);
+
+const DAY = 86_400_000;
+const SENT_CSV = '9001;48601135134;3;20260825100500\n9002;48501052442;3;20260825100501;faktura-114\n';
+const DELIVERED_CSV = '9001;48601135134;21;20260825101000\n9002;48501052442;21;20260825101001;faktura-114\n';
+
+function refreshJob(attempts = 0) {
+  const payload = { packageId: 'pkg_1', refresh: true };
+  return { id: deps.jobs.enqueue('package.report', payload, NOW), type: 'package.report' as const, payload, attempts, lastError: null };
+}
+
+/** Pobiera i kończy zadania z terminem do `at`, tak jak zrobiłaby to pętla robocza. */
+function drain(at: Date): void {
+  for (const j of deps.jobs.claim(at, 10)) deps.jobs.complete(j.id);
+}
+
+/** Rozsyłka z kampanią po pierwszym raporcie, w którym obaj odbiorcy mają stan „wysłana”. */
+async function campaignPackageAfterFirstReport(minutesLeft = 30): Promise<void> {
+  const campaignId = new CampaignsRepo(db).open(apiKeyId, 'przeglad-klimatyzacji-wiosna', NOW);
+  seed({ campaignId });
+  deps.packages.setCreated('pkg_1', '14');
+  deps.packages.setCompleted('pkg_1', NOW);
+  packageFullInfo.mockResolvedValueOnce({ reportId: '123', generation: 2, minutesLeft });
+  getReport.mockResolvedValueOnce(makeZip('raport.csv', Buffer.from(SENT_CSV)));
+  await handlePackageReport(job('package.report'), deps, NOW);
+}
+
+describe('handlePackageReport - drugi raport rozsyłki z kampanią', () => {
+  it('po pierwszym raporcie kolejkuje odświeżenie 24 godziny po zakończeniu', async () => {
+    await campaignPackageAfterFirstReport();
+    expect(deps.packages.recipients('pkg_1').map((r) => r.status)).toEqual(['sent', 'sent']);
+    expect(deps.jobs.claim(new Date(NOW.getTime() + DAY - 1), 10).map((j) => j.type)).toEqual(['webhook']);
+    const [refresh] = deps.jobs.claim(new Date(NOW.getTime() + DAY), 10);
+    expect(refresh).toMatchObject({ type: 'package.report', payload: { packageId: 'pkg_1', refresh: true } });
+  });
+
+  it('odświeżenie czeka na wygaśnięcie pierwszego raportu w Multiinfo', async () => {
+    await campaignPackageAfterFirstReport(2 * 24 * 60);
+    deps.jobs.claim(new Date(NOW.getTime() + 2 * DAY), 10);
+    expect(deps.jobs.claim(new Date(NOW.getTime() + 2 * DAY + REPORT_RETRY_MS), 10).map((j) => j.payload)).toEqual([
+      { packageId: 'pkg_1', refresh: true },
+    ]);
+  });
+
+  it('odświeżenie wpisuje stan doręczenia bez webhooka i bez kolejnego odświeżenia', async () => {
+    await campaignPackageAfterFirstReport();
+    drain(new Date(NOW.getTime() + DAY));
+    packageFullInfo.mockResolvedValueOnce({ reportId: '124', generation: 2, minutesLeft: 30 });
+    getReport.mockResolvedValueOnce(makeZip('raport.csv', Buffer.from(DELIVERED_CSV)));
+    const later = new Date(NOW.getTime() + DAY);
+    await handlePackageReport(refreshJob(), deps, later);
+    expect(deps.packages.recipients('pkg_1').map((r) => r.status)).toEqual(['delivered', 'delivered']);
+    const pkg = deps.packages.get('pkg_1')!;
+    expect(pkg).toMatchObject({ reportStatus: 'ready', reportId: '124', reportExpiresAt: new Date(later.getTime() + 30 * 60_000).toISOString() });
+    expect(readFileSync(join(reportsDir, 'pkg_1.csv'), 'utf8')).toBe(DELIVERED_CSV);
+    expect(deps.deliveries.listRecent(10)).toHaveLength(1);
+    expect(deps.jobs.depth()).toBe(0);
+  });
+
+  it('nieudane odświeżenie pozostawia pierwszy raport bez webhooka', async () => {
+    await campaignPackageAfterFirstReport();
+    drain(new Date(NOW.getTime() + DAY));
+    packageFullInfo.mockResolvedValueOnce({ reportId: '124', generation: 3, minutesLeft: 0 });
+    await handlePackageReport(refreshJob(), deps, new Date(NOW.getTime() + DAY));
+    expect(packageFullInfo).toHaveBeenCalledTimes(2);
+    expect(deps.packages.get('pkg_1')).toMatchObject({ reportStatus: 'ready', reportId: '123' });
+    expect(deps.packages.recipients('pkg_1').map((r) => r.status)).toEqual(['sent', 'sent']);
+    expect(deps.deliveries.listRecent(10)).toHaveLength(1);
+    expect(deps.jobs.depth()).toBe(0);
+  });
+
+  it('odświeżenie w przygotowaniu ponawia za minutę bez zmiany stanu raportu', async () => {
+    await campaignPackageAfterFirstReport();
+    drain(new Date(NOW.getTime() + DAY));
+    packageFullInfo.mockResolvedValueOnce({ reportId: '124', generation: 1, minutesLeft: 0 });
+    const later = new Date(NOW.getTime() + DAY);
+    await handlePackageReport(refreshJob(), deps, later);
+    expect(deps.packages.get('pkg_1')).toMatchObject({ reportStatus: 'ready', reportId: '123' });
+    expect(deps.jobs.claim(new Date(later.getTime() + REPORT_RETRY_MS), 10).map((j) => j.payload)).toEqual([
+      { packageId: 'pkg_1', refresh: true },
+    ]);
+  });
+
+  it('rozsyłka z kampanią bez raportu doręczenia nie kolejkuje odświeżenia', async () => {
+    const campaignId = new CampaignsRepo(db).open(apiKeyId, 'przeglad-klimatyzacji-wiosna', NOW);
+    seed({ campaignId, deliveryReport: 0 });
+    deps.packages.setCreated('pkg_1', '14');
+    deps.packages.setCompleted('pkg_1', NOW);
+    packageFullInfo.mockResolvedValueOnce({ reportId: '123', generation: 2, minutesLeft: 30 });
+    getReport.mockResolvedValueOnce(makeZip('raport.csv', Buffer.from(SENT_CSV)));
+    await handlePackageReport(job('package.report'), deps, NOW);
+    expect(deps.jobs.claim(new Date(NOW.getTime() + 3 * DAY), 10).map((j) => j.type)).toEqual(['webhook']);
+  });
+});
 
 describe('handlePackageCreate', () => {
   it('przekazuje odbiorców i parametry, zapisuje identyfikator i planuje pytanie o postęp', async () => {

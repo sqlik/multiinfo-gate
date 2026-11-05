@@ -1,4 +1,5 @@
 import { silentLogger } from '../log.ts';
+import { targetPattern } from '../links/utm.ts';
 import type { Job } from '../store/jobs.ts';
 import { handleSend, notify, type WorkerDeps } from './send.ts';
 import { handleMail } from './mail.ts';
@@ -92,6 +93,7 @@ export class Worker {
       ['ladunki', () => this.deps.integrationEvents?.scrubPayloadsBefore(new Date(now.getTime() - 7 * DAY_MS))],
       ['kolejka_powiadomien', () => this.deps.notifications?.pruneBefore(new Date(now.getTime() - 30 * DAY_MS))],
       ['skrzynki_przetworzone', () => this.deps.mailInRepo?.pruneSeenBefore(new Date(now.getTime() - 180 * DAY_MS))],
+      ['skracacz', () => this.purgeLinks(now)],
     ];
     for (const [name, step] of steps) {
       try {
@@ -100,6 +102,20 @@ export class Worker {
         log.error('worker.utrzymanie_blad', { step: name, error });
       }
     }
+  }
+
+  /**
+   * Retencja skracacza: kody z minionym terminem znikają, kampania bez kodów zostaje oznaczona jako
+   * kampania z usuniętymi szczegółami, a linki indywidualne scalają się według wzorca. Liczby
+   * kampanii pozostają bez zmian. Usuwanie po indeksie kosztuje niewiele, dlatego krok działa co turę.
+   */
+  private purgeLinks(now: Date): void {
+    const links = this.deps.links;
+    if (links === undefined) return;
+    for (const campaignId of links.shortLinks.purge(now)) {
+      if (links.shortLinks.remaining(campaignId) === 0) links.campaigns.setDetailsPurged(campaignId, now);
+    }
+    links.campaigns.collapseTargets(now, targetPattern);
   }
 
   private async run(job: Job, now: Date): Promise<void> {

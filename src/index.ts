@@ -184,6 +184,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     reportsDir: join(config.dataDir, 'reports'), log, allowPrivateWebhooks: config.webhookAllowPrivate,
     integrationEmit, integrations, integrationEvents, guards, notifier, notifications, scanner, releases,
     mailIn: mailInPoller, mailInRepo: mailIn, m365: { tokens: m365Tokens, accounts: m365Accounts }, m365KeepAlive: m365Tokens,
+    links: { campaigns, shortLinks },
   });
 
   const receiver = new Receiver({

@@ -11,18 +11,23 @@ import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
+import { CampaignsRepo } from '../../src/store/campaigns.ts';
+import { LinkDomainsRepo } from '../../src/store/link-domains.ts';
+import { ShortLinksRepo, type ShortLinkInput } from '../../src/store/short-links.ts';
 
 const masterKey = randomBytes(32);
 const TRACE = { at: '', durationMs: 1, script: 'sendsmslong.aspx', params: {}, httpStatus: 200, lines: ['1'] };
 
 let deps: WorkerDeps;
+let db: ReturnType<typeof openDatabase>;
+let apiKeyId: number;
 let clock: Date;
 let sendLong: ReturnType<typeof vi.fn>;
 let clientsFor: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   clock = new Date('2026-08-25T10:00:00Z');
-  const db = openDatabase(':memory:');
+  db = openDatabase(':memory:');
   const accounts = new AccountsRepo(db, masterKey);
   const accountId = accounts.insert({
     name: 'Firma', baseUrl: 'https://api2.multiinfo.plus.pl/Api61/', login: 'firma_api', password: 't',
@@ -31,7 +36,7 @@ beforeEach(() => {
     storeContent: 1, serviceIds: ['24138'],
   });
   const apiKeys = new ApiKeysRepo(db, masterKey);
-  const apiKeyId = apiKeys.insert({
+  apiKeyId = apiKeys.insert({
     accountId, name: 'k', keyHash: 'h', keyPrefix: 'p', defaultServiceId: '24138', defaultOrig: null,
     maxParts: 9, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'],
   });
@@ -76,6 +81,41 @@ describe('Worker.tick - tura utrzymaniowa', () => {
     clock = new Date(clock.getTime() + 30_000);
     await worker.tick();
     expect(flushN).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Worker.tick - retencja skracacza', () => {
+  it('usuwa kody po terminie retencji, oznacza kampanię bez kodów i scala linki indywidualne', async () => {
+    const campaigns = new CampaignsRepo(db);
+    const shortLinks = new ShortLinksRepo(db);
+    const domainId = new LinkDomainsRepo(db).create({ domain: 'l.firma.pl', displayName: 'Firma Serwis', homeUrl: null, bareLinks: false }, clock);
+    const past = new Date(clock.getTime() - 60_000).toISOString();
+    const future = new Date(clock.getTime() + 60_000).toISOString();
+    const spring = campaigns.open(apiKeyId, 'przeglad-klimatyzacji-wiosna', clock);
+    const winter = campaigns.open(apiKeyId, 'cennik-zima', clock);
+    const code = (c: string, campaignId: number, target: string, purgeAfter: string, recipientKey: string): ShortLinkInput => ({
+      code: c, domainId, apiKeyId, campaignId, target, utm: 1, recipientKey, messageId: null, packageId: 'pkg_1', seq: 1,
+      dest: '48601000001', clientId: null, expiresAt: past, purgeAfter, createdAt: past,
+    });
+    shortLinks.insert(code('kod0001', spring, 'https://firma.pl/klient/10482/przeglad', past, 'pkg_1#1'));
+    shortLinks.insert(code('kod0002', spring, 'https://firma.pl/klient/10483/przeglad', past, 'pkg_1#2'));
+    shortLinks.insert(code('kod0003', winter, 'https://firma.pl/cennik', past, 'pkg_2#1'));
+    shortLinks.insert(code('kod0004', winter, 'https://firma.pl/cennik', future, 'pkg_3#1'));
+    campaigns.addTarget(spring, 'https://firma.pl/klient/10482/przeglad', past);
+    campaigns.addTarget(spring, 'https://firma.pl/klient/10483/przeglad', past);
+    campaigns.addSent(spring, 2);
+    campaigns.countOpen(spring);
+    const before = campaigns.get(spring)!;
+
+    const worker = new Worker({ ...deps, links: { campaigns, shortLinks } }, { now: () => clock, maintenanceMs: 60_000 });
+    await worker.tick();
+
+    expect(['kod0001', 'kod0002', 'kod0003', 'kod0004'].map((c) => shortLinks.exists(c))).toEqual([false, false, false, true]);
+    expect(campaigns.get(spring)).toEqual({ ...before, detailsPurgedAt: clock.toISOString() });
+    expect(campaigns.get(winter)!.detailsPurgedAt).toBeNull();
+    expect(campaigns.targets(spring)).toEqual([
+      { target: 'https://firma.pl/klient/{…}/przeglad', collapsed: 1, recipients: 2, opens: 0, clicks: 0 },
+    ]);
   });
 });
 

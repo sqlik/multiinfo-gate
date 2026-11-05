@@ -15,6 +15,8 @@ import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
 import type { IntegrationsRepo } from '../store/integrations.ts';
 import type { NotificationsRepo } from '../store/notifications.ts';
 import type { MailInRepo } from '../store/mail-in.ts';
+import type { CampaignsRepo } from '../store/campaigns.ts';
+import type { ShortLinksRepo } from '../store/short-links.ts';
 import type { Mailer } from './mail.ts';
 import type { M365MailboxDeps } from '../m365/mailbox.ts';
 import type { ClientPool } from './clients.ts';
@@ -66,6 +68,11 @@ export interface WorkerDeps {
   mailIn?: { tick(now: Date): Promise<void> };
   /** Stan skrzynek - sprzątanie przetworzonych maili w turze utrzymaniowej. */
   mailInRepo?: Pick<MailInRepo, 'pruneSeenBefore'>;
+  /** Skracacz: retencja kodów w turze utrzymaniowej; bez tego zestawu kody nie są usuwane. */
+  links?: {
+    campaigns: Pick<CampaignsRepo, 'setDetailsPurged' | 'collapseTargets'>;
+    shortLinks: Pick<ShortLinksRepo, 'purge' | 'remaining'>;
+  };
   log?: Logger;
 }
 

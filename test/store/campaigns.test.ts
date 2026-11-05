@@ -49,6 +49,14 @@ describe('CampaignsRepo', () => {
     expect(campaigns.get(id)!.linksDisabledAt).toBe(AT.toISOString());
   });
 
+  it('kolejna wysyłka do kampanii po retencji zdejmuje znacznik usuniętych szczegółów, bo powstają nowe', () => {
+    const { campaigns, apiKeyId } = setup();
+    const id = campaigns.open(apiKeyId, NAME, AT);
+    campaigns.setDetailsPurged(id, AT);
+    campaigns.open(apiKeyId, NAME, LATER);
+    expect(campaigns.get(id)!.detailsPurgedAt).toBeNull();
+  });
+
   it('liczy rozsyłki i pojedyncze wiadomości kampanii', () => {
     const { campaigns, messages, packages, apiKeyId, accountId } = setup();
     const id = campaigns.open(apiKeyId, NAME, AT);
