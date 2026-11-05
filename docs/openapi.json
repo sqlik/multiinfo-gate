@@ -64,7 +64,18 @@
                     }
                   ],
                   "maxParts": 5,
-                  "ratePerMin": 60
+                  "ratePerMin": 60,
+                  "links": {
+                    "mode": "sender",
+                    "domains": [
+                      {
+                        "domain": "l.firma.pl",
+                        "default": true
+                      }
+                    ],
+                    "validityDays": 90,
+                    "utm": true
+                  }
                 }
               }
             }
@@ -3021,7 +3032,8 @@
           "services",
           "origs",
           "maxParts",
-          "ratePerMin"
+          "ratePerMin",
+          "links"
         ],
         "properties": {
           "name": {
@@ -3082,6 +3094,59 @@
             "type": "integer",
             "description": "Limit żądań klucza na minutę",
             "example": 60
+          },
+          "links": {
+            "type": "object",
+            "description": "Skracanie linków przy kluczu, ustawiane w panelu w formularzu klucza",
+            "required": [
+              "mode",
+              "domains",
+              "validityDays",
+              "utm"
+            ],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "off",
+                  "sender",
+                  "always"
+                ],
+                "description": "Tryb skracania: off wyłączone, sender decyduje wysyłający polem shortenLinks, always zawsze",
+                "example": "sender"
+              },
+              "domains": {
+                "type": "array",
+                "description": "Aktywne domeny skracacza klucza w kolejności alfabetycznej. Przy trybie off lista jest pusta",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "domain",
+                    "default"
+                  ],
+                  "properties": {
+                    "domain": {
+                      "type": "string",
+                      "description": "Domena krótkich linków",
+                      "example": "l.firma.pl"
+                    },
+                    "default": {
+                      "type": "boolean",
+                      "description": "Domena używana, gdy wysyłka nie podaje pola linkDomain"
+                    }
+                  }
+                }
+              },
+              "validityDays": {
+                "type": "integer",
+                "description": "Domyślna ważność krótkich linków w dniach",
+                "example": 90
+              },
+              "utm": {
+                "type": "boolean",
+                "description": "Dopisywanie parametrów UTM do adresów docelowych"
+              }
+            }
           }
         }
       },

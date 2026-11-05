@@ -697,7 +697,7 @@ const WIERSZ_RAPORTU: JsonSchema = {
 /** Uprawnienia klucza; listy obiektów, bo listy wyboru w aplikacjach czytają pola obiektów. */
 const UPRAWNIENIA_KLUCZA: JsonSchema = {
   type: 'object',
-  required: ['name', 'services', 'origs', 'maxParts', 'ratePerMin'],
+  required: ['name', 'services', 'origs', 'maxParts', 'ratePerMin', 'links'],
   properties: {
     name: { type: 'string', description: 'Nazwa klucza nadana w panelu', example: 'Powiadomienia CRM' },
     services: {
@@ -728,6 +728,32 @@ const UPRAWNIENIA_KLUCZA: JsonSchema = {
     },
     maxParts: { type: 'integer', description: 'Najwyższa liczba części jednej wiadomości', example: 5 },
     ratePerMin: { type: 'integer', description: 'Limit żądań klucza na minutę', example: 60 },
+    links: {
+      type: 'object',
+      description: 'Skracanie linków przy kluczu, ustawiane w panelu w formularzu klucza',
+      required: ['mode', 'domains', 'validityDays', 'utm'],
+      properties: {
+        mode: {
+          type: 'string', enum: ['off', 'sender', 'always'],
+          description: 'Tryb skracania: off wyłączone, sender decyduje wysyłający polem shortenLinks, always zawsze',
+          example: 'sender',
+        },
+        domains: {
+          type: 'array',
+          description: 'Aktywne domeny skracacza klucza w kolejności alfabetycznej. Przy trybie off lista jest pusta',
+          items: {
+            type: 'object',
+            required: ['domain', 'default'],
+            properties: {
+              domain: { type: 'string', description: 'Domena krótkich linków', example: 'l.firma.pl' },
+              default: { type: 'boolean', description: 'Domena używana, gdy wysyłka nie podaje pola linkDomain' },
+            },
+          },
+        },
+        validityDays: { type: 'integer', description: 'Domyślna ważność krótkich linków w dniach', example: 90 },
+        utm: { type: 'boolean', description: 'Dopisywanie parametrów UTM do adresów docelowych' },
+      },
+    },
   },
 };
 
@@ -774,6 +800,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
                     origs: [{ orig: 'Firma Alert', default: false }, { orig: 'Firma Info', default: true }],
                     maxParts: 5,
                     ratePerMin: 60,
+                    links: { mode: 'sender', domains: [{ domain: 'l.firma.pl', default: true }], validityDays: 90, utm: true },
                   },
                 },
               },

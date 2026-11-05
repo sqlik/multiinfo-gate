@@ -1,5 +1,7 @@
 import type { AccountRow } from '../../store/accounts.ts';
-import type { ApiKeyRow } from '../../store/api-keys.ts';
+import { LINKS_DOCS_URL } from '../../docs-links.ts';
+import type { ApiKeyRow, KeyLinkSettings } from '../../store/api-keys.ts';
+import type { LinkDomainRow } from '../../store/link-domains.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
 import { lastValidDay, warsawStamp } from '../../time/warsaw.ts';
 import { kindLabel } from './integrations.ts';
@@ -31,6 +33,81 @@ export interface KeyFormValues {
   name: string; serviceIds: string[]; defaultServiceId: string; origs: string[]; defaultOrig: string;
   maxParts: string; ratePerMin: string; webhookUrl: string; expiresOn: string; noExpiry: boolean;
   inboundSubscribed: boolean; integrationsOnly: boolean;
+}
+
+/** Sekcja „Skracanie linków” w postaci tekstowej, jak pola formularza klucza. */
+export interface LinkFormValues {
+  mode: string; domainIds: string[]; defaultDomainId: string; targets: string; validityDays: string; utm: boolean;
+}
+
+/** Domeny do wyboru: aktywne oraz już przypisane do klucza, także wyłączone, żeby zapis ich nie gubił. */
+export interface LinkSection { values: LinkFormValues; domains: LinkDomainRow[] }
+
+export function linkValuesOf(s: KeyLinkSettings): LinkFormValues {
+  return {
+    mode: s.mode, domainIds: s.domainIds.map(String), defaultDomainId: s.defaultDomainId === null ? '' : String(s.defaultDomainId),
+    targets: s.targets.join('\n'), validityDays: String(s.validityDays), utm: s.utm,
+  };
+}
+
+export const NEW_LINK_VALUES: LinkFormValues = { mode: 'off', domainIds: [], defaultDomainId: '', targets: '', validityDays: '90', utm: true };
+
+const LINK_MODES: Array<[string, string]> = [['off', 'Wyłączone'], ['sender', 'Decyduje wysyłający'], ['always', 'Zawsze']];
+
+/** Sekcja „Skracanie linków” (spec 5.1). Pola poza trybem ukrywa panel.js, gdy tryb to „Wyłączone”. */
+function linkFields(section: LinkSection): string {
+  const v = section.values;
+  const modes = LINK_MODES.map(([value, label]) =>
+    `<option value="${value}"${v.mode === value ? ' selected' : ''}>${esc(label)}</option>`).join('');
+  const domainChoices = section.domains.length === 0
+    ? '<div class="hint">Brak domen skracacza. Domenę dodaje się w elemencie <a href="/skracacz">Skracacz linków</a></div>'
+    : section.domains.map((d) => `<label class="choice">
+        <input type="checkbox" name="linkDomainIds" value="${esc(d.id)}"${v.domainIds.includes(String(d.id)) ? ' checked' : ''}> <span class="m">${esc(d.domain)}</span>${d.enabled === 1 ? '' : ' <span class="dim">wyłączona</span>'}
+      </label>`).join('');
+  const defaultOptions = section.domains.map((d) =>
+    `<option value="${esc(d.id)}"${v.defaultDomainId === String(d.id) ? ' selected' : ''}>${esc(d.domain)}</option>`).join('');
+
+  return `<div class="field">
+      <div class="lab" style="margin-top: 6px;">Skracanie linków</div>
+      <div class="hint">Bramka zamienia linki w SMS-ach wysyłanych tym kluczem na krótkie linki własnej domeny i liczy ich otwarcia.
+        Ustawienie obejmuje także integracje i konektor Power Automate korzystające z tego klucza</div>
+    </div>
+    <div class="field">
+      <label for="linkMode">Tryb</label>
+      <select id="linkMode" name="linkMode">${modes}</select>
+      <div class="hint">„Decyduje wysyłający” skraca linki, chyba że żądanie zawiera shortenLinks: false. „Zawsze” skraca niezależnie od żądania</div>
+    </div>
+    <div data-show="linkMode!=off">
+      <div class="field">
+        <label>Domeny</label>
+        <div class="choices">${domainChoices}</div>
+        <div class="hint">Domeny skracacza, których ten klucz może używać</div>
+      </div>
+      <div class="field">
+        <label for="linkDefaultDomainId">Domena domyślna</label>
+        <select id="linkDefaultDomainId" name="linkDefaultDomainId">
+          <option value="">pierwsza zaznaczona</option>
+          ${defaultOptions}
+        </select>
+        <div class="hint">Używana, gdy żądanie nie podaje linkDomain. Musi być jedną z zaznaczonych</div>
+      </div>
+      <div class="field">
+        <label for="linkTargets">Dozwolone domeny docelowe</label>
+        <textarea id="linkTargets" name="linkTargets" rows="4" placeholder="firma.pl">${esc(v.targets)}</textarea>
+        <div class="hint">Jedna domena w wierszu, na przykład firma.pl. Wpis obejmuje także subdomeny, a linki do innych domen
+          zostają wysłane bez zmian. Powód, dla którego lista jest obowiązkowa, wyjaśnia <a href="${LINKS_DOCS_URL}#obowiazkowa-lista-domen-docelowych" target="_blank" rel="noopener noreferrer">dokumentacja skracacza</a></div>
+      </div>
+      <div class="field">
+        <label for="linkValidityDays">Ważność linków w dniach (1-365)</label>
+        <input id="linkValidityDays" name="linkValidityDays" type="number" min="1" max="365" value="${esc(v.validityDays)}" required>
+        <div class="hint">Po tym czasie link prowadzi do strony „Link wygasł”. Żądanie może podać inną ważność polem linkValidityDays</div>
+      </div>
+      <div class="field">
+        <label class="choice"><input type="checkbox" name="linkUtm" value="1"${v.utm ? ' checked' : ''}> Dopisuj parametry UTM</label>
+        <div class="hint">Bramka dopisuje do adresu docelowego utm_source=sms, utm_medium=sms i utm_campaign z nazwą kampanii,
+          chyba że adres zawiera już parametr utm_</div>
+      </div>
+    </div>`;
 }
 
 export const NEW_KEY_VALUES = (choice: AccountChoice): KeyFormValues => ({
@@ -250,7 +327,7 @@ export function chooseAccountPage(accounts: AccountRow[]): string {
 }
 
 /** Pola wspólne dla nowego klucza i edycji. `mode` steruje tylko podpowiedzią przy webhooku i polem sekretu. */
-function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'): string {
+function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit', links: LinkSection): string {
   const services = choice.serviceIds.map((id) => `<label class="choice">
       <input type="checkbox" name="serviceIds" value="${esc(id)}"${v.serviceIds.includes(id) ? ' checked' : ''}> <span class="m">${esc(id)}</span>
     </label>`).join('');
@@ -332,11 +409,13 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
       <input id="expiresOn" name="expiresOn" type="date" value="${esc(v.expiresOn)}">
       <label class="choice"><input type="checkbox" name="noExpiry" value="1"${v.noExpiry ? ' checked' : ''}> Nie wygasa (niezalecane)</label>
       <div class="hint">Po tej dacie żądania z tym kluczem otrzymują odpowiedź 401. Przedłużenie polega na zmianie daty, bez generowania nowego klucza</div>
-    </div>`;
+    </div>
+    ${linkFields(links)}`;
 }
 
 export function newKeyPage(choice: AccountChoice, error: string | null = null,
-                           values: KeyFormValues = NEW_KEY_VALUES(choice)): string {
+                           values: KeyFormValues = NEW_KEY_VALUES(choice),
+                           links: LinkSection = { values: NEW_LINK_VALUES, domains: [] }): string {
   return `<div class="head">
     <div>
       <h1 class="h1">Nowy klucz API</h1>
@@ -348,7 +427,7 @@ export function newKeyPage(choice: AccountChoice, error: string | null = null,
     <div class="panel" style="max-width: 560px;">
       <form class="form" method="post" action="/klucze">
         <input type="hidden" name="accountId" value="${esc(choice.row.id)}">
-        ${keyFields(choice, values, 'new')}
+        ${keyFields(choice, values, 'new', links)}
         <div><button class="btn btn-p" type="submit">Wygeneruj klucz</button></div>
       </form>
     </div>
@@ -371,7 +450,8 @@ function integrationsPanel(integrations: IntegrationRow[]): string {
 }
 
 export function editKeyPage(choice: AccountChoice, row: ApiKeyRow, error: string | null = null,
-                            values: KeyFormValues = valuesOf(row), integrations: IntegrationRow[] = []): string {
+                            values: KeyFormValues = valuesOf(row), integrations: IntegrationRow[] = [],
+                            links: LinkSection = { values: NEW_LINK_VALUES, domains: [] }): string {
   return `<div class="head">
     <div>
       <div class="crumb"><a href="/klucze">Klucze API</a> / edycja</div>
@@ -383,7 +463,7 @@ export function editKeyPage(choice: AccountChoice, row: ApiKeyRow, error: string
     ${error === null ? '' : `<div class="warn">${esc(error)}</div>`}
     <div class="panel" style="max-width: 560px;">
       <form class="form" method="post" action="/klucze/${esc(row.id)}/edytuj">
-        ${keyFields(choice, values, 'edit')}
+        ${keyFields(choice, values, 'edit', links)}
         <div><button class="btn btn-p" type="submit">Zapisz klucz</button></div>
       </form>
     </div>

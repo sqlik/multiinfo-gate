@@ -566,3 +566,170 @@ describe('klucz kanału SMS powiadomień', () => {
     expect(h.apiKeys.get(key.id)!.revokedAt).not.toBeNull();
   });
 });
+
+describe('klucz: sekcja „Skracanie linków”', () => {
+  const AT = new Date('2026-08-25T10:00:00Z');
+  const domain = (name: string, enabled = true) => {
+    const id = h.linkDomains.create({ domain: name, displayName: 'Firma Serwis', homeUrl: null, bareLinks: false }, AT);
+    if (!enabled) h.linkDomains.setEnabled(id, false, AT);
+    return id;
+  };
+
+  /** Formularz z polami wielokrotnymi: pary nazwa-wartość zamiast obiektu. */
+  const post = (url: string, pairs: Array<[string, string]>) => h.app.inject({
+    method: 'POST', url,
+    headers: { cookie: h.cookie, 'content-type': 'application/x-www-form-urlencoded' },
+    payload: new URLSearchParams(pairs).toString(),
+  });
+  const base = (): Array<[string, string]> => [
+    ['name', 'Kampanie serwisu'], ['accountId', String(accountId)], ['serviceIds', '24138'], ['origs', 'Firma Info'],
+    ['maxParts', '5'], ['ratePerMin', '60'], ['noExpiry', '1'],
+  ];
+  const links = (o: { mode?: string; domains?: number[]; def?: number | ''; targets?: string; days?: string; utm?: boolean } = {}): Array<[string, string]> => [
+    ['linkMode', o.mode ?? 'sender'],
+    ...(o.domains ?? []).map((d): [string, string] => ['linkDomainIds', String(d)]),
+    ['linkDefaultDomainId', o.def === undefined ? String(o.domains?.[0] ?? '') : String(o.def)],
+    ['linkTargets', o.targets ?? 'firma.pl'],
+    ['linkValidityDays', o.days ?? '90'],
+    ...(o.utm === false ? [] : [['linkUtm', '1'] as [string, string]]),
+  ];
+  const lastKey = () => h.apiKeys.list().at(-1)!;
+  const audit = (action: string) => h.db.prepare('SELECT meta FROM audit_log WHERE action = ? ORDER BY id').all(action) as Array<{ meta: string }>;
+
+  it('formularz nowego klucza: tryb, aktywne domeny, domena domyślna, cele, ważność i UTM', async () => {
+    domain('l.firma.pl');
+    domain('stara-firma.pl', false);
+    const res = await h.app.inject({ method: 'GET', url: `/klucze/nowy?accountId=${accountId}`, headers: { cookie: h.cookie } });
+    expect(res.body).toContain('Skracanie linków');
+    for (const label of ['Wyłączone', 'Decyduje wysyłający', 'Zawsze']) expect(res.body).toContain(label);
+    expect(res.body).toContain('name="linkDomainIds"');
+    expect(res.body).toContain('l.firma.pl');
+    expect(res.body).not.toContain('stara-firma.pl');
+    expect(res.body).toContain('name="linkDefaultDomainId"');
+    expect(res.body).toContain('<textarea id="linkTargets" name="linkTargets"');
+    expect(res.body).toMatch(/name="linkValidityDays"[^>]*value="90"/);
+    expect(res.body).toMatch(/name="linkUtm" value="1" checked/);
+    expect(res.body).toContain('data-show="linkMode!=off"');
+    expect(res.body).toContain('https://sqlik.github.io/multiinfo-gate/skracacz/#obowiazkowa-lista-domen-docelowych');
+    expect(res.body).not.toMatch(/[\u2013\u2014]/);
+  });
+
+  it('bez domen skracacza formularz odsyła do elementu „Skracacz linków”', async () => {
+    const res = await h.app.inject({ method: 'GET', url: `/klucze/nowy?accountId=${accountId}`, headers: { cookie: h.cookie } });
+    expect(res.body).toContain('Brak domen skracacza. Domenę dodaje się w elemencie <a href="/skracacz">Skracacz linków</a>');
+  });
+
+  it('zapis trybu „Decyduje wysyłający” z domeną i celem, z wpisem w dzienniku', async () => {
+    const id = domain('l.firma.pl');
+    const res = await post('/klucze', [...base(), ...links({ domains: [id], targets: '  Firma.PL \n\nserwis-klima.pl\r\nfirma.pl', days: '30' })]);
+    expect(res.statusCode).toBe(200);
+    expect(h.apiKeys.linkSettings(lastKey().id)).toEqual({
+      mode: 'sender', domainIds: [id], defaultDomainId: id, targets: ['firma.pl', 'serwis-klima.pl'], validityDays: 30, utm: true,
+    });
+    const entries = audit('klucz.skracanie');
+    expect(entries).toHaveLength(1);
+    expect(JSON.parse(entries[0]!.meta)).toEqual({
+      nazwa: 'Kampanie serwisu', tryb: 'sender', domeny: ['l.firma.pl'], domyslna: 'l.firma.pl', cele: ['firma.pl', 'serwis-klima.pl'],
+      waznosc: 30, utm: true,
+    });
+  });
+
+  it('klucz z trybem „Wyłączone” nie zapisuje wpisu o skracaniu', async () => {
+    await post('/klucze', [...base(), ...links({ mode: 'off', targets: '' })]);
+    expect(h.apiKeys.linkSettings(lastKey().id).mode).toBe('off');
+    expect(audit('klucz.skracanie')).toEqual([]);
+  });
+
+  it('tryb „Zawsze” bez celów albo bez domeny jest odrzucony z tekstem', async () => {
+    const id = domain('l.firma.pl');
+    const noTargets = await post('/klucze', [...base(), ...links({ mode: 'always', domains: [id], targets: '' })]);
+    expect(noTargets.statusCode).toBe(400);
+    expect(noTargets.body).toContain('co najmniej jednej dozwolonej domeny docelowej');
+    const noDomain = await post('/klucze', [...base(), ...links({ mode: 'always', domains: [] })]);
+    expect(noDomain.statusCode).toBe(400);
+    expect(noDomain.body).toContain('co najmniej jednej domeny skracacza');
+    expect(h.apiKeys.list()).toEqual([]);
+  });
+
+  it('domena domyślna spoza zaznaczonych, nieznana domena i ważność spoza zakresu są odrzucone', async () => {
+    const a = domain('l.firma.pl');
+    const b = domain('firma-link.pl');
+    const wrongDefault = await post('/klucze', [...base(), ...links({ domains: [a], def: b })]);
+    expect(wrongDefault.statusCode).toBe(400);
+    expect(wrongDefault.body).toContain('Domena domyślna musi być jedną z zaznaczonych');
+    const unknown = await post('/klucze', [...base(), ...links({ domains: [999] })]);
+    expect(unknown.statusCode).toBe(400);
+    expect(unknown.body).toContain('Wybrana domena skracacza nie istnieje');
+    for (const days of ['0', '366', 'abc']) {
+      const res = await post('/klucze', [...base(), ...links({ domains: [a], days })]);
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toContain('od 1 do 365 dni');
+    }
+    expect(h.apiKeys.list()).toEqual([]);
+  });
+
+  it('cel ze schematem jest odrzucony z tekstem i wpisaną wartością', async () => {
+    const id = domain('l.firma.pl');
+    const res = await post('/klucze', [...base(), ...links({ domains: [id], targets: 'https://firma.pl' })]);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('Dozwolone domeny docelowe zawierają nieprawidłowy wpis „https://firma.pl”. Wpisz samą domenę, bez https:// i bez ścieżki');
+    expect(res.body).toContain('https://firma.pl</textarea>');
+  });
+
+  it('edycja klucza pokazuje i zachowuje ustawienia skracania', async () => {
+    const a = domain('l.firma.pl');
+    const b = domain('firma-link.pl');
+    await post('/klucze', [...base(), ...links({ domains: [a, b], def: b, targets: 'firma.pl\nserwis-klima.pl', days: '45', utm: false })]);
+    const key = lastKey();
+    const page = await h.app.inject({ method: 'GET', url: `/klucze/${key.id}/edytuj`, headers: { cookie: h.cookie } });
+    expect(page.body).toMatch(/<option value="sender" selected>/);
+    expect(page.body).toMatch(new RegExp(`name="linkDomainIds" value="${a}" checked`));
+    expect(page.body).toMatch(new RegExp(`<option value="${b}" selected>`));
+    expect(page.body).toContain('firma.pl\nserwis-klima.pl</textarea>');
+    expect(page.body).toMatch(/name="linkValidityDays"[^>]*value="45"/);
+    expect(page.body).not.toMatch(/name="linkUtm" value="1" checked/);
+
+    const before = h.apiKeys.linkSettings(key.id);
+    const res = await post(`/klucze/${key.id}/edytuj`, [
+      ['name', key.name], ['serviceIds', '24138'], ['origs', 'Firma Info'], ['maxParts', '5'], ['ratePerMin', '60'], ['noExpiry', '1'],
+      ...links({ domains: [a, b], def: b, targets: 'firma.pl\nserwis-klima.pl', days: '45', utm: false }),
+    ]);
+    expect(res.statusCode).toBe(302);
+    expect(h.apiKeys.linkSettings(key.id)).toEqual(before);
+    expect(audit('klucz.skracanie')).toHaveLength(1);
+  });
+
+  it('edycja zmieniająca tryb zapisuje wpis o skracaniu', async () => {
+    const a = domain('l.firma.pl');
+    await post('/klucze', [...base(), ...links({ domains: [a] })]);
+    const key = lastKey();
+    await post(`/klucze/${key.id}/edytuj`, [
+      ['name', key.name], ['serviceIds', '24138'], ['origs', 'Firma Info'], ['maxParts', '5'], ['ratePerMin', '60'], ['noExpiry', '1'],
+      ...links({ mode: 'always', domains: [a] }),
+    ]);
+    expect(h.apiKeys.linkSettings(key.id).mode).toBe('always');
+    const entries = audit('klucz.skracanie');
+    expect(entries).toHaveLength(2);
+    expect(JSON.parse(entries[1]!.meta)).toMatchObject({ tryb: 'always' });
+  });
+
+  it('wyłączona domena przypisana do klucza zostaje w formularzu edycji z oznaczeniem', async () => {
+    const a = domain('l.firma.pl');
+    await post('/klucze', [...base(), ...links({ domains: [a] })]);
+    h.linkDomains.setEnabled(a, false, AT);
+    const page = await h.app.inject({ method: 'GET', url: `/klucze/${lastKey().id}/edytuj`, headers: { cookie: h.cookie } });
+    expect(page.body).toMatch(new RegExp(`name="linkDomainIds" value="${a}" checked`));
+    expect(page.body).toContain('wyłączona');
+  });
+
+  it('formularz bez sekcji skracania (stary klient) nie zmienia ustawień', async () => {
+    const a = domain('l.firma.pl');
+    await post('/klucze', [...base(), ...links({ domains: [a] })]);
+    const key = lastKey();
+    const before = h.apiKeys.linkSettings(key.id);
+    await post(`/klucze/${key.id}/edytuj`, [
+      ['name', key.name], ['serviceIds', '24138'], ['origs', 'Firma Info'], ['maxParts', '5'], ['ratePerMin', '60'], ['noExpiry', '1'],
+    ]);
+    expect(h.apiKeys.linkSettings(key.id)).toEqual(before);
+  });
+});

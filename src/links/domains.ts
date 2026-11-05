@@ -42,7 +42,7 @@ export function normalizeDomain(raw: string): string {
     throw new LinkDomainError('Wpisz samą domenę, bez https:// i bez ścieżki, na przykład l.firma.pl');
   }
   if (d.includes(':')) {
-    throw new LinkDomainError('Wpisz domenę bez portu, na przykład l.firma.pl. Port przekierowań wystawia serwer pośredniczący pod portem 443');
+    throw new LinkDomainError('Wpisz domenę bez portu, na przykład l.firma.pl');
   }
   const ascii = domainToASCII(d.replace(/\.$/, ''));
   const labels = ascii.split('.');
