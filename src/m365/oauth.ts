@@ -189,6 +189,7 @@ const HINTS: Record<string, string> = {
   '7000112': 'Aplikacja została wyłączona w Entra ID, dlatego należy ją ponownie włączyć we właściwościach w sekcji Aplikacje dla przedsiębiorstw',
   '700016': 'Katalog nie zawiera aplikacji o podanym identyfikatorze, dlatego należy sprawdzić identyfikator aplikacji i identyfikator katalogu w ustawieniach konta',
   '50011': 'Rejestracja aplikacji nie zawiera adresu przekierowania bramki, dlatego należy dopisać w Entra ID adres podany w formularzu konta',
+  '50105': 'Aplikacja w Entra ID wymaga przypisania, a konto nie jest do niej przypisane, dlatego należy dodać konto techniczne w sekcji Użytkownicy i grupy aplikacji w Aplikacjach dla przedsiębiorstw',
 };
 
 const GENERAL_HINT = `Microsoft odrzucił logowanie, dlatego ${RELOGIN}, a gdy błąd się powtórzy, sprawdzić rejestrację aplikacji w Entra ID`;

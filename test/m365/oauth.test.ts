@@ -298,7 +298,7 @@ describe('aadstsCode', () => {
 });
 
 describe('hintFor', () => {
-  const codes = ['50173', '50133', '700082', '50076', '50079', '53003', '65001', '7000112', '700016', '50011'];
+  const codes = ['50173', '50133', '700082', '50076', '50079', '53003', '65001', '7000112', '700016', '50011', '50105'];
 
   it('każdy kod ze specyfikacji ma własną podpowiedź, różną od ogólnej', () => {
     const general = hintFor(null);
@@ -316,7 +316,7 @@ describe('hintFor', () => {
 });
 
 describe('hintFor na stronie konta', () => {
-  const codes = ['50173', '50133', '700082', '50076', '50079', '53003', '65001', '7000112', '700016', '50011', null];
+  const codes = ['50173', '50133', '700082', '50076', '50079', '53003', '65001', '7000112', '700016', '50011', '50105', null];
 
   it('bez odesłania do szczegółów konta, bo administrator już na nich jest; powiadomienie zachowuje odesłanie', () => {
     for (const c of codes) expect(hintFor(c, 'account'), String(c)).not.toContain('w szczegółach konta');

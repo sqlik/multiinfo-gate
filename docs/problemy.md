@@ -418,8 +418,10 @@ Microsoft wyświetla błąd AADSTS50011. Komunikat informuje, że adres przekier
 adresów skonfigurowanych dla aplikacji.
 
 Panel tworzy adres przekierowania z adresu, pod którym jest otwarty. Panel otwarty pod inną nazwą
-albo przez tunel na innym porcie tworzy adres, którego nie ma w rejestracji aplikacji. Szczegóły
-konta ostrzegają o takiej różnicy jeszcze przed logowaniem. Panel nie otrzymuje samego błędu,
+tworzy adres, którego nie ma w rejestracji aplikacji. Na przykład adres `http://localhost:8081`
+wymaga osobnego wpisu, nawet gdy rejestracja zawiera już `http://127.0.0.1:8081`. Numer portu przy
+adresach `127.0.0.1` i `localhost` nie ma znaczenia, ponieważ Microsoft go nie porównuje. Szczegóły
+konta ostrzegają o różnicy adresów jeszcze przed logowaniem. Panel nie otrzymuje samego błędu,
 ponieważ Microsoft nie przekierowuje przeglądarki na adres spoza rejestracji.
 
 Aby dopisać adres do rejestracji:
@@ -427,7 +429,8 @@ Aby dopisać adres do rejestracji:
 1. W szczegółach konta kliknij **Edytuj** i skopiuj adres przekierowania przyciskiem **Kopiuj**.
 2. W centrum administracyjnym Microsoft Entra otwórz rejestrację aplikacji i przejdź do sekcji
    **Authentication (Preview)**.
-3. W platformie „Aplikacje mobilne i klasyczne” dodaj skopiowany adres i zapisz zmiany.
+3. Przy platformie „Aplikacje mobilne i klasyczne” kliknij **Edytuj**, wklej skopiowany adres
+   w pustym polu i kliknij **Konfiguruj**.
 4. Wróć do szczegółów konta w panelu i kliknij **Zaloguj ponownie**.
 
 Oczekiwany wynik: Microsoft wyświetla stronę wyboru konta, a po logowaniu przeglądarka wraca do

@@ -631,10 +631,10 @@ PowerShella. Każda firma rejestruje w swoim katalogu własną aplikację, dlate
 korzysta z żadnej usługi pośredniczącej. Skrzynki prywatne Outlook.com nie są obsługiwane.
 
 Przygotowanie obejmuje trzy etapy: konto techniczne w centrum administracyjnym Microsoft 365,
-rejestrację aplikacji w centrum administracyjnym Microsoft Entra i połączenie konta w panelu
-bramki. Dwa pierwsze etapy wykonuje administrator Microsoft 365. Użycie konta w Mail2SMS opisuje
-rozdział 5.1 [Integracji z aplikacjami](integracje.md#51-skrzynka), a wysyłkę maili powiadomień
-rozdział 9.1 tego samego artykułu.
+rejestrację aplikacji z przypisaniem konta technicznego w centrum administracyjnym Microsoft Entra i
+połączenie konta w panelu bramki. Dwa pierwsze etapy wykonuje administrator Microsoft 365. Użycie
+konta w Mail2SMS opisuje rozdział 5.1 [Integracji z aplikacjami](integracje.md#51-skrzynka), a
+wysyłkę maili powiadomień rozdział 9.1 tego samego artykułu.
 
 #### Konto techniczne
 
@@ -707,8 +707,31 @@ Zgoda administratora sprawia, że konto techniczne nie zatwierdza uprawnień prz
 
 Sekcja **Authentication (Preview)** rejestracji przedstawia wybraną platformę pod nazwą
 „Aplikacje mobilne i klasyczne”. W tej sekcji dopiszesz kolejny adres przekierowania, na przykład po zmianie
-adresu, pod którym otwierasz panel. Platforma przyjmuje zarówno adres `http://localhost` z tunelu
-SSH, jak i adres `https://` panelu wystawionego pod domeną.
+adresu, pod którym otwierasz panel. Platforma przyjmuje zarówno adres `http://127.0.0.1` z tunelu
+SSH, jak i adres `https://` panelu wystawionego pod domeną. W adresie `http://127.0.0.1` Microsoft
+nie porównuje numeru portu, dlatego tunel na innym porcie lokalnym nie wymaga zmiany rejestracji.
+Adresy `127.0.0.1` i `localhost` są jednak dla Microsoftu różnymi adresami. Rejestracja powinna
+zawierać wyłącznie adresy, pod którymi otwierasz panel. Dlatego po wystawieniu panelu pod domeną
+usuń adres tunelu, jeżeli z niego nie korzystasz.
+
+#### Przypisanie konta technicznego
+
+Zgoda administratora obejmuje wszystkie konta w katalogu. Dlatego bez dodatkowego ustawienia przez
+aplikację może zalogować się każde konto organizacji, na przykład własne konto administratora
+wybrane omyłkowo przy logowaniu w panelu. Ustawienie „Wymagane jest przypisanie” ogranicza
+aplikację do kont przypisanych przez administratora Microsoft 365.
+
+1. W centrum administracyjnym Microsoft Entra otwórz **Entra ID → Aplikacje dla przedsiębiorstw**
+   i wyszukaj aplikację po nazwie nadanej przy rejestracji.
+2. Otwórz aplikację i przejdź do sekcji **Właściwości**. Ustaw **Wymagane jest przypisanie?** na
+   **Tak** i kliknij **Zapisz**.
+3. Przejdź do sekcji **Użytkownicy i grupy** i kliknij **Dodaj użytkownika/grupę**.
+4. Kliknij **Niczego nie wybrano**, zaznacz konto techniczne, a następnie kliknij **Wybierz**
+   i **Przypisz**.
+5. Jeżeli lista zawiera inne konta, zaznacz je i kliknij **Usuń przypisanie**.
+
+Oczekiwany wynik: lista w sekcji **Użytkownicy i grupy** zawiera wyłącznie konto techniczne.
+Microsoft odrzuca logowanie każdego innego konta błędem AADSTS50105.
 
 #### Połączenie konta w panelu
 
@@ -737,6 +760,9 @@ Jeżeli wynik jest inny:
 - **Microsoft wyświetla błąd AADSTS50011.** Rejestracja aplikacji nie zawiera adresu
   przekierowania, pod którym otwarto panel. Sposób naprawy opisuje punkt
   [Microsoft odrzuca adres przekierowania](problemy.md#m365-adres-przekierowania)
+- **Microsoft wyświetla błąd AADSTS50105.** Wybrane konto nie jest przypisane do aplikacji.
+  Zaloguj się kontem technicznym albo przypisz je według punktu
+  [Przypisanie konta technicznego](#przypisanie-konta-technicznego)
 - **Microsoft wyświetla błąd AADSTS700016.** Identyfikator aplikacji nie odpowiada żadnej
   rejestracji w podanym katalogu. Popraw identyfikatory przyciskiem **Edytuj** w szczegółach konta
 - **Microsoft wyświetla błąd AADSTS65001 albo prosi o zgodę na uprawnienia.** Zgoda
@@ -785,7 +811,7 @@ zostałby wysłany. Kanał SMS opisuje rozdział 9.5
 [Integracji z aplikacjami](integracje.md#95-powiadomienia-sms).
 
 Odwołanie sesji albo zmiana hasła nie zatrzymuje bramki natychmiast. Bramka korzysta jeszcze
-z bieżącego tokenu dostępu, który Microsoft wydaje na około półtorej godziny. Natychmiastowe
+z bieżącego tokenu dostępu, który Microsoft wydaje na około godzinę. Natychmiastowe
 odcięcie zapewnia przycisk **Rozłącz** w szczegółach konta. Rozłączenie usuwa token z bramki
 i ustawia stan „Niezalogowane”. Zgodę aplikacji po stronie Microsoftu cofa się w centrum
 administracyjnym Microsoft Entra.

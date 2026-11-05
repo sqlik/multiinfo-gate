@@ -83,7 +83,7 @@ export function m365ListPage(views: M365AccountView[]): string {
   </div>`;
 }
 
-/** Kroki 1-7 przygotowania po stronie Microsoftu (spec 3), zwinięte nad polami formularza. */
+/** Kroki 1-8 przygotowania po stronie Microsoftu (spec 3), zwinięte nad polami formularza. */
 function instructions(): string {
   return `<details>
       <summary>Przygotowanie w Microsoft 365 i Entra ID</summary>
@@ -96,6 +96,7 @@ function instructions(): string {
           <li>W polu „Identyfikator URI przekierowania” wybierz platformę „Klient publiczny/natywny (mobilne i klasyczne)” i wklej adres podany niżej</li>
           <li>Dodaj uprawnienia delegowane IMAP.AccessAsUser.All, SMTP.Send, offline_access, openid, email i profile</li>
           <li>Kliknij „Wyraź zgodę administratora dla katalogu” i potwierdź</li>
+          <li>W sekcji Aplikacje dla przedsiębiorstw otwórz tę aplikację, we właściwościach ustaw „Wymagane jest przypisanie?” na „Tak”, a następnie w sekcji Użytkownicy i grupy przypisz wyłącznie konto techniczne</li>
           <li>Skopiuj z przeglądu aplikacji identyfikator katalogu i identyfikator aplikacji, a następnie wklej je w polach poniżej</li>
         </ol>
         <p>Pełny opis znajdziesz w <a href="${M365_DOCS_URL}" target="_blank" rel="noopener noreferrer">dokumentacji, w rozdziale 4.8</a>.</p>
@@ -195,9 +196,18 @@ function stateAlert(row: M365AccountRow): string {
   return '';
 }
 
+/**
+ * Microsoft pomija port w adresach przekierowania `http://localhost` i `http://127.0.0.1` klienta publicznego
+ * (sprawdzone w tenancie 2026-11-05), ale `localhost` i `127.0.0.1` traktuje jako różne adresy.
+ */
+function loopbackKey(uri: string): string {
+  const m = /^http:\/\/(localhost|127\.0\.0\.1)(?::\d+)?(\/.*)$/.exec(uri);
+  return m === null ? uri : `http://${m[1]}${m[2]}`;
+}
+
 export function m365DetailPage(v: M365AccountView, opts: { redirectUri: string | null }): string {
   const row = v.row;
-  const mismatch = row.redirectUri !== null && opts.redirectUri !== null && opts.redirectUri !== row.redirectUri
+  const mismatch = row.redirectUri !== null && opts.redirectUri !== null && loopbackKey(opts.redirectUri) !== loopbackKey(row.redirectUri)
     ? `<div class="warn">Bieżący adres przekierowania ${esc(opts.redirectUri)} różni się od adresu użytego przy ostatnim logowaniu. Microsoft odrzuci logowanie, jeżeli tego adresu nie ma w rejestracji aplikacji w Entra ID.</div>`
     : '';
   const error = row.errorCode === null && row.errorMessage === null

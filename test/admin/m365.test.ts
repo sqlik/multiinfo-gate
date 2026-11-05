@@ -201,6 +201,8 @@ describe('lista, formularz i szczegóły', () => {
     expect(body).toContain('W polu „Identyfikator URI przekierowania” wybierz platformę');
     expect(body).toContain('Wyraź zgodę administratora dla katalogu');
     expect(body).not.toContain('Udziel zgody administratora');
+    expect(body).toContain('„Wymagane jest przypisanie?” na „Tak”');
+    expect(body).toContain('w sekcji Użytkownicy i grupy przypisz wyłącznie konto techniczne');
   });
 
   it('zapis bez logowania prowadzi na szczegóły, a błędne dane wracają do formularza z komunikatem', async () => {
@@ -261,6 +263,13 @@ describe('lista, formularz i szczegóły', () => {
     const other = await page(`/microsoft-365/${id}`, '127.0.0.1:8081');
     expect(other.body).toContain('różni się od adresu użytego przy ostatnim logowaniu');
     expect(other.body).toContain('http://127.0.0.1:8081/m365/powrot');
+  });
+
+  it('inny port tunelu przy tym samym adresie pętli zwrotnej nie daje ostrzeżenia, bo Microsoft go pomija', async () => {
+    const id = await connected();
+    expect((await page(`/microsoft-365/${id}`, 'localhost:18081')).body).not.toContain('różni się od adresu użytego przy ostatnim logowaniu');
+    expect((await page(`/microsoft-365/${id}`, 'localhost')).body).not.toContain('różni się od adresu użytego przy ostatnim logowaniu');
+    expect((await page(`/microsoft-365/${id}`, 'gate.firma.pl:8081')).body).toContain('różni się od adresu użytego przy ostatnim logowaniu');
   });
 
   it('konto wymagające logowania pokazuje kod AADSTS i podpowiedź', async () => {
