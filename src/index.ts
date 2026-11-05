@@ -43,6 +43,7 @@ import { CampaignsRepo } from './store/campaigns.ts';
 import { LinkDomainsRepo } from './store/link-domains.ts';
 import { ShortLinksRepo } from './store/short-links.ts';
 import { DomainChecks } from './links/domain-checks.ts';
+import { emitLinkOpened } from './links/events.ts';
 import { buildLinksServer } from './links/server.ts';
 import { fetchToken } from './m365/oauth.ts';
 import { M365Service } from './m365/service.ts';
@@ -211,7 +212,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const redirects = buildLinksServer({
     ...links, messages, checks: domainChecks, trustedProxies: config.trustedProxies, log,
     transaction: (fn) => db.transaction(fn)(),
-    opened: () => {},
+    opened: (link, campaign, domain, at) => emitLinkOpened({ apiKeys, deliveries, jobs, integrationEmit }, link, campaign, domain, at),
   });
 
   // Panel domyślnie zostaje na pętli zwrotnej (MIG_ADMIN_HOST); w kontenerze o wystawieniu

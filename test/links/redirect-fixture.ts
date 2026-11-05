@@ -66,5 +66,5 @@ export function redirectFixture() {
   const campaign = () => campaigns.get(campaignId)!;
   const target = (url: string) => campaigns.targets(campaignId).find((t) => t.target === url);
 
-  return { db, apiKeys, apiKeyId, linkDomains, domainId, otherId, campaigns, shortLinks, messages, campaignId, deps, opened, addLink, campaign, target };
+  return { db, key, accountId, apiKeys, apiKeyId, linkDomains, domainId, otherId, campaigns, shortLinks, messages, campaignId, deps, opened, addLink, campaign, target };
 }

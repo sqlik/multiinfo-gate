@@ -7,7 +7,7 @@ import type { Job } from '../store/jobs.ts';
 import type { DeliveryRow } from '../store/webhook-deliveries.ts';
 import type { WorkerDeps } from './send.ts';
 
-export type WebhookEvent = 'message.sent' | 'message.delivered' | 'message.failed' | 'package.completed' | 'message.received';
+export type WebhookEvent = 'message.sent' | 'message.delivered' | 'message.failed' | 'package.completed' | 'message.received' | 'link.opened';
 
 /** Tyle z zależności workera, ile trzeba do zakolejkowania dostawy - korzysta też odbiornik. */
 export type WebhookEmitDeps = Pick<WorkerDeps, 'apiKeys' | 'deliveries' | 'jobs'>;

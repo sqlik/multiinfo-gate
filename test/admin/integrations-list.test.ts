@@ -164,6 +164,8 @@ describe('GET /integracje/nowa', () => {
     expect(form.body).toContain('name="url"');
     expect(form.body).toContain('freescout.example');
     expect(form.body).toContain('name="events"');
+    expect(form.body).toContain('value="link.opened"');
+    expect(form.body).toContain('link.opened (link otwarty)');
     expect(form.body).toContain('name="bodyTemplate"');
     expect(form.body).toContain('X-FreeScout-API-Key');
   });
