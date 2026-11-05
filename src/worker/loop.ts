@@ -85,6 +85,9 @@ export class Worker {
       ['powiadomienia_sms', () => this.deps.notifier?.flushSms?.(now)],
       ['skaner', () => this.deps.scanner?.scan(now)],
       ['wydania', () => { void this.deps.releases?.check(now); }],
+      ['konta_m365', () => {
+        void this.deps.m365KeepAlive?.keepAlive(now).catch((error: unknown) => log.error('worker.utrzymanie_blad', { step: 'konta_m365', error }));
+      }],
       ['idempotencja', () => this.deps.guards?.pruneDedupBefore(new Date(now.getTime() - DAY_MS))],
       ['ladunki', () => this.deps.integrationEvents?.scrubPayloadsBefore(new Date(now.getTime() - 7 * DAY_MS))],
       ['kolejka_powiadomien', () => this.deps.notifications?.pruneBefore(new Date(now.getTime() - 30 * DAY_MS))],

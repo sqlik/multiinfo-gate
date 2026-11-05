@@ -10,6 +10,13 @@ import { M365AuthError, hintFor, refreshTokens, type TokenFetch, type TokenSet }
 
 /** Token dostępu odświeżany, gdy do wygaśnięcia zostało mniej niż tyle. */
 const REFRESH_MARGIN_MS = 5 * 60_000;
+/**
+ * Konto bez odświeżenia dłużej niż tyle odświeża tura utrzymaniowa. Microsoft unieważnia token odświeżania
+ * po 90 dniach bezczynności, a konto używane wyłącznie do rzadkich maili powiadomień mogłoby tyle czekać.
+ */
+export const KEEP_ALIVE_AFTER_MS = 7 * 86_400_000;
+/** Odstęp między próbami utrzymania jednego konta po nieudanym odświeżeniu. */
+const KEEP_ALIVE_RETRY_MS = 3_600_000;
 
 export interface M365Access { token: string; address: string }
 
@@ -18,6 +25,7 @@ export interface M365TokensDeps { accounts: M365AccountsRepo; fetch: TokenFetch;
 export class M365Tokens {
   private readonly cache = new Map<number, { token: string; expiresAt: Date }>();
   private readonly inflight = new Map<number, Promise<M365Access>>();
+  private readonly keepAliveAt = new Map<number, number>();
 
   constructor(private readonly deps: M365TokensDeps) {}
 
@@ -38,6 +46,23 @@ export class M365Tokens {
       this.inflight.set(accountId, pending);
     }
     return pending;
+  }
+
+  /**
+   * Odświeża konta połączone albo po przejściowym błędzie, których ostatnie odświeżenie jest starsze niż
+   * KEEP_ALIVE_AFTER_MS. Awarię zapisuje i zgłasza `access`, tak jak przy zwykłym użyciu konta.
+   */
+  async keepAlive(now: Date): Promise<void> {
+    const due = this.deps.accounts.list().filter((a) => {
+      if (a.state !== 'connected' && a.state !== 'error') return false;
+      const last = Date.parse(a.lastRefreshAt ?? a.connectedAt ?? a.createdAt);
+      const tried = this.keepAliveAt.get(a.id) ?? Number.NEGATIVE_INFINITY;
+      return now.getTime() - last > KEEP_ALIVE_AFTER_MS && now.getTime() - tried >= KEEP_ALIVE_RETRY_MS;
+    });
+    for (const account of due) {
+      this.keepAliveAt.set(account.id, now.getTime());
+      await this.access(account.id, now).catch(() => undefined);
+    }
   }
 
   remember(accountId: number, set: TokenSet): void {

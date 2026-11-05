@@ -224,3 +224,38 @@ describe('szczegóły konta po odrzuconym odświeżeniu', () => {
     expect(html.match(/AADSTS50173/g)).toHaveLength(1);
   });
 });
+
+describe('M365Tokens.keepAlive - konto bezczynne nie wygasa', () => {
+  const DAY = 86_400_000;
+  const at = (ms: number) => new Date(T0.getTime() + ms);
+
+  it('odświeża konto, którego ostatnie odświeżenie jest starsze niż 7 dni, i zapisuje nowy token odświeżania', async () => {
+    const fetch = fakeFetch([tokenBody(1)]);
+    const tokens = new M365Tokens({ accounts, fetch: fetch.f });
+    await tokens.keepAlive(at(6 * DAY));
+    expect(fetch.forms).toHaveLength(0);
+    await tokens.keepAlive(at(7 * DAY + 1));
+    expect(fetch.forms).toHaveLength(1);
+    expect(accounts.refreshToken(id)).toBe('odswiezanie-1');
+    expect(accounts.get(id)!.lastRefreshAt).toBe(at(7 * DAY + 1).toISOString());
+    await tokens.keepAlive(at(8 * DAY));
+    expect(fetch.forms).toHaveLength(1);
+  });
+
+  it('pomija konta wymagające logowania i nowe, a po nieudanej próbie czeka godzinę', async () => {
+    const other = accounts.create({ ...INPUT, name: 'Biuro handlowe' }, T0);
+    const fetch = fakeFetch([{ status: 503, body: {} }]);
+    const tokens = new M365Tokens({ accounts, fetch: fetch.f });
+    await tokens.keepAlive(at(8 * DAY));
+    expect(fetch.forms).toHaveLength(1);
+    expect(accounts.get(id)!.state).toBe('error');
+    expect(accounts.get(other)!.state).toBe('new');
+    await tokens.keepAlive(at(8 * DAY + 30 * 60_000));
+    expect(fetch.forms).toHaveLength(1);
+    await tokens.keepAlive(at(8 * DAY + 61 * 60_000));
+    expect(fetch.forms).toHaveLength(2);
+    accounts.failed(id, { state: 'needs_login', code: '50173', message: 'odwołane' }, at(9 * DAY));
+    await tokens.keepAlive(at(10 * DAY));
+    expect(fetch.forms).toHaveLength(2);
+  });
+});

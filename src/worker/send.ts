@@ -50,6 +50,8 @@ export interface WorkerDeps {
   notifier?: AdminNotifier & { flush?(now: Date): void; flushSms?(now: Date): void };
   /** Sprawdzanie nowych wydań na GitHubie; bez niego bramka nie pyta. */
   releases?: { check(now: Date): Promise<void> | void };
+  /** Odświeżenie kont Microsoft 365 bezczynnych od tygodnia, zanim Microsoft unieważni token odświeżania. */
+  m365KeepAlive?: { keepAlive(now: Date): Promise<void> };
   /** Ustawienie SMTP i kolejka powiadomień - zadanie `mail` i sprzątanie. */
   notifications?: NotificationsRepo;
   /** Wysyłka maila; testy podstawiają atrapę. */

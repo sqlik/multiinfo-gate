@@ -89,6 +89,14 @@ describe('Worker.tick - sprawdzanie wydań', () => {
     expect(pruneSeenBefore).toHaveBeenCalledWith(new Date(clock.getTime() - 180 * 86_400_000));
   });
 
+  it('tura utrzymaniowa podtrzymuje konta Microsoft 365, a odrzucona obietnica nie zatrzymuje tury', async () => {
+    const keepAlive = vi.fn(async () => { throw new Error('sieć'); });
+    deps.m365KeepAlive = { keepAlive };
+    const worker = new Worker(deps, { now: () => clock, maintenanceMs: 60_000 });
+    await worker.tick();
+    expect(keepAlive).toHaveBeenCalledWith(clock);
+  });
+
   it('tura utrzymaniowa woła sprawdzenie wydań z bieżącym czasem', async () => {
     const check = vi.fn(async () => {});
     deps.releases = { check };

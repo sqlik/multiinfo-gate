@@ -768,11 +768,10 @@ konta, a panel informuje o tej zmianie.
 #### Ponowne logowanie i odcięcie dostępu
 
 Microsoft unieważnia logowanie bramki po zmianie albo resecie hasła konta technicznego, po
-odwołaniu sesji w Entra ID i po cofnięciu zgody. Logowanie wygasa także po 90 dniach bez użycia.
-Skrzynka Mail2SMS korzysta z konta przy każdym sprawdzeniu, dlatego dotyczy to głównie konta
-używanego wyłącznie do rzadkich maili powiadomień. Konto przechodzi wówczas w stan „Wymaga
-logowania”. Przegląd panelu wyświetla pasek z nazwą konta i przyciskiem **Zaloguj
-ponownie**, a menu pokazuje liczbę takich kont przy pozycji **Konta Microsoft 365**. Po ponownym
+odwołaniu sesji w Entra ID i po cofnięciu zgody. Logowanie nieużywane przez 90 dni również
+wygasa, dlatego bramka co tydzień odświeża logowanie konta, z którego w tym czasie nie
+korzystała. Po unieważnieniu logowania konto przechodzi w stan „Wymaga logowania”. Przegląd
+panelu wyświetla pasek z nazwą konta i przyciskiem **Zaloguj ponownie**, a menu pokazuje liczbę takich kont przy pozycji **Konta Microsoft 365**. Po ponownym
 logowaniu skrzynki wznawiają pracę przy najbliższym sprawdzeniu.
 
 Reguła **Konto Microsoft 365 wymaga logowania** powiadamia administratora mailem i SMS-em. Gdy
