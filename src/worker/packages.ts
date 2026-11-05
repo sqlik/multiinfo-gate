@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { silentLogger, type Logger } from '../log.ts';
 import { parseReport } from '../multiinfo/report.ts';
+import { PACKAGE_NOT_RETRIED } from '../multiinfo/client.ts';
 import { ProviderError } from '../multiinfo/response.ts';
 import { pauseForCertificate } from './certificate.ts';
 import { unzipFirstFile } from '../multiinfo/zip.ts';
@@ -21,6 +22,9 @@ export const REPORT_RETRY_MS = 60_000;
 const PAUSED_RECHECK_MS = 60_000;
 
 /** Statusy rozsyłki w packageinfo.aspx (§7.3). */
+/** Kod bramki dla rozsyłki, której utworzenia Multiinfo nie potwierdziło. */
+const UNCERTAIN_CODE = -72;
+
 const MI_PACKAGE = { open: 1, sending: 2, completed: 11, cancelled: 12 } as const;
 
 /** Kod „brak rozsyłki / rozsyłka zakończona” - dla rozsyłki widzianej jako czynna znaczy: zakończona. */
@@ -58,7 +62,8 @@ function handleProviderFailure(
     return;
   }
 
-  if (provider !== null && provider.kind === 'permanent') {
+  // Wynik nieznany kończy jak błąd trwały: ponowienie mogłoby utworzyć rozsyłkę drugi raz.
+  if (provider !== null && (provider.kind === 'permanent' || provider.kind === 'uncertain')) {
     onPermanent(provider.code, provider.message);
     return;
   }
@@ -107,6 +112,23 @@ export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date)
     deps.jobs.complete(job.id);
     return;
   }
+  // Poprzedni proces przekazał żądanie i zatrzymał się przed odpowiedzią. Multiinfo mogło
+  // utworzyć rozsyłkę, a nie pozwala tego sprawdzić, dlatego bramka jej nie ponawia.
+  if (typeof job.payload.sentAt === 'string') {
+    fail(deps, job, pkg, UNCERTAIN_CODE, `Bramka zatrzymała się po przekazaniu rozsyłki do Multiinfo, zanim nadeszła odpowiedź. ${PACKAGE_NOT_RETRIED}`, now, log);
+    return;
+  }
+
+  // Znacznik w zadaniu chroni przed powtórzeniem po awarii procesu. Jego brak nie może jednak
+  // przerwać wysyłki, a wyjątek ze zdarzenia gniazda zatrzymałby cały proces. Dlatego błąd
+  // zapisu trafia tylko do dziennika.
+  const onSent = () => {
+    try {
+      deps.jobs.markSent(job.id, now);
+    } catch (error) {
+      log.error('rozsylka.znacznik_przekazania', { packageId: pkg.id, error: error instanceof Error ? error.message : String(error) });
+    }
+  };
 
   try {
     const miPackageId = await deps.clients.for(pkg.accountId).createPackage({
@@ -119,7 +141,7 @@ export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date)
       deliveryReport: pkg.deliveryReport === 1,
       advancedEncoding: pkg.encoding === 'ucs2',
       multipart: pkg.multipart === 1,
-    });
+    }, { onSent });
 
     deps.packages.setCreated(pkg.id, miPackageId);
     // Treści to dane osobowe - konto bez przechowywania nie zostawia ich po przekazaniu.

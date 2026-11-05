@@ -1,21 +1,42 @@
+import { createServer } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MultiinfoClient } from '../../src/multiinfo/client.ts';
+import { MultiinfoClient, packageTimeoutMs, type ClientOptions, type PackageParams, type PackageRecipient } from '../../src/multiinfo/client.ts';
 import { ProviderError } from '../../src/multiinfo/response.ts';
 import { startFakeMultiinfo, type FakeMultiinfo } from '../helpers/fake-multiinfo.ts';
 
 let fake: FakeMultiinfo;
 let client: MultiinfoClient;
 
-beforeAll(async () => {
-  fake = await startFakeMultiinfo();
-  client = new MultiinfoClient({
-    baseUrl: fake.baseUrl,
+function clientWith(options: Omit<ClientOptions, 'extraServerCa'>, baseUrl = fake.baseUrl): MultiinfoClient {
+  return new MultiinfoClient({
+    baseUrl,
     login: 'firma_test',
     password: 'tajne',
     certPem: fake.clientCertPem,
     keyPem: fake.clientKeyPem,
     caPem: fake.caPem,
-  }, { extraServerCa: fake.serverCaPem });
+  }, { extraServerCa: fake.serverCaPem, ...options });
+}
+
+const recipient = (n: string): PackageRecipient => ({ dest: `4860100000${n}`, text: `Treść ${n}`, clientId: null });
+
+const onePackage = (): PackageParams => ({
+  serviceId: '24138', defaultText: null, deliveryReport: false, advancedEncoding: false, multipart: false,
+  recipients: [recipient('1')],
+});
+
+/** Port, na którym nikt nie słucha - połączenie zostaje odrzucone, zanim żądanie wyjdzie. */
+async function closedPort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  const { port } = server.address() as { port: number };
+  await new Promise<void>((r) => server.close(() => r()));
+  return port;
+}
+
+beforeAll(async () => {
+  fake = await startFakeMultiinfo();
+  client = clientWith({});
 }, 60_000);
 
 afterAll(async () => {
@@ -211,12 +232,77 @@ describe('MultiinfoClient - rozsyłki', () => {
     expect(req.params.isMultiPart).toBe('true');
   });
 
-  it('createPackage zgłasza błąd, gdy odpowiedź nie niesie identyfikatora', async () => {
+  it('createPackage: odpowiedź 0 bez identyfikatora to wynik nieznany, bo rozsyłka mogła powstać', async () => {
     fake.reply('0\n');
-    await expect(client.createPackage({
-      serviceId: '24138', defaultText: 'x', deliveryReport: false, advancedEncoding: false, multipart: false,
-      recipients: [{ dest: '48601135134', text: null, clientId: null }],
-    })).rejects.toMatchObject({ code: -71, kind: 'transient' });
+    await expect(client.createPackage(onePackage())).rejects.toMatchObject({ code: -72, kind: 'uncertain' });
+  });
+
+  it('createPackage: limit czasu rośnie z liczbą odbiorców, 5000 odbiorców to 180 s', () => {
+    expect(packageTimeoutMs(1)).toBe(30_030);
+    expect(packageTimeoutMs(5000)).toBe(180_000);
+  });
+
+  it('createPackage: limit czasu liczy się z liczby odbiorców rozsyłki', async () => {
+    const seen: number[] = [];
+    const counting = clientWith({ packageTimeoutMs: (n) => { seen.push(n); return 5_000; } });
+    fake.reply('0\n16');
+    await counting.createPackage({ ...onePackage(), recipients: [recipient('1'), recipient('2'), recipient('3')] });
+    counting.close();
+    expect(seen).toEqual([3]);
+  });
+
+  it('createPackage: brak odpowiedzi po przekazaniu żądania to wynik nieznany, nie błąd przejściowy', async () => {
+    const impatient = clientWith({ packageTimeoutMs: () => 100 });
+    fake.respond(async () => { await new Promise((r) => setTimeout(r, 400)); return '0\n17'; });
+    await expect(impatient.createPackage(onePackage())).rejects.toMatchObject({ code: -72, kind: 'uncertain' });
+    impatient.close();
+    fake.respond(null);
+  });
+
+  it('createPackage: odpowiedź HTTP 5xx po przekazaniu żądania to wynik nieznany', async () => {
+    fake.reply('Internal Server Error', 500);
+    await expect(client.createPackage(onePackage())).rejects.toMatchObject({ code: -72, kind: 'uncertain' });
+  });
+
+  it('createPackage: odmowa połączenia przed przekazaniem żądania pozostaje błędem przejściowym', async () => {
+    const port = await closedPort();
+    const unreachable = clientWith({}, `https://127.0.0.1:${port}/Api61/`);
+    let sent = false;
+    await expect(unreachable.createPackage(onePackage(), { onSent: () => { sent = true; } }))
+      .rejects.toMatchObject({ code: -71, kind: 'transient' });
+    unreachable.close();
+    expect(sent).toBe(false);
+  });
+
+  it('createPackage: jawna odmowa Multiinfo kodem -10 pozostaje błędem przejściowym', async () => {
+    fake.reply('-10\nSystem przeciazony');
+    await expect(client.createPackage(onePackage())).rejects.toMatchObject({ code: -10, kind: 'transient' });
+  });
+
+  it('createPackage otwiera nowe połączenie, bo zamknięte keep-alive dałoby fałszywy wynik nieznany', async () => {
+    // Połączenie zamknięte przez serwer w chwili ponownego użycia przyjmuje żądanie do gniazda,
+    // ale nie do Multiinfo. Przy rozsyłce taki błąd oznaczałby wynik nieznany zamiast ponowienia.
+    fake.reply('0\n19');
+    await client.createPackage(onePackage());
+    await client.createPackage(onePackage());
+    const [first, second] = fake.requests.slice(-2);
+    expect(second!.remotePort).not.toBe(first!.remotePort);
+  });
+
+  it('zwykłe polecenia nadal korzystają z połączenia keep-alive', async () => {
+    fake.reply('0\nOK');
+    await client.cancel('1');
+    await client.cancel('2');
+    const [first, second] = fake.requests.slice(-2);
+    expect(second!.remotePort).toBe(first!.remotePort);
+  });
+
+  it('createPackage zgłasza przekazanie żądania, zanim nadejdzie odpowiedź', async () => {
+    const order: string[] = [];
+    fake.respond(() => { order.push('odpowiedź'); return '0\n18'; });
+    await client.createPackage(onePackage(), { onSent: () => order.push('przekazane') });
+    fake.respond(null);
+    expect(order).toEqual(['przekazane', 'odpowiedź']);
   });
 
   it('packageInfo czyta identyfikator, liczby i status', async () => {

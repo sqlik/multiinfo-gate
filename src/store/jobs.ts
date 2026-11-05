@@ -60,6 +60,14 @@ export class JobsRepo {
     return this.db.transaction(fn)();
   }
 
+  /**
+   * Zapisuje w zadaniu chwilę przekazania żądania do Multiinfo. Zadanie odzyskane po awarii
+   * procesu niesie ten znacznik, więc nie powtarza skutku, którego wynik nie jest znany.
+   */
+  markSent(id: number, at: Date): void {
+    this.db.prepare("UPDATE jobs SET payload = json_set(payload, '$.sentAt', ?) WHERE id = ?").run(iso(at), id);
+  }
+
   complete(id: number): void {
     this.db.prepare('DELETE FROM jobs WHERE id = ?').run(id);
   }

@@ -1063,7 +1063,13 @@ Pole `summary` występuje tylko przy `report.status` równym `ready`.
 | `sending` | w trakcie wysyłki; `remaining` maleje |
 | `completed` | wysyłka zakończona; bramka zamawia raport samoczynnie |
 | `cancelled` | anulowana po stronie Multiinfo |
-| `failed` | odrzucona przez Multiinfo; przyczyna w `providerCode` i `error` |
+| `failed` | odrzucona przez Multiinfo albo bez potwierdzenia utworzenia; przyczyna w `providerCode` i `error` |
+
+Kod `providerCode` równy -72 oznacza, że Multiinfo nie potwierdziło utworzenia rozsyłki. Bramka
+przekazała rozsyłkę, ale nie otrzymała odpowiedzi w wyznaczonym czasie albo zatrzymała się przed
+jej otrzymaniem. Multiinfo mogło mimo to utworzyć rozsyłkę, a jego API nie pozwala tego sprawdzić.
+Dlatego bramka nie ponawia takiej rozsyłki samoczynnie. Postępowanie opisuje punkt
+[Rozsyłka zakończona kodem -72](problemy.md#rozsylka-bez-potwierdzenia).
 
 | `report.status` | Znaczenie |
 |---|---|

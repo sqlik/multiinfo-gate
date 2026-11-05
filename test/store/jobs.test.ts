@@ -79,6 +79,15 @@ describe('JobsRepo', () => {
     expect(repo.claim(at(16 * 60_000), 10)).toHaveLength(1);
   });
 
+  it('znacznik przekazania żądania zostaje w zadaniu odzyskanym po awarii procesu', () => {
+    const repo = new JobsRepo(openDatabase(':memory:'));
+    const id = repo.enqueue('package.create', { packageId: 'pkg_1' }, at(0));
+    repo.claim(at(0), 10);
+    repo.markSent(id, at(1000));
+    const [again] = repo.claim(at(16 * 60_000), 10);
+    expect(again!.payload).toEqual({ packageId: 'pkg_1', sentAt: at(1000).toISOString() });
+  });
+
   it('usuwa zadanie zakończone niepowodzeniem i podaje głębokość kolejki', () => {
     const repo = new JobsRepo(openDatabase(':memory:'));
     repo.enqueue('send', { messageId: 'msg_1' }, at(0));

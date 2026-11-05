@@ -96,7 +96,7 @@ describe('handlePackageCreate', () => {
         { dest: '48601135134', text: null, clientId: null },
         { dest: '48501052442', text: 'Indywidualna', clientId: 'faktura-114' },
       ],
-    });
+    }, { onSent: expect.any(Function) });
     const pkg = deps.packages.get('pkg_1')!;
     expect(pkg.miPackageId).toBe('14');
     expect(pkg.status).toBe('open');
@@ -155,6 +155,55 @@ describe('handlePackageCreate', () => {
     // Konto wstrzymane - kolejna tura nie woła Multiinfo.
     await handlePackageCreate(deferred!, deps, NOW);
     expect(createPackage).toHaveBeenCalledTimes(1);
+  });
+
+  it('wynik nieznany kończy rozsyłkę stanem failed bez ponowienia', async () => {
+    seed();
+    createPackage.mockRejectedValue(new ProviderError(-72, 'Multiinfo nie odpowiedziało w wyznaczonym czasie. Bramka nie ponawia rozsyłki', 'uncertain'));
+    await handlePackageCreate(job('package.create'), deps, NOW);
+    const pkg = deps.packages.get('pkg_1')!;
+    expect(pkg.status).toBe('failed');
+    expect(pkg.providerCode).toBe(-72);
+    expect(pkg.error).toContain('Bramka nie ponawia rozsyłki');
+    expect(lastWebhook()).toMatchObject({ event: 'package.completed', id: 'pkg_1', status: 'failed', providerCode: -72 });
+    expect(deps.jobs.claim(new Date(NOW.getTime() + 86_400_000), 10).map((j) => j.type)).toEqual(['webhook']);
+  });
+
+  it('zapisuje w zadaniu przekazanie żądania, zanim nadejdzie odpowiedź Multiinfo', async () => {
+    seed();
+    const created = job('package.create');
+    let payloadAtSend: Record<string, unknown> | undefined;
+    createPackage.mockImplementation(async (_p: unknown, hooks: { onSent?: () => void }) => {
+      hooks.onSent?.();
+      payloadAtSend = JSON.parse((db.prepare('SELECT payload FROM jobs WHERE id = ?').get(created.id) as { payload: string }).payload);
+      return '14';
+    });
+    await handlePackageCreate(created, deps, NOW);
+    expect(payloadAtSend).toEqual({ packageId: 'pkg_1', sentAt: NOW.toISOString() });
+  });
+
+  it('błąd zapisu znacznika przekazania nie przerywa utworzenia rozsyłki', async () => {
+    seed();
+    vi.spyOn(deps.jobs, 'markSent').mockImplementation(() => { throw new Error('database is locked'); });
+    createPackage.mockImplementation(async (_p: unknown, hooks: { onSent?: () => void }) => {
+      hooks.onSent?.();
+      return '14';
+    });
+    await handlePackageCreate(job('package.create'), deps, NOW);
+    expect(deps.packages.get('pkg_1')!.miPackageId).toBe('14');
+    expect(deps.packages.get('pkg_1')!.status).toBe('open');
+  });
+
+  it('po awarii procesu w trakcie przekazania nie tworzy rozsyłki drugi raz', async () => {
+    seed();
+    const created = job('package.create');
+    // Poprzedni proces przekazał żądanie i padł przed odpowiedzią; zadanie wraca z kolejki ze znacznikiem.
+    await handlePackageCreate({ ...created, payload: { packageId: 'pkg_1', sentAt: NOW.toISOString() } }, deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    const pkg = deps.packages.get('pkg_1')!;
+    expect(pkg.status).toBe('failed');
+    expect(pkg.providerCode).toBe(-72);
+    expect(pkg.error).toContain('Bramka nie ponawia rozsyłki');
   });
 
   it('nie tworzy ponownie rozsyłki, która już wyszła', async () => {

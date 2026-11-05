@@ -163,6 +163,20 @@ describe('GET /rozsylki/:id', () => {
     expect(res.body).toContain('błąd');
   });
 
+  it('przy wyniku nieznanym -72 odsyła do opisu postępowania', async () => {
+    seed();
+    h.packages.setFailed('pkg_1', -72, 'Multiinfo nie odpowiedziało w wyznaczonym czasie. Bramka nie ponawia rozsyłki', NOW);
+    const res = await page('/rozsylki/pkg_1');
+    expect(res.body).toContain('problemy/#rozsylka-bez-potwierdzenia');
+    expect(res.body).toContain('Jak ustalić, czy SMS-y zostały wysłane');
+  });
+
+  it('przy innym błędzie nie odsyła do opisu wyniku nieznanego', async () => {
+    seed();
+    h.packages.setFailed('pkg_1', -63, 'Zbyt wielu odbiorców', NOW);
+    expect((await page('/rozsylki/pkg_1')).body).not.toContain('rozsylka-bez-potwierdzenia');
+  });
+
   it('ucieka HTML w identyfikatorze klienta i treści', async () => {
     seed('pkg_x', [{ dest: '48601135134', text: '<b>x</b>', clientId: '<img src=x>' }]);
     const res = await page('/rozsylki/pkg_x');

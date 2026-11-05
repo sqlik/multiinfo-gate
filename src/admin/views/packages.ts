@@ -1,9 +1,16 @@
 import type { PackageRow, RecipientRow } from '../../store/packages.ts';
+import { problemUrl } from '../../docs-links.ts';
 import { warsawStamp } from '../../time/warsaw.ts';
 import { esc } from './layout.ts';
 import {
   packageStatusLabel, packageStatusTone, reportStatusLabel, statusLabel, statusTone,
 } from './status-labels.ts';
+
+/** Kod -72: Multiinfo nie potwierdziło utworzenia rozsyłki, więc bramka jej nie ponowiła. */
+function uncertainHelp(providerCode: number | null): string {
+  if (providerCode !== -72) return '';
+  return `<br><a href="${esc(problemUrl('rozsylka-bez-potwierdzenia'))}" target="_blank" rel="noopener noreferrer">Jak ustalić, czy SMS-y zostały wysłane</a>`;
+}
 
 export interface PackagesData {
   rows: PackageRow[];
@@ -178,7 +185,7 @@ export function packagePage(d: PackageDetail): string {
           <div${p.error === null ? ' style="border-bottom: none;"' : ''}>Raport</div>
           <div${p.error === null ? ' style="border-bottom: none;"' : ''}>${reportState}</div>
           ${p.error === null ? '' : `<div style="border-bottom: none;">Błąd</div>
-            <div class="m fail" style="border-bottom: none;">${p.providerCode === null ? '' : `${esc(p.providerCode)} - `}${esc(p.error)}</div>`}
+            <div class="m fail" style="border-bottom: none;">${p.providerCode === null ? '' : `${esc(p.providerCode)} - `}${esc(p.error)}${uncertainHelp(p.providerCode)}</div>`}
         </div>
       </div>
       <div class="panel">

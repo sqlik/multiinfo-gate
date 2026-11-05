@@ -348,6 +348,23 @@ administratora Polkomtel.
 Wpis `odbior.zatrzymany` w dzienniku oznacza inną przyczynę: Multiinfo odrzuciło zapytanie
 o wiadomości. Opis zdarzeń odbioru zawiera rozdział 7.3 [Uruchomienia](uruchomienie.md).
 
+## Rozsyłka zakończona kodem -72 {#rozsylka-bez-potwierdzenia}
+
+Objaw: rozsyłka ma stan `failed`, a pole `providerCode` zawiera wartość -72. Komunikat błędu
+informuje, że bramka nie ponawia rozsyłki. Dziennik zawiera wpis `rozsylka.nieudana` z kodem -72.
+
+Bramka przekazała rozsyłkę do Multiinfo, ale nie otrzymała potwierdzenia jej utworzenia. Najczęściej
+Multiinfo nie odpowiedziało w wyznaczonym czasie albo bramka zatrzymała się w trakcie oczekiwania.
+Limit czasu rośnie z liczbą odbiorców i dla 5000 odbiorców wynosi 3 minuty. Multiinfo mogło mimo to
+utworzyć rozsyłkę, a jego API nie pozwala tego sprawdzić ani anulować rozsyłki. Dlatego bramka nie
+ponawia jej samoczynnie, ponieważ odbiorcy mogliby otrzymać SMS-y dwukrotnie.
+
+Przed ponownym zleceniem rozsyłki ustal, czy SMS-y dotarły do odbiorców. Pomocny jest numer
+kontrolny umieszczony w każdej rozsyłce, na przykład numer dyżuru IT. Jeżeli termin rozsyłki minął,
+a numer kontrolny nie otrzymał SMS-a, rozsyłkę można zlecić ponownie. W pozostałych przypadkach
+zwróć się do administratora Polkomtel. Podaj nazwę konta Multiinfo, usługę i godzinę zlecenia,
+dzięki czemu administrator sprawdzi, czy rozsyłka powstała.
+
 ## Wersja Node.js bez poprawek bezpieczeństwa {#wersja-node}
 
 Objaw: przegląd panelu pokazuje czerwony pasek z informacją, że Node.js, na którym działa bramka,

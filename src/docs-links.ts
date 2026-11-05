@@ -14,7 +14,7 @@ export const PROBLEM_ANCHORS = [
   'panel-nie-odpowiada', 'pierwsze-konto', 'logowanie-wraca', 'kod-odrzucony', 'blad-wewnetrzny',
   'klucz-glowny', 'klucz-nieprawidlowy', 'klucz-czesciowy', 'kopia-przed-aktualizacja', 'baza-z-nowszego-wydania',
   'brak-miejsca', 'uprawnienia', 'uszkodzona-baza', 'nieudana-migracja', 'awaria-startu',
-  'zajety-port', 'po-aktualizacji', 'sms-od-abonentow', 'wersja-node', 'zgloszenie',
+  'zajety-port', 'po-aktualizacji', 'sms-od-abonentow', 'rozsylka-bez-potwierdzenia', 'wersja-node', 'zgloszenie',
   'microsoft-365', 'm365-wymaga-logowania', 'm365-adres-przekierowania', 'm365-zgoda', 'm365-dostep-warunkowy',
   'm365-skrzynka', 'm365-smtp', 'm365-nadawca', 'm365-spam',
 ] as const;
