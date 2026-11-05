@@ -123,6 +123,11 @@ export class ShortLinksRepo {
     return (this.db.prepare('SELECT COUNT(*) AS n FROM short_links WHERE campaign_id = ?').get(campaignId) as { n: number }).n;
   }
 
+  /** Najpóźniejszy termin retencji kodów domeny; do tej chwili domena nie może zostać usunięta. */
+  domainPurgeAfter(domainId: number): string | null {
+    return (this.db.prepare('SELECT MAX(purge_after) AS last FROM short_links WHERE domain_id = ?').get(domainId) as { last: string | null }).last;
+  }
+
   /** Usuwa kody z minionym `purge_after`; zwraca identyfikatory kampanii, których kody zniknęły. */
   purge(now: Date): number[] {
     return this.db.transaction(() => {

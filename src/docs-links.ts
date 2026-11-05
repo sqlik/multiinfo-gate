@@ -6,6 +6,9 @@ export const TROUBLESHOOTING_URL = 'https://sqlik.github.io/multiinfo-gate/probl
 /** Rozdział „Konto Microsoft 365” w artykule o uruchomieniu; formularz konta odsyła do niego z instrukcji. */
 export const M365_DOCS_URL = 'https://sqlik.github.io/multiinfo-gate/uruchomienie/#48-konto-microsoft-365';
 
+/** Artykuł „Skracacz linków”; formularz domeny odsyła do niego przy rekordach DNS. */
+export const LINKS_DOCS_URL = 'https://sqlik.github.io/multiinfo-gate/skracacz/';
+
 /**
  * Stałe kotwice punktów artykułu (`{#…}` w docs/problemy.md); panel i dziennik odsyłają do nich wprost.
  * Zgodność z artykułem pilnuje test docs-links.
@@ -16,7 +19,7 @@ export const PROBLEM_ANCHORS = [
   'brak-miejsca', 'uprawnienia', 'uszkodzona-baza', 'nieudana-migracja', 'awaria-startu',
   'zajety-port', 'po-aktualizacji', 'sms-od-abonentow', 'rozsylka-bez-potwierdzenia', 'wersja-node', 'zgloszenie',
   'microsoft-365', 'm365-wymaga-logowania', 'm365-adres-przekierowania', 'm365-zgoda', 'm365-dostep-warunkowy',
-  'm365-skrzynka', 'm365-smtp', 'm365-nadawca', 'm365-spam',
+  'm365-skrzynka', 'm365-smtp', 'm365-nadawca', 'm365-spam', 'skracacz-sprawdzenie-domeny',
 ] as const;
 
 export type ProblemAnchor = typeof PROBLEM_ANCHORS[number];

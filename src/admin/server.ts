@@ -38,6 +38,7 @@ import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 import type { CampaignsRepo } from '../store/campaigns.ts';
 import type { LinkDomainsRepo } from '../store/link-domains.ts';
 import type { ShortLinksRepo } from '../store/short-links.ts';
+import type { DomainChecks } from '../links/domain-checks.ts';
 import type { Resolver } from '../net/private-address.ts';
 import type { ClientPool } from '../worker/clients.ts';
 import { FlashStore } from './flash.ts';
@@ -49,6 +50,7 @@ import { registerUserRoutes } from './routes/users.ts';
 import { registerDeliveryRoutes } from './routes/deliveries.ts';
 import { registerInboundViewRoutes } from './routes/inbound.ts';
 import { registerIntegrationRoutes } from './routes/integrations.ts';
+import { registerLinkRoutes } from './routes/links.ts';
 import { registerMessageViewRoutes } from './routes/messages.ts';
 import { registerNotificationRoutes } from './routes/notifications.ts';
 import { registerSettingsRoutes } from './routes/settings.ts';
@@ -85,6 +87,11 @@ export interface AdminDeps {
   linkDomains: LinkDomainsRepo;
   campaigns: CampaignsRepo;
   shortLinks: ShortLinksRepo;
+  /** Tokeny sprawdzenia domeny skracacza, wspólne z serwerem przekierowań, który na nie odpowiada. */
+  domainChecks: DomainChecks;
+  /** Rozwiązywanie nazw i pobranie tokenu przy sprawdzeniu domeny; testy podstawiają atrapy. */
+  domainLookup?: (host: string) => Promise<unknown>;
+  domainFetch?: typeof fetch;
   /** Stan skrzynek pocztowych: formularz skrzynki, lista, szczegóły, kafelek przeglądu. */
   mailIn?: MailInRepo;
   /** Połączenie ze skrzynką do „Sprawdź połączenie”; testy podstawiają podróbkę. */
@@ -451,6 +458,7 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   registerAccountRoutes(app, deps, render);
   registerKeyRoutes(app, deps, render);
   registerIntegrationRoutes(app, deps, render);
+  registerLinkRoutes(app, deps, render);
   registerNotificationRoutes(app, deps, render);
   registerSettingsRoutes(app, deps, render);
   registerUserRoutes(app, deps, render);

@@ -145,6 +145,16 @@ describe('ShortLinksRepo', () => {
     expect(links.purge(AT)).toEqual([]);
   });
 
+  it('podaje najpóźniejszy termin retencji kodów domeny, a domena bez kodów daje null', () => {
+    const { db, links, input } = setup();
+    const other = new LinkDomainsRepo(db).create({ domain: 'firma-link.pl', displayName: 'Firma Serwis', homeUrl: null, bareLinks: false }, AT);
+    expect(links.domainPurgeAfter(other)).toBeNull();
+    links.insert(input('kod0001', { domainId: other, purgeAfter: '2027-03-05T10:00:00.000Z' }));
+    links.insert(input('kod0002', { domainId: other, purgeAfter: '2027-04-20T10:00:00.000Z' }));
+    links.insert(input('kod0003', { purgeAfter: '2027-09-01T10:00:00.000Z' }));
+    expect(links.domainPurgeAfter(other)).toBe('2027-04-20T10:00:00.000Z');
+  });
+
   it('podsumowuje kody rozsyłki: liczba, domena, kampania i najwcześniejsze wygaśnięcie', () => {
     const { links, input, campaignId } = setup();
     expect(links.packageSummary('pkg_1')).toBeUndefined();

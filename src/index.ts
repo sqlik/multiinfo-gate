@@ -199,16 +199,16 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     hookLimiter: new RateLimiter(), trustedProxies: config.trustedProxies, notifier,
     allowPrivateWebhooks: config.webhookAllowPrivate, ...links,
   });
+  // Tokeny sprawdzenia domeny wystawia panel, a odpowiada na nie serwer przekierowań.
+  const domainChecks = new DomainChecks();
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
     integrationEvents, guards, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
     trustedProxies: config.trustedProxies,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate, allowPrivateMail: config.mailAllowPrivate,
-    log, install, nodeVersion, m365, m365Accounts, m365Tokens, ...links,
+    log, install, nodeVersion, m365, m365Accounts, m365Tokens, ...links, domainChecks,
   });
-  // Tokeny sprawdzenia domeny wystawia panel, a odpowiada na nie serwer przekierowań.
-  const domainChecks = new DomainChecks();
   const redirects = buildLinksServer({
     ...links, messages, checks: domainChecks, trustedProxies: config.trustedProxies, log,
     transaction: (fn) => db.transaction(fn)(),

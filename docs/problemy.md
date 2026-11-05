@@ -551,6 +551,28 @@ Rozwiązanie: włącz w Microsoft 365 podpis DKIM dla domeny skrzynki bramki. Od
 przekazuje pocztę dalej, powinien dopisać adres nadawcy bramki do listy bezpiecznych nadawców
 w skrzynce docelowej.
 
+## Sprawdzenie domeny skracacza kończy się błędem {#skracacz-sprawdzenie-domeny}
+
+Objaw: po kliknięciu **Sprawdź domenę** w elemencie **Skracacz linków** domena otrzymuje plakietkę
+„sprawdzenie nieudane”. Strona domeny podaje krok, na którym sprawdzenie się zatrzymało, oraz kod
+błędu.
+
+Sprawdzenie pobiera z bramki jednorazowy token spod adresu
+`https://<domena>/.well-known/multiinfo-gate/<token>`. Żądanie przechodzi tę samą drogę co kliknięcie
+odbiorcy SMS-a: przez DNS, serwer pośredniczący i certyfikat HTTPS do portu przekierowań bramki.
+Wynik pozytywny potwierdza więc całą drogę za jednym razem.
+
+| Krok | Przyczyna | Rozwiązanie |
+|---|---|---|
+| rozwiązanie nazwy | brak rekordu DNS domeny albo nowy rekord nie dotarł jeszcze do serwerów DNS | dodać rekord A dla domeny głównej albo rekord CNAME dla subdomeny, a następnie odczekać czas ważności rekordu |
+| połączenie | serwer pośredniczący nie wystawia portu przekierowań pod tą domeną albo zapora blokuje port 443 | wystawić port przekierowań na serwerze pośredniczącym i otworzyć port 443 w zaporze |
+| połączenie | sieć bez pętli zwrotnej NAT, w której serwer nie może połączyć się z własnym adresem publicznym | otworzyć krótki link z telefonu w sieci komórkowej, a działający link potwierdza gotowość domeny |
+| certyfikat | certyfikat wygasł, nie obejmuje domeny albo serwer pośredniczący jeszcze go nie uzyskał | sprawdzić certyfikat na serwerze pośredniczącym i ponowić sprawdzenie po jego wystawieniu |
+| odpowiedź | domena prowadzi do innego serwera, do panelu, do API albo do innej instancji bramki | skierować domenę na port przekierowań tej bramki, domyślnie 8082 |
+
+Domena niesprawdzona albo z nieudanym sprawdzeniem może zostać użyta przy kluczu. Sprawdzenie nie
+blokuje pracy, ponieważ w niektórych sieciach wynik negatywny nie oznacza awarii.
+
 ## Jak zgłosić problem {#zgloszenie}
 
 Problemy zgłaszasz w serwisie GitHub, w zakładce

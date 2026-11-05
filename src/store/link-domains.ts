@@ -62,15 +62,31 @@ export class LinkDomainsRepo {
       .run(at.toISOString(), ok ? 1 : 0, detail, id);
   }
 
-  /** Identyfikatory kluczy z tą domeną; usunięcie domeny przypisanej jest zabronione. */
-  keysUsing(id: number): number[] {
-    return (this.db
-      .prepare(`SELECT api_key_id FROM api_key_link_domains WHERE domain_id = ?
-                UNION SELECT id FROM api_keys WHERE link_default_domain_id = ? ORDER BY 1`)
-      .all(id, id) as Array<{ api_key_id: number }>).map((r) => r.api_key_id);
+  /** Wynik sprawdzenia dotyczy nazwy domeny; po zmianie nazwy przestaje obowiązywać. */
+  clearCheck(id: number): void {
+    this.db.prepare('UPDATE link_domains SET checked_at = NULL, check_ok = NULL, check_detail = NULL WHERE id = ?').run(id);
   }
 
+  /**
+   * Klucze nieodwołane z tą domeną; usunięcie domeny przypisanej jest zabronione. Klucza odwołanego
+   * nie można już edytować, dlatego jego przypisanie nie blokuje usunięcia.
+   */
+  keysUsing(id: number): Array<{ id: number; name: string }> {
+    return this.db
+      .prepare(`SELECT k.id, k.name FROM api_keys k
+                WHERE k.revoked_at IS NULL
+                  AND (k.link_default_domain_id = @id OR EXISTS (SELECT 1 FROM api_key_link_domains d WHERE d.api_key_id = k.id AND d.domain_id = @id))
+                ORDER BY k.name, k.id`)
+      .all({ id }) as Array<{ id: number; name: string }>;
+  }
+
+  /** Usuwa domenę razem z przypisaniami kluczy odwołanych; przypisanie klucza aktywnego zatrzymuje usunięcie na kluczu obcym. */
   remove(id: number): void {
-    this.db.prepare('DELETE FROM link_domains WHERE id = ?').run(id);
+    const revoked = 'SELECT id FROM api_keys WHERE revoked_at IS NOT NULL';
+    this.db.transaction(() => {
+      this.db.prepare(`DELETE FROM api_key_link_domains WHERE domain_id = ? AND api_key_id IN (${revoked})`).run(id);
+      this.db.prepare(`UPDATE api_keys SET link_default_domain_id = NULL WHERE link_default_domain_id = ? AND id IN (${revoked})`).run(id);
+      this.db.prepare('DELETE FROM link_domains WHERE id = ?').run(id);
+    })();
   }
 }

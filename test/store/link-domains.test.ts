@@ -88,8 +88,27 @@ describe('LinkDomainsRepo', () => {
     const other = domains.create(input({ domain: 'firma-link.pl' }), AT);
     expect(domains.keysUsing(id)).toEqual([]);
     keys.setLinkSettings(apiKeyId, { mode: 'always', domainIds: [id], defaultDomainId: id, targets: ['firma.pl'], validityDays: 90, utm: true });
-    expect(domains.keysUsing(id)).toEqual([apiKeyId]);
+    expect(domains.keysUsing(id)).toEqual([{ id: apiKeyId, name: 'kampanie' }]);
     expect(domains.keysUsing(other)).toEqual([]);
+  });
+
+  it('pomija klucze odwołane, a usunięcie domeny kasuje ich przypisania', () => {
+    const { domains, keys, apiKeyId } = setup();
+    const id = domains.create(input(), AT);
+    keys.setLinkSettings(apiKeyId, { mode: 'always', domainIds: [id], defaultDomainId: id, targets: ['firma.pl'], validityDays: 90, utm: true });
+    keys.revoke(apiKeyId);
+    expect(domains.keysUsing(id)).toEqual([]);
+    domains.remove(id);
+    expect(domains.get(id)).toBeUndefined();
+    expect(keys.linkSettings(apiKeyId)).toMatchObject({ domainIds: [], defaultDomainId: null });
+  });
+
+  it('kasuje wynik sprawdzenia domeny', () => {
+    const { domains } = setup();
+    const id = domains.create(input(), AT);
+    domains.setCheck(id, false, 'dns ENOTFOUND', LATER);
+    domains.clearCheck(id);
+    expect(domains.get(id)).toMatchObject({ checkedAt: null, checkOk: null, checkDetail: null });
   });
 
   it('usuwa domenę bez przypisań', () => {
