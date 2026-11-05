@@ -20,7 +20,7 @@ describe('migracja 006', () => {
     expect(cols('messages')).toContain('integration_id');
     expect(cols('inbound_messages')).toEqual(expect.arrayContaining(['external_ref', 'external_integration_id']));
     expect(cols('webhook_deliveries')).toEqual(expect.arrayContaining(['integration_id', 'method', 'headers_enc', 'response_ref']));
-    expect(db.pragma('user_version', { simple: true })).toBe(11);
+    expect(db.pragma('user_version', { simple: true })).toBe(12);
   });
 });
 
@@ -88,7 +88,7 @@ describe('migracja 010 na bazie 1.8.7 z danymi', () => {
     old.close();
 
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(11);
+    expect(db.pragma('user_version', { simple: true })).toBe(12);
     expect(db.prepare('SELECT id, integration_id, mail_from, requested_by FROM messages').all())
       .toEqual([{ id: 'msg_1', integration_id: integrationId, mail_from: 'dyspozytor@firma.pl', requested_by: null }]);
     expect(db.prepare('SELECT id, integration_id, requested_by, idempotency_key FROM packages').all())
@@ -113,7 +113,7 @@ describe('migracja 011', () => {
   const cols = (db: ReturnType<typeof openDatabase>, t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((c) => c.name);
   it('zakłada konta Microsoft 365 i ustawienia kanału SMS, dokłada kolumny sposobu logowania SMTP, SMS w regułach i kolejce, wiadomości systemowe', () => {
     const db = openDatabase(':memory:');
-    expect(db.pragma('user_version', { simple: true })).toBe(11);
+    expect(db.pragma('user_version', { simple: true })).toBe(12);
     expect(cols(db, 'm365_accounts')).toEqual(expect.arrayContaining([
       'id', 'name', 'tenant', 'client_id', 'redirect_uri', 'address', 'refresh_enc', 'state', 'error_code', 'error_message',
       'error_since', 'notified_at', 'connected_at', 'connected_by', 'last_refresh_at', 'created_at', 'updated_at',
@@ -157,7 +157,7 @@ describe('migracja 011 na bazie 1.9.0 z danymi', () => {
     old.close();
 
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(11);
+    expect(db.pragma('user_version', { simple: true })).toBe(12);
     const notifications = new NotificationsRepo(db, randomBytes(32));
     expect(notifications.smtp()).toMatchObject({ host: 'smtp.firma.pl', authMode: 'password', m365AccountId: null });
     expect(db.prepare('SELECT config FROM integrations').get()).toEqual({ config });
@@ -173,5 +173,64 @@ describe('migracja 011 na bazie 1.9.0 z danymi', () => {
     const before = readFileSync(path);
     expect(() => openDatabase(path, { migrations: TEN })).toThrow(NewerDatabaseError);
     expect(readFileSync(path).equals(before)).toBe(true);
+  });
+});
+
+const ELEVEN = [...TEN, '011-microsoft-365.sql'];
+
+describe('migracja 012 na bazie 1.10.0 z danymi', () => {
+  const cols = (db: ReturnType<typeof openDatabase>, t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((c) => c.name);
+  let root: string;
+  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'mig-012-')); });
+  afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+
+  it('zakłada tabele skracacza, a istniejący klucz ma skracanie wyłączone', () => {
+    const path = join(root, 'gate.sqlite');
+    const old = openDatabaseRaw(path);
+    applyMigrations(old, { migrations: ELEVEN });
+    expect(old.pragma('user_version', { simple: true })).toBe(11);
+    const accountId = new AccountsRepo(old, randomBytes(32)).insert(accountInput());
+    old.prepare(`INSERT INTO api_keys (account_id, name, key_hash, key_prefix, max_parts, rate_per_min, created_at) VALUES (?, 'k', 'h', 'p', 3, 60, '2026-01-01')`).run(accountId);
+    const apiKeyId = (old.prepare('SELECT id FROM api_keys').get() as { id: number }).id;
+    old.prepare(`INSERT INTO messages (id, api_key_id, account_id, service_id, dest, body_hash, encoding, parts, slots, created_at)
+                 VALUES ('msg_1', ?, ?, '24138', '48601000001', 'h', 'gsm', 1, 5, '2026-01-01')`).run(apiKeyId, accountId);
+    old.prepare(`INSERT INTO packages (id, api_key_id, account_id, service_id, encoding, recipients_count, created_at)
+                 VALUES ('pkg_1', ?, ?, '24138', 'gsm', 1, '2026-01-01')`).run(apiKeyId, accountId);
+    old.prepare(`INSERT INTO package_recipients (package_id, seq, dest) VALUES ('pkg_1', 1, '48601000002')`).run();
+    old.close();
+
+    const db = openDatabase(path);
+    expect(db.pragma('user_version', { simple: true })).toBe(12);
+    const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>).map((r) => r.name);
+    expect(tables).toEqual(expect.arrayContaining([
+      'link_domains', 'api_key_link_domains', 'api_key_link_targets', 'campaigns', 'campaign_hours', 'campaign_targets', 'short_links',
+    ]));
+    expect(cols(db, 'link_domains')).toEqual(expect.arrayContaining([
+      'id', 'domain', 'display_name', 'home_url', 'bare_links', 'enabled', 'checked_at', 'check_ok', 'check_detail', 'created_at', 'updated_at',
+    ]));
+    expect(cols(db, 'campaigns')).toEqual(expect.arrayContaining([
+      'id', 'api_key_id', 'name', 'first_sent_at', 'last_sent_at', 'sent', 'opens', 'clicks', 'bots', 'links_disabled_at', 'details_purged_at', 'created_at',
+    ]));
+    expect(cols(db, 'campaign_targets')).toEqual(expect.arrayContaining(['id', 'campaign_id', 'target', 'collapsed', 'recipients', 'opens', 'clicks', 'purge_after']));
+    expect(cols(db, 'short_links')).toEqual(expect.arrayContaining([
+      'code', 'domain_id', 'api_key_id', 'campaign_id', 'target', 'utm', 'recipient_key', 'message_id', 'package_id', 'seq', 'dest', 'client_id',
+      'clicks', 'bot_clicks', 'first_opened_at', 'last_clicked_at', 'expires_at', 'disabled_at', 'purge_after', 'created_at',
+    ]));
+    expect(db.prepare('SELECT link_mode, link_default_domain_id, link_validity_days, link_utm FROM api_keys').get())
+      .toEqual({ link_mode: 'off', link_default_domain_id: null, link_validity_days: 90, link_utm: 1 });
+    expect(db.prepare('SELECT campaign_id FROM messages').get()).toEqual({ campaign_id: null });
+    expect(db.prepare('SELECT campaign_id FROM packages').get()).toEqual({ campaign_id: null });
+    expect(db.prepare('SELECT links FROM package_recipients').get()).toEqual({ links: 0 });
+    expect(() => db.prepare("UPDATE api_keys SET link_mode = 'zawsze'").run()).toThrow(/CHECK/);
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    db.close();
+  });
+
+  it('indeksy kodów: kampania z odbiorcą, wiadomość, odbiorca rozsyłki i termin retencji', () => {
+    const db = openDatabase(':memory:');
+    const indexed = (db.prepare('PRAGMA index_list(short_links)').all() as Array<{ name: string }>)
+      .map((i) => (db.prepare(`PRAGMA index_info(${i.name})`).all() as Array<{ name: string }>).map((c) => c.name).join(','));
+    expect(indexed).toEqual(expect.arrayContaining(['campaign_id,recipient_key', 'message_id', 'package_id,seq', 'purge_after']));
   });
 });

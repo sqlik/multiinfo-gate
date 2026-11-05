@@ -24,6 +24,8 @@ export interface MessageRow {
   requestedBy: string | null;
   /** SMS kanału powiadomień administratora: niewidoczny w API, webhooku klucza i integracjach wychodzących. */
   system: 0 | 1;
+  /** Kampania skracacza; tylko wiadomości z co najmniej jednym krótkim linkiem. */
+  campaignId: number | null;
 }
 
 export interface MessageInput {
@@ -39,6 +41,7 @@ export interface MessageInput {
   mailFrom?: string | null;
   requestedBy?: string | null;
   system?: 0 | 1;
+  campaignId?: number | null;
 }
 
 export interface MessageFilter {
@@ -67,7 +70,7 @@ interface RawMessage {
   idempotency_key: string | null;
   created_at: string; sent_at: string | null; final_at: string | null;
   trace: string | null; in_reply_to: string | null; integration_id: number | null; mail_from: string | null;
-  requested_by: string | null; system: 0 | 1;
+  requested_by: string | null; system: 0 | 1; campaign_id: number | null;
 }
 
 /** Statusy, po których wiadomość nie zmieni już stanu i trafia na listę nieudanych. */
@@ -107,6 +110,7 @@ function toRow(r: RawMessage): MessageRow {
     mailFrom: r.mail_from,
     requestedBy: r.requested_by,
     system: r.system,
+    campaignId: r.campaign_id,
   };
 }
 
@@ -126,8 +130,9 @@ export class MessagesRepo {
       .prepare(
         `INSERT INTO messages (
            id, api_key_id, account_id, service_id, dest, body, body_hash,
-           encoding, parts, slots, orig, cost_center, valid_to, idempotency_key, in_reply_to, integration_id, mail_from, requested_by, system, created_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           encoding, parts, slots, orig, cost_center, valid_to, idempotency_key, in_reply_to, integration_id, mail_from, requested_by, system,
+           campaign_id, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                    COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))`,
       )
       .run(
@@ -150,6 +155,7 @@ export class MessagesRepo {
         input.mailFrom ?? null,
         input.requestedBy ?? null,
         input.system ?? 0,
+        input.campaignId ?? null,
         input.createdAt ?? null,
       );
   }
