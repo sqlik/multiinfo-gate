@@ -66,14 +66,6 @@ describe('kolejka', () => {
     expect(repo.lastSentAt('integration_error')).toBe(NOW.toISOString());
     expect(repo.lastSentAt('webhook_undelivered')).toBeNull();
   });
-  it('pruneBefore usuwa stare załatwione wpisy, oczekujące zostają', () => {
-    const old = new Date('2026-07-01T00:00:00Z');
-    const a = repo.enqueue({ event: 'integration_error', at: old, summary: 'a' })!;
-    repo.enqueue({ event: 'integration_error', at: old, summary: 'b' });
-    repo.markSent([a], old);
-    expect(repo.pruneBefore(NOW)).toBe(1);
-    expect(repo.pending('integration_error')).toHaveLength(1);
-  });
 });
 
 describe('SMTP przez konto Microsoft 365', () => {
@@ -145,15 +137,14 @@ describe('kanał SMS', () => {
     expect(repo.pending('integration_error')).toEqual([expect.objectContaining({ id: c, status: 'pending', smsStatus: 'suppressed' })]);
   });
 
-  it('pruneBefore nie usuwa wpisu, którego SMS czeka na wysłanie', () => {
+  it('pruneBefore usuwa wpisy starsze niż granica, także oczekujące na mail albo SMS, a młodsze zostawia', () => {
     const old = new Date('2026-07-01T00:00:00Z');
     repo.enqueue({ event: 'm365_disconnected', at: old, summary: 'a', mail: false, sms: true });
-    const b = repo.enqueue({ event: 'integration_error', at: old, summary: 'b', mail: true, sms: true })!;
-    repo.markSent([b], old);
-    expect(repo.pruneBefore(NOW)).toBe(0);
-    repo.markSms([b], 'sent', old);
-    expect(repo.pruneBefore(NOW)).toBe(1);
-    expect(repo.pendingSms('m365_disconnected')).toHaveLength(1);
+    repo.enqueue({ event: 'integration_error', at: old, summary: 'b', mail: true, sms: false });
+    const fresh = repo.enqueue({ event: 'integration_error', at: NOW, summary: 'c', mail: true, sms: true })!;
+    expect(repo.pruneBefore(new Date(NOW.getTime() - 1))).toBe(2);
+    expect(repo.pendingSms('m365_disconnected')).toEqual([]);
+    expect(repo.pending('integration_error').map((r) => r.id)).toEqual([fresh]);
   });
 
   it('nowe zdarzenia mają SMS włączony domyślnie, dotychczasowe wyłączony; zapis reguły bez sms go nie zmienia', () => {

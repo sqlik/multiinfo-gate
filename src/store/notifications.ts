@@ -202,8 +202,12 @@ export class NotificationsRepo {
   }
 
   /** Załatwione wpisy starsze niż `at` znikają; oczekujące na mail albo SMS czekają choćby miesiąc. */
+  /**
+   * Usuwa wpisy starsze niż `at`, także oczekujące: bez SMTP zdarzenie czeka na mail do 30 dni (docs 9.1),
+   * a starsze powiadomienie nie ma już wartości dla administratora.
+   */
   pruneBefore(at: Date): number {
-    return this.db.prepare("DELETE FROM notification_queue WHERE status != 'pending' AND sms_status != 'pending' AND at < ?").run(at.toISOString()).changes;
+    return this.db.prepare('DELETE FROM notification_queue WHERE at < ?').run(at.toISOString()).changes;
   }
 
   pendingSms(event: NotificationEvent): QueueRow[] {

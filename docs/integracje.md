@@ -2081,9 +2081,9 @@ przekazuje pocztę do innej skrzynki, powinien też dopisać adres nadawcy bramk
 bezpiecznych nadawców.
 
 Po zapisaniu użyj przycisku **Wyślij mail testowy**. Wynik pojawia się na pasku u góry. Przy
-błędzie widać pełny komunikat serwera SMTP. Z niego wynika, czy przyczyną jest hasło, port czy
-certyfikat. Bez zapisanego SMTP i bez włączonego kanału SMS tabela reguł jest wyszarzona,
-a zgłoszone zdarzenia czekają w kolejce do 30 dni.
+błędzie pasek wyświetla pełny komunikat serwera SMTP. Z niego wynika, czy przyczyną jest hasło,
+port czy certyfikat. Bez zapisanego SMTP i bez włączonego kanału SMS tabela reguł jest
+wyszarzona. Zgłoszone zdarzenia czekają wtedy na mail w kolejce, a po 30 dniach bramka je usuwa.
 
 Znane odmowy serwera Microsoft 365 panel uzupełnia podpowiedzią:
 
