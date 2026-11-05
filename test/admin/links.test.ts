@@ -190,6 +190,16 @@ describe('Skracacz linków: sprawdzenie domeny', () => {
     plainText(detail.body);
   });
 
+  it('adres w sieci wewnętrznej: bramka nie łączy się z nim i wyjaśnia dlaczego', async () => {
+    const id = await created();
+    h.resolve.value = async () => ['192.168.1.20'];
+    await post(`/skracacz/${id}/sprawdz`);
+    const detail = await page(`/skracacz/${id}`);
+    expect(detail.body).toContain('adres w sieci wewnętrznej 192.168.1.20');
+    expect(detail.body).toContain('Krok sprawdzenia: rozwiązanie nazwy');
+    plainText(detail.body);
+  });
+
   it.each([
     ['dns ENOTFOUND', 'rekord A albo CNAME'],
     ['tls CERT_HAS_EXPIRED', 'Certyfikat'],

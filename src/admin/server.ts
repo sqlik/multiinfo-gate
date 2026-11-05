@@ -89,8 +89,7 @@ export interface AdminDeps {
   shortLinks: ShortLinksRepo;
   /** Tokeny sprawdzenia domeny skracacza, wspólne z serwerem przekierowań, który na nie odpowiada. */
   domainChecks: DomainChecks;
-  /** Rozwiązywanie nazw i pobranie tokenu przy sprawdzeniu domeny; testy podstawiają atrapy. */
-  domainLookup?: (host: string) => Promise<unknown>;
+  /** Pobranie tokenu przy sprawdzeniu domeny; testy podstawiają atrapę. Nazwę rozwiązuje `resolve`. */
   domainFetch?: typeof fetch;
   /** Stan skrzynek pocztowych: formularz skrzynki, lista, szczegóły, kafelek przeglądu. */
   mailIn?: MailInRepo;

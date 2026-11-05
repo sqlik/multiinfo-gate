@@ -8,7 +8,7 @@ import { NOW, redirectFixture } from './redirect-fixture.ts';
 const ADMIN = { id: 1, login: 'janek' };
 const NEW = { domain: 'firma-sms.pl', displayName: 'Firma Serwis', homeUrl: null, bareLinks: false };
 
-type Net = { lookup: NonNullable<DomainServiceDeps['lookup']>; fetch: NonNullable<DomainServiceDeps['fetch']> };
+type Net = { resolve: NonNullable<DomainServiceDeps['resolve']>; fetch: NonNullable<DomainServiceDeps['fetch']> };
 
 /** Błąd `fetch` z Node: `TypeError: fetch failed` z przyczyną z kodem gniazda albo TLS. */
 const fetchFailed = (code: string) => Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error(code), { code }) });
@@ -20,7 +20,7 @@ function setup() {
   const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
   const lookups: string[] = [];
   const net: Net = {
-    lookup: async (host) => { lookups.push(host); return { address: '203.0.113.10', family: 4 }; },
+    resolve: async (host) => { lookups.push(host); return ['203.0.113.10']; },
     // Domyślnie odpowiada jak serwer przekierowań tej bramki: tokenem, gdy jest ważny dla domeny.
     fetch: (async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
@@ -33,7 +33,7 @@ function setup() {
   };
   const service = new LinkDomainService({
     linkDomains: f.linkDomains, shortLinks: f.shortLinks, audit, checks,
-    lookup: (host) => net.lookup(host), fetch: ((input, init) => net.fetch(input, init)) as typeof fetch,
+    resolve: (host) => net.resolve(host), fetch: ((input, init) => net.fetch(input, init)) as typeof fetch,
   });
   const entries = () => f.db.prepare('SELECT actor, action, target, meta FROM audit_log ORDER BY id').all() as
     Array<{ actor: string; action: string; target: string; meta: string | null }>;
@@ -180,11 +180,28 @@ describe('LinkDomainService: sprawdzenie domeny', () => {
 
   it('błąd rozwiązania nazwy to krok dns', async () => {
     const s = setup();
-    s.net.lookup = async () => { throw Object.assign(new Error('getaddrinfo ENOTFOUND l.firma.pl'), { code: 'ENOTFOUND' }); };
+    s.net.resolve = async () => { throw Object.assign(new Error('getaddrinfo ENOTFOUND l.firma.pl'), { code: 'ENOTFOUND' }); };
     expect(await s.service.check(s.domainId, ADMIN, NOW)).toEqual({ ok: false, step: 'dns', detail: 'ENOTFOUND' });
     expect(s.calls).toHaveLength(0);
     expect(s.linkDomains.get(s.domainId)).toMatchObject({ checkOk: 0, checkDetail: 'dns ENOTFOUND' });
     expect(JSON.parse(s.entries().at(-1)!.meta!)).toEqual({ domain: 'l.firma.pl', ok: false, step: 'dns', detail: 'ENOTFOUND' });
+  });
+
+  it('adres w sieci wewnętrznej zatrzymuje sprawdzenie przed połączeniem, jak przy webhookach', async () => {
+    const s = setup();
+    s.net.resolve = async () => ['203.0.113.10', '10.0.0.5'];
+    expect(await s.service.check(s.domainId, ADMIN, NOW)).toEqual({ ok: false, step: 'dns', detail: 'private 10.0.0.5' });
+    s.net.resolve = async () => ['127.0.0.1'];
+    expect(await s.service.check(s.domainId, ADMIN, NOW)).toEqual({ ok: false, step: 'dns', detail: 'private 127.0.0.1' });
+    s.net.resolve = async () => ['fd00::5'];
+    expect(await s.service.check(s.domainId, ADMIN, NOW)).toEqual({ ok: false, step: 'dns', detail: 'private fd00::5' });
+    expect(s.calls).toHaveLength(0);
+  });
+
+  it('nazwa bez adresów to krok dns', async () => {
+    const s = setup();
+    s.net.resolve = async () => [];
+    expect(await s.service.check(s.domainId, ADMIN, NOW)).toEqual({ ok: false, step: 'dns', detail: 'ENODATA' });
   });
 
   it.each([

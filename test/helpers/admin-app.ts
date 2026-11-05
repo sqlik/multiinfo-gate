@@ -56,9 +56,9 @@ export interface AdminHarness {
   linkDomains: ReturnType<typeof linkDeps>['linkDomains'];
   campaigns: ReturnType<typeof linkDeps>['campaigns'];
   shortLinks: ReturnType<typeof linkDeps>['shortLinks'];
-  /** Tokeny sprawdzenia domeny i podmienna sieć sprawdzenia; domyślnie każda nazwa się rozwiązuje, a pobranie daje 404. */
+  /** Tokeny sprawdzenia domeny i podmienne pobranie tokenu (domyślnie 404); nazwę rozwiązuje `resolve`. */
   domainChecks: DomainChecks;
-  domainNet: { lookup: (host: string) => Promise<unknown>; fetch: typeof fetch };
+  domainNet: { fetch: typeof fetch };
   /** Podróbka skrzynki pocztowej do „Sprawdź połączenie”; hasło TajneHaslo9, UIDVALIDITY 7. */
   mailbox: FakeMailbox;
   notifications: NotificationsRepo;
@@ -179,14 +179,13 @@ export async function startAdminHarness(
   const resolve = { value: async (_hostname: string) => ['93.184.216.34'] };
   const domainChecks = new DomainChecks();
   const domainNet: AdminHarness['domainNet'] = {
-    lookup: async () => ({ address: '203.0.113.10', family: 4 }),
     fetch: (async () => new Response('', { status: 404 })) as typeof fetch,
   };
   const app = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, receiver,
     integrationEvents, guards, mailIn, mailboxConnect: fakeConnect(mailbox), engine: new TemplateEngine(), notifications, settings, notifier,
     m365, m365Accounts, m365Tokens, ...links, domainChecks,
-    domainLookup: (host) => domainNet.lookup(host), domainFetch: ((input, init) => domainNet.fetch(input, init)) as typeof fetch,
+    domainFetch: ((input, init) => domainNet.fetch(input, init)) as typeof fetch,
     mailer: async (settings, mail) => { mailSettings.push(settings); if (harness.mailError) throw harness.mailError; mails.push(mail); },
     clients: clients as never, sessions, masterKey, now: () => now, trustedProxies: opts.trustedProxies ?? [],
     resolve: (hostname) => resolve.value(hostname),

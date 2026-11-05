@@ -26,7 +26,7 @@ export function registerLinkRoutes(app: FastifyInstance, deps: AdminDeps, render
   const now = deps.now ?? (() => new Date());
   const service = new LinkDomainService({
     linkDomains: deps.linkDomains, shortLinks: deps.shortLinks, audit: deps.audit, checks: deps.domainChecks,
-    ...(deps.domainLookup ? { lookup: deps.domainLookup } : {}),
+    ...(deps.resolve ? { resolve: deps.resolve } : {}),
     ...(deps.domainFetch ? { fetch: deps.domainFetch } : {}),
   });
 

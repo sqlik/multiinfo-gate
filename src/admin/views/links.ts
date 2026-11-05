@@ -78,6 +78,12 @@ export function linkDomainListPage(views: LinkDomainView[]): string {
 export function checkMessage(domain: string, step: DomainCheckStep, detail: string): string {
   switch (step) {
     case 'dns':
+      if (detail.startsWith('private ')) {
+        return `Domena ${domain} wskazuje z serwera bramki adres w sieci wewnętrznej ${detail.slice(8)}. Bramka nie łączy się `
+          + 'przy sprawdzeniu z adresami wewnętrznymi, tak samo jak przy webhookach. Odbiorcy otwierają linki z internetu, dlatego '
+          + 'publiczny rekord DNS domeny powinien wskazywać publiczny adres serwera. Gdy serwer bramki korzysta z wewnętrznego '
+          + 'serwera DNS, sprawdź krótki link z telefonu w sieci komórkowej.';
+      }
       return `Nie można ustalić adresu domeny ${domain}. Sprawdź u dostawcy DNS rekord A albo CNAME tej domeny.`;
     case 'connect':
       return `Bramka nie może połączyć się z adresem https://${domain}. Sprawdź, czy serwer pośredniczący wystawia port `
@@ -94,7 +100,10 @@ export function checkMessage(domain: string, step: DomainCheckStep, detail: stri
   }
 }
 
-const detailLabel = (detail: string) => (detail === 'timeout' ? 'przekroczony czas oczekiwania 10 s' : detail);
+const detailLabel = (detail: string) => {
+  if (detail === 'timeout') return 'przekroczony czas oczekiwania 10 s';
+  return detail.startsWith('private ') ? 'adres wewnętrzny' : detail;
+};
 
 const STEP_LABEL: Record<DomainCheckStep, string> = {
   dns: 'rozwiązanie nazwy', connect: 'połączenie', tls: 'certyfikat', response: 'odpowiedź',

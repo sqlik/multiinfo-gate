@@ -1,8 +1,8 @@
 // Domeny skracacza: zapis, wyłączenie, usunięcie i sprawdzenie domeny (spec 4). Panel woła usługę
 // z tras „Skracacz linków”, a w 1.12 także serwer MCP.
-import { promises as dns } from 'node:dns';
 import { domainToASCII } from 'node:url';
 import type { PanelUser } from '../m365/service.ts';
+import { isPrivateAddress, systemResolver, type Resolver } from '../net/private-address.ts';
 import type { AuditRepo } from '../store/audit.ts';
 import type { LinkDomainInput, LinkDomainsRepo } from '../store/link-domains.ts';
 import type { ShortLinksRepo } from '../store/short-links.ts';
@@ -17,7 +17,8 @@ export interface DomainServiceDeps {
   shortLinks: Pick<ShortLinksRepo, 'domainPurgeAfter'>;
   audit: AuditRepo;
   checks: DomainChecks;
-  lookup?: (host: string) => Promise<unknown>;
+  /** Rozwiązywanie nazw wspólne z webhookami; testy podstawiają atrapę. */
+  resolve?: Resolver;
   fetch?: typeof fetch;
 }
 
@@ -118,11 +119,11 @@ async function readLimited(response: Response): Promise<string | null> {
 const minute = (iso: string) => warsawStamp(iso).slice(0, 16);
 
 export class LinkDomainService {
-  private readonly lookup: (host: string) => Promise<unknown>;
+  private readonly resolve: Resolver;
   private readonly fetch: typeof fetch;
 
   constructor(private readonly deps: DomainServiceDeps) {
-    this.lookup = deps.lookup ?? ((host) => dns.lookup(host));
+    this.resolve = deps.resolve ?? systemResolver;
     this.fetch = deps.fetch ?? globalThis.fetch;
   }
 
@@ -186,11 +187,17 @@ export class LinkDomainService {
   }
 
   private async probe(domain: string, token: string): Promise<DomainCheckResult> {
+    let addresses: string[];
     try {
-      await this.lookup(domain);
+      addresses = await this.resolve(domain);
     } catch (error) {
       return { ok: false, step: 'dns', detail: codeOf(error) ?? 'error' };
     }
+    if (addresses.length === 0) return { ok: false, step: 'dns', detail: 'ENODATA' };
+    // Jak przy webhookach i IMAP: bramka nie łączy się z adresami w sieci wewnętrznej, dlatego sprawdzenie
+    // nie może służyć do badania serwerów wewnętrznych. Odbiorcy otwierają linki z internetu.
+    const inside = addresses.find(isPrivateAddress);
+    if (inside !== undefined) return { ok: false, step: 'dns', detail: `private ${inside}` };
     try {
       const response = await this.fetch(`https://${domain}/.well-known/multiinfo-gate/${token}`, {
         redirect: 'manual', signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
