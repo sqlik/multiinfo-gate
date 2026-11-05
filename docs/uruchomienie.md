@@ -1247,9 +1247,10 @@ zawiera treści wiadomości, haseł ani pełnych kluczy. Zdarzenia warte uwagi:
 
 Wydania są numerowane według schematu `1.2.3`. Pierwsza liczba zmienia się przy zmianach
 niezgodnych wstecz, druga przy nowych możliwościach, trzecia przy poprawkach. Numer bieżącej
-wersji pokazuje maszt panelu. W wierszu poleceń numer podaje pole `version` w odpowiedzi
-`/healthz` na porcie panelu. Panel dołącza to pole wyłącznie do zapytań z adresu pętli zwrotnej,
-czyli wysłanych z wnętrza kontenera bramki, oraz do zapytań HTTPS od odwrotnego proxy wpisanego
+wersji pokazuje maszt panelu. W wierszu poleceń numer podaje polecenie
+`docker compose exec multiinfo-gate grep '"version"' package.json` wykonane w katalogu
+`~/multiinfo-gate/docker`. Odpowiedź `/healthz` na porcie panelu zawiera numer wersji wyłącznie
+przy zapytaniach z adresu pętli zwrotnej oraz przy zapytaniach HTTPS od odwrotnego proxy wpisanego
 w `MIG_TRUSTED_PROXIES`. Zapytanie z innego adresu otrzymuje sam stan. Listę wydań z opisem zmian
 znajdziesz pod adresem `https://github.com/sqlik/multiinfo-gate/releases`.
 
@@ -1291,10 +1292,7 @@ docker compose up -d
 Polecenia wykonują kolejno: przejście do katalogu z plikami Compose, pobranie nowych plików
 uruchomieniowych i dokumentacji, pobranie nowego obrazu, uruchomienie. Oczekiwany wynik:
 `curl http://127.0.0.1:8080/healthz` odpowiada `{"status":"ok"}`, a polecenie
-`docker compose exec multiinfo-gate wget -qO- http://127.0.0.1:8081/healthz` pokazuje w polu
-`version` nowy numer. Polecenie `docker compose exec` odpytuje panel z wnętrza kontenera.
-Zapytanie wysłane z serwera trafia do kontenera przez sieć Dockera, dlatego otrzymuje sam stan
-bez numeru wersji.
+`docker compose exec multiinfo-gate grep '"version"' package.json` pokazuje nowy numer.
 
 Kopię sprawdza polecenie `docker compose exec multiinfo-gate ls /data/backups`. Oczekiwany wynik
 zawiera plik `przed-aktualizacja-<WERSJA>.sqlite` z numerem poprzedniej wersji. Przy aktualizacji
@@ -1328,8 +1326,8 @@ docker compose up -d
 ```
 
 Ostatnie polecenie tworzy kontener z obrazu poprzedniej wersji i uruchamia go na przywróconej
-kopii. Oczekiwany wynik: `docker compose exec multiinfo-gate wget -qO- http://127.0.0.1:8081/healthz`
-pokazuje w polu `version` poprzedni numer.
+kopii. Oczekiwany wynik: `docker compose exec multiinfo-gate grep '"version"' package.json`
+pokazuje poprzedni numer.
 
 Przy budowaniu ze źródeł (`docker-compose.build.yml`) zamiast `docker compose pull` wykonujesz
 `docker compose up -d --build`. Przy powrocie zamiast zmiany `MIG_WERSJA` wykonaj
@@ -1510,10 +1508,9 @@ informacją, a próbę zalogowania odrzuca. Do panelu prowadzą dwie drogi:
 
 Bez logowania z sieci widać jedynie ekran logowania i `http://<ADRES-KONTENERA>:8081/healthz`
 z samym polem `status`. Szczegóły, czyli wersję, kolejkę i konta Multiinfo z dniami do końca
-certyfikatu, panel podaje wyłącznie zapytaniom z adresu pętli zwrotnej. Warunek spełnia na
-przykład polecenie `curl http://127.0.0.1:8081/healthz` wykonane w kontenerze. Odwrotne proxy
-otrzymuje szczegóły, gdy przekazuje żądanie HTTPS, a jego adres znajduje się
-w `MIG_TRUSTED_PROXIES`.
+certyfikatu, panel podaje wyłącznie zapytaniom z adresu pętli zwrotnej, na którym w kontenerze
+LXC nie nasłuchuje. Otrzymuje je także odwrotne proxy, które przekazuje żądanie HTTPS, a jego adres
+znajduje się w `MIG_TRUSTED_PROXIES`. Numer wersji podaje maszt panelu.
 
 Gdy nawet ekran logowania w sieci jest niepożądany, na przykład w sieci z obcymi urządzeniami,
 wpisz w pliku `/etc/multiinfo-gate/env` wiersz `MIG_ADMIN_HOST=127.0.0.1` i wykonaj
