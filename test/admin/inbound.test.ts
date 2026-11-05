@@ -85,6 +85,14 @@ describe('GET /odebrane', () => {
     }
   });
 
+  it('odpowiedź na SMS powiadomienia bramki: na liście z plakietką, w szczegółach z wyjaśnieniem braku dostaw', async () => {
+    seed('in_sys', { system: 1, body: 'Przyjalem' });
+    const list = (await page('/odebrane')).body;
+    expect(list).toContain('href="/odebrane/in_sys"');
+    expect(list).toContain('odpowiedź na powiadomienie bramki');
+    expect((await page('/odebrane/in_sys')).body).toContain('Bramka nie przekazuje jej aplikacjom ani integracjom');
+  });
+
   it('treść nieprzechowywana ma podpis zamiast treści', async () => {
     seed('in_1', { body: null });
     expect((await page('/odebrane')).body).toContain('treść nieprzechowywana');

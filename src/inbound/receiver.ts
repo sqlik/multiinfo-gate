@@ -315,8 +315,10 @@ export class Receiver {
     const sender = normalizeSender(sms.sender, account.defaultCountryCode);
     const receivedAt = receivedAtOf(sms, now, log);
     const related = this.deps.messages.lastTo(
-      target.accountId, target.serviceId, sender, new Date(now.getTime() - RELATED_WINDOW_MS),
+      target.accountId, target.serviceId, sender, new Date(now.getTime() - RELATED_WINDOW_MS), { includeSystem: true },
     );
+    // Odpowiedź na SMS powiadomienia bramki: numer administratora i treść nie opuszczają panelu.
+    const system = related?.system === 1;
     const keepContent = account.storeContent === 1;
 
     return this.deps.inbound.transaction(() => {
@@ -324,11 +326,17 @@ export class Receiver {
         id, accountId: target.accountId, serviceId: target.serviceId, miId: sms.miId, sender, dest: sms.dest,
         kind: sms.kind, body: keepContent ? sms.content : null, bodyHash: sha256Hex(sms.content),
         protocolId: sms.protocolId, codingScheme: sms.codingScheme, connectorId: sms.connectorId || null,
-        relatedMessageId: related?.id ?? null, receivedAt, createdAt: now.toISOString(),
+        relatedMessageId: related?.id ?? null, receivedAt, createdAt: now.toISOString(), system: system ? 1 : 0,
       });
       if (!inserted) {
         log.info('odbior.duplikat', { ...target, miId: sms.miId });
         return { id, duplicate: true };
+      }
+
+      if (system) {
+        this.deps.services.markReceived(target, now);
+        log.info('odbior.odpowiedz_na_powiadomienie', { ...target, id, miId: sms.miId, related: related!.id });
+        return { id, duplicate: false };
       }
 
       const payload = {

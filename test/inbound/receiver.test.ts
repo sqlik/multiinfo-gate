@@ -117,6 +117,48 @@ describe('Receiver.pollOnce', () => {
     expect(JSON.parse(deps.deliveries.listForInbound(out.id)[0]!.payload).relatedMessageId).toBe('msg_b');
   });
 
+  describe('odpowiedź administratora na SMS powiadomienia bramki', () => {
+    const systemSms = (keyId: number, createdAt: string, system: 0 | 1 = 1, id = 'msg_sys') => deps.messages.insert({
+      id, apiKeyId: keyId, accountId, serviceId: '24138', dest: '48601000001', body: null, bodyHash: 'h', encoding: 'gsm',
+      parts: 1, slots: 1, orig: null, costCenter: null, validTo: null, idempotencyKey: null,
+      requestedBy: 'Powiadomienie bramki', system, createdAt,
+    });
+    const withIntegration = (keyId: number) => {
+      const mk = randomBytes(32);
+      const integrations = new IntegrationsRepo(db, mk);
+      integrations.insert({
+        name: 'Helpdesk', kind: 'webhook_out', apiKeyId: keyId, serviceId: null, orig: null, preset: 'custom', enabled: 1,
+        config: { ...defaultOutboundConfig(), url: 'https://helpdesk.example/hook', body: { mode: 'json', template: '{"from": {{ from | json }}}' } },
+        secrets: {}, storePayloads: 0, createdAt: NOW,
+      });
+      deps.integrations = integrations;
+      deps.integrationEmit = { integrations, integrationEvents: new IntegrationEventsRepo(db, mk), guards: new IntegrationGuardsRepo(db), deliveries: deps.deliveries, jobs: deps.jobs, engine: new TemplateEngine() };
+    };
+
+    it('zostaje tylko w panelu: bez webhooka subskrybenta, bez integracji, oznaczona jako systemowa', async () => {
+      const keyId = deps.apiKeys.insert(keyInput(accountId));
+      withIntegration(keyId);
+      systemSms(keyId, new Date(NOW.getTime() - 60_000).toISOString());
+      getSms.mockResolvedValue({ ...SMS, content: 'Przyjalem, loguje sie' });
+      const out = await receiver.pollOnce(target()) as { id: string };
+      const row = deps.inbound.get(out.id)!;
+      expect(row).toMatchObject({ system: 1, relatedMessageId: 'msg_sys', body: 'Przyjalem, loguje sie' });
+      expect(deps.deliveries.listForInbound(out.id)).toEqual([]);
+      expect(deps.jobs.depth()).toBe(0);
+      expect(confirmSms).toHaveBeenCalledWith('22');
+    });
+
+    it('wiadomość wysłana przez aplikację po SMS-ie powiadomienia przywraca zwykłą obsługę odpowiedzi', async () => {
+      const keyId = deps.apiKeys.insert(keyInput(accountId));
+      systemSms(keyId, new Date(NOW.getTime() - 3600_000).toISOString());
+      systemSms(keyId, new Date(NOW.getTime() - 60_000).toISOString(), 0, 'msg_app');
+      getSms.mockResolvedValue(SMS);
+      const out = await receiver.pollOnce(target()) as { id: string };
+      expect(deps.inbound.get(out.id)).toMatchObject({ system: 0, relatedMessageId: 'msg_app' });
+      expect(deps.deliveries.listForInbound(out.id)).toHaveLength(1);
+    });
+  });
+
   it('konto bez przechowywania treści: skrót w bazie, treść w dostawie, dostawa do wyczyszczenia', async () => {
     db.prepare('UPDATE accounts SET store_content = 0').run();
     deps.apiKeys.insert(keyInput(accountId));

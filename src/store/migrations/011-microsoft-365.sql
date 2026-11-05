@@ -64,3 +64,6 @@ CREATE TABLE sms_notify_settings (
 -- Wiadomość systemowa: SMS kanału powiadomień wysłany w imieniu klucza. Nie pojawia się w API, webhooku
 -- klucza ani w integracjach wychodzących; panel pokazuje ją z oznaczeniem.
 ALTER TABLE messages ADD COLUMN system INTEGER NOT NULL DEFAULT 0;
+
+-- Odpowiedź na SMS kanału powiadomień: numer administratora i treść zostają w panelu, bez webhooków, integracji i API.
+ALTER TABLE inbound_messages ADD COLUMN system INTEGER NOT NULL DEFAULT 0;

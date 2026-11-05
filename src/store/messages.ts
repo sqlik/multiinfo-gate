@@ -159,10 +159,11 @@ export class MessagesRepo {
    * aplikacji, na co abonent odpowiada. Multiinfo tego nie mówi. Wiadomości systemowe odpadają,
    * bo ich identyfikator trafiłby do webhooka aplikacji.
    */
-  lastTo(accountId: number, serviceId: string, dest: string, since: Date): MessageRow | undefined {
+  /** `includeSystem` rozpoznaje odpowiedź administratora na SMS powiadomienia bramki. */
+  lastTo(accountId: number, serviceId: string, dest: string, since: Date, options: { includeSystem?: boolean } = {}): MessageRow | undefined {
     const row = this.db
       .prepare(
-        `SELECT * FROM messages WHERE account_id = ? AND service_id = ? AND dest = ? AND created_at >= ? AND system = 0
+        `SELECT * FROM messages WHERE account_id = ? AND service_id = ? AND dest = ? AND created_at >= ?${options.includeSystem ? '' : ' AND system = 0'}
           ORDER BY created_at DESC, id DESC LIMIT 1`,
       )
       .get(accountId, serviceId, dest, since.toISOString()) as RawMessage | undefined;

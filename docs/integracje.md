@@ -2171,7 +2171,9 @@ Bramka wysyła powiadomienie SMS w imieniu wskazanego klucza, czyli z jego konta
 limitów i nadpisu. Kanał przyjmuje każdy aktywny klucz, także klucz z opcją **Tylko integracje**.
 Lista wiadomości oznacza takie SMS-y plakietką „powiadomienie bramki”. Aplikacje klienta nie
 otrzymują ich przez API, webhook klucza ani integracje, dlatego numery administratorów i treść
-powiadomień nie opuszczają bramki.
+powiadomień nie opuszczają bramki. Odpowiedź administratora na SMS powiadomienia bramka zapisuje
+na ekranie **Odebrane** z plakietką „odpowiedź na powiadomienie bramki”. Tej odpowiedzi również nie
+przekazuje aplikacjom ani integracjom, w tym integracjom SMS do grupy.
 
 Odwołanie klucza wskazanego we włączonym kanale jest zablokowane. Bramka blokuje również usunięcie
 z tego klucza nadpisu, z którym kanał wysyła powiadomienia. Pozostałe przyczyny, na przykład

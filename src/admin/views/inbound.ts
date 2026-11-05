@@ -37,7 +37,7 @@ export function inboundPage(d: InboundListData): string {
         <td class="m"><a href="/odebrane/${esc(r.id)}">${esc(r.id)}</a></td>
         <td class="m">${esc(r.sender)}</td>
         <td class="m nw">${esc(names.get(r.accountId) ?? `konto ${r.accountId}`)} · ${esc(r.serviceId)}</td>
-        <td class="txt">${preview(r.body === null ? null : r.kind === 'binary' ? `[binarna] ${r.body}` : r.body)}</td>
+        <td class="txt">${r.system === 1 ? '<span class="tag">odpowiedź na powiadomienie bramki</span> ' : ''}${preview(r.body === null ? null : r.kind === 'binary' ? `[binarna] ${r.body}` : r.body)}</td>
         <td class="m">${r.relatedMessageId === null ? '<span class="dim">-</span>' : `<a href="/wiadomosci/${esc(r.relatedMessageId)}">${esc(r.relatedMessageId)}</a>`}</td>
       </tr>`).join('');
   const from = d.rows.length === 0 ? 0 : d.offset + 1;
@@ -130,7 +130,9 @@ export function inboundDetailPage(d: InboundDetail): string {
       </div>
       <div class="panel">
         <div class="panel-h"><div class="lab">Dostawy do aplikacji</div></div>
-        ${deliveriesTable(d.deliveries, 'Żaden klucz nie subskrybował tej usługi w chwili odbioru.')}
+        ${deliveriesTable(d.deliveries, r.system === 1
+    ? 'Odpowiedź na SMS powiadomienia bramki zostaje w panelu. Bramka nie przekazuje jej aplikacjom ani integracjom.'
+    : 'Żaden klucz nie subskrybował tej usługi w chwili odbioru.')}
       </div>
     </div>
   </div>`;
