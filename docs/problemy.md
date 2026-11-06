@@ -577,6 +577,13 @@ Wynik pozytywny potwierdza więc całą drogę za jednym razem.
 Domena niesprawdzona albo z nieudanym sprawdzeniem może zostać użyta przy kluczu. Sprawdzenie nie
 blokuje pracy, ponieważ w niektórych sieciach wynik negatywny nie oznacza awarii.
 
+Plakietka „sprawdzona z ostrzeżeniem” oznacza, że linki działają, ale kliknięcia przechodzą przez
+serwer pośredniczący, któremu bramka nie ufa. Bramka liczy wtedy wszystkie wejścia jako wejścia
+z adresu tego serwera, dlatego limit 60 wejść na minutę obejmuje wszystkich odbiorców kampanii razem.
+Ustaw zmienną `MIG_TRUSTED_PROXIES` z wartością podaną na stronie domeny, uruchom bramkę ponownie
+i sprawdź domenę jeszcze raz. W Dockerze z Caddy albo z Traefikiem wartością jest zwykle
+`172.16.0.0/12`.
+
 ## Serwer krótkich linków nie działa {#serwer-krotkich-linkow}
 
 Objaw: przegląd panelu i element **Skracacz linków** wyświetlają pasek „Serwer krótkich linków nie

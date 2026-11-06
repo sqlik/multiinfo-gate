@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { problemUrl } from '../../src/docs-links.ts';
 import { seedAccount, startAdminHarness, type AdminHarness } from '../helpers/admin-app.ts';
 
 const NOW = new Date('2026-11-05T10:00:00Z');
@@ -199,6 +200,41 @@ describe('Skracacz linków: sprawdzenie domeny', () => {
     expect(detail.body).toContain('Krok sprawdzenia: rozwiązanie nazwy');
     expect(detail.body).toContain('albo ustaw zmienną MIG_LINKS_ALLOW_PRIVATE=1 w środowisku bramki');
     plainText(detail.body);
+  });
+
+  it('serwer pośredniczący bez zaufania: ostrzeżenie w komunikacie, na liście i na stronie domeny z wartością zmiennej', async () => {
+    const id = await created();
+    const viaProxy = (proxy: string) => {
+      h.domainNet.fetch = (async (input: string | URL | Request) => {
+        const u = new URL(String(input));
+        const token = u.pathname.split('/').pop() ?? '';
+        const domain = h.linkDomains.byDomain(u.hostname);
+        return new Response(domain && h.domainChecks.answer(token, NOW, domain.id, proxy) ? token : 'Link wygasł');
+      }) as typeof fetch;
+    };
+    viaProxy('172.18.0.3');
+    const res = await post(`/skracacz/${id}/sprawdz`, { back: 'lista' });
+    expect(res.headers.location).toBe('/skracacz');
+    const list = await page('/skracacz');
+    expect(list.body).toContain('Domena odpowiada, ale bramka nie ufa serwerowi pośredniczącemu 172.18.0.3. Szczegóły zawiera strona domeny');
+    expect(list.body).toContain('flash-warn');
+    expect(list.body).toContain('sprawdzona z ostrzeżeniem');
+    const detail = await page(`/skracacz/${id}`);
+    expect(detail.body).toContain('Linki tej domeny działają, ale kliknięcia przychodzą przez serwer pośredniczący 172.18.0.3, któremu bramka nie ufa.');
+    expect(detail.body).toContain('limit 60 wejść na minutę obejmuje wtedy wszystkich odbiorców kampanii razem');
+    expect(detail.body).toContain('Ustaw w środowisku bramki zmienną MIG_TRUSTED_PROXIES=172.16.0.0/12');
+    expect(detail.body).toContain(`href="${problemUrl('skracacz-sprawdzenie-domeny')}"`);
+    plainText(detail.body);
+
+    viaProxy('192.0.2.10');
+    await post(`/skracacz/${id}/sprawdz`);
+    expect((await page(`/skracacz/${id}`)).body).toContain('zmienną MIG_TRUSTED_PROXIES=192.0.2.10');
+
+    redirectServer();
+    await post(`/skracacz/${id}/sprawdz`);
+    const fixed = await page(`/skracacz/${id}`);
+    expect(fixed.body).not.toContain('MIG_TRUSTED_PROXIES');
+    expect(fixed.body).toContain('Linki tej domeny trafiają do tej bramki');
   });
 
   it('MIG_LINKS_ALLOW_PRIVATE=1: sprawdzenie łączy się z adresem w sieci wewnętrznej', async () => {

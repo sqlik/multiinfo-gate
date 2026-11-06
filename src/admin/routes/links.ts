@@ -109,7 +109,9 @@ export function registerLinkRoutes(app: FastifyInstance, deps: AdminDeps, render
     const row = domainOf(request.params.id);
     if (!row) return reply.callNotFound();
     const result = await service.check(row.id, userOf(request), now());
-    if (result.ok) render.flash(request, 'ok', `Domena odpowiada: linki domeny ${row.domain} trafiają do tej bramki`);
+    if (result.ok && result.untrustedProxy !== undefined) {
+      render.flash(request, 'warn', `Domena odpowiada, ale bramka nie ufa serwerowi pośredniczącemu ${result.untrustedProxy}. Szczegóły zawiera strona domeny`);
+    } else if (result.ok) render.flash(request, 'ok', `Domena odpowiada: linki domeny ${row.domain} trafiają do tej bramki`);
     else render.flash(request, 'fail', `Sprawdzenie domeny ${row.domain} nie powiodło się. Szczegóły zawiera strona domeny`);
     return reply.redirect(request.body?.back === 'lista' ? '/skracacz' : `/skracacz/${row.id}`, 303);
   });

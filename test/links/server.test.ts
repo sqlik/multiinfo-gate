@@ -163,6 +163,32 @@ describe('serwer przekierowań - strona główna domeny', () => {
 });
 
 describe('serwer przekierowań - sprawdzenie domeny', () => {
+  it('token przez serwer pośredniczący bez zaufania: zapamiętuje adres tego serwera', async () => {
+    const s = setup();
+    const token = s.checks.issue(s.domainId, LATER);
+    const res = await s.get(`/.well-known/multiinfo-gate/${token}`, 'l.firma.pl', { 'x-forwarded-for': '198.51.100.7' }, '172.18.0.3');
+    expect(res.statusCode).toBe(200);
+    expect(s.checks.untrustedProxy(token)).toBe('172.18.0.3');
+  });
+
+  it('token przez zaufany serwer pośredniczący albo bez nagłówka X-Forwarded-For: bez ostrzeżenia', async () => {
+    const trusted = setup({ trustedProxies: ['172.16.0.0/12'] });
+    const t1 = trusted.checks.issue(trusted.domainId, LATER);
+    await trusted.get(`/.well-known/multiinfo-gate/${t1}`, 'l.firma.pl', { 'x-forwarded-for': '198.51.100.7' }, '172.18.0.3');
+    expect(trusted.checks.untrustedProxy(t1)).toBeNull();
+    const direct = setup();
+    const t2 = direct.checks.issue(direct.domainId, LATER);
+    await direct.get(`/.well-known/multiinfo-gate/${t2}`);
+    expect(direct.checks.untrustedProxy(t2)).toBeNull();
+  });
+
+  it('adres IPv4 w zapisie IPv6 podaje w zwykłej postaci', async () => {
+    const s = setup();
+    const token = s.checks.issue(s.domainId, LATER);
+    await s.get(`/.well-known/multiinfo-gate/${token}`, 'l.firma.pl', { 'x-forwarded-for': '198.51.100.7' }, '::ffff:172.18.0.3');
+    expect(s.checks.untrustedProxy(token)).toBe('172.18.0.3');
+  });
+
   it('token odpowiada w ciągu 120 s wyłącznie pod domeną, dla której powstał', async () => {
     const s = setup();
     const token = s.checks.issue(s.domainId, LATER);

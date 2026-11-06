@@ -98,7 +98,11 @@ export function buildLinksServer(deps: LinksServerDeps): FastifyInstance {
 
   app.get<{ Params: { token: string } }>('/.well-known/multiinfo-gate/:token', async (request, reply) => {
     const domain = domainFor(deps.linkDomains, request.host);
-    if (domain === null || !deps.checks.answer(request.params.token, now(), domain.id)) return expired(request, reply);
+    // Nagłówek X-Forwarded-For, którego bramka nie uwzględniła, oznacza serwer pośredniczący spoza MIG_TRUSTED_PROXIES.
+    // Limit wejść liczy wtedy wszystkie kliknięcia na jego adres, dlatego panel ostrzega o tym przy sprawdzeniu domeny.
+    const remote = request.socket.remoteAddress ?? '';
+    const untrusted = request.headers['x-forwarded-for'] !== undefined && request.ip === remote ? remote.replace(/^::ffff:(?=\d+\.)/, '') : null;
+    if (domain === null || !deps.checks.answer(request.params.token, now(), domain.id, untrusted)) return expired(request, reply);
     return noStore(reply).type('text/plain; charset=utf-8').send(request.params.token);
   });
 

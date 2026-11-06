@@ -199,6 +199,19 @@ describe('LinkDomainService: sprawdzenie domeny', () => {
     expect(s.calls).toHaveLength(0);
   });
 
+  it('serwer pośredniczący bez zaufania: sprawdzenie udane z adresem tego serwera w wyniku, w bazie i w dzienniku', async () => {
+    const s = setup();
+    s.net.fetch = (async (input: string | URL | Request) => {
+      const u = new URL(String(input));
+      const token = u.pathname.split('/').pop() ?? '';
+      const domain = s.linkDomains.byDomain(u.hostname)!;
+      return new Response(s.checks.answer(token, NOW, domain.id, '172.18.0.3') ? token : 'Link wygasł');
+    }) as typeof fetch;
+    expect(await s.service.check(s.domainId, ADMIN, NOW)).toEqual({ ok: true, untrustedProxy: '172.18.0.3' });
+    expect(s.linkDomains.get(s.domainId)).toMatchObject({ checkOk: 1, checkDetail: 'proxy 172.18.0.3' });
+    expect(JSON.parse(s.entries().at(-1)!.meta!)).toEqual({ domain: 'l.firma.pl', ok: true, untrustedProxy: '172.18.0.3' });
+  });
+
   it('MIG_LINKS_ALLOW_PRIVATE=1: domena z adresem w sieci wewnętrznej przechodzi pełne sprawdzenie', async () => {
     const s = setup({ allowPrivate: true });
     s.net.resolve = async () => ['192.168.1.20'];

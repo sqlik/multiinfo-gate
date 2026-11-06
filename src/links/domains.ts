@@ -10,7 +10,8 @@ import { warsawStamp } from '../time/warsaw.ts';
 import type { DomainChecks } from './domain-checks.ts';
 
 export type DomainCheckStep = 'dns' | 'connect' | 'tls' | 'response';
-export interface DomainCheckResult { ok: boolean; step?: DomainCheckStep; detail?: string }
+/** `untrustedProxy`: udane sprawdzenie przez serwer pośredniczący, któremu bramka nie ufa (MIG_TRUSTED_PROXIES). */
+export interface DomainCheckResult { ok: boolean; step?: DomainCheckStep; detail?: string; untrustedProxy?: string }
 
 export interface DomainServiceDeps {
   linkDomains: LinkDomainsRepo;
@@ -182,8 +183,11 @@ export class LinkDomainService {
   async check(id: number, user: PanelUser, now: Date): Promise<DomainCheckResult> {
     const row = this.must(id);
     const token = this.deps.checks.issue(id, now);
-    const result = await this.probe(row.domain, token);
-    this.deps.linkDomains.setCheck(id, result.ok, result.ok ? null : `${result.step} ${result.detail}`, now);
+    const probed = await this.probe(row.domain, token);
+    const proxy = probed.ok ? this.deps.checks.untrustedProxy(token) : null;
+    const result: DomainCheckResult = proxy === null ? probed : { ...probed, untrustedProxy: proxy };
+    const stored = result.ok ? (proxy === null ? null : `proxy ${proxy}`) : `${result.step} ${result.detail}`;
+    this.deps.linkDomains.setCheck(id, result.ok, stored, now);
     this.record(user, 'skracacz.domena.sprawdzenie', id, { domain: row.domain, ...result });
     return result;
   }

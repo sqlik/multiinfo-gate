@@ -17,11 +17,31 @@ const minute = (iso: string) => warsawStamp(iso).slice(0, 16);
 
 const statePill = (row: LinkDomainRow) => (row.enabled === 1 ? pill('ok', 'aktywna') : pill('dim', 'wyłączona'));
 
+/** Udane sprawdzenie przez serwer pośredniczący, któremu bramka nie ufa: adres tego serwera albo null. */
+function untrustedProxyOf(row: LinkDomainRow): string | null {
+  return row.checkOk === 1 && row.checkDetail?.startsWith('proxy ') ? row.checkDetail.slice(6) : null;
+}
+
 /** Plakietka sprawdzenia z datą ostatniego sprawdzenia. */
 function checkPill(row: LinkDomainRow): string {
   if (row.checkedAt === null || row.checkOk === null) return pill('wait', 'niesprawdzona');
   const when = `<span class="dim m" style="margin-left: 8px;">${esc(minute(row.checkedAt))}</span>`;
-  return row.checkOk === 1 ? `${pill('ok', 'sprawdzona')}${when}` : `${pill('fail', 'sprawdzenie nieudane')}${when}`;
+  if (row.checkOk === 0) return `${pill('fail', 'sprawdzenie nieudane')}${when}`;
+  return untrustedProxyOf(row) === null ? `${pill('ok', 'sprawdzona')}${when}` : `${pill('wait', 'sprawdzona z ostrzeżeniem')}${when}`;
+}
+
+/** Wartość MIG_TRUSTED_PROXIES do podpowiedzi: sieci Dockera w całości, inny adres wprost. */
+function trustedProxiesHint(address: string): string {
+  const m = /^172\.(\d+)\.\d+\.\d+$/.exec(address);
+  return m !== null && Number(m[1]) >= 16 && Number(m[1]) <= 31 ? '172.16.0.0/12' : address;
+}
+
+/** Ostrzeżenie przy udanym sprawdzeniu: kliknięcia przez serwer pośredniczący bez zaufania liczą się na jeden adres. */
+function untrustedProxyWarning(proxy: string): string {
+  return `<div class="warn">Linki tej domeny działają, ale kliknięcia przychodzą przez serwer pośredniczący ${esc(proxy)}, któremu bramka nie ufa.
+          Wszystkie kliknięcia liczą się więc jako wejścia z jednego adresu, a limit 60 wejść na minutę obejmuje wtedy wszystkich odbiorców kampanii razem.
+          Ustaw w środowisku bramki zmienną MIG_TRUSTED_PROXIES=${esc(trustedProxiesHint(proxy))} i uruchom bramkę ponownie, a następnie sprawdź domenę jeszcze raz.</div>
+        <div class="hint">Opis znajdziesz w <a href="${problemUrl('skracacz-sprawdzenie-domeny')}" target="_blank" rel="noopener noreferrer">rozwiązywaniu problemów, w punkcie „Sprawdzenie domeny skracacza kończy się błędem”</a></div>`;
 }
 
 /** „1 klucz”, „3 klucze”, „5 kluczy”. */
@@ -134,7 +154,9 @@ function checkPanel(row: LinkDomainRow): string {
   const result = row.checkedAt === null
     ? '<div class="hint">Domena nie była jeszcze sprawdzana. Sprawdzenie potwierdza za jednym razem rekord DNS, serwer pośredniczący, certyfikat i przypisanie domeny do tej bramki. Domena niesprawdzona może być używana</div>'
     : failure === null
-      ? '<div class="hint">Bramka pobrała token sprawdzenia spod adresu domeny. Linki tej domeny trafiają do tej bramki</div>'
+      ? (untrustedProxyOf(row) === null
+        ? '<div class="hint">Bramka pobrała token sprawdzenia spod adresu domeny. Linki tej domeny trafiają do tej bramki</div>'
+        : untrustedProxyWarning(untrustedProxyOf(row)!))
       : `<div class="warn">${esc(checkMessage(row.domain, failure.step, failure.detail))}</div>
         <div class="hint">Krok sprawdzenia: ${esc(STEP_LABEL[failure.step])}, kod błędu: <span class="m">${esc(detailLabel(failure.detail))}</span>.
           Opis znajdziesz w <a href="${problemUrl('skracacz-sprawdzenie-domeny')}" target="_blank" rel="noopener noreferrer">rozwiązywaniu problemów, w punkcie „Sprawdzenie domeny skracacza kończy się błędem”</a></div>`;
