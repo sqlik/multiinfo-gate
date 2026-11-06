@@ -108,12 +108,21 @@ describe('Kampanie: szczegóły', () => {
     plainText(body);
   });
 
-  it('plakietki linków odbiorcy w kolejności tabeli „Linki”, z adresem w podpowiedzi', async () => {
+  it('plakietki linków odbiorcy w kolejności tabeli „Linki”, z odnośnikiem do adresu docelowego w nowej karcie', async () => {
     const { campaignId } = seed();
     const body = (await page(`/kampanie/${campaignId}`)).body;
     const row = body.slice(body.indexOf(`<td class="m">${dest(185)}</td>`));
     const cells = row.slice(0, row.indexOf('</tr>'));
-    expect(cells).toContain(`<span class="tag" title="${FOLDER}">link 1</span> <span class="tag" title="https://firma.pl/oferta/KL-10185">link 2</span>`);
+    const tag = (url: string, label: string) =>
+      `<a class="tag" href="${url}" title="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+    expect(cells).toContain(`${tag(FOLDER, 'link 1')} ${tag('https://firma.pl/oferta/KL-10185', 'link 2')}`);
+  });
+
+  it('tabela „Linki”: link wspólny klikalny, wzorzec linków indywidualnych bez odnośnika', async () => {
+    const { campaignId } = seed();
+    const body = (await page(`/kampanie/${campaignId}`)).body;
+    expect(body).toContain(`<td class="m url"><a href="${FOLDER}" target="_blank" rel="noopener noreferrer">${FOLDER}</a></td>`);
+    expect(body).toContain('<td class="m url">https://firma.pl/oferta/{…}</td>');
   });
 
   it('widok dzienny wykresu', async () => {

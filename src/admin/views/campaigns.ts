@@ -130,6 +130,23 @@ function chartPanel(v: CampaignView): string {
     </div>`;
 }
 
+/**
+ * Adres docelowy jako odnośnik otwierany w nowej karcie, żeby administrator mógł zobaczyć stronę bez wejścia
+ * przez krótki link (liczniki kampanii bez zmian). Wzorzec linków indywidualnych z „{…}” zostaje tekstem.
+ */
+const linkable = (url: string) => /^https?:\/\//i.test(url) && !url.includes('{…}');
+
+function targetLink(url: string): string {
+  if (!linkable(url)) return esc(url);
+  return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>`;
+}
+
+/** Plakietka „link N” z odnośnikiem do adresu docelowego; pełny adres w podpowiedzi. */
+function targetTag(url: string, label: string): string {
+  if (!linkable(url)) return `<span class="tag" title="${esc(url)}">${esc(label)}</span>`;
+  return `<a class="tag" href="${esc(url)}" title="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`;
+}
+
 /** Numer wiersza tabeli „Linki” dla adresu docelowego odbiorcy: adres albo jego wzorzec. */
 function linkNumbers(targets: readonly CampaignTarget[]): (target: string) => number | undefined {
   const index = new Map(targets.map((t, i) => [t.target, i + 1]));
@@ -139,7 +156,7 @@ function linkNumbers(targets: readonly CampaignTarget[]): (target: string) => nu
 function linksPanel(d: CampaignDetail, shown: number): string {
   const rows = d.targets.slice(0, shown).map((t, i) => `<tr>
       <td class="m dim">${i + 1}</td>
-      <td class="m url">${esc(t.target)}</td>
+      <td class="m url">${targetLink(t.target)}</td>
       <td><span class="tag">${t.kind === 'shared' ? 'wspólny' : 'indywidualny'}</span></td>
       <td class="m r">${num(t.opens)}</td>
       <td class="m r">${num(t.clicks)}</td>
@@ -189,11 +206,11 @@ function openersPanel(d: CampaignDetail, shown: number): string {
   }
   const numberOf = linkNumbers(d.targets);
   const rows = d.openers.slice(0, shown).map((o) => {
-    // Plakietki w kolejności wierszy tabeli „Linki”; pełny adres w podpowiedzi.
+    // Plakietki w kolejności wierszy tabeli „Linki”, każda z odnośnikiem do adresu docelowego w nowej karcie.
     const links = o.targets
       .map((t) => ({ t, n: numberOf(t) }))
       .sort((a, b) => (a.n ?? Infinity) - (b.n ?? Infinity))
-      .map(({ t, n }) => `<span class="tag" title="${esc(t)}">${n === undefined ? 'link' : `link ${n}`}</span>`)
+      .map(({ t, n }) => targetTag(t, n === undefined ? 'link' : `link ${n}`))
       .join(' ');
     return `<tr class="opener">
       <td class="m">${esc(o.dest)}</td>

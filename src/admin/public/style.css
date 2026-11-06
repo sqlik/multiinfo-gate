@@ -228,6 +228,8 @@ table input.cell { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-siz
 .revoked td { color: var(--faint); }
 .tag { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; border: 1px solid var(--rule);
        border-radius: var(--radius); padding: 2px 6px; color: var(--muted); }
+a.tag { color: var(--signal); border-color: var(--edge); }
+a.tag:hover { color: var(--signal); background: var(--rail-on); }
 .choices { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .choice { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
 
