@@ -252,8 +252,8 @@ export function linkDomainFormPage(opts: {
   const sub = row ? `Domena skracacza · ${row.displayName}` : 'Domena, w której bramka tworzy krótkie linki do SMS-ów';
   const content = row
     ? `<div class="cols">
-        <div class="stack">${form}</div>
-        <div class="stack">
+        <div class="stack stack-fill">${form}</div>
+        <div class="stack stack-fill">
           ${checkPanel(row)}
           ${keysPanel(opts.keys ?? [])}
           ${statePanel(row)}

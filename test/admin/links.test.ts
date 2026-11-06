@@ -147,6 +147,15 @@ describe('Skracacz linków: formularz domeny', () => {
     expect(bad.body).toContain(`action="/skracacz/${id}"`);
   });
 
+  it('strona domeny: panel formularza kończy się na wysokości prawej kolumny', async () => {
+    const id = await created();
+    const res = await page(`/skracacz/${id}`);
+    expect(res.body).toContain('<div class="cols">\n        <div class="stack stack-fill"><div class="panel">');
+    expect(res.body.match(/<div class="stack stack-fill">/g)).toHaveLength(2);
+    const css = (await h.app.inject({ method: 'GET', url: '/style.css' })).body;
+    expect(css).toContain('.stack-fill > .panel:last-child { flex: 1; }');
+  });
+
   it('nieznana domena i zły identyfikator dają 404', async () => {
     expect((await page('/skracacz/999')).statusCode).toBe(404);
     expect((await page('/skracacz/abc')).statusCode).toBe(404);
