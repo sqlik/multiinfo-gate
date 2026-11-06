@@ -3,6 +3,8 @@
 #   COMPOSE_FILE=docker-compose.yml:docker-compose.caddy.yml
 #   MIG_DOMENA=<TWOJA-DOMENA>
 # i uruchom docker compose up -d. Panel (8081) nie jest wystawiany.
+# Ten sam Caddy obsługuje domeny skracacza: rekord DNS domeny wskazuje ten serwer, a certyfikat
+# powstaje przy pierwszym wejściu na krótki link (Caddyfile, blok on_demand_tls).
 services:
   caddy:
     image: caddy:2
