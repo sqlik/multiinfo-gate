@@ -201,7 +201,8 @@ sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
 ```
 
 Oczekiwany wynik: instalacja kończy się bez komunikatu o błędzie, a `sudo docker --version`
-wypisuje `Docker version 2x.x.x`. Dokładny numer zależy od wersji pakietu w Ubuntu.
+wypisuje numer wersji Dockera. Dokładny numer zależy od wersji pakietu w Ubuntu. Przykładowy
+wynik podaje sprawdzenie po ponownym zalogowaniu, opisane poniżej.
 
 Domyślnie polecenia `docker` może wydawać tylko administrator. Aby nie poprzedzać każdego
 polecenia słowem `sudo`, dodaj swojego użytkownika do grupy `docker`:
@@ -230,7 +231,10 @@ docker --version
 docker compose version
 ```
 
-Oczekiwany wynik: `Docker version 2x.x.x` oraz `Docker Compose version v2.x.x`, oba bez `sudo`.
+Oczekiwany wynik: oba polecenia działają bez `sudo` i wypisują numery wersji, na przykład
+`Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2` oraz
+`Docker Compose version 2.40.3+ds1-0ubuntu1~24.04.1`. Pakiety Ubuntu dopisują do numeru wersji
+oznaczenie pakietu.
 
 Gdy wynik jest inny:
 

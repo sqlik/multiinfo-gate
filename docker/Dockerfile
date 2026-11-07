@@ -14,6 +14,8 @@ FROM node:22-alpine
 LABEL org.opencontainers.image.source="https://github.com/sqlik/multiinfo-gate"
 WORKDIR /app
 ENV NODE_ENV=production
+# npm run admin:dodaj w kontenerze nie dopisuje pod wynikiem zachęty do aktualizacji npm.
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/package.json ./package.json

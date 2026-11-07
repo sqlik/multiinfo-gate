@@ -80,3 +80,12 @@ describe('pliki wdrożenia skracacza', () => {
     expect(links).toMatch(/traefik\.http\.services\.multiinfo-gate-linki\.loadbalancer\.server\.port: "8082"$/m);
   });
 });
+
+describe('obraz Dockera', () => {
+  // `docker compose exec multiinfo-gate npm run admin:dodaj` z instrukcji uruchomienia: npm w kontenerze
+  // dopisywał pod komunikatem o założeniu konta zachętę do aktualizacji npm.
+  it('wyłącza w obrazie końcowym komunikat npm o nowej wersji', () => {
+    const stages = read('docker/Dockerfile').split(/^FROM /m);
+    expect(stages.at(-1)).toMatch(/^ENV .*\bNPM_CONFIG_UPDATE_NOTIFIER=false\b/m);
+  });
+});

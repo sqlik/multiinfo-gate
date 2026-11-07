@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { InboundHealth } from '../inbound/receiver.ts';
 import type { AccountsRepo } from '../store/accounts.ts';
 import type { ReleaseInfo } from '../store/settings.ts';
@@ -27,6 +27,14 @@ export interface HealthDeps {
   detailsAllowed?: (request: FastifyRequest) => boolean;
 }
 
+/**
+ * Odpowiedź /healthz kończy się znakiem nowego wiersza. Administrator sprawdza stan poleceniem curl,
+ * a bez nowego wiersza znak zachęty powłoki dokleja się do wyniku. Treść pozostaje poprawnym JSON-em.
+ */
+export function sendHealth(reply: FastifyReply, body: object): FastifyReply {
+  return reply.type('application/json; charset=utf-8').send(`${JSON.stringify(body)}\n`);
+}
+
 const daysLeft = (notAfter: string, now: Date) =>
   Math.floor((Date.parse(notAfter) - now.getTime()) / 86_400_000);
 
@@ -36,7 +44,7 @@ const daysLeft = (notAfter: string, now: Date) =>
  * zalogować (predykat `detailsAllowed`).
  */
 export function registerHealthRoute(app: FastifyInstance, deps: HealthDeps, mode: 'public' | 'admin'): void {
-  app.get('/healthz', async (request) => {
+  app.get('/healthz', async (request, reply) => {
     const now = (deps.now ?? (() => new Date()))();
     const accounts = deps.accounts.list();
     const paused = accounts.filter((a) => a.pausedReason !== null);
@@ -45,10 +53,10 @@ export function registerHealthRoute(app: FastifyInstance, deps: HealthDeps, mode
     // Usługa zatrzymana błędem Multiinfo (-23/-24) też pogarsza stan: ktoś musi to naprawić w panelu.
     const status = paused.length > 0 || expiring.length > 0 || (inbound?.errors.length ?? 0) > 0 ? 'degraded' : 'ok';
 
-    if (mode === 'public' || (deps.detailsAllowed && !deps.detailsAllowed(request))) return { status };
+    if (mode === 'public' || (deps.detailsAllowed && !deps.detailsAllowed(request))) return sendHealth(reply, { status });
     const release = deps.release?.() ?? null;
 
-    return {
+    return sendHealth(reply, {
       status,
       version: GATE_VERSION,
       queueDepth: deps.queueDepth(),
@@ -61,6 +69,6 @@ export function registerHealthRoute(app: FastifyInstance, deps: HealthDeps, mode
       ...(deps.integrations ? { integrations: deps.integrations() } : {}),
       ...(deps.m365 ? { m365: deps.m365() } : {}),
       ...(release ? { release: { version: release.version, url: release.url } } : {}),
-    };
+    });
   });
 }
