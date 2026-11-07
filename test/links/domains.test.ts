@@ -273,6 +273,14 @@ describe('LinkDomainService: sprawdzenie domeny', () => {
     expect(await s.service.check(s.domainId, ADMIN, NOW)).toEqual({ ok: false, step: 'response', detail: 'token' });
   });
 
+  it('token odesłany przez obcy serwer, bez udziału serwera przekierowań bramki, nie potwierdza domeny', async () => {
+    const s = setup();
+    // Serwer, który odsyła ostatni człon ścieżki, na przykład inna usługa pod tą domeną.
+    s.net.fetch = (async (input: string | URL | Request) => new Response(String(input).split('/').pop())) as typeof fetch;
+    expect(await s.service.check(s.domainId, ADMIN, NOW)).toEqual({ ok: false, step: 'response', detail: 'token' });
+    expect(s.checks.size).toBe(0);
+  });
+
   it('nieznana domena daje błąd z tekstem do panelu', async () => {
     const s = setup();
     await expect(s.service.check(999, ADMIN, NOW)).rejects.toThrow('Nie znaleziono domeny');

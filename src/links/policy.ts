@@ -43,10 +43,3 @@ export function normalizeDomain(raw: string): string | null {
   const ascii = domainToASCII(value);
   return validDomain(ascii) ? ascii : null;
 }
-
-/** Host z nagłówka `Host`: małe litery, bez portu, bez kropki na końcu. */
-export function normalizeHost(raw: string | undefined): string | null {
-  if (raw === undefined) return null;
-  const host = raw.trim().toLowerCase().replace(/:\d*$/, '').replace(/\.$/, '');
-  return host === '' ? null : host;
-}

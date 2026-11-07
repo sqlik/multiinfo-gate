@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideShortening, normalizeDomain, normalizeHost, targetAllowed } from '../../src/links/policy.ts';
+import { decideShortening, normalizeDomain, targetAllowed } from '../../src/links/policy.ts';
 
 describe('decideShortening', () => {
   it.each([
@@ -59,20 +59,5 @@ describe('normalizeDomain', () => {
     '-l.firma.pl',
   ])('odrzuca %j', (raw) => {
     expect(normalizeDomain(raw)).toBeNull();
-  });
-});
-
-describe('normalizeHost', () => {
-  it('zamienia na małe litery, pomija port i kropkę na końcu', () => {
-    expect(normalizeHost('L.FIRMA.PL:443')).toBe('l.firma.pl');
-    expect(normalizeHost('l.firma.pl.')).toBe('l.firma.pl');
-    expect(normalizeHost('l.firma.pl.:8082')).toBe('l.firma.pl');
-    expect(normalizeHost('l.firma.pl')).toBe('l.firma.pl');
-  });
-
-  it('zwraca null dla braku nagłówka albo pustej wartości', () => {
-    expect(normalizeHost(undefined)).toBeNull();
-    expect(normalizeHost('')).toBeNull();
-    expect(normalizeHost(':443')).toBeNull();
   });
 });

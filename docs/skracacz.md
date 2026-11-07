@@ -106,11 +106,13 @@ Sposób wystawienia portu zależy od wariantu z rozdziału 6 [Uruchomienia](uruc
 | Proxmox VE | serwer pośredniczący kierowany na port 8082 kontenera | rozdział 9.7 |
 
 Limit wejść liczony jest dla adresu odbiorcy i wynosi 60 wejść na minutę. Limit chroni przed
-odgadywaniem kodów. Bramka rozpoznaje adres odbiorcy wyłącznie wtedy, gdy ufa serwerowi
+odgadywaniem kodów. Wejścia na nieistniejące kody z jednej sieci IPv6 /48 bramka ogranicza
+dodatkowo do 600 na minutę, ponieważ operator przydziela abonentowi całą pulę adresów IPv6. Bramka rozpoznaje adres odbiorcy wyłącznie wtedy, gdy ufa serwerowi
 pośredniczącemu, czyli gdy jego adres zawiera zmienna `MIG_TRUSTED_PROXIES`. W przeciwnym razie
 wszystkie wejścia liczą się jako wejścia z adresu serwera pośredniczącego, a limit obejmuje
 wszystkich odbiorców kampanii razem. Przy dużej kampanii część odbiorców zobaczy wtedy stronę
-„Zbyt wiele żądań”. Wartość zmiennej podają rozdziały 6.5-6.7 [Uruchomienia](uruchomienie.md),
+„Zbyt wiele żądań”. Pliki wariantów z Caddy i z nginx w Dockerze ustawiają tę zmienną same.
+Wartość dla Traefika i dla kontenera LXC podają rozdziały 6.7 i 9.7 [Uruchomienia](uruchomienie.md),
 a sprawdzenie domeny wykrywa jej brak.
 
 Linki bez `https://` w treści, opisane w rozdziale 5.1, telefon otwiera przez HTTP. Serwer

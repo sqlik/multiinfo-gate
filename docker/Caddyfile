@@ -1,6 +1,6 @@
 # Domena z MIG_DOMENA w docker/.env. Caddy sam pobiera i odnawia certyfikat Let's Encrypt.
 # Limity klucza bramka liczy na klucz, nie na adres, więc proxy ich nie psuje. Adresowi klienta
-# z X-Forwarded-For bramka wierzy tylko przy MIG_TRUSTED_PROXIES=172.16.0.0/12 w docker/.env (rozdział 6.5).
+# z X-Forwarded-For bramka wierzy dzięki MIG_TRUSTED_PROXIES=172.16.0.0/12 z docker-compose.caddy.yml (rozdział 6.5).
 {
 	# Certyfikat domeny skracacza Caddy pobiera przy pierwszym wejściu, gdy bramka potwierdzi, że to
 	# aktywna domena skracacza. Dodanie domeny w panelu bramki nie wymaga zmian w tym pliku.
@@ -13,9 +13,8 @@
 	reverse_proxy multiinfo-gate:8080
 }
 
-# Domeny skracacza: każda inna nazwa trafia do portu przekierowań bramki. Limit wejść liczony na adres
-# odbiorcy wymaga MIG_TRUSTED_PROXIES=172.16.0.0/12 w docker/.env. W przeciwnym razie wszystkie wejścia
-# liczą się jako wejścia z adresu Caddy i przy kampanii trafiają na limit 60 wejść na minutę.
+# Domeny skracacza: każda inna nazwa trafia do portu krótkich linków bramki. Limit wejść jest liczony
+# na adres odbiorcy dzięki MIG_TRUSTED_PROXIES z docker-compose.caddy.yml.
 https:// {
 	tls {
 		on_demand

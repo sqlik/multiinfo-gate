@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DomainChecks } from '../../src/links/domain-checks.ts';
-import { buildLinksServer, limitKey, type LinksServerDeps } from '../../src/links/server.ts';
+import { buildLinksServer, clientKey, limitKey, type LinksServerDeps } from '../../src/links/server.ts';
 import { CAMPAIGN, NOW, redirectFixture } from './redirect-fixture.ts';
 
 const LATER = new Date(NOW.getTime() + 3_600_000);
@@ -168,25 +168,25 @@ describe('serwer przekierowań - sprawdzenie domeny', () => {
     const token = s.checks.issue(s.domainId, LATER);
     const res = await s.get(`/.well-known/multiinfo-gate/${token}`, 'l.firma.pl', { 'x-forwarded-for': '198.51.100.7' }, '172.18.0.3');
     expect(res.statusCode).toBe(200);
-    expect(s.checks.untrustedProxy(token)).toBe('172.18.0.3');
+    expect(s.checks.take(token).untrustedProxy).toBe('172.18.0.3');
   });
 
   it('token przez zaufany serwer pośredniczący albo bez nagłówka X-Forwarded-For: bez ostrzeżenia', async () => {
     const trusted = setup({ trustedProxies: ['172.16.0.0/12'] });
     const t1 = trusted.checks.issue(trusted.domainId, LATER);
     await trusted.get(`/.well-known/multiinfo-gate/${t1}`, 'l.firma.pl', { 'x-forwarded-for': '198.51.100.7' }, '172.18.0.3');
-    expect(trusted.checks.untrustedProxy(t1)).toBeNull();
+    expect(trusted.checks.take(t1)).toEqual({ answered: true, untrustedProxy: null });
     const direct = setup();
     const t2 = direct.checks.issue(direct.domainId, LATER);
     await direct.get(`/.well-known/multiinfo-gate/${t2}`);
-    expect(direct.checks.untrustedProxy(t2)).toBeNull();
+    expect(direct.checks.take(t2)).toEqual({ answered: true, untrustedProxy: null });
   });
 
   it('adres IPv4 w zapisie IPv6 podaje w zwykłej postaci', async () => {
     const s = setup();
     const token = s.checks.issue(s.domainId, LATER);
     await s.get(`/.well-known/multiinfo-gate/${token}`, 'l.firma.pl', { 'x-forwarded-for': '198.51.100.7' }, '::ffff:172.18.0.3');
-    expect(s.checks.untrustedProxy(token)).toBe('172.18.0.3');
+    expect(s.checks.take(token).untrustedProxy).toBe('172.18.0.3');
   });
 
   it('token odpowiada w ciągu 120 s wyłącznie pod domeną, dla której powstał', async () => {
@@ -196,12 +196,15 @@ describe('serwer przekierowań - sprawdzenie domeny', () => {
     expect(ok.statusCode).toBe(200);
     expect(ok.headers['content-type']).toBe('text/plain; charset=utf-8');
     expect(ok.body).toBe(token);
-    expect((await s.get(`/.well-known/multiinfo-gate/${token}`, 'firma-link.pl')).statusCode).toBe(404);
+    expect((await s.get(`/.well-known/multiinfo-gate/${token}`)).statusCode, 'drugie pobranie').toBe(404);
+    const other = s.checks.issue(s.domainId, LATER);
+    expect((await s.get(`/.well-known/multiinfo-gate/${other}`, 'firma-link.pl')).statusCode).toBe(404);
     expect((await s.get('/.well-known/multiinfo-gate/nieznany-token')).statusCode).toBe(404);
     s.clock.now = new Date(LATER.getTime() + 119_000);
-    expect((await s.get(`/.well-known/multiinfo-gate/${token}`)).statusCode).toBe(200);
+    expect((await s.get(`/.well-known/multiinfo-gate/${other}`)).statusCode).toBe(200);
+    const late = s.checks.issue(s.domainId, LATER);
     s.clock.now = new Date(LATER.getTime() + 121_000);
-    expect((await s.get(`/.well-known/multiinfo-gate/${token}`)).statusCode).toBe(404);
+    expect((await s.get(`/.well-known/multiinfo-gate/${late}`)).statusCode).toBe(404);
   });
 
   it('endpoint dla Caddy odpowiada 200 wyłącznie dla aktywnej domeny skracacza', async () => {
@@ -225,6 +228,16 @@ describe('DomainChecks', () => {
     expect(checks.answer(token, NOW, 2)).toBe(false);
     expect(checks.answer(token, new Date(NOW.getTime() + 120_000), 1)).toBe(false);
     expect(checks.answer('inny', NOW, 1)).toBe(false);
+  });
+
+  it('token odpowiada tylko raz, a wynik odczytany przez panel usuwa token', () => {
+    const checks = new DomainChecks();
+    const token = checks.issue(1, NOW);
+    expect(checks.answer(token, NOW, 1, '172.18.0.3')).toBe(true);
+    expect(checks.answer(token, NOW, 1)).toBe(false);
+    expect(checks.take(token)).toEqual({ answered: true, untrustedProxy: '172.18.0.3' });
+    expect(checks.size).toBe(0);
+    expect(checks.take(token)).toEqual({ answered: false, untrustedProxy: null });
   });
 
   it('nowy token usuwa tokeny po terminie', () => {
@@ -278,5 +291,114 @@ describe('limitKey', () => {
     expect(limitKey('2001:db8::1')).toBe('2001:db8:0:0::/64');
     expect(limitKey('::1')).toBe('0:0:0:0::/64');
     expect(limitKey('fe80::1%eth0')).toBe('fe80:0:0:0::/64');
+  });
+});
+
+describe('serwer przekierowań - pytanie Caddy o certyfikat', () => {
+  const ask = (s: ReturnType<typeof setup>, domain: string, headers: Record<string, string> = {}) =>
+    s.get(`/.well-known/multiinfo-gate/tls?domain=${domain}`, 'multiinfo-gate:8082', headers, '172.18.0.2');
+
+  it('limit wejść nie obejmuje pytania Caddy: po 60 pytaniach o obce nazwy aktywna domena otrzymuje 200', async () => {
+    const s = setup({ trustedProxies: ['172.16.0.0/12'] });
+    // Uzgodnienie TLS z dowolną nazwą SNI kosztuje atakującego jeden pakiet, a Caddy pyta bramkę o każdą nazwę.
+    for (let i = 0; i < 60; i += 1) await ask(s, `obca-${i}.example`);
+    expect((await ask(s, 'l.firma.pl')).statusCode).toBe(200);
+  });
+
+  it('pytanie, które przyszło przez serwer pośredniczący (z X-Forwarded-For), nie zdradza domen skracacza bramki', async () => {
+    const s = setup({ trustedProxies: ['172.16.0.0/12'] });
+    expect((await ask(s, 'firma-link.pl', { 'x-forwarded-for': '198.51.100.7' })).statusCode).toBe(404);
+  });
+});
+
+describe('serwer przekierowań - nagłówek X-Forwarded-Host', () => {
+  it('X-Forwarded-Host od klienta za zaufanym nginx nie zmienia domeny skracacza', async () => {
+    const s = setup({ trustedProxies: ['127.0.0.1'] });
+    const res = await s.get('/', 'obca-domena.pl', { 'x-forwarded-host': 'l.firma.pl', 'x-forwarded-for': '203.0.113.9' }, '127.0.0.1');
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('kod domeny l.firma.pl działa pod l.firma.pl także z X-Forwarded-Host innej domeny', async () => {
+    const s = setup({ trustedProxies: ['127.0.0.1'] });
+    const code = s.addLink();
+    const res = await s.get(`/${code}`, 'l.firma.pl', { 'x-forwarded-host': 'firma-link.pl', 'x-forwarded-for': '203.0.113.9' }, '127.0.0.1');
+    expect(res.statusCode).toBe(302);
+  });
+});
+
+describe('serwer przekierowań - metody i body żądań', () => {
+  const withLog = () => {
+    const errors: string[] = [];
+    const log = { info() {}, warn() {}, debug() {}, error: (msg: string) => { errors.push(msg); } };
+    return { s: setup({ log }), errors };
+  };
+
+  it('POST z błędnym JSON daje stronę „Link wygasł” 404 bez wpisu przekierowania.wyjatek i zamyka połączenie', async () => {
+    const { s, errors } = withLog();
+    const res = await s.app.inject({ method: 'POST', url: '/aB3xK9q', headers: { host: 'l.firma.pl', 'content-type': 'application/json' }, payload: '{' });
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toContain('Link wygasł');
+    expect(res.headers.connection).toBe('close');
+    expect(errors).toEqual([]);
+  });
+
+  it('POST z body ponad 1 MB daje 404 bez wpisu przekierowania.wyjatek', async () => {
+    const { s, errors } = withLog();
+    const res = await s.app.inject({ method: 'POST', url: '/aB3xK9q', headers: { host: 'l.firma.pl', 'content-type': 'text/plain' }, payload: 'x'.repeat(1_100_000) });
+    expect(res.statusCode).toBe(404);
+    expect(errors).toEqual([]);
+  });
+
+  it('GET z błędnym body JSON nadal przekierowuje albo daje 404, bez wpisu przekierowania.wyjatek', async () => {
+    const { s, errors } = withLog();
+    const code = s.addLink();
+    const res = await s.app.inject({ method: 'GET', url: `/${code}`, headers: { host: 'l.firma.pl', 'content-type': 'application/json' }, payload: '{' });
+    expect([302, 404]).toContain(res.statusCode);
+    expect(errors).toEqual([]);
+  });
+
+  it('serwer ma limit czasu odbioru żądania', () => {
+    // Fastify domyślnie ustawia requestTimeout 0: żądanie z wolno wysyłanym body trzyma połączenie bez końca.
+    const s = setup();
+    expect(s.app.server.requestTimeout).toBeGreaterThan(0);
+    expect(s.app.server.requestTimeout).toBeLessThanOrEqual(15_000);
+  });
+});
+
+describe('serwer przekierowań - nieudane próby z sieci IPv6 /48', () => {
+  it('nieudane próby z wielu sieci /64 jednej sieci /48 mają wspólny limit 600 na minutę', async () => {
+    const s = setup();
+    const statuses: number[] = [];
+    // Sieć /48 zawiera 65 536 sieci /64, czyli tyle osobnych kubełków po 60 prób na minutę.
+    for (let i = 1; i <= 601; i += 1) statuses.push((await s.get('/aB3xK9q', 'l.firma.pl', {}, `2001:db8:1:${i.toString(16)}::1`)).statusCode);
+    expect(statuses.slice(0, 600).every((code) => code === 404)).toBe(true);
+    expect(statuses[600]).toBe(429);
+    expect((await s.get('/aB3xK9q', 'l.firma.pl', {}, '2001:db8:2:1::1')).statusCode).toBe(404);
+  });
+
+  it('udane wejścia z wielu sieci /64 jednej sieci /48 nie wyczerpują limitu nieudanych prób', async () => {
+    const s = setup();
+    const code = s.addLink();
+    for (let i = 1; i <= 700; i += 1) expect((await s.get(`/${code}`, 'l.firma.pl', {}, `2001:db8:1:${i.toString(16)}::1`)).statusCode).toBe(302);
+  });
+});
+
+describe('serwer przekierowań - adres klienta z portem', () => {
+  it('adres z portem od zaufanego serwera pośredniczącego nie daje osobnego kubełka na każdy port', async () => {
+    const s = setup({ trustedProxies: ['10.0.0.1'] });
+    const statuses: number[] = [];
+    for (let port = 40_000; port < 40_061; port += 1) {
+      statuses.push((await s.get('/aB3xK9q', 'l.firma.pl', { 'x-forwarded-for': `203.0.113.5:${port}` }, '10.0.0.1')).statusCode);
+    }
+    expect(statuses.at(-1)).toBe(429);
+  });
+});
+
+describe('clientKey', () => {
+  it('odcina port od adresu IPv4 i IPv6 w nawiasach, a wartość niebędącą adresem zastępuje adresem gniazda', () => {
+    expect(clientKey('203.0.113.5:40001', '10.0.0.1')).toBe('203.0.113.5');
+    expect(clientKey('[2001:db8:1:2::1]:443', '10.0.0.1')).toBe('2001:db8:1:2::/64');
+    expect(clientKey('unknown', '10.0.0.1')).toBe('10.0.0.1');
+    expect(clientKey('203.0.113.5', '10.0.0.1')).toBe('203.0.113.5');
   });
 });

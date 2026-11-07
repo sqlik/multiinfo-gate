@@ -31,7 +31,9 @@ services:
       MIG_INBOUND_TIMEOUT_MS: ${MIG_INBOUND_TIMEOUT_MS:-10000}
       MIG_INBOUND_IDLE_MS: ${MIG_INBOUND_IDLE_MS:-0}
       # Odwrotne proxy, którym wolno podać adres klienta w X-Forwarded-For (lista źródeł i dziennik
-      # integracji): 172.16.0.0/12 dla Caddy i Traefika w Dockerze, 127.0.0.1 dla nginx na hoście.
+      # integracji, limit wejść w krótkie linki): 172.16.0.0/12 dla Caddy, Traefika i nginx na hoście, bo
+      # bramka w kontenerze widzi adres z sieci Dockera. docker-compose.caddy.yml i docker-compose.nginx.yml
+      # ustawiają tę wartość same. Sieć Traefika dzielą inne kontenery, dlatego przy Traefiku wpis w docker/.env.
       MIG_TRUSTED_PROXIES: ${MIG_TRUSTED_PROXIES:-}
       # Raz na dobę pytanie do GitHuba o nowsze wydanie (pasek na przeglądzie i mail do administratora).
       # 0 wyłącza, np. w sieci bez dostępu do internetu (docs/uruchomienie.md, rozdział 7.4).

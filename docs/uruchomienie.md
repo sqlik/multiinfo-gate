@@ -1056,12 +1056,12 @@ Typowe przyczyny: domena nie wskazuje jeszcze na serwer (sprawdź `dig` z rozdzi
 80 jest zamknięty w zaporze (Let's Encrypt nie może potwierdzić domeny), literówka
 w `MIG_DOMENA`.
 
-Adres klienta w dzienniku integracji wymaga jeszcze jednego kroku. Caddy dopisuje nagłówek
-`X-Forwarded-For`, ale bramka ufa mu tylko od adresów z `MIG_TRUSTED_PROXIES`. Kontener
-Caddy ma adres z sieci Dockera. W `docker/.env` dopisz więc `MIG_TRUSTED_PROXIES=172.16.0.0/12`
-(zakres, z którego Docker przydziela adresy swoim sieciom) i wykonaj `docker compose up -d`.
-Bez tego dziennik integracji pokazuje adres Caddy zamiast adresu aplikacji, a lista dozwolonych
-źródeł odrzuca wszystkie żądania.
+Caddy dopisuje adres klienta w nagłówku `X-Forwarded-For`, a bramka ufa temu nagłówkowi tylko
+od adresów z `MIG_TRUSTED_PROXIES`. Kontener Caddy ma adres z sieci Dockera, dlatego plik
+`docker-compose.caddy.yml` ustawia tę zmienną na `172.16.0.0/12`, czyli zakres, z którego Docker
+przydziela adresy swoim sieciom. Dzięki temu dziennik integracji pokazuje adres aplikacji, a lista
+dozwolonych źródeł działa zgodnie z oczekiwaniem. Gdy Docker na serwerze przydziela adresy z innego
+zakresu, wpisz ten zakres w `docker/.env` jako `MIG_TRUSTED_PROXIES` i wykonaj `docker compose up -d`.
 
 Ten sam Caddy obsługuje domeny skracacza linków z artykułu
 [Skracacz linków i kampanie](skracacz.md). Rekord DNS domeny skracacza wskazuje ten sam serwer co
@@ -1070,8 +1070,8 @@ niej certyfikat przy pierwszym połączeniu, gdy bramka potwierdzi, że domena j
 skracacza. Pierwsze wydanie certyfikatu trwa kilka sekund. Dlatego zalecane jest sprawdzenie
 domeny w panelu zaraz po jej dodaniu, ponieważ sprawdzenie wywołuje wydanie certyfikatu, zanim
 w link kliknie pierwszy odbiorca. Linki bez `https://` Caddy przekierowuje z portu 80 na HTTPS.
-Limit wejść w krótkie linki, liczony dla adresu odbiorcy, również wymaga zmiennej
-`MIG_TRUSTED_PROXIES=172.16.0.0/12`.
+Limit wejść w krótkie linki jest liczony dla adresu odbiorcy dzięki tej samej zmiennej
+`MIG_TRUSTED_PROXIES`.
 
 ### 6.6. Wariant B: nginx na serwerze
 
@@ -1114,8 +1114,9 @@ tym samym serwerze jest nim `127.0.0.1`.
 
 Domeny skracacza linków z artykułu [Skracacz linków i kampanie](skracacz.md) obsługuje osobny
 plik konfiguracji nginx. Port krótkich linków bramki, domyślnie 8082, jest dostępny na serwerze
-dopiero po dołączeniu pliku `docker-compose.nginx.yml`. W `docker/.env` dopisz go do wiersza
-`COMPOSE_FILE`:
+dopiero po dołączeniu pliku `docker-compose.nginx.yml`. Plik ustawia też
+`MIG_TRUSTED_PROXIES=172.16.0.0/12`, gdy `docker/.env` nie podaje innej wartości. W `docker/.env`
+dodaj wiersz `COMPOSE_FILE` albo dopisz plik do istniejącego wiersza:
 
 ```
 COMPOSE_FILE=docker-compose.yml:docker-compose.nginx.yml
@@ -1367,7 +1368,10 @@ docker compose up -d
 ```
 
 Polecenia wykonują kolejno: przejście do katalogu z plikami Compose, pobranie nowych plików
-uruchomieniowych i dokumentacji, pobranie nowego obrazu, uruchomienie. Oczekiwany wynik:
+uruchomieniowych i dokumentacji, pobranie nowego obrazu, uruchomienie. Caddy z wariantu A
+odczytuje plik `Caddyfile` wyłącznie przy tworzeniu kontenera. Gdy wydanie zmienia ten plik,
+na przykład wydanie 1.11, wykonaj dodatkowo `docker compose up -d --force-recreate caddy`.
+Oczekiwany wynik:
 `curl http://127.0.0.1:8080/healthz` odpowiada `{"status":"ok"}`, a polecenie
 `docker compose exec multiinfo-gate grep '"version"' package.json` pokazuje nowy numer.
 
@@ -1454,7 +1458,7 @@ Zmienne ustawia się w `docker/.env` (klucz główny, domena) albo w sekcji `env
 | `MIG_LINKS_ALLOW_PRIVATE` | `0` | `1` pozwala sprawdzić domenę skracacza, dla której serwer DNS bramki podaje adres w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów). Potrzebna, gdy serwer bramki korzysta z wewnętrznego serwera DNS. Zmienna nie wpływa na przekierowania krótkich linków |
 | `MIG_INBOUND_TIMEOUT_MS` | `10000` | Ile milisekund Multiinfo może wstrzymywać odpowiedź na zapytanie o wiadomości przychodzące (1-60000). Przy wartości domyślnej odbiór trwa zwykle poniżej sekundy, najwyżej ok. 10 s, kosztem sześciu pytań na minutę na usługę. Maksimum `60000` (long polling z dokumentacji Multiinfo) zmniejsza liczbę pytań, ale wiadomość, która nadejdzie między dwoma pytaniami, czeka do końca następnego - opóźnienie odbioru sięga wtedy minuty. Mała wartość razem z `MIG_INBOUND_IDLE_MS` daje odpytywanie okresowe |
 | `MIG_INBOUND_IDLE_MS` | `0` | Przerwa po pustej odpowiedzi, zanim bramka wyśle kolejne zapytanie, `0` oznacza zapytanie natychmiastowe |
-| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku), od których API ufa nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Ustawiana w `docker/.env`: `172.16.0.0/12` dla Caddy, Traefika i nginx na serwerze, gdy bramka działa w Dockerze, adres serwera z nginx dla bramki bez Dockera (rozdział 6). Ta sama lista obowiązuje dla serwera krótkich linków, który liczy limit wejść dla adresu odbiorcy ([Skracacz linków i kampanie](skracacz.md), rozdział 4). Potrzebna, gdy integracje korzystają z listy dozwolonych źródeł albo dziennik powinien pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)). Proxy z tej listy przekazujące żądanie HTTPS otrzymuje też szczegóły `/healthz` panelu (punkt 7.4) |
+| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku), od których API ufa nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Wartość `172.16.0.0/12` ustawiają pliki `docker-compose.caddy.yml` i `docker-compose.nginx.yml`. W `docker/.env` ustawiana dla Traefika (`172.16.0.0/12` albo zakres jego sieci) i dla nginx na serwerze bez pliku `docker-compose.nginx.yml`, a w pliku środowiska kontenera LXC adres serwera z nginx (rozdział 6). Ta sama lista obowiązuje dla serwera krótkich linków, który liczy limit wejść dla adresu odbiorcy ([Skracacz linków i kampanie](skracacz.md), rozdział 4). Potrzebna, gdy integracje korzystają z listy dozwolonych źródeł albo dziennik powinien pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)). Proxy z tej listy przekazujące żądanie HTTPS otrzymuje też szczegóły `/healthz` panelu (punkt 7.4) |
 | `MIG_UPDATE_CHECK` | `1` | Raz na dobę sprawdzać w serwisie GitHub, czy jest nowsze wydanie, i pokazywać je na przeglądzie (rozdział 7.4); `0` wyłącza, np. w sieci bez dostępu do internetu |
 | `MIG_WERSJA` | `1` | Tag obrazu do pobrania: `1`, `1.1` albo `1.1.0` (rozdział 7.4) |
 | `MIG_DOMENA` | - | Domena bramki dla wariantu Caddy i Traefik |

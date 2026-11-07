@@ -184,8 +184,11 @@ export class LinkDomainService {
     const row = this.must(id);
     const token = this.deps.checks.issue(id, now);
     const probed = await this.probe(row.domain, token);
-    const proxy = probed.ok ? this.deps.checks.untrustedProxy(token) : null;
-    const result: DomainCheckResult = proxy === null ? probed : { ...probed, untrustedProxy: proxy };
+    const { answered, untrustedProxy } = this.deps.checks.take(token);
+    // Token w odpowiedzi bez pobrania przez serwer przekierowań tej bramki oznacza obcy serwer, który odsyła ścieżkę.
+    const confirmed: DomainCheckResult = probed.ok && !answered ? { ok: false, step: 'response', detail: 'token' } : probed;
+    const proxy = confirmed.ok ? untrustedProxy : null;
+    const result: DomainCheckResult = proxy === null ? confirmed : { ...confirmed, untrustedProxy: proxy };
     const stored = result.ok ? (proxy === null ? null : `proxy ${proxy}`) : `${result.step} ${result.detail}`;
     this.deps.linkDomains.setCheck(id, result.ok, stored, now);
     this.record(user, 'skracacz.domena.sprawdzenie', id, { domain: row.domain, ...result });

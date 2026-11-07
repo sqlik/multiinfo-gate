@@ -53,6 +53,17 @@ describe('pliki wdrożenia skracacza', () => {
     }
   });
 
+  it('Caddy i nginx w Dockerze domyślnie ufają adresowi klienta z sieci Dockera, Traefik ze wspólną siecią nie', () => {
+    // Bez zaufania wszystkie wejścia liczą się na adres serwera pośredniczącego i limit 60 na minutę obejmuje całą bramkę.
+    for (const file of ['docker/docker-compose.caddy.yml', 'docker/docker-compose.nginx.yml']) {
+      expect(read(file), file).toMatch(/^\s+MIG_TRUSTED_PROXIES: \$\{MIG_TRUSTED_PROXIES:-172\.16\.0\.0\/12\}$/m);
+    }
+    // Sieć Traefika dzielą inne kontenery, które mogłyby podać dowolny adres klienta. Zaufanie ustawia administrator.
+    for (const file of ['docker/docker-compose.traefik.yml', 'docker/docker-compose.traefik-linki.yml']) {
+      expect(read(file), file).not.toMatch(/MIG_TRUSTED_PROXIES:/);
+    }
+  });
+
   it('nginx przekazuje domenę w nagłówku Host i adres odbiorcy w X-Forwarded-For do portu przekierowań', () => {
     const conf = read('docker/nginx/multiinfo-gate-linki.conf');
     expect(conf).toMatch(/proxy_pass http:\/\/127\.0\.0\.1:8082;/);
