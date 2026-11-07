@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CampaignService, groupTargets, messageLinks, packageLinks } from '../../src/links/campaigns.ts';
+import { handleClick } from '../../src/links/clicks.ts';
 import { AuditRepo } from '../../src/store/audit.ts';
+import { ShortLinksRepo } from '../../src/store/short-links.ts';
 import { messageInput } from '../store/helpers.ts';
 import { DELIVERED, FOLDER, SENT, SPRING, SPRING_PACKAGE, clickAt, dest, folderCode, offerCode, seedSpringCampaign } from './campaign-fixture.ts';
 import { NOW, redirectFixture } from './redirect-fixture.ts';
@@ -141,6 +143,39 @@ describe('CampaignService: CSV odbiorców', () => {
     const line = lines.find((l) => l.startsWith(`${dest(200)};`))!;
     expect(line).toMatch(new RegExp(`^${dest(200)};KL-10200;2026-11-\\d\\d \\d\\d:\\d\\d:\\d\\d;2026-11-\\d\\d \\d\\d:\\d\\d:\\d\\d;3;`));
     expect(line.endsWith(`;https://firma.pl/oferta/KL-10200 ${FOLDER}`)).toBe(true);
+  });
+
+  it('komórka od znaku formuły arkusza dostaje apostrof i cudzysłów', () => {
+    const f = redirectFixture();
+    const service = new CampaignService({ campaigns: f.campaigns, shortLinks: f.shortLinks, apiKeys: f.apiKeys, audit: new AuditRepo(f.db) });
+    const clientIds = ['=HYPERLINK("https://zly.example/x","Kliknij")', '+48601000001+SUM(1)', '-2+3', '@SUM(1)', '\t=1+1'];
+    clientIds.forEach((clientId, i) => {
+      const code = f.addLink({ clientId, recipientKey: `msg_${i + 1}`, messageId: `msg_${i + 1}`, dest: `4860100000${i + 1}` });
+      handleClick(f.deps, 'l.firma.pl', code, false, new Date(NOW.getTime() + (i + 1) * 60_000));
+    });
+    const cells = service.openersCsv(f.campaignId).trimEnd().split('\r\n').slice(1).map((l) => l.split(';')[1]!);
+    expect(cells.sort()).toEqual([
+      `"'+48601000001+SUM(1)"`, `"'-2+3"`, `"'=HYPERLINK(""https://zly.example/x"",""Kliknij"")"`, `"'@SUM(1)"`, `"'\t=1+1"`,
+    ].sort());
+  });
+
+  it('pobiera odbiorców jednym zapytaniem, także gdy jest ich ponad tysiąc', () => {
+    const f = redirectFixture();
+    for (let i = 1; i <= 1100; i++) {
+      const code = f.addLink({ recipientKey: `msg_${i}`, messageId: `msg_${i}`, dest: `48601${String(i).padStart(6, '0')}` });
+      handleClick(f.deps, 'l.firma.pl', code, false, new Date(NOW.getTime() + i * 1000));
+    }
+    let prepared = 0;
+    const db = new Proxy(f.db, {
+      get(target, prop) {
+        if (prop === 'prepare') return (sql: string) => { prepared++; return target.prepare(sql); };
+        const value = Reflect.get(target, prop) as unknown;
+        return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(target) : value;
+      },
+    });
+    const service = new CampaignService({ campaigns: f.campaigns, shortLinks: new ShortLinksRepo(db), apiKeys: f.apiKeys, audit: new AuditRepo(f.db) });
+    expect(service.openersCsv(f.campaignId).trimEnd().split('\r\n')).toHaveLength(1101);
+    expect(prepared).toBe(1);
   });
 
   it('kampania po retencji daje sam nagłówek', () => {

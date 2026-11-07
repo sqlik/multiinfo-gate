@@ -11,6 +11,7 @@ import type { ShortLinksRepo } from '../store/short-links.ts';
 import { warsawStamp } from '../time/warsaw.ts';
 import { shortUrl } from './shortener.ts';
 import { targetPattern } from './utm.ts';
+import { csvCell } from '../text/csv.ts';
 
 export type CampaignTarget = { target: string; kind: 'shared' | 'individual'; opens: number; clicks: number };
 export type CampaignOpener = ReturnType<ShortLinksRepo['openers']>[number];
@@ -71,7 +72,10 @@ export function groupTargets(rows: readonly CampaignTargetRow[]): CampaignTarget
   return out.map(({ target, kind, opens, clicks }) => ({ target, kind, opens, clicks }));
 }
 
-export function campaignDetail(deps: CampaignReadDeps, id: number, openersLimit: number, openersOffset = 0): CampaignDetail | undefined {
+/** `openersOrder` 'first': strony odbiorców od pierwszego otwarcia, stabilne przy pobieraniu kolejnych stron w API. */
+export function campaignDetail(
+  deps: CampaignReadDeps, id: number, openersLimit: number, openersOffset = 0, openersOrder: 'recent' | 'first' = 'recent',
+): CampaignDetail | undefined {
   const row = deps.campaigns.get(id);
   if (row === undefined) return undefined;
   const { delivered, reported } = deps.campaigns.delivered(id);
@@ -89,30 +93,18 @@ export function campaignDetail(deps: CampaignReadDeps, id: number, openersLimit:
     domain: summary?.domain ?? null,
     expiresAt: summary?.expiresAt ?? null,
     utm: summary?.utm ?? null,
-    openers: deps.shortLinks.openers(id, openersOffset, openersLimit),
+    openers: deps.shortLinks.openers(id, openersOffset, openersLimit, openersOrder),
   };
 }
 
 const CSV_HEADER = 'numer;identyfikator_klienta;pierwsze_otwarcie;ostatnie_klikniecie;klikniecia;linki';
-/** Tylu odbiorców CSV odczytuje z bazy naraz. */
-const CSV_PAGE = 1000;
-
-function csvCell(value: string | number | null): string {
-  if (value === null) return '';
-  const text = String(value);
-  return /[;"\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
 
 /** Odbiorcy z otwarciem w CSV: pola jak w tabeli panelu, czas polski, adresy docelowe rozdzielone spacją. */
 export function openersCsv(deps: Pick<CampaignReadDeps, 'shortLinks'>, id: number): string {
   const lines = [CSV_HEADER];
-  for (let offset = 0; ; offset += CSV_PAGE) {
-    const page = deps.shortLinks.openers(id, offset, CSV_PAGE);
-    for (const o of page) {
-      lines.push([o.dest, o.clientId, warsawStamp(o.firstOpenedAt), warsawStamp(o.lastClickedAt), o.clicks, o.targets.join(' ')]
-        .map(csvCell).join(';'));
-    }
-    if (page.length < CSV_PAGE) break;
+  for (const o of deps.shortLinks.eachOpener(id)) {
+    lines.push([o.dest, o.clientId, warsawStamp(o.firstOpenedAt), warsawStamp(o.lastClickedAt), o.clicks, o.targets.join(' ')]
+      .map(csvCell).join(';'));
   }
   return `${lines.join('\r\n')}\r\n`;
 }

@@ -8,6 +8,7 @@ import { ApiError } from './errors.ts';
 import { linkFieldsSchema, linkRequest } from './link-fields.ts';
 import type { ApiDeps } from './server.ts';
 import { submitPackage } from './submit-package.ts';
+import { csvCell } from '../text/csv.ts';
 
 /** Górna granica jednej rozsyłki - powyżej niej body żądania i wywołanie package.aspx rosną bez sensu. */
 const MAX_RECIPIENTS = 5000;
@@ -49,12 +50,6 @@ export const packageBodySchema = z.object({
 
 /** Nagłówek CSV; średnik jako separator, bo tak otwierają go polskie arkusze. */
 const CSV_HEADER = 'numer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas';
-
-/** Wartość CSV: cudzysłów tylko, gdy trzeba - pola numeryczne i statusy zostają gołe. */
-function csvCell(value: string | number | null): string {
-  const text = value === null ? '' : String(value);
-  return /[;"\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
 
 /** Raport rozsyłki w postaci CSV - ten sam plik z API i z panelu. */
 export function reportCsv(rows: RecipientRow[]): string {

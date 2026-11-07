@@ -389,7 +389,10 @@ którzy otworzyli link** pokazuje 50 odbiorców od najnowszego kliknięcia: nume
 klienta z rozsyłki, czas pierwszego otwarcia i ostatniego kliknięcia, liczbę kliknięć oraz
 otwarte linki. Pełną listę zawiera plik pobierany przyciskiem **Pobierz CSV**. Separatorem pliku
 jest średnik, a wiersz nagłówka zawiera kolumny
-`numer;identyfikator_klienta;pierwsze_otwarcie;ostatnie_klikniecie;klikniecia;linki`.
+`numer;identyfikator_klienta;pierwsze_otwarcie;ostatnie_klikniecie;klikniecia;linki`. Plik
+zaczyna się od znacznika BOM, dzięki czemu Excel poprawnie wyświetla polskie znaki. Wartość
+zaczynająca się od znaku `=`, `+`, `-` albo `@` otrzymuje apostrof na początku, dlatego arkusz
+nie wykona jej jako formuły.
 
 Szczegóły rozsyłki i wiadomości na ekranach **Rozsyłki** i **Wiadomości** zawierają wiersz
 „Kampania” z odnośnikiem do szczegółów kampanii. Tabela odbiorców rozsyłki zawiera dodatkowo

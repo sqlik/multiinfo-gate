@@ -5,6 +5,7 @@ import type { AdminDeps } from '../server.ts';
 import { integrationLink } from '../views/deliveries.ts';
 import { packagePage, packagesPage } from '../views/packages.ts';
 import { parseOffset } from '../../paging.ts';
+import { CSV_BOM } from '../../text/csv.ts';
 
 const PAGE_SIZE = 25;
 
@@ -71,6 +72,6 @@ export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps,
     }
     reply.type('text/csv; charset=utf-8');
     reply.header('content-disposition', `attachment; filename="${row.id}.csv"`);
-    return reportCsv(deps.packages.recipients(row.id));
+    return `${CSV_BOM}${reportCsv(deps.packages.recipients(row.id))}`;
   });
 }

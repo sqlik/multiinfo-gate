@@ -34,7 +34,7 @@ export function registerCampaignRoutes(app: FastifyInstance, deps: ApiDeps): voi
     if (row === undefined) throw new ApiError(404, 'campaign_not_found', 'Nie ma kampanii o tej nazwie.');
     const { limit, offset } = page(request.query, 50);
     // Jeden odbiorca ponad stronę, żeby wiedzieć, czy jest następna.
-    const d = campaignDetail(deps, row.id, limit + 1, offset)!;
+    const d = campaignDetail(deps, row.id, limit + 1, offset, 'first')!;
     return {
       ...listItem(row),
       packages: d.packages,

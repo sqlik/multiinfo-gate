@@ -46,6 +46,26 @@ function countingPrepare(db: ReturnType<typeof openDatabase>): { db: ReturnType<
 }
 
 describe('ShortLinksRepo', () => {
+  it('retencja odczytuje i usuwa kody po indeksie terminu, a nie przeglądem całej tabeli', () => {
+    const { db, links, input } = setup();
+    links.insert(input('aB3xK9q'));
+    const statements: string[] = [];
+    const recording = new Proxy(db, {
+      get(target, prop) {
+        if (prop === 'prepare') return (sql: string) => { statements.push(sql); return target.prepare(sql); };
+        const value = Reflect.get(target, prop) as unknown;
+        return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(target) : value;
+      },
+    });
+    new ShortLinksRepo(recording).purge(AT);
+    expect(statements.length).toBeGreaterThan(0);
+    for (const sql of statements) {
+      const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(AT.toISOString()) as Array<{ detail: string }>).map((p) => p.detail).join(' | ');
+      expect(plan, sql).toContain('idx_short_links_purge');
+      expect(plan, sql).not.toMatch(/SCAN short_links/);
+    }
+  });
+
   it('przygotowuje zapytania sprawdzenia i zapisu kodu raz, a nie przy każdym kodzie rozsyłki', () => {
     const { db, input } = setup();
     const counting = countingPrepare(db);

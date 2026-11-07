@@ -5,6 +5,7 @@ import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
 import { campaignPage, campaignsPage } from '../views/campaigns.ts';
 import { parseOffset } from '../../paging.ts';
+import { CSV_BOM } from '../../text/csv.ts';
 
 const PAGE_SIZE = 25;
 /** Tylu odbiorców i wierszy linków pokazuje strona kampanii; pełna lista odbiorców jest w CSV. */
@@ -65,7 +66,7 @@ export function registerCampaignRoutes(app: FastifyInstance, deps: AdminDeps, re
     if (!row) return reply.callNotFound();
     reply.type('text/csv; charset=utf-8');
     reply.header('content-disposition', `attachment; filename="${csvName(row.id, row.name)}-odbiorcy.csv"`);
-    return service.openersCsv(row.id);
+    return `${CSV_BOM}${service.openersCsv(row.id)}`;
   });
 
   app.post<{ Params: { id: string } }>('/kampanie/:id/wylacz', async (request, reply) => {

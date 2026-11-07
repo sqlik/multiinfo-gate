@@ -175,6 +175,8 @@ describe('Kampanie: CSV odbiorców', () => {
     expect(res.headers['content-disposition']).toBe(`attachment; filename="${SPRING}-odbiorcy.csv"`);
     expect(res.body.trimEnd().split('\r\n')).toHaveLength(313);
     expect(res.body).toContain(`${dest(200)};KL-10200;`);
+    // Excel z polskimi ustawieniami rozpoznaje UTF-8 wyłącznie po znaczniku BOM na początku pliku.
+    expect(res.body.startsWith('\uFEFFnumer;')).toBe(true);
   });
 
   it('nazwa pliku bez znaków spoza ASCII i bez cudzysłowów', async () => {

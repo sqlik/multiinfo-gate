@@ -1394,7 +1394,9 @@ służy do ponowienia zamówienia, gdy poprzedni raport ma stan `failed`.
 ```
 
 Ten sam raport można pobrać w formacie CSV. Separatorem jest średnik, a wiersz nagłówka to
-`numer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas`:
+`numer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas`. Identyfikator klienta
+zaczynający się od znaku `-` otrzymuje apostrof na początku, dzięki czemu arkusz nie odczyta go
+jako formuły:
 
 === "curl"
 
@@ -2636,7 +2638,7 @@ najwyżej 200 w parametrze `limit`. Kolejne strony pobiera się parametrem `offs
 | `expiresAt` | chwila wygaśnięcia ostatnich ważnych linków kampanii; po usunięciu szczegółów `null` |
 | `utm` | dopisywanie parametrów UTM do adresów docelowych; po usunięciu szczegółów `null` |
 | `links` | adresy docelowe od największej liczby odbiorców; `kind` równe `shared` oznacza adres wysłany na więcej niż jeden numer, a `individual` adres wysłany na jeden numer; linki indywidualne o wspólnej budowie tworzą jeden wiersz ze znacznikiem `{…}` w części zmiennej, a po okresie przechowywania wiersz zawiera tylko domenę i pierwszy człon ścieżki |
-| `openers.data` | odbiorcy, którzy otworzyli link, od najnowszego kliknięcia: numer, identyfikator klienta z rozsyłki, pierwsze otwarcie, ostatnie kliknięcie, liczba kliknięć i otwarte adresy docelowe; po usunięciu szczegółów lista jest pusta |
+| `openers.data` | odbiorcy, którzy otworzyli link, od pierwszego otwarcia, dzięki czemu kolejne kliknięcie nie przesuwa odbiorcy między stronami: numer, identyfikator klienta z rozsyłki, pierwsze otwarcie, ostatnie kliknięcie, liczba kliknięć i otwarte adresy docelowe; po usunięciu szczegółów lista jest pusta |
 
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|

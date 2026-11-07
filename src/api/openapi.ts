@@ -821,7 +821,7 @@ const SZCZEGOLY_KAMPANII: JsonSchema = {
     },
     openers: {
       type: 'object',
-      description: 'Strona odbiorców, którzy otworzyli link, od najnowszego kliknięcia. Po retencji lista jest pusta',
+      description: 'Strona odbiorców, którzy otworzyli link, od pierwszego otwarcia. Po retencji lista jest pusta',
       required: ['data', 'hasMore'],
       properties: {
         data: {

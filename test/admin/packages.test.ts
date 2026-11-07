@@ -70,6 +70,20 @@ describe('GET /rozsylki', () => {
   });
 });
 
+describe('GET /rozsylki/:id/raport.csv', () => {
+  it('plik z panelu zaczyna się od znacznika BOM, a identyfikator klienta od znaku formuły dostaje apostrof', async () => {
+    seed('pkg_1', [
+      { dest: '48601135134', text: null, clientId: null },
+      { dest: '48501052442', text: 'Indywidualna', clientId: '-faktura-114' },
+    ]);
+    ready('pkg_1');
+    const res = await page('/rozsylki/pkg_1/raport.csv');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.startsWith('\uFEFFnumer;')).toBe(true);
+    expect(res.body).toContain(`48501052442;"'-faktura-114";`);
+  });
+});
+
 describe('GET /rozsylki/:id', () => {
   it('pokazuje parametry, odbiorców i ich statusy', async () => {
     seed();
@@ -246,7 +260,7 @@ describe('GET /rozsylki/:id/raport.csv', () => {
     expect(res.headers['content-type']).toContain('text/csv');
     expect(res.headers['content-disposition']).toContain('pkg_1.csv');
     const lines = res.body.split('\r\n');
-    expect(lines[0]).toBe('numer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas');
+    expect(lines[0]).toBe('\uFEFFnumer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas');
     expect(lines[1]).toBe('48601135134;;9001;delivered;21;2026-08-25 12:00:00');
     expect(lines[2]).toBe('48501052442;faktura-114;9002;failed;11;2026-08-25 12:00:01');
   });

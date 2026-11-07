@@ -23,6 +23,29 @@ const toRow = (r: Raw): ShortLinkRow => ({
   expiresAt: r.expires_at, disabledAt: r.disabled_at, purgeAfter: r.purge_after, createdAt: r.created_at,
 });
 
+export interface Opener {
+  dest: string; clientId: string | null; firstOpenedAt: string; lastClickedAt: string; clicks: number; targets: string[];
+}
+interface RawOpener {
+  dest: string; client_id: string | null; first_opened_at: string; last_clicked_at: string; clicks: number; targets: string;
+}
+const toOpener = (r: RawOpener): Opener => ({
+  dest: r.dest, clientId: r.client_id, firstOpenedAt: r.first_opened_at, lastClickedAt: r.last_clicked_at, clicks: r.clicks,
+  targets: (JSON.parse(r.targets) as string[]).sort(),
+});
+/** Odbiorcy kampanii z otwarciem, bez kolejności. */
+const OPENERS_BASE = `SELECT MIN(dest) AS dest, MIN(client_id) AS client_id, MIN(first_opened_at) AS first_opened_at,
+    MAX(last_clicked_at) AS last_clicked_at, SUM(clicks) AS clicks, json_group_array(DISTINCT target) AS targets
+  FROM short_links WHERE campaign_id = ? AND first_opened_at IS NOT NULL
+  GROUP BY recipient_key`;
+/** Od najnowszego kliknięcia, jak w panelu i w pliku CSV. */
+const OPENERS = `${OPENERS_BASE} ORDER BY MAX(last_clicked_at) DESC, recipient_key`;
+/**
+ * Od pierwszego otwarcia, do stron API: chwila pierwszego otwarcia się nie zmienia, a nowy odbiorca trafia
+ * na koniec listy, dlatego kliknięcie w trakcie pobierania stron nie przesuwa odbiorców między stronami.
+ */
+const OPENERS_STABLE = `${OPENERS_BASE} ORDER BY MIN(first_opened_at), recipient_key`;
+
 /** Krótkie kody skracacza: jeden na wystąpienie linku u odbiorcy, bez adresu IP i nagłówka User-Agent wejścia. */
 export class ShortLinksRepo {
   /** Zapytania wołane przy każdym kodzie rozsyłki, przygotowane raz. */
@@ -162,21 +185,14 @@ export class ShortLinksRepo {
   }
 
   /** Odbiorcy z otwarciem, zgrupowani po `recipient_key`, od najnowszego kliknięcia. */
-  openers(campaignId: number, offset: number, limit: number): Array<{
-    dest: string; clientId: string | null; firstOpenedAt: string; lastClickedAt: string; clicks: number; targets: string[];
-  }> {
-    const rows = this.db
-      .prepare(`SELECT MIN(dest) AS dest, MIN(client_id) AS client_id, MIN(first_opened_at) AS first_opened_at,
-                  MAX(last_clicked_at) AS last_clicked_at, SUM(clicks) AS clicks, json_group_array(DISTINCT target) AS targets
-                FROM short_links WHERE campaign_id = ? AND first_opened_at IS NOT NULL
-                GROUP BY recipient_key ORDER BY MAX(last_clicked_at) DESC, recipient_key LIMIT ? OFFSET ?`)
-      .all(campaignId, limit, offset) as Array<{
-        dest: string; client_id: string | null; first_opened_at: string; last_clicked_at: string; clicks: number; targets: string;
-      }>;
-    return rows.map((r) => ({
-      dest: r.dest, clientId: r.client_id, firstOpenedAt: r.first_opened_at, lastClickedAt: r.last_clicked_at, clicks: r.clicks,
-      targets: (JSON.parse(r.targets) as string[]).sort(),
-    }));
+  openers(campaignId: number, offset: number, limit: number, order: 'recent' | 'first' = 'recent'): Opener[] {
+    const sql = `${order === 'first' ? OPENERS_STABLE : OPENERS} LIMIT ? OFFSET ?`;
+    return (this.db.prepare(sql).all(campaignId, limit, offset) as RawOpener[]).map(toOpener);
+  }
+
+  /** Wszyscy odbiorcy z otwarciem jednym zapytaniem, wiersz po wierszu, do pliku CSV. */
+  *eachOpener(campaignId: number): Generator<Opener> {
+    for (const r of this.db.prepare(OPENERS).iterate(campaignId) as IterableIterator<RawOpener>) yield toOpener(r);
   }
 
   remaining(campaignId: number): number {
@@ -190,12 +206,9 @@ export class ShortLinksRepo {
 
   /** Usuwa kody z minionym `purge_after`; zwraca identyfikatory kampanii, których kody zniknęły. */
   purge(now: Date): number[] {
-    return this.db.transaction(() => {
-      const stamp = now.toISOString();
-      const campaigns = (this.db.prepare('SELECT DISTINCT campaign_id FROM short_links WHERE purge_after < ? ORDER BY campaign_id')
-        .all(stamp) as Array<{ campaign_id: number }>).map((r) => r.campaign_id);
-      this.db.prepare('DELETE FROM short_links WHERE purge_after < ?').run(stamp);
-      return campaigns;
-    })();
+    // Jedno polecenie po indeksie terminu: tura bez kodów do usunięcia nie przegląda tabeli.
+    const rows = this.db.prepare('DELETE FROM short_links WHERE purge_after < ? RETURNING campaign_id')
+      .all(now.toISOString()) as Array<{ campaign_id: number }>;
+    return [...new Set(rows.map((r) => r.campaign_id))].sort((a, b) => a - b);
   }
 }

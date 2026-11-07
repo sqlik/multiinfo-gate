@@ -151,6 +151,20 @@ describe('GET /v1/campaigns/{name}', () => {
     expect(all.find((o: { to: string }) => o.to === dest(200))).toMatchObject({ clientId: 'KL-10200', clicks: 3 });
   });
 
+  it('kolejne kliknięcie odbiorcy między stronami nie powoduje pominięcia ani powtórzenia odbiorcy', async () => {
+    seed();
+    const page = async (offset: number) => (await get(`/v1/campaigns/${SPRING}?offset=${offset}&limit=200`)).json().openers.data
+      .map((o: { to: string }) => o.to) as string[];
+    const before = [...await page(0), ...await page(200)];
+    const first = await page(0);
+    // Odbiorca z drugiej strony klika ponownie w trakcie pobierania stron.
+    const late = before.find((to) => !first.includes(to))!;
+    db.prepare('UPDATE short_links SET last_clicked_at = ?, clicks = clicks + 1 WHERE dest = ?').run(NOW.toISOString(), late);
+    const seen = [...first, ...await page(200)];
+    expect(seen).toHaveLength(312);
+    expect(new Set(seen).size).toBe(312);
+  });
+
   it('nazwa z polskimi znakami, spacjami i ukośnikiem zakodowana w adresie', async () => {
     campaigns.open(apiKeyId, 'Przegląd / wiosna 2027', START);
     const res = await get('/v1/campaigns/Przegl%C4%85d%20%2F%20wiosna%202027');
