@@ -51,6 +51,10 @@ w dzienniku integracji oraz przy wiadomości albo rozsyłce. Zlecający nie jest
 SMS-a. Wartość pola podaje sam przepływ, dlatego dziennik zapisuje obok niej adres IP, z którego
 nadeszło wywołanie.
 
+Od wersji 1.11 akcje wysyłające oferują także pola skracania linków. Bramka zamienia wtedy linki
+w treści na krótkie linki własnej domeny firmy i liczy ich otwarcia. Pola opisuje rozdział 6.2,
+a skracacz artykuł [Skracacz linków i kampanie](skracacz.md).
+
 ## 2. Wymagania
 
 ### 2.1. Licencja Power Automate
@@ -215,9 +219,17 @@ należy pobrać plik samodzielnie z panelu bramki.
 ![Okno Importuj plik OpenAPI w Power Automate: nazwa łącznika Multiinfo Gate i wskazany plik multiinfo-gate-power-automate.json](obrazki/power-automate-import.png)
 
 Oczekiwany wynik: komunikat „Pomyślnie utworzono łącznik niestandardowy.” W kroku
-**3. Definicja** widnieje siedem akcji bez ostrzeżeń. Akcja „Lista integracji” pełni funkcję
-wewnętrzną: na jej podstawie konektor buduje listę w polu „Integracja”. W przepływie dostępnych
-jest pozostałych sześć akcji.
+**3. Definicja** widnieje osiem akcji. Akcje „Lista integracji” i „Domeny skracacza” pełnią
+funkcję wewnętrzną, ponieważ na ich podstawie konektor buduje listy w polach „Integracja”
+i „Domena skracacza”. W przepływie dostępnych jest pozostałych sześć akcji.
+
+Edytor łącznika wyświetla przy definicji `Rozsylka` ostrzeżenie „Zawiera schemat z właściwościami,
+który nie jest oznaczony jako typ „object””. Ostrzeżenie dotyczy podsumowania doręczeń rozsyłki,
+które przed pobraniem raportu nie zawiera wartości. Opis tego pola celowo nie podaje typu,
+ponieważ w przeciwnym razie akcja „Sprawdź stan rozsyłki” kończyłaby się błędem dla rozsyłki bez
+gotowego raportu. Ostrzeżenie nie wpływa na działanie konektora. Projektant przepływu nie
+podsuwa jednak pól podrzędnych podsumowania, dlatego liczby doręczonych i niedoręczonych
+wiadomości odczytuje się wyrażeniem albo z akcji „Pobierz raport rozsyłki”.
 
 W kroku **1. Ogólne** możesz dodać własną ikonę łącznika w formacie PNG albo JPG o rozmiarze
 poniżej 1 MB. Ikona nie wpływa na działanie konektora.
@@ -277,8 +289,18 @@ Przycisk **Pokaż wszystkie** przy **Parametrach zaawansowanych** odsłania pozo
 | Ważna do | termin, po którym niedoręczona wiadomość otrzymuje stan `expired`; najpóźniej 72 godziny od przyjęcia |
 | Znacznik rozliczeń | dowolny tekst na potrzeby rozliczeń, zwracany wraz ze stanem wiadomości |
 | Klucz idempotencji | ponowne wywołanie z tym samym kluczem i tymi samymi danymi zwraca pierwotną odpowiedź zamiast wysyłać drugi SMS, nie jest liczone do ochrony przed burzą, a dziennik otrzymuje wpis „duplikat” ([API](api.md), rozdział 3.1) |
+| Skracanie linków | „Tak” zamienia linki do dozwolonych domen docelowych klucza na krótkie linki, „Nie” pozostawia je bez zmian; puste pole oznacza ustawienie klucza w bramce, które ma pierwszeństwo przed wyborem w akcji |
+| Kampania | nazwa kampanii od 1 do 100 znaków, na przykład `przeglad-klimatyzacji-wiosna`; grupuje wysyłki w wynikach kampanii w panelu bramki i trafia do parametru `utm_campaign`; puste pole oznacza nazwę integracji |
+| Domena skracacza | domena z listy aktywnych domen skracacza przypisanych do klucza; puste pole oznacza domenę domyślną klucza |
+| Ważność linków (dni) | liczba dni działania krótkich linków, od 1 do 365; puste pole oznacza ważność ustawioną przy kluczu, domyślnie 90 dni |
 
 Usługi Multiinfo ani nadawcy nie wybiera się w akcji, ponieważ określa je integracja.
+
+Pola skracania linków oferują także akcje „Wyślij rozsyłkę” i „Wyślij SMS do grupy”. Gdy bramka
+skróci albo pominie link, dane wyjściowe akcji zawierają grupę **Krótkie linki** z liczbą
+skróconych linków, domeną skracacza, kampanią, datą „Linki ważne do” i listą pominiętych linków.
+Opis skracania i wyników kampanii znajdziesz w artykule
+[Skracacz linków i kampanie](skracacz.md).
 
 ### 6.3. Test przepływu
 
@@ -418,6 +440,10 @@ rozsyłki” kończy się błędem `409` z kodem `report_not_ready`. Czas
 przygotowania raportu zależy od liczby odbiorców i od Multiinfo. Jeżeli raport nie jest jeszcze
 gotowy, uruchom akcję ponownie po dłuższym opóźnieniu.
 
+Rozsyłka z krótkimi linkami zawiera w danych wyjściowych akcji „Sprawdź stan rozsyłki” grupę
+**Krótkie linki** z liczbą kliknięć oraz liczbą odbiorców, którzy otworzyli link. Odbiorców, którzy
+otworzyli link, pokazuje panel bramki w szczegółach kampanii.
+
 ## 9. SMS do grupy
 
 Przykładowy scenariusz: zgłoszenie awarii trafia jednym SMS-em do wszystkich techników ekipy
@@ -499,7 +525,7 @@ zmian.
 ## 11. Aktualizacja łącznika
 
 Nowy plik konektora należy pobrać po aktualizacji bramki, jeżeli opis wydania wymienia zmiany
-w konektorze. Aktualizacja łącznika zachowuje zapisane przepływy, ponieważ akcje konektora
+w konektorze. Na przykład wydanie 1.11 dodaje do akcji wysyłających pola skracania linków. Aktualizacja łącznika zachowuje zapisane przepływy, ponieważ akcje konektora
 zachowują stałe nazwy wewnętrzne.
 
 1. Pobierz nowy plik z panelu bramki (rozdział 4).
@@ -530,6 +556,8 @@ kodów wraz z ich znaczeniem znajdziesz w rozdziale 5b.6 [API](api.md).
 | kreator odrzuca plik | importowany plik nie pochodzi z panelu bramki, na przykład jest to `openapi.json` z dokumentacji API | pobrać plik z panelu bramki (rozdział 4) |
 | akcji Multiinfo Gate brakuje w wynikach wyszukiwania | wyszukiwarka wyświetla w pierwszej kolejności łączniki Microsoftu | włączyć filtr **Niestandardowe** nad wynikami |
 | lista w polu „Integracja” jest pusta | do klucza połączenia nie jest przypisana żadna włączona integracja z Power Automate | sprawdzić w panelu bramki klucz i stan integracji, a w razie potrzeby wprowadzić w połączeniu inny klucz (rozdział 6.4) |
+| lista w polu „Domena skracacza” jest pusta | klucz połączenia ma skracanie linków wyłączone albo nie ma aktywnej domeny skracacza | poprosić administratora bramki o ustawienie skracania przy kluczu według rozdziału 6 artykułu [Skracacz linków i kampanie](skracacz.md) |
+| link w SMS-ie nie został skrócony | ustawienie klucza, domena linku spoza dozwolonych domen docelowych albo link bez `https://` | sprawdzić grupę **Krótkie linki** w danych wyjściowych akcji według punktu [Link w SMS-ie nie został skrócony](problemy.md#link-niezamieniony) |
 | błąd `401` z kodem `invalid_api_key`, `revoked_api_key` albo `expired_api_key` | klucz zapisany w połączeniu jest nieprawidłowy, odwołany albo wygasł | wprowadzić w połączeniu ważny klucz (rozdział 6.4) |
 | błąd `404` z kodem `integration_not_found` | integracja wskazana w akcji została usunięta albo należy do innego klucza niż klucz połączenia | ponownie wybrać integrację z listy |
 | błąd `409` z kodem `integration_disabled` | integracja jest wyłączona w panelu bramki | poprosić administratora o włączenie integracji |
@@ -556,12 +584,23 @@ integracji Mail2SMS, a bramka przekształca tę wiadomość w SMS.
 Metoda ta wymaga integracji Mail2SMS w bramce, opisanej w rozdziale 5
 [Integracji z aplikacjami](integracje.md). Najważniejsze warunki:
 
-- skrzynka Mail2SMS jest prowadzona u dostawcy innego niż Microsoft 365, na przykład w home.pl,
-  w OVH albo na własnym serwerze poczty (rozdział 5.1 Integracji)
 - adres konta, z którego przepływ wysyła wiadomość, znajduje się na liście dozwolonych nadawców
   integracji (rozdział 5.2)
 - integracja określa odbiorców SMS-a: numer w temacie albo w pierwszym wierszu wiadomości,
   numery przypisane nadawcy albo stałą listę (rozdział 5.3)
+
+Skrzynką Mail2SMS może być skrzynka bramki w Microsoft 365, opisana w rozdziale 4.8
+[Uruchomienia](uruchomienie.md#48-konto-microsoft-365), albo skrzynka u innego dostawcy, na
+przykład w home.pl, w OVH albo na własnym serwerze poczty (rozdział 5.1 Integracji).
+
+Akcja Outlooka wysyła wiadomość z konta właściciela przepływu. Gdy skrzynka bramki należy do tego
+samego tenanta Microsoft 365, wiadomość jest pocztą wewnętrzną organizacji. Exchange Online nie
+dopisuje do niej wyniku SPF ani DKIM, ale oznacza ją jako wewnętrzną. Bramka przepuszcza taką
+wiadomość, gdy adres nadawcy należy do domeny skrzynki bramki albo do jej subdomeny (rozdział 5.2
+Integracji). Na przykład wiadomość od `jan.kowalski@firma.pl` do skrzynki `sms@firma.pl`
+przechodzi weryfikację nadawcy. Wiadomość od adresu w innej domenie tego samego tenanta, na
+przykład `firma.onmicrosoft.com`, zostaje pominięta z powodem „brak potwierdzenia SPF/DKIM od
+serwera”. Adres nadawcy i skrzynkę bramki należy wtedy umieścić w tej samej domenie.
 
 Konfiguracja przepływu:
 

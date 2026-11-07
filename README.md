@@ -62,6 +62,14 @@ logowanie hasłem do SMTP. Nowe ustawienie pomija wiadomości starsze niż wybra
 czemu po przerwie w dostępie do skrzynki nieaktualny alarm nie trafia na telefon. Administrator
 otrzymuje powiadomienia także SMS-em, również wtedy, gdy poczta nie działa.
 
+Wersja 1.11 wprowadza wbudowany skracacz linków i kampanie. Bramka zamienia linki w SMS-ach na
+krótkie linki własnej domeny firmy, na przykład `https://l.firma.pl/aB3xK9q`. Każdy odbiorca
+otrzymuje własny kod, dzięki czemu bramka liczy otwarcia dokładnie, także przy linku wspólnym dla
+całej kampanii. Wyniki kampanii przedstawia nowy ekran „Kampanie” w panelu, API oraz zdarzenie
+„link otwarty”. Do adresu docelowego bramka dopisuje parametry UTM, dlatego ruch z kampanii jest
+widoczny w Google Analytics, Matomo albo Umami. Skracanie włącza się przy kluczu API, a lista
+dozwolonych domen docelowych chroni domenę skracacza przed wpisem na listę ostrzeżeń CERT Polska.
+
 ## Co trzeba mieć
 
 - Konto Multiinfo z użytkownikiem API i certyfikatem (`.pfx` z hasłem)
@@ -88,7 +96,8 @@ Strona dokumentacji: [sqlik.github.io/multiinfo-gate](https://sqlik.github.io/mu
 - [API dla aplikacji](https://sqlik.github.io/multiinfo-gate/api/) - każde wywołanie z przykładem w siedmiu wariantach (curl, HTTP, PHP, Python, Node.js, PowerShell, C#), webhooki, błędy, limity
 - [Integracje z aplikacjami](https://sqlik.github.io/multiinfo-gate/integracje/) - adres wejściowy dla aplikacji z własnym formatem, Mail2SMS, szablony Liquid, gotowe ustawienia, powiadomienia administratora mailem i SMS-em
 - [Power Automate](https://sqlik.github.io/multiinfo-gate/power-automate/) - konektor do Microsoft Power Automate: integracja w panelu, import pliku, pierwszy przepływ, rozsyłka z Excela, rozwiązywanie problemów
-- [Rozwiązywanie problemów](https://sqlik.github.io/multiinfo-gate/problemy/) - objaw, sprawdzenie i naprawa: panel, logowanie, tryb awaryjny, aktualizacja, Microsoft 365, zgłaszanie problemów
+- [Skracacz linków i kampanie](https://sqlik.github.io/multiinfo-gate/skracacz/) - krótkie linki własnej domeny, obowiązkowa lista domen docelowych, wyniki kampanii, parametry UTM, ważność linków i przechowywanie danych
+- [Rozwiązywanie problemów](https://sqlik.github.io/multiinfo-gate/problemy/) - objaw, sprawdzenie i naprawa: panel, logowanie, tryb awaryjny, aktualizacja, Microsoft 365, skracacz linków, zgłaszanie problemów
 - [Przykład w PHP](examples/php/) - strona testowa i kod do skopiowania
 
 Źródłem strony są pliki w katalogu [`docs/`](docs/). Przykłady z zakładkami czytają się w nich

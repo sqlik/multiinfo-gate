@@ -515,6 +515,10 @@ zaczyna wtedy odpytywać Multiinfo o wiadomości z usług klucza i przekazuje ka
 samej usługi może odbierać naraz. Gdy ostatni odbierający klucz zostanie odwołany, wygaśnie albo
 straci zaznaczenie, bramka przestaje odpytywać o tę usługę.
 
+Sekcja **Skracanie linków** włącza dla klucza zamianę linków w SMS-ach na krótkie linki własnej
+domeny firmy i liczenie ich otwarć. Opis sekcji znajdziesz w artykule
+[Skracacz linków i kampanie](skracacz.md), w rozdziale 6.
+
 Pole **Tylko integracje** ogranicza klucz do integracji. Klucz z tą opcją nie wysyła SMS-ów przez
 `POST /v1/messages` ani `POST /v1/packages`, a takie wywołanie kończy się błędem `403` z kodem
 `integrations_only_key`. Opcja jest zalecana dla klucza konektora Power Automate, ponieważ klucz
@@ -959,7 +963,8 @@ odebranej.
 Ten rozdział dotyczy sytuacji, w której aplikacja kliencka działa poza serwerem bramki. Może to
 być agencja obsługująca wysyłki albo system hostowany u innego dostawcy. Aplikacja otrzymuje klucz
 API i łączy się z bramką przez internet. Panel pozostaje dostępny wyłącznie przez tunel SSH. Na
-zewnątrz wystawia się tylko API.
+zewnątrz wystawia się tylko API. Bramka korzystająca ze skracacza linków wystawia dodatkowo port
+krótkich linków pod domenami skracacza. Opis znajdziesz przy każdym wariancie poniżej.
 
 ### 6.1. Pojęcia
 
@@ -1000,7 +1005,9 @@ nazwami „firewall” albo „security group”. Jeżeli na serwerze działa do
 sudo ufw allow 80,443/tcp
 ```
 
-Portów 8080 i 8081 nie otwieraj. Mają pozostać dostępne wyłącznie z samego serwera.
+Portów 8080, 8081 i 8082 nie otwieraj. Mają pozostać dostępne wyłącznie z samego serwera. Port
+8082 przyjmuje krótkie linki skracacza, które serwer pośredniczący odbiera z internetu na porcie
+443.
 
 ### 6.4. Wybór wariantu
 
@@ -1056,6 +1063,16 @@ Caddy ma adres z sieci Dockera. W `docker/.env` dopisz więc `MIG_TRUSTED_PROXIE
 Bez tego dziennik integracji pokazuje adres Caddy zamiast adresu aplikacji, a lista dozwolonych
 źródeł odrzuca wszystkie żądania.
 
+Ten sam Caddy obsługuje domeny skracacza linków z artykułu
+[Skracacz linków i kampanie](skracacz.md). Rekord DNS domeny skracacza wskazuje ten sam serwer co
+domena bramki. Domena dodana w panelu nie wymaga zmian w pliku `Caddyfile`. Caddy uzyskuje dla
+niej certyfikat przy pierwszym połączeniu, gdy bramka potwierdzi, że domena jest aktywną domeną
+skracacza. Pierwsze wydanie certyfikatu trwa kilka sekund. Dlatego zalecane jest sprawdzenie
+domeny w panelu zaraz po jej dodaniu, ponieważ sprawdzenie wywołuje wydanie certyfikatu, zanim
+w link kliknie pierwszy odbiorca. Linki bez `https://` Caddy przekierowuje z portu 80 na HTTPS.
+Limit wejść w krótkie linki, liczony dla adresu odbiorcy, również wymaga zmiennej
+`MIG_TRUSTED_PROXIES=172.16.0.0/12`.
+
 ### 6.6. Wariant B: nginx na serwerze
 
 W tym wariancie nginx zainstalowany bezpośrednio w systemie przekazuje ruch do bramki.
@@ -1088,9 +1105,43 @@ oznacza, że bramka nie działa (sprawdź `docker compose ps` w katalogu `docker
 certbota `Challenge failed` oznacza, że domena nie wskazuje na serwer albo port 80 jest
 zamknięty.
 
-Adres klienta w dzienniku integracji: konfiguracja przekazuje `X-Forwarded-For`, a nginx łączy
-się z bramką z adresu `127.0.0.1`. W `docker/.env` dopisz więc `MIG_TRUSTED_PROXIES=127.0.0.1`
-i wykonaj `docker compose up -d`.
+Adres klienta w dzienniku integracji: konfiguracja przekazuje `X-Forwarded-For`. Nginx łączy się
+z portem opublikowanym przez Dockera, dlatego bramka w kontenerze widzi adres bramy sieci Dockera,
+na przykład `172.18.0.1`, a nie `127.0.0.1`. W `docker/.env` dopisz więc
+`MIG_TRUSTED_PROXIES=172.16.0.0/12` i wykonaj `docker compose up -d`. Bramka uruchomiona bez
+Dockera, na przykład w kontenerze LXC z rozdziału 9, widzi adres serwera z nginx. Przy nginx na
+tym samym serwerze jest nim `127.0.0.1`.
+
+Domeny skracacza linków z artykułu [Skracacz linków i kampanie](skracacz.md) obsługuje osobny
+plik konfiguracji nginx. Port krótkich linków bramki, domyślnie 8082, jest dostępny na serwerze
+dopiero po dołączeniu pliku `docker-compose.nginx.yml`. W `docker/.env` dopisz go do wiersza
+`COMPOSE_FILE`:
+
+```
+COMPOSE_FILE=docker-compose.yml:docker-compose.nginx.yml
+```
+
+Następnie wykonaj polecenia w katalogu `~/multiinfo-gate/docker`. W poleceniach `sed`
+i `certbot` zastąp `l.firma.pl` domeną skracacza z panelu:
+
+```bash
+docker compose up -d
+sudo cp ~/multiinfo-gate/docker/nginx/multiinfo-gate-linki.conf /etc/nginx/sites-available/multiinfo-gate-linki
+sudo sed -i 's/<DOMENY-SKRACACZA>/l.firma.pl/' /etc/nginx/sites-available/multiinfo-gate-linki
+sudo ln -s /etc/nginx/sites-available/multiinfo-gate-linki /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d l.firma.pl --redirect
+```
+
+Opcja `--redirect` dodaje przekierowanie z HTTP na HTTPS, potrzebne dla linków bez `https://`.
+Kilka domen skracacza wpisuje się w pliku po spacji, w wierszu `server_name`, a certbot otrzymuje
+każdą z nich w osobnej opcji `-d`. Każda kolejna domena dodana w panelu wymaga takiego dopisania
+i ponownego wywołania certbota. Gdy port 8082 na serwerze zajmuje inny program, zmienna
+`MIG_PORT_LINKOW` w `docker/.env` ustawia inny port. Ten sam numer należy wtedy wpisać w wierszu
+`proxy_pass` pliku nginx.
+
+Oczekiwany wynik: sprawdzenie domeny w panelu kończy się plakietką „sprawdzona”. Procedurę
+sprawdzenia opisuje rozdział 5.2 artykułu [Skracacz linków i kampanie](skracacz.md).
 
 ### 6.7. Wariant C: Traefik już działający na serwerze
 
@@ -1157,6 +1208,28 @@ Adres klienta w dzienniku integracji: Traefik dopisuje `X-Forwarded-For` i łąc
 z adresu w swojej sieci Dockera. W `docker/.env` dopisz więc `MIG_TRUSTED_PROXIES=172.16.0.0/12`
 (albo dokładny zakres sieci Traefika z `docker network inspect <NAZWA-SIECI>`) i wykonaj
 `docker compose up -d`.
+
+Domeny skracacza linków z artykułu [Skracacz linków i kampanie](skracacz.md) Traefik obsługuje
+według reguły z pliku `docker/.env`. Do wiersza `COMPOSE_FILE` dopisz plik
+`docker-compose.traefik-linki.yml`, a domeny skracacza wpisz w zmiennej
+`MIG_TRAEFIK_REGULA_LINKOW`:
+
+```
+COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml:docker-compose.traefik-linki.yml
+MIG_TRAEFIK_REGULA_LINKOW='Host(`l.firma.pl`)'
+```
+
+Kilka domen łączy się w regule operatorem `||`:
+
+```
+MIG_TRAEFIK_REGULA_LINKOW='Host(`l.firma.pl`) || Host(`firma-link.pl`)'
+```
+
+Traefik uzyskuje certyfikat dla każdej domeny z reguły. Każda kolejna domena dodana w panelu
+wymaga dopisania jej do reguły i wykonania `docker compose up -d`. Linki bez `https://` wymagają
+przekierowania z punktu wejścia HTTP na HTTPS w konfiguracji Traefika. Traefik kieruje ruch do
+bramki dopiero po pierwszym udanym sprawdzeniu jej stanu, około 30 sekund po uruchomieniu
+kontenera. Do tego czasu domena skracacza odpowiada kodem 404.
 
 ### 6.8. Przekazanie dostępu aplikacji zewnętrznej
 
@@ -1371,27 +1444,32 @@ Zmienne ustawia się w `docker/.env` (klucz główny, domena) albo w sekcji `env
 | `MIG_ADMIN_PORT` | `8081` | Port panelu |
 | `MIG_API_HOST` | `0.0.0.0` | Adres nasłuchu API |
 | `MIG_ADMIN_HOST` | `127.0.0.1` | Adres nasłuchu panelu, poza kontenerem zostaw domyślny; nazwa interfejsu (np. `eth0`) oznacza jego adres IPv4 |
+| `MIG_LINKS_PORT` | `8082` | Port serwera krótkich linków skracacza ([Skracacz linków i kampanie](skracacz.md)) |
+| `MIG_LINKS_HOST` | jak `MIG_API_HOST` | Adres nasłuchu serwera krótkich linków; nazwa interfejsu oznacza jego adres IPv4 |
 | `MIG_DATA_DIR` | `/data` | Katalog bazy, raportów i kopii |
 | `MIG_LOG_LEVEL` | `info` | Jeden z `silent`, `error`, `warn`, `info`, `debug` |
 | `MIG_BACKUP_RETENTION_DAYS` | `14` | Ile dni trzymać kopie bazy |
 | `MIG_WEBHOOK_ALLOW_PRIVATE` | `0` | `1` pozwala na adresy webhooków w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów); domyślnie bramka wysyła żądania wyłącznie na adresy publiczne i takie tylko przyjmuje w panelu. Potrzebne, gdy aplikacja odbierająca webhooki działa na tym samym serwerze, np. przykład PHP z rozdziału 5 |
 | `MIG_MAIL_ALLOW_PRIVATE` | `0` | `1` pozwala na serwer IMAP w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów). Zmienna osobna od `MIG_WEBHOOK_ALLOW_PRIVATE`, ponieważ serwer poczty w sieci firmowej to częstszy przypadek niż aplikacja odbierająca webhooki |
+| `MIG_LINKS_ALLOW_PRIVATE` | `0` | `1` pozwala sprawdzić domenę skracacza, dla której serwer DNS bramki podaje adres w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów). Potrzebna, gdy serwer bramki korzysta z wewnętrznego serwera DNS. Zmienna nie wpływa na przekierowania krótkich linków |
 | `MIG_INBOUND_TIMEOUT_MS` | `10000` | Ile milisekund Multiinfo może wstrzymywać odpowiedź na zapytanie o wiadomości przychodzące (1-60000). Przy wartości domyślnej odbiór trwa zwykle poniżej sekundy, najwyżej ok. 10 s, kosztem sześciu pytań na minutę na usługę. Maksimum `60000` (long polling z dokumentacji Multiinfo) zmniejsza liczbę pytań, ale wiadomość, która nadejdzie między dwoma pytaniami, czeka do końca następnego - opóźnienie odbioru sięga wtedy minuty. Mała wartość razem z `MIG_INBOUND_IDLE_MS` daje odpytywanie okresowe |
 | `MIG_INBOUND_IDLE_MS` | `0` | Przerwa po pustej odpowiedzi, zanim bramka wyśle kolejne zapytanie, `0` oznacza zapytanie natychmiastowe |
-| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku), od których API ufa nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Ustawiana w `docker/.env`: `172.16.0.0/12` dla Caddy i Traefika w Dockerze, `127.0.0.1` dla nginx na serwerze (rozdział 6). Potrzebna, gdy integracje korzystają z listy dozwolonych źródeł albo dziennik powinien pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)). Proxy z tej listy przekazujące żądanie HTTPS otrzymuje też szczegóły `/healthz` panelu (punkt 7.4) |
+| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku), od których API ufa nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Ustawiana w `docker/.env`: `172.16.0.0/12` dla Caddy, Traefika i nginx na serwerze, gdy bramka działa w Dockerze, adres serwera z nginx dla bramki bez Dockera (rozdział 6). Ta sama lista obowiązuje dla serwera krótkich linków, który liczy limit wejść dla adresu odbiorcy ([Skracacz linków i kampanie](skracacz.md), rozdział 4). Potrzebna, gdy integracje korzystają z listy dozwolonych źródeł albo dziennik powinien pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)). Proxy z tej listy przekazujące żądanie HTTPS otrzymuje też szczegóły `/healthz` panelu (punkt 7.4) |
 | `MIG_UPDATE_CHECK` | `1` | Raz na dobę sprawdzać w serwisie GitHub, czy jest nowsze wydanie, i pokazywać je na przeglądzie (rozdział 7.4); `0` wyłącza, np. w sieci bez dostępu do internetu |
 | `MIG_WERSJA` | `1` | Tag obrazu do pobrania: `1`, `1.1` albo `1.1.0` (rozdział 7.4) |
 | `MIG_DOMENA` | - | Domena bramki dla wariantu Caddy i Traefik |
-| `COMPOSE_FILE` | - | Dodatkowe pliki Compose oddzielone dwukropkiem: `docker-compose.caddy.yml` włącza Caddy, `docker-compose.traefik.yml` Traefik, `docker-compose.build.yml` budowanie ze źródeł; zawsze po `docker-compose.yml` |
+| `COMPOSE_FILE` | - | Dodatkowe pliki Compose oddzielone dwukropkiem: `docker-compose.caddy.yml` włącza Caddy, `docker-compose.traefik.yml` Traefik, `docker-compose.traefik-linki.yml` domeny skracacza w Traefiku, `docker-compose.nginx.yml` port krótkich linków dla nginx na serwerze, `docker-compose.build.yml` budowanie ze źródeł; zawsze po `docker-compose.yml` |
 | `MIG_TRAEFIK_SIEC` | `traefik` | Wariant Traefik: sieć Dockera, w której Traefik szuka kontenerów |
 | `MIG_TRAEFIK_WEJSCIE` | `websecure` | Wariant Traefik: punkt wejścia HTTPS |
 | `MIG_TRAEFIK_RESOLVER` | `letsencrypt` | Wariant Traefik: nazwa resolvera certyfikatów |
+| `MIG_TRAEFIK_REGULA_LINKOW` | - | Wariant Traefik ze skracaczem: reguła z domenami skracacza, na przykład ``Host(`l.firma.pl`)``; wymagana przy `docker-compose.traefik-linki.yml` |
+| `MIG_PORT_LINKOW` | `8082` | Wariant nginx ze skracaczem: port krótkich linków na pętli zwrotnej serwera, przy `docker-compose.nginx.yml` |
 
 ## 8. Lista kontrolna po wdrożeniu
 
 Do sprawdzenia na docelowym serwerze, na koncie produkcyjnym i numerze testowym:
 
-- [ ] `https://<TWOJA-DOMENA>/healthz` odpowiada `{"status":"ok"}`, a `http://<ADRES-SERWERA>:8080` i `:8081` z zewnątrz nie odpowiadają
+- [ ] `https://<TWOJA-DOMENA>/healthz` odpowiada `{"status":"ok"}`, a `http://<ADRES-SERWERA>:8080`, `:8081` i `:8082` z zewnątrz nie odpowiadają
 - [ ] Sprawdzenie połączenia na karcie konta daje `-31`
 - [ ] Wiadomość testowa bez polskich znaków dociera, w panelu ma stan `delivered`
 - [ ] Wiadomość z polskimi znakami dociera z poprawnymi znakami
@@ -1403,6 +1481,7 @@ Do sprawdzenia na docelowym serwerze, na koncie produkcyjnym i numerze testowym:
 - [ ] Konto panelu ma drugi składnik, kody zapasowe są przechowywane poza serwerem
 - [ ] Drugi użytkownik panelu zalogował się hasłem startowym i włączył drugi składnik
 - [ ] Po nocy w `backups/` leży plik z datą
+- [ ] Przy skracaczu linków domena skracacza otrzymuje w panelu plakietkę „sprawdzona”, a krótki link z SMS-a testowego otwiera się na telefonie w sieci komórkowej
 
 ## 9. Proxmox VE
 
@@ -1726,3 +1805,23 @@ aplikacji w sieci firmowej wymaga `MIG_WEBHOOK_ALLOW_PRIVATE=1` w `/etc/multiinf
 i `systemctl restart multiinfo-gate`. Bez tego panel odrzuca taki adres przy zapisie. Serwer
 poczty Mail2SMS w sieci firmowej wymaga analogicznie `MIG_MAIL_ALLOW_PRIVATE=1` w tym samym
 pliku (docs/integracje.md, rozdział 5.1).
+
+### 9.7. Krótkie linki w kontenerze
+
+Kontener z punktu 9.1 uruchamia serwer krótkich linków skracacza na porcie 8082, pod adresem
+kontenera. Odbiorcy SMS-ów otwierają krótkie linki z internetu, dlatego domena skracacza wymaga
+serwera pośredniczącego z HTTPS pod publicznym adresem, tak jak aplikacja w internecie z punktu
+9.6. Konfigurację nginx dla domen skracacza zawiera plik `docker/nginx/multiinfo-gate-linki.conf`
+z repozytorium bramki, opisany w punkcie 6.6. W wierszu `proxy_pass` zamiast
+`http://127.0.0.1:8082` wpisujesz `http://<ADRES-KONTENERA>:8082`.
+
+Adres serwera z nginx wpisz w `/etc/multiinfo-gate/env` kontenera w zmiennej
+`MIG_TRUSTED_PROXIES`, tak jak w punkcie 9.6, a następnie wykonaj
+`systemctl restart multiinfo-gate`. W przeciwnym razie limit 60 wejść na minutę obejmuje
+wszystkich odbiorców kampanii razem. Sprawdzenie domeny w panelu wykrywa taki przypadek
+i wyświetla plakietkę „sprawdzona z ostrzeżeniem”.
+
+Sprawdzenie domeny łączy się z publicznym adresem domeny. Kontener korzystający z wewnętrznego
+serwera DNS, który podaje dla domeny adres w sieci firmowej, wymaga zmiennej
+`MIG_LINKS_ALLOW_PRIVATE=1` w tym samym pliku. Kontener z Dockerem z punktu 9.5 korzysta
+z wariantów z rozdziału 6 bez zmian.

@@ -18,7 +18,9 @@ nie może rozpocząć pracy, pokazuje w panelu przyczynę i sposób naprawy. Od 
 wprowadza konektor do Microsoft Power Automate, który umożliwia wysyłkę SMS-ów z przepływów: do
 jednego numeru, w formie rozsyłki albo do listy odbiorców prowadzonej w bramce. Od wersji 1.10
 Mail2SMS odczytuje także skrzynki Microsoft 365 przez skrzynkę przeznaczoną dla bramki, a bramka
-powiadamia administratora również SMS-em.
+powiadamia administratora również SMS-em. Od wersji 1.11 bramka zamienia linki w SMS-ach na krótkie
+linki własnej domeny firmy, liczy ich otwarcia i przedstawia wyniki kampanii w panelu, w API
+i w zdarzeniu „link otwarty”.
 
 ![Przegląd: liczniki wiadomości wychodzących i odebranych z ostatniej doby, stan połączeń z Multiinfo i ostatnie niepowodzenia](obrazki/przeglad.png)
 
@@ -39,8 +41,10 @@ zamiast certyfikatów, oraz panel do zarządzania kontami, kluczami i podglądu 
   Microsoft 365), powiadomienia administratora mailem i SMS-em
 - [Power Automate](power-automate.md) - konektor do Microsoft Power Automate: integracja w panelu,
   import pliku, pierwszy przepływ, rozsyłka z Excela, rozwiązywanie problemów
+- [Skracacz linków i kampanie](skracacz.md) - krótkie linki własnej domeny, obowiązkowa lista
+  domen docelowych, wyniki kampanii, parametry UTM, ważność linków i przechowywanie danych
 - [Rozwiązywanie problemów](problemy.md) - objaw, sprawdzenie i naprawa: panel, logowanie, tryb
-  awaryjny, aktualizacja, Microsoft 365, zgłaszanie problemów
+  awaryjny, aktualizacja, Microsoft 365, skracacz linków, zgłaszanie problemów
 - [Przykład w PHP](https://github.com/sqlik/multiinfo-gate/tree/main/examples/php) - strona
   testowa i kod do skopiowania, w repozytorium
 

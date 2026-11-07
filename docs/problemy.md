@@ -56,7 +56,7 @@ w kontenerze LXC: usługa nie startuje, a dziennik zawiera `EADDRINUSE`.
 Port 8080 albo 8081 zajmuje inny program. Program, który zajmuje port, wskazuje polecenie:
 
 ```bash
-sudo ss -ltnp | grep -E ':8080|:8081'
+sudo ss -ltnp | grep -E ':8080|:8081|:8082'
 ```
 
 W kontenerze LXC pracujesz jako `root`, więc wpisz polecenie bez `sudo`.
@@ -66,7 +66,10 @@ Zatrzymaj ten program albo zmień port bramki zmienną `MIG_API_PORT` albo `MIG_
 bramka nie pokazuje strony z przyczyną, bo strony nie ma na czym podać.
 
 Zajęty port serwera krótkich linków, domyślnie 8082, nie zatrzymuje bramki. Opis znajdziesz
-w punkcie [Serwer krótkich linków nie działa](#serwer-krotkich-linkow).
+w punkcie [Serwer krótkich linków nie działa](#serwer-krotkich-linkow). Wyjątkiem jest Docker
+z plikiem `docker-compose.nginx.yml`, który publikuje port 8082 na serwerze. Zajęty port zatrzymuje
+wtedy start kontenera komunikatem `port is already allocated`. Inny port ustawia zmienna
+`MIG_PORT_LINKOW` w `docker/.env`, opisana w rozdziale 6.6 [Uruchomienia](uruchomienie.md).
 
 ## Nie znam loginu i hasła do panelu {#pierwsze-konto}
 
@@ -608,6 +611,68 @@ Zatrzymaj ten program albo zmień port serwera krótkich linków zmienną `MIG_L
 zmiennej zawiera rozdział 7.7 [Uruchomienia](uruchomienie.md). Po zmianie portu skieruj na nowy numer
 serwer pośredniczący domen skracacza, a następnie uruchom bramkę ponownie. Pasek znika, gdy serwer
 krótkich linków zacznie działać.
+
+## Krótki link prowadzi do strony „Link wygasł” {#link-wygasl}
+
+Objaw: odbiorca otwiera krótki link z SMS-a i widzi stronę „Link wygasł” zamiast strony docelowej.
+
+Strona „Link wygasł” zastępuje stronę docelową, gdy link nie może do niej prowadzić. Kod HTTP
+strony wskazuje grupę przyczyn. Kod 410 oznacza link znany bramce, ale nieważny, a kod 404 link
+nieznany tej domenie. Kod podaje polecenie `curl -I` z krótkim linkiem.
+
+| Przyczyna | Sprawdzenie | Rozwiązanie |
+|---|---|---|
+| link stracił ważność | panel **Analityka** w szczegółach kampanii podaje ważność linków | wysłać kampanię ponownie z dłuższą ważnością w żądaniu albo przy kluczu |
+| linki kampanii zostały wyłączone | szczegóły kampanii pokazują plakietkę „linki wyłączone” z datą | kliknąć **Włącz linki**, gdy wyłączenie nie było zamierzone |
+| domena skracacza jest wyłączona | lista w elemencie **Skracacz linków** pokazuje stan „wyłączona” | kliknąć **Włącz domenę** na stronie domeny |
+| wiadomość została anulowana | szczegóły wiadomości pokazują stan `cancelled` | wysłać wiadomość ponownie |
+| bramka usunęła link 30 dni po jego wygaśnięciu | szczegóły kampanii informują o usunięciu szczegółów odbiorców | wysłać kampanię ponownie |
+| link otwarto z błędem w kodzie albo pod inną domeną skracacza tej bramki | adres w przeglądarce różni się od krótkiego linku w SMS-ie | otworzyć link bezpośrednio z SMS-a |
+| link pochodzi z odpowiedzi Mail2SMS do nadawcy wiadomości e-mail | krótki link kończy się kodem zastępczym `0000000` | otworzyć link z SMS-a odbiorcy, ponieważ odpowiedź do nadawcy nie zawiera kodów odbiorców |
+
+Opis ważności i przechowywania linków zawiera rozdział 11 artykułu
+[Skracacz linków i kampanie](skracacz.md).
+
+## Kampania nie pokazuje otwarć mimo wejść w linki {#linki-bez-otwarc}
+
+Objaw: kafelek „Automaty” w szczegółach kampanii pokazuje wejścia, a kafelki „Otwarcia”
+i „Kliknięcia” pokazują 0 albo wartości niższe od oczekiwanych.
+
+Wejście automatu oznacza pobranie linku przez program, a nie przez odbiorcę. Wiadomości Google
+pobierają podgląd linku zaraz po doręczeniu SMS-a. Wiadomości Apple pobierają podgląd po
+stuknięciu „Stuknij, aby wczytać podgląd” przy SMS-ie od nieznanego nadawcy. Komunikatory, skanery
+poczty i programy zabezpieczające pobierają link w podobny sposób. Bramka nie wlicza takich wejść
+do otwarć ani kliknięć, ponieważ nie świadczą o zainteresowaniu odbiorcy. Wiele automatów przy
+niewielu otwarciach oznacza więc zwykle, że SMS-y dotarły, ale odbiorcy nie stuknęli linku.
+
+Bramka rozpoznaje automat po metodzie `HEAD`, po nagłówku wstępnego pobierania i po nazwie
+programu w nagłówku `User-Agent`. Do automatów należy też sprawdzenie linku z komputera
+poleceniem `curl`. Link otwarty w przeglądarce telefonu liczy się jako otwarcie. Wejścia w czasie,
+gdy linki kampanii są wyłączone, nie liczą się do żadnej z tych liczb.
+
+Działanie liczników potwierdza krótki link z SMS-a testowego. Otwórz go w przeglądarce telefonu,
+a następnie odśwież szczegóły kampanii. Oczekiwany wynik: kafelki „Otwarcia” i „Kliknięcia”
+rosną o 1.
+
+## Link w SMS-ie nie został skrócony {#link-niezamieniony}
+
+Objaw: SMS dotarł z pełnym adresem zamiast krótkiego linku, a kampania nie pojawia się w elemencie
+**Kampanie**.
+
+Odpowiedź API na wysyłkę zawiera blok `links`, gdy bramka skróciła albo pominęła link oraz gdy
+ustawienie klucza zmieniło wybór wysyłającego. Pole `notice` i lista `skipped` w tym bloku
+wskazują przyczynę. Opis bloku znajdziesz w rozdziale 3 [API dla aplikacji](api.md).
+
+| Przyczyna | Sprawdzenie | Rozwiązanie |
+|---|---|---|
+| klucz ma tryb skracania „Wyłączone” | sekcja **Skracanie linków** w formularzu klucza, a w odpowiedzi API `notice` równe `disabled_by_key` | wybrać tryb „Decyduje wysyłający” albo „Zawsze” |
+| żądanie zawiera `shortenLinks: false` przy trybie „Decyduje wysyłający” | body żądania albo pole „Skracanie linków” w akcji Power Automate | usunąć pole albo ustawić wartość `true` |
+| domena linku nie należy do dozwolonych domen docelowych klucza | odpowiedź API wymienia link w `skipped` z powodem `domain_not_allowed` | dopisać domenę w polu **Dozwolone domeny docelowe** klucza |
+| link nie zaczyna się od `https://` ani `http://` | treść zawiera adres w postaci `www.firma.pl/oferta` | wpisać link w treści z `https://` |
+| domena skracacza jest wyłączona albo serwer krótkich linków nie działa | odpowiedź API zawiera `notice` równe `domain_unavailable`, a panel wyświetla pasek „Serwer krótkich linków nie działa” | włączyć domenę albo usunąć przyczynę według punktu [Serwer krótkich linków nie działa](#serwer-krotkich-linkow) |
+| SMS wysłano innym kluczem | szczegóły wiadomości na ekranie **Wiadomości** podają nazwę klucza | wysłać kampanię kluczem z włączonym skracaniem |
+
+SMS-y powiadomień bramki dla administratorów nie są skracane nigdy, niezależnie od ustawień klucza.
 
 ## Jak zgłosić problem {#zgloszenie}
 
