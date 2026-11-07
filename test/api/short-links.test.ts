@@ -142,6 +142,14 @@ describe('POST /v1/messages z krótkimi linkami', () => {
     expect(shortLinks.get(code!)!.disabledAt).toBe(NOW.toISOString());
   });
 
+  it('wiadomość z deliveryReport false nie daje kampanii podstaw do liczenia doręczeń', async () => {
+    const res = await post('/v1/messages', { to: '48601000001', text: 'Przegląd https://firma.pl/a', campaign: 'bez-raportu', deliveryReport: false });
+    expect(res.statusCode).toBe(202);
+    expect(campaigns.delivered(campaigns.byName(apiKeyId, 'bez-raportu')!.id).reported).toBe(false);
+    await post('/v1/messages', { to: '48601000002', text: 'Przegląd https://firma.pl/a', campaign: 'z-raportem' });
+    expect(campaigns.delivered(campaigns.byName(apiKeyId, 'z-raportem')!.id).reported).toBe(true);
+  });
+
   it('liczy części na treści po skróceniu', async () => {
     const res = await post('/v1/messages', {
       to: '48601000001', text: 'Przegląd klimatyzacji: https://firma.pl/oferty/przeglad-klimatyzacji-wiosna-2027?klient=123456',
@@ -219,6 +227,15 @@ describe('POST /v1/packages z krótkimi linkami', () => {
     const campaign = campaigns.byName(apiKeyId, id)!;
     expect(pkg.campaignId).toBe(campaign.id);
     expect(campaign.sent).toBe(3);
+  });
+
+  it('rozsyłka z terminem startu otwiera kampanię z terminem wysyłki, a nie z chwilą przyjęcia', async () => {
+    const startAt = new Date(NOW.getTime() + 3 * DAY).toISOString();
+    const res = await post('/v1/packages', {
+      defaultText: 'Przegląd https://firma.pl/a', recipients: [{ to: '48601000001' }], startAt, campaign: 'przeglad-pazdziernik',
+    });
+    expect(res.statusCode).toBe(202);
+    expect(campaigns.byName(apiKeyId, 'przeglad-pazdziernik')).toMatchObject({ firstSentAt: startAt, lastSentAt: startAt, createdAt: NOW.toISOString() });
   });
 
   it('przyjmuje nazwę kampanii ze znakami spoza alfabetu łacińskiego i ukośnikiem', async () => {

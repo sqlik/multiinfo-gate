@@ -25,7 +25,12 @@ export interface DeliveryInput {
   integrationId?: number | null; method?: string;
   /** Nagłówki dostawy integracji; szyfrowane, bo bywa wśród nich token obcej aplikacji. */
   headers?: Record<string, string> | null;
+  /** Termin retencji kodu dla dostawy link.opened; po nim dostawa traci dane odbiorcy. */
+  purgeAfter?: string | null;
 }
+
+/** Pola dostawy link.opened, które wskazują odbiorcę. */
+const RECIPIENT_FIELDS = ['to', 'clientId', 'target', 'shortUrl'] as const;
 
 interface Raw {
   id: number; api_key_id: number; event: string; payload: string; url: string;
@@ -58,12 +63,14 @@ export class WebhookDeliveriesRepo {
       ? encryptSecret(JSON.stringify(input.headers), this.masterKey) : null;
     const info = this.db
       .prepare(
-        `INSERT INTO webhook_deliveries (api_key_id, event, payload, url, created_at, inbound_id, scrub_after, integration_id, method, headers_enc)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO webhook_deliveries (api_key_id, event, payload, url, created_at, inbound_id, scrub_after, integration_id, method,
+           headers_enc, purge_after)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.apiKeyId, input.event, input.payload, input.url, input.createdAt.toISOString(),
         input.inboundId ?? null, input.scrubAfter ? 1 : 0, input.integrationId ?? null, input.method ?? 'POST', headers,
+        input.purgeAfter ?? null,
       );
     return Number(info.lastInsertRowid);
   }
@@ -141,6 +148,30 @@ export class WebhookDeliveriesRepo {
     delete payload.hex;
     payload.bodyHash = sha256Hex(content);
     this.db.prepare('UPDATE webhook_deliveries SET payload = ?, scrub_after = 0 WHERE id = ?').run(JSON.stringify(payload), id);
+  }
+
+  /**
+   * Retencja dostaw link.opened. Dostawa webhooka klucza zachowuje wiadomość, kampanię i czas otwarcia,
+   * a traci numer, identyfikator klienta i adresy. Body i nagłówki dostawy integracji mają kształt obcej
+   * aplikacji, dlatego znikają całe.
+   */
+  purgeDetails(now: Date): number {
+    return this.db.transaction(() => {
+      const due = this.db
+        .prepare('SELECT id, payload, integration_id FROM webhook_deliveries WHERE purge_after IS NOT NULL AND purge_after < ?')
+        .all(now.toISOString()) as Array<{ id: number; payload: string; integration_id: number | null }>;
+      const update = this.db.prepare('UPDATE webhook_deliveries SET payload = ?, headers_enc = NULL, purge_after = NULL WHERE id = ?');
+      for (const row of due) {
+        if (row.integration_id !== null) {
+          update.run('{"scrubbed":true}', row.id);
+          continue;
+        }
+        const payload = JSON.parse(row.payload) as Record<string, unknown>;
+        for (const field of RECIPIENT_FIELDS) delete payload[field];
+        update.run(JSON.stringify({ ...payload, detailsPurged: true }), row.id);
+      }
+      return due.length;
+    })();
   }
 
   /** Nieudana dostawa wraca do kolejki jak nowa: bez prób i bez starej odpowiedzi. */

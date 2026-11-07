@@ -1391,7 +1391,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
         get: {
           operationId: 'listaKampanii',
           summary: 'Lista kampanii',
-          description: 'Zwraca kampanie krótkich linków wysłanych tym kluczem, od ostatniej wysyłki, z liczbą wysłanych SMS-ów,'
+          description: 'Zwraca kampanie krótkich linków wysłanych tym kluczem, od najnowszej kampanii, z liczbą wysłanych SMS-ów,'
             + ' otwarć i kliknięć. Strona ma domyślnie 25 pozycji, najwyżej 200. Następną stronę pobiera się przez offset,'
             + ' dopóki hasMore jest prawdziwe.',
           security: KLUCZ,

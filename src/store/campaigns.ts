@@ -29,17 +29,19 @@ export class CampaignsRepo {
   constructor(private readonly db: Database) {}
 
   /**
-   * Zwraca identyfikator istniejącej albo nowej kampanii i przesuwa `last_sent_at`. Znacznik „linki wyłączone”
+   * Zwraca identyfikator istniejącej albo nowej kampanii i poszerza okres wysyłek o `at`, czyli termin wysyłki.
+   * Rozsyłka z terminem może wyprzedzić w kampanii późniejszą wysyłkę natychmiastową. Znacznik „linki wyłączone”
    * pozostaje, dlatego kody kolejnej wysyłki powstają wyłączone, a przywraca je wyłącznie „Włącz linki”.
    * Znacznik usuniętych szczegółów znika, ponieważ kolejna wysyłka tworzy nowe kody i nowych odbiorców.
    */
-  open(apiKeyId: number, name: string, at: Date): number {
+  open(apiKeyId: number, name: string, at: Date, now: Date = at): number {
     const stamp = at.toISOString();
     const row = this.db
       .prepare(`INSERT INTO campaigns (api_key_id, name, first_sent_at, last_sent_at, created_at) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT (api_key_id, name) DO UPDATE SET last_sent_at = excluded.last_sent_at, details_purged_at = NULL
+                ON CONFLICT (api_key_id, name) DO UPDATE SET first_sent_at = MIN(first_sent_at, excluded.first_sent_at),
+                  last_sent_at = MAX(last_sent_at, excluded.last_sent_at), details_purged_at = NULL
                 RETURNING id`)
-      .get(apiKeyId, name, stamp, stamp, stamp) as { id: number };
+      .get(apiKeyId, name, stamp, stamp, now.toISOString()) as { id: number };
     return row.id;
   }
 
@@ -53,11 +55,16 @@ export class CampaignsRepo {
     return row ? toRow(row) : undefined;
   }
 
-  list(opts: { apiKeyId?: number; offset: number; limit: number }): { rows: CampaignRow[]; hasMore: boolean } {
+  /**
+   * `order` 'recent': od ostatniej wysyłki, jak w panelu. 'created': od najnowszej kampanii, dzięki czemu
+   * kolejna wysyłka w trakcie pobierania stron API nie przesuwa kampanii między stronami.
+   */
+  list(opts: { apiKeyId?: number; offset: number; limit: number; order?: 'recent' | 'created' }): { rows: CampaignRow[]; hasMore: boolean } {
     const where = opts.apiKeyId === undefined ? '' : ' WHERE api_key_id = ?';
     const params: number[] = opts.apiKeyId === undefined ? [] : [opts.apiKeyId];
+    const order = opts.order === 'created' ? 'id DESC' : 'last_sent_at DESC, id DESC';
     const rows = (this.db
-      .prepare(`SELECT * FROM campaigns${where} ORDER BY last_sent_at DESC, id DESC LIMIT ? OFFSET ?`)
+      .prepare(`SELECT * FROM campaigns${where} ORDER BY ${order} LIMIT ? OFFSET ?`)
       .all(...params, opts.limit + 1, opts.offset) as Raw[]).map(toRow);
     return { rows: rows.slice(0, opts.limit), hasMore: rows.length > opts.limit };
   }
@@ -130,7 +137,7 @@ export class CampaignsRepo {
           (SELECT COUNT(*) FROM messages WHERE campaign_id = @id AND status = 'delivered')
           + (SELECT COUNT(*) FROM package_recipients r JOIN packages p ON p.id = r.package_id
               WHERE p.campaign_id = @id AND r.links > 0 AND r.status = 'delivered') AS delivered,
-          EXISTS (SELECT 1 FROM messages WHERE campaign_id = @id)
+          EXISTS (SELECT 1 FROM messages WHERE campaign_id = @id AND delivery_report = 1)
           OR EXISTS (SELECT 1 FROM packages WHERE campaign_id = @id AND delivery_report = 1) AS reported`)
       .get({ id }) as { delivered: number; reported: 0 | 1 };
     return { delivered: row.delivered, reported: row.reported === 1 };

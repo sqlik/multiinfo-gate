@@ -17,6 +17,8 @@ export interface EmitOptions {
   inboundId?: string;
   /** Po zakończeniu dostawy zastąpić treść skrótem (konto bez przechowywania treści). */
   scrubAfter?: boolean;
+  /** Termin, po którym dostawa traci dane odbiorcy (retencja kodu przy link.opened). */
+  purgeAfter?: string;
 }
 
 export type HttpPost = (
@@ -57,7 +59,7 @@ export function emitWebhook(
   const body = JSON.stringify({ event, at: now.toISOString(), ...payload });
   const id = deps.deliveries.insert({
     apiKeyId, event, payload: body, url: key.webhookUrl, createdAt: now,
-    inboundId: opts.inboundId ?? null, scrubAfter: opts.scrubAfter === true,
+    inboundId: opts.inboundId ?? null, scrubAfter: opts.scrubAfter === true, purgeAfter: opts.purgeAfter ?? null,
   });
   deps.jobs.enqueue('webhook', { deliveryId: id }, now);
   return id;

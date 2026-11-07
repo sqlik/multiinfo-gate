@@ -4,6 +4,7 @@ import type { PanelUser } from '../../m365/service.ts';
 import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
 import { campaignPage, campaignsPage } from '../views/campaigns.ts';
+import { parseOffset } from '../../paging.ts';
 
 const PAGE_SIZE = 25;
 /** Tylu odbiorców i wierszy linków pokazuje strona kampanii; pełna lista odbiorców jest w CSV. */
@@ -32,7 +33,7 @@ export function registerCampaignRoutes(app: FastifyInstance, deps: AdminDeps, re
 
   app.get<{ Querystring: { offset?: string } }>('/kampanie', async (request, reply) => {
     reply.type('text/html; charset=utf-8');
-    const offset = Math.max(0, Number.parseInt(request.query.offset ?? '0', 10) || 0);
+    const offset = parseOffset(request.query.offset);
     const { rows, hasMore } = service.list({ offset, limit: PAGE_SIZE });
     return render.page(request, {
       title: 'Kampanie',

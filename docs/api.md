@@ -2391,8 +2391,9 @@ otwarć ani kliknięć.
 
 ### 5c.1. Lista kampanii: `GET /v1/campaigns`
 
-**Przeznaczenie.** Lista kampanii klucza od ostatniej wysyłki, z liczbą wysłanych SMS-ów, otwarć
-i kliknięć. Strona zawiera domyślnie 25 pozycji, najwyżej 200 w parametrze `limit`. Następną stronę
+**Przeznaczenie.** Lista kampanii klucza od najnowszej kampanii, z liczbą wysłanych SMS-ów, otwarć
+i kliknięć. Kolejność nie zależy od ostatniej wysyłki, dlatego kampania nie przechodzi na inną
+stronę, gdy w trakcie pobierania stron trafia do niej kolejna wysyłka. Strona zawiera domyślnie 25 pozycji, najwyżej 200 w parametrze `limit`. Następną stronę
 pobiera się parametrem `offset`, dopóki `hasMore` ma wartość `true`.
 
 === "curl"
@@ -2777,13 +2778,17 @@ Przykład `message.received`:
   "relatedMessageId": "msg_3f9c2a7b1e4d8c6a5b2f" }
 ```
 
-Zdarzenie `link.opened` bramka wysyła przy pierwszym wejściu odbiorcy w dany krótki link,
-z pominięciem wejść automatów. Kolejne kliknięcia tego samego odbiorcy w ten sam link nie
-wywołują zdarzenia. Odbiorca pojedynczej wiadomości jest wskazany polem `messageId`. Odbiorca
+Zdarzenie `link.opened` bramka wysyła przy pierwszym wejściu odbiorcy w link do danego adresu
+docelowego, z pominięciem wejść automatów. Kolejne kliknięcia tego samego odbiorcy w link do tego
+adresu nie wywołują zdarzenia, także gdy adres wystąpił w treści SMS-a dwa razy. Odbiorca pojedynczej wiadomości jest wskazany polem `messageId`. Odbiorca
 rozsyłki nie jest osobną wiadomością, dlatego `messageId` ma dla niego wartość `null`, a odbiorcę
 wskazują `packageId`, `seq` i `clientId`. Pole `seq` podaje pozycję odbiorcy w tablicy
 `recipients` rozsyłki, licząc od 1. Pole `target` zawiera adres docelowy bez parametrów UTM,
 a `shortUrl` krótki link zawsze z `https://`, także gdy SMS zawierał link bez schematu.
+
+Zapis dostawy zdarzenia w bramce traci pola `to`, `clientId`, `target` i `shortUrl` 30 dni po
+wygaśnięciu linku, razem z kodem. Zapis dostawy integracji traci w tym terminie całe body
+i nagłówki.
 
 Przykład `link.opened` dla odbiorcy rozsyłki:
 

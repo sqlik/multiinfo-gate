@@ -42,6 +42,8 @@ export interface MessageInput {
   requestedBy?: string | null;
   system?: 0 | 1;
   campaignId?: number | null;
+  /** 0: wysyłka bez raportu doręczenia, wiadomość nie przejdzie w stan „doręczona”. */
+  deliveryReport?: 0 | 1;
 }
 
 export interface MessageFilter {
@@ -131,8 +133,8 @@ export class MessagesRepo {
         `INSERT INTO messages (
            id, api_key_id, account_id, service_id, dest, body, body_hash,
            encoding, parts, slots, orig, cost_center, valid_to, idempotency_key, in_reply_to, integration_id, mail_from, requested_by, system,
-           campaign_id, created_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           campaign_id, delivery_report, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                    COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))`,
       )
       .run(
@@ -156,6 +158,7 @@ export class MessagesRepo {
         input.requestedBy ?? null,
         input.system ?? 0,
         input.campaignId ?? null,
+        input.deliveryReport ?? 1,
         input.createdAt ?? null,
       );
   }

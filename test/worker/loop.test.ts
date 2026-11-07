@@ -117,6 +117,15 @@ describe('Worker.tick - retencja skracacza', () => {
       { target: 'https://firma.pl/klient/{…}', collapsed: 1, recipients: 2, opens: 0, clicks: 0 },
     ]);
   });
+
+  it('dostawa zdarzenia link.opened traci dane odbiorcy w terminie retencji kodu', async () => {
+    const past = new Date(clock.getTime() - 60_000).toISOString();
+    const payload = JSON.stringify({ event: 'link.opened', campaign: 'oferta-serwisowa', to: '48601000001', target: 'https://firma.pl/oferta/KL-10482' });
+    const id = deps.deliveries.insert({ apiKeyId, event: 'link.opened', payload, url: 'https://crm.firma.pl/hook', createdAt: clock, purgeAfter: past });
+    const worker = new Worker({ ...deps, links: { campaigns: new CampaignsRepo(db), shortLinks: new ShortLinksRepo(db) } }, { now: () => clock, maintenanceMs: 60_000 });
+    await worker.tick();
+    expect(deps.deliveries.get(id)!.payload).not.toMatch(/48601000001|KL-10482/);
+  });
 });
 
 describe('Worker.tick - sprawdzanie wydań', () => {

@@ -5,6 +5,7 @@ import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
 import { deliveryView, integrationLink } from '../views/deliveries.ts';
 import { messagePage, messagesPage, type MessageDetail } from '../views/messages.ts';
+import { parseOffset } from '../../paging.ts';
 
 /** Kampania i liczby krótkich linków wiadomości; brak dla wiadomości bez skróconych linków. */
 function messageLinkRows(deps: AdminDeps, row: MessageRow): NonNullable<MessageDetail['links']> | null {
@@ -33,7 +34,7 @@ export function registerMessageViewRoutes(app: FastifyInstance, deps: AdminDeps,
 
       const status = (request.query.status ?? '').trim() || null;
       const to = (request.query.to ?? '').trim() || null;
-      const offset = Math.max(0, Number.parseInt(request.query.offset ?? '0', 10) || 0);
+      const offset = parseOffset(request.query.offset);
 
       // Pobieramy jeden wiersz ponad stronę, żeby wiedzieć, czy jest następna.
       const rows = deps.messages.list({

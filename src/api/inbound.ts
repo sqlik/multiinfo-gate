@@ -4,6 +4,7 @@ import { authenticate } from './auth.ts';
 import { normalizeSender } from '../text/phone.ts';
 import { ApiError } from './errors.ts';
 import type { ApiDeps } from './server.ts';
+import { parseOffset } from '../paging.ts';
 
 /** Kształt wiadomości przychodzącej na zewnątrz - te same pola, co w webhooku, plus protokół. */
 export function presentInbound(r: InboundRow) {
@@ -37,7 +38,7 @@ export function registerInboundRoutes(app: FastifyInstance, deps: ApiDeps): void
     // Ujemny LIMIT znaczy w SQLite „bez ograniczenia”: wartość spoza zakresu wraca do domyślnej.
     const requested = Number.parseInt(request.query.limit ?? '', 10);
     const limit = Number.isInteger(requested) && requested >= 1 ? Math.min(requested, 200) : 25;
-    const offset = Math.max(Number.parseInt(request.query.offset ?? '0', 10) || 0, 0);
+    const offset = parseOffset(request.query.offset);
 
     // Odczyt nie wymaga subskrypcji - wystarczy dostęp klucza do usługi.
     let serviceIds = auth.allowedServiceIds;

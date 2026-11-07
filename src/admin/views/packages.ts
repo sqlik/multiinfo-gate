@@ -35,6 +35,8 @@ export interface PackageDetail {
   summary: { delivered: number; failed: number; other: number } | null;
   /** Kampania krótkich linków rozsyłki; brak, gdy rozsyłka nie zawiera skróconych linków. */
   campaign?: { id: number; name: string } | null;
+  /** Kliknięcia odbiorców według numeru kolejnego; null dla rozsyłki bez kampanii. */
+  clicks?: Map<number, number> | null;
 }
 
 const stamp = (iso: string | null) => (iso === null ? '-' : warsawStamp(iso));
@@ -102,7 +104,7 @@ export function packagesPage(data: PackagesData): string {
   </div>`;
 }
 
-function recipientRow(r: RecipientRow): string {
+function recipientRow(r: RecipientRow, clicks: Map<number, number> | null): string {
   const status = r.status === null
     ? '<span class="dim">brak raportu</span>'
     : `<span class="st"><span class="dot dot-${statusTone(r.status)}"></span>${esc(statusLabel(r.status))}</span>`;
@@ -115,7 +117,8 @@ function recipientRow(r: RecipientRow): string {
       <td class="txt">${r.text === null ? '<span class="dim">domyślna</span>' : esc(r.text)}</td>
       <td class="m">${r.miId === null ? '<span class="dim">-</span>' : esc(r.miId)}</td>
       <td>${status}</td>
-      <td class="m dim">${mi}</td>
+      <td class="m dim">${mi}</td>${clicks === null ? '' : `
+      <td class="m">${clicks.has(r.seq) ? esc(clicks.get(r.seq)!) : '<span class="dim">-</span>'}</td>`}
       <td class="m dim">${esc(r.statusChangedAt ?? '')}</td>
     </tr>`;
 }
@@ -134,6 +137,7 @@ function summaryPending(p: PackageRow): string {
 
 export function packagePage(d: PackageDetail): string {
   const p = d.row;
+  const clicks = d.clicks ?? null;
   const yes = (v: 0 | 1) => (v === 1 ? 'tak' : 'nie');
 
   const summary = d.summary === null
@@ -210,10 +214,11 @@ export function packagePage(d: PackageDetail): string {
           <th>Treść</th>
           <th style="width: 100px;">Id Multiinfo</th>
           <th style="width: 130px;">Status</th>
-          <th style="width: 120px;">Status Multiinfo</th>
+          <th style="width: 120px;">Status Multiinfo</th>${clicks === null ? '' : `
+          <th style="width: 90px;">Kliknięcia</th>`}
           <th style="width: 150px;">Czas</th>
         </tr>
-        ${d.recipients.map(recipientRow).join('')}
+        ${d.recipients.map((r) => recipientRow(r, clicks)).join('')}
       </table>
     </div>
   </div>`;

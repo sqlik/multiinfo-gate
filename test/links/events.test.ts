@@ -56,6 +56,19 @@ describe('emitLinkOpened', () => {
     expect(s.jobs.depth()).toBe(1);
   });
 
+  it('dostawy zdarzenia otrzymują termin retencji kodu, po którym tracą dane odbiorcy', () => {
+    const s = setup();
+    s.outbound('CRM kampanie', { events: ['link.opened'] });
+    const code = s.addLink({ purgeAfter: '2027-03-05T10:00:00.000Z' });
+    s.click(code);
+    const rows = s.deliveries.listRecent(10);
+    expect(rows).toHaveLength(2);
+    expect(s.deliveries.purgeDetails(new Date('2027-03-05T09:59:59Z'))).toBe(0);
+    expect(s.deliveries.purgeDetails(new Date('2027-03-05T10:00:01Z'))).toBe(2);
+    const payloads = s.deliveries.listRecent(10).map((d) => d.payload).join(' ');
+    expect(payloads).not.toMatch(/48601000001|firma\.pl\/przeglad/);
+  });
+
   it('odbiorca rozsyłki ma messageId null oraz identyfikator rozsyłki i numer kolejny', () => {
     const s = setup();
     const code = s.addLink({ recipientKey: 'pkg_7:3', messageId: null, packageId: 'pkg_7', seq: 3, dest: '48601000003', clientId: 'K-1042' });

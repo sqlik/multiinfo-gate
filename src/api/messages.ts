@@ -8,6 +8,7 @@ import { ApiError } from './errors.ts';
 import { linkFieldsSchema, linkRequest } from './link-fields.ts';
 import type { ApiDeps } from './server.ts';
 import { submitMessages } from './submit.ts';
+import { parseOffset } from '../paging.ts';
 
 /**
  * Schemat body wysyłki. Poza trasą używa go opis API w formacie OpenAPI
@@ -88,7 +89,7 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
     // Ujemny LIMIT znaczy w SQLite „bez ograniczenia”: wartość spoza zakresu wraca do domyślnej.
     const requested = Number.parseInt(request.query.limit ?? '', 10);
     const limit = Number.isInteger(requested) && requested >= 1 ? Math.min(requested, 200) : 25;
-    const offset = Math.max(Number.parseInt(request.query.offset ?? '0', 10) || 0, 0);
+    const offset = parseOffset(request.query.offset);
 
     const rows = deps.messages.list({
       apiKeyId: auth.apiKeyId,

@@ -56,28 +56,36 @@ export function targetPattern(url: string): string {
   return `${pattern}?${query}`;
 }
 
+/** Człon ścieżki do pokazania w panelu: polskie znaki zamiast zapisu `%XX`. */
+function readable(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
 /**
  * Wzorzec adresu indywidualnego po retencji, ostrzejszy od `targetPattern`: zostaje host bez danych
  * logowania i pierwszy człon ścieżki, a reszta ścieżki i całe zapytanie stają się `{…}`. Na przykład
  * `klient/jan-kowalski/przeglad?kod=9` daje `klient/{…}?{…}`. Pierwszy człon z cyfrą albo ze średnikiem
- * i człon jedyny w adresie też stają się `{…}`, ponieważ mogą wskazywać odbiorcę.
+ * i człon jedyny w adresie też stają się `{…}`, ponieważ mogą wskazywać odbiorcę. Adres czyta parser
+ * przeglądarki, dlatego ukośnik odwrotny i dane logowania nie ukryją ścieżki przed wzorcem.
  */
 export function retentionPattern(url: string): string {
-  const [base] = splitHash(url);
-  const q = base.indexOf('?');
-  const beforeQuery = q === -1 ? base : base.slice(0, q);
-  const query = q === -1 ? '' : base.slice(q + 1);
-  const authorityStart = beforeQuery.indexOf('://') + 3;
-  const pathStart = beforeQuery.indexOf('/', authorityStart);
-  const authority = pathStart === -1 ? beforeQuery.slice(authorityStart) : beforeQuery.slice(authorityStart, pathStart);
-  let out = `${beforeQuery.slice(0, authorityStart)}${authority.slice(authority.lastIndexOf('@') + 1)}`;
-  if (pathStart !== -1) {
-    const [first = '', ...rest] = beforeQuery.slice(pathStart + 1).split('/');
-    const restHasData = rest.some((segment) => segment !== '');
-    const keepFirst = first !== '' && !hasDigit(first) && !first.includes(';') && (restHasData || query !== '');
-    if (first === '' && !restHasData) out += '/';
-    else if (!keepFirst) out += `/${PLACEHOLDER}`;
-    else out += `/${first}${restHasData ? `/${PLACEHOLDER}` : rest.length > 0 ? '/' : ''}`;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return PLACEHOLDER;
   }
-  return query === '' ? out : `${out}?${PLACEHOLDER}`;
+  const [first = '', ...rest] = parsed.pathname.slice(1).split('/');
+  const restHasData = rest.some((segment) => segment !== '');
+  const hasQuery = parsed.search !== '';
+  const keepFirst = first !== '' && !hasDigit(first) && !first.includes(';') && (restHasData || hasQuery);
+  let path: string;
+  if (first === '' && !restHasData) path = '/';
+  else if (!keepFirst) path = `/${PLACEHOLDER}`;
+  else path = `/${readable(first)}${restHasData ? `/${PLACEHOLDER}` : rest.length > 0 ? '/' : ''}`;
+  return `${parsed.protocol}//${parsed.host}${path}${hasQuery ? `?${PLACEHOLDER}` : ''}`;
 }

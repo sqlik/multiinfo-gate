@@ -4,12 +4,13 @@ import type { CampaignRow } from '../store/campaigns.ts';
 import { authenticate } from './auth.ts';
 import { ApiError } from './errors.ts';
 import type { ApiDeps } from './server.ts';
+import { parseOffset } from '../paging.ts';
 
 /** Ujemny LIMIT znaczy w SQLite „bez ograniczenia”: wartość spoza zakresu wraca do domyślnej. */
 function page(query: Record<string, string>, fallback: number): { limit: number; offset: number } {
   const requested = Number.parseInt(query.limit ?? '', 10);
   const limit = Number.isInteger(requested) && requested >= 1 ? Math.min(requested, 200) : fallback;
-  const offset = Math.max(Number.parseInt(query.offset ?? '0', 10) || 0, 0);
+  const offset = parseOffset(query.offset);
   return { limit, offset };
 }
 
@@ -22,7 +23,7 @@ const listItem = (c: CampaignRow) => ({
 export function registerCampaignRoutes(app: FastifyInstance, deps: ApiDeps): void {
   app.get<{ Querystring: Record<string, string> }>('/v1/campaigns', async (request) => {
     const auth = authenticate(request.headers.authorization, deps.apiKeys);
-    const { rows, hasMore } = deps.campaigns.list({ apiKeyId: auth.apiKeyId, ...page(request.query, 25) });
+    const { rows, hasMore } = deps.campaigns.list({ apiKeyId: auth.apiKeyId, order: 'created', ...page(request.query, 25) });
     return { data: rows.map(listItem), hasMore };
   });
 

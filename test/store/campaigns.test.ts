@@ -57,6 +57,14 @@ describe('CampaignsRepo', () => {
     expect(campaigns.byName(apiKeyId, NAME)!.id).toBe(id);
   });
 
+  it('wysyłka z wcześniejszym terminem przesuwa pierwszą wysyłkę, a nie ostatnią', () => {
+    const { campaigns, apiKeyId } = setup();
+    // Rozsyłka z terminem za trzy dni, a potem pojedynczy SMS wysłany od razu.
+    const id = campaigns.open(apiKeyId, NAME, LATER);
+    campaigns.open(apiKeyId, NAME, AT);
+    expect(campaigns.get(id)).toMatchObject({ firstSentAt: AT.toISOString(), lastSentAt: LATER.toISOString() });
+  });
+
   it('kolejna wysyłka do kampanii z wyłączonymi linkami zachowuje znacznik', () => {
     const { campaigns, apiKeyId } = setup();
     const id = campaigns.open(apiKeyId, NAME, AT);
@@ -151,8 +159,17 @@ describe('CampaignsRepo', () => {
       deliveryReport: 0, encoding: 'gsm', multipart: 0, createdAt: AT.toISOString(), campaignId: id,
     }, recipients);
     db.prepare("UPDATE package_recipients SET status = 'delivered'").run();
-    // Pojedyncze SMS-y bramka zawsze odpytuje o stan, więc kampania z nimi ma wynik doręczeń.
+    // Pojedyncze SMS-y z raportem doręczenia dają kampanii podstawę do liczenia doręczeń.
     expect(campaigns.delivered(id)).toEqual({ delivered: 3, reported: true });
+  });
+
+  it('pojedynczy SMS bez raportu doręczenia nie daje podstaw do liczenia doręczeń', () => {
+    const { campaigns, messages, apiKeyId, accountId } = setup();
+    const id = campaigns.open(apiKeyId, NAME, AT);
+    messages.insert(messageInput({ id: 'msg_1', apiKeyId, accountId, campaignId: id, deliveryReport: 0 }));
+    expect(campaigns.delivered(id)).toEqual({ delivered: 0, reported: false });
+    messages.insert(messageInput({ id: 'msg_2', apiKeyId, accountId, campaignId: id }));
+    expect(campaigns.delivered(id)).toEqual({ delivered: 0, reported: true });
   });
 
   it('bez raportu doręczenia w żadnej wysyłce kafelek nie ma podstaw do liczenia', () => {

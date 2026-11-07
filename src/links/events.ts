@@ -19,8 +19,11 @@ export function emitLinkOpened(deps: LinkOpenedDeps, link: ShortLinkRow, campaig
     to: link.dest, clientId: link.clientId, target: link.target, shortUrl: shortUrl(domain.domain, link.code, false),
     openedAt: now.toISOString(),
   };
-  emitWebhook(deps, link.apiKeyId, 'link.opened', payload, now);
+  // Dostawa zawiera dane odbiorcy, dlatego traci je w terminie retencji kodu (spec 10).
+  emitWebhook(deps, link.apiKeyId, 'link.opened', payload, now, { purgeAfter: link.purgeAfter });
   if (deps.integrationEmit) {
-    emitIntegrations(deps.integrationEmit, link.apiKeyId, 'link.opened', payload, now, link.messageId === null ? {} : { messageId: link.messageId });
+    emitIntegrations(deps.integrationEmit, link.apiKeyId, 'link.opened', payload, now, {
+      purgeAfter: link.purgeAfter, ...(link.messageId === null ? {} : { messageId: link.messageId }),
+    });
   }
 }

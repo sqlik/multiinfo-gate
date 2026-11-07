@@ -69,7 +69,7 @@ const get = (url: string, key = apiKey) => app.inject({ method: 'GET', url, head
 const seed = () => seedSpringCampaign(db, { apiKeyId, accountId, domain: 'l.firma.pl', start: START });
 
 describe('GET /v1/campaigns', () => {
-  it('lista wyłącznie kampanii klucza, od ostatniej wysyłki, z liczbami', async () => {
+  it('lista wyłącznie kampanii klucza, od najnowszej kampanii, z liczbami', async () => {
     seed();
     campaigns.open(otherKeyId, 'serwisowa', NOW);
     campaigns.open(apiKeyId, 'cennik-zima', new Date(START.getTime() - 86_400_000));
@@ -77,14 +77,33 @@ describe('GET /v1/campaigns', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       data: [
+        expect.objectContaining({ name: 'cennik-zima', sent: 0 }),
         {
           name: SPRING, firstSentAt: START.toISOString(), lastSentAt: START.toISOString(), sent: SENT, opens: 312, clicks: 455, bots: 41,
           linksDisabledAt: null,
         },
-        expect.objectContaining({ name: 'cennik-zima', sent: 0 }),
       ],
       hasMore: false,
     });
+  });
+
+  it('kolejna wysyłka do kampanii między stronami nie powoduje pominięcia ani powtórzenia kampanii', async () => {
+    for (const name of ['C', 'B', 'A']) campaigns.open(apiKeyId, name, START);
+    const names = async (offset: number) => (await get(`/v1/campaigns?limit=1&offset=${offset}`)).json().data.map((c: { name: string }) => c.name);
+    const seen = [...await names(0)];
+    // Aplikacja pobiera kolejne strony, a w tym czasie operator wysyła kolejną falę kampanii C.
+    campaigns.open(apiKeyId, 'C', NOW);
+    seen.push(...await names(1), ...await names(2));
+    expect(seen.sort()).toEqual(['A', 'B', 'C']);
+  });
+
+  it('przesunięcie spoza zakresu liczb całkowitych daje pustą stronę, a nie błąd 500', async () => {
+    seed();
+    const huge = '99999999999999999999';
+    for (const url of [`/v1/campaigns?offset=${huge}`, `/v1/campaigns/${SPRING}?offset=${huge}`, `/v1/messages?offset=${huge}`, `/v1/inbound?offset=${huge}`]) {
+      const res = await get(url);
+      expect(res.statusCode, url).toBe(200);
+    }
   });
 
   it('stronicowanie jak w GET /v1/messages', async () => {

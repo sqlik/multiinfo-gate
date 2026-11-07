@@ -177,7 +177,7 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
   let codesCount = 0;
   let linksDisabled = false;
   deps.packages.transaction(() => {
-    const opened = campaignName === null ? null : openCampaign(deps, auth.apiKeyId, campaignName, now);
+    const opened = campaignName === null ? null : openCampaign(deps, auth.apiKeyId, campaignName, linkStart, now);
     const campaignId = opened?.id ?? null;
     linksDisabled = opened?.linksDisabled ?? false;
     // Treść wspólna z krótkimi linkami staje się treścią indywidualną każdego odbiorcy, a Multiinfo

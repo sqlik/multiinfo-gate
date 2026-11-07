@@ -211,11 +211,32 @@ describe('Kampanie: wyłączenie i włączenie linków', () => {
   });
 });
 
+describe('Stronicowanie list panelu', () => {
+  it('przesunięcie spoza zakresu liczb całkowitych daje pustą stronę, a nie błąd 500', async () => {
+    seed();
+    for (const path of ['/kampanie', '/wiadomosci', '/rozsylki', '/dziennik']) {
+      const res = await page(`${path}?offset=99999999999999999999`);
+      expect(res.statusCode, path).toBe(200);
+    }
+  });
+});
+
 describe('Kampania w szczegółach rozsyłki i wiadomości', () => {
   it('rozsyłka: wiersz „Kampania” z odnośnikiem', async () => {
     const { campaignId } = seed();
     const res = await page(`/rozsylki/${SPRING_PACKAGE}`);
     expect(res.body).toContain(`<div>Kampania</div><div><a href="/kampanie/${campaignId}">${SPRING}</a></div>`);
+  });
+
+  it('rozsyłka: tabela odbiorców pokazuje liczbę kliknięć każdego odbiorcy', async () => {
+    seed();
+    const clicks = (seq: number) => (h.db.prepare('SELECT SUM(clicks) AS n FROM short_links WHERE package_id = ? AND seq = ?')
+      .get(SPRING_PACKAGE, seq) as { n: number }).n;
+    const res = await page(`/rozsylki/${SPRING_PACKAGE}`);
+    const table = res.body.slice(res.body.indexOf('<div class="lab">Odbiorcy</div>'));
+    expect(table).toContain('<th style="width: 90px;">Kliknięcia</th>');
+    const row = (seq: number) => table.slice(table.indexOf(`>${dest(seq)}<`), table.indexOf('</tr>', table.indexOf(`>${dest(seq)}<`)));
+    for (const seq of [1, 2]) expect(row(seq)).toContain(`<td class="m">${clicks(seq)}</td>`);
   });
 
   it('wiadomość: kampania, liczba kliknięć i pierwsze otwarcie', async () => {

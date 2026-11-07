@@ -124,5 +124,12 @@ CREATE INDEX idx_short_links_domain ON short_links(domain_id);
 ALTER TABLE messages ADD COLUMN campaign_id INTEGER REFERENCES campaigns(id);
 ALTER TABLE packages ADD COLUMN campaign_id INTEGER REFERENCES campaigns(id);
 ALTER TABLE package_recipients ADD COLUMN links INTEGER NOT NULL DEFAULT 0;
+-- Wiadomość bez raportu doręczenia zostaje w stanie „wysłana”, dlatego nie daje kampanii podstaw do liczenia doręczeń.
+ALTER TABLE messages ADD COLUMN delivery_report INTEGER NOT NULL DEFAULT 1;
 CREATE INDEX idx_messages_campaign ON messages(campaign_id);
 CREATE INDEX idx_packages_campaign ON packages(campaign_id);
+
+-- Dostawa zdarzenia link.opened zawiera numer odbiorcy i adres docelowy, dlatego w terminie retencji
+-- kodu traci te pola tak jak szczegóły kampanii.
+ALTER TABLE webhook_deliveries ADD COLUMN purge_after TEXT;
+CREATE INDEX idx_webhook_deliveries_purge ON webhook_deliveries(purge_after) WHERE purge_after IS NOT NULL;

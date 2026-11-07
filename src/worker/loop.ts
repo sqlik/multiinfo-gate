@@ -106,10 +106,12 @@ export class Worker {
 
   /**
    * Retencja skracacza: kody z minionym terminem znikają, kampania bez kodów zostaje oznaczona jako
-   * kampania z usuniętymi szczegółami, a linki indywidualne scalają się według wzorca. Liczby
-   * kampanii pozostają bez zmian. Usuwanie po indeksie kosztuje niewiele, dlatego krok działa co turę.
+   * kampania z usuniętymi szczegółami, a linki indywidualne scalają się według wzorca. Dostawy zdarzenia
+   * link.opened tracą dane odbiorcy w tym samym terminie. Liczby kampanii pozostają bez zmian. Usuwanie
+   * po indeksie kosztuje niewiele, dlatego krok działa co turę.
    */
   private purgeLinks(now: Date): void {
+    this.deps.deliveries.purgeDetails(now);
     const links = this.deps.links;
     if (links === undefined) return;
     for (const campaignId of links.shortLinks.purge(now)) {

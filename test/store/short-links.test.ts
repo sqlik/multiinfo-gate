@@ -139,13 +139,17 @@ describe('ShortLinksRepo', () => {
     expect(links.get('kod0002')!.disabledAt).toBeNull();
   });
 
-  it('podaje kody wiadomości i odbiorcy rozsyłki', () => {
+  it('podaje kody wiadomości i kliknięcia odbiorców rozsyłki', () => {
     const { links, input } = setup();
     links.insert(input('kod0001'));
     links.insert(input('kod0002', { recipientKey: 'pkg_1#1', messageId: null, packageId: 'pkg_1', seq: 1 }));
     links.insert(input('kod0003', { recipientKey: 'pkg_1#2', messageId: null, packageId: 'pkg_1', seq: 2 }));
+    links.insert(input('kod0004', { recipientKey: 'pkg_1#2', messageId: null, packageId: 'pkg_1', seq: 2 }));
+    links.click('kod0003', AT, false);
+    links.click('kod0004', AT, false);
+    links.click('kod0004', AT, true);
     expect(links.forMessage('msg_1').map((l) => l.code)).toEqual(['kod0001']);
-    expect(links.forPackageRecipient('pkg_1', 2).map((l) => l.code)).toEqual(['kod0003']);
+    expect(links.clicksByPackage('pkg_1')).toEqual(new Map([[1, 0], [2, 2]]));
   });
 
   it('listuje odbiorców z otwarciem od najnowszego kliknięcia', () => {

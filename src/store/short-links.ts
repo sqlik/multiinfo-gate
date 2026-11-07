@@ -111,8 +111,11 @@ export class ShortLinksRepo {
     return (this.db.prepare('SELECT * FROM short_links WHERE message_id = ? ORDER BY rowid').all(messageId) as Raw[]).map(toRow);
   }
 
-  forPackageRecipient(packageId: string, seq: number): ShortLinkRow[] {
-    return (this.db.prepare('SELECT * FROM short_links WHERE package_id = ? AND seq = ? ORDER BY rowid').all(packageId, seq) as Raw[]).map(toRow);
+  /** Kliknięcia odbiorców rozsyłki według numeru kolejnego; odbiorca bez kodów albo po retencji nie ma wpisu. */
+  clicksByPackage(packageId: string): Map<number, number> {
+    const rows = this.db.prepare('SELECT seq, SUM(clicks) AS clicks FROM short_links WHERE package_id = ? GROUP BY seq')
+      .all(packageId) as Array<{ seq: number; clicks: number }>;
+    return new Map(rows.map((r) => [r.seq, r.clicks]));
   }
 
   /** Kody rozsyłki w skrócie, do odpowiedzi na powtórzone żądanie; brak kodów daje `undefined`. */

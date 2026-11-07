@@ -66,20 +66,21 @@ function active(deps: ClickDeps, link: ShortLinkRow, now: Date): boolean {
   return link.messageId === null || deps.messages.get(link.messageId)?.status !== 'cancelled';
 }
 
-/** Liczniki jednego wejścia; zwraca true przy pierwszym otwarciu kodu przez człowieka. */
+/**
+ * Liczniki jednego wejścia; zwraca true przy pierwszym otwarciu adresu docelowego przez odbiorcę (człowieka).
+ * Drugie wystąpienie tego samego linku w SMS-ie ma własny kod, ale nie jest nowym otwarciem.
+ */
 function count(deps: ClickDeps, link: ShortLinkRow, campaignId: number, automated: boolean, now: Date): boolean {
   const { firstOpen } = deps.shortLinks.click(link.code, now, automated);
   deps.campaigns.countClick(campaignId, now.toISOString().slice(0, 13), automated);
   if (automated) return false;
   deps.campaigns.countTargetClick(campaignId, link.target);
-  if (firstOpen) {
-    // Otwarcie kampanii i adresu docelowego liczy się raz na odbiorcę, także gdy ten sam link wystąpił w SMS-ie dwa razy.
-    if (!deps.shortLinks.recipientOpenedOther(campaignId, link.recipientKey, link.code)) deps.campaigns.countOpen(campaignId);
-    if (!deps.shortLinks.recipientOpenedOther(campaignId, link.recipientKey, link.code, link.target)) {
-      deps.campaigns.countTargetOpen(campaignId, link.target);
-    }
-  }
-  return firstOpen;
+  if (!firstOpen) return false;
+  // Otwarcie kampanii i adresu docelowego liczy się raz na odbiorcę, także gdy ten sam link wystąpił w SMS-ie dwa razy.
+  if (!deps.shortLinks.recipientOpenedOther(campaignId, link.recipientKey, link.code)) deps.campaigns.countOpen(campaignId);
+  if (deps.shortLinks.recipientOpenedOther(campaignId, link.recipientKey, link.code, link.target)) return false;
+  deps.campaigns.countTargetOpen(campaignId, link.target);
+  return true;
 }
 
 export function handleClick(deps: ClickDeps, host: string | null, code: string | null, automated: boolean, now: Date): ClickResult {
@@ -94,8 +95,8 @@ export function handleClick(deps: ClickDeps, host: string | null, code: string |
   if (domain.enabled !== 1 || campaign === undefined || !active(deps, link, now)) return { kind: 'expired', domain, status: 410 };
 
   const location = locationHeader(link.utm === 1 ? withUtm(link.target, campaign.name) : link.target);
-  const firstOpen = deps.transaction(() => count(deps, link, campaign.id, automated, now));
-  if (firstOpen) {
+  const targetOpened = deps.transaction(() => count(deps, link, campaign.id, automated, now));
+  if (targetOpened) {
     try {
       deps.opened(link, campaign, domain, now);
     } catch (error) {

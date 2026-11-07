@@ -159,6 +159,8 @@ describe('handleClick - liczenie wejść', () => {
     human(f, second);
     expect(f.target('https://firma.pl/przeglad')).toMatchObject({ recipients: 1, opens: 1, clicks: 2 });
     expect(f.campaign()).toMatchObject({ opens: 1, clicks: 2 });
+    // Zdarzenie „link otwarty” dotyczy odbiorcy i adresu docelowego, dlatego drugie wystąpienie go nie wywołuje.
+    expect(f.opened.map((o) => o.code)).toEqual([first]);
   });
 
   it('otwarcia różnych odbiorców liczą się osobno', () => {

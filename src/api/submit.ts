@@ -206,7 +206,7 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
       }
       deps.messages.insert({
         id, apiKeyId: auth.apiKeyId, accountId: auth.accountId, serviceId, dest,
-        body: account.storeContent ? text : null, bodyHash: hash,
+        body: account.storeContent ? text : null, bodyHash: hash, deliveryReport: deliveryReport ? 1 : 0,
       encoding: measurement.encoding, parts: segmentation.parts, slots: measurement.slots,
       orig: orig ?? null, costCenter: input.costCenter ?? null,
       validTo: validTo?.toISOString() ?? null,

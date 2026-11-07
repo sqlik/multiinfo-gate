@@ -4,6 +4,7 @@ import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
 import { integrationLink } from '../views/deliveries.ts';
 import { packagePage, packagesPage } from '../views/packages.ts';
+import { parseOffset } from '../../paging.ts';
 
 const PAGE_SIZE = 25;
 
@@ -20,7 +21,7 @@ const RECIPIENTS_SHOWN = 200;
 export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps, render: Renderer): void {
   app.get<{ Querystring: { offset?: string } }>('/rozsylki', async (request, reply) => {
     reply.type('text/html; charset=utf-8');
-    const offset = Math.max(0, Number.parseInt(request.query.offset ?? '0', 10) || 0);
+    const offset = parseOffset(request.query.offset);
     // Jeden wiersz ponad stronę, żeby wiedzieć, czy jest następna.
     const rows = deps.packages.list({ limit: PAGE_SIZE + 1, offset });
 
@@ -56,6 +57,7 @@ export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps,
         shown: RECIPIENTS_SHOWN,
         summary: row.reportStatus === 'ready' ? deps.packages.recipientSummary(row.id) : null,
         campaign: campaignLink(deps, row.campaignId),
+        clicks: row.campaignId === null ? null : deps.shortLinks.clicksByPackage(row.id),
       }),
     });
   });

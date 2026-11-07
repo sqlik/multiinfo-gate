@@ -392,12 +392,14 @@ jest średnik, a wiersz nagłówka zawiera kolumny
 `numer;identyfikator_klienta;pierwsze_otwarcie;ostatnie_klikniecie;klikniecia;linki`.
 
 Szczegóły rozsyłki i wiadomości na ekranach **Rozsyłki** i **Wiadomości** zawierają wiersz
-„Kampania” z odnośnikiem do szczegółów kampanii.
+„Kampania” z odnośnikiem do szczegółów kampanii. Tabela odbiorców rozsyłki zawiera dodatkowo
+kolumnę „Kliknięcia” z liczbą kliknięć każdego odbiorcy.
 
 ### 9.3. Doręczenia w kampanii
 
 Kafelek „Doręczone” korzysta z raportów doręczenia. Raport rozsyłki bramka pobiera zaraz po jej
-zakończeniu, a dla rozsyłki z krótkimi linkami ponownie po 24 godzinach. Drugi raport obejmuje
+zakończeniu, a dla rozsyłki z krótkimi linkami i raportem doręczenia ponownie po 24 godzinach.
+Drugi raport obejmuje
 potwierdzenia doręczenia, które operator przekazał później, na przykład od telefonów wyłączonych
 w chwili wysyłki. Gdy żadna wysyłka kampanii nie zamawiała raportu doręczenia, kafelek pokazuje
 napis „brak raportu”.
@@ -435,7 +437,8 @@ przycisk **Wyłącz linki** w kampanii albo wyłączenie domeny skracacza.
 Aplikacja odczytuje kampanie wywołaniami `GET /v1/campaigns` i `GET /v1/campaigns/{nazwa}`.
 Odczyt wiadomości i rozsyłki zawiera blok `links` z kampanią, liczbą otwarć i kliknięć. Zdarzenie
 `link.opened` informuje aplikację o pierwszym wejściu odbiorcy w dany link, z pominięciem
-automatów. Kolejne kliknięcia tego samego odbiorcy w ten sam link nie wywołują zdarzenia.
+automatów. Kolejne kliknięcia tego samego odbiorcy w link do tego samego adresu nie wywołują
+zdarzenia.
 Zdarzenie trafia na adres webhooka klucza i do integracji wychodzących z wybranym zdarzeniem
 „link otwarty”. Opis wywołań i zdarzenia znajdziesz w artykule [API dla aplikacji](api.md),
 w rozdziałach 5c i 6.2.
@@ -474,6 +477,7 @@ strony „Link wygasł” z nazwą wyświetlaną domeny.
 |---|---|
 | krótki kod i adres docelowy | do 30 dni po wygaśnięciu linku |
 | szczegóły otwarć i kliknięć odbiorców | do 30 dni po wygaśnięciu linku |
+| numer, identyfikator klienta i adresy w zapisie dostaw zdarzenia „link otwarty” | do 30 dni po wygaśnięciu linku |
 | liczby zbiorcze kampanii: wysłane, doręczone, otwarcia, kliknięcia, automaty, wyniki linków | bez ograniczenia |
 
 Po okresie przechowywania szczegóły kampanii pokazują wyłącznie liczby zbiorcze i informację, że

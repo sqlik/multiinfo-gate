@@ -192,11 +192,11 @@ export function materialize(p: PreparedText, codes: readonly string[]): string {
   return text;
 }
 
-/** `linksDisabled`: kampania ma wyłączone linki, dlatego kody tej wysyłki powstają wyłączone. */
+/** `at`: termin wysyłki. `linksDisabled`: kampania ma wyłączone linki, dlatego kody tej wysyłki powstają wyłączone. */
 export function openCampaign(
-  deps: { campaigns: Pick<CampaignsRepo, 'open' | 'get'> }, apiKeyId: number, name: string, now: Date,
+  deps: { campaigns: Pick<CampaignsRepo, 'open' | 'get'> }, apiKeyId: number, name: string, at: Date, now: Date = at,
 ): { id: number; linksDisabled: boolean } {
-  const id = deps.campaigns.open(apiKeyId, name, now);
+  const id = deps.campaigns.open(apiKeyId, name, at, now);
   return { id, linksDisabled: (deps.campaigns.get(id)?.linksDisabledAt ?? null) !== null };
 }
 

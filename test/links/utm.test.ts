@@ -100,8 +100,13 @@ describe('retentionPattern', () => {
     expect(retentionPattern('https://firma.pl/jan-kowalski')).toBe('https://firma.pl/{…}');
   });
 
+  it('czyta ukośnik odwrotny jak przeglądarka, dlatego ścieżka zapisana z nim też traci dane odbiorcy', () => {
+    expect(retentionPattern('https://firma.pl\\klient\\jan-kowalski')).toBe('https://firma.pl/klient/{…}');
+    expect(retentionPattern('HTTPS://FIRMA.PL\\oferta?kod=9')).toBe('https://firma.pl/oferta?{…}');
+  });
+
   it('pozostawia adres bez ścieżki', () => {
-    expect(retentionPattern('https://firma.pl')).toBe('https://firma.pl');
+    expect(retentionPattern('https://firma.pl')).toBe('https://firma.pl/');
     expect(retentionPattern('https://firma.pl/')).toBe('https://firma.pl/');
     expect(retentionPattern('https://firma.pl/?kod=9')).toBe('https://firma.pl/?{…}');
   });
