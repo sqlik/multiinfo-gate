@@ -407,9 +407,10 @@ powiadomienie według reguł z rozdziału 9.
 Integracja z SMS-a wybiera zdarzenia, na które reaguje: `message.received` (odebrany SMS),
 statusy wysyłki `message.sent`, `message.delivered` i `message.failed` oraz od wersji 1.11
 `link.opened`, w formularzu „link otwarty”. Zdarzenie `link.opened` informuje o pierwszym wejściu
-odbiorcy w krótki link skracacza z artykułu [Skracacz linków i kampanie](skracacz.md). Na
-przykład biuro handlowe otrzymuje w Slacku wiadomość, gdy klient otworzy link do oferty. Reaguje tylko na
-zdarzenia z usług, do których klucz ma dostęp. Włączona integracja nasłuchująca
+odbiorcy w krótki link skracacza z artykułu [Skracacz linków i kampanie](skracacz.md). Integracja
+reaguje tylko na zdarzenia z usług, do których klucz ma dostęp. Zdarzenie „link otwarty” wybiera
+się w trybie zaawansowanym formularza albo w integracji „Własne”. Na przykład biuro handlowe
+otrzymuje wtedy w Slacku wiadomość, gdy klient otworzy link do oferty. Włączona integracja nasłuchująca
 `message.received` sama uruchamia odbiór z usług klucza. Nie trzeba zaznaczać odbioru przy
 kluczu ani podawać adresu webhooka.
 
@@ -872,7 +873,8 @@ o status nie będą realizowane, wraz z ostatnim znanym statusem każdego numeru
 
 Gdy klucz integracji skraca linki, treść SMS-a w raporcie zawiera krótki link z kodem zastępczym
 `0000000`, na przykład `https://l.firma.pl/0000000`. Ten sam kod pokazuje podgląd przycisku
-**Sprawdź** w formularzu integracji. Każdy odbiorca otrzymuje własny kod, a raport nie zawiera
+**Sprawdź szablon** w formularzu Mail2SMS i webhooka oraz przycisku **Sprawdź** w formularzu
+SMS-a do grupy. Każdy odbiorca otrzymuje własny kod, a raport nie zawiera
 kodów odbiorców, ponieważ wejście nadawcy liczyłoby się jako otwarcie przez odbiorcę. Link z kodem
 zastępczym prowadzi do strony „Link wygasł”.
 

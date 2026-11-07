@@ -107,7 +107,7 @@ Bramka SMS między Twoimi aplikacjami a API Multiinfo (Plus, Polkomtel).
 
 - Panel: http://${IP}:8081 (tunel SSH przez hosta albo HTTPS przez odwrotne proxy - instrukcja, punkt 9.2)
 - API dla aplikacji: http://${IP}:8080 (z sieci wprost albo tunelem SSH przez hosta - instrukcja, punkt 9.3)
-- Krótkie linki skracacza: port 8082 dla serwera pośredniczącego domen skracacza (artykuł „Skracacz linków”)
+- Krótkie linki skracacza: port 8082, wystawiany przez serwer pośredniczący pod domeną skracacza (instrukcja, punkt 9.7)
 - Dane pierwszego konta panelu: \`/root/multiinfo-gate.creds\` w kontenerze
 - Konfiguracja: \`/etc/multiinfo-gate/env\`, dane i kopie: \`/var/lib/multiinfo-gate\`
 - Aktualizacja do najnowszego wydania: polecenie \`update\` w kontenerze

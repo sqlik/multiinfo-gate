@@ -1,5 +1,4 @@
-import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { PROBLEM_ANCHORS } from '../src/docs-links.ts';
 
@@ -21,7 +20,8 @@ describe('kotwice artykułu Rozwiązywanie problemów', () => {
 });
 
 describe('artykuł Skracacz linków', () => {
-  const sources = execSync('git ls-files src', { encoding: 'utf8' }).trim().split('\n').filter((f) => f.endsWith('.ts'));
+  // Test działa także w kopii bez historii git, na przykład w archiwum wydania.
+  const sources = readdirSync('src', { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.ts')).map((f) => `src/${f}`);
   const fromPanel = sources.flatMap((f) => [...readFileSync(f, 'utf8').matchAll(/\$\{LINKS_DOCS_URL\}#([a-z0-9-]+)/g)].map((m) => m[1]));
   const docs = ['docs/uruchomienie.md', 'docs/api.md', 'docs/index.md', 'docs/problemy.md', 'docs/integracje.md', 'docs/power-automate.md'];
   const fromDocs = docs.flatMap((f) => [...readFileSync(f, 'utf8').matchAll(/skracacz\.md#([a-z0-9-]+)/g)].map((m) => m[1]));

@@ -111,7 +111,23 @@ describe('Skracacz linków: formularz domeny', () => {
     expect(res.body).toContain('CNAME');
     expect(res.body).toContain('https://sqlik.github.io/multiinfo-gate/skracacz/');
     expect(res.body).toContain('action="/skracacz"');
+    expect(res.body).toContain('port krótkich linków bramki z certyfikatem HTTPS');
+    expect(res.body).toContain('w artykule „Skracacz linków i kampanie”');
     plainText(res.body);
+  });
+
+  it('komunikaty sprawdzenia domeny i panel kluczy mówią o porcie krótkich linków i elemencie „Klucze API”', async () => {
+    const { checkMessage } = await import('../../src/admin/views/links.ts');
+    const texts = [
+      checkMessage('l.firma.pl', 'connect', ''), checkMessage('l.firma.pl', 'response', 'token'), checkMessage('l.firma.pl', 'response', '404'),
+    ];
+    for (const t of texts) {
+      expect(t).toContain('port krótkich linków');
+      expect(t).not.toContain('przekierowań');
+    }
+    const id = h.linkDomains.create({ domain: 'l.firma.pl', displayName: 'Firma Serwis', homeUrl: null, bareLinks: false }, new Date());
+    const body = (await page(`/skracacz/${id}`)).body;
+    expect(body).toContain('Domenę przypisuje się do klucza w sekcji „Skracanie linków” formularza klucza, w elemencie „Klucze API”.');
   });
 
   it('zapis tworzy domenę niesprawdzoną i prowadzi do jej strony', async () => {

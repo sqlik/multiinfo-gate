@@ -126,16 +126,16 @@ export function checkMessage(domain: string, step: DomainCheckStep, detail: stri
       return `Nie można ustalić adresu domeny ${domain}. Sprawdź u dostawcy DNS rekord A albo CNAME tej domeny.`;
     case 'connect':
       return `Bramka nie może połączyć się z adresem https://${domain}. Sprawdź, czy serwer pośredniczący wystawia port `
-        + 'przekierowań pod tą domeną i czy zapora przepuszcza ruch na porcie 443. W sieci bez pętli zwrotnej NAT serwer '
+        + 'krótkich linków pod tą domeną i czy zapora przepuszcza ruch na porcie 443. W sieci bez pętli zwrotnej NAT serwer '
         + 'nie może połączyć się z własnym adresem publicznym. Sprawdzenie kończy się wtedy tym błędem, chociaż linki mogą działać u odbiorców.';
     case 'tls':
       return `Certyfikat HTTPS domeny ${domain} jest nieważny albo nie obejmuje tej domeny. Sprawdź certyfikat na serwerze pośredniczącym.`;
     case 'response':
       return detail === 'token'
         ? `Pod adresem domeny ${domain} odpowiada inny serwer albo inna instancja bramki. Sprawdź, czy serwer pośredniczący `
-          + 'kieruje tę domenę na port przekierowań tej bramki.'
+          + 'kieruje tę domenę na port krótkich linków tej bramki.'
         : `Serwer pod adresem domeny ${domain} odpowiedział kodem ${detail} zamiast tokenu sprawdzenia. Sprawdź, czy serwer `
-          + 'pośredniczący kieruje tę domenę na port przekierowań bramki, a nie na panel albo API.';
+          + 'pośredniczący kieruje tę domenę na port krótkich linków bramki, a nie na panel albo API.';
   }
 }
 
@@ -174,7 +174,7 @@ function checkPanel(row: LinkDomainRow): string {
 
 function keysPanel(keys: Array<{ id: number; name: string }>): string {
   const body = keys.length === 0
-    ? '<div class="dim">Domena nie jest przypisana do żadnego klucza. Przypisanie wykonuje się w sekcji „Skracanie linków” formularza klucza w „Klucze API”.</div>'
+    ? '<div class="dim">Domena nie jest przypisana do żadnego klucza. Domenę przypisuje się do klucza w sekcji „Skracanie linków” formularza klucza, w elemencie „Klucze API”.</div>'
     : `<ul style="margin: 0; padding-left: 18px;">${keys.map((k) => `<li><a href="/klucze/${esc(k.id)}/edytuj">${esc(k.name)}</a></li>`).join('')}</ul>`;
   return `<div class="panel">
       <div class="panel-h"><div class="lab">Klucze API</div></div>
@@ -211,8 +211,8 @@ function dnsGuide(): string {
   return `<div class="hint" style="font-size: 12.5px; line-height: 1.55;">
       Przed dodaniem domeny skieruj ją u dostawcy DNS na serwer bramki. Domena główna, na przykład firma-link.pl, wymaga
       rekordu A z publicznym adresem serwera. Subdomena, na przykład l.firma.pl, może zamiast niego używać rekordu CNAME
-      z nazwą serwera. Serwer pośredniczący wystawia pod tą domeną port przekierowań bramki z certyfikatem HTTPS.
-      Opis znajdziesz w <a href="${LINKS_DOCS_URL}" target="_blank" rel="noopener noreferrer">dokumentacji, w artykule „Skracacz linków”</a>.
+      z nazwą serwera. Serwer pośredniczący wystawia pod tą domeną port krótkich linków bramki z certyfikatem HTTPS.
+      Opis znajdziesz w <a href="${LINKS_DOCS_URL}" target="_blank" rel="noopener noreferrer">dokumentacji, w artykule „Skracacz linków i kampanie”</a>.
     </div>`;
 }
 

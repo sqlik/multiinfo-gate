@@ -612,6 +612,10 @@ describe('klucz: sekcja „Skracanie linków”', () => {
     expect(res.body).toContain('data-show="linkMode!=off"');
     expect(res.body).toContain('https://sqlik.github.io/multiinfo-gate/skracacz/#obowiazkowa-lista-domen-docelowych');
     expect(res.body).not.toMatch(/[\u2013\u2014]/);
+    // Administrator pracuje w panelu: podpowiedzi opisują wybór wysyłającego bez nazw pól API.
+    const section = res.body.slice(res.body.indexOf('id="linkMode"'), res.body.indexOf('name="linkUtm"'));
+    expect(section).not.toMatch(/shortenLinks|linkDomain\b|linkValidityDays\b(?!")/);
+    expect(section).toContain('w API albo w akcji Power Automate');
   });
 
   it('bez domen skracacza formularz odsyła do elementu „Skracacz linków”', async () => {

@@ -9,8 +9,8 @@ export type ProviderResponse =
 export type ErrorKind = 'transient' | 'permanent' | 'certificate' | 'uncertain';
 
 export class ProviderError extends Error {
-  constructor(readonly code: number, message: string, readonly kind: ErrorKind) {
-    super(message || `Multiinfo zwróciło kod ${code}`);
+  constructor(readonly code: number, message: string, readonly kind: ErrorKind, options?: ErrorOptions) {
+    super(message || `Multiinfo zwróciło kod ${code}`, options);
     this.name = 'ProviderError';
   }
 }

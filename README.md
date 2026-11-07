@@ -65,10 +65,11 @@ otrzymuje powiadomienia także SMS-em, również wtedy, gdy poczta nie działa.
 Wersja 1.11 wprowadza wbudowany skracacz linków i kampanie. Bramka zamienia linki w SMS-ach na
 krótkie linki własnej domeny firmy, na przykład `https://l.firma.pl/aB3xK9q`. Każdy odbiorca
 otrzymuje własny kod, dzięki czemu bramka liczy otwarcia dokładnie, także przy linku wspólnym dla
-całej kampanii. Wyniki kampanii przedstawia nowy ekran „Kampanie” w panelu, API oraz zdarzenie
-„link otwarty”. Do adresu docelowego bramka dopisuje parametry UTM, dlatego ruch z kampanii jest
-widoczny w Google Analytics, Matomo albo Umami. Skracanie włącza się przy kluczu API, a lista
-dozwolonych domen docelowych chroni domenę skracacza przed wpisem na listę ostrzeżeń CERT Polska.
+całej kampanii. Wyniki kampanii przedstawia nowy ekran „Kampanie” w panelu. Aplikacje odczytują
+je przez API albo odbierają zdarzenie „link otwarty”. Do adresu docelowego bramka dopisuje
+parametry UTM, dlatego ruch z kampanii jest widoczny w Google Analytics, Matomo albo Umami.
+Skracanie włącza się przy kluczu API, a lista dozwolonych domen docelowych zmniejsza ryzyko wpisu
+domeny skracacza na listę ostrzeżeń CERT Polska.
 
 ## Co trzeba mieć
 

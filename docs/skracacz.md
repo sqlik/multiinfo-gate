@@ -331,9 +331,10 @@ Anulowanie wiadomości wyłącza jej linki. Rozsyłki anulowanej w Multiinfo bra
 samoczynnie, ponieważ część SMS-ów mogła zostać już wysłana. Jej linki zatrzymuje przycisk
 **Wyłącz linki** w kampanii.
 
-Odpowiedź Mail2SMS do nadawcy wiadomości e-mail i podgląd przycisku **Sprawdź** w formularzu
-integracji pokazują krótki link z kodem zastępczym `0000000`, na przykład
-`https://l.firma.pl/0000000`. Każdy odbiorca otrzymuje własny kod, a raport do nadawcy nie
+Odpowiedź Mail2SMS do nadawcy wiadomości e-mail pokazuje krótki link z kodem zastępczym
+`0000000`, na przykład `https://l.firma.pl/0000000`. Ten sam kod pokazuje podgląd przycisku
+**Sprawdź szablon** w formularzu Mail2SMS i webhooka oraz przycisku **Sprawdź** w formularzu
+SMS-a do grupy. Każdy odbiorca otrzymuje własny kod, a raport do nadawcy nie
 zawiera kodów odbiorców, ponieważ wejście nadawcy liczyłoby się jako otwarcie przez odbiorcę.
 Link z kodem zastępczym prowadzi do strony „Link wygasł”.
 
@@ -518,3 +519,7 @@ zewnętrznych:
 Kod należy do domeny, w której został utworzony. Kod z domeny `l.firma.pl` otwarty pod inną
 domeną skracacza tej samej bramki prowadzi do strony „Link wygasł”. Ta zasada utrudnia mieszanie
 marek przy kilku domenach.
+
+Telefon czasem dołącza do krótkiego linku kropkę, wielokropek albo nawias, które w treści SMS-a
+kończyły zdanie. Bramka pomija taką interpunkcję na końcu adresu, gdy reszta jest poprawnym kodem,
+dlatego adres `https://l.firma.pl/aB3xK9q.` prowadzi do tego samego celu co `https://l.firma.pl/aB3xK9q`.

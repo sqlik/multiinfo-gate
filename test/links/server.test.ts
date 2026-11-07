@@ -28,6 +28,18 @@ describe('serwer przekierowań - krótki link', () => {
     expect(s.campaign()).toMatchObject({ clicks: 1, opens: 1, bots: 0 });
   });
 
+  it('kod z interpunkcją doklejoną przez telefon na końcu zdania przekierowuje tak jak sam kod', async () => {
+    const s = setup();
+    const code = s.addLink();
+    for (const tail of ['.', '...', '%E2%80%A6', ',', '!', ')', '%22', '%C2%BB', '%E2%80%9D']) {
+      const res = await s.get(`/${code}${tail}`);
+      expect(res.statusCode, `/${code}${tail}`).toBe(302);
+    }
+    // Kod dłuższy o znak spoza interpunkcji nie jest kodem: bramka nie zgaduje.
+    expect((await s.get(`/${code}x`)).statusCode).toBe(404);
+    expect((await s.get('/!.')).statusCode).toBe(404);
+  });
+
   it('adres z polskimi znakami trafia do nagłówka Location w postaci ASCII', async () => {
     const s = setup();
     const code = s.addLink({ target: 'https://firma.pl/przegląd' });

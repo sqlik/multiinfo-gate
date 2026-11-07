@@ -195,7 +195,8 @@ const POLA_WIADOMOSCI: Record<string, JsonSchema> = {
   linkDomain: {
     type: 'string',
     description: 'Domena skracacza spośród domen przypisanych do klucza. Pominięta oznacza domenę domyślną klucza.'
-      + ' Domena spoza klucza kończy wywołanie błędem link_domain_not_allowed.',
+      + ' Domena spoza klucza kończy wywołanie błędem link_domain_not_allowed. Wyłączona domena klucza nie przerywa'
+      + ' wysyłki: linki zostają wysłane bez zmian, a blok links zawiera zgłoszenie domain_unavailable.',
     example: 'l.firma.pl',
   },
   linkValidityDays: {
@@ -1042,7 +1043,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             '400': blad(
               'Błąd w body żądania: invalid_body, invalid_phone, invalid_orig, too_many_parts, service_required,'
                 + ' valid_to_in_past, valid_to_too_far, a przy polu inReplyTo także in_reply_to_single,'
-                + ' in_reply_to_unknown oraz in_reply_to_recipient',
+                + ' in_reply_to_unknown oraz in_reply_to_recipient, a przy polu linkDomain spoza klucza link_domain_not_allowed',
               'invalid_phone',
               'Numer odbiorcy jest nieprawidłowy: 4860100000 (numer z kodem 48 ma 11 cyfr)',
             ),
@@ -1228,7 +1229,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             },
             '400': blad(
               'Błąd w body żądania: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts,'
-                + ' invalid_orig, service_required, start_at_in_past',
+                + ' invalid_orig, service_required, start_at_in_past, link_domain_not_allowed',
               'text_required',
               'recipients.3: brak treści i brak treści domyślnej.',
             ),
@@ -1583,7 +1584,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             },
             '400': blad(
               'Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone,'
-                + ' too_many_parts, valid_to_in_past, valid_to_too_far',
+                + ' too_many_parts, valid_to_in_past, valid_to_too_far, link_domain_not_allowed',
               'too_many_parts',
               'Treść wymaga 4 części, a limit integracji to 3.',
             ),
@@ -1627,7 +1628,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             },
             '400': blad(
               'Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone,'
-                + ' text_required, invalid_client_id, too_many_parts, start_at_in_past',
+                + ' text_required, invalid_client_id, too_many_parts, start_at_in_past, link_domain_not_allowed',
               'too_many_parts',
               'recipients.1: Treść wymaga 4 części, a limit integracji to 3.',
             ),
@@ -1678,7 +1679,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             },
             '400': blad(
               'Błąd w body żądania albo treść ponad limit części integracji: invalid_body, too_many_parts,'
-                + ' valid_to_in_past, valid_to_too_far',
+                + ' valid_to_in_past, valid_to_too_far, link_domain_not_allowed',
               'too_many_parts',
               'Treść wymaga 4 części, a limit integracji to 3.',
             ),

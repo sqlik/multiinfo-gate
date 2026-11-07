@@ -238,7 +238,7 @@
                   },
                   "linkDomain": {
                     "type": "string",
-                    "description": "Domena skracacza spośród domen przypisanych do klucza. Pominięta oznacza domenę domyślną klucza. Domena spoza klucza kończy wywołanie błędem link_domain_not_allowed.",
+                    "description": "Domena skracacza spośród domen przypisanych do klucza. Pominięta oznacza domenę domyślną klucza. Domena spoza klucza kończy wywołanie błędem link_domain_not_allowed. Wyłączona domena klucza nie przerywa wysyłki: linki zostają wysłane bez zmian, a blok links zawiera zgłoszenie domain_unavailable.",
                     "example": "l.firma.pl"
                   },
                   "linkValidityDays": {
@@ -528,7 +528,7 @@
             }
           },
           "400": {
-            "description": "Błąd w body żądania: invalid_body, invalid_phone, invalid_orig, too_many_parts, service_required, valid_to_in_past, valid_to_too_far, a przy polu inReplyTo także in_reply_to_single, in_reply_to_unknown oraz in_reply_to_recipient",
+            "description": "Błąd w body żądania: invalid_body, invalid_phone, invalid_orig, too_many_parts, service_required, valid_to_in_past, valid_to_too_far, a przy polu inReplyTo także in_reply_to_single, in_reply_to_unknown oraz in_reply_to_recipient, a przy polu linkDomain spoza klucza link_domain_not_allowed",
             "content": {
               "application/json": {
                 "schema": {
@@ -1066,7 +1066,7 @@
                   },
                   "linkDomain": {
                     "type": "string",
-                    "description": "Domena skracacza spośród domen przypisanych do klucza. Pominięta oznacza domenę domyślną klucza. Domena spoza klucza kończy wywołanie błędem link_domain_not_allowed.",
+                    "description": "Domena skracacza spośród domen przypisanych do klucza. Pominięta oznacza domenę domyślną klucza. Domena spoza klucza kończy wywołanie błędem link_domain_not_allowed. Wyłączona domena klucza nie przerywa wysyłki: linki zostają wysłane bez zmian, a blok links zawiera zgłoszenie domain_unavailable.",
                     "example": "l.firma.pl"
                   },
                   "linkValidityDays": {
@@ -1227,7 +1227,7 @@
             }
           },
           "400": {
-            "description": "Błąd w body żądania: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts, invalid_orig, service_required, start_at_in_past",
+            "description": "Błąd w body żądania: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts, invalid_orig, service_required, start_at_in_past, link_domain_not_allowed",
             "content": {
               "application/json": {
                 "schema": {
@@ -2226,7 +2226,7 @@
                   },
                   "linkDomain": {
                     "type": "string",
-                    "description": "Domena skracacza spośród domen przypisanych do klucza. Pominięta oznacza domenę domyślną klucza. Domena spoza klucza kończy wywołanie błędem link_domain_not_allowed.",
+                    "description": "Domena skracacza spośród domen przypisanych do klucza. Pominięta oznacza domenę domyślną klucza. Domena spoza klucza kończy wywołanie błędem link_domain_not_allowed. Wyłączona domena klucza nie przerywa wysyłki: linki zostają wysłane bez zmian, a blok links zawiera zgłoszenie domain_unavailable.",
                     "example": "l.firma.pl"
                   },
                   "linkValidityDays": {
@@ -2392,7 +2392,7 @@
             }
           },
           "400": {
-            "description": "Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone, too_many_parts, valid_to_in_past, valid_to_too_far",
+            "description": "Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone, too_many_parts, valid_to_in_past, valid_to_too_far, link_domain_not_allowed",
             "content": {
               "application/json": {
                 "schema": {
@@ -2616,7 +2616,7 @@
                   },
                   "linkDomain": {
                     "type": "string",
-                    "description": "Domena skracacza spośród domen przypisanych do klucza. Pominięta oznacza domenę domyślną klucza. Domena spoza klucza kończy wywołanie błędem link_domain_not_allowed.",
+                    "description": "Domena skracacza spośród domen przypisanych do klucza. Pominięta oznacza domenę domyślną klucza. Domena spoza klucza kończy wywołanie błędem link_domain_not_allowed. Wyłączona domena klucza nie przerywa wysyłki: linki zostają wysłane bez zmian, a blok links zawiera zgłoszenie domain_unavailable.",
                     "example": "l.firma.pl"
                   },
                   "linkValidityDays": {
@@ -2783,7 +2783,7 @@
             }
           },
           "400": {
-            "description": "Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts, start_at_in_past",
+            "description": "Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts, start_at_in_past, link_domain_not_allowed",
             "content": {
               "application/json": {
                 "schema": {
@@ -2984,7 +2984,7 @@
                   },
                   "linkDomain": {
                     "type": "string",
-                    "description": "Domena skracacza spośród domen przypisanych do klucza. Pominięta oznacza domenę domyślną klucza. Domena spoza klucza kończy wywołanie błędem link_domain_not_allowed.",
+                    "description": "Domena skracacza spośród domen przypisanych do klucza. Pominięta oznacza domenę domyślną klucza. Domena spoza klucza kończy wywołanie błędem link_domain_not_allowed. Wyłączona domena klucza nie przerywa wysyłki: linki zostają wysłane bez zmian, a blok links zawiera zgłoszenie domain_unavailable.",
                     "example": "l.firma.pl"
                   },
                   "linkValidityDays": {
@@ -3041,7 +3041,7 @@
             }
           },
           "400": {
-            "description": "Błąd w body żądania albo treść ponad limit części integracji: invalid_body, too_many_parts, valid_to_in_past, valid_to_too_far",
+            "description": "Błąd w body żądania albo treść ponad limit części integracji: invalid_body, too_many_parts, valid_to_in_past, valid_to_too_far, link_domain_not_allowed",
             "content": {
               "application/json": {
                 "schema": {

@@ -167,6 +167,17 @@ describe('buildPowerAutomateConnector', () => {
     expect(resolve(node.items!).properties!.domain!.type).toBe('string');
   });
 
+  it('pole notice bloku „Krótkie linki” nosi etykietę „Zgłoszenie skracania”', () => {
+    const labels: unknown[] = [];
+    walk(doc, '$', (obj) => {
+      const links = (obj as { properties?: Record<string, { properties?: Record<string, { 'x-ms-summary'?: unknown }> }> }).properties?.links;
+      const notice = links?.properties?.notice;
+      if (notice !== undefined) labels.push(notice['x-ms-summary']);
+    });
+    expect(labels.length).toBeGreaterThan(0);
+    expect(new Set(labels)).toEqual(new Set(['Zgłoszenie skracania']));
+  });
+
   it('nie ma śladu OpenAPI 3', () => {
     const forbidden = ['openapi', 'servers', 'components', 'requestBody', 'oneOf', 'anyOf', 'allOf', 'nullable'];
     walk(doc, '$', (obj, path) => {

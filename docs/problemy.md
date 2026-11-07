@@ -565,17 +565,17 @@ błędu.
 
 Sprawdzenie pobiera z bramki jednorazowy token spod adresu
 `https://<domena>/.well-known/multiinfo-gate/<token>`. Żądanie przechodzi tę samą drogę co kliknięcie
-odbiorcy SMS-a: przez DNS, serwer pośredniczący i certyfikat HTTPS do portu przekierowań bramki.
+odbiorcy SMS-a: przez DNS, serwer pośredniczący i certyfikat HTTPS do portu krótkich linków bramki.
 Wynik pozytywny potwierdza więc całą drogę za jednym razem.
 
 | Krok | Przyczyna | Rozwiązanie |
 |---|---|---|
 | rozwiązanie nazwy | brak rekordu DNS domeny albo nowy rekord nie dotarł jeszcze do serwerów DNS | dodać rekord A dla domeny głównej albo rekord CNAME dla subdomeny, a następnie odczekać czas ważności rekordu |
 | rozwiązanie nazwy | serwer bramki otrzymuje dla domeny adres w sieci wewnętrznej, na przykład z wewnętrznego serwera DNS | skierować publiczny rekord DNS na publiczny adres serwera, a działanie linku sprawdzić z telefonu w sieci komórkowej albo ustawić `MIG_LINKS_ALLOW_PRIVATE=1` w środowisku bramki |
-| połączenie | serwer pośredniczący nie wystawia portu przekierowań pod tą domeną albo zapora blokuje port 443 | wystawić port przekierowań na serwerze pośredniczącym i otworzyć port 443 w zaporze |
+| połączenie | serwer pośredniczący nie wystawia portu krótkich linków pod tą domeną albo zapora blokuje port 443 | wystawić port krótkich linków na serwerze pośredniczącym i otworzyć port 443 w zaporze |
 | połączenie | sieć bez pętli zwrotnej NAT, w której serwer nie może połączyć się z własnym adresem publicznym | otworzyć krótki link z telefonu w sieci komórkowej, a działający link potwierdza gotowość domeny |
 | certyfikat | certyfikat wygasł, nie obejmuje domeny albo serwer pośredniczący jeszcze go nie uzyskał | sprawdzić certyfikat na serwerze pośredniczącym i ponowić sprawdzenie po jego wystawieniu |
-| odpowiedź | domena prowadzi do innego serwera, do panelu, do API albo do innej instancji bramki | skierować domenę na port przekierowań tej bramki, domyślnie 8082 |
+| odpowiedź | domena prowadzi do innego serwera, do panelu, do API albo do innej instancji bramki | skierować domenę na port krótkich linków tej bramki, domyślnie 8082 |
 
 Domena niesprawdzona albo z nieudanym sprawdzeniem może zostać użyta przy kluczu. Sprawdzenie nie
 blokuje pracy, ponieważ w niektórych sieciach wynik negatywny nie oznacza awarii.

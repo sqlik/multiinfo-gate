@@ -1817,7 +1817,7 @@ kontenera. Odbiorcy SMS-ów otwierają krótkie linki z internetu, dlatego domen
 serwera pośredniczącego z HTTPS pod publicznym adresem, tak jak aplikacja w internecie z punktu
 9.6. Konfigurację nginx dla domen skracacza zawiera plik `docker/nginx/multiinfo-gate-linki.conf`
 z repozytorium bramki, opisany w punkcie 6.6. W wierszu `proxy_pass` zamiast
-`http://127.0.0.1:8082` wpisujesz `http://<ADRES-KONTENERA>:8082`.
+`http://127.0.0.1:8082` wpisz `http://<ADRES-KONTENERA>:8082`.
 
 Adres serwera z nginx wpisz w `/etc/multiinfo-gate/env` kontenera w zmiennej
 `MIG_TRUSTED_PROXIES`, tak jak w punkcie 9.6, a następnie wykonaj

@@ -75,7 +75,7 @@ function linkFields(section: LinkSection): string {
     <div class="field">
       <label for="linkMode">Tryb</label>
       <select id="linkMode" name="linkMode">${modes}</select>
-      <div class="hint">„Decyduje wysyłający” skraca linki, chyba że żądanie zawiera shortenLinks: false. „Zawsze” skraca niezależnie od żądania</div>
+      <div class="hint">„Decyduje wysyłający” skraca linki, chyba że wysyłka wyłącza skracanie w API albo w akcji Power Automate. „Zawsze” skraca niezależnie od wyboru wysyłającego</div>
     </div>
     <div data-show="linkMode!=off">
       <div class="field">
@@ -89,7 +89,7 @@ function linkFields(section: LinkSection): string {
           <option value="">pierwsza zaznaczona</option>
           ${defaultOptions}
         </select>
-        <div class="hint">Używana, gdy żądanie nie podaje linkDomain. Musi być jedną z zaznaczonych</div>
+        <div class="hint">Używana, gdy wysyłka nie wskazuje domeny skracacza w API albo w akcji Power Automate. Musi być jedną z zaznaczonych</div>
       </div>
       <div class="field">
         <label for="linkTargets">Dozwolone domeny docelowe</label>
@@ -100,7 +100,7 @@ function linkFields(section: LinkSection): string {
       <div class="field">
         <label for="linkValidityDays">Ważność linków w dniach (1-365)</label>
         <input id="linkValidityDays" name="linkValidityDays" type="number" min="1" max="365" value="${esc(v.validityDays)}" required>
-        <div class="hint">Po tym czasie link prowadzi do strony „Link wygasł”. Żądanie może podać inną ważność polem linkValidityDays</div>
+        <div class="hint">Po tym czasie link prowadzi do strony „Link wygasł”. Wysyłka może podać inną ważność w API albo w akcji Power Automate</div>
       </div>
       <div class="field">
         <label class="choice"><input type="checkbox" name="linkUtm" value="1"${v.utm ? ' checked' : ''}> Dopisuj parametry UTM</label>

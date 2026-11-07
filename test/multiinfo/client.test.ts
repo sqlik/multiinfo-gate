@@ -1,4 +1,5 @@
 import { createServer } from 'node:net';
+import forge from 'node-forge';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MultiinfoClient, packageTimeoutMs, type ClientOptions, type PackageParams, type PackageRecipient } from '../../src/multiinfo/client.ts';
 import { ProviderError } from '../../src/multiinfo/response.ts';
@@ -249,6 +250,47 @@ describe('MultiinfoClient - rozsyłki', () => {
     await counting.createPackage({ ...onePackage(), recipients: [recipient('1'), recipient('2'), recipient('3')] });
     counting.close();
     expect(seen).toEqual([3]);
+  });
+
+  it('createPackage: alert TLS 1.3 po zapisaniu żądania oznacza odrzuconą sesję, dlatego błąd jest przejściowy', async () => {
+    // Bez certyfikatu klienta serwer odrzuca sesję alertem „certificate required” dopiero po uzgodnieniu TLS 1.3,
+    // czyli po zapisaniu żądania do gniazda. Serwer HTTP niczego nie otrzymał.
+    const noCert = new MultiinfoClient({
+      baseUrl: fake.baseUrl, login: 'firma_test', password: 'tajne', certPem: '', keyPem: '', caPem: null,
+    }, { extraServerCa: fake.serverCaPem });
+    const before = fake.requests.length;
+    let sent = false;
+    let rejected = false;
+    const error = await noCert.createPackage(onePackage(), {
+      onSent: () => { sent = true; }, onRejected: () => { rejected = true; },
+    }).catch((e: unknown) => e);
+    noCert.close();
+    expect(fake.requests.length).toBe(before);
+    expect(sent).toBe(true);
+    expect(error).toMatchObject({ code: -71, kind: 'transient' });
+    expect(rejected).toBe(true);
+  });
+
+  it('createPackage: zerwanie połączenia bez alertu TLS po zapisaniu żądania pozostaje wynikiem nieznanym', async () => {
+    const keys = forge.pki.rsa.generateKeyPair(2048);
+    const cert = forge.pki.createCertificate();
+    cert.publicKey = keys.publicKey;
+    cert.serialNumber = '01';
+    cert.validity.notBefore = new Date(Date.now() - 86_400_000);
+    cert.validity.notAfter = new Date(Date.now() + 86_400_000);
+    cert.setSubject([{ shortName: 'CN', value: 'firma_test' }]);
+    cert.setIssuer([{ shortName: 'CN', value: 'firma_test' }]);
+    cert.sign(keys.privateKey, forge.md.sha256.create());
+    // Atrapa odrzuca obcy certyfikat zamknięciem połączenia, bez alertu: klient widzi to samo co przy awarii serwera.
+    const untrusted = new MultiinfoClient({
+      baseUrl: fake.baseUrl, login: 'firma_test', password: 'tajne', caPem: null,
+      certPem: forge.pki.certificateToPem(cert), keyPem: forge.pki.privateKeyToPem(keys.privateKey),
+    }, { extraServerCa: fake.serverCaPem });
+    let rejected = false;
+    const error = await untrusted.createPackage(onePackage(), { onRejected: () => { rejected = true; } }).catch((e: unknown) => e);
+    untrusted.close();
+    expect(error).toMatchObject({ code: -72, kind: 'uncertain' });
+    expect(rejected).toBe(false);
   });
 
   it('createPackage: brak odpowiedzi po przekazaniu żądania to wynik nieznany, nie błąd przejściowy', async () => {

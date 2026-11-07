@@ -6,6 +6,7 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { RateLimiter } from '../api/rate-limit.ts';
 import { silentLogger } from '../log.ts';
 import { isAutomated } from './bots.ts';
+import { isCode } from './codes.ts';
 import { domainFor, handleClick, hostName, locationHeader, type ClickDeps } from './clicks.ts';
 import type { DomainChecks } from './domain-checks.ts';
 import { expiredPage, homePage, limitPage, unavailablePage } from './pages.ts';
@@ -84,6 +85,15 @@ function sendPage(reply: FastifyReply, status: number, html: string): FastifyRep
 
 function redirect(reply: FastifyReply, location: string): FastifyReply {
   return noStore(reply).code(302).header('location', location).send();
+}
+
+/** Interpunkcja, którą telefon dołącza do linku na końcu zdania, na przykład „Zapis: l.firma.pl/aB3xK9q.”. */
+const TRAILING_PUNCTUATION = /[.,;:!?…)"'»”]+$/u;
+
+/** Kod ze ścieżki; interpunkcja na końcu odpada wyłącznie wtedy, gdy reszta jest poprawnym kodem. */
+export function pathCode(segment: string): string {
+  const trimmed = segment.replace(TRAILING_PUNCTUATION, '');
+  return trimmed !== segment && isCode(trimmed) ? trimmed : segment;
 }
 
 export function buildLinksServer(deps: LinksServerDeps): FastifyInstance {
@@ -176,7 +186,7 @@ export function buildLinksServer(deps: LinksServerDeps): FastifyInstance {
 
   // Fastify obsługuje HEAD tymi samymi trasami; isAutomated uznaje HEAD za wejście automatu.
   app.get('/', async (request, reply) => respond(request, reply, null));
-  app.get<{ Params: { code: string } }>('/:code', async (request, reply) => respond(request, reply, request.params.code));
+  app.get<{ Params: { code: string } }>('/:code', async (request, reply) => respond(request, reply, pathCode(request.params.code)));
 
   return app;
 }

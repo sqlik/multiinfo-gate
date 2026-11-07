@@ -192,7 +192,7 @@ describe('handlePackageCreate', () => {
         { dest: '48601135134', text: null, clientId: null },
         { dest: '48501052442', text: 'Indywidualna', clientId: 'faktura-114' },
       ],
-    }, { onSent: expect.any(Function) });
+    }, { onSent: expect.any(Function), onRejected: expect.any(Function) });
     const pkg = deps.packages.get('pkg_1')!;
     expect(pkg.miPackageId).toBe('14');
     expect(pkg.status).toBe('open');
@@ -276,6 +276,20 @@ describe('handlePackageCreate', () => {
     });
     await handlePackageCreate(created, deps, NOW);
     expect(payloadAtSend).toEqual({ packageId: 'pkg_1', sentAt: NOW.toISOString() });
+  });
+
+  it('sesja odrzucona przez serwer po przekazaniu zdejmuje znacznik, dlatego rozsyłka zostaje ponowiona', async () => {
+    seed();
+    const created = job('package.create');
+    createPackage.mockImplementation(async (_p: unknown, hooks: { onSent?: () => void; onRejected?: () => void }) => {
+      hooks.onSent?.();
+      hooks.onRejected?.();
+      throw new ProviderError(-71, 'Nie udało się połączyć: tlsv13 alert certificate required', 'transient');
+    });
+    await handlePackageCreate(created, deps, NOW);
+    expect(deps.packages.get('pkg_1')!.status).toBe('queued');
+    const [retry] = deps.jobs.claim(new Date(NOW.getTime() + 86_400_000), 10).filter((j) => j.type === 'package.create');
+    expect(retry!.payload).toEqual({ packageId: 'pkg_1' });
   });
 
   it('błąd zapisu znacznika przekazania nie przerywa utworzenia rozsyłki', async () => {

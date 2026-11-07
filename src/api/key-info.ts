@@ -5,15 +5,10 @@ import { keyOrigs } from './orig.ts';
 import type { ApiDeps } from './server.ts';
 
 /**
- * Uprawnienia klucza, którym aplikacja się uwierzytelnia: usługi, nadpisy i limity. Służy listom
- * wyboru (konektor Power Automate) i sprawdzeniu klucza przez programistę. Bez danych konta
- * Multiinfo i bez sekretów: odpowiedź mówi tylko o kluczu, którego aplikacja i tak używa.
- */
-/**
  * Skracanie linków przy kluczu: tryb, aktywne domeny skracacza z domyślną, ważność i UTM. Lista dozwolonych
  * domen docelowych zostaje w panelu, bo aplikacja nie potrzebuje jej do wysyłki. Tryb „off” daje pustą listę.
  */
-function linksBlock(deps: ApiDeps, keyId: number) {
+function keyLinks(deps: ApiDeps, keyId: number) {
   const s = deps.apiKeys.linkSettings(keyId);
   const domains = s.mode === 'off' ? [] : s.domainIds
     .map((id) => deps.linkDomains.get(id))
@@ -23,6 +18,11 @@ function linksBlock(deps: ApiDeps, keyId: number) {
   return { mode: s.mode, domains, validityDays: s.validityDays, utm: s.utm };
 }
 
+/**
+ * Uprawnienia klucza, którym aplikacja się uwierzytelnia: usługi, nadpisy i limity. Służy listom
+ * wyboru (konektor Power Automate) i sprawdzeniu klucza przez programistę. Bez danych konta
+ * Multiinfo i bez sekretów: odpowiedź mówi tylko o kluczu, którego aplikacja i tak używa.
+ */
 export function registerKeyInfoRoute(app: FastifyInstance, deps: ApiDeps): void {
   app.get('/v1/key', async (request) => {
     const auth = authenticate(request.headers.authorization, deps.apiKeys);
@@ -41,7 +41,7 @@ export function registerKeyInfoRoute(app: FastifyInstance, deps: ApiDeps): void 
       origs: allowed.map((orig) => ({ orig, default: orig === fallback })),
       maxParts: auth.maxParts,
       ratePerMin: auth.ratePerMin,
-      links: linksBlock(deps, key.id),
+      links: keyLinks(deps, key.id),
     };
   });
 }

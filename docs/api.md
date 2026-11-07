@@ -2307,6 +2307,7 @@ Pola body żądania:
 | `text` | tak | treść wiadomości, jak w rozdziale 3 |
 | `requestedBy` | nie | zlecający, do 100 znaków |
 | `encoding`, `deliveryReport`, `validTo`, `costCenter` | nie | jak w rozdziale 3 |
+| `shortenLinks`, `campaign`, `linkDomain`, `linkValidityDays` | nie | jak w rozdziale 3; pominięta nazwa kampanii oznacza nazwę integracji |
 
 Odbiorców wyznacza lista integracji. Pole `to` nie ma w tym wywołaniu znaczenia. Bramka je
 pomija, podobnie jak `serviceId`, `orig`, `maxParts` i `inReplyTo`. Wysyłka jest przyjmowana

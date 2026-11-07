@@ -247,7 +247,7 @@ const LABELS_BY_NAME: Record<string, string> = {
   links: 'Krótkie linki',
   shortened: 'Liczba skróconych linków',
   domain: 'Domena skracacza',
-  notice: 'Ustawienie klucza',
+  notice: 'Zgłoszenie skracania',
   skipped: 'Pominięte linki',
   url: 'Adres',
   reason: 'Powód',

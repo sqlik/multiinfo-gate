@@ -41,6 +41,14 @@ export const PACKAGE_NOT_RETRIED = 'Bramka nie ponawia rozsyłki, ponieważ Mult
 export interface PackageHooks {
   /** Wywoływane w chwili przekazania żądania do Multiinfo, przed odpowiedzią. */
   onSent?: () => void;
+  /** Wywoływane, gdy serwer po `onSent` odrzucił sesję TLS alertem, więc żądanie nie zostało obsłużone. */
+  onRejected?: () => void;
+}
+
+/** Błąd z kodem alertu TLS od serwera, na przykład `ERR_SSL_TLSV13_ALERT_CERTIFICATE_REQUIRED`. */
+function tlsAlert(error: unknown): boolean {
+  const code = (error instanceof Error ? (error.cause as { code?: unknown } | undefined)?.code : undefined);
+  return typeof code === 'string' && /^ERR_SSL_\w*ALERT/.test(code);
 }
 
 export interface SendLongParams {
@@ -251,8 +259,9 @@ export class MultiinfoClient {
         },
       );
 
-      // `finish` oznacza, że całe żądanie trafiło do gniazda. Odmowa połączenia albo błąd TLS
-      // kończą żądanie wcześniej, więc wtedy Multiinfo na pewno niczego nie otrzymało.
+      // `finish` oznacza, że całe żądanie trafiło do gniazda. Odmowa połączenia i błąd uzgodnienia TLS 1.2
+      // kończą żądanie wcześniej, więc wtedy Multiinfo na pewno niczego nie otrzymało. W TLS 1.3 serwer
+      // ocenia certyfikat klienta po uzgodnieniu i odrzuca sesję alertem już po `finish`.
       if (opts.onSent) req.on('finish', opts.onSent);
       req.setTimeout(opts.timeoutMs ?? REQUEST_TIMEOUT_MS, () => {
         req.destroy(new ProviderError(-71, 'Multiinfo nie odpowiedziało w wyznaczonym czasie', 'transient'));
@@ -262,7 +271,7 @@ export class MultiinfoClient {
       opts.signal?.addEventListener('abort', onAbort, { once: true });
       // Komunikat błędu sieci nie zawiera poświadczeń - w żądaniu idą one w treści, nie w adresie.
       req.on('error', (e) => settle(() => {
-        reject(e instanceof ProviderError ? e : new ProviderError(-71, `Nie udało się połączyć: ${e.message}`, 'transient'));
+        reject(e instanceof ProviderError ? e : new ProviderError(-71, `Nie udało się połączyć: ${e.message}`, 'transient', { cause: e }));
       }));
       // Ostatnia deska: żądanie zamknięte bez odpowiedzi i bez błędu nie może zostać bez wyniku.
       req.on('close', () => settle(() => reject(new ProviderError(-71, 'Połączenie zamknięte przed końcem odpowiedzi', 'transient'))));
@@ -369,6 +378,12 @@ export class MultiinfoClient {
       });
     } catch (error) {
       if (!sent) throw error;
+      // Alert TLS oznacza, że serwer odrzucił sesję, zanim obsłużył żądanie, na przykład certyfikat
+      // klienta w TLS 1.3. Rozsyłka nie powstała, dlatego błąd pozostaje przejściowy.
+      if (tlsAlert(error)) {
+        hooks.onRejected?.();
+        throw error;
+      }
       const reason = error instanceof Error ? error.message : String(error);
       throw new ProviderError(-72, `${reason}. ${PACKAGE_NOT_RETRIED}`, 'uncertain');
     }

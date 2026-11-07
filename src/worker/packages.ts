@@ -27,10 +27,10 @@ const REPORT_REFRESH_MS = 24 * 60 * 60_000;
 /** Po tym czasie sprawdzamy ponownie, czy wstrzymane konto zostało odblokowane. */
 const PAUSED_RECHECK_MS = 60_000;
 
-/** Statusy rozsyłki w packageinfo.aspx (§7.3). */
 /** Kod bramki dla rozsyłki, której utworzenia Multiinfo nie potwierdziło. */
 const UNCERTAIN_CODE = -72;
 
+/** Statusy rozsyłki w packageinfo.aspx (§7.3). */
 const MI_PACKAGE = { open: 1, sending: 2, completed: 11, cancelled: 12 } as const;
 
 /** Kod „brak rozsyłki / rozsyłka zakończona” - dla rozsyłki widzianej jako czynna znaczy: zakończona. */
@@ -135,6 +135,14 @@ export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date)
       log.error('rozsylka.znacznik_przekazania', { packageId: pkg.id, error: error instanceof Error ? error.message : String(error) });
     }
   };
+  // Serwer odrzucił sesję TLS, zanim obsłużył żądanie: rozsyłka nie powstała i może zostać ponowiona.
+  const onRejected = () => {
+    try {
+      deps.jobs.clearSent(job.id);
+    } catch (error) {
+      log.error('rozsylka.znacznik_przekazania', { packageId: pkg.id, error: error instanceof Error ? error.message : String(error) });
+    }
+  };
 
   try {
     const miPackageId = await deps.clients.for(pkg.accountId).createPackage({
@@ -147,7 +155,7 @@ export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date)
       deliveryReport: pkg.deliveryReport === 1,
       advancedEncoding: pkg.encoding === 'ucs2',
       multipart: pkg.multipart === 1,
-    }, { onSent });
+    }, { onSent, onRejected });
 
     deps.packages.setCreated(pkg.id, miPackageId);
     // Treści to dane osobowe - konto bez przechowywania nie zostawia ich po przekazaniu.

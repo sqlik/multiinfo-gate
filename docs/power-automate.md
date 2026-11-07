@@ -224,7 +224,7 @@ funkcję wewnętrzną, ponieważ na ich podstawie konektor buduje listy w polach
 i „Domena skracacza”. W przepływie dostępnych jest pozostałych sześć akcji.
 
 Edytor łącznika wyświetla przy definicji `Rozsylka` ostrzeżenie „Zawiera schemat z właściwościami,
-który nie jest oznaczony jako typ „object””. Ostrzeżenie dotyczy podsumowania doręczeń rozsyłki,
+który nie jest oznaczony jako typ »object«”. Ostrzeżenie dotyczy podsumowania doręczeń rozsyłki,
 które przed pobraniem raportu nie zawiera wartości. Opis tego pola celowo nie podaje typu,
 ponieważ w przeciwnym razie akcja „Sprawdź stan rozsyłki” kończyłaby się błędem dla rozsyłki bez
 gotowego raportu. Ostrzeżenie nie wpływa na działanie konektora. Projektant przepływu nie

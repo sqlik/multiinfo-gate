@@ -146,6 +146,27 @@ describe('opis API', () => {
     }
   });
 
+  it('opis odpowiedzi 400 każdej operacji wysyłki wymienia link_domain_not_allowed', () => {
+    const paths = ['/v1/messages', '/v1/packages', '/v1/integrations/{id}/messages', '/v1/integrations/{id}/packages', '/v1/integrations/{id}/group'];
+    for (const path of paths) {
+      const op = (doc.paths as Record<string, Record<string, { responses: Record<string, { description?: string }> }>>)[path]!.post!;
+      expect(op.responses['400']!.description, path).toContain('link_domain_not_allowed');
+    }
+  });
+
+  it('opis pola linkDomain wymienia zgłoszenie domain_unavailable przy wyłączonej domenie', () => {
+    const walk = (node: unknown, found: string[]): string[] => {
+      if (node === null || typeof node !== 'object') return found;
+      const props = (node as { properties?: Record<string, { description?: string }> }).properties;
+      if (props?.linkDomain?.description) found.push(props.linkDomain.description);
+      for (const value of Object.values(node)) walk(value, found);
+      return found;
+    };
+    const descriptions = walk(doc, []);
+    expect(descriptions.length).toBeGreaterThan(0);
+    for (const d of descriptions) expect(d).toMatch(/link_domain_not_allowed.*domain_unavailable/s);
+  });
+
   it('zapisany plik zgadza się z modułem', () => {
     const zapisany = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
     expect(zapisany).toEqual(JSON.parse(JSON.stringify(doc)));
