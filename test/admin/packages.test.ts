@@ -96,6 +96,15 @@ describe('GET /rozsylki/:id', () => {
     expect(res.body).toContain('gotowy · 2 odbiorców');
   });
 
+  // Data ważności dotyczy kopii raportu w Multiinfo. CSV i statusy pochodzą z bazy bramki, więc są dostępne także później.
+  it('stan gotowego raportu nie pokazuje daty ważności kopii w Multiinfo', async () => {
+    seed();
+    ready('pkg_1');
+    const res = await page('/rozsylki/pkg_1');
+    expect(res.body).toContain('gotowy · 2 odbiorców');
+    expect(res.body).not.toContain('ważny do');
+  });
+
   it('gotowy raport jednego odbiorcy w poprawnej odmianie', async () => {
     seed('pkg_1', [{ dest: '48601135134', text: null, clientId: null }]);
     h.packages.setCreated('pkg_1', '14');

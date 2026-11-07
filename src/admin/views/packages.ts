@@ -148,10 +148,10 @@ export function packagePage(d: PackageDetail): string {
     ? `<a class="btn btn-p" href="/rozsylki/${esc(p.id)}/raport.csv">Pobierz CSV</a>`
     : `<span class="btn btn-s disabled" title="${esc(reportStatusLabel(p.reportStatus))}">Pobierz CSV</span>`;
 
+  // Bez daty ważności: dotyczy kopii raportu w Multiinfo, a CSV i statusy pochodzą z bazy bramki.
   const reportState = p.reportStatus === 'ready'
     ? `gotowy · ${esc(p.recipientsCount)} ${p.recipientsCount === 1 ? 'odbiorca' : 'odbiorców'}`
-      + (p.reportExpiresAt === null ? '' : ` · ważny do ${esc(stamp(p.reportExpiresAt))}`)
-    : `<span class="${p.reportStatus === 'failed' ? 'fail' : 'dim'}">${esc(reportStatusLabel(p.reportStatus))}</span>`;
+    :`<span class="${p.reportStatus === 'failed' ? 'fail' : 'dim'}">${esc(reportStatusLabel(p.reportStatus))}</span>`;
 
   const note = d.recipients.length < p.recipientsCount
     ? `<div class="m dim">pierwszych ${esc(d.shown)} z ${esc(p.recipientsCount)} - pełna lista w CSV</div>`
