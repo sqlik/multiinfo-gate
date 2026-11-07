@@ -20,6 +20,8 @@ export interface PackageRow {
   /** Klucz idempotencji z nagłówka `Idempotency-Key` i skrót żądania, z którym go użyto. */
   idempotencyKey: string | null;
   requestHash: string | null;
+  /** Kampania skracacza; tylko rozsyłki z co najmniej jednym krótkim linkiem. */
+  campaignId: number | null;
 }
 
 export interface PackageInput {
@@ -27,11 +29,17 @@ export interface PackageInput {
   defaultText: string | null; orig: string | null; costCenter: string | null; startAt: string | null;
   deliveryReport: 0 | 1; encoding: 'gsm' | 'ucs2'; multipart: 0 | 1; createdAt: string;
   integrationId?: number | null; requestedBy?: string | null; idempotencyKey?: string | null; requestHash?: string | null;
+  campaignId?: number | null;
 }
 
-export interface RecipientInput { dest: string; text: string | null; clientId: string | null }
+export interface RecipientInput {
+  dest: string; text: string | null; clientId: string | null;
+  /** Liczba krótkich kodów w treści odbiorcy; pominięcie oznacza 0. */
+  links?: number;
+}
 
 export interface RecipientRow extends RecipientInput {
+  links: number;
   seq: number; miId: string | null; miStatus: number | null;
   status: GatewayStatus | null; statusChangedAt: string | null;
 }
@@ -50,12 +58,12 @@ interface Raw {
   status: PackageStatus; provider_code: number | null; error: string | null;
   report_status: ReportStatus; report_id: string | null; report_expires_at: string | null; report_path: string | null;
   created_at: string; completed_at: string | null; integration_id: number | null; requested_by: string | null;
-  idempotency_key: string | null; request_hash: string | null;
+  idempotency_key: string | null; request_hash: string | null; campaign_id: number | null;
 }
 
 interface RawRecipient {
   seq: number; dest: string; text: string | null; client_id: string | null; mi_id: string | null;
-  mi_status: number | null; status: GatewayStatus | null; status_changed_at: string | null;
+  mi_status: number | null; status: GatewayStatus | null; status_changed_at: string | null; links: number;
 }
 
 function toRow(r: Raw): PackageRow {
@@ -68,13 +76,13 @@ function toRow(r: Raw): PackageRow {
     reportStatus: r.report_status, reportId: r.report_id, reportExpiresAt: r.report_expires_at,
     reportPath: r.report_path, createdAt: r.created_at, completedAt: r.completed_at,
     integrationId: r.integration_id, requestedBy: r.requested_by,
-    idempotencyKey: r.idempotency_key, requestHash: r.request_hash,
+    idempotencyKey: r.idempotency_key, requestHash: r.request_hash, campaignId: r.campaign_id,
   };
 }
 
 const toRecipient = (r: RawRecipient): RecipientRow => ({
   seq: r.seq, dest: r.dest, text: r.text, clientId: r.client_id, miId: r.mi_id,
-  miStatus: r.mi_status, status: r.status, statusChangedAt: r.status_changed_at,
+  miStatus: r.mi_status, status: r.status, statusChangedAt: r.status_changed_at, links: r.links,
 });
 
 /** Statusy odbiorcy liczone w podsumowaniu jako nieudane. */
@@ -104,15 +112,15 @@ export class PackagesRepo {
       this.db.prepare(
         `INSERT INTO packages (id, api_key_id, account_id, service_id, default_text, orig, cost_center, start_at,
            delivery_report, encoding, multipart, recipients_count, created_at, integration_id, requested_by,
-           idempotency_key, request_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           idempotency_key, request_hash, campaign_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(input.id, input.apiKeyId, input.accountId, input.serviceId, input.defaultText, input.orig,
         input.costCenter, input.startAt, input.deliveryReport, input.encoding, input.multipart,
         recipients.length, input.createdAt, input.integrationId ?? null, input.requestedBy ?? null,
-        input.idempotencyKey ?? null, input.requestHash ?? null);
+        input.idempotencyKey ?? null, input.requestHash ?? null, input.campaignId ?? null);
       const add = this.db.prepare(
-        'INSERT INTO package_recipients (package_id, seq, dest, text, client_id) VALUES (?, ?, ?, ?, ?)');
-      recipients.forEach((r, i) => add.run(input.id, i + 1, r.dest, r.text, r.clientId));
+        'INSERT INTO package_recipients (package_id, seq, dest, text, client_id, links) VALUES (?, ?, ?, ?, ?, ?)');
+      recipients.forEach((r, i) => add.run(input.id, i + 1, r.dest, r.text, r.clientId, r.links ?? 0));
     });
     create();
   }

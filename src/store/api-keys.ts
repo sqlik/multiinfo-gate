@@ -32,6 +32,13 @@ export interface ApiKeyInput {
   integrationsOnly?: 0 | 1;
 }
 
+/** Skracanie linków przy kluczu: wyłączone, decyduje wysyłający (pole w żądaniu) albo zawsze. */
+export type LinkMode = 'off' | 'sender' | 'always';
+
+export interface KeyLinkSettings {
+  mode: LinkMode; domainIds: number[]; defaultDomainId: number | null; targets: string[]; validityDays: number; utm: boolean;
+}
+
 export interface ApiKeyPatch {
   name: string; defaultServiceId: string | null; defaultOrig: string | null;
   maxParts: number; ratePerMin: number; webhookUrl: string | null;
@@ -240,6 +247,36 @@ export class ApiKeysRepo {
       )
       .all(accountId, now.toISOString(), serviceId) as RawApiKey[];
     return rows.map((r) => this.toRow(r));
+  }
+
+  linkSettings(keyId: number): KeyLinkSettings {
+    const row = this.db
+      .prepare('SELECT link_mode, link_default_domain_id, link_validity_days, link_utm FROM api_keys WHERE id = ?')
+      .get(keyId) as { link_mode: LinkMode; link_default_domain_id: number | null; link_validity_days: number; link_utm: 0 | 1 } | undefined;
+    if (!row) throw new Error(`Klucz ${keyId} nie istnieje`);
+    const domainIds = (this.db.prepare('SELECT domain_id FROM api_key_link_domains WHERE api_key_id = ? ORDER BY domain_id')
+      .all(keyId) as Array<{ domain_id: number }>).map((r) => r.domain_id);
+    const targets = (this.db.prepare('SELECT domain FROM api_key_link_targets WHERE api_key_id = ? ORDER BY domain')
+      .all(keyId) as Array<{ domain: string }>).map((r) => r.domain);
+    return {
+      mode: row.link_mode, domainIds, defaultDomainId: row.link_default_domain_id, targets,
+      validityDays: row.link_validity_days, utm: row.link_utm === 1,
+    };
+  }
+
+  /** Zapis w jednej transakcji: zastępuje listy domen i domen docelowych albo nie zmienia niczego. */
+  setLinkSettings(keyId: number, settings: KeyLinkSettings): void {
+    this.db.transaction(() => {
+      this.db
+        .prepare('UPDATE api_keys SET link_mode = ?, link_default_domain_id = ?, link_validity_days = ?, link_utm = ? WHERE id = ?')
+        .run(settings.mode, settings.defaultDomainId, settings.validityDays, settings.utm ? 1 : 0, keyId);
+      this.db.prepare('DELETE FROM api_key_link_domains WHERE api_key_id = ?').run(keyId);
+      const addDomain = this.db.prepare('INSERT INTO api_key_link_domains (api_key_id, domain_id) VALUES (?, ?)');
+      for (const id of settings.domainIds) addDomain.run(keyId, id);
+      this.db.prepare('DELETE FROM api_key_link_targets WHERE api_key_id = ?').run(keyId);
+      const addTarget = this.db.prepare('INSERT INTO api_key_link_targets (api_key_id, domain) VALUES (?, ?)');
+      for (const domain of settings.targets) addTarget.run(keyId, domain);
+    })();
   }
 
   revoke(id: number): void {

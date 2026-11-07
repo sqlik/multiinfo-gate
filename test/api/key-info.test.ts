@@ -7,6 +7,7 @@ import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
 import { openDatabase } from '../../src/store/db.ts';
 import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
+import { LinkDomainsRepo } from '../../src/store/link-domains.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
 import { MessagesRepo } from '../../src/store/messages.ts';
@@ -67,7 +68,45 @@ describe('GET /v1/key', () => {
       origs: [{ orig: 'Firma Alert', default: false }, { orig: 'Firma Info', default: true }],
       maxParts: 5,
       ratePerMin: 60,
+      links: { mode: 'off', domains: [], validityDays: 90, utm: true },
     });
+  });
+
+  it('blok links: tryb, aktywne domeny klucza z domyślną, ważność i UTM', async () => {
+    const { id, key } = addKey();
+    const domains = new LinkDomainsRepo(db);
+    const NOW = new Date('2026-11-05T10:00:00Z');
+    const main = domains.create({ domain: 'l.firma.pl', displayName: 'Firma Serwis', homeUrl: null, bareLinks: false }, NOW);
+    const second = domains.create({ domain: 'firma-link.pl', displayName: 'Firma Serwis', homeUrl: null, bareLinks: true }, NOW);
+    const off = domains.create({ domain: 'stara-firma.pl', displayName: 'Firma Serwis', homeUrl: null, bareLinks: false }, NOW);
+    domains.setEnabled(off, false, NOW);
+    apiKeys.setLinkSettings(id, {
+      mode: 'sender', domainIds: [main, second, off], defaultDomainId: second, targets: ['firma.pl'], validityDays: 30, utm: false,
+    });
+    expect((await get(key)).json().links).toEqual({
+      mode: 'sender',
+      domains: [{ domain: 'firma-link.pl', default: true }, { domain: 'l.firma.pl', default: false }],
+      validityDays: 30,
+      utm: false,
+    });
+  });
+
+  it('klucz z trybem off zwraca pustą listę domen, nawet gdy domeny zostały przypisane', async () => {
+    const { id, key } = addKey();
+    const main = new LinkDomainsRepo(db).create(
+      { domain: 'l.firma.pl', displayName: 'Firma Serwis', homeUrl: null, bareLinks: false }, new Date('2026-11-05T10:00:00Z'),
+    );
+    apiKeys.setLinkSettings(id, { mode: 'off', domainIds: [main], defaultDomainId: main, targets: ['firma.pl'], validityDays: 90, utm: true });
+    expect((await get(key)).json().links).toEqual({ mode: 'off', domains: [], validityDays: 90, utm: true });
+  });
+
+  it('dozwolone domeny docelowe nie trafiają do odpowiedzi', async () => {
+    const { id, key } = addKey();
+    const main = new LinkDomainsRepo(db).create(
+      { domain: 'l.firma.pl', displayName: 'Firma Serwis', homeUrl: null, bareLinks: false }, new Date('2026-11-05T10:00:00Z'),
+    );
+    apiKeys.setLinkSettings(id, { mode: 'always', domainIds: [main], defaultDomainId: main, targets: ['serwis-klima.pl'], validityDays: 90, utm: true });
+    expect((await get(key)).body).not.toContain('serwis-klima.pl');
   });
 
   it('nie ujawnia danych konta, skrótu klucza ani webhooka', async () => {

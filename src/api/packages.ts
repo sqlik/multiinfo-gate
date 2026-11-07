@@ -1,11 +1,14 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from '../zod.ts';
+import { packageLinks } from '../links/campaigns.ts';
 import type { PackageRow, RecipientRow } from '../store/packages.ts';
 import { authenticate, refuseIntegrationsOnly } from './auth.ts';
 import { dropEmptyFields } from './empty-fields.ts';
 import { ApiError } from './errors.ts';
+import { linkFieldsSchema, linkRequest } from './link-fields.ts';
 import type { ApiDeps } from './server.ts';
 import { submitPackage } from './submit-package.ts';
+import { csvCell } from '../text/csv.ts';
 
 /** Górna granica jednej rozsyłki - powyżej niej body żądania i wywołanie package.aspx rosną bez sensu. */
 const MAX_RECIPIENTS = 5000;
@@ -42,16 +45,11 @@ export const packageBodySchema = z.object({
   deliveryReport: z.boolean().default(true),
   encoding: z.enum(['auto', 'gsm', 'unicode']).default('auto'),
   costCenter: z.string().optional(),
+  ...linkFieldsSchema,
 });
 
 /** Nagłówek CSV; średnik jako separator, bo tak otwierają go polskie arkusze. */
 const CSV_HEADER = 'numer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas';
-
-/** Wartość CSV: cudzysłów tylko, gdy trzeba - pola numeryczne i statusy zostają gołe. */
-function csvCell(value: string | number | null): string {
-  const text = value === null ? '' : String(value);
-  return /[;"\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
 
 /** Raport rozsyłki w postaci CSV - ten sam plik z API i z panelu. */
 export function reportCsv(rows: RecipientRow[]): string {
@@ -85,11 +83,12 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
       throw new ApiError(400, 'invalid_body',
         parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
     }
-    const { serviceId, ...input } = parsed.data;
+    const { serviceId, shortenLinks, campaign, linkDomain, linkValidityDays, ...input } = parsed.data;
     const idempotencyKey = request.headers['idempotency-key'];
     const accepted = submitPackage(deps, auth, {
       ...input, serviceId: serviceId === undefined ? undefined : String(serviceId),
       ...(typeof idempotencyKey === 'string' ? { idempotencyKey } : {}),
+      links: linkRequest({ shortenLinks, campaign, linkDomain, linkValidityDays }),
     }, now());
 
     reply.code(202);
@@ -103,7 +102,9 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
     if (!pkg || pkg.apiKeyId !== auth.apiKeyId) {
       throw new ApiError(404, 'package_not_found', 'Nie ma rozsyłki o tym identyfikatorze.');
     }
-    return present(pkg, pkg.reportStatus === 'ready' ? deps.packages.recipientSummary(pkg.id) : null);
+    const view = present(pkg, pkg.reportStatus === 'ready' ? deps.packages.recipientSummary(pkg.id) : null);
+    const links = packageLinks(deps, pkg);
+    return links === undefined ? view : { ...view, links };
   });
 
   const owned = (id: string, authorization: string | undefined): PackageRow => {

@@ -11,6 +11,7 @@ import { IntegrationsRepo } from '../../src/store/integrations.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { accountInput } from '../store/helpers.ts';
+import { linkDeps } from '../helpers/api-deps.ts';
 
 const NOW = new Date('2026-11-03T10:00:00Z');
 let deps: Parameters<typeof submitPackage>[0];
@@ -28,7 +29,7 @@ beforeEach(() => {
   const apiKeyId = apiKeys.insert({ accountId, name: 'Power Automate', keyHash: 'h', keyPrefix: 'p', defaultServiceId: '24138', defaultOrig: null, maxParts: 5, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'] });
   integrationId = new IntegrationsRepo(db, key).insert({ name: 'Dyspozytornia', kind: 'power_automate', apiKeyId, serviceId: null, orig: null, preset: 'power-automate', enabled: 1, config: defaultPowerAutomateConfig(), secrets: {}, storePayloads: 0, createdAt: NOW });
   auth = authFromKey(apiKeys.get(apiKeyId)!);
-  deps = { accounts, packages: new PackagesRepo(db), jobs: new JobsRepo(db) };
+  deps = { accounts, packages: new PackagesRepo(db), jobs: new JobsRepo(db), apiKeys, ...linkDeps(db) };
 });
 
 describe('submitPackage', () => {

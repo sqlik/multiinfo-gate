@@ -130,6 +130,8 @@ export interface MessageDetail {
   deliveries: DeliveryView[];
   /** Integracja, z której wiadomość przyszła (webhook przychodzący albo skrzynka); brak dla wysyłki przez API. */
   integration?: { id: number; name: string } | null;
+  /** Krótkie linki wiadomości: kampania, kliknięcia ludzi i pierwsze otwarcie; null po retencji szczegółów. */
+  links?: { campaign: { id: number; name: string }; clicks: number | null; firstOpenedAt: string | null } | null;
 }
 
 type Tone = 'ok' | 'wait' | 'fail' | 'dim';
@@ -232,6 +234,15 @@ function contentPanel(m: MessageRow, storeContent: boolean, accountName: string)
   }
 }
 
+/** Wiersze kampanii w danych wiadomości; po retencji liczby kliknięć już nie ma. */
+function linkRows(links: MessageDetail['links']): string {
+  if (!links) return '';
+  const campaign = `<div>Kampania</div><div><a href="/kampanie/${esc(links.campaign.id)}">${esc(links.campaign.name)}</a></div>`;
+  if (links.clicks === null) return `${campaign}<div>Kliknięcia</div><div class="dim">szczegóły usunięte zgodnie z retencją</div>`;
+  return `${campaign}<div>Kliknięcia</div><div class="m">${esc(links.clicks)}</div>`
+    + `<div>Pierwsze otwarcie</div><div class="m">${links.firstOpenedAt === null ? '<span class="dim">brak</span>' : esc(stamp(links.firstOpenedAt))}</div>`;
+}
+
 export function messagePage(d: MessageDetail): string {
   const m = d.row;
   const substatus = m.miStatus === null
@@ -271,6 +282,7 @@ export function messagePage(d: MessageDetail): string {
           <div>ID usługi</div><div class="m">${esc(m.serviceId)}</div>
           ${m.inReplyTo === null ? '' : `<div>Odpowiedź na</div><div class="m"><a href="/odebrane/${esc(m.inReplyTo)}">${esc(m.inReplyTo)}</a></div>`}
           ${!d.integration ? '' : `<div>Integracja</div><div><a href="/integracje/${esc(d.integration.id)}">${esc(d.integration.name)}</a></div>`}
+          ${linkRows(d.links)}
           ${m.mailFrom === null ? '' : `<div>E-mail nadawcy</div><div class="m">${esc(m.mailFrom)}</div>`}
           ${m.requestedBy === null ? '' : `<div>Zlecający</div><div>${esc(m.requestedBy)}</div>`}
           <div>Części w Multiinfo</div><div>${parts}</div>

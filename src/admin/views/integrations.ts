@@ -51,6 +51,7 @@ export const hookPath = (hookId: string): string => `/hooks/${hookId}`;
 
 const EVENT_LABELS: Record<(typeof OUTBOUND_EVENTS)[number], string> = {
   'message.received': 'odebrany SMS', 'message.sent': 'przyjęty do wysyłki', 'message.delivered': 'doręczony', 'message.failed': 'niedoręczony',
+  'link.opened': 'link otwarty',
 };
 
 /** „12 s temu”, „3 min temu”, „2 h temu”, „3 dni temu”. */

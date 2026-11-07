@@ -5,8 +5,11 @@ import { TemplateEngine } from '../../src/integrations/templates.ts';
 import { IntegrationEventsRepo } from '../../src/store/integration-events.ts';
 import { IntegrationGuardsRepo } from '../../src/store/integration-guards.ts';
 import { IntegrationsRepo } from '../../src/store/integrations.ts';
+import { CampaignsRepo } from '../../src/store/campaigns.ts';
+import { LinkDomainsRepo } from '../../src/store/link-domains.ts';
+import { ShortLinksRepo } from '../../src/store/short-links.ts';
 
-/** Zależności integracji do `buildApiServer` w testach, które integracji nie dotyczą. */
+/** Zależności integracji i skracacza do `buildApiServer` w testach, które ich nie dotyczą. */
 export function integrationDeps(db: Database, masterKey: Buffer, resolve: (hostname: string) => Promise<string[]> = async () => []) {
   return {
     integrations: new IntegrationsRepo(db, masterKey),
@@ -15,5 +18,11 @@ export function integrationDeps(db: Database, masterKey: Buffer, resolve: (hostn
     engine: new TemplateEngine(),
     sources: new SourceMatcher(resolve),
     hookLimiter: new RateLimiter(),
+    ...linkDeps(db),
   };
+}
+
+/** Repozytoria skracacza wymagane przez wspólną drogę wysyłki. */
+export function linkDeps(db: Database) {
+  return { linkDomains: new LinkDomainsRepo(db), campaigns: new CampaignsRepo(db), shortLinks: new ShortLinksRepo(db) };
 }

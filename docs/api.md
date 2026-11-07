@@ -24,6 +24,11 @@ Konektor jest plikiem pobieranym z panelu bramki i korzysta z wywołań integrac
 opisanych w rozdziale 5b. Import konektora i budowę przepływów przedstawia artykuł
 [Power Automate](power-automate.md).
 
+Od wersji 1.11 bramka zamienia linki w treści na krótkie linki własnej domeny firmy i liczy ich
+otwarcia. Pola skracania w wysyłkach opisuje rozdział 3, wyniki kampanii rozdział 5c, a zdarzenie
+`link.opened` rozdział 6.2. Przygotowanie domeny i ustawienia klucza przedstawia artykuł
+[Skracacz linków i kampanie](skracacz.md).
+
 Dokument opisuje każde wywołanie w tym samym układzie: przeznaczenie, pełne żądanie w siedmiu
 wariantach do wyboru zakładką (curl, surowy HTTP, PHP, Python, Node.js, PowerShell, C#),
 odpowiedź oraz błędy tego wywołania wraz z zalecanym postępowaniem. To samo API opisuje plik
@@ -93,7 +98,7 @@ Błędy uwierzytelniania mają kod HTTP `401` i jedną z wartości `error.code`:
 ### 2.1. Uprawnienia klucza: `GET /v1/key`
 
 **Przeznaczenie.** Odczyt uprawnień klucza, którym wywołanie jest uwierzytelnione: usług,
-nadpisów nadawcy i limitów. Aplikacja buduje z odpowiedzi listy wyboru usługi i nadawcy.
+nadpisów nadawcy, limitów i ustawień skracania linków. Aplikacja buduje z odpowiedzi listy wyboru usługi i nadawcy.
 Programista może nim sprawdzić klucz przed pierwszą wysyłką. Wywołanie liczy się do limitu żądań
 klucza.
 
@@ -187,7 +192,15 @@ klucza.
     { "orig": "Firma Info", "default": true }
   ],
   "maxParts": 5,
-  "ratePerMin": 60
+  "ratePerMin": 60,
+  "links": {
+    "mode": "sender",
+    "domains": [
+      { "domain": "l.firma.pl", "default": true }
+    ],
+    "validityDays": 90,
+    "utm": true
+  }
 }
 ```
 
@@ -198,10 +211,16 @@ klucza.
 | `origs` | nadpisy nadawcy dozwolone w polu `orig`, w kolejności alfabetycznej; `default: true` oznacza nadpis używany, gdy wysyłka nie podaje `orig` |
 | `maxParts` | najwyższa liczba części jednej wiadomości |
 | `ratePerMin` | limit żądań klucza na minutę |
+| `links.mode` | tryb skracania linków: `off` wyłączone, `sender` decyduje wysyłający, `always` zawsze |
+| `links.domains` | aktywne domeny skracacza klucza w kolejności alfabetycznej; `default: true` oznacza domenę używaną, gdy wysyłka nie podaje `linkDomain`; przy trybie `off` lista jest pusta |
+| `links.validityDays` | domyślna ważność krótkich linków w dniach |
+| `links.utm` | dopisywanie parametrów UTM do adresów docelowych |
 
 Lista `origs` obejmuje nadpis domyślny klucza. Gdy klucz go nie ma, obejmuje nadpis domyślny
 konta. Pusta lista oznacza, że wiadomość zostanie wysłana bez nadpisu. Nadawcą jest wtedy numer
 przydzielony kontu w Multiinfo. Odpowiedź nie zawiera danych konta Multiinfo ani sekretów.
+Blok `links` nie zawiera listy dozwolonych domen docelowych, ponieważ aplikacja nie potrzebuje jej
+do wysyłki. Z pola `links.domains` korzysta lista „Domena skracacza” w konektorze Power Automate.
 
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
@@ -323,6 +342,10 @@ Pola body żądania:
 | `validTo` | nie | ISO 8601, najwyżej 72 godziny od przyjęcia; wiadomość niedoręczona do tego czasu otrzymuje stan `expired` |
 | `costCenter` | nie | dowolny znacznik na potrzeby rozliczeń aplikacji; zwracany w odczycie wiadomości |
 | `inReplyTo` | nie | identyfikator wiadomości przychodzącej (`in_...`), na którą to odpowiedź (rozdział 5a.3); bramka przekazuje go Multiinfo jako `smsInId`; dopuszczalny tylko przy jednym odbiorcy, którym jest nadawca tej wiadomości i w tej samej usłudze, z której przyszła |
+| `shortenLinks` | nie | `true` zamienia linki do dozwolonych domen docelowych klucza na krótkie linki, `false` pozostawia je bez zmian; pominięte pole oznacza skracanie przy kluczu w trybie „Decyduje wysyłający”; ustawienie klucza ma pierwszeństwo ([Skracacz linków i kampanie](skracacz.md), rozdział 6.1) |
+| `campaign` | nie | nazwa kampanii, od 1 do 100 znaków, na przykład `przeglad-klimatyzacji-wiosna`; grupuje wysyłki w wynikach kampanii i trafia do parametru `utm_campaign`; pominięta oznacza nazwę klucza |
+| `linkDomain` | nie | domena skracacza spośród domen klucza, na przykład `l.firma.pl`; pominięta oznacza domenę domyślną klucza; domena spoza klucza kończy żądanie błędem `400 link_domain_not_allowed` |
+| `linkValidityDays` | nie | ważność krótkich linków w dniach, od 1 do 365, liczona od przyjęcia żądania; pominięte pole oznacza ważność ustawioną przy kluczu |
 
 Pole opcjonalne z pustym napisem `""` albo z wartością `null` bramka traktuje jak pominięte.
 Tak samo traktuje pola rozsyłki i pola odbiorców rozsyłki (rozdział 5.1). Pusty `startAt`
@@ -348,6 +371,59 @@ i poprzedza je nazwą pola.
 `parts` to liczba części, na które wiadomość została podzielona. Każdą część operator rozlicza
 osobno. `slots` to liczba zajętych miejsc. W kodowaniu GSM-7 znaki `{ } [ ] ~ ^ | \ €` zajmują
 dwa miejsca. `slotsRemaining` to liczba wolnych miejsc w ostatniej części.
+
+**Blok `links`.** Gdy bramka skraca albo pomija link, a także gdy ustawienie klucza zmienia wybór
+wysyłającego, odpowiedź zawiera blok `links`. Przy tablicy `to` blok występuje w każdym elemencie
+tablicy wyników. Długość treści i liczbę części bramka liczy na treści po skróceniu. Opis
+skracania znajdziesz w artykule [Skracacz linków i kampanie](skracacz.md).
+
+Na przykład treść „Przeglad klimatyzacji przed sezonem: https://firma.pl/przeglad” z polem
+`"campaign": "przeglad-klimatyzacji-wiosna"` otrzymuje odpowiedź:
+
+```json
+{
+  "id": "msg_3f9c2a7b1e4d8c6a5b2f",
+  "status": "queued",
+  "encoding": "gsm",
+  "parts": 1,
+  "characters": 63,
+  "slots": 63,
+  "slotsRemaining": 97,
+  "links": {
+    "shortened": 1,
+    "domain": "l.firma.pl",
+    "campaign": "przeglad-klimatyzacji-wiosna",
+    "expiresAt": "2026-11-24T10:00:00.000Z",
+    "notice": null,
+    "skipped": []
+  }
+}
+```
+
+| Pole | Opis |
+|---|---|
+| `shortened` | liczba skróconych linków; w rozsyłce liczba krótkich linków wszystkich odbiorców |
+| `domain` | domena skracacza użyta w krótkich linkach |
+| `campaign` | kampania, do której należą krótkie linki |
+| `expiresAt` | chwila wygaśnięcia krótkich linków |
+| `notice` | ustawienie albo stan, które zmieniły wynik wybrany przez wysyłającego; `null`, gdy żadne |
+| `skipped` | linki wysłane bez zmian, każdy z polami `url` i `reason`, których powody przedstawia druga tabela poniżej |
+
+| `notice` | Znaczenie |
+|---|---|
+| `disabled_by_key` | żądanie zawiera `shortenLinks: true`, a klucz ma skracanie wyłączone; linki zostały wysłane bez zmian |
+| `forced_by_key` | żądanie zawiera `shortenLinks: false`, a klucz skraca linki zawsze |
+| `domain_unavailable` | domena skracacza jest wyłączona albo serwer krótkich linków nie działa; linki zostały wysłane bez zmian |
+| `campaign_links_disabled` | linki kampanii są wyłączone w panelu, dlatego krótkie linki tej wysyłki prowadzą do strony „Link wygasł” do czasu włączenia linków kampanii |
+
+| `reason` | Znaczenie |
+|---|---|
+| `domain_not_allowed` | domena linku nie należy do dozwolonych domen docelowych klucza |
+| `too_long` | adres jest dłuższy niż 2048 znaków |
+| `too_many` | link następuje w treści po 10 skróconych linkach |
+
+Powtórzenie żądania z tym samym `Idempotency-Key` zwraca te same krótkie linki i nie zwiększa
+liczby wysłanych SMS-ów w kampanii.
 
 ### 3.1. Klucz idempotencji
 
@@ -474,6 +550,7 @@ utworzenie rozsyłki (rozdział 5.1).
 | 400 | `in_reply_to_single` | `inReplyTo` podano razem z listą odbiorców | odpowiadać jednemu odbiorcy naraz |
 | 400 | `in_reply_to_unknown` | wskazanej wiadomości przychodzącej nie ma w tej usłudze | sprawdzić identyfikator `in_...` oraz `serviceId` |
 | 400 | `in_reply_to_recipient` | odbiorca odpowiedzi to ktoś inny niż nadawca wskazanej wiadomości | wysłać odpowiedź na numer nadawcy; `message` go podaje |
+| 400 | `link_domain_not_allowed` | `linkDomain` wskazuje domenę skracacza, która nie jest przypisana do klucza | użyć domeny z `links.domains` w odpowiedzi `GET /v1/key` albo pominąć pole |
 | 403 | `service_not_allowed` | usługa spoza uprawnień klucza | użyć usługi przypisanej do klucza |
 | 403 | `orig_not_allowed` | nadpis spoza uprawnień klucza; `message` wymienia dozwolone | użyć jednego z wymienionych |
 | 403 | `integrations_only_key` | klucz z opcją „Tylko integracje” wysyła wyłącznie przez integracje | użyć innego klucza albo integracji z Power Automate |
@@ -591,6 +668,35 @@ Pole `text` występuje tylko wtedy, gdy konto Multiinfo ma włączone przechowyw
 Pole `inReplyTo` to identyfikator wiadomości przychodzącej, gdy wysyłka była odpowiedzią
 w wątku (rozdział 5a.3). W pozostałych przypadkach ma wartość `null`. Wartości `status`
 objaśnia rozdział 7.
+
+Wiadomość z krótkimi linkami zawiera dodatkowo blok `links`:
+
+```json
+"links": {
+  "campaign": "przeglad-klimatyzacji-wiosna",
+  "domain": "l.firma.pl",
+  "expiresAt": "2026-11-24T10:00:00.000Z",
+  "shortened": 1,
+  "opens": 1,
+  "clicks": 2,
+  "firstOpenedAt": "2026-08-26T10:04:12.000Z",
+  "detailsPurged": false,
+  "shortLinks": [
+    { "url": "https://l.firma.pl/aB3xK9q", "target": "https://firma.pl/przeglad", "clicks": 2, "firstOpenedAt": "2026-08-26T10:04:12.000Z" }
+  ]
+}
+```
+
+| Pole | Opis |
+|---|---|
+| `campaign` | kampania, do której należą krótkie linki |
+| `domain`, `expiresAt` | domena skracacza i chwila wygaśnięcia krótkich linków |
+| `shortened` | liczba krótkich linków w wiadomości |
+| `opens` | 1, gdy odbiorca otworzył co najmniej jeden krótki link, w przeciwnym razie 0 |
+| `clicks` | liczba wejść odbiorcy w krótkie linki bez wejść automatów, na przykład podglądu linku |
+| `firstOpenedAt` | chwila pierwszego otwarcia albo `null` |
+| `detailsPurged` | `true`, gdy bramka usunęła szczegóły krótkich linków 30 dni po ich wygaśnięciu; liczby, domena i chwila wygaśnięcia przyjmują wtedy wartość `null`, a lista `shortLinks` jest pusta |
+| `shortLinks` | krótkie linki w kolejności wystąpienia w treści z adresem docelowym bez parametrów UTM, liczbą wejść i chwilą pierwszego otwarcia |
 
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
@@ -778,6 +884,8 @@ anulowana po stronie operatora, o ile nie została jeszcze doręczona.
 
 **Odpowiedź `200`:** `{ "id": "msg_3f9c2a7b1e4d8c6a5b2f", "status": "cancelled" }`
 
+Krótkie linki anulowanej wiadomości prowadzą od tej chwili do strony „Link wygasł”.
+
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
 | 404 | `message_not_found` | brak wiadomości albo wiadomość innego klucza | sprawdzić identyfikator |
@@ -923,6 +1031,7 @@ kolejnymi wywołaniami.
 | `defaultText` | nie | treść dla odbiorców bez własnego `text`; wymagana, jeżeli którykolwiek odbiorca jej nie ma |
 | `recipients[].clientId` | nie | 1-20 znaków z zakresu `A-Z a-z 0-9 . _ -`; zwracany w raporcie |
 | `orig`, `serviceId`, `encoding`, `deliveryReport`, `costCenter` | nie | znaczenie jak w rozdziale 3 |
+| `shortenLinks`, `campaign`, `linkDomain`, `linkValidityDays` | nie | skracanie linków jak w rozdziale 3; pominięta nazwa kampanii oznacza identyfikator rozsyłki, a ważność liczy się od `startAt` albo od przyjęcia rozsyłki |
 | `startAt` | nie | ISO 8601 w przyszłości; Multiinfo rozpoczyna wysyłkę o tej godzinie |
 
 Kodowanie jest wspólne dla całej rozsyłki. Jeżeli którakolwiek treść wymaga UCS-2, wszystkie
@@ -943,6 +1052,10 @@ razem. Ten sam klucz z inną rozsyłką kończy się kodem `409 idempotency_conf
 { "id": "pkg_7c1e9a2b3d4f5a6b7c8d", "status": "queued", "recipients": 2, "encoding": "gsm", "multipart": false }
 ```
 
+Rozsyłka ze skróconymi linkami zawiera blok `links` opisany w rozdziale 3. Pole `shortened` podaje
+liczbę krótkich linków wszystkich odbiorców. Każdy odbiorca otrzymuje własne kody, także przy
+treści wspólnej `defaultText`.
+
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
 | 400 | `invalid_body` | body nie przechodzi walidacji; `message` wymienia pola | poprawić wskazane pola |
@@ -951,6 +1064,7 @@ razem. Ten sam klucz z inną rozsyłką kończy się kodem `409 idempotency_conf
 | 400 | `invalid_client_id` | `clientId` poza dozwolonym wzorcem | użyć wyłącznie liter, cyfr, kropki, podkreślenia i myślnika, do 20 znaków |
 | 400 | `too_many_parts` | treść przekracza limit części | skrócić treść |
 | 400 | `invalid_orig`, `service_required`, `start_at_in_past` | jak nazwa kodu | poprawić pole |
+| 400 | `link_domain_not_allowed` | `linkDomain` spoza domen skracacza klucza | użyć domeny z `GET /v1/key` albo pominąć pole |
 | 403 | `service_not_allowed`, `orig_not_allowed` | usługa albo nadpis spoza uprawnień klucza | użyć wartości przypisanych do klucza |
 | 403 | `integrations_only_key` | klucz z opcją „Tylko integracje” wysyła wyłącznie przez integracje | użyć innego klucza albo integracji z Power Automate |
 | 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną rozsyłką, a także klucz użyty wcześniej przez integrację | użyć nowego klucza idempotencji |
@@ -1054,7 +1168,20 @@ razem. Ten sam klucz z inną rozsyłką kończy się kodem `409 idempotency_conf
 }
 ```
 
-Pole `summary` występuje tylko przy `report.status` równym `ready`.
+Pole `summary` występuje tylko przy `report.status` równym `ready`. Pole `report.expiresAt` podaje
+ważność kopii raportu w Multiinfo. Raport pobrany przez bramkę pozostaje dostępny przez
+`GET .../report` także po tej chwili, ponieważ bramka odczytuje go z własnej bazy.
+
+Raport rozsyłki bramka zamawia samoczynnie po zakończeniu każdej rozsyłki, także przy
+`deliveryReport: false`. Pole `deliveryReport` decyduje o zamówieniu potwierdzeń doręczenia od
+operatora. Dla rozsyłki z krótkimi linkami i raportem doręczenia bramka pobiera raport ponownie
+24 godziny po zakończeniu. Drugi raport obejmuje potwierdzenia doręczenia przekazane przez
+operatora później, a bramka aktualizuje na jego podstawie wyniki kampanii.
+
+Rozsyłka ze skróconymi linkami zawiera dodatkowo blok `links` z polami `campaign`, `domain`,
+`expiresAt`, `shortened`, `opens`, `clicks`, `firstOpenedAt` i `detailsPurged`. Znaczenie pól jest
+takie jak w rozdziale 4.1, a `shortened` i `opens` obejmują wszystkich odbiorców rozsyłki.
+Odbiorców, którzy otworzyli link, zwraca odczyt kampanii z rozdziału 5c.
 
 | `status` | Znaczenie |
 |---|---|
@@ -1063,7 +1190,13 @@ Pole `summary` występuje tylko przy `report.status` równym `ready`.
 | `sending` | w trakcie wysyłki; `remaining` maleje |
 | `completed` | wysyłka zakończona; bramka zamawia raport samoczynnie |
 | `cancelled` | anulowana po stronie Multiinfo |
-| `failed` | odrzucona przez Multiinfo; przyczyna w `providerCode` i `error` |
+| `failed` | odrzucona przez Multiinfo albo bez potwierdzenia utworzenia; przyczyna w `providerCode` i `error` |
+
+Kod `providerCode` równy -72 oznacza, że Multiinfo nie potwierdziło utworzenia rozsyłki. Bramka
+przekazała rozsyłkę, ale nie otrzymała odpowiedzi w wyznaczonym czasie albo zatrzymała się przed
+jej otrzymaniem. Multiinfo mogło mimo to utworzyć rozsyłkę, a jego API nie pozwala tego sprawdzić.
+Dlatego bramka nie ponawia takiej rozsyłki samoczynnie. Postępowanie opisuje punkt
+[Rozsyłka zakończona kodem -72](problemy.md#rozsylka-bez-potwierdzenia).
 
 | `report.status` | Znaczenie |
 |---|---|
@@ -1261,7 +1394,9 @@ służy do ponowienia zamówienia, gdy poprzedni raport ma stan `failed`.
 ```
 
 Ten sam raport można pobrać w formacie CSV. Separatorem jest średnik, a wiersz nagłówka to
-`numer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas`:
+`numer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas`. Identyfikator klienta
+zaczynający się od znaku `-` otrzymuje apostrof na początku, dzięki czemu arkusz nie odczyta go
+jako formuły:
 
 === "curl"
 
@@ -1692,6 +1827,10 @@ niewidocznych znaków formatowania, na przykład końca wiersza albo znaku zmian
 Kolumna „Nadawca” w dzienniku integracji pokazuje `API · <zlecający> · <adres IP wywołania>`,
 a przy braku zlecającego `API · <adres IP wywołania>`.
 
+Każda z trzech wysyłek przyjmuje także pola skracania linków z rozdziału 3: `shortenLinks`,
+`campaign`, `linkDomain` i `linkValidityDays`. Pominięta nazwa kampanii oznacza nazwę integracji.
+Odpowiedź zawiera blok `links` jak w rozdziałach 3 i 5.1.
+
 ### 5b.1. Lista integracji: `GET /v1/integrations`
 
 **Przeznaczenie.** Odczyt czynnych integracji z Power Automate przypisanych do klucza. Z tego
@@ -1899,6 +2038,7 @@ Pola body żądania:
 | `text` | tak | treść wiadomości, jak w rozdziale 3 |
 | `requestedBy` | nie | zlecający, do 100 znaków |
 | `encoding`, `deliveryReport`, `validTo`, `costCenter` | nie | jak w rozdziale 3 |
+| `shortenLinks`, `campaign`, `linkDomain`, `linkValidityDays` | nie | jak w rozdziale 3; pominięta nazwa kampanii oznacza nazwę integracji |
 
 Pusty numer nigdy nie oznacza wysyłki do listy odbiorców integracji. Do listy wysyła wyłącznie
 wywołanie z rozdziału 5b.4.
@@ -2167,6 +2307,7 @@ Pola body żądania:
 | `text` | tak | treść wiadomości, jak w rozdziale 3 |
 | `requestedBy` | nie | zlecający, do 100 znaków |
 | `encoding`, `deliveryReport`, `validTo`, `costCenter` | nie | jak w rozdziale 3 |
+| `shortenLinks`, `campaign`, `linkDomain`, `linkValidityDays` | nie | jak w rozdziale 3; pominięta nazwa kampanii oznacza nazwę integracji |
 
 Odbiorców wyznacza lista integracji. Pole `to` nie ma w tym wywołaniu znaczenia. Bramka je
 pomija, podobnie jak `serviceId`, `orig`, `maxParts` i `inReplyTo`. Wysyłka jest przyjmowana
@@ -2238,11 +2379,278 @@ klucza na minutę, wspólny dla całego API.
 Wywołanie wyłączonej integracji nie zostawia wpisu w dzienniku. Pozostałe błędy z tabeli poza
 `401`, `404` i `rate_limited` zostawiają wpis „błąd” albo „limit”.
 
+## 5c. Kampanie
+
+Kampania grupuje wysyłki z krótkimi linkami wysłane jednym kluczem pod jedną nazwą z pola
+`campaign`. Bez nazwy bramka nadaje nazwę domyślną: identyfikator rozsyłki, nazwę integracji albo
+nazwę klucza. Do kampanii należą wyłącznie SMS-y z co najmniej jednym skróconym linkiem. Aplikacja
+odczytuje wyłącznie kampanie swojego klucza. Opis kampanii i wyników w panelu znajdziesz
+w artykule [Skracacz linków i kampanie](skracacz.md).
+
+Otwarcia oznaczają liczbę odbiorców, którzy otworzyli co najmniej jeden krótki link. Kliknięcia
+oznaczają wszystkie wejścia odbiorców w krótkie linki. Wejścia automatów, na przykład podglądu
+linku w komunikatorze albo skanera poczty, bramka liczy osobno w polu `bots` i nie wlicza ich do
+otwarć ani kliknięć.
+
+### 5c.1. Lista kampanii: `GET /v1/campaigns`
+
+**Przeznaczenie.** Lista kampanii klucza od najnowszej kampanii, z liczbą wysłanych SMS-ów, otwarć
+i kliknięć. Kolejność nie zależy od ostatniej wysyłki, dlatego kampania nie przechodzi na inną
+stronę, gdy w trakcie pobierania stron trafia do niej kolejna wysyłka. Strona zawiera domyślnie 25 pozycji, najwyżej 200 w parametrze `limit`. Następną stronę
+pobiera się parametrem `offset`, dopóki `hasMore` ma wartość `true`.
+
+=== "curl"
+
+    ```bash
+    curl -s "https://<TWOJA-DOMENA>/v1/campaigns" \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    GET /v1/campaigns HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/campaigns');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    foreach ($odpowiedz['data'] as $k) {
+        echo $k['name'], ': ', $k['opens'], ' otwarć', PHP_EOL;
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/campaigns",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    for k in odpowiedz["data"]:
+        print(k["name"], k["opens"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/campaigns", {
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    for (const k of odpowiedz.data) console.log(k.name, k.opens);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/v1/campaigns" -Headers $naglowki
+    $odpowiedz.data | ForEach-Object { "$($_.name): $($_.opens)" }
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/v1/campaigns"));
+    foreach (var k in odpowiedz.RootElement.GetProperty("data").EnumerateArray())
+        Console.WriteLine($"{k.GetProperty("name")}: {k.GetProperty("opens")}");
+    ```
+
+**Odpowiedź `200`:**
+
+```json
+{
+  "data": [
+    {
+      "name": "przeglad-klimatyzacji-wiosna",
+      "firstSentAt": "2026-08-26T10:00:00.000Z",
+      "lastSentAt": "2026-08-26T10:03:40.000Z",
+      "sent": 1240,
+      "opens": 312,
+      "clicks": 455,
+      "bots": 41,
+      "linksDisabledAt": null
+    }
+  ],
+  "hasMore": false
+}
+```
+
+| Pole | Opis |
+|---|---|
+| `name` | nazwa kampanii |
+| `firstSentAt`, `lastSentAt` | chwila pierwszej i ostatniej wysyłki z krótkim linkiem |
+| `sent` | liczba wysłanych SMS-ów z krótkimi linkami |
+| `opens` | liczba odbiorców, którzy otworzyli co najmniej jeden krótki link |
+| `clicks` | liczba wejść odbiorców w krótkie linki |
+| `bots` | liczba wejść automatów, niewliczonych do otwarć ani kliknięć |
+| `linksDisabledAt` | chwila wyłączenia linków kampanii w panelu albo `null`, gdy linki działają |
+
+### 5c.2. Wyniki kampanii: `GET /v1/campaigns/{nazwa}`
+
+**Przeznaczenie.** Liczby kampanii, adresy docelowe z otwarciami i kliknięciami oraz strona
+odbiorców, którzy otworzyli link. Nazwę kampanii podaje się w adresie w postaci zakodowanej, na
+przykład spację jako `%20`, a ukośnik jako `%2F`. Strona odbiorców zawiera domyślnie 50 pozycji,
+najwyżej 200 w parametrze `limit`. Kolejne strony pobiera się parametrem `offset`, dopóki
+`openers.hasMore` ma wartość `true`.
+
+=== "curl"
+
+    ```bash
+    curl -s "https://<TWOJA-DOMENA>/v1/campaigns/przeglad-klimatyzacji-wiosna" \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    GET /v1/campaigns/przeglad-klimatyzacji-wiosna HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/campaigns/przeglad-klimatyzacji-wiosna');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    foreach ($odpowiedz['openers']['data'] as $o) {
+        echo $o['to'], ' ', $o['clicks'], PHP_EOL;
+    }
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/campaigns/przeglad-klimatyzacji-wiosna",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    for o in odpowiedz["openers"]["data"]:
+        print(o["to"], o["clicks"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/campaigns/przeglad-klimatyzacji-wiosna", {
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    for (const o of odpowiedz.openers.data) console.log(o.to, o.clicks);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Uri "https://<TWOJA-DOMENA>/v1/campaigns/przeglad-klimatyzacji-wiosna" -Headers $naglowki
+    $odpowiedz.openers.data | ForEach-Object { "$($_.to): $($_.clicks)" }
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var odpowiedz = JsonDocument.Parse(await http.GetStringAsync("https://<TWOJA-DOMENA>/v1/campaigns/przeglad-klimatyzacji-wiosna"));
+    foreach (var o in odpowiedz.RootElement.GetProperty("openers").GetProperty("data").EnumerateArray())
+        Console.WriteLine($"{o.GetProperty("to")}: {o.GetProperty("clicks")}");
+    ```
+
+**Odpowiedź `200`:**
+
+```json
+{
+  "name": "przeglad-klimatyzacji-wiosna",
+  "firstSentAt": "2026-08-26T10:00:00.000Z",
+  "lastSentAt": "2026-08-26T10:03:40.000Z",
+  "sent": 1240,
+  "opens": 312,
+  "clicks": 455,
+  "bots": 41,
+  "linksDisabledAt": null,
+  "packages": 1,
+  "messages": 0,
+  "delivered": 1204,
+  "detailsPurgedAt": null,
+  "domain": "l.firma.pl",
+  "expiresAt": "2026-11-24T10:00:00.000Z",
+  "utm": true,
+  "links": [
+    { "target": "https://firma.pl/przeglad", "kind": "shared", "opens": 298, "clicks": 431 },
+    { "target": "https://firma.pl/oferta/{…}", "kind": "individual", "opens": 14, "clicks": 24 }
+  ],
+  "openers": {
+    "data": [
+      {
+        "to": "48601000001",
+        "clientId": "klient-1001",
+        "firstOpenedAt": "2026-08-26T10:04:12.000Z",
+        "lastClickedAt": "2026-08-26T18:20:05.000Z",
+        "clicks": 3,
+        "targets": ["https://firma.pl/oferta/1001", "https://firma.pl/przeglad"]
+      }
+    ],
+    "hasMore": true
+  }
+}
+```
+
+| Pole | Opis |
+|---|---|
+| `packages`, `messages` | liczba rozsyłek i pojedynczych wiadomości z krótkimi linkami w kampanii |
+| `delivered` | liczba doręczonych SMS-ów według raportów doręczenia; `null`, gdy żadna wysyłka kampanii nie zamawiała raportu doręczenia |
+| `detailsPurgedAt` | chwila usunięcia szczegółów odbiorców, 30 dni po wygaśnięciu linków; liczby kampanii pozostają bez zmian |
+| `domain` | domena skracacza ostatniej wysyłki; po usunięciu szczegółów `null` |
+| `expiresAt` | chwila wygaśnięcia ostatnich ważnych linków kampanii; po usunięciu szczegółów `null` |
+| `utm` | dopisywanie parametrów UTM do adresów docelowych; po usunięciu szczegółów `null` |
+| `links` | adresy docelowe od największej liczby odbiorców; `kind` równe `shared` oznacza adres wysłany na więcej niż jeden numer, a `individual` adres wysłany na jeden numer; linki indywidualne o wspólnej budowie tworzą jeden wiersz ze znacznikiem `{…}` w części zmiennej, a po okresie przechowywania wiersz zawiera tylko domenę i pierwszy człon ścieżki |
+| `openers.data` | odbiorcy, którzy otworzyli link, od pierwszego otwarcia, dzięki czemu kolejne kliknięcie nie przesuwa odbiorcy między stronami: numer, identyfikator klienta z rozsyłki, pierwsze otwarcie, ostatnie kliknięcie, liczba kliknięć i otwarte adresy docelowe; po usunięciu szczegółów lista jest pusta |
+
+| HTTP | `error.code` | Przyczyna | Postępowanie |
+|---|---|---|---|
+| 404 | `campaign_not_found` | brak kampanii o tej nazwie albo kampania innego klucza | sprawdzić nazwę i jej zakodowanie w adresie |
+
 ## 6. Powiadomienia webhook
 
 Webhook to mechanizm powiadomień zwrotnych. Aplikacja udostępnia adres HTTP, a bramka wysyła na
 niego żądanie `POST` przy każdej zmianie stanu: wysłaniu, doręczeniu, niepowodzeniu,
-zakończeniu rozsyłki. Wysyła je także przy odebraniu SMS-a od abonenta. Dzięki temu aplikacja
+zakończeniu rozsyłki. Wysyła je także przy odebraniu SMS-a od abonenta i przy pierwszym otwarciu
+krótkiego linku. Dzięki temu aplikacja
 nie musi cyklicznie odpytywać bramki o stan każdej wiadomości. Adres i sekret ustawia
 administrator bramki przy kluczu API. Sekret służy do weryfikacji, że żądanie pochodzi od
 bramki.
@@ -2256,7 +2664,7 @@ Każde żądanie zawiera nagłówki:
 | Nagłówek | Wartość |
 |---|---|
 | `Content-Type` | `application/json` |
-| `X-MIG-Event` | `message.sent`, `message.delivered`, `message.failed`, `package.completed` albo `message.received` |
+| `X-MIG-Event` | `message.sent`, `message.delivered`, `message.failed`, `package.completed`, `message.received` albo `link.opened` |
 | `X-MIG-Timestamp` | czas uniksowy w sekundach, użyty do obliczenia podpisu |
 | `X-MIG-Signature` | `sha256=<hex>`, gdzie `<hex>` to HMAC-SHA256 z sekretu obliczony z ciągu `<X-MIG-Timestamp>.<body żądania>` |
 
@@ -2353,6 +2761,7 @@ Do tego dochodzą pola zależne od zdarzenia:
 | `message.failed` | `status` (`failed`, `blocked`, `expired` albo `cancelled`), `to`, `error`; przy odmowie Multiinfo `providerCode`, przy raporcie doręczenia `miStatus` i `miSubstatus` |
 | `package.completed` | `recipients`, `status` (`completed`, `failed`, `cancelled`); po pobraniu raportu `report: "ready"` i `summary`, przy nieudanym raporcie `report: "failed"`; przy odmowie `providerCode` i `error` |
 | `message.received` | `serviceId`, `from`, `to`, `kind`, `text` albo `hex`, `receivedAt`, `relatedMessageId` - pola jak w 5a.2; `id` to identyfikator wiadomości przychodzącej `in_...` |
+| `link.opened` | `messageId`, `packageId`, `seq`, `campaign`, `to`, `clientId`, `target`, `shortUrl`, `openedAt` - bez pola `id`; opis niżej |
 
 Powiadomienia o wysyłce będącej odpowiedzią w wątku (5a.3) zawierają dodatkowo pole `inReplyTo`.
 
@@ -2370,6 +2779,27 @@ Przykład `message.received`:
   "serviceId": "24138", "from": "48601000001", "to": "7968", "kind": "text",
   "text": "Dziekuje, wszystko jasne", "receivedAt": "2026-08-29T07:14:00.000Z",
   "relatedMessageId": "msg_3f9c2a7b1e4d8c6a5b2f" }
+```
+
+Zdarzenie `link.opened` bramka wysyła przy pierwszym wejściu odbiorcy w link do danego adresu
+docelowego, z pominięciem wejść automatów. Kolejne kliknięcia tego samego odbiorcy w link do tego
+adresu nie wywołują zdarzenia, także gdy adres wystąpił w treści SMS-a dwa razy. Odbiorca pojedynczej wiadomości jest wskazany polem `messageId`. Odbiorca
+rozsyłki nie jest osobną wiadomością, dlatego `messageId` ma dla niego wartość `null`, a odbiorcę
+wskazują `packageId`, `seq` i `clientId`. Pole `seq` podaje pozycję odbiorcy w tablicy
+`recipients` rozsyłki, licząc od 1. Pole `target` zawiera adres docelowy bez parametrów UTM,
+a `shortUrl` krótki link zawsze z `https://`, także gdy SMS zawierał link bez schematu.
+
+Zapis dostawy zdarzenia w bramce traci pola `to`, `clientId`, `target` i `shortUrl` 30 dni po
+wygaśnięciu linku, razem z kodem. Zapis dostawy integracji traci w tym terminie całe body
+i nagłówki.
+
+Przykład `link.opened` dla odbiorcy rozsyłki:
+
+```json
+{ "event": "link.opened", "at": "2026-08-26T10:04:12.000Z", "messageId": null,
+  "packageId": "pkg_7c1e9a2b3d4f5a6b7c8d", "seq": 1, "campaign": "przeglad-klimatyzacji-wiosna",
+  "to": "48601000001", "clientId": "klient-1001", "target": "https://firma.pl/przeglad",
+  "shortUrl": "https://l.firma.pl/aB3xK9q", "openedAt": "2026-08-26T10:04:12.000Z" }
 ```
 
 Powiadomienie `message.received` zawiera treść zawsze, także gdy konto nie przechowuje treści.
@@ -2458,11 +2888,12 @@ użytkownikowi końcowemu.
 | 400 | `in_reply_to_single` | `inReplyTo` razem z listą odbiorców | jeden odbiorca |
 | 400 | `in_reply_to_recipient` | odbiorca odpowiedzi to nie nadawca wskazanej wiadomości | w `to` podać `from` z `message.received` |
 | 400 | `invalid_query` | `since` albo `until` nie są datami ISO 8601, albo parametr zapytania podano więcej niż raz | poprawić parametry zapytania |
+| 400 | `link_domain_not_allowed` | `linkDomain` wskazuje domenę skracacza nieprzypisaną do klucza | użyć domeny z `links.domains` w `GET /v1/key` albo pominąć pole |
 | 401 | `missing_api_key`, `invalid_api_key`, `revoked_api_key`, `expired_api_key` | brak, nieprawidłowy, odwołany albo wygasły klucz | rozdział 2 |
 | 403 | `service_not_allowed` | usługa spoza uprawnień klucza | użyć usługi przypisanej do klucza |
 | 403 | `orig_not_allowed` | nadpis spoza uprawnień klucza; `message` wymienia dozwolone | użyć jednego z wymienionych |
 | 403 | `integrations_only_key` | klucz z opcją „Tylko integracje” wysyła wyłącznie przez integracje z Power Automate | użyć innego klucza albo wywołań z rozdziału 5b |
-| 404 | `message_not_found`, `package_not_found`, `inbound_not_found`, `integration_not_found` | brak obiektu albo obiekt innego klucza | sprawdzić identyfikator |
+| 404 | `message_not_found`, `package_not_found`, `inbound_not_found`, `integration_not_found`, `campaign_not_found` | brak obiektu albo obiekt innego klucza | sprawdzić identyfikator |
 | 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią, numerem albo rozsyłką, a także klucz użyty wcześniej w innej integracji | użyć nowego klucza idempotencji |
 | 409 | `already_final`, `already_passed` | anulowanie niemożliwe (4.3) | brak |
 | 409 | `integration_disabled`, `group_empty` | integracja z Power Automate wyłączona w panelu albo bez odbiorców grupy (5b.6) | poprosić administratora o włączenie integracji albo uzupełnienie listy |

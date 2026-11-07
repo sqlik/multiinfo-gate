@@ -39,6 +39,13 @@ import { MessageEventsRepo } from './store/message-events.ts';
 import { MessagesRepo } from './store/messages.ts';
 import { NotificationsRepo } from './store/notifications.ts';
 import { M365AccountsRepo } from './store/m365-accounts.ts';
+import { CampaignsRepo } from './store/campaigns.ts';
+import { LinkDomainsRepo } from './store/link-domains.ts';
+import { ShortLinksRepo } from './store/short-links.ts';
+import { DomainChecks } from './links/domain-checks.ts';
+import { LinksServerState } from './links/server-state.ts';
+import { emitLinkOpened } from './links/events.ts';
+import { buildLinksServer } from './links/server.ts';
 import { fetchToken } from './m365/oauth.ts';
 import { M365Service } from './m365/service.ts';
 import { M365Tokens } from './m365/tokens.ts';
@@ -146,9 +153,15 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const notifications = new NotificationsRepo(db, config.masterKey);
   const settings = new SettingsRepo(db);
   const m365Accounts = new M365AccountsRepo(db, config.masterKey);
+  const linkDomains = new LinkDomainsRepo(db);
+  const campaigns = new CampaignsRepo(db);
+  const shortLinks = new ShortLinksRepo(db);
+  // Stan serwera przekierowań trafia razem z repozytoriami skracacza do każdej drogi wysyłki i do panelu.
+  const linksServer = new LinksServerState();
+  const links = { linkDomains, campaigns, shortLinks, linksServer };
   const notifier = new Notifier({
     notifications, jobs, log,
-    sms: (text, now) => sendNotificationSms({ accounts, apiKeys, messages, events, jobs, inbound, notifications }, text, now),
+    sms: (text, now) => sendNotificationSms({ accounts, apiKeys, messages, events, jobs, inbound, notifications, ...links }, text, now),
     subjectName: subjectNamer({ integrations, accounts, m365Accounts }),
   });
   const m365Tokens = new M365Tokens({ accounts: m365Accounts, fetch: fetchToken, notifier, log });
@@ -158,7 +171,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     release: () => pendingRelease(settings), mailIn,
   });
   const releases = new ReleaseChecker({ settings, notifier, log, enabled: config.updateCheck });
-  const integrationEmit = { integrations, integrationEvents, guards, deliveries, jobs, engine, notifier, log, group: { accounts, apiKeys, messages, events, jobs, inbound } };
+  const integrationEmit = { integrations, integrationEvents, guards, deliveries, jobs, engine, notifier, log, group: { accounts, apiKeys, messages, events, jobs, inbound, ...links } };
 
   const backups = new BackupScheduler({
     db, dir: join(config.dataDir, 'backups'), retentionDays: config.backupRetentionDays, log,
@@ -167,13 +180,14 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const mailInPoller = new MailInPoller({
     accounts, apiKeys, messages, events, jobs, inbound, integrations, integrationEvents, guards, engine,
     mailIn, connect: imapConnect, resolve: systemResolver, allowPrivateMail: config.mailAllowPrivate, notifier, notifications, log,
-    m365: { tokens: m365Tokens, accounts: m365Accounts },
+    m365: { tokens: m365Tokens, accounts: m365Accounts }, ...links,
   });
   const worker = new Worker({
     accounts, apiKeys, messages, events, deliveries, packages, jobs, clients, inbound,
     reportsDir: join(config.dataDir, 'reports'), log, allowPrivateWebhooks: config.webhookAllowPrivate,
     integrationEmit, integrations, integrationEvents, guards, notifier, notifications, scanner, releases,
     mailIn: mailInPoller, mailInRepo: mailIn, m365: { tokens: m365Tokens, accounts: m365Accounts }, m365KeepAlive: m365Tokens,
+    links: { campaigns, shortLinks },
   });
 
   const receiver = new Receiver({
@@ -187,15 +201,22 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     inboundHealth: () => receiver.health(),
     integrations, integrationEvents, guards, engine, sources: new SourceMatcher(systemResolver),
     hookLimiter: new RateLimiter(), trustedProxies: config.trustedProxies, notifier,
-    allowPrivateWebhooks: config.webhookAllowPrivate,
+    allowPrivateWebhooks: config.webhookAllowPrivate, ...links,
   });
+  // Tokeny sprawdzenia domeny wystawia panel, a odpowiada na nie serwer przekierowań.
+  const domainChecks = new DomainChecks();
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
     integrationEvents, guards, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
     trustedProxies: config.trustedProxies,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate, allowPrivateMail: config.mailAllowPrivate,
-    log, install, nodeVersion, m365, m365Accounts, m365Tokens,
+    allowPrivateLinks: config.linksAllowPrivate, log, install, nodeVersion, m365, m365Accounts, m365Tokens, ...links, domainChecks,
+  });
+  const redirects = buildLinksServer({
+    ...links, messages, checks: domainChecks, trustedProxies: config.trustedProxies, log,
+    transaction: (fn) => db.transaction(fn)(),
+    opened: (link, campaign, domain, at) => emitLinkOpened({ apiKeys, deliveries, jobs, integrationEmit }, link, campaign, domain, at),
   });
 
   // Panel domyślnie zostaje na pętli zwrotnej (MIG_ADMIN_HOST); w kontenerze o wystawieniu
@@ -208,9 +229,29 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   } catch (error) {
     await api.close();
     await admin.close();
+    await redirects.close();
     clients.closeAll();
     db.close();
     throw error;
+  }
+  // Serwer przekierowań, którego nie da się uruchomić, nie zatrzymuje bramki: wysyłka działa bez skracania,
+  // a panel i dziennik podają przyczynę, na przykład port zajęty przez inny program.
+  try {
+    await redirects.listen({ port: config.linksPort, host: config.linksHost });
+  } catch (error) {
+    // Inny błąd niż nasłuch, na przykład wadliwa wtyczka serwera, jest błędem programu i zatrzymuje start jak dotąd.
+    if (!isListenError(error)) {
+      await api.close();
+      await admin.close();
+      await redirects.close();
+      clients.closeAll();
+      db.close();
+      throw error;
+    }
+    const code = (error as { code?: unknown }).code;
+    const problem = { host: config.linksHost, port: config.linksPort, code: typeof code === 'string' ? code : 'nieznany' };
+    linksServer.failed(problem);
+    log.error('linki.serwer_nie_dziala', { ...problem, help: problemUrl('serwer-krotkich-linkow') });
   }
   backups.start();
   worker.start();
@@ -222,8 +263,10 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const running: RunningGate = {
     apiPort: portOf(api.server.address()),
     adminPort: portOf(admin.server.address()),
+    ...(linksServer.available() ? { linksPort: portOf(redirects.server.address()) } : {}),
     apiHost: config.apiHost,
     adminHost: config.adminHost,
+    linksHost: config.linksHost,
     mode: 'normal',
     stop: async () => {
       // Odbiornik pierwszy: przerywa long polling, zanim zamkniemy pulę klientów i bazę.
@@ -232,6 +275,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
       worker.stop();
       await api.close();
       await admin.close();
+      await redirects.close();
       clients.closeAll();
       db.close();
       log.info('bramka.zatrzymana');
@@ -242,6 +286,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   log.info('bramka.start', {
     api: `${running.apiHost}:${running.apiPort}`,
     panel: `${running.adminHost}:${running.adminPort}`,
+    linki: linksServer.available() ? `${running.linksHost}:${running.linksPort}` : 'nie działa',
     queueDepth: jobs.depth(),
     webhookAllowPrivate: config.webhookAllowPrivate,
     inboundTimeoutMs: config.inboundTimeoutMs,

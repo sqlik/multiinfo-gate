@@ -26,6 +26,7 @@ export const CONNECTOR_ARTICLE = 'https://sqlik.github.io/multiinfo-gate/power-a
  */
 export const CONNECTOR_OPERATIONS = [
   'WyslijSms', 'WyslijRozsylke', 'WyslijSmsDoGrupy', 'StanWiadomosci', 'StanRozsylki', 'RaportRozsylki', 'ListaIntegracji',
+  'DomenySkracacza',
 ] as const;
 
 /**
@@ -182,6 +183,15 @@ const LABELS_BY_PATH: Record<string, string> = {
   'IntegracjaPowerAutomate.id': 'Identyfikator integracji',
   'IntegracjaPowerAutomate.name': 'Nazwa integracji',
   'IntegracjaPowerAutomate.recipients': 'Liczba odbiorców grupy',
+  'PrzyjetaWiadomosc.links.expiresAt': 'Linki ważne do',
+  'PrzyjetaRozsylka.links.expiresAt': 'Linki ważne do',
+  'WysylkaDoGrupy.messages[].links.expiresAt': 'Linki ważne do',
+  'Wiadomosc.links.expiresAt': 'Linki ważne do',
+  'Wiadomosc.links.shortLinks[].url': 'Krótki link',
+  'Rozsylka.links.expiresAt': 'Linki ważne do',
+  'DomenySkracaczaKlucza.links': 'Skracanie linków przy kluczu',
+  'DomenySkracaczaKlucza.links.domains': 'Domeny skracacza',
+  'DomenySkracaczaKlucza.links.domains[].default': 'Domena domyślna',
 };
 
 const LABELS_BY_NAME: Record<string, string> = {
@@ -230,6 +240,23 @@ const LABELS_BY_NAME: Record<string, string> = {
   messages: 'Wiadomości',
   code: 'Kod błędu',
   message: 'Komunikat',
+  shortenLinks: 'Skracanie linków',
+  campaign: 'Kampania',
+  linkDomain: 'Domena skracacza',
+  linkValidityDays: 'Ważność linków (dni)',
+  links: 'Krótkie linki',
+  shortened: 'Liczba skróconych linków',
+  domain: 'Domena skracacza',
+  notice: 'Zgłoszenie skracania',
+  skipped: 'Pominięte linki',
+  url: 'Adres',
+  reason: 'Powód',
+  opens: 'Odbiorcy z otwarciem',
+  clicks: 'Kliknięcia',
+  firstOpenedAt: 'Pierwsze otwarcie',
+  detailsPurged: 'Szczegóły usunięte po retencji',
+  shortLinks: 'Lista krótkich linków',
+  target: 'Adres docelowy',
 };
 
 /**
@@ -252,6 +279,15 @@ const DESCRIPTIONS_BY_PATH: Record<string, string> = {
   encoding: 'Automatyczne wybiera GSM-7, a przy polskich znakach Unicode. Przy GSM Multiinfo zastępuje polskie znaki'
     + ' łacińskimi odpowiednikami. Unicode zawsze koduje treść w UCS-2',
   deliveryReport: 'Wartość „Nie” oznacza rezygnację z raportu doręczenia. Stan wiadomości kończy się wtedy na sent',
+  shortenLinks: 'Wartość „Tak” zamienia linki do dozwolonych domen docelowych klucza na krótkie linki, a wartość „Nie”'
+    + ' pozostawia je bez zmian. Puste pole oznacza ustawienie klucza w bramce. Ustawienie klucza ma pierwszeństwo'
+    + ' przed wyborem w akcji',
+  campaign: 'Nazwa kampanii, od 1 do 100 znaków. Grupuje wysyłki w wynikach kampanii w panelu bramki i trafia do'
+    + ' parametru utm_campaign. Puste pole oznacza nazwę integracji',
+  linkDomain: 'Domena skracacza z listy aktywnych domen przypisanych do klucza, na przykład l.firma.pl. Puste pole'
+    + ' oznacza domenę domyślną klucza',
+  linkValidityDays: 'Liczba dni, przez które krótkie linki działają, od 1 do 365. Puste pole oznacza ważność ustawioną'
+    + ' przy kluczu, domyślnie 90 dni',
   'WyslijRozsylke.recipients': 'Lista odbiorców, od 1 do 5000 pozycji. Pozycje wpisuje się po kolei albo podaje całą'
     + ' listę z akcji „Wybierz”',
   'WyslijRozsylke.recipients[].to': 'Numer telefonu odbiorcy, na przykład 48601000001. Numer bez kodu kraju otrzymuje'
@@ -259,6 +295,9 @@ const DESCRIPTIONS_BY_PATH: Record<string, string> = {
   'WyslijRozsylke.recipients[].text': 'Treść dla tego odbiorcy. Puste pole oznacza treść wspólną rozsyłki',
   'WyslijRozsylke.recipients[].clientId': 'Własny identyfikator odbiorcy, na przykład numer zlecenia. Od 1 do 20'
     + ' znaków: litery bez polskich znaków, cyfry, kropka, podkreślenie i łącznik. Wraca w raporcie rozsyłki',
+  'DomenySkracaczaKlucza.links.domains': 'Aktywne domeny skracacza przypisane do klucza, w kolejności alfabetycznej.'
+    + ' Gdy skracanie linków przy kluczu jest wyłączone, lista jest pusta',
+  'DomenySkracaczaKlucza.links.domains[].default': 'Domena używana, gdy pole „Domena skracacza” jest puste',
   'Wiadomosc.status': 'Stan wiadomości: queued - w kolejce, sent - przekazana do sieci, delivered - doręczona,'
     + ' failed - niedoręczona, przyczynę podaje opis błędu, expired - upłynęła ważność bez doręczenia, cancelled -'
     + ' anulowana, blocked - numer na liście blokad operatora, throttled - wstrzymana limitem operatora, unknown -'
@@ -277,6 +316,10 @@ const VISIBILITY: Record<string, Visibility> = {
   validTo: 'advanced',
   costCenter: 'advanced',
   startAt: 'advanced',
+  shortenLinks: 'advanced',
+  campaign: 'advanced',
+  linkDomain: 'advanced',
+  linkValidityDays: 'advanced',
 };
 
 const ENCODING_NAMES = [
@@ -287,6 +330,10 @@ const ENCODING_NAMES = [
 
 const INTEGRATION_LIST: DynamicValues = {
   operationId: 'ListaIntegracji', 'value-collection': 'data', 'value-path': 'id', 'value-title': 'name',
+};
+
+const LINK_DOMAIN_LIST: DynamicValues = {
+  operationId: 'DomenySkracacza', 'value-collection': 'links/domains', 'value-path': 'domain', 'value-title': 'domain',
 };
 
 const SIMPLE_KEYS = ['type', 'format', 'enum', 'default', 'pattern', 'minimum', 'maximum', 'minLength', 'minItems', 'maxItems'] as const;
@@ -334,6 +381,7 @@ function decorate(converted: SwaggerSchema, path: string, name: string, source: 
     const visibility = nested ? undefined : VISIBILITY[name];
     if (visibility) out['x-ms-visibility'] = visibility;
     if (name === 'encoding') out['x-ms-enum-values'] = ENCODING_NAMES;
+    if (name === 'linkDomain' && !nested) out['x-ms-dynamic-values'] = LINK_DOMAIN_LIST;
   }
   return out;
 }
@@ -358,8 +406,13 @@ function apiParts(api: OpenApiDocument) {
     if (!found) throw new Error(`Opis API nie zna ${method.toUpperCase()} ${path}`);
     return found;
   };
-  const report409 = jsonSchemaOf(op('/v1/packages/{id}/report', 'get').responses['409']?.content);
   const schemas = api.components.schemas;
+  const named = (schema: JsonSchema): JsonSchema =>
+    schema.$ref ? schemas[schema.$ref.replace('#/components/schemas/', '')]! : schema;
+  const report409 = named(jsonSchemaOf(op('/v1/packages/{id}/report', 'get').responses['409']?.content));
+  const keyLinks = named(jsonSchemaOf(op('/v1/key', 'get').responses['200']?.content)).properties?.links;
+  const keyDomains = keyLinks?.properties?.domains;
+  if (!keyLinks || !keyDomains) throw new Error('Opis API nie ma listy domen skracacza w GET /v1/key');
   return {
     messageBody: jsonSchemaOf(op('/v1/integrations/{id}/messages', 'post').requestBody?.content),
     packageBody: jsonSchemaOf(op('/v1/integrations/{id}/packages', 'post').requestBody?.content),
@@ -376,7 +429,13 @@ function apiParts(api: OpenApiDocument) {
       IntegracjaPowerAutomate: schemas.IntegracjaPowerAutomate!,
       Blad: schemas.Blad!,
       OdpowiedzBledu: schemas.OdpowiedzBledu!,
-      BladRaportu: report409.$ref ? schemas[report409.$ref.replace('#/components/schemas/', '')]! : report409,
+      BladRaportu: report409,
+      // Z uprawnień klucza konektor potrzebuje tylko domen skracacza: usługi, nadpisy i limity zostają poza plikiem.
+      DomenySkracaczaKlucza: {
+        type: 'object',
+        required: ['links'],
+        properties: { links: { ...keyLinks, required: ['domains'], properties: { domains: keyDomains } } },
+      },
     } satisfies Record<string, JsonSchema>,
   };
 }
@@ -586,6 +645,15 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
           description: 'Czynne integracje z Power Automate klucza. Źródło listy „Integracja”.',
           'x-ms-visibility': 'internal',
           responses: { '200': { description: 'Integracje klucza', schema: ref('ListaIntegracji') }, default: ERROR },
+        },
+      },
+      '/v1/key': {
+        get: {
+          operationId: 'DomenySkracacza',
+          summary: 'Domeny skracacza',
+          description: 'Aktywne domeny skracacza klucza. Źródło listy „Domena skracacza”.',
+          'x-ms-visibility': 'internal',
+          responses: { '200': { description: 'Domeny skracacza klucza', schema: ref('DomenySkracaczaKlucza') }, default: ERROR },
         },
       },
     },

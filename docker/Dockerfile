@@ -20,7 +20,7 @@ COPY --from=build /app/package.json ./package.json
 RUN mkdir -p /data && chown -R node:node /data
 USER node
 VOLUME ["/data"]
-EXPOSE 8080 8081
+EXPOSE 8080 8081 8082
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD node -e "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "dist/index.js"]

@@ -49,6 +49,8 @@ export function registerCancelRoute(app: FastifyInstance, deps: ApiDeps): void {
     }
 
     deps.messages.setStatus(message.id, { status: 'cancelled', finalAt: at, error: null });
+    // Krótkie linki anulowanej wiadomości prowadzą od tej chwili do strony „Link wygasł”.
+    deps.shortLinks.disableMessage(message.id, at);
     deps.events.record(message.id, at, 'cancelled', message.miIds.length === 0
       ? 'przed przekazaniem do Multiinfo'
       : `cancelsms.aspx: ${message.miIds.join(', ')}`);

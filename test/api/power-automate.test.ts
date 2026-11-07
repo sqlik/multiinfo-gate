@@ -100,16 +100,82 @@ describe('buildPowerAutomateConnector', () => {
 
   it('ma dokładnie stałe nazwy operacji, bo zapisane przepływy się do nich odwołują', () => {
     expect([...operations.keys()].sort()).toEqual([...CONNECTOR_OPERATIONS].sort());
-    expect(CONNECTOR_OPERATIONS).toEqual(['WyslijSms', 'WyslijRozsylke', 'WyslijSmsDoGrupy', 'StanWiadomosci', 'StanRozsylki', 'RaportRozsylki', 'ListaIntegracji']);
+    expect(CONNECTOR_OPERATIONS).toEqual([
+      'WyslijSms', 'WyslijRozsylke', 'WyslijSmsDoGrupy', 'StanWiadomosci', 'StanRozsylki', 'RaportRozsylki', 'ListaIntegracji',
+      'DomenySkracacza',
+    ]);
   });
 
   it('każda operacja odpowiada trasie prawdziwego serwera', () => {
     for (const o of operations.values()) expect(routes, o.operationId).toContain(`${o.method} ${o.path}`);
   });
 
-  it('nie ma grup SMS ani uprawnień klucza: grupy z panelu nie są dostępne z Power Automate', () => {
-    for (const o of operations.values()) expect(o.path, o.operationId).not.toMatch(/^\/v1\/(groups|key)/);
+  it('nie ma grup SMS: grupy z panelu nie są dostępne z Power Automate', () => {
+    for (const o of operations.values()) expect(o.path, o.operationId).not.toMatch(/^\/v1\/groups/);
     expect(routes.some((r) => r.includes('/v1/groups'))).toBe(false);
+  });
+
+  it('uprawnienia klucza czyta wyłącznie wewnętrzna lista domen skracacza, a jej odpowiedź opisuje same domeny', () => {
+    const keyOps = [...operations.values()].filter((o) => o.path.startsWith('/v1/key'));
+    expect(keyOps.map((o) => o.operationId)).toEqual(['DomenySkracacza']);
+    expect(op('DomenySkracacza')).toMatchObject({ method: 'get', path: '/v1/key', 'x-ms-visibility': 'internal' });
+    expect(op('DomenySkracacza').parameters ?? []).toEqual([]);
+    expect(op('DomenySkracacza').responses.default).toBeDefined();
+    const response = resolve(op('DomenySkracacza').responses['200']!.schema!);
+    expect(Object.keys(response.properties!)).toEqual(['links']);
+    expect(response.required).toEqual(['links']);
+    const links = response.properties!.links!;
+    expect(Object.keys(links.properties!)).toEqual(['domains']);
+    expect(links.required).toEqual(['domains']);
+    const domain = links.properties!.domains!.items!;
+    expect(Object.keys(domain.properties!).sort()).toEqual(['default', 'domain']);
+    expect(domain.properties!.domain).toMatchObject({ type: 'string', 'x-ms-summary': 'Domena skracacza' });
+    expect(domain.properties!.default).toMatchObject({ type: 'boolean', 'x-ms-summary': 'Domena domyślna' });
+    expect(domain.properties!.default!.description).toContain('„Domena skracacza”');
+    expect(JSON.stringify(response)).not.toMatch(/services|origs|ratePerMin|maxParts|validityDays|utm/);
+  });
+
+  it('akcje wysyłające mają cztery pola skracania linków w ustawieniach zaawansowanych', () => {
+    const fields = {
+      shortenLinks: { type: 'boolean', 'x-ms-summary': 'Skracanie linków' },
+      campaign: { type: 'string', 'x-ms-summary': 'Kampania' },
+      linkDomain: { type: 'string', 'x-ms-summary': 'Domena skracacza' },
+      linkValidityDays: { type: 'integer', format: 'int32', 'x-ms-summary': 'Ważność linków (dni)' },
+    };
+    for (const id of ['WyslijSms', 'WyslijRozsylke', 'WyslijSmsDoGrupy']) {
+      const body = bodyOf(id);
+      for (const [name, expected] of Object.entries(fields)) {
+        expect(body.properties![name], `${id}.${name}`).toMatchObject({ ...expected, 'x-ms-visibility': 'advanced' });
+        expect(body.properties![name]!.description, `${id}.${name}`).toMatch(/Puste pole oznacza/);
+        expect(body.required ?? [], `${id}.${name}`).not.toContain(name);
+      }
+      expect(body.properties!.shortenLinks!.default, id).toBeUndefined();
+    }
+  });
+
+  it('„Domena skracacza” podsuwa listę aktywnych domen klucza z operacji DomenySkracacza', () => {
+    for (const id of ['WyslijSms', 'WyslijRozsylke', 'WyslijSmsDoGrupy']) {
+      expect(bodyOf(id).properties!.linkDomain!['x-ms-dynamic-values'], id).toEqual({
+        operationId: 'DomenySkracacza', 'value-collection': 'links/domains', 'value-path': 'domain', 'value-title': 'domain',
+      });
+      expect(bodyOf(id).properties!.campaign!['x-ms-dynamic-values'], id).toBeUndefined();
+    }
+    // Ścieżka value-collection i pola value-path, value-title muszą istnieć w schemacie odpowiedzi operacji.
+    let node = resolve(op('DomenySkracacza').responses['200']!.schema!);
+    for (const step of 'links/domains'.split('/')) node = resolve(node.properties![step]!);
+    expect(node.type).toBe('array');
+    expect(resolve(node.items!).properties!.domain!.type).toBe('string');
+  });
+
+  it('pole notice bloku „Krótkie linki” nosi etykietę „Zgłoszenie skracania”', () => {
+    const labels: unknown[] = [];
+    walk(doc, '$', (obj) => {
+      const links = (obj as { properties?: Record<string, { properties?: Record<string, { 'x-ms-summary'?: unknown }> }> }).properties?.links;
+      const notice = links?.properties?.notice;
+      if (notice !== undefined) labels.push(notice['x-ms-summary']);
+    });
+    expect(labels.length).toBeGreaterThan(0);
+    expect(new Set(labels)).toEqual(new Set(['Zgłoszenie skracania']));
   });
 
   it('nie ma śladu OpenAPI 3', () => {

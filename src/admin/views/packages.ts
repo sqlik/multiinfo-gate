@@ -1,9 +1,16 @@
 import type { PackageRow, RecipientRow } from '../../store/packages.ts';
+import { problemUrl } from '../../docs-links.ts';
 import { warsawStamp } from '../../time/warsaw.ts';
 import { esc } from './layout.ts';
 import {
   packageStatusLabel, packageStatusTone, reportStatusLabel, statusLabel, statusTone,
 } from './status-labels.ts';
+
+/** Kod -72: Multiinfo nie potwierdziło utworzenia rozsyłki, więc bramka jej nie ponowiła. */
+function uncertainHelp(providerCode: number | null): string {
+  if (providerCode !== -72) return '';
+  return `<br><a href="${esc(problemUrl('rozsylka-bez-potwierdzenia'))}" target="_blank" rel="noopener noreferrer">Jak ustalić, czy SMS-y zostały wysłane</a>`;
+}
 
 export interface PackagesData {
   rows: PackageRow[];
@@ -26,6 +33,10 @@ export interface PackageDetail {
   /** Ilu odbiorców pokazujemy; reszta jest w CSV. */
   shown: number;
   summary: { delivered: number; failed: number; other: number } | null;
+  /** Kampania krótkich linków rozsyłki; brak, gdy rozsyłka nie zawiera skróconych linków. */
+  campaign?: { id: number; name: string } | null;
+  /** Kliknięcia odbiorców według numeru kolejnego; null dla rozsyłki bez kampanii. */
+  clicks?: Map<number, number> | null;
 }
 
 const stamp = (iso: string | null) => (iso === null ? '-' : warsawStamp(iso));
@@ -93,7 +104,7 @@ export function packagesPage(data: PackagesData): string {
   </div>`;
 }
 
-function recipientRow(r: RecipientRow): string {
+function recipientRow(r: RecipientRow, clicks: Map<number, number> | null): string {
   const status = r.status === null
     ? '<span class="dim">brak raportu</span>'
     : `<span class="st"><span class="dot dot-${statusTone(r.status)}"></span>${esc(statusLabel(r.status))}</span>`;
@@ -106,7 +117,8 @@ function recipientRow(r: RecipientRow): string {
       <td class="txt">${r.text === null ? '<span class="dim">domyślna</span>' : esc(r.text)}</td>
       <td class="m">${r.miId === null ? '<span class="dim">-</span>' : esc(r.miId)}</td>
       <td>${status}</td>
-      <td class="m dim">${mi}</td>
+      <td class="m dim">${mi}</td>${clicks === null ? '' : `
+      <td class="m">${clicks.has(r.seq) ? esc(clicks.get(r.seq)!) : '<span class="dim">-</span>'}</td>`}
       <td class="m dim">${esc(r.statusChangedAt ?? '')}</td>
     </tr>`;
 }
@@ -125,6 +137,7 @@ function summaryPending(p: PackageRow): string {
 
 export function packagePage(d: PackageDetail): string {
   const p = d.row;
+  const clicks = d.clicks ?? null;
   const yes = (v: 0 | 1) => (v === 1 ? 'tak' : 'nie');
 
   const summary = d.summary === null
@@ -139,10 +152,10 @@ export function packagePage(d: PackageDetail): string {
     ? `<a class="btn btn-p" href="/rozsylki/${esc(p.id)}/raport.csv">Pobierz CSV</a>`
     : `<span class="btn btn-s disabled" title="${esc(reportStatusLabel(p.reportStatus))}">Pobierz CSV</span>`;
 
+  // Bez daty ważności: dotyczy kopii raportu w Multiinfo, a CSV i statusy pochodzą z bazy bramki.
   const reportState = p.reportStatus === 'ready'
     ? `gotowy · ${esc(p.recipientsCount)} ${p.recipientsCount === 1 ? 'odbiorca' : 'odbiorców'}`
-      + (p.reportExpiresAt === null ? '' : ` · ważny do ${esc(stamp(p.reportExpiresAt))}`)
-    : `<span class="${p.reportStatus === 'failed' ? 'fail' : 'dim'}">${esc(reportStatusLabel(p.reportStatus))}</span>`;
+    :`<span class="${p.reportStatus === 'failed' ? 'fail' : 'dim'}">${esc(reportStatusLabel(p.reportStatus))}</span>`;
 
   const note = d.recipients.length < p.recipientsCount
     ? `<div class="m dim">pierwszych ${esc(d.shown)} z ${esc(p.recipientsCount)} - pełna lista w CSV</div>`
@@ -166,6 +179,7 @@ export function packagePage(d: PackageDetail): string {
         <div class="kv">
           ${d.integration === null ? '' : `<div>Integracja</div><div><a href="/integracje/${esc(d.integration.id)}">${esc(d.integration.name)}</a></div>`}
           ${p.requestedBy === null ? '' : `<div>Zlecający</div><div>${esc(p.requestedBy)}</div>`}
+          ${!d.campaign ? '' : `<div>Kampania</div><div><a href="/kampanie/${esc(d.campaign.id)}">${esc(d.campaign.name)}</a></div>`}
           <div>ID usługi</div><div class="m">${esc(p.serviceId)}</div>
           <div>Nadpis</div><div class="m">${esc(p.orig ?? '-')}</div>
           <div>Kodowanie</div><div class="m">${esc(p.encoding === 'gsm' ? 'GSM-7' : 'UCS-2')}${p.multipart === 1 ? ' · wieloczęściowa' : ''}</div>
@@ -178,7 +192,7 @@ export function packagePage(d: PackageDetail): string {
           <div${p.error === null ? ' style="border-bottom: none;"' : ''}>Raport</div>
           <div${p.error === null ? ' style="border-bottom: none;"' : ''}>${reportState}</div>
           ${p.error === null ? '' : `<div style="border-bottom: none;">Błąd</div>
-            <div class="m fail" style="border-bottom: none;">${p.providerCode === null ? '' : `${esc(p.providerCode)} - `}${esc(p.error)}</div>`}
+            <div class="m fail" style="border-bottom: none;">${p.providerCode === null ? '' : `${esc(p.providerCode)} - `}${esc(p.error)}${uncertainHelp(p.providerCode)}</div>`}
         </div>
       </div>
       <div class="panel">
@@ -200,10 +214,11 @@ export function packagePage(d: PackageDetail): string {
           <th>Treść</th>
           <th style="width: 100px;">Id Multiinfo</th>
           <th style="width: 130px;">Status</th>
-          <th style="width: 120px;">Status Multiinfo</th>
+          <th style="width: 120px;">Status Multiinfo</th>${clicks === null ? '' : `
+          <th style="width: 90px;">Kliknięcia</th>`}
           <th style="width: 150px;">Czas</th>
         </tr>
-        ${d.recipients.map(recipientRow).join('')}
+        ${d.recipients.map((r) => recipientRow(r, clicks)).join('')}
       </table>
     </div>
   </div>`;

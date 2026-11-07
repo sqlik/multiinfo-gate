@@ -22,6 +22,33 @@ export interface ClientOptions {
    * Bramka tego nie ustawia; potrzebne testom z lokalnym serwerem o własnym CA.
    */
   extraServerCa?: string;
+  /** Limit czasu `package.aspx` z liczby odbiorców. Bramka używa `packageTimeoutMs`, testy go skracają. */
+  packageTimeoutMs?: (recipients: number) => number;
+}
+
+/**
+ * Multiinfo przyjmuje rozsyłkę z treściami indywidualnymi około 10 ms na odbiorcę (próba
+ * 2026-11-05: 500 odbiorców w 4,9 s) i nie wysyła nic przed końcem przetwarzania. Limit ma
+ * trzykrotny zapas: 5000 odbiorców to 180 s.
+ */
+export function packageTimeoutMs(recipients: number): number {
+  return 30_000 + 30 * recipients;
+}
+
+/** Dopisek do błędu, po którym bramka nie ponawia rozsyłki. */
+export const PACKAGE_NOT_RETRIED = 'Bramka nie ponawia rozsyłki, ponieważ Multiinfo mogło ją utworzyć mimo braku potwierdzenia';
+
+export interface PackageHooks {
+  /** Wywoływane w chwili przekazania żądania do Multiinfo, przed odpowiedzią. */
+  onSent?: () => void;
+  /** Wywoływane, gdy serwer po `onSent` odrzucił sesję TLS alertem, więc żądanie nie zostało obsłużone. */
+  onRejected?: () => void;
+}
+
+/** Błąd z kodem alertu TLS od serwera, na przykład `ERR_SSL_TLSV13_ALERT_CERTIFICATE_REQUIRED`. */
+function tlsAlert(error: unknown): boolean {
+  const code = (error instanceof Error ? (error.cause as { code?: unknown } | undefined)?.code : undefined);
+  return typeof code === 'string' && /^ERR_SSL_\w*ALERT/.test(code);
 }
 
 export interface SendLongParams {
@@ -133,7 +160,11 @@ const REQUEST_TIMEOUT_MS = 30_000;
 interface RawReply { body: Buffer; status: number; durationMs: number }
 
 /** Odstępstwa od zwykłego żądania: dłuższy limit, przerwanie z zewnątrz i osobna pula - dla long pollingu. */
-interface TransportOptions { timeoutMs?: number; signal?: AbortSignal; longPoll?: boolean }
+interface TransportOptions {
+  timeoutMs?: number; signal?: AbortSignal; longPoll?: boolean; onSent?: () => void;
+  /** Nowe połączenie zamiast keep-alive - dla poleceń, których nie wolno ponowić po przekazaniu. */
+  freshConnection?: boolean;
+}
 
 export class MultiinfoClient {
   private readonly agent: Agent;
@@ -143,8 +174,15 @@ export class MultiinfoClient {
    * czekałyby na koniec oczekiwania Plusa.
    */
   private readonly pollAgent: Agent;
+  /**
+   * Pula bez keep-alive dla `package.aspx`. Połączenie zamknięte przez serwer w chwili ponownego
+   * użycia przyjmuje żądanie do gniazda, ale nie do Multiinfo, a rozsyłki po przekazaniu się nie ponawia.
+   */
+  private readonly packageAgent: Agent;
+  private readonly packageTimeout: (recipients: number) => number;
 
   constructor(private readonly creds: ClientCredentials, options: ClientOptions = {}) {
+    this.packageTimeout = options.packageTimeoutMs ?? packageTimeoutMs;
     const tls = {
       // Opcja `ca` zastępuje wbudowany magazyn zaufanych CA, więc łańcuch z .pfx nie może
       // tam trafić - bramka przestałaby ufać certyfikatowi serwera Multiinfo.
@@ -155,11 +193,13 @@ export class MultiinfoClient {
     };
     this.agent = new Agent({ ...tls, maxSockets: 4 });
     this.pollAgent = new Agent(tls);
+    this.packageAgent = new Agent({ ...tls, keepAlive: false });
   }
 
   close(): void {
     this.agent.destroy();
     this.pollAgent.destroy();
+    this.packageAgent.destroy();
   }
 
   /**
@@ -196,7 +236,7 @@ export class MultiinfoClient {
           port: url.port,
           path: `${url.pathname}${url.search}`,
           method,
-          agent: opts.longPoll ? this.pollAgent : this.agent,
+          agent: opts.longPoll ? this.pollAgent : opts.freshConnection ? this.packageAgent : this.agent,
           headers: body === null ? {} : {
             'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
             'content-length': Buffer.byteLength(body),
@@ -219,6 +259,10 @@ export class MultiinfoClient {
         },
       );
 
+      // `finish` oznacza, że całe żądanie trafiło do gniazda. Odmowa połączenia i błąd uzgodnienia TLS 1.2
+      // kończą żądanie wcześniej, więc wtedy Multiinfo na pewno niczego nie otrzymało. W TLS 1.3 serwer
+      // ocenia certyfikat klienta po uzgodnieniu i odrzuca sesję alertem już po `finish`.
+      if (opts.onSent) req.on('finish', opts.onSent);
       req.setTimeout(opts.timeoutMs ?? REQUEST_TIMEOUT_MS, () => {
         req.destroy(new ProviderError(-71, 'Multiinfo nie odpowiedziało w wyznaczonym czasie', 'transient'));
       });
@@ -227,7 +271,7 @@ export class MultiinfoClient {
       opts.signal?.addEventListener('abort', onAbort, { once: true });
       // Komunikat błędu sieci nie zawiera poświadczeń - w żądaniu idą one w treści, nie w adresie.
       req.on('error', (e) => settle(() => {
-        reject(e instanceof ProviderError ? e : new ProviderError(-71, `Nie udało się połączyć: ${e.message}`, 'transient'));
+        reject(e instanceof ProviderError ? e : new ProviderError(-71, `Nie udało się połączyć: ${e.message}`, 'transient', { cause: e }));
       }));
       // Ostatnia deska: żądanie zamknięte bez odpowiedzi i bez błędu nie może zostać bez wyniku.
       req.on('close', () => settle(() => reject(new ProviderError(-71, 'Połączenie zamknięte przed końcem odpowiedzi', 'transient'))));
@@ -305,8 +349,12 @@ export class MultiinfoClient {
     MultiinfoClient.unwrap(await this.text('cancelsms.aspx', { smsId }));
   }
 
-  /** Tworzy rozsyłkę i zwraca jej identyfikator w Multiinfo. */
-  async createPackage(p: PackageParams): Promise<string> {
+  /**
+   * Tworzy rozsyłkę i zwraca jej identyfikator w Multiinfo. Multiinfo nie pozwala sprawdzić,
+   * czy rozsyłka powstała, ani jej anulować przez API. Dlatego błąd po przekazaniu żądania
+   * jest wynikiem nieznanym (`uncertain`), a nie przejściowym, i nie może prowadzić do ponowienia.
+   */
+  async createPackage(p: PackageParams, hooks: PackageHooks = {}): Promise<string> {
     const params = new URLSearchParams({
       serviceId: p.serviceId,
       delivNotifRequest: String(p.deliveryReport),
@@ -320,9 +368,29 @@ export class MultiinfoClient {
     if (p.startAt !== undefined) params.set('startDate', formatOperatorTime(p.startAt));
     for (const r of p.recipients) params.append(PACKAGE_DEST_PARAM, formatPackageRecipient(r));
 
-    const lines = MultiinfoClient.unwrap(await this.text('package.aspx', params));
+    let sent = false;
+    let body: string;
+    try {
+      body = await this.text('package.aspx', params, {
+        timeoutMs: this.packageTimeout(p.recipients.length),
+        freshConnection: true,
+        onSent: () => { sent = true; hooks.onSent?.(); },
+      });
+    } catch (error) {
+      if (!sent) throw error;
+      // Alert TLS oznacza, że serwer odrzucił sesję, zanim obsłużył żądanie, na przykład certyfikat
+      // klienta w TLS 1.3. Rozsyłka nie powstała, dlatego błąd pozostaje przejściowy.
+      if (tlsAlert(error)) {
+        hooks.onRejected?.();
+        throw error;
+      }
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new ProviderError(-72, `${reason}. ${PACKAGE_NOT_RETRIED}`, 'uncertain');
+    }
+    // Kody z treści odpowiedzi to jawna odmowa Multiinfo - rozsyłka nie powstała.
+    const lines = MultiinfoClient.unwrap(body);
     const id = lines[0]?.trim();
-    if (!id) throw new ProviderError(-71, 'package.aspx nie zwróciło identyfikatora rozsyłki', 'transient');
+    if (!id) throw new ProviderError(-72, `Multiinfo przyjęło rozsyłkę bez podania identyfikatora. ${PACKAGE_NOT_RETRIED}`, 'uncertain');
     return id;
   }
 

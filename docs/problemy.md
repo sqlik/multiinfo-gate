@@ -56,7 +56,7 @@ w kontenerze LXC: usługa nie startuje, a dziennik zawiera `EADDRINUSE`.
 Port 8080 albo 8081 zajmuje inny program. Program, który zajmuje port, wskazuje polecenie:
 
 ```bash
-sudo ss -ltnp | grep -E ':8080|:8081'
+sudo ss -ltnp | grep -E ':8080|:8081|:8082'
 ```
 
 W kontenerze LXC pracujesz jako `root`, więc wpisz polecenie bez `sudo`.
@@ -64,6 +64,12 @@ W kontenerze LXC pracujesz jako `root`, więc wpisz polecenie bez `sudo`.
 Zatrzymaj ten program albo zmień port bramki zmienną `MIG_API_PORT` albo `MIG_ADMIN_PORT`
 (rozdział 7.7 [Uruchomienia](uruchomienie.md)). Zajęty port to jedyna awaria startu, przy której
 bramka nie pokazuje strony z przyczyną, bo strony nie ma na czym podać.
+
+Zajęty port serwera krótkich linków, domyślnie 8082, nie zatrzymuje bramki. Opis znajdziesz
+w punkcie [Serwer krótkich linków nie działa](#serwer-krotkich-linkow). Wyjątkiem jest Docker
+z plikiem `docker-compose.nginx.yml`, który publikuje port 8082 na serwerze. Zajęty port zatrzymuje
+wtedy start kontenera komunikatem `port is already allocated`. Inny port ustawia zmienna
+`MIG_PORT_LINKOW` w `docker/.env`, opisana w rozdziale 6.6 [Uruchomienia](uruchomienie.md).
 
 ## Nie znam loginu i hasła do panelu {#pierwsze-konto}
 
@@ -348,6 +354,24 @@ administratora Polkomtel.
 Wpis `odbior.zatrzymany` w dzienniku oznacza inną przyczynę: Multiinfo odrzuciło zapytanie
 o wiadomości. Opis zdarzeń odbioru zawiera rozdział 7.3 [Uruchomienia](uruchomienie.md).
 
+## Rozsyłka zakończona kodem -72 {#rozsylka-bez-potwierdzenia}
+
+Objaw: rozsyłka ma stan `failed`, a pole `providerCode` zawiera wartość -72. Komunikat błędu
+informuje, że bramka nie ponawia rozsyłki. Dziennik zawiera wpis `rozsylka.nieudana` z kodem -72.
+
+Bramka przekazała rozsyłkę do Multiinfo, ale nie otrzymała potwierdzenia jej utworzenia. Najczęściej
+Multiinfo nie odpowiedziało w wyznaczonym czasie albo bramka zatrzymała się w trakcie oczekiwania.
+Limit czasu rośnie z liczbą odbiorców i dla 5000 odbiorców wynosi 3 minuty. Multiinfo mogło mimo to
+utworzyć rozsyłkę. API Multiinfo nie pozwala sprawdzić, czy rozsyłka powstała, a utworzonej rozsyłki
+nie można anulować. Dlatego bramka nie ponawia jej samoczynnie, ponieważ odbiorcy mogliby otrzymać
+SMS-y dwukrotnie.
+
+Przed ponownym zleceniem rozsyłki ustal, czy SMS-y dotarły do odbiorców. Najpewniejszym sposobem
+jest numer kontrolny umieszczony w każdej rozsyłce, na przykład numer dyżuru IT. Jeżeli termin
+rozsyłki minął, a numer kontrolny nie otrzymał SMS-a, rozsyłkę można zlecić ponownie. W wyjątkowych
+przypadkach istnienie rozsyłki może sprawdzić administrator Polkomtel, ale nie jest to standardowa
+procedura obsługi klienta Multiinfo.
+
 ## Wersja Node.js bez poprawek bezpieczeństwa {#wersja-node}
 
 Objaw: przegląd panelu pokazuje czerwony pasek z informacją, że Node.js, na którym działa bramka,
@@ -532,6 +556,126 @@ nie wymagają zmian.
 Rozwiązanie: włącz w Microsoft 365 podpis DKIM dla domeny skrzynki bramki. Odbiorca, który
 przekazuje pocztę dalej, powinien dopisać adres nadawcy bramki do listy bezpiecznych nadawców
 w skrzynce docelowej.
+
+## Sprawdzenie domeny skracacza kończy się błędem {#skracacz-sprawdzenie-domeny}
+
+Objaw: po kliknięciu **Sprawdź domenę** w elemencie **Skracacz linków** domena otrzymuje plakietkę
+„sprawdzenie nieudane”. Strona domeny podaje krok, na którym sprawdzenie się zatrzymało, oraz kod
+błędu.
+
+Sprawdzenie pobiera z bramki jednorazowy token spod adresu
+`https://<domena>/.well-known/multiinfo-gate/<token>`. Żądanie przechodzi tę samą drogę co kliknięcie
+odbiorcy SMS-a: przez DNS, serwer pośredniczący i certyfikat HTTPS do portu krótkich linków bramki.
+Wynik pozytywny potwierdza więc całą drogę za jednym razem.
+
+| Krok | Przyczyna | Rozwiązanie |
+|---|---|---|
+| rozwiązanie nazwy | brak rekordu DNS domeny albo nowy rekord nie dotarł jeszcze do serwerów DNS | dodać rekord A dla domeny głównej albo rekord CNAME dla subdomeny, a następnie odczekać czas ważności rekordu |
+| rozwiązanie nazwy | serwer bramki otrzymuje dla domeny adres w sieci wewnętrznej, na przykład z wewnętrznego serwera DNS | skierować publiczny rekord DNS na publiczny adres serwera, a działanie linku sprawdzić z telefonu w sieci komórkowej albo ustawić `MIG_LINKS_ALLOW_PRIVATE=1` w środowisku bramki |
+| połączenie | serwer pośredniczący nie wystawia portu krótkich linków pod tą domeną albo zapora blokuje port 443 | wystawić port krótkich linków na serwerze pośredniczącym i otworzyć port 443 w zaporze |
+| połączenie | sieć bez pętli zwrotnej NAT, w której serwer nie może połączyć się z własnym adresem publicznym | otworzyć krótki link z telefonu w sieci komórkowej, a działający link potwierdza gotowość domeny |
+| certyfikat | certyfikat wygasł, nie obejmuje domeny albo serwer pośredniczący jeszcze go nie uzyskał | sprawdzić certyfikat na serwerze pośredniczącym i ponowić sprawdzenie po jego wystawieniu |
+| odpowiedź | domena prowadzi do innego serwera, do panelu, do API albo do innej instancji bramki | skierować domenę na port krótkich linków tej bramki, domyślnie 8082 |
+
+Domena niesprawdzona albo z nieudanym sprawdzeniem może zostać użyta przy kluczu. Sprawdzenie nie
+blokuje pracy, ponieważ w niektórych sieciach wynik negatywny nie oznacza awarii.
+
+Plakietka „sprawdzona z ostrzeżeniem” oznacza, że linki działają, ale kliknięcia przechodzą przez
+serwer pośredniczący, któremu bramka nie ufa. Bramka liczy wtedy wszystkie wejścia jako wejścia
+z adresu tego serwera, dlatego limit 60 wejść na minutę obejmuje wszystkich odbiorców kampanii razem.
+Ustaw zmienną `MIG_TRUSTED_PROXIES` z wartością podaną na stronie domeny, uruchom bramkę ponownie
+i sprawdź domenę jeszcze raz. W Dockerze, także za nginx na serwerze, wartością jest zwykle
+`172.16.0.0/12`.
+
+## Serwer krótkich linków nie działa {#serwer-krotkich-linkow}
+
+Objaw: przegląd panelu i element **Skracacz linków** wyświetlają pasek „Serwer krótkich linków nie
+działa”. Dziennik zawiera wpis `linki.serwer_nie_dziala` z adresem, portem i kodem błędu.
+
+Serwer krótkich linków przyjmuje kliknięcia odbiorców na osobnym porcie, domyślnie 8082. Gdy bramka
+nie może uruchomić nasłuchu na tym porcie, pozostałe funkcje działają bez zmian: API, panel, wysyłka
+i odbiór. Do czasu usunięcia przyczyny bramka nie skraca linków i wysyła je w pełnej postaci,
+a odpowiedź API zawiera wtedy zgłoszenie `domain_unavailable`. Krótkie linki wysłane wcześniej nie
+otwierają się, dopóki serwer nie działa.
+
+Najczęstszą przyczyną jest inny program, który zajmuje port 8082. Dziennik podaje wtedy kod
+`EADDRINUSE`. Program, który zajmuje port, wskazuje polecenie:
+
+```bash
+sudo ss -ltnp | grep ':8082'
+```
+
+W kontenerze LXC pracujesz jako `root`, więc wpisz polecenie bez `sudo`.
+
+Zatrzymaj ten program albo zmień port serwera krótkich linków zmienną `MIG_LINKS_PORT`. Opis
+zmiennej zawiera rozdział 7.7 [Uruchomienia](uruchomienie.md). Po zmianie portu skieruj na nowy numer
+serwer pośredniczący domen skracacza, a następnie uruchom bramkę ponownie. Pasek znika, gdy serwer
+krótkich linków zacznie działać.
+
+## Krótki link prowadzi do strony „Link wygasł” {#link-wygasl}
+
+Objaw: odbiorca otwiera krótki link z SMS-a i widzi stronę „Link wygasł” zamiast strony docelowej.
+
+Strona „Link wygasł” zastępuje stronę docelową, gdy link nie może do niej prowadzić. Kod HTTP
+strony wskazuje grupę przyczyn. Kod 410 oznacza link znany bramce, ale nieważny, a kod 404 link
+nieznany tej domenie. Kod podaje polecenie `curl -I` z krótkim linkiem.
+
+| Przyczyna | Sprawdzenie | Rozwiązanie |
+|---|---|---|
+| link stracił ważność | panel **Analityka** w szczegółach kampanii podaje ważność linków | wysłać kampanię ponownie z dłuższą ważnością w żądaniu albo przy kluczu |
+| linki kampanii zostały wyłączone | szczegóły kampanii pokazują plakietkę „linki wyłączone” z datą | kliknąć **Włącz linki**, gdy wyłączenie nie było zamierzone |
+| domena skracacza jest wyłączona | lista w elemencie **Skracacz linków** pokazuje stan „wyłączona” | kliknąć **Włącz domenę** na stronie domeny |
+| wiadomość została anulowana | szczegóły wiadomości pokazują stan `cancelled` | wysłać wiadomość ponownie |
+| bramka usunęła link 30 dni po jego wygaśnięciu | szczegóły kampanii informują o usunięciu szczegółów odbiorców | wysłać kampanię ponownie |
+| link otwarto z błędem w kodzie albo pod inną domeną skracacza tej bramki | adres w przeglądarce różni się od krótkiego linku w SMS-ie | otworzyć link bezpośrednio z SMS-a |
+| link pochodzi z odpowiedzi Mail2SMS do nadawcy wiadomości e-mail | krótki link kończy się kodem zastępczym `0000000` | otworzyć link z SMS-a odbiorcy, ponieważ odpowiedź do nadawcy nie zawiera kodów odbiorców |
+
+Opis ważności i przechowywania linków zawiera rozdział 11 artykułu
+[Skracacz linków i kampanie](skracacz.md).
+
+## Kampania nie pokazuje otwarć mimo wejść w linki {#linki-bez-otwarc}
+
+Objaw: kafelek „Automaty” w szczegółach kampanii pokazuje wejścia, a kafelki „Otwarcia”
+i „Kliknięcia” pokazują 0 albo wartości niższe od oczekiwanych.
+
+Wejście automatu oznacza pobranie linku przez program, a nie przez odbiorcę. Wiadomości Google
+pobierają podgląd linku zaraz po doręczeniu SMS-a. Wiadomości Apple pobierają podgląd po
+stuknięciu „Stuknij, aby wczytać podgląd” przy SMS-ie od nieznanego nadawcy. Komunikatory, skanery
+poczty i programy zabezpieczające pobierają link w podobny sposób. Bramka nie wlicza takich wejść
+do otwarć ani kliknięć, ponieważ nie świadczą o zainteresowaniu odbiorcy. Wiele automatów przy
+niewielu otwarciach oznacza więc zwykle, że SMS-y dotarły, ale odbiorcy nie stuknęli linku.
+
+Bramka rozpoznaje automat po metodzie `HEAD`, po nagłówku wstępnego pobierania i po nazwie
+programu w nagłówku `User-Agent`. Do automatów należy też sprawdzenie linku z komputera
+poleceniem `curl`. Link otwarty w przeglądarce telefonu liczy się jako otwarcie. Wejścia w czasie,
+gdy linki kampanii są wyłączone, nie liczą się do żadnej z tych liczb.
+
+Działanie liczników potwierdza krótki link z SMS-a testowego. Otwórz go w przeglądarce telefonu,
+a następnie odśwież szczegóły kampanii. Oczekiwany wynik: kafelki „Otwarcia” i „Kliknięcia”
+rosną o 1.
+
+## Link w SMS-ie nie został skrócony {#link-niezamieniony}
+
+Objaw: SMS dotarł z pełnym adresem zamiast krótkiego linku, a kampania nie pojawia się w elemencie
+**Kampanie**.
+
+Odpowiedź API na wysyłkę zawiera blok `links`, gdy bramka skróciła albo pominęła link oraz gdy
+ustawienie klucza zmieniło wybór wysyłającego. Pole `notice` i lista `skipped` w tym bloku
+wskazują przyczynę. Opis bloku znajdziesz w rozdziale 3 [API dla aplikacji](api.md).
+
+| Przyczyna | Sprawdzenie | Rozwiązanie |
+|---|---|---|
+| klucz ma tryb skracania „Wyłączone” | sekcja **Skracanie linków** w formularzu klucza, a w odpowiedzi API `notice` równe `disabled_by_key` | wybrać tryb „Decyduje wysyłający” albo „Zawsze” |
+| żądanie zawiera `shortenLinks: false` przy trybie „Decyduje wysyłający” | body żądania albo pole „Skracanie linków” w akcji Power Automate | usunąć pole albo ustawić wartość `true` |
+| domena linku nie należy do dozwolonych domen docelowych klucza | odpowiedź API wymienia link w `skipped` z powodem `domain_not_allowed` | dopisać domenę w polu **Dozwolone domeny docelowe** klucza |
+| adres jest dłuższy niż 2048 znaków | odpowiedź API wymienia link w `skipped` z powodem `too_long` | usunąć z adresu zbędne parametry |
+| treść zawiera więcej niż 10 linków | odpowiedź API wymienia kolejne linki w `skipped` z powodem `too_many` | ograniczyć liczbę linków albo podzielić treść na kilka SMS-ów |
+| link jest krótkim linkiem tej bramki | adres w treści zaczyna się od domeny skracacza | wpisać w treści adres docelowy zamiast krótkiego linku |
+| link nie zaczyna się od `https://` ani `http://` | treść zawiera adres w postaci `www.firma.pl/oferta` | wpisać link w treści z `https://` |
+| domena skracacza jest wyłączona albo serwer krótkich linków nie działa | odpowiedź API zawiera `notice` równe `domain_unavailable`, a panel wyświetla pasek „Serwer krótkich linków nie działa” | włączyć domenę albo usunąć przyczynę według punktu [Serwer krótkich linków nie działa](#serwer-krotkich-linkow) |
+| SMS wysłano innym kluczem | szczegóły wiadomości na ekranie **Wiadomości** podają nazwę klucza | wysłać kampanię kluczem z włączonym skracaniem |
+
+SMS-y powiadomień bramki dla administratorów nie są skracane nigdy, niezależnie od ustawień klucza.
 
 ## Jak zgłosić problem {#zgloszenie}
 

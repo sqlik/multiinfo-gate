@@ -1,0 +1,19 @@
+# Wariant C ze skracaczem: Traefik przyjmuje także domeny krótkich linków i kieruje je do portu
+# przekierowań bramki w sieci Traefika. Plik uzupełnia docker-compose.traefik.yml.
+# Włączenie: w docker/.env dopisz
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml:docker-compose.traefik-linki.yml
+#   MIG_TRAEFIK_REGULA_LINKOW='Host(`l.firma.pl`)'
+# Kilka domen skracacza łączy się w regule operatorem ||, na przykład
+#   MIG_TRAEFIK_REGULA_LINKOW='Host(`l.firma.pl`) || Host(`firma-link.pl`)'
+# Traefik pobiera certyfikat dla każdej domeny z reguły. Linki bez schematu (l.firma.pl/kod) telefon
+# otwiera przez HTTP, dlatego punkt wejścia HTTP Traefika powinien przekierowywać na HTTPS.
+# Limit wejść liczony na adres odbiorcy wymaga MIG_TRUSTED_PROXIES=172.16.0.0/12 w docker/.env.
+services:
+  multiinfo-gate:
+    labels:
+      traefik.http.routers.multiinfo-gate-linki.rule: ${MIG_TRAEFIK_REGULA_LINKOW:?ustaw MIG_TRAEFIK_REGULA_LINKOW w docker/.env na regułę Host z domenami skracacza}
+      traefik.http.routers.multiinfo-gate-linki.entrypoints: ${MIG_TRAEFIK_WEJSCIE:-websecure}
+      traefik.http.routers.multiinfo-gate-linki.tls: "true"
+      traefik.http.routers.multiinfo-gate-linki.tls.certresolver: ${MIG_TRAEFIK_RESOLVER:-letsencrypt}
+      traefik.http.routers.multiinfo-gate-linki.service: multiinfo-gate-linki
+      traefik.http.services.multiinfo-gate-linki.loadbalancer.server.port: "8082"

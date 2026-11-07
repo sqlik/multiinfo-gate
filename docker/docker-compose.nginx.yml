@@ -1,0 +1,15 @@
+# Wariant B ze skracaczem: nginx albo inny serwer pośredniczący na hoście przed bramką w Dockerze.
+# Plik mapuje port przekierowań krótkich linków na pętlę zwrotną hosta, tak jak API na 8080.
+# Włączenie: w docker/.env dopisz
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.nginx.yml
+# i uruchom docker compose up -d. Blok nginx dla domen skracacza: nginx/multiinfo-gate-linki.conf.
+# Port 8082 zajęty na hoście zatrzymuje start kontenera. Inny port hosta ustawia MIG_PORT_LINKOW
+# w docker/.env, a ten sam numer trafia wtedy do proxy_pass w bloku nginx.
+services:
+  multiinfo-gate:
+    environment:
+      # nginx łączy się z portem opublikowanym przez Dockera, więc bramka widzi adres bramy sieci Dockera,
+      # na przykład 172.18.0.1. Bez zaufania limit wejść w krótkie linki obejmowałby wszystkich odbiorców razem.
+      MIG_TRUSTED_PROXIES: ${MIG_TRUSTED_PROXIES:-172.16.0.0/12}
+    ports:
+      - "127.0.0.1:${MIG_PORT_LINKOW:-8082}:8082"

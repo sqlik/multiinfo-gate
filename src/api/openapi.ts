@@ -176,6 +176,81 @@ const POLA_WIADOMOSCI: Record<string, JsonSchema> = {
       + ' Najwyżej 100 znaków, bez znaków sterujących.',
     example: 'jan.nowak@firma.pl',
   },
+  shortenLinks: {
+    type: 'boolean',
+    description: 'Skracanie linków w treści. Wartość true zamienia linki do dozwolonych domen docelowych klucza na krótkie'
+      + ' linki domeny skracacza, a wartość false pozostawia je bez zmian. Pominięte pole oznacza skracanie przy kluczu'
+      + ' w trybie Decyduje wysyłający. Ustawienie klucza ma pierwszeństwo, a blok links w odpowiedzi zgłasza,'
+      + ' że zostało zastosowane.',
+  },
+  campaign: {
+    type: 'string',
+    minLength: 1,
+    maxLength: 100,
+    description: 'Nazwa kampanii, od 1 do 100 znaków. Grupuje wysyłki w wynikach kampanii i trafia do parametru'
+      + ' utm_campaign. Bez nazwy bramka nadaje nazwę domyślną: identyfikator rozsyłki, nazwę integracji albo nazwę'
+      + ' klucza. Kampania powstaje wyłącznie wtedy, gdy treść zawiera co najmniej jeden skrócony link.',
+    example: 'przeglad-klimatyzacji-wiosna',
+  },
+  linkDomain: {
+    type: 'string',
+    description: 'Domena skracacza spośród domen przypisanych do klucza. Pominięta oznacza domenę domyślną klucza.'
+      + ' Domena spoza klucza kończy wywołanie błędem link_domain_not_allowed. Wyłączona domena klucza nie przerywa'
+      + ' wysyłki: linki zostają wysłane bez zmian, a blok links zawiera zgłoszenie domain_unavailable.',
+    example: 'l.firma.pl',
+  },
+  linkValidityDays: {
+    type: 'integer',
+    minimum: 1,
+    maximum: 365,
+    description: 'Ważność krótkich linków w dniach, od 1 do 365. Bramka liczy ją od terminu rozpoczęcia rozsyłki albo'
+      + ' od przyjęcia żądania. Pominięte pole oznacza ważność ustawioną przy kluczu, domyślnie 90 dni.',
+  },
+};
+
+/** Wynik skracania w odpowiedzi na wysyłkę i rozsyłkę. */
+const BLOK_LINKOW: JsonSchema = {
+  type: 'object',
+  description: 'Wynik skracania linków. Bramka dołącza ten blok, gdy skraca albo pomija link oraz gdy wynik różni się'
+    + ' od wyboru wysyłającego',
+  required: ['shortened', 'domain', 'campaign', 'expiresAt', 'notice', 'skipped'],
+  properties: {
+    shortened: { type: 'integer', description: 'Liczba skróconych linków. W rozsyłce obejmuje krótkie linki wszystkich'
+      + ' odbiorców' },
+    domain: { type: 'string', nullable: true, description: 'Domena skracacza użyta w krótkich linkach', example: 'l.firma.pl' },
+    campaign: { type: 'string', nullable: true, description: 'Kampania, do której należą krótkie linki',
+      example: 'przeglad-klimatyzacji-wiosna' },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Chwila wygaśnięcia krótkich linków' },
+    notice: {
+      type: 'string',
+      nullable: true,
+      enum: ['disabled_by_key', 'forced_by_key', 'domain_unavailable', 'campaign_links_disabled'],
+      description: 'Ustawienie albo stan kampanii, które zmieniają wynik wybrany przez wysyłającego. Wartość disabled_by_key'
+        + ' oznacza skracanie wyłączone przy kluczu, forced_by_key oznacza skracanie wymuszone przy kluczu, a domain_unavailable'
+        + ' oznacza wyłączoną domenę skracacza albo niedziałający serwer krótkich linków, przez co linki zostały wysłane bez zmian.'
+        + ' Wartość campaign_links_disabled oznacza'
+        + ' kampanię z wyłączonymi linkami, dlatego krótkie linki tej wysyłki prowadzą do strony „Link wygasł” do czasu'
+        + ' włączenia linków kampanii w panelu',
+    },
+    skipped: {
+      type: 'array',
+      description: 'Linki wysłane bez zmian, chociaż skracanie było włączone',
+      items: {
+        type: 'object',
+        required: ['url', 'reason'],
+        properties: {
+          url: { type: 'string', description: 'Adres wysłany bez zmian', example: 'https://inna-firma.pl/cennik' },
+          reason: {
+            type: 'string',
+            enum: ['domain_not_allowed', 'too_long', 'too_many'],
+            description: 'Powód pominięcia. Wartość domain_not_allowed oznacza domenę spoza dozwolonych domen docelowych klucza.'
+              + ' Wartość too_long oznacza adres dłuższy niż 2048 znaków.'
+              + ' Wartość too_many oznacza link, który w treści następuje po 10 skróconych linkach',
+          },
+        },
+      },
+    },
+  },
 };
 
 /** Opis pola wysyłki po nazwie. Brak opisu przerywa budowanie, także przy body rozsyłki. */
@@ -269,6 +344,10 @@ const CIALO_ROZSYLKI: JsonSchema = {
     encoding: pole('encoding'),
     deliveryReport: pole('deliveryReport'),
     costCenter: pole('costCenter'),
+    shortenLinks: pole('shortenLinks'),
+    campaign: pole('campaign'),
+    linkDomain: pole('linkDomain'),
+    linkValidityDays: pole('linkValidityDays'),
     startAt: {
       type: 'string',
       format: 'date-time',
@@ -297,6 +376,7 @@ const PRZYJETA_ROZSYLKA: JsonSchema = {
       type: 'boolean',
       description: 'Czy którakolwiek treść jest dzielona na części',
     },
+    links: BLOK_LINKOW,
   },
 };
 
@@ -316,6 +396,7 @@ const PRZYJETA_WIADOMOSC: JsonSchema = {
     slots: { type: 'integer', description: 'Liczba zajętych miejsc. W kodowaniu GSM-7 znaki { } [ ] ~ ^ | \\ i euro'
       + ' zajmują po dwa miejsca' },
     slotsRemaining: { type: 'integer', description: 'Liczba wolnych miejsc w ostatniej części' },
+    links: BLOK_LINKOW,
   },
 };
 
@@ -471,6 +552,68 @@ function lista(pozycja: JsonSchema, opis: string): JsonSchema {
   };
 }
 
+/** Pola bloku `links` w odczycie wiadomości i rozsyłki. Po retencji liczby, domena i wygaśnięcie przyjmują wartość null. */
+const POLA_LINKOW_ODCZYTU: Record<string, JsonSchema> = {
+  campaign: { type: 'string', description: 'Kampania, do której należą krótkie linki', example: 'przeglad-klimatyzacji-wiosna' },
+  domain: { type: 'string', nullable: true, description: 'Domena skracacza użyta w krótkich linkach', example: 'l.firma.pl' },
+  expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Chwila wygaśnięcia krótkich linków' },
+  shortened: {
+    type: 'integer', nullable: true,
+    description: 'Liczba krótkich linków. W rozsyłce obejmuje krótkie linki wszystkich odbiorców',
+  },
+  opens: {
+    type: 'integer', nullable: true,
+    description: 'Liczba odbiorców, którzy otworzyli co najmniej jeden krótki link. W wiadomości przyjmuje wartość 0 albo 1',
+  },
+  clicks: {
+    type: 'integer', nullable: true,
+    description: 'Liczba wejść w krótkie linki bez wejść automatów, na przykład podglądu linku w komunikatorze',
+  },
+  firstOpenedAt: {
+    type: 'string', format: 'date-time', nullable: true,
+    description: 'Chwila pierwszego otwarcia krótkiego linku. Gdy nikt nie otworzył linku, wartość wynosi null',
+  },
+  detailsPurged: {
+    type: 'boolean',
+    description: 'Czy bramka usunęła szczegóły krótkich linków zgodnie z retencją, 30 dni po wygaśnięciu linków. Liczby,'
+      + ' domena i chwila wygaśnięcia przyjmują wtedy wartość null',
+  },
+};
+
+const LINKI_ROZSYLKI: JsonSchema = {
+  type: 'object',
+  description: 'Krótkie linki rozsyłki. Blok występuje tylko w rozsyłce, w której bramka skróciła linki. Odbiorców, którzy'
+    + ' otworzyli link, zwraca odczyt kampanii',
+  required: Object.keys(POLA_LINKOW_ODCZYTU),
+  properties: POLA_LINKOW_ODCZYTU,
+};
+
+const LINKI_WIADOMOSCI: JsonSchema = {
+  type: 'object',
+  description: 'Krótkie linki wiadomości. Blok występuje w odczycie pojedynczej wiadomości, w której bramka skróciła linki',
+  required: [...Object.keys(POLA_LINKOW_ODCZYTU), 'shortLinks'],
+  properties: {
+    ...POLA_LINKOW_ODCZYTU,
+    shortLinks: {
+      type: 'array',
+      description: 'Krótkie linki w kolejności wystąpienia w treści. Po retencji lista jest pusta',
+      items: {
+        type: 'object',
+        required: ['url', 'target', 'clicks', 'firstOpenedAt'],
+        properties: {
+          url: { type: 'string', description: 'Krótki link wysłany w SMS-ie', example: 'https://l.firma.pl/aB3xK9q' },
+          target: { type: 'string', description: 'Adres docelowy bez parametrów UTM', example: 'https://firma.pl/przeglad' },
+          clicks: { type: 'integer', description: 'Liczba wejść w ten link bez wejść automatów' },
+          firstOpenedAt: {
+            type: 'string', format: 'date-time', nullable: true,
+            description: 'Chwila pierwszego otwarcia tego linku. Gdy odbiorca nie otworzył linku, wartość wynosi null',
+          },
+        },
+      },
+    },
+  },
+};
+
 const WIADOMOSC: JsonSchema = {
   type: 'object',
   description: 'Wiadomość wysłana tym kluczem',
@@ -513,6 +656,7 @@ const WIADOMOSC: JsonSchema = {
       description: 'Kod odmowy albo błędu z Multiinfo. Poza błędem pole jest puste',
     },
     error: { type: 'string', nullable: true, description: 'Wyjaśnienie błędu po polsku. Poza błędem pole jest puste' },
+    links: LINKI_WIADOMOSCI,
   },
 };
 
@@ -592,7 +736,127 @@ const ROZSYLKA: JsonSchema = {
         other: { type: 'integer', description: 'Liczba pozostałych, na przykład wciąż w drodze' },
       },
     },
+    links: LINKI_ROZSYLKI,
   },
+};
+
+/** Liczby kampanii wspólne dla listy i szczegółów. Liczby zbiorcze zostają po retencji szczegółów odbiorców. */
+const POLA_KAMPANII: Record<string, JsonSchema> = {
+  name: {
+    type: 'string',
+    description: 'Nazwa kampanii z pola campaign. Gdy wysyłka nie zawiera tego pola, bramka nadaje nazwę domyślną:'
+      + ' identyfikator rozsyłki, nazwę integracji albo nazwę klucza',
+    example: 'przeglad-klimatyzacji-wiosna',
+  },
+  firstSentAt: { type: 'string', format: 'date-time', description: 'Chwila pierwszej wysyłki z krótkim linkiem' },
+  lastSentAt: { type: 'string', format: 'date-time', description: 'Chwila ostatniej wysyłki z krótkim linkiem' },
+  sent: { type: 'integer', description: 'Liczba wysłanych SMS-ów z krótkimi linkami', example: 1240 },
+  opens: { type: 'integer', description: 'Liczba odbiorców, którzy otworzyli co najmniej jeden krótki link', example: 312 },
+  clicks: { type: 'integer', description: 'Liczba wejść w krótkie linki bez wejść automatów', example: 455 },
+  bots: {
+    type: 'integer',
+    description: 'Liczba wejść automatów, na przykład podglądu linku w komunikatorze albo skanera poczty. Bramka nie wlicza'
+      + ' ich do otwarć ani kliknięć',
+    example: 41,
+  },
+  linksDisabledAt: {
+    type: 'string', format: 'date-time', nullable: true,
+    description: 'Chwila wyłączenia linków kampanii w panelu bramki. Gdy linki działają, wartość wynosi null',
+  },
+};
+
+const KAMPANIA: JsonSchema = {
+  type: 'object',
+  description: 'Kampania krótkich linków wysłanych tym kluczem',
+  required: Object.keys(POLA_KAMPANII),
+  properties: POLA_KAMPANII,
+};
+
+const SZCZEGOLY_KAMPANII: JsonSchema = {
+  type: 'object',
+  description: 'Kampania z liczbami, linkami i stroną odbiorców, którzy otworzyli link',
+  required: [...Object.keys(POLA_KAMPANII), 'packages', 'messages', 'delivered', 'detailsPurgedAt', 'domain', 'expiresAt', 'utm',
+    'links', 'openers'],
+  properties: {
+    ...POLA_KAMPANII,
+    packages: { type: 'integer', description: 'Liczba rozsyłek z krótkimi linkami w kampanii' },
+    messages: { type: 'integer', description: 'Liczba pojedynczych wiadomości z krótkimi linkami w kampanii' },
+    delivered: {
+      type: 'integer', nullable: true,
+      description: 'Liczba doręczonych SMS-ów z krótkimi linkami według raportów doręczenia. Gdy żadna wysyłka kampanii nie'
+        + ' zamawiała raportu doręczenia, wartość wynosi null',
+    },
+    detailsPurgedAt: {
+      type: 'string', format: 'date-time', nullable: true,
+      description: 'Chwila usunięcia szczegółów odbiorców zgodnie z retencją, 30 dni po wygaśnięciu linków. Liczby kampanii'
+        + ' pozostają bez zmian',
+    },
+    domain: { type: 'string', nullable: true, description: 'Domena skracacza ostatniej wysyłki. Po retencji null', example: 'l.firma.pl' },
+    expiresAt: {
+      type: 'string', format: 'date-time', nullable: true,
+      description: 'Chwila wygaśnięcia ostatnich ważnych linków kampanii. Po retencji null',
+    },
+    utm: {
+      type: 'boolean', nullable: true,
+      description: 'Czy bramka dopisuje do adresów docelowych parametry utm_source=sms, utm_medium=sms i utm_campaign'
+        + ' z nazwą kampanii. Po retencji null',
+    },
+    links: {
+      type: 'array',
+      description: 'Adresy docelowe od największej liczby odbiorców. Linki indywidualne o wspólnej budowie tworzą jeden wiersz,'
+        + ' w którym część zmienną zastępuje znacznik {…}',
+      items: {
+        type: 'object',
+        required: ['target', 'kind', 'opens', 'clicks'],
+        properties: {
+          target: { type: 'string', description: 'Adres docelowy albo wzorzec adresów indywidualnych', example: 'https://firma.pl/oferta/{…}' },
+          kind: {
+            type: 'string', enum: ['shared', 'individual'],
+            description: 'Rodzaj linku: shared oznacza adres wysłany na więcej niż jeden numer, individual adres wysłany na jeden numer.'
+              + ' Po okresie przechowywania adresy indywidualne zastępuje wzorzec z domeną i pierwszym członem ścieżki',
+          },
+          opens: { type: 'integer', description: 'Liczba odbiorców, którzy otworzyli link' },
+          clicks: { type: 'integer', description: 'Liczba wejść w link bez wejść automatów' },
+        },
+      },
+    },
+    openers: {
+      type: 'object',
+      description: 'Strona odbiorców, którzy otworzyli link, od pierwszego otwarcia. Po retencji lista jest pusta',
+      required: ['data', 'hasMore'],
+      properties: {
+        data: {
+          type: 'array',
+          description: 'Odbiorcy na tej stronie',
+          items: {
+            type: 'object',
+            required: ['to', 'clientId', 'firstOpenedAt', 'lastClickedAt', 'clicks', 'targets'],
+            properties: {
+              to: { type: 'string', description: 'Numer odbiorcy', example: '48601000001' },
+              clientId: { type: 'string', nullable: true, description: 'Własny identyfikator odbiorcy podany przy rozsyłce' },
+              firstOpenedAt: { type: 'string', format: 'date-time', description: 'Chwila pierwszego otwarcia' },
+              lastClickedAt: { type: 'string', format: 'date-time', description: 'Chwila ostatniego kliknięcia' },
+              clicks: { type: 'integer', description: 'Liczba wejść odbiorcy w krótkie linki' },
+              targets: {
+                type: 'array', items: { type: 'string' },
+                description: 'Adresy docelowe linków, które odbiorca otworzył, w kolejności alfabetycznej',
+              },
+            },
+          },
+        },
+        hasMore: { type: 'boolean', description: 'Czy za tą stroną są dalsi odbiorcy' },
+      },
+    },
+  },
+};
+
+const PARAMETR_NAZWY_KAMPANII: OpenApiParameter = {
+  name: 'name',
+  in: 'path',
+  required: true,
+  description: 'Nazwa kampanii zakodowana w adresie, na przykład spacja jako %20, a ukośnik jako %2F',
+  schema: { type: 'string', minLength: 1, maxLength: 100 },
+  example: 'przeglad-klimatyzacji-wiosna',
 };
 
 const WIERSZ_RAPORTU: JsonSchema = {
@@ -622,7 +886,7 @@ const WIERSZ_RAPORTU: JsonSchema = {
 /** Uprawnienia klucza; listy obiektów, bo listy wyboru w aplikacjach czytają pola obiektów. */
 const UPRAWNIENIA_KLUCZA: JsonSchema = {
   type: 'object',
-  required: ['name', 'services', 'origs', 'maxParts', 'ratePerMin'],
+  required: ['name', 'services', 'origs', 'maxParts', 'ratePerMin', 'links'],
   properties: {
     name: { type: 'string', description: 'Nazwa klucza nadana w panelu', example: 'Powiadomienia CRM' },
     services: {
@@ -653,6 +917,32 @@ const UPRAWNIENIA_KLUCZA: JsonSchema = {
     },
     maxParts: { type: 'integer', description: 'Najwyższa liczba części jednej wiadomości', example: 5 },
     ratePerMin: { type: 'integer', description: 'Limit żądań klucza na minutę', example: 60 },
+    links: {
+      type: 'object',
+      description: 'Skracanie linków przy kluczu, ustawiane w panelu w formularzu klucza',
+      required: ['mode', 'domains', 'validityDays', 'utm'],
+      properties: {
+        mode: {
+          type: 'string', enum: ['off', 'sender', 'always'],
+          description: 'Tryb skracania: off wyłączone, sender decyduje wysyłający polem shortenLinks, always zawsze',
+          example: 'sender',
+        },
+        domains: {
+          type: 'array',
+          description: 'Aktywne domeny skracacza klucza w kolejności alfabetycznej. Przy trybie off lista jest pusta',
+          items: {
+            type: 'object',
+            required: ['domain', 'default'],
+            properties: {
+              domain: { type: 'string', description: 'Domena krótkich linków', example: 'l.firma.pl' },
+              default: { type: 'boolean', description: 'Domena używana, gdy wysyłka nie podaje pola linkDomain' },
+            },
+          },
+        },
+        validityDays: { type: 'integer', description: 'Domyślna ważność krótkich linków w dniach', example: 90 },
+        utm: { type: 'boolean', description: 'Dopisywanie parametrów UTM do adresów docelowych' },
+      },
+    },
   },
 };
 
@@ -699,6 +989,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
                     origs: [{ orig: 'Firma Alert', default: false }, { orig: 'Firma Info', default: true }],
                     maxParts: 5,
                     ratePerMin: 60,
+                    links: { mode: 'sender', domains: [{ domain: 'l.firma.pl', default: true }], validityDays: 90, utm: true },
                   },
                 },
               },
@@ -752,7 +1043,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             '400': blad(
               'Błąd w body żądania: invalid_body, invalid_phone, invalid_orig, too_many_parts, service_required,'
                 + ' valid_to_in_past, valid_to_too_far, a przy polu inReplyTo także in_reply_to_single,'
-                + ' in_reply_to_unknown oraz in_reply_to_recipient',
+                + ' in_reply_to_unknown oraz in_reply_to_recipient, a przy polu linkDomain spoza klucza link_domain_not_allowed',
               'invalid_phone',
               'Numer odbiorcy jest nieprawidłowy: 4860100000 (numer z kodem 48 ma 11 cyfr)',
             ),
@@ -938,7 +1229,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             },
             '400': blad(
               'Błąd w body żądania: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts,'
-                + ' invalid_orig, service_required, start_at_in_past',
+                + ' invalid_orig, service_required, start_at_in_past, link_domain_not_allowed',
               'text_required',
               'recipients.3: brak treści i brak treści domyślnej.',
             ),
@@ -1097,6 +1388,51 @@ export function buildOpenApiDocument(): OpenApiDocument {
           },
         },
       },
+      '/v1/campaigns': {
+        get: {
+          operationId: 'listaKampanii',
+          summary: 'Lista kampanii',
+          description: 'Zwraca kampanie krótkich linków wysłanych tym kluczem, od najnowszej kampanii, z liczbą wysłanych SMS-ów,'
+            + ' otwarć i kliknięć. Strona ma domyślnie 25 pozycji, najwyżej 200. Następną stronę pobiera się przez offset,'
+            + ' dopóki hasMore jest prawdziwe.',
+          security: KLUCZ,
+          parameters: PARAMETRY_STRONICOWANIA,
+          responses: {
+            '200': {
+              description: 'Strona wyników',
+              content: { 'application/json': { schema: lista({ $ref: '#/components/schemas/Kampania' }, 'Strona kampanii') } },
+            },
+            '401': BLAD_KLUCZA,
+          },
+        },
+      },
+      '/v1/campaigns/{name}': {
+        get: {
+          operationId: 'odczytajKampanie',
+          summary: 'Wyniki kampanii',
+          description: 'Zwraca liczby kampanii, adresy docelowe z otwarciami i kliknięciami oraz stronę odbiorców, którzy'
+            + ' otworzyli link. Strona odbiorców ma domyślnie 50 pozycji, najwyżej 200. Kolejne strony pobiera się przez'
+            + ' offset, dopóki openers.hasMore jest prawdziwe.',
+          security: KLUCZ,
+          parameters: [
+            PARAMETR_NAZWY_KAMPANII,
+            { ...PARAMETRY_STRONICOWANIA[0]!, description: 'Liczba odbiorców na stronie', schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } },
+            { ...PARAMETRY_STRONICOWANIA[1]!, description: 'Liczba odbiorców pominiętych od początku listy' },
+          ],
+          responses: {
+            '200': {
+              description: 'Wyniki kampanii',
+              content: { 'application/json': { schema: { $ref: '#/components/schemas/SzczegolyKampanii' } } },
+            },
+            '401': BLAD_KLUCZA,
+            '404': blad(
+              'Brak kampanii albo kampania innego klucza; bramka nie rozróżnia tych dwóch sytuacji',
+              'campaign_not_found',
+              'Nie ma kampanii o tej nazwie.',
+            ),
+          },
+        },
+      },
       '/v1/inbound': {
         get: {
           operationId: 'listaWiadomosciPrzychodzacych',
@@ -1248,7 +1584,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             },
             '400': blad(
               'Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone,'
-                + ' too_many_parts, valid_to_in_past, valid_to_too_far',
+                + ' too_many_parts, valid_to_in_past, valid_to_too_far, link_domain_not_allowed',
               'too_many_parts',
               'Treść wymaga 4 części, a limit integracji to 3.',
             ),
@@ -1292,7 +1628,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             },
             '400': blad(
               'Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone,'
-                + ' text_required, invalid_client_id, too_many_parts, start_at_in_past',
+                + ' text_required, invalid_client_id, too_many_parts, start_at_in_past, link_domain_not_allowed',
               'too_many_parts',
               'recipients.1: Treść wymaga 4 części, a limit integracji to 3.',
             ),
@@ -1343,7 +1679,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             },
             '400': blad(
               'Błąd w body żądania albo treść ponad limit części integracji: invalid_body, too_many_parts,'
-                + ' valid_to_in_past, valid_to_too_far',
+                + ' valid_to_in_past, valid_to_too_far, link_domain_not_allowed',
               'too_many_parts',
               'Treść wymaga 4 części, a limit integracji to 3.',
             ),
@@ -1418,6 +1754,8 @@ export function buildOpenApiDocument(): OpenApiDocument {
         WiadomoscPrzychodzaca: WIADOMOSC_PRZYCHODZACA,
         Rozsylka: ROZSYLKA,
         WierszRaportu: WIERSZ_RAPORTU,
+        Kampania: KAMPANIA,
+        SzczegolyKampanii: SZCZEGOLY_KAMPANII,
         IntegracjaPowerAutomate: INTEGRACJA_POWER_AUTOMATE,
         WysylkaDoGrupy: WYSYLKA_DO_GRUPY_INTEGRACJI,
         Blad: {

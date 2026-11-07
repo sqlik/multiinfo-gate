@@ -1,3 +1,4 @@
+import type { LinksServerState } from '../../src/links/server-state.ts';
 import { randomBytes } from 'node:crypto';
 import type { CertificateView } from '../../src/multiinfo/client.ts';
 import { authenticator } from 'otplib';
@@ -29,6 +30,8 @@ import { TemplateEngine } from '../../src/integrations/templates.ts';
 import type { NotificationEvent } from '../../src/notifications/rules.ts';
 import type { MailContent, MailerSettings } from '../../src/worker/mail.ts';
 import { FakeMailbox, fakeConnect } from './fake-mailbox.ts';
+import { linkDeps } from './api-deps.ts';
+import { DomainChecks } from '../../src/links/domain-checks.ts';
 import type { InstallKind } from '../../src/config/install.ts';
 import type { Logger } from '../../src/log.ts';
 
@@ -50,6 +53,13 @@ export interface AdminHarness {
   integrationEvents: IntegrationEventsRepo;
   guards: IntegrationGuardsRepo;
   mailIn: MailInRepo;
+  /** Repozytoria skracacza: domeny, kampanie i kody. */
+  linkDomains: ReturnType<typeof linkDeps>['linkDomains'];
+  campaigns: ReturnType<typeof linkDeps>['campaigns'];
+  shortLinks: ReturnType<typeof linkDeps>['shortLinks'];
+  /** Tokeny sprawdzenia domeny i podmienne pobranie tokenu (domyślnie 404); nazwę rozwiązuje `resolve`. */
+  domainChecks: DomainChecks;
+  domainNet: { fetch: typeof fetch };
   /** Podróbka skrzynki pocztowej do „Sprawdź połączenie”; hasło TajneHaslo9, UIDVALIDITY 7. */
   mailbox: FakeMailbox;
   notifications: NotificationsRepo;
@@ -108,7 +118,8 @@ function makeProbeStub(): ProbeStub {
  */
 export async function startAdminHarness(
   now = new Date('2026-08-25T10:00:00Z'),
-  opts: { totp?: boolean; allowPrivateWebhooks?: boolean; allowPrivateMail?: boolean; log?: Logger; install?: InstallKind | null; nodeVersion?: string; trustedProxies?: string[] } = {},
+  opts: { totp?: boolean; allowPrivateWebhooks?: boolean; allowPrivateMail?: boolean; allowPrivateLinks?: boolean; log?: Logger; install?: InstallKind | null; nodeVersion?: string; trustedProxies?: string[];
+    linksServer?: Pick<LinksServerState, 'problem'> } = {},
 ): Promise<AdminHarness> {
   const masterKey = randomBytes(32);
   const db = openDatabase(':memory:');
@@ -128,6 +139,7 @@ export async function startAdminHarness(
   const integrationEvents = new IntegrationEventsRepo(db, masterKey);
   const guards = new IntegrationGuardsRepo(db);
   const mailIn = new MailInRepo(db);
+  const links = linkDeps(db);
   const mailbox = new FakeMailbox({ password: 'TajneHaslo9', uidValidity: 7 });
   const notifications = new NotificationsRepo(db, masterKey);
   const settings = new SettingsRepo(db);
@@ -167,28 +179,35 @@ export async function startAdminHarness(
   const m365 = new M365Service({ accounts: m365Accounts, tokens: m365Tokens, fetch: m365Fetch, integrations, notifications, audit });
 
   const resolve = { value: async (_hostname: string) => ['93.184.216.34'] };
+  const domainChecks = new DomainChecks();
+  const domainNet: AdminHarness['domainNet'] = {
+    fetch: (async () => new Response('', { status: 404 })) as typeof fetch,
+  };
   const app = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, receiver,
     integrationEvents, guards, mailIn, mailboxConnect: fakeConnect(mailbox), engine: new TemplateEngine(), notifications, settings, notifier,
-    m365, m365Accounts, m365Tokens,
+    m365, m365Accounts, m365Tokens, ...links, domainChecks,
+    domainFetch: ((input, init) => domainNet.fetch(input, init)) as typeof fetch,
     mailer: async (settings, mail) => { mailSettings.push(settings); if (harness.mailError) throw harness.mailError; mails.push(mail); },
     clients: clients as never, sessions, masterKey, now: () => now, trustedProxies: opts.trustedProxies ?? [],
     resolve: (hostname) => resolve.value(hostname),
     ...(opts.allowPrivateWebhooks ? { allowPrivateWebhooks: true } : {}),
     ...(opts.allowPrivateMail ? { allowPrivateMail: true } : {}),
+    ...(opts.allowPrivateLinks ? { allowPrivateLinks: true } : {}),
     ...(opts.log ? { log: opts.log } : {}),
     ...(opts.install !== undefined ? { install: opts.install } : {}),
     ...(opts.nodeVersion !== undefined ? { nodeVersion: opts.nodeVersion } : {}),
+    ...(opts.linksServer ? { linksServer: opts.linksServer } : {}),
   });
   await app.ready();
 
   return {
     app, db, accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, refreshed,
-    integrationEvents, guards, mailIn, mailbox, notifications, settings, notified, mails, mailSettings, m365Accounts, m365, m365Forms, m365Reply,
+    integrationEvents, guards, mailIn, ...links, mailbox, notifications, settings, notified, mails, mailSettings, m365Accounts, m365, m365Forms, m365Reply,
     get mailError() { return harness.mailError; },
     set mailError(e: Error | null) { harness.mailError = e; },
     sessions, userId, masterKey,
-    cookie: `mig_session=${token}`, totpSecret, probe, invalidated, resolve,
+    cookie: `mig_session=${token}`, totpSecret, probe, invalidated, resolve, domainChecks, domainNet,
   };
 }
 

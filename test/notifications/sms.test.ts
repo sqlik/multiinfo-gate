@@ -9,9 +9,10 @@ import { JobsRepo } from '../../src/store/jobs.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
 import { MessagesRepo } from '../../src/store/messages.ts';
 import { NotificationsRepo } from '../../src/store/notifications.ts';
+import { linkDeps } from '../helpers/api-deps.ts';
 
 const NOW = new Date('2026-11-04T10:00:00Z');
-let deps: SmsSendDeps & { messages: MessagesRepo; jobs: JobsRepo; apiKeys: ApiKeysRepo; notifications: NotificationsRepo };
+let deps: SmsSendDeps & { messages: MessagesRepo; jobs: JobsRepo; apiKeys: ApiKeysRepo; notifications: NotificationsRepo } & ReturnType<typeof linkDeps>;
 let accountId: number;
 
 beforeEach(() => {
@@ -27,7 +28,7 @@ beforeEach(() => {
   });
   deps = {
     accounts, messages: new MessagesRepo(db), events: new MessageEventsRepo(db), jobs: new JobsRepo(db), inbound: new InboundMessagesRepo(db),
-    apiKeys: new ApiKeysRepo(db, masterKey), notifications: new NotificationsRepo(db, masterKey),
+    apiKeys: new ApiKeysRepo(db, masterKey), notifications: new NotificationsRepo(db, masterKey), ...linkDeps(db),
   };
 });
 
@@ -101,6 +102,17 @@ describe('sendNotificationSms', () => {
     channel(key(), { recipients: [] });
     expect(sendNotificationSms(deps, 'Test', NOW).ok).toBe(false);
     expect(sent()).toEqual([]);
+  });
+
+  it('klucz ze skracaniem w trybie „Zawsze” wysyła SMS powiadomienia bez skracania linków', () => {
+    const id = key();
+    const domainId = deps.linkDomains.create({ domain: 'l.firma.pl', displayName: 'Firma Info', homeUrl: null, bareLinks: false }, NOW);
+    deps.apiKeys.setLinkSettings(id, { mode: 'always', domainIds: [domainId], defaultDomainId: domainId, targets: ['firma.pl'], validityDays: 90, utm: true });
+    channel(id);
+    const text = 'Multiinfo Gate Biuro: konto wstrzymane. Panel: https://firma.pl/konta';
+    expect(sendNotificationSms(deps, text, NOW).ok).toBe(true);
+    for (const m of sent()) expect(m).toMatchObject({ body: text, campaignId: null });
+    expect(deps.campaigns.list({ offset: 0, limit: 10 }).rows).toEqual([]);
   });
 
   it('odmowa wysyłki przez klucz (nadpis spoza dozwolonych) daje powód zamiast wyjątku', () => {

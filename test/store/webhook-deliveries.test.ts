@@ -3,6 +3,8 @@ import { openDatabase } from '../../src/store/db.ts';
 import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
 import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
+import { IntegrationsRepo } from '../../src/store/integrations.ts';
+import { defaultOutboundConfig } from '../../src/integrations/config.ts';
 import { accountInput, testKey } from './helpers.ts';
 
 const NOW = new Date('2026-08-25T10:00:00Z');
@@ -19,7 +21,7 @@ function setup() {
   const seedInbound = db.prepare(`INSERT INTO inbound_messages (id, account_id, service_id, mi_id, sender, dest, kind, body_hash, protocol_id, coding_scheme, received_at, created_at)
     VALUES (?, ?, '24138', ?, '48601000001', '7968', 'text', 'h', 0, 0, '2026-08-25T09:00:00.000Z', '2026-08-25T09:00:01.000Z')`);
   for (const id of ['in_1', 'in_2']) seedInbound.run(id, accountId, id);
-  return { repo: new WebhookDeliveriesRepo(db, key), apiKeyId };
+  return { repo: new WebhookDeliveriesRepo(db, key), apiKeyId, db, key };
 }
 
 describe('WebhookDeliveriesRepo', () => {
@@ -136,6 +138,38 @@ describe('WebhookDeliveriesRepo - dostawy odebranych', () => {
     expect(payload.bodyHash).toMatch(/^[0-9a-f]{64}$/);
     expect(payload.id).toBe('in_1');
     expect(repo.get(id)!.scrubAfter).toBe(0);
+  });
+
+  it('po terminie retencji kodu dostawa link.opened traci numer, identyfikator klienta i adres docelowy', () => {
+    const { repo, apiKeyId, db, key } = setup();
+    const integrationId = new IntegrationsRepo(db, key).insert({
+      name: 'CRM kampanie', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1,
+      config: { ...defaultOutboundConfig(), events: ['link.opened'], url: 'https://hooks.firma.pl/kampanie' },
+      secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const payload = JSON.stringify({
+      event: 'link.opened', at: NOW.toISOString(), messageId: 'msg_1', packageId: null, seq: null, campaign: 'oferta-serwisowa',
+      to: '48601000001', clientId: 'KL-10482', target: 'https://firma.pl/oferta/KL-10482', shortUrl: 'https://l.firma.pl/aB3xK9q',
+      openedAt: NOW.toISOString(),
+    });
+    const due = repo.insert({ apiKeyId, event: 'link.opened', payload, url: 'https://crm.example/hook', createdAt: NOW, purgeAfter: '2026-09-01T00:00:00.000Z' });
+    const later = repo.insert({ apiKeyId, event: 'link.opened', payload, url: 'https://crm.example/hook', createdAt: NOW, purgeAfter: '2026-12-01T00:00:00.000Z' });
+    const integration = repo.insert({
+      apiKeyId, event: 'link.opened', payload: '{"kto":"48601000001"}', url: 'https://hooks.firma.pl/kampanie', createdAt: NOW,
+      integrationId, headers: { 'X-Numer': '48601000001' }, purgeAfter: '2026-09-01T00:00:00.000Z',
+    });
+    const other = repo.insert({ apiKeyId, event: 'message.sent', payload: '{"id":"msg_1","to":"48601000001"}', url: 'https://crm.example/hook', createdAt: NOW });
+    expect(repo.purgeDetails(new Date('2026-10-01T00:00:00Z'))).toBe(2);
+    const purged = JSON.parse(repo.get(due)!.payload) as Record<string, unknown>;
+    expect(purged).toEqual({
+      event: 'link.opened', at: NOW.toISOString(), messageId: 'msg_1', packageId: null, seq: null, campaign: 'oferta-serwisowa',
+      openedAt: NOW.toISOString(), detailsPurged: true,
+    });
+    expect(repo.get(later)!.payload).toBe(payload);
+    expect(repo.get(integration)!.payload).not.toContain('48601000001');
+    expect(repo.headers(integration)).toEqual({});
+    expect(repo.get(other)!.payload).toContain('48601000001');
+    expect(repo.purgeDetails(new Date('2026-10-01T00:00:00Z'))).toBe(0);
   });
 
   it('liczy odebrane z dostawą w toku albo nieudaną, bez powtórzeń', () => {

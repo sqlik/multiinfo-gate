@@ -1,11 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from '../zod.ts';
+import { messageLinks } from '../links/campaigns.ts';
 import type { MessageRow } from '../store/messages.ts';
 import { authenticate, refuseIntegrationsOnly } from './auth.ts';
 import { dropEmptyFields } from './empty-fields.ts';
 import { ApiError } from './errors.ts';
+import { linkFieldsSchema, linkRequest } from './link-fields.ts';
 import type { ApiDeps } from './server.ts';
 import { submitMessages } from './submit.ts';
+import { parseOffset } from '../paging.ts';
 
 /**
  * Schemat body wysyłki. Poza trasą używa go opis API w formacie OpenAPI
@@ -25,6 +28,7 @@ export const messageBodySchema = z.object({
   costCenter: z.string().optional(),
   /** Wiadomość przychodząca, na którą to odpowiedź; identyfikator ma stały kształt, reszta to sprawdzenie w bazie. */
   inReplyTo: z.string().regex(/^in_[A-Za-z0-9_]{1,40}$/).optional(),
+  ...linkFieldsSchema,
 });
 
 
@@ -62,6 +66,7 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
       ...(input.costCenter !== undefined ? { costCenter: input.costCenter } : {}),
       ...(input.inReplyTo !== undefined ? { inReplyTo: input.inReplyTo } : {}),
       ...(typeof idempotencyKey === 'string' ? { idempotencyKey } : {}),
+      links: linkRequest(input),
     }, now());
 
     reply.code(202);
@@ -75,7 +80,8 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
     if (!message || message.apiKeyId !== auth.apiKeyId || message.system === 1) {
       throw new ApiError(404, 'message_not_found', 'Nie ma wiadomości o tym identyfikatorze.');
     }
-    return present(message);
+    const links = messageLinks(deps, message);
+    return links === undefined ? present(message) : { ...present(message), links };
   });
 
   app.get<{ Querystring: Record<string, string> }>('/v1/messages', async (request) => {
@@ -83,7 +89,7 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
     // Ujemny LIMIT znaczy w SQLite „bez ograniczenia”: wartość spoza zakresu wraca do domyślnej.
     const requested = Number.parseInt(request.query.limit ?? '', 10);
     const limit = Number.isInteger(requested) && requested >= 1 ? Math.min(requested, 200) : 25;
-    const offset = Math.max(Number.parseInt(request.query.offset ?? '0', 10) || 0, 0);
+    const offset = parseOffset(request.query.offset);
 
     const rows = deps.messages.list({
       apiKeyId: auth.apiKeyId,

@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { silentLogger, type Logger } from '../log.ts';
 import { parseReport } from '../multiinfo/report.ts';
+import { PACKAGE_NOT_RETRIED } from '../multiinfo/client.ts';
 import { ProviderError } from '../multiinfo/response.ts';
 import { pauseForCertificate } from './certificate.ts';
 import { unzipFirstFile } from '../multiinfo/zip.ts';
@@ -17,8 +18,17 @@ export const PACKAGE_POLL_TAIL_MS = 900_000;
 /** Raport generuje się po stronie Plusa - pytamy o niego co minutę. */
 export const REPORT_RETRY_MS = 60_000;
 
+/**
+ * Rozsyłka z krótkimi linkami pobiera raport drugi raz po dobie, ponieważ potwierdzenia doręczenia
+ * przychodzą także po pierwszym raporcie, a kafelek „Doręczone” kampanii liczy się z raportu.
+ */
+const REPORT_REFRESH_MS = 24 * 60 * 60_000;
+
 /** Po tym czasie sprawdzamy ponownie, czy wstrzymane konto zostało odblokowane. */
 const PAUSED_RECHECK_MS = 60_000;
+
+/** Kod bramki dla rozsyłki, której utworzenia Multiinfo nie potwierdziło. */
+const UNCERTAIN_CODE = -72;
 
 /** Statusy rozsyłki w packageinfo.aspx (§7.3). */
 const MI_PACKAGE = { open: 1, sending: 2, completed: 11, cancelled: 12 } as const;
@@ -58,7 +68,8 @@ function handleProviderFailure(
     return;
   }
 
-  if (provider !== null && provider.kind === 'permanent') {
+  // Wynik nieznany kończy jak błąd trwały: ponowienie mogłoby utworzyć rozsyłkę drugi raz.
+  if (provider !== null && (provider.kind === 'permanent' || provider.kind === 'uncertain')) {
     onPermanent(provider.code, provider.message);
     return;
   }
@@ -107,6 +118,31 @@ export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date)
     deps.jobs.complete(job.id);
     return;
   }
+  // Poprzedni proces przekazał żądanie i zatrzymał się przed odpowiedzią. Multiinfo mogło
+  // utworzyć rozsyłkę, a nie pozwala tego sprawdzić, dlatego bramka jej nie ponawia.
+  if (typeof job.payload.sentAt === 'string') {
+    fail(deps, job, pkg, UNCERTAIN_CODE, `Bramka zatrzymała się po przekazaniu rozsyłki do Multiinfo, zanim nadeszła odpowiedź. ${PACKAGE_NOT_RETRIED}`, now, log);
+    return;
+  }
+
+  // Znacznik w zadaniu chroni przed powtórzeniem po awarii procesu. Jego brak nie może jednak
+  // przerwać wysyłki, a wyjątek ze zdarzenia gniazda zatrzymałby cały proces. Dlatego błąd
+  // zapisu trafia tylko do dziennika.
+  const onSent = () => {
+    try {
+      deps.jobs.markSent(job.id, now);
+    } catch (error) {
+      log.error('rozsylka.znacznik_przekazania', { packageId: pkg.id, error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+  // Serwer odrzucił sesję TLS, zanim obsłużył żądanie: rozsyłka nie powstała i może zostać ponowiona.
+  const onRejected = () => {
+    try {
+      deps.jobs.clearSent(job.id);
+    } catch (error) {
+      log.error('rozsylka.znacznik_przekazania', { packageId: pkg.id, error: error instanceof Error ? error.message : String(error) });
+    }
+  };
 
   try {
     const miPackageId = await deps.clients.for(pkg.accountId).createPackage({
@@ -119,7 +155,7 @@ export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date)
       deliveryReport: pkg.deliveryReport === 1,
       advancedEncoding: pkg.encoding === 'ucs2',
       multipart: pkg.multipart === 1,
-    });
+    }, { onSent, onRejected });
 
     deps.packages.setCreated(pkg.id, miPackageId);
     // Treści to dane osobowe - konto bez przechowywania nie zostawia ich po przekazaniu.
@@ -195,23 +231,42 @@ export async function handlePackagePoll(job: Job, deps: WorkerDeps, now: Date): 
   }
 }
 
+/**
+ * Drugi raport rozsyłki z kampanią i raportem doręczenia: dobę po zakończeniu, ale nie wcześniej niż po
+ * wygaśnięciu pierwszego raportu, żeby Multiinfo przygotowało nowy raport zamiast zwrócić poprzedni.
+ */
+function scheduleRefresh(deps: WorkerDeps, pkg: PackageRow, reportExpiresAt: Date, now: Date): void {
+  if (pkg.campaignId === null || pkg.deliveryReport !== 1) return;
+  const completedAt = pkg.completedAt === null ? now.getTime() : Date.parse(pkg.completedAt);
+  const at = Math.max(completedAt + REPORT_REFRESH_MS, reportExpiresAt.getTime() + REPORT_RETRY_MS);
+  deps.jobs.enqueue('package.report', { packageId: pkg.id, refresh: true }, new Date(at));
+}
+
 export async function handlePackageReport(job: Job, deps: WorkerDeps, now: Date): Promise<void> {
   const log = deps.log ?? silentLogger;
   const ready = prepare(job, deps, now, log);
   if (!ready) return;
   const { pkg } = ready;
-  if (pkg.miPackageId === null || pkg.reportStatus === 'ready') {
+  // Odświeżenie pobiera raport mimo gotowego pierwszego i nie zmienia jego stanu do chwili pobrania nowego.
+  const refresh = job.payload.refresh === true;
+  if (pkg.miPackageId === null || (!refresh && pkg.reportStatus === 'ready')) {
     deps.jobs.complete(job.id);
     return;
   }
-  if (pkg.reportStatus !== 'pending') deps.packages.setReport(pkg.id, { status: 'pending' });
+  if (!refresh && pkg.reportStatus !== 'pending') deps.packages.setReport(pkg.id, { status: 'pending' });
 
-  const reportFailed = (code: number | null, message: string) => {
-    deps.packages.setReport(pkg.id, { status: 'failed' });
-    deps.jobs.complete(job.id);
-    notifyCompleted(deps, pkg, { status: pkg.status, report: 'failed', providerCode: code, error: message }, now);
-    log.warn('rozsylka.raport_nieudany', { packageId: pkg.id, code, error: message });
-  };
+  const reportFailed = refresh
+    ? (code: number | null, message: string) => {
+      // Pierwszy raport pozostaje ważny, a klient otrzymał już webhook zakończenia rozsyłki.
+      deps.jobs.complete(job.id);
+      log.warn('rozsylka.raport_odswiezenie_nieudane', { packageId: pkg.id, code, error: message });
+    }
+    : (code: number | null, message: string) => {
+      deps.packages.setReport(pkg.id, { status: 'failed' });
+      deps.jobs.complete(job.id);
+      notifyCompleted(deps, pkg, { status: pkg.status, report: 'failed', providerCode: code, error: message }, now);
+      log.warn('rozsylka.raport_nieudany', { packageId: pkg.id, code, error: message });
+    };
 
   try {
     const client = deps.clients.for(pkg.accountId);
@@ -221,7 +276,7 @@ export async function handlePackageReport(job: Job, deps: WorkerDeps, now: Date)
       return;
     }
     if (info.generation !== 2) {
-      deps.packages.setReport(pkg.id, { status: 'pending', reportId: info.reportId });
+      if (!refresh) deps.packages.setReport(pkg.id, { status: 'pending', reportId: info.reportId });
       deps.jobs.retry(job.id, new Date(now.getTime() + REPORT_RETRY_MS), 'raport w przygotowaniu');
       return;
     }
@@ -242,7 +297,14 @@ export async function handlePackageReport(job: Job, deps: WorkerDeps, now: Date)
       expiresAt: new Date(now.getTime() + info.minutesLeft * 60_000).toISOString(),
     });
     deps.jobs.complete(job.id);
+    if (refresh) {
+      // Ten sam identyfikator oznacza, że Multiinfo zwróciło pierwszy raport zamiast nowego.
+      if (info.reportId === pkg.reportId) log.warn('rozsylka.raport_odswiezenie_ten_sam', { packageId: pkg.id, reportId: info.reportId });
+      log.info('rozsylka.raport_odswiezony', { packageId: pkg.id, rows: rows.length, reportId: info.reportId });
+      return;
+    }
     notifyCompleted(deps, pkg, { status: pkg.status, report: 'ready', summary: deps.packages.recipientSummary(pkg.id) }, now);
+    scheduleRefresh(deps, pkg, new Date(now.getTime() + info.minutesLeft * 60_000), now);
     log.info('rozsylka.raport', { packageId: pkg.id, rows: rows.length, reportId: info.reportId });
   } catch (error) {
     handleProviderFailure(error, job, deps, pkg, now, log, reportFailed);

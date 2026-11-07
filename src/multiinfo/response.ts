@@ -2,11 +2,15 @@ export type ProviderResponse =
   | { ok: true; lines: string[] }
   | { ok: false; code: number; message: string };
 
-export type ErrorKind = 'transient' | 'permanent' | 'certificate';
+/**
+ * `uncertain`: żądanie dotarło do Multiinfo, ale wynik nie jest znany. Ponowienie mogłoby
+ * powtórzyć skutek, na przykład utworzyć tę samą rozsyłkę drugi raz.
+ */
+export type ErrorKind = 'transient' | 'permanent' | 'certificate' | 'uncertain';
 
 export class ProviderError extends Error {
-  constructor(readonly code: number, message: string, readonly kind: ErrorKind) {
-    super(message || `Multiinfo zwróciło kod ${code}`);
+  constructor(readonly code: number, message: string, readonly kind: ErrorKind, options?: ErrorOptions) {
+    super(message || `Multiinfo zwróciło kod ${code}`, options);
     this.name = 'ProviderError';
   }
 }

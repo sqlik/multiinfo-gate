@@ -25,6 +25,10 @@ export interface AppConfig {
    * decyduje mapowanie portów.
    */
   adminHost: string;
+  /** Port serwera przekierowań krótkich linków (MIG_LINKS_PORT). */
+  linksPort: number;
+  /** Adres nasłuchu serwera przekierowań; domyślnie ten sam co API (MIG_LINKS_HOST). */
+  linksHost: string;
   dataDir: string;
   logLevel: LogLevel;
   backupRetentionDays: number;
@@ -36,6 +40,8 @@ export interface AppConfig {
   webhookAllowPrivate: boolean;
   /** Zgoda na serwer IMAP w sieci wewnętrznej (MIG_MAIL_ALLOW_PRIVATE=1). */
   mailAllowPrivate: boolean;
+  /** Zgoda na sprawdzenie domeny skracacza, która wskazuje adres w sieci wewnętrznej (MIG_LINKS_ALLOW_PRIVATE=1). */
+  linksAllowPrivate: boolean;
   /** Ile ms Multiinfo może trzymać getsms.aspx bez odpowiedzi (1..60000). Domyślnie 10000:
    *  pełne 60000 opóźnia wiadomość nadeszłą między pytaniami nawet o minutę. */
   inboundTimeoutMs: number;
@@ -119,11 +125,16 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env, interfaces: Int
     adminPort: intOr(source.MIG_ADMIN_PORT, 8081),
     apiHost: listenAddress('MIG_API_HOST', source.MIG_API_HOST || '0.0.0.0', interfaces),
     adminHost: listenAddress('MIG_ADMIN_HOST', source.MIG_ADMIN_HOST || '127.0.0.1', interfaces),
+    linksPort: intOr(source.MIG_LINKS_PORT, 8082),
+    linksHost: source.MIG_LINKS_HOST
+      ? listenAddress('MIG_LINKS_HOST', source.MIG_LINKS_HOST, interfaces)
+      : listenAddress('MIG_API_HOST', source.MIG_API_HOST || '0.0.0.0', interfaces),
     dataDir: source.MIG_DATA_DIR ?? '/data',
     logLevel: logLevelOr(source.MIG_LOG_LEVEL, 'info'),
     backupRetentionDays: intOr(source.MIG_BACKUP_RETENTION_DAYS, 14),
     webhookAllowPrivate: flag(source.MIG_WEBHOOK_ALLOW_PRIVATE),
     mailAllowPrivate: flag(source.MIG_MAIL_ALLOW_PRIVATE),
+    linksAllowPrivate: flag(source.MIG_LINKS_ALLOW_PRIVATE),
     inboundTimeoutMs: boundedInt('MIG_INBOUND_TIMEOUT_MS', source.MIG_INBOUND_TIMEOUT_MS, 10_000, 1, 60_000),
     inboundIdleMs: boundedInt('MIG_INBOUND_IDLE_MS', source.MIG_INBOUND_IDLE_MS, 0, 0, 3_600_000),
     trustedProxies: proxyList(source.MIG_TRUSTED_PROXIES),

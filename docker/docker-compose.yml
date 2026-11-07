@@ -9,6 +9,8 @@ services:
       MIG_MASTER_KEY: ${MIG_MASTER_KEY:?ustaw MIG_MASTER_KEY, 32 bajty w base64}
       MIG_API_PORT: "8080"
       MIG_ADMIN_PORT: "8081"
+      # Serwer przekierowań krótkich linków skracacza. Nasłuchuje na wszystkich interfejsach kontenera.
+      MIG_LINKS_PORT: "8082"
       # W kontenerze panel musi nasłuchiwać na wszystkich interfejsach sieci kontenera,
       # żeby mapowanie portów poniżej mogło go dostarczyć na pętlę zwrotną hosta.
       MIG_ADMIN_HOST: 0.0.0.0
@@ -20,13 +22,18 @@ services:
       # Serwer poczty (Mail2SMS) tylko pod adresem publicznym. Serwer w sieci wewnętrznej wymaga
       # MIG_MAIL_ALLOW_PRIVATE=1 w docker/.env (docs/integracje.md, rozdział 5.1).
       MIG_MAIL_ALLOW_PRIVATE: ${MIG_MAIL_ALLOW_PRIVATE:-0}
+      # Sprawdzenie domeny skracacza łączy się tylko z adresem publicznym. Sieć z wewnętrznym serwerem
+      # DNS, który podaje dla domeny adres wewnętrzny, wymaga MIG_LINKS_ALLOW_PRIVATE=1 w docker/.env.
+      MIG_LINKS_ALLOW_PRIVATE: ${MIG_LINKS_ALLOW_PRIVATE:-0}
       # Odbiór wiadomości przychodzących: oczekiwanie na odpowiedź Multiinfo (zalecane 10000 -
       # docs/uruchomienie.md, rozdział 7.7; domyślne 60 s opóźnia odbiór nawet o minutę) i przerwa po pustej
       # odpowiedzi; zmiana tylko przy odpytywaniu okresowym (docs/uruchomienie.md, rozdział 7.7).
       MIG_INBOUND_TIMEOUT_MS: ${MIG_INBOUND_TIMEOUT_MS:-10000}
       MIG_INBOUND_IDLE_MS: ${MIG_INBOUND_IDLE_MS:-0}
       # Odwrotne proxy, którym wolno podać adres klienta w X-Forwarded-For (lista źródeł i dziennik
-      # integracji): 172.16.0.0/12 dla Caddy i Traefika w Dockerze, 127.0.0.1 dla nginx na hoście.
+      # integracji, limit wejść w krótkie linki): 172.16.0.0/12 dla Caddy, Traefika i nginx na hoście, bo
+      # bramka w kontenerze widzi adres z sieci Dockera. docker-compose.caddy.yml i docker-compose.nginx.yml
+      # ustawiają tę wartość same. Sieć Traefika dzielą inne kontenery, dlatego przy Traefiku wpis w docker/.env.
       MIG_TRUSTED_PROXIES: ${MIG_TRUSTED_PROXIES:-}
       # Raz na dobę pytanie do GitHuba o nowsze wydanie (pasek na przeglądzie i mail do administratora).
       # 0 wyłącza, np. w sieci bez dostępu do internetu (docs/uruchomienie.md, rozdział 7.4).
@@ -34,6 +41,8 @@ services:
     ports:
       # API i panel tylko na pętli zwrotnej hosta. Na świat API wystawia odwrotne proxy
       # (docker-compose.caddy.yml, nginx na hoście albo docker-compose.traefik.yml) - docs/uruchomienie.md, rozdział 6.
+      # Port krótkich linków (8082) nie jest mapowany na hosta: Caddy i Traefik łączą się z bramką w sieci
+      # Dockera, a nginx na hoście dodaje mapowanie plikiem docker-compose.nginx.yml.
       - "127.0.0.1:8080:8080"
       - "127.0.0.1:8081:8081"
     volumes:

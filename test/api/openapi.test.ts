@@ -37,7 +37,8 @@ describe('opis API', () => {
     expect(wyslij.security).toEqual([{ bearerAuth: [] }]);
     const schema = wyslij.requestBody!.content['application/json']!.schema;
     expect(Object.keys(schema.properties!).sort()).toEqual(
-      ['costCenter', 'deliveryReport', 'encoding', 'inReplyTo', 'maxParts', 'orig', 'serviceId', 'text', 'to', 'validTo'],
+      ['campaign', 'costCenter', 'deliveryReport', 'encoding', 'inReplyTo', 'linkDomain', 'linkValidityDays', 'maxParts', 'orig',
+        'serviceId', 'shortenLinks', 'text', 'to', 'validTo'],
     );
     expect(schema.required!.slice().sort()).toEqual(['text', 'to']);
   });
@@ -79,7 +80,8 @@ describe('opis API', () => {
   });
 
   it('każde pole odpowiedzi odczytu ma opis po polsku', () => {
-    for (const nazwa of ['Wiadomosc', 'WiadomoscPrzychodzaca', 'Rozsylka', 'WierszRaportu', 'IntegracjaPowerAutomate', 'WysylkaDoGrupy']) {
+    for (const nazwa of ['Wiadomosc', 'WiadomoscPrzychodzaca', 'Rozsylka', 'WierszRaportu', 'IntegracjaPowerAutomate', 'WysylkaDoGrupy',
+      'Kampania', 'SzczegolyKampanii']) {
       const schema = doc.components.schemas[nazwa]!;
       for (const [pole, opis] of Object.entries(schema.properties!)) {
         expect(opis.description, `${nazwa}.${pole}`).toBeTruthy();
@@ -125,6 +127,44 @@ describe('opis API', () => {
   it('nazwa operacji jest niepowtarzalna, bo po niej nazywają się metody wygenerowanego klienta', () => {
     const nazwy = Object.values(doc.paths).flatMap((p) => Object.values(p)).map((o) => o.operationId);
     expect(new Set(nazwy).size).toBe(nazwy.length);
+  });
+
+  it('pole skipped wymienia wszystkie powody pominięcia linku', () => {
+    const reasons: { enum?: unknown; description?: string }[] = [];
+    const walk = (node: unknown): void => {
+      if (node === null || typeof node !== 'object') return;
+      const props = (node as { properties?: Record<string, unknown> }).properties;
+      const skipped = props?.skipped as { items?: { properties?: { reason?: { enum?: unknown; description?: string } } } } | undefined;
+      if (skipped?.items?.properties?.reason) reasons.push(skipped.items.properties.reason);
+      for (const value of Object.values(node)) walk(value);
+    };
+    walk(doc);
+    expect(reasons.length).toBeGreaterThan(0);
+    for (const reason of reasons) {
+      expect(reason.enum).toEqual(['domain_not_allowed', 'too_long', 'too_many']);
+      expect(reason.description).toMatch(/too_long.*2048.*too_many.*10/s);
+    }
+  });
+
+  it('opis odpowiedzi 400 każdej operacji wysyłki wymienia link_domain_not_allowed', () => {
+    const paths = ['/v1/messages', '/v1/packages', '/v1/integrations/{id}/messages', '/v1/integrations/{id}/packages', '/v1/integrations/{id}/group'];
+    for (const path of paths) {
+      const op = (doc.paths as Record<string, Record<string, { responses: Record<string, { description?: string }> }>>)[path]!.post!;
+      expect(op.responses['400']!.description, path).toContain('link_domain_not_allowed');
+    }
+  });
+
+  it('opis pola linkDomain wymienia zgłoszenie domain_unavailable przy wyłączonej domenie', () => {
+    const walk = (node: unknown, found: string[]): string[] => {
+      if (node === null || typeof node !== 'object') return found;
+      const props = (node as { properties?: Record<string, { description?: string }> }).properties;
+      if (props?.linkDomain?.description) found.push(props.linkDomain.description);
+      for (const value of Object.values(node)) walk(value, found);
+      return found;
+    };
+    const descriptions = walk(doc, []);
+    expect(descriptions.length).toBeGreaterThan(0);
+    for (const d of descriptions) expect(d).toMatch(/link_domain_not_allowed.*domain_unavailable/s);
   });
 
   it('zapisany plik zgadza się z modułem', () => {

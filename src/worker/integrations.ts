@@ -11,7 +11,8 @@ import type { JobsRepo } from '../store/jobs.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 
 /** Zależności wysyłki SMS dla grup; bez nich grupa zapisuje błąd zamiast rozsyłać. */
-export type SmsGroupDeps = Pick<PipelineDeps, 'accounts' | 'apiKeys' | 'messages' | 'events' | 'jobs' | 'inbound'>;
+export type SmsGroupDeps = Pick<PipelineDeps,
+  'accounts' | 'apiKeys' | 'messages' | 'events' | 'jobs' | 'inbound' | 'linkDomains' | 'campaigns' | 'shortLinks'>;
 
 export interface IntegrationEmitDeps {
   integrations: IntegrationsRepo;
@@ -30,6 +31,8 @@ export interface EmitIntegrationsOptions {
   messageId?: string;
   /** Po stanie końcowym dostawy body ma zniknąć (konto bez przechowywania treści). */
   scrubAfter?: boolean;
+  /** Termin, po którym body i nagłówki dostawy znikają (retencja kodu przy link.opened). */
+  purgeAfter?: string;
 }
 
 export const isOutboundEvent = (event: string): event is OutboundEvent => (OUTBOUND_EVENTS as readonly string[]).includes(event);
@@ -132,6 +135,7 @@ export function emitIntegrations(
       const id = deps.deliveries.insert({
         apiKeyId, event, payload: rendered.body, url: config.url, createdAt: now, inboundId: opts.inboundId ?? null,
         scrubAfter: opts.scrubAfter === true, integrationId: integration.id, method: config.method, headers: rendered.headers,
+        purgeAfter: opts.purgeAfter ?? null,
       });
       deps.jobs.enqueue('webhook', { deliveryId: id }, now);
       note('sent', undefined, id);

@@ -4,8 +4,17 @@ import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
 import { integrationLink } from '../views/deliveries.ts';
 import { packagePage, packagesPage } from '../views/packages.ts';
+import { parseOffset } from '../../paging.ts';
+import { CSV_BOM } from '../../text/csv.ts';
 
 const PAGE_SIZE = 25;
+
+/** Odnośnik do kampanii krótkich linków; brak dla wysyłki bez skróconych linków. */
+export function campaignLink(deps: Pick<AdminDeps, 'campaigns'>, campaignId: number | null): { id: number; name: string } | null {
+  if (campaignId === null) return null;
+  const campaign = deps.campaigns.get(campaignId);
+  return campaign === undefined ? null : { id: campaign.id, name: campaign.name };
+}
 
 /** Tylu odbiorców pokazujemy w szczególe; pełna lista jest w CSV. */
 const RECIPIENTS_SHOWN = 200;
@@ -13,7 +22,7 @@ const RECIPIENTS_SHOWN = 200;
 export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps, render: Renderer): void {
   app.get<{ Querystring: { offset?: string } }>('/rozsylki', async (request, reply) => {
     reply.type('text/html; charset=utf-8');
-    const offset = Math.max(0, Number.parseInt(request.query.offset ?? '0', 10) || 0);
+    const offset = parseOffset(request.query.offset);
     // Jeden wiersz ponad stronę, żeby wiedzieć, czy jest następna.
     const rows = deps.packages.list({ limit: PAGE_SIZE + 1, offset });
 
@@ -48,6 +57,8 @@ export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps,
         recipients: deps.packages.recipients(row.id, RECIPIENTS_SHOWN),
         shown: RECIPIENTS_SHOWN,
         summary: row.reportStatus === 'ready' ? deps.packages.recipientSummary(row.id) : null,
+        campaign: campaignLink(deps, row.campaignId),
+        clicks: row.campaignId === null ? null : deps.shortLinks.clicksByPackage(row.id),
       }),
     });
   });
@@ -61,6 +72,6 @@ export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps,
     }
     reply.type('text/csv; charset=utf-8');
     reply.header('content-disposition', `attachment; filename="${row.id}.csv"`);
-    return reportCsv(deps.packages.recipients(row.id));
+    return `${CSV_BOM}${reportCsv(deps.packages.recipients(row.id))}`;
   });
 }

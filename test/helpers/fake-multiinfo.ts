@@ -11,6 +11,8 @@ export interface FakeRequest {
   clientCn: string | undefined;
   /** CN wystawcy certyfikatu klienta widziany przez serwer - dowód, że klient przysłał łańcuch. */
   clientIssuerCn: string | undefined;
+  /** Port klienta - ten sam przy kolejnych żądaniach oznacza ponownie użyte połączenie keep-alive. */
+  remotePort: number | undefined;
 }
 
 /** Odpowiedź atrapy: treść albo funkcja z surowym dostępem do odpowiedzi HTTP (np. urwanie połączenia). */
@@ -105,6 +107,7 @@ export async function startFakeMultiinfo(): Promise<FakeMultiinfo> {
           multi: Object.fromEntries([...new Set(source.keys())].map((k) => [k, source.getAll(k)])),
           clientCn: peer?.subject?.CN,
           clientIssuerCn: peer?.issuerCertificate?.subject?.CN,
+          remotePort: req.socket.remotePort,
         };
         requests.push(entry);
         const send = (b: FakeReply) => {

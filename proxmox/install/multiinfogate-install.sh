@@ -65,6 +65,9 @@ MIG_MASTER_KEY=${master_key}
 MIG_API_PORT=8080
 MIG_ADMIN_PORT=8081
 MIG_API_HOST=0.0.0.0
+# Serwer przekierowań krótkich linków skracacza.
+MIG_LINKS_PORT=8082
+MIG_LINKS_HOST=0.0.0.0
 # Panel na adresie kontenera, żeby dało się wejść tunelem SSH przez hosta Proxmox albo przez odwrotne
 # proxy z HTTPS (rozdział 9.2). Logowania zwykłym HTTP z sieci panel i tak nie przyjmuje.
 # 127.0.0.1 chowa także ekran logowania i /healthz; wtedy tunel prowadzi do samego kontenera.
@@ -76,6 +79,8 @@ MIG_BACKUP_RETENTION_DAYS=14
 MIG_WEBHOOK_ALLOW_PRIVATE=0
 # 1 pozwala na serwer poczty (Mail2SMS) w sieci wewnętrznej.
 MIG_MAIL_ALLOW_PRIVATE=0
+# 1 pozwala sprawdzić domenę skracacza, dla której serwer DNS w sieci podaje adres wewnętrzny.
+MIG_LINKS_ALLOW_PRIVATE=0
 # Odbiór wiadomości przychodzących: oczekiwanie na odpowiedź Multiinfo (60000 to maksimum,
 # ale opóźnia odbiór nawet o minutę - patrz docs 7.7) i przerwa po pustej odpowiedzi.
 MIG_INBOUND_TIMEOUT_MS=10000

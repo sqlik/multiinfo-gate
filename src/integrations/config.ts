@@ -5,7 +5,7 @@ import { isValidPath } from './paths.ts';
 export type IntegrationKind = 'webhook_in' | 'webhook_out' | 'mail_in' | 'sms_group' | 'power_automate';
 export const INTEGRATION_KINDS: IntegrationKind[] = ['webhook_in', 'webhook_out', 'mail_in', 'sms_group', 'power_automate'];
 
-export const OUTBOUND_EVENTS = ['message.received', 'message.sent', 'message.delivered', 'message.failed'] as const;
+export const OUTBOUND_EVENTS = ['message.received', 'message.sent', 'message.delivered', 'message.failed', 'link.opened'] as const;
 export type OutboundEvent = (typeof OUTBOUND_EVENTS)[number];
 
 const path = z.string().min(1).max(200).refine(isValidPath, 'nieprawidłowa ścieżka');

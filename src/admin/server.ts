@@ -1,3 +1,4 @@
+import type { LinksServerState } from '../links/server-state.ts';
 import { randomBytes } from 'node:crypto';
 import type { InstallKind } from '../config/install.ts';
 import { problemUrl } from '../docs-links.ts';
@@ -35,6 +36,10 @@ import type { TemplateEngine } from '../integrations/templates.ts';
 import type { AdminNotifier } from '../notifications/rules.ts';
 import type { Mailer } from '../worker/mail.ts';
 import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
+import type { CampaignsRepo } from '../store/campaigns.ts';
+import type { LinkDomainsRepo } from '../store/link-domains.ts';
+import type { ShortLinksRepo } from '../store/short-links.ts';
+import type { DomainChecks } from '../links/domain-checks.ts';
 import type { Resolver } from '../net/private-address.ts';
 import type { ClientPool } from '../worker/clients.ts';
 import { FlashStore } from './flash.ts';
@@ -46,6 +51,8 @@ import { registerUserRoutes } from './routes/users.ts';
 import { registerDeliveryRoutes } from './routes/deliveries.ts';
 import { registerInboundViewRoutes } from './routes/inbound.ts';
 import { registerIntegrationRoutes } from './routes/integrations.ts';
+import { registerCampaignRoutes } from './routes/campaigns.ts';
+import { registerLinkRoutes } from './routes/links.ts';
 import { registerMessageViewRoutes } from './routes/messages.ts';
 import { registerNotificationRoutes } from './routes/notifications.ts';
 import { registerSettingsRoutes } from './routes/settings.ts';
@@ -78,6 +85,16 @@ export interface AdminDeps {
   integrations: IntegrationsRepo;
   integrationEvents: IntegrationEventsRepo;
   guards: IntegrationGuardsRepo;
+  /** Skracacz: domeny, kampanie i kody; SMS testowy kanału powiadomień przekazuje je do wspólnej drogi wysyłki. */
+  linkDomains: LinkDomainsRepo;
+  campaigns: CampaignsRepo;
+  shortLinks: ShortLinksRepo;
+  /** Stan serwera przekierowań: przyczyna pokazywana na przeglądzie i w elemencie „Skracacz linków”. */
+  linksServer?: Pick<LinksServerState, 'available' | 'problem'>;
+  /** Tokeny sprawdzenia domeny skracacza, wspólne z serwerem przekierowań, który na nie odpowiada. */
+  domainChecks: DomainChecks;
+  /** Pobranie tokenu przy sprawdzeniu domeny; testy podstawiają atrapę. Nazwę rozwiązuje `resolve`. */
+  domainFetch?: typeof fetch;
   /** Stan skrzynek pocztowych: formularz skrzynki, lista, szczegóły, kafelek przeglądu. */
   mailIn?: MailInRepo;
   /** Połączenie ze skrzynką do „Sprawdź połączenie”; testy podstawiają podróbkę. */
@@ -107,6 +124,8 @@ export interface AdminDeps {
   allowPrivateWebhooks?: boolean;
   /** MIG_MAIL_ALLOW_PRIVATE: zgoda na serwer IMAP w sieci wewnętrznej. */
   allowPrivateMail?: boolean;
+  /** MIG_LINKS_ALLOW_PRIVATE: zgoda na sprawdzenie domeny skracacza z adresem w sieci wewnętrznej. */
+  allowPrivateLinks?: boolean;
   /** Dziennik błędów panelu (`panel.wyjatek`); bez niego wpisy przepadają. */
   log?: Logger;
   /** Wariant instalacji do poleceń na stronach pomocy; brak = oba warianty. */
@@ -444,11 +463,13 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   registerAccountRoutes(app, deps, render);
   registerKeyRoutes(app, deps, render);
   registerIntegrationRoutes(app, deps, render);
+  registerLinkRoutes(app, deps, render);
   registerNotificationRoutes(app, deps, render);
   registerSettingsRoutes(app, deps, render);
   registerUserRoutes(app, deps, render);
   registerOverviewRoutes(app, deps, render);
   registerPackageViewRoutes(app, deps, render);
+  registerCampaignRoutes(app, deps, render);
   registerMessageViewRoutes(app, deps, render);
   registerInboundViewRoutes(app, deps, render);
   registerDeliveryRoutes(app, deps, render);

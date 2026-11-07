@@ -5,9 +5,9 @@ import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { IntegrationEventInput, IntegrationEventsRepo } from '../store/integration-events.ts';
 import type { IntegrationGuardsRepo } from '../store/integration-guards.ts';
 import type { IntegrationRow, IntegrationsRepo } from '../store/integrations.ts';
-import { measureText, type EncodingRequest } from '../text/measure.ts';
+import { fitPrepared, plainText, prepareLinks, type PreparedText } from '../links/shortener.ts';
+import { fitToParts } from '../text/fit.ts';
 import { InvalidPhoneError, MAX_RECIPIENTS_PER_HOOK, normalizeRecipient, splitRecipients, TooManyRecipientsError } from '../text/phone.ts';
-import { segmentText, TooManyPartsError } from '../text/segment.ts';
 import type { GroupMember, InboundConfig, MailInConfig, SmsGroupConfig } from './config.ts';
 import { confirmText, type ConfirmEvent } from './group/confirm.ts';
 import { groupRecipients, groupSender } from './group/members.ts';
@@ -23,6 +23,21 @@ import { enrich, safeUrl, type EnrichGet } from './enrich.ts';
 import { maskPath, readPath } from './paths.ts';
 import { TemplateEngine, TemplateError } from './templates.ts';
 import type { Resolver } from '../net/private-address.ts';
+
+/** Przycięcie treści mieszka w `src/text/fit.ts`; potok udostępnia je dotychczasowym odbiorcom. */
+export { fitToParts };
+
+/**
+ * Szablon treści z krótkimi linkami klucza integracji. Podgląd „Sprawdź szablon” pokazuje go z kodem
+ * zastępczym, bo każdy odbiorca otrzymuje własny kod, i niczego nie zapisuje.
+ */
+export type Shorten = (text: string) => PreparedText;
+
+/** Treść podglądu po skróceniu i przycięciu, tak samo jak w wysyłce. */
+function fitPreview(text: string, maxParts: number, shorten: Shorten | undefined): { text: string; parts: number } {
+  const fitted = fitPrepared(shorten ? shorten(text) : plainText(text), maxParts);
+  return { text: fitted.prepared.text, parts: fitted.parts };
+}
 
 export interface PipelineDeps extends SubmitDeps {
   apiKeys: ApiKeysRepo;
@@ -106,45 +121,12 @@ function withEnriched(payload: unknown, as: string, value: unknown): unknown {
 }
 
 /**
- * Przycięcie do `maxParts` części tym samym licznikiem, którym API dzieli wiadomości. Kodowanie
- * podaje integracja, w której autor wybiera je sam (Power Automate); pozostałe liczą `auto`.
- */
-export function fitToParts(text: string, maxParts: number, encoding: EncodingRequest = 'auto'): { text: string; parts: number; over: boolean } {
-  const fits = (candidate: string): number | null => {
-    try {
-      return segmentText(candidate, measureText(candidate, encoding), maxParts).parts;
-    } catch (e) {
-      if (e instanceof TooManyPartsError) return null;
-      throw e;
-    }
-  };
-  const whole = fits(text);
-  if (whole !== null) return { text, parts: whole, over: false };
-  // Ucinamy po znakach, aż zmieści się w limicie. Treść w GSM-7 kończą trzy kropki,
-  // bo znak wielokropka spoza alfabetu GSM przełączyłby ją na UCS-2.
-  const chars = [...text];
-  const cutAt = (n: number): string => {
-    const head = chars.slice(0, n).join('');
-    return measureText(head, encoding).encoding === 'gsm' ? `${head}...` : `${head}…`;
-  };
-  let lo = 0;
-  let hi = chars.length;
-  while (lo < hi) {
-    const mid = Math.ceil((lo + hi) / 2);
-    if (fits(cutAt(mid)) !== null) lo = mid;
-    else hi = mid - 1;
-  }
-  const cut = cutAt(lo);
-  return { text: cut, parts: fits(cut) ?? maxParts, over: true };
-}
-
-/**
  * Podgląd do „Sprawdź szablon” - bez zapisu, bez wysyłki, bez strażników. Podgląd nie pyta
  * aplikacji po sieci: gdy ustawienie ma zapytanie uzupełniające, podstawia jego przykładową
  * odpowiedź, tak samo jak zrobiłby to potok z prawdziwą.
  */
 export function previewInbound(
-  engine: TemplateEngine, config: InboundConfig, payload: unknown, countryCode: string, now: Date, enrichSample?: unknown,
+  engine: TemplateEngine, config: InboundConfig, payload: unknown, countryCode: string, now: Date, enrichSample?: unknown, shorten?: Shorten,
 ): InboundPreview {
   const context = buildInboundContext(payload, { name: 'podgląd' }, now);
   if (config.enrich && enrichSample !== undefined) {
@@ -164,7 +146,7 @@ export function previewInbound(
       }
     });
     const rendered = renderInboundText(engine, config, context);
-    const fitted = rendered === '' ? { text: '', parts: 0 } : fitToParts(rendered, config.overflow === 'truncate' ? config.maxParts : 9);
+    const fitted = rendered === '' ? { text: '', parts: 0 } : fitPreview(rendered, config.overflow === 'truncate' ? config.maxParts : 9, shorten);
     return { matches: ok, recipients, text: fitted.text, parts: fitted.parts, error: rendered === '' ? 'Szablon dał pustą treść.' : null, threadRecipient };
   } catch (e) {
     return { matches: false, recipients: [], text: '', parts: 0, error: e instanceof Error ? e.message : String(e), threadRecipient: false };
@@ -212,13 +194,18 @@ export function passGuards(
   return { kind: 'ok' };
 }
 
-/** Limit części, wysyłka przez `submitMessages`, wpis `sent` albo `error`. */
+/**
+ * Skracanie linków, limit części, wysyłka przez `submitMessages`, wpis `sent` albo `error`. Treść
+ * w wyniku jest szablonem z kodem zastępczym: raport Mail2SMS nie zawiera kodu żadnego odbiorcy,
+ * dlatego kliknięcie w raporcie nie liczy się jako otwarcie.
+ */
 export function dispatch(
   deps: PipelineDeps, integration: IntegrationRow, key: ApiKeyRow, text: string, recipients: string[],
   config: { maxParts: number; overflow: 'truncate' | 'reject' }, note: Noter, now: Date,
   extra: { inReplyTo?: string; sentReason?: string; mailFrom?: string } = {},
 ): { kind: 'sent'; messageIds: string[]; parts: number; text: string } | { kind: 'error'; code: InboundErrorCode; detail: string } {
-  const fitted = fitToParts(text, config.maxParts);
+  // Integracje nie mają pól skracania w żądaniu, dlatego obowiązuje ustawienie klucza jak przy pustym polu.
+  const fitted = fitPrepared(prepareLinks(deps, key.id, text, {}, {}), config.maxParts);
   if (fitted.over && config.overflow === 'reject') {
     const detail = `Treść wymaga więcej niż ${config.maxParts} części.`;
     note('error', { reason: detail });
@@ -226,7 +213,7 @@ export function dispatch(
   }
   try {
     const results = submitMessages(deps, authFromKey(key), {
-      to: recipients, text: fitted.text, integrationId: integration.id, maxParts: config.maxParts,
+      to: recipients, text, prepared: fitted.prepared, campaignFallback: integration.name, integrationId: integration.id, maxParts: config.maxParts,
       ...(integration.serviceId ? { serviceId: integration.serviceId } : {}),
       ...(integration.orig ? { orig: integration.orig } : {}),
       ...(extra.inReplyTo ? { inReplyTo: extra.inReplyTo } : {}),
@@ -239,7 +226,7 @@ export function dispatch(
       ...(extra.inReplyTo ? { inboundId: extra.inReplyTo } : {}),
       ...(reason !== '' ? { reason } : {}),
     });
-    return { kind: 'sent', messageIds, parts: fitted.parts, text: fitted.text };
+    return { kind: 'sent', messageIds, parts: fitted.parts, text: fitted.prepared.text };
   } catch (e) {
     if (e instanceof ApiError) {
       const code: InboundErrorCode = e.code === 'invalid_phone' ? 'invalid_phone' : e.code === 'too_many_parts' ? 'too_many_parts' : 'service';
@@ -542,12 +529,12 @@ export async function runMailIn(deps: PipelineDeps, integration: MailInIntegrati
 }
 
 /** Podgląd do „Sprawdź szablon” dla skrzynki: nic nie wysyła, nic nie zapisuje. */
-export function previewMailIn(engine: TemplateEngine, config: MailInConfig, mail: ParsedMail, countryCode: string, now: Date): MailInPreview {
+export function previewMailIn(engine: TemplateEngine, config: MailInConfig, mail: ParsedMail, countryCode: string, now: Date, shorten?: Shorten): MailInPreview {
   const sender = matchSender(mail.from, config.senders);
   try {
     const p = prepareMail(engine, config, mail, sender, countryCode, { name: 'podgląd' }, now);
     const text = p.render();
-    const fitted = text === '' ? { text: '', parts: 0 } : fitToParts(text, config.overflow === 'truncate' ? config.maxParts : 9);
+    const fitted = text === '' ? { text: '', parts: 0 } : fitPreview(text, config.overflow === 'truncate' ? config.maxParts : 9, shorten);
     return {
       senderAllowed: sender !== null, recipients: p.recipients, recipientsLevel: p.level, invalid: p.invalid, fields: p.fields, cleaned: p.cleaned,
       text: fitted.text, parts: fitted.parts, error: text === '' ? 'Treść SMS-a jest pusta.' : null,
@@ -673,7 +660,7 @@ export function runSmsGroup(deps: PipelineDeps, integration: SmsGroupIntegration
 }
 
 /** Podgląd do „Sprawdź” dla grupy: nic nie wysyła, nic nie zapisuje, nie dotyka bazy. */
-export function previewSmsGroup(engine: TemplateEngine, config: SmsGroupConfig, event: ReceivedEvent, now: Date): SmsGroupPreview {
+export function previewSmsGroup(engine: TemplateEngine, config: SmsGroupConfig, event: ReceivedEvent, now: Date, shorten?: Shorten): SmsGroupPreview {
   const sender = groupSender(config, event.from);
   const match = matchPrefix(event.text ?? '', config.prefix);
   const body = match.ok ? match.body : '';
@@ -683,7 +670,7 @@ export function previewSmsGroup(engine: TemplateEngine, config: SmsGroupConfig, 
   try {
     const text = renderGroupText(engine, config, buildGroupContext(event, body, sender, recipients, config, { name: 'podgląd' }, now));
     if (text === '') return { ...base, text: '', parts: 0, confirm: null, error: 'Treść SMS-a jest pusta.' };
-    const fitted = fitToParts(text, config.overflow === 'truncate' ? config.maxParts : 9);
+    const fitted = fitPreview(text, config.overflow === 'truncate' ? config.maxParts : 9, shorten);
     const confirm = config.confirm.enabled ? confirmText({ kind: 'sent', recipients: recipients.length }) : null;
     return { ...base, text: fitted.text, parts: fitted.parts, confirm, error: null };
   } catch (e) {

@@ -29,6 +29,8 @@ services:
       traefik.http.routers.multiinfo-gate.entrypoints: ${MIG_TRAEFIK_WEJSCIE:-websecure}
       traefik.http.routers.multiinfo-gate.tls: "true"
       traefik.http.routers.multiinfo-gate.tls.certresolver: ${MIG_TRAEFIK_RESOLVER:-letsencrypt}
+      # Usługa wskazana wprost, bo docker-compose.traefik-linki.yml dokłada drugą usługę tego kontenera.
+      traefik.http.routers.multiinfo-gate.service: multiinfo-gate
       traefik.http.services.multiinfo-gate.loadbalancer.server.port: "8080"
 
 networks:

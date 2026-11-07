@@ -1,8 +1,18 @@
 import type { FastifyInstance } from 'fastify';
+import { messageLinks } from '../../links/campaigns.ts';
+import type { MessageRow } from '../../store/messages.ts';
 import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
 import { deliveryView, integrationLink } from '../views/deliveries.ts';
-import { messagePage, messagesPage } from '../views/messages.ts';
+import { messagePage, messagesPage, type MessageDetail } from '../views/messages.ts';
+import { parseOffset } from '../../paging.ts';
+
+/** Kampania i liczby krótkich linków wiadomości; brak dla wiadomości bez skróconych linków. */
+function messageLinkRows(deps: AdminDeps, row: MessageRow): NonNullable<MessageDetail['links']> | null {
+  const block = messageLinks(deps, row);
+  if (block === undefined || row.campaignId === null) return null;
+  return { campaign: { id: row.campaignId, name: block.campaign }, clicks: block.clicks, firstOpenedAt: block.firstOpenedAt };
+}
 
 const PAGE_SIZE = 25;
 
@@ -24,7 +34,7 @@ export function registerMessageViewRoutes(app: FastifyInstance, deps: AdminDeps,
 
       const status = (request.query.status ?? '').trim() || null;
       const to = (request.query.to ?? '').trim() || null;
-      const offset = Math.max(0, Number.parseInt(request.query.offset ?? '0', 10) || 0);
+      const offset = parseOffset(request.query.offset);
 
       // Pobieramy jeden wiersz ponad stronę, żeby wiedzieć, czy jest następna.
       const rows = deps.messages.list({
@@ -72,6 +82,7 @@ export function registerMessageViewRoutes(app: FastifyInstance, deps: AdminDeps,
         events: deps.events.list(row.id),
         deliveries: deps.deliveries.listForMessage(row.id).map((delivery) => deliveryView(deps, delivery)),
         integration: row.integrationId === null ? null : integrationLink(deps, row.integrationId),
+        links: messageLinkRows(deps, row),
       }),
     });
   });

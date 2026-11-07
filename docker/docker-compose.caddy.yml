@@ -3,7 +3,16 @@
 #   COMPOSE_FILE=docker-compose.yml:docker-compose.caddy.yml
 #   MIG_DOMENA=<TWOJA-DOMENA>
 # i uruchom docker compose up -d. Panel (8081) nie jest wystawiany.
+# Ten sam Caddy obsługuje domeny skracacza: rekord DNS domeny wskazuje ten serwer, a certyfikat
+# powstaje przy pierwszym wejściu na krótki link (Caddyfile, blok on_demand_tls).
 services:
+  multiinfo-gate:
+    environment:
+      # Caddy łączy się z bramką z adresu w sieci Dockera i podaje adres klienta w X-Forwarded-For.
+      # Bez zaufania limit wejść w krótkie linki obejmowałby wszystkich odbiorców razem, a lista źródeł
+      # integracji widziałaby adres Caddy. Docker z innym zakresem adresów wymaga wpisu w docker/.env.
+      MIG_TRUSTED_PROXIES: ${MIG_TRUSTED_PROXIES:-172.16.0.0/12}
+
   caddy:
     image: caddy:2
     restart: unless-stopped

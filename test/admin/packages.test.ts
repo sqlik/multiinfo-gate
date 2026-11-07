@@ -70,6 +70,20 @@ describe('GET /rozsylki', () => {
   });
 });
 
+describe('GET /rozsylki/:id/raport.csv', () => {
+  it('plik z panelu zaczyna się od znacznika BOM, a identyfikator klienta od znaku formuły dostaje apostrof', async () => {
+    seed('pkg_1', [
+      { dest: '48601135134', text: null, clientId: null },
+      { dest: '48501052442', text: 'Indywidualna', clientId: '-faktura-114' },
+    ]);
+    ready('pkg_1');
+    const res = await page('/rozsylki/pkg_1/raport.csv');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.startsWith('\uFEFFnumer;')).toBe(true);
+    expect(res.body).toContain(`48501052442;"'-faktura-114";`);
+  });
+});
+
 describe('GET /rozsylki/:id', () => {
   it('pokazuje parametry, odbiorców i ich statusy', async () => {
     seed();
@@ -94,6 +108,15 @@ describe('GET /rozsylki/:id', () => {
     expect(res.body).toMatch(/<div class="head">[\s\S]*class="btn btn-p" href="\/rozsylki\/pkg_1\/raport\.csv">Pobierz CSV<\/a>/);
     expect(res.body).not.toMatch(/<div class="kv">[\s\S]*Pobierz CSV/);
     expect(res.body).toContain('gotowy · 2 odbiorców');
+  });
+
+  // Data ważności dotyczy kopii raportu w Multiinfo. CSV i statusy pochodzą z bazy bramki, więc są dostępne także później.
+  it('stan gotowego raportu nie pokazuje daty ważności kopii w Multiinfo', async () => {
+    seed();
+    ready('pkg_1');
+    const res = await page('/rozsylki/pkg_1');
+    expect(res.body).toContain('gotowy · 2 odbiorców');
+    expect(res.body).not.toContain('ważny do');
   });
 
   it('gotowy raport jednego odbiorcy w poprawnej odmianie', async () => {
@@ -163,6 +186,20 @@ describe('GET /rozsylki/:id', () => {
     expect(res.body).toContain('błąd');
   });
 
+  it('przy wyniku nieznanym -72 odsyła do opisu postępowania', async () => {
+    seed();
+    h.packages.setFailed('pkg_1', -72, 'Multiinfo nie odpowiedziało w wyznaczonym czasie. Bramka nie ponawia rozsyłki', NOW);
+    const res = await page('/rozsylki/pkg_1');
+    expect(res.body).toContain('problemy/#rozsylka-bez-potwierdzenia');
+    expect(res.body).toContain('Jak ustalić, czy SMS-y zostały wysłane');
+  });
+
+  it('przy innym błędzie nie odsyła do opisu wyniku nieznanego', async () => {
+    seed();
+    h.packages.setFailed('pkg_1', -63, 'Zbyt wielu odbiorców', NOW);
+    expect((await page('/rozsylki/pkg_1')).body).not.toContain('rozsylka-bez-potwierdzenia');
+  });
+
   it('ucieka HTML w identyfikatorze klienta i treści', async () => {
     seed('pkg_x', [{ dest: '48601135134', text: '<b>x</b>', clientId: '<img src=x>' }]);
     const res = await page('/rozsylki/pkg_x');
@@ -223,7 +260,7 @@ describe('GET /rozsylki/:id/raport.csv', () => {
     expect(res.headers['content-type']).toContain('text/csv');
     expect(res.headers['content-disposition']).toContain('pkg_1.csv');
     const lines = res.body.split('\r\n');
-    expect(lines[0]).toBe('numer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas');
+    expect(lines[0]).toBe('\uFEFFnumer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas');
     expect(lines[1]).toBe('48601135134;;9001;delivered;21;2026-08-25 12:00:00');
     expect(lines[2]).toBe('48501052442;faktura-114;9002;failed;11;2026-08-25 12:00:01');
   });

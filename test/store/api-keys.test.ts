@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo, type ApiKeyInput } from '../../src/store/api-keys.ts';
 import { openDatabase } from '../../src/store/db.ts';
+import { LinkDomainsRepo } from '../../src/store/link-domains.ts';
 import { accountInput, testKey } from './helpers.ts';
 
 const setup = () => {
@@ -192,5 +193,38 @@ describe('ApiKeysRepo.inboundSubscribers', () => {
     keys.update(id, { name: 'crm', defaultServiceId: '24138', defaultOrig: null, maxParts: 9, ratePerMin: 60,
       webhookUrl: 'https://crm.example/hook', expiresAt: null, serviceIds: ['24138'], origs: [], inboundSubscribed: 1, integrationsOnly: 0 });
     expect(keys.get(id)!.inboundSubscribed).toBe(1);
+  });
+});
+
+describe('ApiKeysRepo - skracanie linków', () => {
+  const AT = new Date('2026-11-05T10:00:00Z');
+  const domain = (db: ReturnType<typeof openDatabase>, name: string) =>
+    new LinkDomainsRepo(db).create({ domain: name, displayName: 'Firma Serwis', homeUrl: null, bareLinks: false }, AT);
+
+  it('klucz bez ustawień ma skracanie wyłączone, ważność 90 dni i UTM', () => {
+    const { keys, accountId } = setup();
+    const id = keys.insert(keyInput(accountId));
+    expect(keys.linkSettings(id)).toEqual({ mode: 'off', domainIds: [], defaultDomainId: null, targets: [], validityDays: 90, utm: true });
+  });
+
+  it('zapis ustawień zastępuje listy domen i domen docelowych', () => {
+    const { db, keys, accountId } = setup();
+    const id = keys.insert(keyInput(accountId));
+    const sub = domain(db, 'l.firma.pl');
+    const main = domain(db, 'firma-link.pl');
+    keys.setLinkSettings(id, { mode: 'sender', domainIds: [sub, main], defaultDomainId: main, targets: ['firma.pl', 'sklep.firma.pl'], validityDays: 30, utm: false });
+    expect(keys.linkSettings(id)).toEqual({ mode: 'sender', domainIds: [sub, main], defaultDomainId: main, targets: ['firma.pl', 'sklep.firma.pl'], validityDays: 30, utm: false });
+    keys.setLinkSettings(id, { mode: 'always', domainIds: [sub], defaultDomainId: sub, targets: ['firma.pl'], validityDays: 90, utm: true });
+    expect(keys.linkSettings(id)).toEqual({ mode: 'always', domainIds: [sub], defaultDomainId: sub, targets: ['firma.pl'], validityDays: 90, utm: true });
+  });
+
+  it('błąd zapisu nie zostawia list zmienionych tylko częściowo', () => {
+    const { db, keys, accountId } = setup();
+    const id = keys.insert(keyInput(accountId));
+    const sub = domain(db, 'l.firma.pl');
+    keys.setLinkSettings(id, { mode: 'always', domainIds: [sub], defaultDomainId: sub, targets: ['firma.pl'], validityDays: 90, utm: true });
+    // Domena 999 nie istnieje - klucz obcy przerywa zapis w połowie.
+    expect(() => keys.setLinkSettings(id, { mode: 'sender', domainIds: [sub, 999], defaultDomainId: sub, targets: ['sklep.firma.pl'], validityDays: 30, utm: true })).toThrow();
+    expect(keys.linkSettings(id)).toEqual({ mode: 'always', domainIds: [sub], defaultDomainId: sub, targets: ['firma.pl'], validityDays: 90, utm: true });
   });
 });

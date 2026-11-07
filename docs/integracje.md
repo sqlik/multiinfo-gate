@@ -329,6 +329,12 @@ Filtr `gsm` zamienia je na łacińskie i przywraca 160.
 Skrócona treść bez polskich znaków kończy się trzema kropkami. Znak „…” nie należy do alfabetu
 GSM, więc skróciłby część do 70 znaków. Skrócona treść z polskimi znakami kończy się znakiem „…”.
 
+Klucz API integracji z włączonym skracaniem linków zamienia linki w treści na krótkie linki
+własnej domeny firmy. Bramka skraca linki przed liczeniem części, dlatego limit dotyczy treści
+z krótkimi linkami. Gdy granica limitu wypada w środku krótkiego linku, bramka usuwa cały link
+zamiast jego fragmentu. Kampania otrzymuje nazwę integracji. Opis skracania znajdziesz w artykule
+[Skracacz linków i kampanie](skracacz.md).
+
 ### 3.6. Warunek
 
 Sekcja „Warunek” decyduje, czy zdarzenie jest przetwarzane dalej. Ma dwa tryby. W trybie reguł wpisuje
@@ -398,9 +404,13 @@ powiadomienie według reguł z rozdziału 9.
 
 ### 4.1. Zdarzenia i warunek
 
-Integracja z SMS-a wybiera zdarzenia, na które reaguje: `message.received` (odebrany SMS) oraz
-statusy wysyłki `message.sent`, `message.delivered` i `message.failed`. Reaguje tylko na
-zdarzenia z usług, do których klucz ma dostęp. Włączona integracja nasłuchująca
+Integracja z SMS-a wybiera zdarzenia, na które reaguje: `message.received` (odebrany SMS),
+statusy wysyłki `message.sent`, `message.delivered` i `message.failed` oraz od wersji 1.11
+`link.opened`, w formularzu „link otwarty”. Zdarzenie `link.opened` informuje o pierwszym wejściu
+odbiorcy w krótki link skracacza z artykułu [Skracacz linków i kampanie](skracacz.md). Integracja
+reaguje tylko na zdarzenia z usług, do których klucz ma dostęp. Zdarzenie „link otwarty” wybiera
+się w trybie zaawansowanym formularza albo w integracji „Własne”. Na przykład biuro handlowe
+otrzymuje wtedy w Slacku wiadomość, gdy klient otworzy link do oferty. Włączona integracja nasłuchująca
 `message.received` sama uruchamia odbiór z usług klucza. Nie trzeba zaznaczać odbioru przy
 kluczu ani podawać adresu webhooka.
 
@@ -861,6 +871,13 @@ Sprawdzanie trwa najwyżej 24 godziny od wysyłki. Po tym czasie nadawca otrzymu
 z informacją, że doręczenia nie udało się potwierdzić w ciągu 24 godzin i dalsze odpytania
 o status nie będą realizowane, wraz z ostatnim znanym statusem każdego numeru.
 
+Gdy klucz integracji skraca linki, treść SMS-a w raporcie zawiera krótki link z kodem zastępczym
+`0000000`, na przykład `https://l.firma.pl/0000000`. Ten sam kod pokazuje podgląd przycisku
+**Sprawdź szablon** w formularzu Mail2SMS i webhooka oraz przycisku **Sprawdź** w formularzu
+SMS-a do grupy. Każdy odbiorca otrzymuje własny kod, a raport nie zawiera
+kodów odbiorców, ponieważ wejście nadawcy liczyłoby się jako otwarcie przez odbiorcę. Link z kodem
+zastępczym prowadzi do strony „Link wygasł”.
+
 Po nieudanej wysyłce odpowiedź jest wysyłana natychmiast: `SMS nie został wysłany: treść wymaga
 więcej niż 1 części.`, `SMS nie został wysłany: nie udało się ustalić odbiorcy.` albo `SMS nie
 został wysłany: przekroczono limit integracji (10 w 10 min).`
@@ -1142,6 +1159,10 @@ niestandardowy. Import, tworzenie połączenia i budowę przepływów krok po kr
 artykuł [Power Automate](power-automate.md). Wywołania API, z których korzysta konektor, opisuje
 rozdział 5b [API dla aplikacji](api.md).
 
+Od wersji 1.11 akcje konektora zawierają pola skracania linków: „Skracanie linków”, „Kampania”,
+„Domena skracacza” i „Ważność linków (dni)”. Puste pole „Kampania” oznacza nazwę integracji. Opis
+pól znajdziesz w artykule [Skracacz linków i kampanie](skracacz.md).
+
 Integracja z Power Automate nie obejmuje warunku, szablonu Liquid ani próbki. Treść, odbiorców
 i warunki wysyłki określa się w samym przepływie. Powielenie tych ustawień w bramce utrudniłoby
 wyszukiwanie błędów, ponieważ ta sama logika znajdowałaby się w dwóch miejscach.
@@ -1284,6 +1305,7 @@ W szablonie dostępne są te zmienne:
 | `integration.name` | oba | nazwa integracji |
 | `event`, `at`, `id` | z SMS-a | rodzaj zdarzenia, czas, identyfikator wiadomości |
 | `from`, `to`, `text` albo `hex`, `kind`, `receivedAt`, `serviceId`, `relatedMessageId` | `message.received` | jak w rozdziale 6.2 [API](api.md) |
+| `messageId`, `packageId`, `seq`, `campaign`, `to`, `clientId`, `target`, `shortUrl`, `openedAt` | `link.opened` | jak w rozdziale 6.2 API; zdarzenie nie zawiera pola `id`, a odbiorcę rozsyłki wskazują `packageId` i `seq` |
 | `status`, `to`, `parts`, `error`, `miStatus`, `miSubstatus`, `providerCode`, `inReplyTo` | statusy | jak w rozdziale 6.2 API; pola zdarzenia leżą też na wierzchu, więc `{{ text }}` i `{{ p.text }}` to to samo |
 | `from`, `from_name`, `subject`, `text`, `text_full`, `date`, `to`, `message_id`, `fields.<nazwa>` | Mail2SMS | adres i nazwa nadawcy, temat bez przedrostka z numerami, treść oczyszczona, treść pełna, data w formacie ISO 8601, lista adresatów, `Message-ID`, wycinki z rozdziału 5.5; `p` to cały kontekst |
 | `body`, `prefix`, `sender`, `sender_name`, `recipients` | SMS do grupy | treść po zdjęciu prefiksu, prefiks z ustawień, nazwa nadawcy z listy albo jego numer, sama nazwa albo pusty ciąg, lista numerów odbiorców; pola zdarzenia `message.received` jak wyżej, `p` to cały kontekst |
