@@ -99,7 +99,7 @@ describe('startEmergency', () => {
   it('stan panelu zgłasza niedostępność bez szczegółów', async () => {
     const res = await panel('/healthz');
     expect(res.status).toBe(503);
-    expect(await res.text()).toBe('{"status":"unavailable"}');
+    expect(await res.text()).toBe('{"status":"unavailable"}\n');
   });
 
   it('API odpowiada błędem w kształcie API', async () => {
@@ -117,7 +117,9 @@ describe('startEmergency', () => {
   it('stan API zgłasza niedostępność', async () => {
     const res = await api('/healthz');
     expect(res.status).toBe(503);
-    const body = await res.json();
+    const text = await res.text();
+    expect(text.endsWith('}\n')).toBe(true);
+    const body = JSON.parse(text);
     expect(body.status).toBe('unavailable');
     expect(body.error.code).toBe('unavailable');
   });

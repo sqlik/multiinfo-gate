@@ -253,6 +253,17 @@ describe('GET /healthz', () => {
     expect((await app.inject({ method: 'GET', url: '/healthz' })).statusCode).toBe(200);
   });
 
+  // Odpowiedź sprawdza się ręcznie poleceniem curl. Bez nowego wiersza znak zachęty powłoki dokleja się do wyniku.
+  it('kończy odpowiedź znakiem nowego wiersza w obu wariantach i pozostaje JSON-em', async () => {
+    for (const server of [app, adminApp]) {
+      const res = await server.inject({ method: 'GET', url: '/healthz' });
+      expect(res.body.endsWith('}\n')).toBe(true);
+      expect(res.headers['content-type']).toBe('application/json; charset=utf-8');
+      expect(res.json().status).toBe('ok');
+    }
+    expect((await app.inject({ method: 'GET', url: '/healthz' })).body).toBe('{"status":"ok"}\n');
+  });
+
   it('podaje stan odbiornika i pogarsza status przy błędzie usługi', async () => {
     const inbound = { services: 2, listening: 1, errors: [{ account: 'Firma', serviceId: '24138', error: '-24: nieaktywna' }] };
     const withInbound = buildApiServer({ ...baseDeps, healthMode: 'admin', inboundHealth: () => inbound });

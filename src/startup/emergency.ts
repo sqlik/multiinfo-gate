@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyReply } from 'fastify';
 import { emergencyPage, type StartupFailure } from '../admin/views/emergency.ts';
+import { sendHealth } from '../api/health.ts';
 import type { AppConfig } from '../config/env.ts';
 import type { InstallKind } from '../config/install.ts';
 import { problemUrl, REASON_ANCHOR } from '../docs-links.ts';
@@ -52,12 +53,12 @@ export async function startEmergency(config: AppConfig, failure: StartupFailure,
   const panel = Fastify({ logger: false, frameworkErrors: (_error, _request, reply) => sendPage(reply) });
   // Trasy tylko dla istniejących plików: katalog (`/`, `/fonts/`) i każda inna ścieżka idą do strony przyczyny.
   panel.register(fastifyStatic, { root: publicPath, prefix: '/', index: false, wildcard: false });
-  panel.get('/healthz', async (_request, reply) => reply.code(503).send({ status: 'unavailable' }));
+  panel.get('/healthz', async (_request, reply) => sendHealth(reply.code(503), { status: 'unavailable' }));
   panel.setNotFoundHandler((_request, reply) => { sendPage(reply); });
   panel.setErrorHandler((_error, _request, reply) => sendPage(reply));
 
   const api = Fastify({ logger: false, frameworkErrors: (_error, request, reply) => sendApi(request.url, reply) });
-  api.get('/healthz', async (_request, reply) => reply.code(503).send({
+  api.get('/healthz', async (_request, reply) => sendHealth(reply.code(503), {
     status: 'unavailable', error: { code: 'unavailable', message: API_MESSAGE },
   }));
   api.setNotFoundHandler((request, reply) => { sendApi(request.url, reply); });

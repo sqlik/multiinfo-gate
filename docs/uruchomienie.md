@@ -230,7 +230,10 @@ docker --version
 docker compose version
 ```
 
-Oczekiwany wynik: `Docker version 2x.x.x` oraz `Docker Compose version v2.x.x`, oba bez `sudo`.
+Oczekiwany wynik: oba polecenia działają bez `sudo` i wypisują numery wersji, na przykład
+`Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2` oraz
+`Docker Compose version 2.40.3+ds1-0ubuntu1~24.04.1`. Pakiety Ubuntu dopisują do numeru wersji
+oznaczenie pakietu.
 
 Gdy wynik jest inny:
 
