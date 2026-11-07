@@ -113,6 +113,8 @@ CREATE TABLE short_links (
   created_at       TEXT    NOT NULL
 );
 CREATE INDEX idx_short_links_recipient ON short_links(campaign_id, recipient_key);
+-- Odbiorcy adresu docelowego liczą się według numerów: przypomnienie do tego samego numeru nie tworzy linku wspólnego.
+CREATE INDEX idx_short_links_dest ON short_links(campaign_id, dest);
 CREATE INDEX idx_short_links_message ON short_links(message_id);
 CREATE INDEX idx_short_links_package ON short_links(package_id, seq);
 CREATE INDEX idx_short_links_purge ON short_links(purge_after);

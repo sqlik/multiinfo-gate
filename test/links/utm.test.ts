@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { targetPattern, withUtm } from '../../src/links/utm.ts';
+import { retentionPattern, targetPattern, withUtm } from '../../src/links/utm.ts';
 
 const UTM = 'utm_source=sms&utm_medium=sms&utm_campaign=przeglad-klimatyzacji-wiosna';
 
@@ -56,17 +56,53 @@ describe('targetPattern', () => {
     expect(targetPattern('https://firma.pl/Przegl%C4%85d/oferta')).toBe('https://firma.pl/Przegl%C4%85d/{…}');
   });
 
-  it('zastępuje każdą wartość zapytania i pozostawia klucz bez wartości', () => {
-    expect(targetPattern('https://firma.pl/o/abc?k=9&t=x&flaga')).toBe('https://firma.pl/o/{…}?k={…}&t={…}&flaga');
+  it('zastępuje każdą wartość zapytania i parametr bez znaku =', () => {
+    expect(targetPattern('https://firma.pl/o/abc?k=9&t=x&flaga')).toBe('https://firma.pl/o/{…}?k={…}&t={…}&{…}');
+    expect(targetPattern('https://firma.pl/oferta?jan.kowalski@firma.pl')).toBe('https://firma.pl/{…}?{…}');
   });
 
-  it('pozostawia adres bez ścieżki albo zakończony ukośnikiem', () => {
+  it('pozostawia adres bez ścieżki', () => {
     expect(targetPattern('https://firma.pl')).toBe('https://firma.pl');
     expect(targetPattern('https://firma.pl/')).toBe('https://firma.pl/');
-    expect(targetPattern('https://firma.pl/oferty/')).toBe('https://firma.pl/oferty/');
+  });
+
+  it('zastępuje ostatni niepusty człon adresu zakończonego ukośnikiem', () => {
+    expect(targetPattern('https://firma.pl/oferty/')).toBe('https://firma.pl/{…}/');
+    expect(targetPattern('https://firma.pl/oferta/jan-kowalski/')).toBe('https://firma.pl/oferta/{…}/');
   });
 
   it('pomija kotwicę', () => {
     expect(targetPattern('https://firma.pl/klient/123#termin')).toBe('https://firma.pl/klient/{…}');
+  });
+});
+
+describe('retentionPattern', () => {
+  it('pozostawia domenę i pierwszy człon ścieżki, a resztę ścieżki zastępuje jednym {…}', () => {
+    expect(retentionPattern('https://firma.pl/potwierdz/kQpRxZaBmn/wizyta')).toBe('https://firma.pl/potwierdz/{…}');
+    expect(retentionPattern('https://firma.pl/klient/jan-kowalski/przeglad')).toBe('https://firma.pl/klient/{…}');
+    expect(retentionPattern('https://firma.pl/oferta/jan-kowalski/')).toBe('https://firma.pl/oferta/{…}');
+  });
+
+  it('zastępuje całe zapytanie jednym {…}, także parametr bez znaku =', () => {
+    expect(retentionPattern('https://firma.pl/oferta?klient=KL-10482&kod=x')).toBe('https://firma.pl/oferta?{…}');
+    expect(retentionPattern('https://firma.pl/oferta/?jan.kowalski@firma.pl')).toBe('https://firma.pl/oferta/?{…}');
+  });
+
+  it('pomija dane logowania przed nazwą hosta i kotwicę', () => {
+    expect(retentionPattern('https://jan.kowalski@firma.pl/oferta/1#termin')).toBe('https://firma.pl/oferta/{…}');
+    expect(retentionPattern('https://jan:haslo@firma.pl:8443/oferta/1')).toBe('https://firma.pl:8443/oferta/{…}');
+  });
+
+  it('zastępuje pierwszy człon z cyfrą, z parametrem po średniku albo jedyny człon ścieżki', () => {
+    expect(retentionPattern('https://firma.pl/KL-10482')).toBe('https://firma.pl/{…}');
+    expect(retentionPattern('https://firma.pl/2026/oferta/aBcDeFgHiJ')).toBe('https://firma.pl/{…}');
+    expect(retentionPattern('https://firma.pl/oferta;sesja=jan/1')).toBe('https://firma.pl/{…}');
+    expect(retentionPattern('https://firma.pl/jan-kowalski')).toBe('https://firma.pl/{…}');
+  });
+
+  it('pozostawia adres bez ścieżki', () => {
+    expect(retentionPattern('https://firma.pl')).toBe('https://firma.pl');
+    expect(retentionPattern('https://firma.pl/')).toBe('https://firma.pl/');
+    expect(retentionPattern('https://firma.pl/?kod=9')).toBe('https://firma.pl/?{…}');
   });
 });

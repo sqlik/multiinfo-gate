@@ -55,6 +55,13 @@ export class ShortLinksRepo {
     return row ? toRow(row) : undefined;
   }
 
+  /** Numer otrzymał już ten adres docelowy w kampanii w innej wiadomości albo u innego odbiorcy rozsyłki. */
+  sentToDest(campaignId: number, target: string, dest: string, exceptRecipientKey: string): boolean {
+    return this.prepared(`SELECT 1 FROM short_links INDEXED BY idx_short_links_dest
+                          WHERE campaign_id = ? AND dest = ? AND target = ? AND recipient_key <> ? LIMIT 1`)
+      .get(campaignId, dest, target, exceptRecipientKey) !== undefined;
+  }
+
   exists(code: string): boolean {
     return this.prepared('SELECT 1 FROM short_links WHERE code = ?').get(code) !== undefined;
   }

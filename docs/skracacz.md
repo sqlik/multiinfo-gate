@@ -379,10 +379,10 @@ Wykres pokazuje kliknięcia co godzinę przez pierwsze 48 godzin od pierwszej wy
 22:00 do 7:00 na tle wyróżnionym. Kampania trwająca dłużej oferuje przełącznik na widok dzienny.
 
 Tabela **Linki** wymienia adresy docelowe z liczbą otwarć i kliknięć. Rodzaj „wspólny” oznacza
-adres wysłany więcej niż jednemu odbiorcy, a rodzaj „indywidualny” adres wysłany jednemu
-odbiorcy. Linki indywidualne o wspólnej
-budowie, na przykład `https://firma.pl/oferta/1001` i `https://firma.pl/oferta/1002`, tabela
-łączy w jeden wiersz `https://firma.pl/oferta/{…}`.
+adres wysłany na więcej niż jeden numer. Rodzaj „indywidualny” oznacza adres wysłany na jeden
+numer, także kilka razy, na przykład w przypomnieniu. Linki indywidualne o wspólnej budowie, na
+przykład `https://firma.pl/oferta/1001` i `https://firma.pl/oferta/1002`, tabela łączy w jeden
+wiersz `https://firma.pl/oferta/{…}`.
 
 Panel **Analityka** podaje parametry UTM, domenę skracacza i ważność linków. Tabela **Odbiorcy,
 którzy otworzyli link** pokazuje 50 odbiorców od najnowszego kliknięcia: numer, identyfikator
@@ -479,6 +479,11 @@ strony „Link wygasł” z nazwą wyświetlaną domeny.
 Po okresie przechowywania szczegóły kampanii pokazują wyłącznie liczby zbiorcze i informację, że
 szczegóły odbiorców zostały usunięte. Kod usunięty z bazy prowadzi do tej samej strony „Link
 wygasł”.
+
+Po tym samym okresie tabela **Linki** zastępuje adresy indywidualne wzorcem bez danych odbiorcy.
+Wzorzec zawiera domenę i pierwszy człon ścieżki, a resztę adresu zastępuje znakiem `{…}`. Adres
+`https://firma.pl/klient/jan-kowalski/przeglad?kod=9` przyjmuje więc postać
+`https://firma.pl/klient/{…}?{…}`. Liczby otwarć i kliknięć pozostają bez zmian.
 
 Adres docelowy każdego kodu bramka przechowuje zawsze, także gdy konto Multiinfo nie przechowuje
 treści wiadomości. Bez adresu przekierowanie nie mogłoby działać. Link indywidualny może zawierać

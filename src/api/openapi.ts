@@ -811,7 +811,8 @@ const SZCZEGOLY_KAMPANII: JsonSchema = {
           target: { type: 'string', description: 'Adres docelowy albo wzorzec adresów indywidualnych', example: 'https://firma.pl/oferta/{…}' },
           kind: {
             type: 'string', enum: ['shared', 'individual'],
-            description: 'Rodzaj linku: shared oznacza adres wysłany więcej niż jednemu odbiorcy, individual adres jednego odbiorcy',
+            description: 'Rodzaj linku: shared oznacza adres wysłany na więcej niż jeden numer, individual adres wysłany na jeden numer.'
+              + ' Po okresie przechowywania adresy indywidualne zastępuje wzorzec z domeną i pierwszym członem ścieżki',
           },
           opens: { type: 'integer', description: 'Liczba odbiorców, którzy otworzyli link' },
           clicks: { type: 'integer', description: 'Liczba wejść w link bez wejść automatów' },

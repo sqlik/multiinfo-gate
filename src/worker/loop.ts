@@ -1,5 +1,5 @@
 import { silentLogger } from '../log.ts';
-import { targetPattern } from '../links/utm.ts';
+import { retentionPattern } from '../links/utm.ts';
 import type { Job } from '../store/jobs.ts';
 import { handleSend, notify, type WorkerDeps } from './send.ts';
 import { handleMail } from './mail.ts';
@@ -115,7 +115,7 @@ export class Worker {
     for (const campaignId of links.shortLinks.purge(now)) {
       if (links.shortLinks.remaining(campaignId) === 0) links.campaigns.setDetailsPurged(campaignId, now);
     }
-    links.campaigns.collapseTargets(now, targetPattern);
+    links.campaigns.collapseTargets(now, retentionPattern);
   }
 
   private async run(job: Job, now: Date): Promise<void> {

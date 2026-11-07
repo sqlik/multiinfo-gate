@@ -74,13 +74,16 @@ export class CampaignsRepo {
     this.db.prepare('UPDATE campaigns SET sent = sent + ? WHERE id = ?').run(recipients, id);
   }
 
-  /** Kolejny odbiorca adresu docelowego; termin retencji wiersza to najpóźniejszy termin jego kodów. */
-  addTarget(id: number, target: string, purgeAfter: string): void {
+  /**
+   * Kolejny odbiorca adresu docelowego; termin retencji wiersza to najpóźniejszy termin jego kodów.
+   * `newRecipient` false: numer otrzymał już ten adres w kampanii, dlatego liczba odbiorców się nie zmienia.
+   */
+  addTarget(id: number, target: string, purgeAfter: string, newRecipient = true): void {
     this.addTargetStatement ??= this.db
       .prepare(`INSERT INTO campaign_targets (campaign_id, target, collapsed, recipients, purge_after) VALUES (?, ?, 0, 1, ?)
                 ON CONFLICT (campaign_id, target, collapsed) DO UPDATE SET
-                  recipients = recipients + 1, purge_after = MAX(COALESCE(purge_after, ''), excluded.purge_after)`);
-    this.addTargetStatement.run(id, target, purgeAfter);
+                  recipients = recipients + ?, purge_after = MAX(COALESCE(purge_after, ''), excluded.purge_after)`);
+    this.addTargetStatement.run(id, target, purgeAfter, newRecipient ? 1 : 0);
   }
 
   /** Wejście w godzinie `YYYY-MM-DDTHH` (UTC); automat liczy się osobno od kliknięć ludzi. */

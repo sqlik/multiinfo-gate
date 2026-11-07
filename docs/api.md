@@ -2634,7 +2634,7 @@ najwyżej 200 w parametrze `limit`. Kolejne strony pobiera się parametrem `offs
 | `domain` | domena skracacza ostatniej wysyłki; po usunięciu szczegółów `null` |
 | `expiresAt` | chwila wygaśnięcia ostatnich ważnych linków kampanii; po usunięciu szczegółów `null` |
 | `utm` | dopisywanie parametrów UTM do adresów docelowych; po usunięciu szczegółów `null` |
-| `links` | adresy docelowe od największej liczby odbiorców; `kind` równe `shared` oznacza adres wysłany więcej niż jednemu odbiorcy, a `individual` adres jednego odbiorcy; linki indywidualne o wspólnej budowie tworzą jeden wiersz ze znacznikiem `{…}` w części zmiennej |
+| `links` | adresy docelowe od największej liczby odbiorców; `kind` równe `shared` oznacza adres wysłany na więcej niż jeden numer, a `individual` adres wysłany na jeden numer; linki indywidualne o wspólnej budowie tworzą jeden wiersz ze znacznikiem `{…}` w części zmiennej, a po okresie przechowywania wiersz zawiera tylko domenę i pierwszy człon ścieżki |
 | `openers.data` | odbiorcy, którzy otworzyli link, od najnowszego kliknięcia: numer, identyfikator klienta z rozsyłki, pierwsze otwarcie, ostatnie kliknięcie, liczba kliknięć i otwarte adresy docelowe; po usunięciu szczegółów lista jest pusta |
 
 | HTTP | `error.code` | Przyczyna | Postępowanie |

@@ -45,7 +45,7 @@ export type ShortenerDeps = {
 };
 export interface LinkPersistDeps {
   campaigns: Pick<CampaignsRepo, 'open' | 'addTarget'>;
-  shortLinks: Pick<ShortLinksRepo, 'insert' | 'exists'>;
+  shortLinks: Pick<ShortLinksRepo, 'insert' | 'exists' | 'sentToDest'>;
   /** Źródło kodów; testy podstawiają kody stałe. */
   newCode?: () => string;
 }
@@ -231,8 +231,10 @@ export function createCodes(
     });
     return code;
   });
-  // Ten sam adres dwa razy w treści jednego odbiorcy liczy się jako jeden odbiorca tego adresu.
-  for (const target of new Set(p.slots.map((s) => s.target))) deps.campaigns.addTarget(campaignId, target, purgeAfter);
+  // Ten sam adres dwa razy w treści jednego odbiorcy albo ponownie u tego samego numeru liczy się jako jeden odbiorca.
+  for (const target of new Set(p.slots.map((s) => s.target))) {
+    deps.campaigns.addTarget(campaignId, target, purgeAfter, !deps.shortLinks.sentToDest(campaignId, target, r.dest, r.recipientKey));
+  }
   return codes;
 }
 

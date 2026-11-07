@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../src/api/errors.ts';
+import { groupTargets } from '../../src/links/campaigns.ts';
 import { isCode } from '../../src/links/codes.ts';
 import {
   createCodes, fitPrepared, linksBlock, materialize, onceSettings, openCampaign, prepareLinks, shortUrl,
@@ -314,6 +315,22 @@ describe('createCodes', () => {
     expect(campaigns.targets(campaignId)).toEqual([
       { target: 'https://firma.pl/a', collapsed: 0, recipients: 1, opens: 0, clicks: 0 },
     ]);
+  });
+
+  it('liczy odbiorców adresu docelowego według różnych numerów, a nie według liczby SMS-ów', () => {
+    const { prepare, campaigns, shortLinks, apiKeyId } = setup();
+    const target = 'https://firma.pl/oferta/KL-10482';
+    const p = prepare(`Oferta przeglądu: ${target}`);
+    const campaignId = openCampaign({ campaigns }, apiKeyId, 'oferta-serwisowa', NOW).id;
+    const send = (key: string, dest: string) =>
+      createCodes({ campaigns, shortLinks }, p, campaignId, apiKeyId, { ...recipient, recipientKey: key, messageId: key, dest }, NOW, NOW);
+    send('msg_1', '48601000001');
+    // Przypomnienie dzień później: ten sam klient, ten sam link indywidualny, ta sama kampania.
+    send('msg_2', '48601000001');
+    expect(campaigns.targets(campaignId)).toEqual([{ target, collapsed: 0, recipients: 1, opens: 0, clicks: 0 }]);
+    expect(groupTargets(campaigns.targets(campaignId))[0]!.kind).toBe('individual');
+    send('msg_3', '48601000002');
+    expect(campaigns.targets(campaignId)[0]!.recipients).toBe(2);
   });
 
   it('zgłasza kampanię z wyłączonymi linkami przy kolejnej wysyłce', () => {

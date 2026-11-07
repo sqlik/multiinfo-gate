@@ -114,7 +114,7 @@ describe('Worker.tick - retencja skracacza', () => {
     expect(campaigns.get(spring)).toEqual({ ...before, detailsPurgedAt: clock.toISOString() });
     expect(campaigns.get(winter)!.detailsPurgedAt).toBeNull();
     expect(campaigns.targets(spring)).toEqual([
-      { target: 'https://firma.pl/klient/{…}/przeglad', collapsed: 1, recipients: 2, opens: 0, clicks: 0 },
+      { target: 'https://firma.pl/klient/{…}', collapsed: 1, recipients: 2, opens: 0, clicks: 0 },
     ]);
   });
 });

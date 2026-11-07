@@ -55,10 +55,10 @@ export function redirectFixture() {
       ...o,
     };
     shortLinks.insert(row);
-    // Ten sam adres u tego samego odbiorcy liczy się raz, tak jak w createCodes.
+    // Ten sam adres u tego samego odbiorcy albo numeru liczy się raz, tak jak w createCodes.
     if (!targets.has(`${row.recipientKey} ${row.target}`)) {
       targets.add(`${row.recipientKey} ${row.target}`);
-      campaigns.addTarget(row.campaignId, row.target, row.purgeAfter);
+      campaigns.addTarget(row.campaignId, row.target, row.purgeAfter, !shortLinks.sentToDest(row.campaignId, row.target, row.dest, row.recipientKey));
     }
     return code;
   };

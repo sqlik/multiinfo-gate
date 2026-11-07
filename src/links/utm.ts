@@ -29,8 +29,8 @@ const hasDigit = (segment: string): boolean => /\d/.test(segment.replace(/%[0-9A
 function pathPattern(path: string): string {
   const segments = path.split('/');
   if (segments.some(hasDigit)) return segments.map((s) => (hasDigit(s) ? PLACEHOLDER : s)).join('/');
-  const last = segments.length - 1;
-  if (segments[last] !== '') segments[last] = PLACEHOLDER;
+  const last = segments.findLastIndex((s) => s !== '');
+  if (last !== -1) segments[last] = PLACEHOLDER;
   return segments.join('/');
 }
 
@@ -50,8 +50,34 @@ export function targetPattern(url: string): string {
     .split('&')
     .map((pair) => {
       const eq = pair.indexOf('=');
-      return eq === -1 ? pair : `${pair.slice(0, eq + 1)}${PLACEHOLDER}`;
+      return eq === -1 ? PLACEHOLDER : `${pair.slice(0, eq + 1)}${PLACEHOLDER}`;
     })
     .join('&');
   return `${pattern}?${query}`;
+}
+
+/**
+ * Wzorzec adresu indywidualnego po retencji, ostrzejszy od `targetPattern`: zostaje host bez danych
+ * logowania i pierwszy człon ścieżki, a reszta ścieżki i całe zapytanie stają się `{…}`. Na przykład
+ * `klient/jan-kowalski/przeglad?kod=9` daje `klient/{…}?{…}`. Pierwszy człon z cyfrą albo ze średnikiem
+ * i człon jedyny w adresie też stają się `{…}`, ponieważ mogą wskazywać odbiorcę.
+ */
+export function retentionPattern(url: string): string {
+  const [base] = splitHash(url);
+  const q = base.indexOf('?');
+  const beforeQuery = q === -1 ? base : base.slice(0, q);
+  const query = q === -1 ? '' : base.slice(q + 1);
+  const authorityStart = beforeQuery.indexOf('://') + 3;
+  const pathStart = beforeQuery.indexOf('/', authorityStart);
+  const authority = pathStart === -1 ? beforeQuery.slice(authorityStart) : beforeQuery.slice(authorityStart, pathStart);
+  let out = `${beforeQuery.slice(0, authorityStart)}${authority.slice(authority.lastIndexOf('@') + 1)}`;
+  if (pathStart !== -1) {
+    const [first = '', ...rest] = beforeQuery.slice(pathStart + 1).split('/');
+    const restHasData = rest.some((segment) => segment !== '');
+    const keepFirst = first !== '' && !hasDigit(first) && !first.includes(';') && (restHasData || query !== '');
+    if (first === '' && !restHasData) out += '/';
+    else if (!keepFirst) out += `/${PLACEHOLDER}`;
+    else out += `/${first}${restHasData ? `/${PLACEHOLDER}` : rest.length > 0 ? '/' : ''}`;
+  }
+  return query === '' ? out : `${out}?${PLACEHOLDER}`;
 }
