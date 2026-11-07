@@ -129,6 +129,23 @@ describe('opis API', () => {
     expect(new Set(nazwy).size).toBe(nazwy.length);
   });
 
+  it('pole skipped wymienia wszystkie powody pominięcia linku', () => {
+    const reasons: { enum?: unknown; description?: string }[] = [];
+    const walk = (node: unknown): void => {
+      if (node === null || typeof node !== 'object') return;
+      const props = (node as { properties?: Record<string, unknown> }).properties;
+      const skipped = props?.skipped as { items?: { properties?: { reason?: { enum?: unknown; description?: string } } } } | undefined;
+      if (skipped?.items?.properties?.reason) reasons.push(skipped.items.properties.reason);
+      for (const value of Object.values(node)) walk(value);
+    };
+    walk(doc);
+    expect(reasons.length).toBeGreaterThan(0);
+    for (const reason of reasons) {
+      expect(reason.enum).toEqual(['domain_not_allowed', 'too_long', 'too_many']);
+      expect(reason.description).toMatch(/too_long.*2048.*too_many.*10/s);
+    }
+  });
+
   it('zapisany plik zgadza się z modułem', () => {
     const zapisany = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
     expect(zapisany).toEqual(JSON.parse(JSON.stringify(doc)));

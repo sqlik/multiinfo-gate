@@ -1,6 +1,6 @@
 import { shortId } from '../ids.ts';
 import {
-  createCodes, linkExpiry, linksBlock, materialize, openCampaign, prepareLinks, storedLinksBlock,
+  createCodes, linkExpiry, linksBlock, materialize, openCampaign, plainText, prepareLinks, storedLinksBlock,
   type LinkRequest, type LinksResponse, type PreparedText,
 } from '../links/shortener.ts';
 import type { ApiKeyRow, ApiKeysRepo } from '../store/api-keys.ts';
@@ -118,19 +118,6 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
     if (ahead > MAX_VALIDITY_MS) throw new ApiError(400, 'valid_to_too_far', 'Multiinfo dopuszcza ważność najwyżej 72 godziny.');
   }
 
-  // Pomiar i podział dotyczą treści po skróceniu: szablon ma długość treści końcowej.
-  const prepared = input.prepared
-    ?? prepareLinks(deps, auth.apiKeyId, input.text, input.links ?? {}, input.system ? { system: true } : {});
-  const maxParts = Math.min(input.maxParts ?? auth.maxParts, auth.maxParts);
-  const measurement = measureText(prepared.text, input.encoding ?? 'auto');
-  let segmentation;
-  try {
-    segmentation = segmentText(prepared.text, measurement, maxParts);
-  } catch (e) {
-    if (e instanceof TooManyPartsError) throw new ApiError(400, 'too_many_parts', e.message);
-    throw e;
-  }
-
   const idem = input.idempotencyKey;
   const hash = sha256Hex(input.text);
   const recipients = input.to;
@@ -161,6 +148,28 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
     }
     return { dest, perRecipientIdem, existing };
   });
+  // Powtórzenie przyjętej wysyłki zwraca zapisane wiadomości także wtedy, gdy administrator zmienił
+  // w międzyczasie domeny albo limit części klucza.
+  const repeat = checked.length > 0 && checked.every((c) => c.existing !== undefined);
+
+  // Pomiar i podział dotyczą treści po skróceniu: szablon ma długość treści końcowej.
+  let prepared: PreparedText;
+  try {
+    prepared = input.prepared
+      ?? prepareLinks(deps, auth.apiKeyId, input.text, input.links ?? {}, input.system ? { system: true } : {});
+  } catch (e) {
+    if (!repeat || !(e instanceof ApiError)) throw e;
+    prepared = plainText(input.text);
+  }
+  const maxParts = Math.min(input.maxParts ?? auth.maxParts, auth.maxParts);
+  const measurement = measureText(prepared.text, input.encoding ?? 'auto');
+  let segmentation;
+  try {
+    segmentation = segmentText(prepared.text, measurement, repeat ? Number.MAX_SAFE_INTEGER : maxParts);
+  } catch (e) {
+    if (e instanceof TooManyPartsError) throw new ApiError(400, 'too_many_parts', e.message);
+    throw e;
+  }
 
   // Kampania powstaje wyłącznie dla treści z co najmniej jednym skróconym linkiem.
   const shortening = prepared.info !== null && prepared.slots.length > 0 ? prepared.info : null;

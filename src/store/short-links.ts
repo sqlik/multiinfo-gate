@@ -1,4 +1,4 @@
-import type { Database } from 'better-sqlite3';
+import type { Database, Statement } from 'better-sqlite3';
 
 export interface ShortLinkRow {
   code: string; domainId: number; apiKeyId: number; campaignId: number; target: string; utm: 0 | 1; recipientKey: string;
@@ -25,12 +25,24 @@ const toRow = (r: Raw): ShortLinkRow => ({
 
 /** Krótkie kody skracacza: jeden na wystąpienie linku u odbiorcy, bez adresu IP i nagłówka User-Agent wejścia. */
 export class ShortLinksRepo {
+  /** Zapytania wołane przy każdym kodzie rozsyłki, przygotowane raz. */
+  private readonly statements = new Map<string, Statement>();
+
   constructor(private readonly db: Database) {}
+
+  private prepared(sql: string): Statement {
+    let statement = this.statements.get(sql);
+    if (statement === undefined) {
+      statement = this.db.prepare(sql);
+      this.statements.set(sql, statement);
+    }
+    return statement;
+  }
 
   /** Kod kampanii z wyłączonymi linkami powstaje wyłączony z chwilą wyłączenia kampanii. */
   insert(row: ShortLinkInput): void {
-    this.db
-      .prepare(`INSERT INTO short_links (code, domain_id, api_key_id, campaign_id, target, utm, recipient_key, message_id, package_id,
+    this
+      .prepared(`INSERT INTO short_links (code, domain_id, api_key_id, campaign_id, target, utm, recipient_key, message_id, package_id,
                   seq, dest, client_id, expires_at, disabled_at, purge_after, created_at)
                 VALUES (@code, @domainId, @apiKeyId, @campaignId, @target, @utm, @recipientKey, @messageId, @packageId,
                   @seq, @dest, @clientId, @expiresAt, (SELECT links_disabled_at FROM campaigns WHERE id = @campaignId),
@@ -44,7 +56,7 @@ export class ShortLinksRepo {
   }
 
   exists(code: string): boolean {
-    return this.db.prepare('SELECT 1 FROM short_links WHERE code = ?').get(code) !== undefined;
+    return this.prepared('SELECT 1 FROM short_links WHERE code = ?').get(code) !== undefined;
   }
 
   /** Kliknięcie: liczniki kodu; zwraca `firstOpen` true przy pierwszym wejściu niebędącym automatem. */

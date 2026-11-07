@@ -4,10 +4,13 @@
 /** Przesunięcia w jednostkach UTF-16, `end` wyłącznie. */
 export interface FoundLink { start: number; end: number; url: string }
 
-const LINK = /https?:\/\/\S+/gi;
+/** Nawiasy ostre i cudzysłów prosty kończą adres: `tekst<https://…>` w części tekstowej maila z Outlooka, `href="https://…"`. */
+const LINK = /https?:\/\/[^\s<>"]+/gi;
 const SCHEME = /^https?:\/\/$/i;
 /** Znaki na końcu adresu, które w treści należą do zdania, a nie do linku. */
-const TRAILING = new Set(['.', ',', ';', ':', '!', '?', '…', '"', "'", '»', '”']);
+const TRAILING = new Set(['.', ',', ';', ':', '!', '?', '…', "'", '»', '”']);
+/** Nawias zamykający i jego para otwierająca. */
+const CLOSING: Record<string, string> = { ')': '(', ']': '[', '}': '{' };
 
 function count(text: string, char: string): number {
   let n = 0;
@@ -24,7 +27,8 @@ function trimTrailing(url: string): string {
       continue;
     }
     // Nawias zamykający należy do adresu tylko wtedy, gdy ma parę wewnątrz adresu: https://firma.pl/a_(b).
-    if (last === ')' && count(url.slice(0, end), ')') > count(url.slice(0, end), '(')) {
+    const opening = last === undefined ? undefined : CLOSING[last];
+    if (opening !== undefined && count(url.slice(0, end), last!) > count(url.slice(0, end), opening)) {
       end--;
       continue;
     }

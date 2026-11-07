@@ -77,6 +77,46 @@ describe('prepareLinks', () => {
     expect(p.info!.skipped).toEqual([{ url: 'https://inna.pl/c', reason: 'domain_not_allowed' }]);
   });
 
+  it('skraca odnośnik z części tekstowej maila z Outlooka bez nawiasu ostrego w adresie docelowym', () => {
+    const { prepare } = setup();
+    const p = prepare('Szczegóły zgłoszenia<https://firma.pl/zgloszenie/48213>');
+    expect(p.slots.map((s) => s.target)).toEqual(['https://firma.pl/zgloszenie/48213']);
+    expect(p.text).toBe('Szczegóły zgłoszenia<https://l.firma.pl/0000000>');
+  });
+
+  it('pozostawia adres dłuższy niż 2048 znaków i wymienia go jako pominięty', () => {
+    const { prepare } = setup();
+    const atLimit = `https://firma.pl/o?x=${'a'.repeat(2048 - 'https://firma.pl/o?x='.length)}`;
+    const overLimit = `${atLimit}b`;
+    expect(prepare(`Oferta ${atLimit}`).slots).toHaveLength(1);
+    const p = prepare(`Oferta ${overLimit}`);
+    expect(p.text === `Oferta ${overLimit}`).toBe(true);
+    expect(p.slots).toEqual([]);
+    expect(p.info!.skipped).toEqual([{ url: overLimit, reason: 'too_long' }]);
+  });
+
+  it('skraca najwyżej 10 linków w treści, kolejne pozostawia i wymienia jako pominięte', () => {
+    const { prepare } = setup();
+    const links = Array.from({ length: 12 }, (_, i) => `https://firma.pl/${i}`);
+    const p = prepare(`Inna https://inna.pl/x ${links.join(' ')}`);
+    expect(p.slots.map((s) => s.target)).toEqual(links.slice(0, 10));
+    expect(p.text.endsWith(' https://firma.pl/10 https://firma.pl/11')).toBe(true);
+    expect(p.info!.skipped).toEqual([
+      { url: 'https://inna.pl/x', reason: 'domain_not_allowed' },
+      { url: 'https://firma.pl/10', reason: 'too_many' },
+      { url: 'https://firma.pl/11', reason: 'too_many' },
+    ]);
+  });
+
+  it('nie skraca ponownie krótkiego linku z domeny skracacza, choć domena docelowa obejmuje jej subdomenę', () => {
+    const { prepare } = setup();
+    const text = 'Przypomnienie o przeglądzie: https://l.firma.pl/AbC1234 oraz HTTPS://L.FIRMA.PL/xYz9876';
+    const p = prepare(text);
+    expect(p.slots).toEqual([]);
+    expect(p.text).toBe(text);
+    expect(p.info!.skipped).toEqual([]);
+  });
+
   it('nadaje osobny slot każdemu wystąpieniu tego samego linku', () => {
     const { prepare } = setup();
     const p = prepare('https://firma.pl/a i ponownie https://firma.pl/a');
@@ -215,6 +255,21 @@ describe('fitPrepared', () => {
     expect(fitted.prepared.slots).toEqual(p.slots);
     expect(fitted.prepared.text.startsWith('Oferta https://l.firma.pl/0000000 XXX')).toBe(true);
     expect(fitted.prepared.text).toHaveLength(160);
+  });
+
+  it('usuwa krótki link kończący się dokładnie w miejscu przycięcia, zamiast dokleić do niego wielokropek', () => {
+    const { prepare } = setup();
+    const short = 'https://l.firma.pl/0000000';
+    // UCS-2: 70 znaków w części, przycięcie zostawia 69 znaków i „…”; GSM-7: 160 znaków, 157 i „...”.
+    for (const [kept, head] of [[69, 'Przegląd klimatyzacji, zapis: '], [157, 'Przeglad klimatyzacji, zapis: ']] as const) {
+      const lead = head.padEnd(kept - short.length, 'x');
+      const p = prepare(`${lead}https://firma.pl/przeglad dalsza treść kampanii, która nie mieści się w limicie części`);
+      expect(p.slots[0]!.start + p.slots[0]!.length).toBe(kept);
+      const fitted = fitPrepared(p, 1);
+      expect(fitted.over).toBe(true);
+      expect(fitted.prepared.slots).toEqual([]);
+      expect(fitted.prepared.text).not.toContain('0000000');
+    }
   });
 
   it('liczy części treści z polskimi znakami po skróceniu', () => {

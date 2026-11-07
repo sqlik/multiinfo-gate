@@ -1,4 +1,4 @@
-import type { Database } from 'better-sqlite3';
+import type { Database, Statement } from 'better-sqlite3';
 
 export interface CampaignRow {
   id: number; apiKeyId: number; name: string; firstSentAt: string; lastSentAt: string; sent: number; opens: number;
@@ -23,6 +23,9 @@ const toRow = (r: Raw): CampaignRow => ({
  * dlatego zostają po retencji szczegółów odbiorców.
  */
 export class CampaignsRepo {
+  /** Zapytanie wołane przy każdym odbiorcy rozsyłki, przygotowane raz. */
+  private addTargetStatement: Statement | undefined;
+
   constructor(private readonly db: Database) {}
 
   /**
@@ -73,11 +76,11 @@ export class CampaignsRepo {
 
   /** Kolejny odbiorca adresu docelowego; termin retencji wiersza to najpóźniejszy termin jego kodów. */
   addTarget(id: number, target: string, purgeAfter: string): void {
-    this.db
+    this.addTargetStatement ??= this.db
       .prepare(`INSERT INTO campaign_targets (campaign_id, target, collapsed, recipients, purge_after) VALUES (?, ?, 0, 1, ?)
                 ON CONFLICT (campaign_id, target, collapsed) DO UPDATE SET
-                  recipients = recipients + 1, purge_after = MAX(COALESCE(purge_after, ''), excluded.purge_after)`)
-      .run(id, target, purgeAfter);
+                  recipients = recipients + 1, purge_after = MAX(COALESCE(purge_after, ''), excluded.purge_after)`);
+    this.addTargetStatement.run(id, target, purgeAfter);
   }
 
   /** Wejście w godzinie `YYYY-MM-DDTHH` (UTC); automat liczy się osobno od kliknięć ludzi. */

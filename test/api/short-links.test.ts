@@ -31,9 +31,14 @@ let campaigns: CampaignsRepo;
 /** Stan serwera krótkich linków widziany przez API; testy zajętego portu ustawiają false. */
 let linksServerUp = true;
 let shortLinks: ShortLinksRepo;
+let apiKeysRepo: ApiKeysRepo;
+let linkDomainsRepo: LinkDomainsRepo;
+let mainDomainId: number;
+let testDb: ReturnType<typeof openDatabase>;
 
 beforeEach(async () => {
   const db = openDatabase(':memory:');
+  testDb = db;
   const accounts = new AccountsRepo(db, masterKey);
   const apiKeys = new ApiKeysRepo(db, masterKey);
   messages = new MessagesRepo(db);
@@ -60,6 +65,9 @@ beforeEach(async () => {
   });
   campaigns = deps.campaigns;
   shortLinks = deps.shortLinks;
+  apiKeysRepo = apiKeys;
+  linkDomainsRepo = deps.linkDomains;
+  mainDomainId = domainId;
 
   app = buildApiServer({
     accounts, apiKeys, messages, events: new MessageEventsRepo(db), jobs, packages, clients: {} as never,
@@ -266,6 +274,57 @@ describe('POST /v1/packages z krótkimi linkami', () => {
     const id = first.json().id as string;
     expect(campaigns.byName(apiKeyId, id)!.sent).toBe(2);
     expect(shortLinks.remaining(campaigns.byName(apiKeyId, id)!.id)).toBe(2);
+  });
+});
+
+describe('powtórzenie z tym samym Idempotency-Key po zmianie ustawień klucza', () => {
+  /** Klucz z drugą domeną promo-firma.pl, którą administrator odpina między próbami klienta. */
+  const withPromo = () => {
+    const promoId = linkDomainsRepo.create({ domain: 'promo-firma.pl', displayName: 'Firma Serwis', homeUrl: null, bareLinks: false }, NOW);
+    apiKeysRepo.setLinkSettings(apiKeyId, {
+      mode: 'sender', domainIds: [mainDomainId, promoId], defaultDomainId: mainDomainId, targets: ['firma.pl'], validityDays: 90, utm: true,
+    });
+  };
+  const unassignPromo = () => apiKeysRepo.setLinkSettings(apiKeyId, {
+    mode: 'sender', domainIds: [mainDomainId], defaultDomainId: mainDomainId, targets: ['firma.pl'], validityDays: 90, utm: true,
+  });
+  const idem = { 'idempotency-key': 'zlecenie-17' };
+
+  it('wiadomość: zwraca przyjętą wiadomość mimo odpięcia domeny skracacza od klucza', async () => {
+    withPromo();
+    const payload = { to: '48601000001', text: 'Oferta https://firma.pl/a', linkDomain: 'promo-firma.pl' };
+    const first = await post('/v1/messages', payload, idem);
+    expect(first.statusCode).toBe(202);
+    unassignPromo();
+    const again = await post('/v1/messages', payload, idem);
+    expect(again.statusCode).toBe(202);
+    expect(again.json().id).toBe(first.json().id);
+    expect(again.json().links).toMatchObject({ shortened: 1, domain: 'promo-firma.pl' });
+  });
+
+  it('rozsyłka: zwraca przyjętą rozsyłkę mimo odpięcia domeny skracacza od klucza', async () => {
+    withPromo();
+    const payload = { defaultText: 'Oferta https://firma.pl/a', recipients: [{ to: '48601000001' }], linkDomain: 'promo-firma.pl' };
+    const first = await post('/v1/packages', payload, idem);
+    expect(first.statusCode).toBe(202);
+    unassignPromo();
+    const again = await post('/v1/packages', payload, idem);
+    expect(again.statusCode).toBe(202);
+    expect(again.json().id).toBe(first.json().id);
+    expect(again.json().links).toMatchObject({ shortened: 1, domain: 'promo-firma.pl' });
+  });
+
+  it('wiadomość i rozsyłka: zwracają przyjętą wysyłkę mimo obniżenia limitu części klucza', async () => {
+    const text = `Przegląd klimatyzacji ${'x'.repeat(150)} https://firma.pl/a`;
+    const message = await post('/v1/messages', { to: '48601000001', text }, idem);
+    const pkg = await post('/v1/packages', { defaultText: text, recipients: [{ to: '48601000002' }] }, { 'idempotency-key': 'rozsylka-17' });
+    expect([message.statusCode, pkg.statusCode]).toEqual([202, 202]);
+    testDb.prepare('UPDATE api_keys SET max_parts = 1 WHERE id = ?').run(apiKeyId);
+    const messageAgain = await post('/v1/messages', { to: '48601000001', text }, idem);
+    const pkgAgain = await post('/v1/packages', { defaultText: text, recipients: [{ to: '48601000002' }] }, { 'idempotency-key': 'rozsylka-17' });
+    expect([messageAgain.statusCode, pkgAgain.statusCode]).toEqual([202, 202]);
+    expect(messageAgain.json().id).toBe(message.json().id);
+    expect(pkgAgain.json().id).toBe(pkg.json().id);
   });
 });
 

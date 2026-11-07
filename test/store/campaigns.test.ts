@@ -28,6 +28,23 @@ const setup = () => {
   };
 };
 
+it('CampaignsRepo przygotowuje zapytanie dopisania adresu docelowego raz, a nie przy każdym odbiorcy rozsyłki', () => {
+  const { db, apiKeyId } = setup();
+  let prepared = 0;
+  const counting = new Proxy(db, {
+    get(target, prop) {
+      if (prop === 'prepare') return (sql: string) => { prepared++; return target.prepare(sql); };
+      const value = Reflect.get(target, prop) as unknown;
+      return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(target) : value;
+    },
+  });
+  const campaigns = new CampaignsRepo(counting);
+  const id = campaigns.open(apiKeyId, NAME, AT);
+  const before = prepared;
+  for (let i = 0; i < 50; i++) campaigns.addTarget(id, `https://firma.pl/oferta/${i}`, '2026-03-05T10:00:00.000Z');
+  expect(prepared - before).toBeLessThanOrEqual(1);
+});
+
 describe('CampaignsRepo', () => {
   it('otwiera kampanię i zwraca ją po nazwie przy kolejnej wysyłce, przesuwając ostatnią wysyłkę', () => {
     const { campaigns, apiKeyId } = setup();

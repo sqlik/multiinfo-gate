@@ -672,8 +672,18 @@ describe('klucz: sekcja „Skracanie linków”', () => {
     const id = domain('l.firma.pl');
     const res = await post('/klucze', [...base(), ...links({ domains: [id], targets: 'https://firma.pl' })]);
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('Dozwolone domeny docelowe zawierają nieprawidłowy wpis „https://firma.pl”. Wpisz samą domenę, bez https:// i bez ścieżki');
+    expect(res.body).toContain('Dozwolone domeny docelowe zawierają nieprawidłowy wpis „https://firma.pl”. Wpisz samą domenę, bez https:// i bez ścieżki, na przykład firma.pl.');
     expect(res.body).toContain('https://firma.pl</textarea>');
+  });
+
+  it('błąd listy domen docelowych podaje przykład domeny docelowej, a nie domeny skracacza', async () => {
+    const id = domain('l.firma.pl');
+    for (const target of ['firma', 'firma.pl:8443', 'firma..pl']) {
+      const res = await post('/klucze', [...base(), ...links({ domains: [id], targets: target })]);
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toContain('na przykład firma.pl.');
+      expect(res.body).not.toContain('na przykład l.firma.pl');
+    }
   });
 
   it('edycja klucza pokazuje i zachowuje ustawienia skracania', async () => {

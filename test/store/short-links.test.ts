@@ -32,7 +32,32 @@ const setup = () => {
   return { db, links, campaigns, campaignId, otherCampaignId, input };
 };
 
+/** Baza, która liczy przygotowane zapytania. */
+function countingPrepare(db: ReturnType<typeof openDatabase>): { db: ReturnType<typeof openDatabase>; prepared: () => number } {
+  let n = 0;
+  const proxy = new Proxy(db, {
+    get(target, prop) {
+      if (prop === 'prepare') return (sql: string) => { n++; return target.prepare(sql); };
+      const value = Reflect.get(target, prop) as unknown;
+      return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(target) : value;
+    },
+  });
+  return { db: proxy, prepared: () => n };
+}
+
 describe('ShortLinksRepo', () => {
+  it('przygotowuje zapytania sprawdzenia i zapisu kodu raz, a nie przy każdym kodzie rozsyłki', () => {
+    const { db, input } = setup();
+    const counting = countingPrepare(db);
+    const links = new ShortLinksRepo(counting.db);
+    for (let i = 0; i < 50; i++) {
+      const code = `aB3x${String(i).padStart(3, '0')}`;
+      links.exists(code);
+      links.insert(input(code));
+    }
+    expect(counting.prepared()).toBeLessThanOrEqual(2);
+  });
+
   it('zapisuje kod z licznikami zerowymi i odczytuje go', () => {
     const { links, input } = setup();
     expect(links.exists('aB3xK9q')).toBe(false);

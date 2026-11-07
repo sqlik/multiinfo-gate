@@ -71,6 +71,24 @@ describe('findLinks', () => {
     expect(findLinks('Wpisz https:// oraz http://. w przeglądarce')).toEqual([]);
   });
 
+  it('kończy link przed nawiasem ostrym, także w odnośniku z części tekstowej maila z Outlooka', () => {
+    expect(urls('Formularz <https://firma.pl/zgloszenie/48213>')).toEqual(['https://firma.pl/zgloszenie/48213']);
+    expect(urls('Szczegóły zgłoszenia<https://firma.pl/zgloszenie/48213>')).toEqual(['https://firma.pl/zgloszenie/48213']);
+    expect(urls('https://firma.pl/a<https://firma.pl/a>')).toEqual(['https://firma.pl/a', 'https://firma.pl/a']);
+  });
+
+  it('kończy link przed cudzysłowem prostym w środku tekstu', () => {
+    expect(urls('<a href="https://firma.pl/oferta">oferta</a>')).toEqual(['https://firma.pl/oferta']);
+  });
+
+  it('pomija nawias kwadratowy i klamrowy bez pary, a zachowuje zrównoważony', () => {
+    expect(urls('Cennik [https://firma.pl/cennik] oraz {https://firma.pl/regulamin}')).toEqual([
+      'https://firma.pl/cennik',
+      'https://firma.pl/regulamin',
+    ]);
+    expect(urls('Lista https://firma.pl/a[1] i https://firma.pl/b{2}')).toEqual(['https://firma.pl/a[1]', 'https://firma.pl/b{2}']);
+  });
+
   it('podaje przesunięcia w jednostkach UTF-16', () => {
     const text = 'Zażółć 😀 https://firma.pl/x';
     const [link] = findLinks(text);

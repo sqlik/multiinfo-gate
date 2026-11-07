@@ -82,7 +82,7 @@ function checkLinks(v: LinkFormValues, exists: (id: number) => boolean): { ok: t
   const targets = new Set<string>();
   for (const line of v.targets.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== '')) {
     try {
-      targets.add(normalizeDomain(line));
+      targets.add(normalizeDomain(line, 'firma.pl'));
     } catch (error) {
       if (!(error instanceof LinkDomainError)) throw error;
       return { ok: false, error: `Dozwolone domeny docelowe zawierają nieprawidłowy wpis „${line}”. ${error.message}.` };

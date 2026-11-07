@@ -407,7 +407,7 @@ Na przykład treść „Przeglad klimatyzacji przed sezonem: https://firma.pl/pr
 | `campaign` | kampania, do której należą krótkie linki |
 | `expiresAt` | chwila wygaśnięcia krótkich linków |
 | `notice` | ustawienie albo stan, które zmieniły wynik wybrany przez wysyłającego; `null`, gdy żadne |
-| `skipped` | linki wysłane bez zmian, każdy z polami `url` i `reason`; powód `domain_not_allowed` oznacza domenę spoza dozwolonych domen docelowych klucza |
+| `skipped` | linki wysłane bez zmian, każdy z polami `url` i `reason`, których powody przedstawia druga tabela poniżej |
 
 | `notice` | Znaczenie |
 |---|---|
@@ -415,6 +415,12 @@ Na przykład treść „Przeglad klimatyzacji przed sezonem: https://firma.pl/pr
 | `forced_by_key` | żądanie zawiera `shortenLinks: false`, a klucz skraca linki zawsze |
 | `domain_unavailable` | domena skracacza jest wyłączona albo serwer krótkich linków nie działa; linki zostały wysłane bez zmian |
 | `campaign_links_disabled` | linki kampanii są wyłączone w panelu, dlatego krótkie linki tej wysyłki prowadzą do strony „Link wygasł” do czasu włączenia linków kampanii |
+
+| `reason` | Znaczenie |
+|---|---|
+| `domain_not_allowed` | domena linku nie należy do dozwolonych domen docelowych klucza |
+| `too_long` | adres jest dłuższy niż 2048 znaków |
+| `too_many` | link następuje w treści po 10 skróconych linkach |
 
 Powtórzenie żądania z tym samym `Idempotency-Key` zwraca te same krótkie linki i nie zwiększa
 liczby wysłanych SMS-ów w kampanii.

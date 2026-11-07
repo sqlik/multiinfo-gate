@@ -1,7 +1,7 @@
 import { sha256Hex } from '../text/hash.ts';
 import { shortId } from '../ids.ts';
 import {
-  createCodes, linkExpiry, materialize, onceSettings, openCampaign, packageLinksBlock, prepareLinks, storedLinksBlock,
+  createCodes, linkExpiry, materialize, onceSettings, openCampaign, packageLinksBlock, plainText, prepareLinks, storedLinksBlock,
   type LinkRequest, type LinksResponse, type PreparedText,
 } from '../links/shortener.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
@@ -90,24 +90,6 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
 
   const maxParts = Math.min(input.maxParts ?? auth.maxParts, auth.maxParts);
 
-  // Szablony treści: pomiar, kodowanie i limit części dotyczą treści po skróceniu.
-  const shortener = onceSettings(deps);
-  const prepare = (text: string) => prepareLinks(shortener, auth.apiKeyId, text, input.links ?? {}, {});
-  const defaultTemplate = input.defaultText === undefined ? undefined : input.prepared?.defaultText ?? prepare(input.defaultText);
-  const ownTemplates = input.recipients.map((r, index) =>
-    r.text === undefined ? undefined : input.prepared?.recipients[index] ?? prepare(r.text));
-
-  // Jedno kodowanie i jeden znacznik wieloczęściowości na całą rozsyłkę: tak działa package.aspx.
-  const forced = packageEncoding([defaultTemplate?.text, ...ownTemplates.map((t) => t?.text)], input.encoding);
-  const partsOf = (text: string, where: string): number => {
-    try {
-      return segmentText(text, measureText(text, forced), maxParts).parts;
-    } catch (e) {
-      if (e instanceof TooManyPartsError) throw new ApiError(400, 'too_many_parts', `${where}: ${e.message}`);
-      throw e;
-    }
-  };
-  let multipart = defaultTemplate !== undefined && partsOf(defaultTemplate.text, 'defaultText') > 1;
   const recipients: RecipientInput[] = input.recipients.map((r, index) => {
     let dest: string;
     try {
@@ -120,17 +102,11 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
       throw new ApiError(400, 'invalid_client_id',
         `recipients.${index}: identyfikator klienta może mieć 1-20 znaków z zakresu A-Z, a-z, 0-9, kropka, podkreślenie, myślnik.`);
     }
-    const text = r.text ?? input.defaultText;
-    if (text === undefined) {
+    if (r.text === undefined && input.defaultText === undefined) {
       throw new ApiError(400, 'text_required', `recipients.${index}: brak treści i brak treści domyślnej.`);
     }
-    // Treść wspólną policzyło już sprawdzenie przed pętlą.
-    const own = ownTemplates[index];
-    if (own !== undefined && partsOf(own.text, `recipients.${index}`) > 1) multipart = true;
     return { dest, text: r.text ?? null, clientId: r.clientId ?? null };
   });
-
-  const encoding = forced === 'unicode' ? 'ucs2' : 'gsm';
   const integrationId = input.integrationId ?? null;
 
   // Skrót z wartości po sprawdzeniu: zapis numeru z kodem kraju i bez niego to ta sama rozsyłka.
@@ -139,29 +115,58 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
     encoding: input.encoding, costCenter: input.costCenter ?? null, defaultText: input.defaultText ?? null, recipients,
     ...(input.links === undefined || Object.keys(input.links).length === 0 ? {} : { links: input.links }),
   }));
+  const existing = input.idempotencyKey === undefined ? undefined : deps.packages.findByIdempotencyKey(auth.apiKeyId, input.idempotencyKey);
+  if (existing && (existing.requestHash !== requestHash || existing.integrationId !== integrationId)) {
+    throw new ApiError(409, 'idempotency_conflict', 'Ten klucz idempotencji został już użyty z inną rozsyłką albo przez inną integrację.');
+  }
+
+  // Szablony treści: pomiar, kodowanie i limit części dotyczą treści po skróceniu. Powtórzenie przyjętej
+  // rozsyłki potrzebuje szablonów tylko do zgłoszeń w bloku `links`, dlatego zmiana domen klucza w międzyczasie
+  // nie kończy się błędem.
+  const shortener = onceSettings(deps);
+  const prepare = (text: string): PreparedText => {
+    try {
+      return prepareLinks(shortener, auth.apiKeyId, text, input.links ?? {}, {});
+    } catch (e) {
+      if (existing === undefined || !(e instanceof ApiError)) throw e;
+      return plainText(text);
+    }
+  };
+  const defaultTemplate = input.defaultText === undefined ? undefined : input.prepared?.defaultText ?? prepare(input.defaultText);
+  const ownTemplates = input.recipients.map((r, index) =>
+    r.text === undefined ? undefined : input.prepared?.recipients[index] ?? prepare(r.text));
   // Szablon każdego odbiorcy: własna treść albo treść wspólna. Treść wspólna, której nie używa żaden odbiorca,
   // nie tworzy kampanii i nie trafia do bloku `links`.
   const used = input.recipients.map((_, index) => ownTemplates[index] ?? defaultTemplate!);
   const templates = [...new Set(used)];
-  if (input.idempotencyKey !== undefined) {
-    const existing = deps.packages.findByIdempotencyKey(auth.apiKeyId, input.idempotencyKey);
-    if (existing) {
-      if (existing.requestHash !== requestHash || existing.integrationId !== integrationId) {
-        throw new ApiError(409, 'idempotency_conflict',
-          'Ten klucz idempotencji został już użyty z inną rozsyłką albo przez inną integrację.');
-      }
-      const summary = deps.shortLinks.packageSummary(existing.id);
-      const campaign = summary && deps.campaigns.get(summary.campaignId);
-      const links = storedLinksBlock(templates, summary && {
-        count: summary.count, domain: deps.linkDomains.get(summary.domainId)?.domain ?? null,
-        campaign: campaign?.name ?? null, expiresAt: summary.expiresAt, linksDisabled: (campaign?.linksDisabledAt ?? null) !== null,
-      });
-      return {
-        id: existing.id, status: existing.status, recipients: existing.recipientsCount, encoding: existing.encoding,
-        multipart: existing.multipart === 1, ...(links === undefined ? {} : { links }),
-      };
-    }
+  if (existing) {
+    const summary = deps.shortLinks.packageSummary(existing.id);
+    const campaign = summary && deps.campaigns.get(summary.campaignId);
+    const links = storedLinksBlock(templates, summary && {
+      count: summary.count, domain: deps.linkDomains.get(summary.domainId)?.domain ?? null,
+      campaign: campaign?.name ?? null, expiresAt: summary.expiresAt, linksDisabled: (campaign?.linksDisabledAt ?? null) !== null,
+    });
+    return {
+      id: existing.id, status: existing.status, recipients: existing.recipientsCount, encoding: existing.encoding,
+      multipart: existing.multipart === 1, ...(links === undefined ? {} : { links }),
+    };
   }
+
+  // Jedno kodowanie i jeden znacznik wieloczęściowości na całą rozsyłkę: tak działa package.aspx.
+  const forced = packageEncoding([defaultTemplate?.text, ...ownTemplates.map((t) => t?.text)], input.encoding);
+  const partsOf = (text: string, where: string): number => {
+    try {
+      return segmentText(text, measureText(text, forced), maxParts).parts;
+    } catch (e) {
+      if (e instanceof TooManyPartsError) throw new ApiError(400, 'too_many_parts', `${where}: ${e.message}`);
+      throw e;
+    }
+  };
+  let multipart = defaultTemplate !== undefined && partsOf(defaultTemplate.text, 'defaultText') > 1;
+  ownTemplates.forEach((own, index) => {
+    if (own !== undefined && partsOf(own.text, `recipients.${index}`) > 1) multipart = true;
+  });
+  const encoding = forced === 'unicode' ? 'ucs2' : 'gsm';
 
   const id = shortId('pkg');
   // Kampania powstaje wyłącznie wtedy, gdy co najmniej jeden odbiorca otrzyma krótki link.

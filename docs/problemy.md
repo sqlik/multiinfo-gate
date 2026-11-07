@@ -668,6 +668,9 @@ wskazują przyczynę. Opis bloku znajdziesz w rozdziale 3 [API dla aplikacji](ap
 | klucz ma tryb skracania „Wyłączone” | sekcja **Skracanie linków** w formularzu klucza, a w odpowiedzi API `notice` równe `disabled_by_key` | wybrać tryb „Decyduje wysyłający” albo „Zawsze” |
 | żądanie zawiera `shortenLinks: false` przy trybie „Decyduje wysyłający” | body żądania albo pole „Skracanie linków” w akcji Power Automate | usunąć pole albo ustawić wartość `true` |
 | domena linku nie należy do dozwolonych domen docelowych klucza | odpowiedź API wymienia link w `skipped` z powodem `domain_not_allowed` | dopisać domenę w polu **Dozwolone domeny docelowe** klucza |
+| adres jest dłuższy niż 2048 znaków | odpowiedź API wymienia link w `skipped` z powodem `too_long` | usunąć z adresu zbędne parametry |
+| treść zawiera więcej niż 10 linków | odpowiedź API wymienia kolejne linki w `skipped` z powodem `too_many` | ograniczyć liczbę linków albo podzielić treść na kilka SMS-ów |
+| link jest krótkim linkiem tej bramki | adres w treści zaczyna się od domeny skracacza | wpisać w treści adres docelowy zamiast krótkiego linku |
 | link nie zaczyna się od `https://` ani `http://` | treść zawiera adres w postaci `www.firma.pl/oferta` | wpisać link w treści z `https://` |
 | domena skracacza jest wyłączona albo serwer krótkich linków nie działa | odpowiedź API zawiera `notice` równe `domain_unavailable`, a panel wyświetla pasek „Serwer krótkich linków nie działa” | włączyć domenę albo usunąć przyczynę według punktu [Serwer krótkich linków nie działa](#serwer-krotkich-linkow) |
 | SMS wysłano innym kluczem | szczegóły wiadomości na ekranie **Wiadomości** podają nazwę klucza | wysłać kampanię kluczem z włączonym skracaniem |

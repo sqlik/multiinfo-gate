@@ -243,12 +243,19 @@ schematu, na przykład `www.firma.pl/oferta`, nie są skracane, ponieważ ich ro
 w zwykłym tekście jest niejednoznaczne. Link, który ma zostać skrócony, należy więc wpisać
 w treści z `https://`.
 
-Kropka, przecinek, wykrzyknik i nawias zamykający na końcu adresu nie należą do linku. W treści
-„Oferta: https://firma.pl/o?id=5.” bramka skraca więc adres bez końcowej kropki, a kropka pozostaje
-w treści po krótkim linku. Polskie znaki w ścieżce adresu należą do linku.
+Kropka, przecinek, wykrzyknik, cudzysłów i nawias zamykający bez pary na końcu adresu nie należą
+do linku. W treści „Oferta: https://firma.pl/o?id=5.” bramka skraca więc adres bez końcowej kropki,
+a kropka pozostaje w treści po krótkim linku. Znaki `<` i `>` nie należą do linku także w środku
+tekstu. Odnośnik zapisany przez program pocztowy jako `Protokół przeglądu<https://firma.pl/protokol/12>`
+zostaje więc skrócony bez znaku `>`, a znak pozostaje w treści. Polskie znaki w ścieżce adresu
+należą do linku.
 
-Bramka skraca każdy rozpoznany link do dozwolonej domeny docelowej, bez względu na jego długość.
-Skracacz służy bowiem także liczeniu otwarć, a nie tylko oszczędzaniu znaków.
+Bramka skraca każdy rozpoznany link do dozwolonej domeny docelowej, także krótki, ponieważ
+skracacz służy również liczeniu otwarć. Adres dłuższy niż 2048 znaków zostaje jednak wysłany bez
+zmian, ponieważ bramka zapisuje adres docelowy osobno dla każdego odbiorcy. W jednej treści bramka
+skraca najwyżej 10 linków, a kolejne wysyła bez zmian. Odpowiedź API wymienia takie linki
+w liście `skipped` z powodem `too_long` albo `too_many`. Krótki link z domeny skracacza tej bramki
+nie jest skracany ponownie.
 
 ## 7. Obowiązkowa lista domen docelowych {#obowiazkowa-lista-domen-docelowych}
 

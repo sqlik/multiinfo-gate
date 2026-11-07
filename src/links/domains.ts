@@ -1,6 +1,5 @@
 // Domeny skracacza: zapis, wyłączenie, usunięcie i sprawdzenie domeny (spec 4). Panel woła usługę
 // z tras „Skracacz linków”, a w 1.12 także serwer MCP.
-import { domainToASCII } from 'node:url';
 import type { PanelUser } from '../m365/service.ts';
 import { isPrivateAddress, systemResolver, type Resolver } from '../net/private-address.ts';
 import type { AuditRepo } from '../store/audit.ts';
@@ -8,6 +7,7 @@ import type { LinkDomainInput, LinkDomainsRepo } from '../store/link-domains.ts'
 import type { ShortLinksRepo } from '../store/short-links.ts';
 import { warsawStamp } from '../time/warsaw.ts';
 import type { DomainChecks } from './domain-checks.ts';
+import { normalizeDomain as validDomain } from './policy.ts';
 
 export type DomainCheckStep = 'dns' | 'connect' | 'tls' | 'response';
 /** `untrustedProxy`: udane sprawdzenie przez serwer pośredniczący, któremu bramka nie ufa (MIG_TRUSTED_PROXIES). */
@@ -31,26 +31,25 @@ export class LinkDomainError extends Error {}
 const CHECK_TIMEOUT_MS = 10_000;
 /** Odpowiedź z tokenem ma kilkadziesiąt bajtów; dłuższej treści sprawdzenie nie czyta do końca. */
 const MAX_BODY = 4096;
-const LABEL = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
 const TLS_CODE = /^(?:CERT_|ERR_TLS_|ERR_SSL_|UNABLE_TO_|DEPTH_ZERO_SELF_SIGNED_CERT$|SELF_SIGNED_CERT_IN_CHAIN$|HOSTNAME_MISMATCH$)/;
 const STEPS: readonly DomainCheckStep[] = ['dns', 'connect', 'tls', 'response'];
 
-const INVALID = 'Wpisz poprawną nazwę domeny, na przykład l.firma.pl albo firma-link.pl';
-
-/** Domena w postaci zapisu: małe litery, bez kropki na końcu, nazwy z polskimi znakami w postaci xn--. */
-export function normalizeDomain(raw: string): string {
+/**
+ * Domena w postaci zapisu: małe litery, bez kropki na końcu, nazwy z polskimi znakami w postaci xn--.
+ * `example` trafia do komunikatu błędu: domena skracacza albo, w liście domen docelowych klucza, `firma.pl`.
+ */
+export function normalizeDomain(raw: string, example: 'l.firma.pl' | 'firma.pl' = 'l.firma.pl'): string {
   const d = raw.trim();
-  if (d === '') throw new LinkDomainError('Podaj domenę skracacza, na przykład l.firma.pl');
+  if (d === '') throw new LinkDomainError(`Podaj domenę skracacza, na przykład ${example}`);
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(d) || /[/?#\\]/.test(d)) {
-    throw new LinkDomainError('Wpisz samą domenę, bez https:// i bez ścieżki, na przykład l.firma.pl');
+    throw new LinkDomainError(`Wpisz samą domenę, bez https:// i bez ścieżki, na przykład ${example}`);
   }
   if (d.includes(':')) {
-    throw new LinkDomainError('Wpisz domenę bez portu, na przykład l.firma.pl');
+    throw new LinkDomainError(`Wpisz domenę bez portu, na przykład ${example}`);
   }
-  const ascii = domainToASCII(d.replace(/\.$/, ''));
-  const labels = ascii.split('.');
-  if (ascii === '' || ascii.length > 253 || labels.length < 2 || !labels.every((l) => LABEL.test(l)) || /^\d+$/.test(labels.at(-1)!)) {
-    throw new LinkDomainError(INVALID);
+  const ascii = validDomain(d);
+  if (ascii === null) {
+    throw new LinkDomainError(`Wpisz poprawną nazwę domeny, na przykład ${example === 'l.firma.pl' ? 'l.firma.pl albo firma-link.pl' : example}`);
   }
   return ascii;
 }

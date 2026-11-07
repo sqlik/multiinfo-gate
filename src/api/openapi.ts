@@ -233,7 +233,7 @@ const BLOK_LINKOW: JsonSchema = {
     },
     skipped: {
       type: 'array',
-      description: 'Linki wysłane bez zmian, ponieważ ich domena nie należy do dozwolonych domen docelowych klucza',
+      description: 'Linki wysłane bez zmian, chociaż skracanie było włączone',
       items: {
         type: 'object',
         required: ['url', 'reason'],
@@ -241,8 +241,10 @@ const BLOK_LINKOW: JsonSchema = {
           url: { type: 'string', description: 'Adres wysłany bez zmian', example: 'https://inna-firma.pl/cennik' },
           reason: {
             type: 'string',
-            enum: ['domain_not_allowed'],
-            description: 'Powód pominięcia. Wartość domain_not_allowed oznacza domenę spoza dozwolonych domen docelowych klucza',
+            enum: ['domain_not_allowed', 'too_long', 'too_many'],
+            description: 'Powód pominięcia. Wartość domain_not_allowed oznacza domenę spoza dozwolonych domen docelowych klucza.'
+              + ' Wartość too_long oznacza adres dłuższy niż 2048 znaków.'
+              + ' Wartość too_many oznacza link, który w treści następuje po 10 skróconych linkach',
           },
         },
       },

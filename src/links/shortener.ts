@@ -21,10 +21,15 @@ const RETENTION_DAYS = 30;
 const MAX_CAMPAIGN_NAME = 100;
 /** Kolizja kodu jest skrajnie mało prawdopodobna; limit chroni przed pętlą przy wadliwym źródle losowości. */
 const CODE_ATTEMPTS = 20;
+/** Każdy odbiorca otrzymuje w bazie własną kopię adresu docelowego, dlatego dłuższy adres zostaje bez zmian. */
+export const MAX_TARGET_LENGTH = 2048;
+/** Najwięcej skracanych linków w jednej treści; kolejne zostają bez zmian. */
+export const MAX_LINKS = 10;
 
 export interface LinkRequest { shorten?: boolean; campaign?: string; domain?: string; validityDays?: number }
 export interface LinkSlot { start: number; length: number; target: string }
-export type SkippedLink = { url: string; reason: 'domain_not_allowed' };
+/** `too_long`: adres dłuższy niż 2048 znaków, `too_many`: link po dziesiątym skracanym linku w treści. */
+export type SkippedLink = { url: string; reason: 'domain_not_allowed' | 'too_long' | 'too_many' };
 export interface LinkInfo {
   domainId: number; domain: string; bare: boolean; utm: boolean; validityDays: number;
   /** null: nazwa domyślna (identyfikator rozsyłki, nazwa integracji albo nazwa klucza) nadawana przy zapisie. */
@@ -62,11 +67,18 @@ const unchanged = (text: string, notice: LinkNotice | null): PreparedText => ({ 
 /** Treść bez skracania w postaci szablonu, na przykład dla podglądu bez klucza. */
 export const plainText = (text: string): PreparedText => unchanged(text, null);
 
-/** Ustawienia klucza odczytane raz na wywołanie, a nie raz na każdą z 5000 treści rozsyłki. */
+/** Ustawienia klucza i domeny skracacza odczytane raz na wywołanie, a nie raz na każdą z 5000 treści rozsyłki. */
 export function onceSettings(deps: ShortenerDeps): ShortenerDeps {
   const cache = new Map<number, KeyLinkSettings>();
+  const domains = new Map<string, LinkDomainRow | undefined>();
   return {
-    linkDomains: deps.linkDomains,
+    linkDomains: {
+      get: (id: number) => deps.linkDomains.get(id),
+      byDomain: (domain: string) => {
+        if (!domains.has(domain)) domains.set(domain, deps.linkDomains.byDomain(domain));
+        return domains.get(domain);
+      },
+    },
     ...(deps.linksServer ? { linksServer: deps.linksServer } : {}),
     apiKeys: {
       linkSettings: (id: number) => {
@@ -125,8 +137,13 @@ export function prepareLinks(deps: ShortenerDeps, apiKeyId: number, text: string
   let last = 0;
   for (const link of findLinks(text)) {
     const host = hostOf(link.url);
-    if (host === null || !targetAllowed(host, settings.targets)) {
-      skipped.push({ url: link.url, reason: 'domain_not_allowed' });
+    // Krótki link bramki skrócony ponownie prowadziłby przez dwa przekierowania i liczył otwarcia dwa razy.
+    if (host !== null && deps.linkDomains.byDomain(host) !== undefined) continue;
+    const reason = host === null || !targetAllowed(host, settings.targets) ? 'domain_not_allowed'
+      : link.url.length > MAX_TARGET_LENGTH ? 'too_long'
+      : slots.length >= MAX_LINKS ? 'too_many' : null;
+    if (reason !== null) {
+      skipped.push({ url: link.url, reason });
       continue;
     }
     out += text.slice(last, link.start);
@@ -151,9 +168,10 @@ export function fitPrepared(p: PreparedText, maxParts: number, encoding: Encodin
   // `fitToParts` kończy przyciętą treść znakiem wielokropka (UCS-2) albo trzema kropkami (GSM-7).
   const suffix = fitted.text.endsWith('…') ? '…' : '...';
   let kept = fitted.text.length - suffix.length;
-  const cut = p.slots.find((s) => s.start < kept && kept < s.start + s.length);
+  // Link kończący się dokładnie w miejscu cięcia też wypada: wielokropek doklejony do kodu zmieniłby adres w telefonie.
+  const cut = p.slots.find((s) => s.start < kept && kept <= s.start + s.length);
   if (cut === undefined) {
-    return { prepared: { ...p, text: fitted.text, slots: p.slots.filter((s) => s.start + s.length <= kept) }, parts: fitted.parts, over: true };
+    return { prepared: { ...p, text: fitted.text, slots: p.slots.filter((s) => s.start + s.length < kept) }, parts: fitted.parts, over: true };
   }
   kept = cut.start;
   const text = `${p.text.slice(0, kept)}${suffix}`;
