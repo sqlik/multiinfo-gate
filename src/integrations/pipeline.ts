@@ -551,7 +551,14 @@ export interface ReceivedEvent {
   id: string; serviceId: string; from: string; to: string; kind: string; text?: string; hex?: string; receivedAt: string; relatedMessageId: string | null;
 }
 
-export type SmsGroupSkipReason = 'binary' | 'sender_not_allowed' | 'no_prefix' | 'empty' | 'condition' | 'no_recipients';
+export type SmsGroupSkipReason = 'binary' | 'sender_not_allowed' | 'no_prefix' | 'empty' | 'stale' | 'condition' | 'no_recipients';
+
+/**
+ * Wiadomość starsza niż ten próg (licząc od odbioru przez Multiinfo) nie trafia do grupy. Multiinfo trzyma
+ * nieodebrane SMS-y, dopóki ktoś o nie nie zapyta, więc pierwsze uruchomienie odbioru oddałoby zaległości
+ * sprzed dni i grupa rozesłałaby je na koszt konta. Dwie godziny obejmują zwykłą przerwę w pracy bramki.
+ */
+export const GROUP_MAX_AGE_MS = 2 * 3600_000;
 export type SmsGroupOutcome =
   | { kind: 'sent'; messageIds: string[]; recipients: string[]; parts: number; text: string; confirmId: string | null }
   | { kind: 'skipped'; reason: SmsGroupSkipReason }
@@ -610,6 +617,10 @@ export function runSmsGroup(deps: PipelineDeps, integration: SmsGroupIntegration
   if (sender === null) return skip('sender_not_allowed', `nadawca spoza listy: ${event.from}`);
   const match = matchPrefix(event.text, config.prefix);
   if (!match.ok) return match.reason === 'empty' ? skip('empty', 'pusta treść') : skip('no_prefix', 'bez prefiksu');
+  const received = Date.parse(event.receivedAt);
+  if (Number.isFinite(received) && now.getTime() - received > GROUP_MAX_AGE_MS) {
+    return skip('stale', 'wiadomość zaległa: Multiinfo odebrało ją ponad 2 godziny temu');
+  }
   const recipients = groupRecipients(config, event.from);
   const context = buildGroupContext(event, match.body, sender, recipients, config, integration, now);
 

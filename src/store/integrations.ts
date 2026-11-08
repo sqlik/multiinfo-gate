@@ -57,12 +57,14 @@ const OUTBOUND_LISTENER_SQL = `i.enabled = 1 AND (
             OR (i.kind = 'sms_group' AND ? = 'message.received'))`;
 
 /**
- * Warunek SQL bez parametrów: integracja `i` odbiera wiadomości przychodzące, czyli jest włączoną wychodzącą
- * na message.received albo włączoną grupą SMS. Taka integracja zapala odbiór usług swojego klucza.
+ * Warunek SQL bez parametrów: integracja `i` odbiera wiadomości z usługi `s.service_id`, czyli jest włączoną
+ * wychodzącą na message.received albo włączoną grupą SMS, której wybrana usługa (o ile jest) to ta usługa.
+ * Taka integracja zapala odbiór. Zapytanie musi mieć w zasięgu usługę klucza pod aliasem `s`. Ten sam warunek
+ * liczy odpytywanie, dostawy i kartę konta, żeby te trzy miejsca zawsze widziały tych samych odbiorców.
  */
 export const RECEIVED_LISTENER_SQL = `i.enabled = 1 AND (
             (i.kind = 'webhook_out' AND EXISTS (SELECT 1 FROM json_each(json_extract(i.config, '$.events')) e WHERE e.value = 'message.received'))
-            OR i.kind = 'sms_group')`;
+            OR (i.kind = 'sms_group' AND (i.service_id IS NULL OR i.service_id = s.service_id)))`;
 
 export class IntegrationsRepo {
   constructor(private readonly db: Database, private readonly masterKey: Buffer) {}
@@ -136,10 +138,10 @@ export class IntegrationsRepo {
     const rows = this.db.prepare(
       `SELECT DISTINCT k.id FROM api_keys k
          JOIN api_key_services s ON s.api_key_id = k.id AND s.service_id = ?
-         JOIN integrations i ON i.api_key_id = k.id AND ${OUTBOUND_LISTENER_SQL}
+         JOIN integrations i ON i.api_key_id = k.id AND ${RECEIVED_LISTENER_SQL}
         WHERE k.account_id = ? AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at > ?)
         ORDER BY k.id`,
-    ).all(serviceId, 'message.received', 'message.received', accountId, now.toISOString()) as Array<{ id: number }>;
+    ).all(serviceId, accountId, now.toISOString()) as Array<{ id: number }>;
     return rows.map((r) => r.id);
   }
 

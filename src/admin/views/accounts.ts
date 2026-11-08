@@ -495,13 +495,13 @@ function ago(iso: string, now: Date): string {
 function inboundPanel(v: AccountView, now: Date): string {
   const rows = v.inbound.map(({ serviceId, subscribers, listeners, state }) => {
     const receivers = [
-      ...subscribers.map((name) => esc(name)),
+      ...subscribers.map((name) => `${esc(name)} <span class="tag">klucz</span>`),
       ...listeners.map((i) => `<a href="/integracje/${esc(i.id)}">${esc(i.name)}</a> <span class="tag">${i.kind === 'sms_group' ? 'grupa SMS' : 'integracja'}</span>`),
     ];
     let status: string;
     if (v.row.pausedReason !== null) status = '<span class="st"><span class="dot dot-wait"></span>wstrzymany razem z kontem</span>';
     else if (state.error !== null) status = `<span class="st"><span class="dot dot-fail"></span>zatrzymany: ${esc(state.error)}</span>`;
-    else if (receivers.length === 0) status = '<span class="dim">nieaktywny (brak odbierających kluczy i integracji)</span>';
+    else if (receivers.length === 0) status = '<span class="dim">nieaktywny: żaden klucz ani integracja nie odbiera</span>';
     else {
       const polled = state.lastPollAt === null ? 'bez odpytania' : `ostatnie odpytanie ${ago(state.lastPollAt, now)}`;
       const received = state.lastReceivedAt === null ? 'bez odebranych wiadomości' : `ostatnia odebrana ${warsawStamp(state.lastReceivedAt)}`;
@@ -510,14 +510,14 @@ function inboundPanel(v: AccountView, now: Date): string {
     }
     return `<tr>
       <td class="m">${esc(serviceId)}</td>
-      <td>${receivers.length === 0 ? '<span class="dim">-</span>' : receivers.join('<br>')}</td>
+      <td>${receivers.length === 0 ? '<span class="dim">-</span>' : receivers.map((r) => `<div style="padding: 3px 0;">${r}</div>`).join('')}</td>
       <td>${status}</td>
     </tr>`;
   }).join('');
   return `<div class="panel">
     <div class="panel-h"><div class="lab">Odbiór wiadomości</div><a href="/klucze">Subskrypcje przy kluczach</a></div>
     <table>
-      <tr><th style="width: 70px;">ID usługi</th><th style="width: 260px;">Odbierają</th><th>Stan odbiornika</th></tr>
+      <tr><th style="width: 70px;">ID usługi</th><th style="width: 260px;">Klucze i integracje</th><th>Stan odbiornika</th></tr>
       ${rows}
     </table>
     <div class="hint" style="padding: 10px 16px;">Odebrane SMS-y trafiają do API Multiinfo wyłącznie wtedy, gdy administrator Polkomtel ustawi

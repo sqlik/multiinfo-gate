@@ -124,6 +124,18 @@ describe('emitIntegrations: grupa SMS', () => {
     expect(deps.integrationEvents.list(g, 5)[0]).toMatchObject({ result: 'sent', inboundId: 'in_1' });
     expect(notify).not.toHaveBeenCalled();
   });
+  it('grupa z wybraną usługą pomija SMS odebrany w innej usłudze klucza, bez wpisu w dzienniku', () => {
+    const g = integrations.insert({
+      name: 'Grupa 24138', kind: 'sms_group', apiKeyId, serviceId: '24138', orig: null, preset: 'sms-grupa', enabled: 1,
+      config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], prefix: 'pomoc' },
+      secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    emitIntegrations(deps, apiKeyId, 'message.received', { ...received, serviceId: '24902', text: 'Pomoc: inna usługa' }, NOW, { inboundId: 'in_1' });
+    expect(sentMessages()).toEqual([]);
+    expect(deps.integrationEvents.list(g, 5)).toEqual([]);
+    emitIntegrations(deps, apiKeyId, 'message.received', { ...received, text: 'Pomoc: ta usługa' }, NOW, { inboundId: 'in_1' });
+    expect(sentMessages()).toEqual([['48601000002', 'ta usługa']]);
+  });
   it('bez zależności wysyłki zapisuje błąd i powiadamia, nie rzuca', () => {
     const g = group({});
     const { group: _omit, ...bez } = deps;

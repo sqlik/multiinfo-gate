@@ -547,7 +547,7 @@ describe('karta konta - odbiór wiadomości', () => {
   it('usługa bez subskrybentów: odbiór nieaktywny', async () => {
     const res = await card();
     expect(res.body).toContain('Odbiór wiadomości');
-    expect(res.body).toContain('nieaktywny (brak odbierających kluczy i integracji)');
+    expect(res.body).toContain('nieaktywny: żaden klucz ani integracja nie odbiera');
   });
 
   it('usługa z subskrybentem: aktywny, z czasem ostatniego pytania i ostatniej odebranej', async () => {
@@ -557,7 +557,8 @@ describe('karta konta - odbiór wiadomości', () => {
     h.inboundServices.markReceived({ accountId, serviceId: '24138' }, new Date(NOW.getTime() - 3600_000));
     const res = await card();
     expect(res.body).toContain('aktywny');
-    expect(res.body).toContain('CRM');
+    expect(res.body).toContain('CRM <span class="tag">klucz</span>');
+    expect(res.body).toContain('>Klucze i integracje</th>');
     expect(res.body).toContain('ostatnie odpytanie 12 s temu');
     expect(res.body).toContain('ostatnia odebrana 2026-08-25 11:00:00');
   });
@@ -601,7 +602,7 @@ describe('karta konta - odbiór wiadomości', () => {
       config: { ...defaultOutboundConfig(), url: 'https://dyzur.example/sms', events: ['message.delivered'] }, secrets: {}, storePayloads: 0, createdAt: NOW,
     });
     const res = await card();
-    expect(res.body).toContain('nieaktywny (brak odbierających kluczy i integracji)');
+    expect(res.body).toContain('nieaktywny: żaden klucz ani integracja nie odbiera');
     expect(res.body).not.toContain('>Wyłączona</a>');
     expect(res.body).not.toContain('>Statusy</a>');
   });

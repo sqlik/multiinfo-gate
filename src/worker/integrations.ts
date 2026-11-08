@@ -103,6 +103,8 @@ export function emitIntegrations(
   const ids: number[] = [];
   for (const integration of deps.integrations.listOutboundFor(apiKeyId, event)) {
     if (integration.kind === 'sms_group') {
+      // Grupa z wybraną usługą nasłuchuje tylko jej; SMS z innej usługi klucza nie dotyczy tej grupy.
+      if (integration.serviceId !== null && payload.serviceId !== integration.serviceId) continue;
       runGroup(deps, integration as SmsGroupIntegration, payload as unknown as ReceivedEvent, now);
       continue;
     }

@@ -75,6 +75,17 @@ describe('runSmsGroup', () => {
     expect(events(g.id).map((e) => e[1])).toEqual(['brak treści tekstowej', 'pusta treść', 'bez prefiksu', 'nadawca spoza listy: 48601000009']);
     expect(events(g.id).every((e) => e[0] === 'skipped')).toBe(true);
   });
+  it('wiadomość odebrana przez Multiinfo ponad 2 godziny temu to pominięto bez rozesłania i bez potwierdzenia', () => {
+    // Zaległe SMS-y czekające w Multiinfo, na przykład po pierwszym uruchomieniu odbioru, nie mogą trafić do całej grupy.
+    const g = lists({ confirm: { enabled: true } });
+    const stale = new Date(NOW.getTime() - 2 * 3600_000 - 1000).toISOString();
+    expect(runSmsGroup(deps, g, event({ receivedAt: stale }), NOW)).toEqual({ kind: 'skipped', reason: 'stale' });
+    expect(allMessages()).toHaveLength(0);
+    expect(events(g.id)).toEqual([['skipped', 'wiadomość zaległa: Multiinfo odebrało ją ponad 2 godziny temu']]);
+    // Tuż przed progiem grupa rozsyła normalnie.
+    const fresh = new Date(NOW.getTime() - 2 * 3600_000 + 60_000).toISOString();
+    expect(runSmsGroup(deps, g, event({ receivedAt: fresh }), NOW)).toMatchObject({ kind: 'sent' });
+  });
   it('potwierdzenie: SMS w wątku do nadawcy po rozesłaniu, z liczbą odbiorców', () => {
     const g = lists({ confirm: { enabled: true } });
     const out = runSmsGroup(deps, g, event(), NOW) as Extract<SmsGroupOutcome, { kind: 'sent' }>;

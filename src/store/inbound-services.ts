@@ -18,7 +18,8 @@ export class InboundServicesRepo {
    * Odbiór zapala subskrypcja: para konto+usługa jest celem, gdy konto jest czynne
    * i niewstrzymane, usługa nadal należy do konta, a choć jeden czynny klucz z webhookiem
    * subskrybuje ją. Drugi powód pytania Multiinfo: integracja wychodząca na message.received albo grupa SMS
-   * przy czynnym kluczu z dostępem do usługi - klucz nie musi mieć adresu webhooka ani subskrypcji.
+   * (bez wybranej usługi albo z tą usługą) przy czynnym kluczu z dostępem do usługi - klucz nie musi mieć
+   * adresu webhooka ani subskrypcji.
    * Bez jednego i drugiego nie ma po co pytać.
    */
   activeTargets(now: Date): InboundTarget[] {

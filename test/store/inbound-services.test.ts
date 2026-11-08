@@ -83,6 +83,64 @@ describe('InboundServicesRepo.activeTargets', () => {
     integrations.setEnabled(id, false, NOW);
     expect(repo.activeTargets(NOW)).toEqual([]);
   });
+  it('grupa z wybraną usługą odpytuje tylko tę usługę, grupa bez usługi wszystkie usługi klucza', () => {
+    const apiKeyId = keys.insert(key({ webhookUrl: null, webhookSecret: null, inboundSubscribed: 0, serviceIds: ['24138', '24902'] }));
+    const id = integrations.insert({
+      name: 'Ekipa serwisowa', kind: 'sms_group', apiKeyId, serviceId: '24138', orig: null, preset: 'sms-grupa', enabled: 1,
+      config: defaultSmsGroupConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    expect(repo.activeTargets(NOW)).toEqual([{ accountId, serviceId: '24138' }]);
+    integrations.update(id, { name: 'Ekipa serwisowa', serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1, storePayloads: 0, config: defaultSmsGroupConfig() }, NOW);
+    expect(repo.activeTargets(NOW)).toEqual([{ accountId, serviceId: '24138' }, { accountId, serviceId: '24902' }]);
+  });
+});
+
+describe('odpytywanie, dostawy i karta konta liczą tych samych odbiorców', () => {
+  // Trzy zapytania odpowiadają na to samo pytanie: activeTargets (o co pytać Multiinfo), inboundListenerKeyIds
+  // (komu dostarczyć odebraną) i inboundListeners (co pokazać na karcie konta). Rozjazd między nimi był błędem 1.11.1.
+  const zgodne = () => {
+    const cele = repo.activeTargets(NOW).map((t) => t.serviceId);
+    for (const usluga of ['24138', '24902']) {
+      const klucze = integrations.inboundListenerKeyIds(accountId, usluga, NOW).length + keys.inboundSubscribers(accountId, usluga, NOW).length;
+      const karta = integrations.inboundListeners(accountId, usluga, NOW).length + keys.inboundSubscribers(accountId, usluga, NOW).length;
+      expect([usluga, klucze > 0, karta > 0]).toEqual([usluga, cele.includes(usluga), cele.includes(usluga)]);
+    }
+  };
+  let numer = 0;
+  const integracja = (apiKeyId: number, over: { kind: 'sms_group' | 'webhook_out'; serviceId?: string | null; enabled?: 0 | 1; events?: string[] }) => integrations.insert({
+    name: `I${++numer}`, kind: over.kind, apiKeyId, serviceId: over.serviceId ?? null, orig: null, preset: 'custom', enabled: over.enabled ?? 1,
+    config: over.kind === 'sms_group' ? defaultSmsGroupConfig() : { ...defaultOutboundConfig(), url: 'https://x.example/', ...(over.events ? { events: over.events as never } : {}) },
+    secrets: {}, storePayloads: 0, createdAt: NOW,
+  });
+  const bezOdbioru = (over: Partial<ApiKeyInput> = {}) => keys.insert(key({ webhookUrl: null, webhookSecret: null, inboundSubscribed: 0, serviceIds: ['24138', '24902'], ...over }));
+
+  it('grupa z usługą, bez usługi i wyłączona', () => {
+    const k = bezOdbioru();
+    zgodne();
+    integracja(k, { kind: 'sms_group', serviceId: '24902' });
+    zgodne();
+    integracja(k, { kind: 'sms_group', enabled: 0 });
+    zgodne();
+  });
+  it('wychodząca na odebrane i tylko na statusy', () => {
+    const k = bezOdbioru();
+    integracja(k, { kind: 'webhook_out', events: ['message.delivered'] });
+    zgodne();
+    integracja(k, { kind: 'webhook_out' });
+    zgodne();
+  });
+  it('klucz odwołany, wygasły i bez jednej z usług', () => {
+    const odwolany = bezOdbioru({ keyPrefix: 'p1' });
+    integracja(odwolany, { kind: 'sms_group' });
+    keys.revoke(odwolany);
+    zgodne();
+    const wygasly = bezOdbioru({ keyPrefix: 'p2', expiresAt: '2026-08-29T09:00:00.000Z' });
+    integracja(wygasly, { kind: 'webhook_out' });
+    zgodne();
+    const jednaUsluga = bezOdbioru({ keyPrefix: 'p3', serviceIds: ['24902'] });
+    integracja(jednaUsluga, { kind: 'sms_group', serviceId: '24138' });
+    zgodne();
+  });
 });
 
 describe('InboundServicesRepo - stan usługi', () => {
