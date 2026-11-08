@@ -516,8 +516,9 @@ aplikacja ma otrzymywać powiadomienia o doręczeniu (opis w `docs/api.md`, rozd
 Pole **Odbiera wiadomości przychodzące** włącza dla klucza odbiór SMS-ów od abonentów. Bramka
 zaczyna wtedy odpytywać Multiinfo o wiadomości z usług klucza i przekazuje każdą powiadomieniem
 `message.received` na adres webhooka. Pole wymaga adresu webhooka. Kilka kluczy z dostępem do tej
-samej usługi może odbierać naraz. Gdy ostatni odbierający klucz zostanie odwołany, wygaśnie albo
-straci zaznaczenie, bramka przestaje odpytywać o tę usługę.
+samej usługi może odbierać naraz. Odbiór uruchamiają także integracje z SMS-a nasłuchujące
+odebranych SMS-ów oraz grupy SMS. Bramka przestaje odpytywać o usługę, gdy nie odbiera jej już żaden
+klucz ani żadna integracja.
 
 Sekcja **Skracanie linków** włącza dla klucza zamianę linków w SMS-ach na krótkie linki własnej
 domeny firmy i liczenie ich otwarć. Opis sekcji znajdziesz w artykule
@@ -530,13 +531,14 @@ wklejony w przepływie nie pozwala wtedy ominąć limitu części, ochrony przed
 integracji. Lista kluczy oznacza taki klucz plakietką „tylko integracje”. Polecenie sprawdzające
 przy nowym kluczu odczytuje wtedy listę integracji zamiast wysyłać SMS.
 
-Stan odbioru widać na karcie konta w sekcji „Odbiór wiadomości”: czy jest aktywny, czas ostatniego
-odpytania i ostatniej odebranej wiadomości. Usługa zatrzymana błędem Multiinfo (na przykład
-nieaktywna) pokazuje przyczynę. Bramka ponawia odpytanie co 15 minut. Gdy administrator
+Stan odbioru przedstawia karta konta w sekcji „Odbiór wiadomości”: czy odbiór jest aktywny, czas
+ostatniego odpytania i ostatniej odebranej wiadomości. Kolumna „Klucze i integracje” wymienia klucze
+z zaznaczonym odbiorem oraz integracje, które same uruchamiają odbiór. Usługa zatrzymana błędem
+Multiinfo, na przykład nieaktywna, pokazuje przyczynę. Bramka ponawia odpytanie co 15 minut. Gdy administrator
 Polkomtel aktywuje usługę, odbiór wznawia się bez ingerencji. Zapis klucza albo tego konta w panelu
 wymusza natychmiastowe odpytanie.
 
-![Karta konta, sekcja Odbiór wiadomości: usługa z odbierającym kluczem, stan aktywny z czasem ostatniego pytania i ostatniej odebranej](obrazki/konto-odbior.png)
+![Karta konta, sekcja Odbiór wiadomości: usługę odbierają klucz, grupa SMS i integracja, stan aktywny z czasem ostatniego odpytania i ostatniej odebranej](obrazki/konto-odbior.png)
 
 Nad listą kluczy panel prosi raz o **adres, pod którym aplikacje widzą bramkę**. Przy bramce pod
 domeną (rozdział 6) jest to `https://<TWOJA-DOMENA>`. Przy kontenerze na Proxmoxie w sieci
@@ -936,7 +938,8 @@ w panelu w zakładce **Odebrane** (ekran poniżej), a aplikacja otrzyma powiadom
 i z jakim skutkiem.
 
 Jeżeli lista pozostaje pusta, sprawdź na karcie konta sekcję „Odbiór wiadomości”. Stan
-„nieaktywny” oznacza brak odbierającego klucza. Stan „zatrzymany” podaje kod błędu Multiinfo.
+„nieaktywny” oznacza, że żaden klucz ani integracja nie odbiera wiadomości z tej usługi. Stan
+„zatrzymany” podaje kod błędu Multiinfo.
 Stan „aktywny” z bieżącym czasem pytania oznacza, że bramka odpytuje, ale Multiinfo nie zwraca wiadomości.
 Wtedy wiadomości prawdopodobnie trafiają do panelu WWW Multiinfo zamiast do API.
 

@@ -1015,7 +1015,8 @@ Przycisk **Dodaj integrację** i kafelek **Do grupy** otwierają formularz od ra
 ustawienia. Formularz w trybie prostym ma pięć sekcji.
 
 1. **Podstawy.** Nazwa grupy, klucz API, a gdy klucz ma więcej niż jedną usługę, także usługa.
-   Grupa nasłuchuje SMS-ów odebranych w usłudze klucza.
+   Grupa nasłuchuje SMS-ów odebranych w tej usłudze. Włączona grupa sama uruchamia odbiór,
+   dlatego zaznaczanie odbioru przy kluczu ani podawanie adresu webhooka nie jest potrzebne.
 2. **Kto i do kogo.** Wybór trybu dwoma polami opcji. Dla osobnych list są dwa pola:
    „Numery uprawnione do pisania” i „Numery odbiorców”. Dla grupy zamkniętej jedno pole:
    „Numery członków”. W każdym polu jeden numer w wierszu. Po numerze można dopisać nazwę,
@@ -1116,12 +1117,15 @@ Powody właściwe dla grupy:
 
 | Wynik | Powód |
 |---|---|
-| pominięto | brak treści tekstowej, nadawca spoza listy, bez prefiksu, pusta treść, warunek niespełniony, brak odbiorców |
+| pominięto | brak treści tekstowej, nadawca spoza listy, bez prefiksu, pusta treść, wiadomość zaległa, warunek niespełniony, brak odbiorców |
 | limit | nadmiar ponad limit burzy, na przykład `ponad 10 w 10 min` |
 | błąd | treść ponad limit części przy „nie wysyłaj”, błąd szablonu, klucz albo konto niedostępne, nieudane potwierdzenie |
 | wysłano | liczba odbiorców, na przykład `6 odbiorców`, z odnośnikiem do pierwszej wiadomości |
 
-„Brak treści tekstowej” dotyczy SMS-a binarnego. „Brak odbiorców” pojawia się w grupie
+„Brak treści tekstowej” dotyczy SMS-a binarnego. „Wiadomość zaległa” oznacza SMS-a, którego
+Multiinfo odebrało ponad 2 godziny wcześniej. Takie wiadomości czekają w Multiinfo na przykład
+wtedy, gdy odbiór był wyłączony. Grupa ich nie rozsyła, ponieważ treść sprzed kilku godzin jest
+zwykle nieaktualna, a rozesłanie obciążyłoby konto. „Brak odbiorców” pojawia się w grupie
 zamkniętej, gdy jedyny członek pisze do siebie. Przy włączonym przechowywaniu ładunków wpis
 zawiera zdarzenie odebranej wiadomości, a odnośnik **Użyj jako próbki** wpisuje numer nadawcy
 i treść w pola próbki.

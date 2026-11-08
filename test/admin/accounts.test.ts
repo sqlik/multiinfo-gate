@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
+import { defaultOutboundConfig, defaultSmsGroupConfig } from '../../src/integrations/config.ts';
 
 // Materiał testowy powstaje przy wczytywaniu modułu, a nie w beforeAll: warunek
 // it.runIf jest sprawdzany już przy zbieraniu testów, więc flaga ustawiona
@@ -247,7 +248,7 @@ describe('POST /konta/:id/nadpisy', () => {
   it('nie pozwala ustawić wartości domyślnej spoza słownika', async () => {
     const res = await save('Firma Info\nFirma Wind', 'Inna Firma');
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('nie znajduje się na liście nadpisów');
+    expect(res.body).toContain('Wartość domyślna „Inna Firma” nie znajduje się na liście nadpisów tego konta<');
   });
 
   it('usunięcie nadpisu ze słownika kasuje go też z kluczy', async () => {
@@ -546,7 +547,7 @@ describe('karta konta - odbiór wiadomości', () => {
   it('usługa bez subskrybentów: odbiór nieaktywny', async () => {
     const res = await card();
     expect(res.body).toContain('Odbiór wiadomości');
-    expect(res.body).toContain('nieaktywny (brak subskrybujących kluczy)');
+    expect(res.body).toContain('nieaktywny: żaden klucz ani integracja nie odbiera');
   });
 
   it('usługa z subskrybentem: aktywny, z czasem ostatniego pytania i ostatniej odebranej', async () => {
@@ -556,9 +557,54 @@ describe('karta konta - odbiór wiadomości', () => {
     h.inboundServices.markReceived({ accountId, serviceId: '24138' }, new Date(NOW.getTime() - 3600_000));
     const res = await card();
     expect(res.body).toContain('aktywny');
-    expect(res.body).toContain('CRM');
+    expect(res.body).toContain('CRM <span class="tag">klucz</span>');
+    expect(res.body).toContain('>Klucze i integracje</th>');
     expect(res.body).toContain('ostatnie odpytanie 12 s temu');
     expect(res.body).toContain('ostatnia odebrana 2026-08-25 11:00:00');
+  });
+
+  it('usługa z integracją wychodzącą na odebrane: aktywny, z nazwą integracji i odnośnikiem', async () => {
+    // Klucz bez subskrypcji i bez webhooka: odbiór zapala sama integracja.
+    const apiKeyId = h.apiKeys.insert({ accountId, name: 'Dyżur IT', keyHash: 'h', keyPrefix: 'p', defaultServiceId: '24138', defaultOrig: null,
+      maxParts: 5, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'], inboundSubscribed: 0 });
+    const id = h.integrations.insert({
+      name: 'Potwierdzenia dyżuru IT', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'prosty-json', enabled: 1,
+      config: { ...defaultOutboundConfig(), url: 'https://dyzur.example/sms' }, secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    h.inboundServices.markPolled({ accountId, serviceId: '24138' }, new Date(NOW.getTime() - 12_000));
+    const res = await card();
+    expect(res.body).not.toContain('nieaktywny');
+    expect(res.body).toContain('ostatnie odpytanie');
+    expect(res.body).toContain(`<a href="/integracje/${id}">Potwierdzenia dyżuru IT</a> <span class="tag">integracja</span>`);
+  });
+
+  it('usługa z grupą SMS: aktywny, z nazwą grupy', async () => {
+    const apiKeyId = h.apiKeys.insert({ accountId, name: 'Grupy', keyHash: 'h', keyPrefix: 'p', defaultServiceId: '24138', defaultOrig: null,
+      maxParts: 5, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'], inboundSubscribed: 0 });
+    const id = h.integrations.insert({
+      name: 'Ekipa serwisowa', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1,
+      config: defaultSmsGroupConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const res = await card();
+    expect(res.body).not.toContain('nieaktywny');
+    expect(res.body).toContain(`<a href="/integracje/${id}">Ekipa serwisowa</a> <span class="tag">grupa SMS</span>`);
+  });
+
+  it('wyłączona integracja i integracja tylko na statusy nie odbierają', async () => {
+    const apiKeyId = h.apiKeys.insert({ accountId, name: 'Dyżur IT', keyHash: 'h', keyPrefix: 'p', defaultServiceId: '24138', defaultOrig: null,
+      maxParts: 5, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'], inboundSubscribed: 0 });
+    h.integrations.insert({
+      name: 'Wyłączona', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'prosty-json', enabled: 0,
+      config: { ...defaultOutboundConfig(), url: 'https://dyzur.example/sms' }, secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    h.integrations.insert({
+      name: 'Statusy', kind: 'webhook_out', apiKeyId, serviceId: null, orig: null, preset: 'prosty-json', enabled: 1,
+      config: { ...defaultOutboundConfig(), url: 'https://dyzur.example/sms', events: ['message.delivered'] }, secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const res = await card();
+    expect(res.body).toContain('nieaktywny: żaden klucz ani integracja nie odbiera');
+    expect(res.body).not.toContain('>Wyłączona</a>');
+    expect(res.body).not.toContain('>Statusy</a>');
   });
 
   it('subskrybent, ale jeszcze bez pytania: mówi to wprost', async () => {

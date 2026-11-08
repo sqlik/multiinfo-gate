@@ -35,7 +35,7 @@ export interface ReceiverDeps {
   log?: Logger;
   /** Czekanie przerywalne sygnałem; testy podstawiają natychmiastowe. */
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
-  /** Integracje wychodzące na message.received; bez obu pól odebrane idą tylko do subskrybentów. */
+  /** Integracje wychodzące na message.received i grupy SMS; bez obu pól odebrane idą tylko do subskrybentów. */
   integrations?: IntegrationsRepo;
   integrationEmit?: IntegrationEmitDeps;
   /** Powiadomienia administratora (konto wstrzymane za certyfikat). */
@@ -76,7 +76,7 @@ export type PollOutcome =
   | { kind: 'error'; error: string };
 
 export interface InboundHealth {
-  /** Usługi z choć jednym subskrybentem (cele). */
+  /** Usługi z choć jednym odbierającym kluczem albo integracją (cele). */
   services: number;
   /** Pętle działające w tej chwili. */
   listening: number;
