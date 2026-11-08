@@ -248,7 +248,7 @@ describe('POST /konta/:id/nadpisy', () => {
   it('nie pozwala ustawić wartości domyślnej spoza słownika', async () => {
     const res = await save('Firma Info\nFirma Wind', 'Inna Firma');
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('nie znajduje się na liście nadpisów');
+    expect(res.body).toContain('Wartość domyślna „Inna Firma” nie znajduje się na liście nadpisów tego konta<');
   });
 
   it('usunięcie nadpisu ze słownika kasuje go też z kluczy', async () => {

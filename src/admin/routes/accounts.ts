@@ -389,7 +389,7 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
       const defaultOrig = (request.body?.defaultOrig ?? '').trim();
       if (defaultOrig !== '' && !unikalne.includes(defaultOrig)) {
         reply.code(400);
-        return listPage(request, `Wartość domyślna „${defaultOrig}” jest nie znajduje się na liście nadpisów tego konta.`);
+        return listPage(request, `Wartość domyślna „${defaultOrig}” nie znajduje się na liście nadpisów tego konta`);
       }
 
       deps.accounts.setOrigs(view.row.id, unikalne.map((orig) => ({ orig, label: null })));
