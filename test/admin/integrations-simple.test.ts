@@ -30,6 +30,21 @@ const kuma = (over: Record<string, string> = {}) => ({
   numbers: '601 000 001\n+48 602 000 002', whenId: 'awaria', textId: 'z-komunikatem', secret: 'tajne-haslo', action: 'zapisz', ...over,
 });
 
+describe('tryb prosty: podpowiedź klucza według kierunku', () => {
+  it('integracja z SMS-a opisuje klucz jako źródło zdarzeń, a notkę ustawienia jako podpowiedź pola', async () => {
+    const res = await page('/integracje/nowa?rodzaj=webhook_out&ustawienie=prosty-json');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('<div class="hint">Integracja przekazuje zdarzenia wyłącznie z usług tego klucza</div>');
+    expect(res.body).not.toContain('SMS-y są wysyłane z konta Multiinfo tego klucza');
+    expect(res.body).toContain('<div class="field"><div class="hint" style="margin-top: 0;">Bramka wysyła pełne zdarzenie');
+  });
+  it('integracja do SMS-a zachowuje podpowiedź o koncie, usłudze i nadpisie klucza', async () => {
+    const res = await page('/integracje/nowa?rodzaj=webhook_in&ustawienie=prosty-json');
+    expect(res.body).toContain('SMS-y są wysyłane z konta Multiinfo tego klucza, z jego domyślnej usługi i domyślnego nadpisu nadawcy');
+    expect(res.body).not.toContain('Integracja przekazuje zdarzenia wyłącznie z usług tego klucza');
+  });
+});
+
 describe('tryb prosty: przychodząca', () => {
   it('formularz Uptime Kumy pokazuje listy w języku użytkownika, podgląd każdej treści i ani jednej ścieżki', async () => {
     const res = await page('/integracje/nowa?rodzaj=webhook_in&ustawienie=uptime-kuma');

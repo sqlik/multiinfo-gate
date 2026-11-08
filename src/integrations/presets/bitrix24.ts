@@ -63,7 +63,7 @@ export const bitrix24: Preset = {
         hint: 'Widoczny w adresie profilu w Bitrixie: /company/personal/user/1/ to numer 1',
         digits: true, where: 'query',
       }],
-      note: 'Każdy odebrany SMS zakłada w Bitrixie zadanie z treścią wiadomości, powiązane z kontaktem o tym numerze.',
+      note: 'Każdy odebrany SMS zakłada w Bitrixie zadanie z treścią wiadomości, powiązane z kontaktem o tym numerze',
     },
   },
   warning: 'Adres webhooka pełni rolę hasła do portalu. Nie należy wklejać go do zgłoszeń ani umieszczać na zrzutach ekranu.',

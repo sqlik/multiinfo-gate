@@ -25,7 +25,7 @@ export const freshdesk: Preset = {
       address: { label: 'Adres Freshdeska', hint: 'Adres Freshdeska z końcówką /api/v2/tickets', placeholder: 'https://firma.freshdesk.com/api/v2/tickets' },
       secrets: [{ ref: 'authorization', label: 'Klucz API Freshdeska', hint: 'We Freshdesku: awatar → Ustawienia profilu → Twój klucz API (nazwa pola we Freshdesku). Bramka zamienia go na nagłówek', transform: 'basic-x' }],
       params: [],
-      note: 'Każdy odebrany SMS zakłada zgłoszenie z numerem nadawcy jako telefonem kontaktu; agent widzi numer i treść.',
+      note: 'Każdy odebrany SMS zakłada zgłoszenie z numerem nadawcy jako telefonem kontaktu. Agent widzi numer i treść',
     },
   },
   expect: {
