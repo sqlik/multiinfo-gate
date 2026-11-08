@@ -26,7 +26,7 @@ export const freescout: Preset = {
       address: { label: 'Adres FreeScouta', hint: 'Adres FreeScouta z końcówką /api/conversations', placeholder: 'https://pomoc.firma.pl/api/conversations' },
       secrets: [{ ref: 'apiKey', label: 'Klucz API FreeScouta', hint: 'We FreeScoucie: Zarządzaj → API & Webhooks → API Keys', transform: 'raw' }],
       params: [{ key: 'mailboxId', label: 'Numer skrzynki', hint: 'Numer widoczny w adresie ustawień skrzynki we FreeScoucie, np. 1', digits: true }],
-      note: 'Każdy odebrany SMS zakłada rozmowę typu „phone” w tej skrzynce; agent widzi numer i treść.',
+      note: 'Każdy odebrany SMS zakłada rozmowę typu „phone” w tej skrzynce. Agent widzi numer i treść',
     },
   },
   expect: {

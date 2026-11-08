@@ -28,7 +28,7 @@ export const prostyJson: Preset = {
     outbound: {
       address: { label: 'Adres aplikacji', hint: 'Adres, na który bramka ma wysłać zdarzenie jako JSON żądaniem POST', placeholder: 'https://automat.firma.pl/webhook' },
       secrets: [], params: [],
-      note: 'Bramka wysyła pełne zdarzenie w formacie z dokumentacji API: event, from, to, text, receivedAt i pozostałe pola.',
+      note: 'Bramka wysyła pełne zdarzenie w formacie z dokumentacji API: event, from, to, text, receivedAt i pozostałe pola',
     },
   },
   expect: {

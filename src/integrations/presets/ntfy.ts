@@ -19,7 +19,7 @@ export const ntfy: Preset = {
     outbound: {
       address: { label: 'Adres tematu ntfy', hint: 'Serwer i nazwa tematu subskrybowanego w aplikacji ntfy na telefonie', placeholder: 'https://ntfy.sh/firma-sms' },
       secrets: [], params: [],
-      note: 'Każdy odebrany SMS przychodzi na telefon jako powiadomienie z tytułem „SMS od <numer>” i treścią SMS-a. Temat chroniony tokenem konfiguruje się w trybie zaawansowanym.',
+      note: 'Każdy odebrany SMS przychodzi na telefon jako powiadomienie z tytułem „SMS od <numer>” i treścią SMS-a. Temat chroniony tokenem konfiguruje się w trybie zaawansowanym',
     },
   },
   expect: { outboundText: 'Pomocy, nie działa' },
