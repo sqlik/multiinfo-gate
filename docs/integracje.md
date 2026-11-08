@@ -1015,7 +1015,8 @@ Przycisk **Dodaj integrację** i kafelek **Do grupy** otwierają formularz od ra
 ustawienia. Formularz w trybie prostym ma pięć sekcji.
 
 1. **Podstawy.** Nazwa grupy, klucz API, a gdy klucz ma więcej niż jedną usługę, także usługa.
-   Grupa nasłuchuje SMS-ów odebranych w usłudze klucza.
+   Grupa nasłuchuje SMS-ów odebranych w usłudze klucza. Włączona grupa sama uruchamia odbiór,
+   dlatego zaznaczanie odbioru przy kluczu nie jest potrzebne.
 2. **Kto i do kogo.** Wybór trybu dwoma polami opcji. Dla osobnych list są dwa pola:
    „Numery uprawnione do pisania” i „Numery odbiorców”. Dla grupy zamkniętej jedno pole:
    „Numery członków”. W każdym polu jeden numer w wierszu. Po numerze można dopisać nazwę,

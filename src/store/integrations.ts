@@ -56,6 +56,14 @@ const OUTBOUND_LISTENER_SQL = `i.enabled = 1 AND (
             (i.kind = 'webhook_out' AND EXISTS (SELECT 1 FROM json_each(json_extract(i.config, '$.events')) e WHERE e.value = ?))
             OR (i.kind = 'sms_group' AND ? = 'message.received'))`;
 
+/**
+ * Warunek SQL bez parametrów: integracja `i` odbiera wiadomości przychodzące, czyli jest włączoną wychodzącą
+ * na message.received albo włączoną grupą SMS. Taka integracja zapala odbiór usług swojego klucza.
+ */
+export const RECEIVED_LISTENER_SQL = `i.enabled = 1 AND (
+            (i.kind = 'webhook_out' AND EXISTS (SELECT 1 FROM json_each(json_extract(i.config, '$.events')) e WHERE e.value = 'message.received'))
+            OR i.kind = 'sms_group')`;
+
 export class IntegrationsRepo {
   constructor(private readonly db: Database, private readonly masterKey: Buffer) {}
 
@@ -133,6 +141,21 @@ export class IntegrationsRepo {
         ORDER BY k.id`,
     ).all(serviceId, 'message.received', 'message.received', accountId, now.toISOString()) as Array<{ id: number }>;
     return rows.map((r) => r.id);
+  }
+
+  /**
+   * Integracje konta, które odbierają wiadomości z usługi: włączone wychodzące na message.received i grupy SMS
+   * przy czynnym kluczu z dostępem do usługi. To ten sam powód pytania Multiinfo, który liczy odbiornik.
+   */
+  inboundListeners(accountId: number, serviceId: string, now: Date): Array<{ id: number; name: string; kind: IntegrationKind }> {
+    return this.db.prepare(
+      `SELECT DISTINCT i.id, i.name, i.kind FROM integrations i
+         JOIN api_keys k ON k.id = i.api_key_id
+         JOIN api_key_services s ON s.api_key_id = k.id AND s.service_id = ?
+        WHERE k.account_id = ? AND ${RECEIVED_LISTENER_SQL}
+          AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at > ?)
+        ORDER BY i.name`,
+    ).all(serviceId, accountId, now.toISOString()) as Array<{ id: number; name: string; kind: IntegrationKind }>;
   }
 
   setEnabled(id: number, enabled: boolean, at: Date): void {

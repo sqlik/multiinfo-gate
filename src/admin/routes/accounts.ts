@@ -54,6 +54,7 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AdminDeps, ren
       inbound: serviceIds.map((serviceId) => ({
         serviceId,
         subscribers: deps.apiKeys.inboundSubscribers(id, serviceId, at).map((k) => k.name),
+        listeners: deps.integrations.inboundListeners(id, serviceId, at),
         state: states.get(serviceId) ?? { serviceId, lastPollAt: null, lastReceivedAt: null, error: null },
       })),
     };

@@ -1,5 +1,6 @@
 import type { Database } from 'better-sqlite3';
 import { INBOUND_SUBSCRIBER_SQL } from './api-keys.ts';
+import { RECEIVED_LISTENER_SQL } from './integrations.ts';
 
 export interface InboundTarget { accountId: number; serviceId: string }
 
@@ -16,7 +17,7 @@ export class InboundServicesRepo {
   /**
    * Odbiór zapala subskrypcja: para konto+usługa jest celem, gdy konto jest czynne
    * i niewstrzymane, usługa nadal należy do konta, a choć jeden czynny klucz z webhookiem
-   * subskrybuje ją. Drugi powód pytania Multiinfo: integracja wychodząca na message.received
+   * subskrybuje ją. Drugi powód pytania Multiinfo: integracja wychodząca na message.received albo grupa SMS
    * przy czynnym kluczu z dostępem do usługi - klucz nie musi mieć adresu webhooka ani subskrypcji.
    * Bez jednego i drugiego nie ma po co pytać.
    */
@@ -37,10 +38,9 @@ export class InboundServicesRepo {
              JOIN accounts a ON a.id = s.account_id
              JOIN api_keys k ON k.account_id = s.account_id
              JOIN api_key_services ks ON ks.api_key_id = k.id AND ks.service_id = s.service_id
-             JOIN integrations i ON i.api_key_id = k.id AND i.kind = 'webhook_out' AND i.enabled = 1
+             JOIN integrations i ON i.api_key_id = k.id AND ${RECEIVED_LISTENER_SQL}
             WHERE a.active = 1 AND a.paused_reason IS NULL
               AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at > ?)
-              AND EXISTS (SELECT 1 FROM json_each(json_extract(i.config, '$.events')) e WHERE e.value = 'message.received')
          ) ORDER BY account_id, service_id`,
       )
       .all(at, at) as Array<{ account_id: number; service_id: string }>;

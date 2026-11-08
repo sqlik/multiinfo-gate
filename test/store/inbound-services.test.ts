@@ -4,7 +4,7 @@ import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo, type ApiKeyInput } from '../../src/store/api-keys.ts';
 import { InboundServicesRepo } from '../../src/store/inbound-services.ts';
 import { IntegrationsRepo } from '../../src/store/integrations.ts';
-import { defaultOutboundConfig } from '../../src/integrations/config.ts';
+import { defaultOutboundConfig, defaultSmsGroupConfig } from '../../src/integrations/config.ts';
 import { accountInput, testKey } from './helpers.ts';
 
 const NOW = new Date('2026-08-29T10:00:00Z');
@@ -72,6 +72,16 @@ describe('InboundServicesRepo.activeTargets', () => {
     integrations.update(id, { name: 'HA', serviceId: null, orig: null, preset: 'custom', enabled: 1, storePayloads: 0, config: { ...defaultOutboundConfig(), url: 'https://ha.example/x' } }, NOW);
     keys.insert(key({ keyPrefix: 'p2' }));
     expect(repo.activeTargets(NOW)).toEqual([{ accountId, serviceId: '24138' }]);
+  });
+  it('cel odbioru powstaje też z włączonej grupy SMS, bez subskrypcji i bez integracji wychodzącej', () => {
+    const apiKeyId = keys.insert(key({ webhookUrl: null, webhookSecret: null, inboundSubscribed: 0 }));
+    const id = integrations.insert({
+      name: 'Ekipa serwisowa', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1,
+      config: defaultSmsGroupConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    expect(repo.activeTargets(NOW)).toEqual([{ accountId, serviceId: '24138' }]);
+    integrations.setEnabled(id, false, NOW);
+    expect(repo.activeTargets(NOW)).toEqual([]);
   });
 });
 

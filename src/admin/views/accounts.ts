@@ -1,5 +1,6 @@
 import type { AccountRow } from '../../store/accounts.ts';
 import type { InboundServiceState } from '../../store/inbound-services.ts';
+import type { IntegrationKind } from '../../integrations/config.ts';
 import type { CertBundle } from '../../secrets/pkcs12.ts';
 import type { CertificateView } from '../../multiinfo/client.ts';
 import { warsawDay, warsawStamp } from '../../time/warsaw.ts';
@@ -10,8 +11,14 @@ export interface AccountView {
   serviceIds: string[];
   origs: string[];
   keyCount: number;
-  /** Stan odbioru per usługa: kto subskrybuje i co ostatnio robił odbiornik. */
-  inbound: Array<{ serviceId: string; subscribers: string[]; state: InboundServiceState }>;
+  /**
+   * Stan odbioru per usługa: klucze z zaznaczonym odbiorem, integracje odbierające wiadomości
+   * (wychodzące na message.received i grupy SMS) oraz to, co ostatnio robił odbiornik.
+   */
+  inbound: Array<{
+    serviceId: string; subscribers: string[]; listeners: Array<{ id: number; name: string; kind: IntegrationKind }>;
+    state: InboundServiceState;
+  }>;
 }
 
 /** Wynik sprawdzenia połączenia, gotowy do pokazania razem ze śladem żądania. */
@@ -486,11 +493,15 @@ function ago(iso: string, now: Date): string {
  * subskrybentów to stan zwykły, nie awaria.
  */
 function inboundPanel(v: AccountView, now: Date): string {
-  const rows = v.inbound.map(({ serviceId, subscribers, state }) => {
+  const rows = v.inbound.map(({ serviceId, subscribers, listeners, state }) => {
+    const receivers = [
+      ...subscribers.map((name) => esc(name)),
+      ...listeners.map((i) => `<a href="/integracje/${esc(i.id)}">${esc(i.name)}</a> <span class="tag">${i.kind === 'sms_group' ? 'grupa SMS' : 'integracja'}</span>`),
+    ];
     let status: string;
     if (v.row.pausedReason !== null) status = '<span class="st"><span class="dot dot-wait"></span>wstrzymany razem z kontem</span>';
     else if (state.error !== null) status = `<span class="st"><span class="dot dot-fail"></span>zatrzymany: ${esc(state.error)}</span>`;
-    else if (subscribers.length === 0) status = '<span class="dim">nieaktywny (brak subskrybujących kluczy)</span>';
+    else if (receivers.length === 0) status = '<span class="dim">nieaktywny (brak odbierających kluczy i integracji)</span>';
     else {
       const polled = state.lastPollAt === null ? 'bez odpytania' : `ostatnie odpytanie ${ago(state.lastPollAt, now)}`;
       const received = state.lastReceivedAt === null ? 'bez odebranych wiadomości' : `ostatnia odebrana ${warsawStamp(state.lastReceivedAt)}`;
@@ -499,14 +510,14 @@ function inboundPanel(v: AccountView, now: Date): string {
     }
     return `<tr>
       <td class="m">${esc(serviceId)}</td>
-      <td>${subscribers.length === 0 ? '<span class="dim">-</span>' : esc(subscribers.join(', '))}</td>
+      <td>${receivers.length === 0 ? '<span class="dim">-</span>' : receivers.join('<br>')}</td>
       <td>${status}</td>
     </tr>`;
   }).join('');
   return `<div class="panel">
     <div class="panel-h"><div class="lab">Odbiór wiadomości</div><a href="/klucze">Subskrypcje przy kluczach</a></div>
     <table>
-      <tr><th style="width: 70px;">ID usługi</th><th style="width: 140px;">Odbierają klucze</th><th>Stan odbiornika</th></tr>
+      <tr><th style="width: 70px;">ID usługi</th><th style="width: 260px;">Odbierają</th><th>Stan odbiornika</th></tr>
       ${rows}
     </table>
     <div class="hint" style="padding: 10px 16px;">Odebrane SMS-y trafiają do API Multiinfo wyłącznie wtedy, gdy administrator Polkomtel ustawi

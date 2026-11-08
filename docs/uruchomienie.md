@@ -531,7 +531,9 @@ integracji. Lista kluczy oznacza taki klucz plakietką „tylko integracje”. P
 przy nowym kluczu odczytuje wtedy listę integracji zamiast wysyłać SMS.
 
 Stan odbioru widać na karcie konta w sekcji „Odbiór wiadomości”: czy jest aktywny, czas ostatniego
-odpytania i ostatniej odebranej wiadomości. Usługa zatrzymana błędem Multiinfo (na przykład
+odpytania i ostatniej odebranej wiadomości. Kolumna „Odbierają” wymienia klucze z zaznaczonym odbiorem
+oraz integracje, które uruchamiają odbiór, czyli integracje z SMS-a nasłuchujące odebranych SMS-ów
+i grupy SMS. Usługa zatrzymana błędem Multiinfo (na przykład
 nieaktywna) pokazuje przyczynę. Bramka ponawia odpytanie co 15 minut. Gdy administrator
 Polkomtel aktywuje usługę, odbiór wznawia się bez ingerencji. Zapis klucza albo tego konta w panelu
 wymusza natychmiastowe odpytanie.
@@ -936,7 +938,7 @@ w panelu w zakładce **Odebrane** (ekran poniżej), a aplikacja otrzyma powiadom
 i z jakim skutkiem.
 
 Jeżeli lista pozostaje pusta, sprawdź na karcie konta sekcję „Odbiór wiadomości”. Stan
-„nieaktywny” oznacza brak odbierającego klucza. Stan „zatrzymany” podaje kod błędu Multiinfo.
+„nieaktywny” oznacza, że żaden klucz ani integracja nie odbiera wiadomości z tej usługi. Stan „zatrzymany” podaje kod błędu Multiinfo.
 Stan „aktywny” z bieżącym czasem pytania oznacza, że bramka odpytuje, ale Multiinfo nie zwraca wiadomości.
 Wtedy wiadomości prawdopodobnie trafiają do panelu WWW Multiinfo zamiast do API.
 
