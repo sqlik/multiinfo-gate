@@ -32,7 +32,8 @@ export function modeSwitch(ctx: FormContext, mode: 'prosty' | 'zaawansowany'): s
   </div>`;
 }
 
-function keyField(ctx: FormContext, sv: SimpleValues): string {
+/** Podpowiedź pod kluczem zależy od kierunku: do SMS-a klucz wysyła, z SMS-a klucz wyznacza usługi, z których płyną zdarzenia. */
+function keyField(ctx: FormContext, sv: SimpleValues, hint: string): string {
   if (ctx.row) {
     const key = ctx.keys.find((k) => k.id === ctx.row!.apiKeyId);
     return `<div class="field"><label>Konto i klucz API</label><div class="box">${esc(key ? `${key.name} · ${key.accountName}` : `klucz ${ctx.row.apiKeyId}`)}</div></div>`;
@@ -42,9 +43,12 @@ function keyField(ctx: FormContext, sv: SimpleValues): string {
       <select id="apiKeyId" name="apiKeyId">
         ${ctx.keys.map((k) => `<option value="${esc(k.id)}"${sv.apiKeyId === String(k.id) ? ' selected' : ''}>${esc(k.name)} · ${esc(k.accountName)}</option>`).join('')}
       </select>
-      <div class="hint">SMS-y są wysyłane z konta Multiinfo tego klucza, z jego domyślnej usługi i domyślnego nadpisu nadawcy</div>
+      <div class="hint">${esc(hint)}</div>
     </div>`;
 }
+
+const KEY_HINT_INBOUND = 'SMS-y są wysyłane z konta Multiinfo tego klucza, z jego domyślnej usługi i domyślnego nadpisu nadawcy';
+const KEY_HINT_OUTBOUND = 'Integracja przekazuje zdarzenia wyłącznie z usług tego klucza';
 
 function secretField(ctx: FormContext, label: string, where: string): string {
   const saved = ctx.secretNames.length > 0;
@@ -94,7 +98,7 @@ function inboundSections(ctx: FormContext, sv: SimpleValues, opts: SimplePageOpt
     : secretField(ctx, simple.auth.label, simple.auth.where);
   return `<details open><summary>1. Nazwa i konto</summary>
       <div class="field"><label for="name">Nazwa integracji</label><input id="name" name="name" value="${esc(sv.name)}" required></div>
-      ${keyField(ctx, sv)}
+      ${keyField(ctx, sv, KEY_HINT_INBOUND)}
       ${ctx.row ? `<div class="field"><label class="choice"><input type="checkbox" name="enabled" value="1"${sv.enabled ? ' checked' : ''}> Włączona</label></div>` : '<input type="hidden" name="enabled" value="1">'}
     </details>
     <details open><summary>2. Kto otrzyma SMS</summary>${numbers}</details>
@@ -126,9 +130,9 @@ function outboundSections(ctx: FormContext, sv: SimpleValues): string {
     </div>`).join('');
   return `<details open><summary>1. Nazwa i konto</summary>
       <div class="field"><label for="name">Nazwa integracji</label><input id="name" name="name" value="${esc(sv.name)}" required></div>
-      ${keyField(ctx, sv)}
+      ${keyField(ctx, sv, KEY_HINT_OUTBOUND)}
       ${ctx.row ? `<div class="field"><label class="choice"><input type="checkbox" name="enabled" value="1"${sv.enabled ? ' checked' : ''}> Włączona</label></div>` : '<input type="hidden" name="enabled" value="1">'}
-      <div class="hint">${esc(simple.note)}</div>
+      <div class="field"><div class="hint" style="margin-top: 0;">${esc(simple.note)}</div></div>
     </details>
     <details open><summary>2. Gdzie wysyłać</summary>
       <div class="field">
