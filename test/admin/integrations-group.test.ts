@@ -118,6 +118,30 @@ describe('formularz SMS do grupy', () => {
     const edit = (await get(`/integracje/${row.id}/edytuj`)).body;
     expect(edit).toContain('48601000002 Marek Kowalski\n48601000003');
   });
+  it('grupa z odbiorcami zapisanymi jako same numery: szczegóły, edycja i ponowny zapis z nazwami', async () => {
+    await create();
+    const row = groupRow();
+    const legacy = { ...row.config, recipients: ['48601000002', '48601000003'] };
+    h.db.prepare('UPDATE integrations SET config = ? WHERE id = ?').run(JSON.stringify(legacy), row.id);
+    const detail = (await get(`/integracje/${row.id}`)).body;
+    expect(detail).toContain('48601000002, 48601000003');
+    const edit = (await get(`/integracje/${row.id}/edytuj`)).body;
+    expect(edit).toContain('48601000002\n48601000003');
+    const saved = await post(`/integracje/${row.id}/edytuj`, formBody({ recipients: '48601000002 Marek Kowalski\n48601000003' }));
+    expect(saved.statusCode).toBe(302);
+    const raw = JSON.parse((h.db.prepare('SELECT config FROM integrations WHERE id = ?').get(row.id) as { config: string }).config);
+    expect(raw.recipients).toEqual([{ phone: '48601000002', name: 'Marek Kowalski' }, { phone: '48601000003', name: '' }]);
+  });
+  it('nazwy odbiorców są escapowane w szczegółach i w polu edycji', async () => {
+    await create({ recipients: '601000002 Marek<script>alert(1)</script>' });
+    const row = groupRow();
+    expect(row.config).toMatchObject({ recipients: [{ phone: '48601000002', name: 'Marek<script>alert(1)</script>' }] });
+    for (const url of [`/integracje/${row.id}`, `/integracje/${row.id}/edytuj`]) {
+      const body = (await get(url)).body;
+      expect(body).not.toContain('<script>alert(1)');
+      expect(body).toContain('Marek&lt;script&gt;alert(1)&lt;/script&gt;');
+    }
+  });
   it('szczegół grupy nie podaje identyfikatora dla API ani konektora: grupy działają tylko przy SMS-ie od uprawnionego numeru', async () => {
     await create();
     const row = groupRow();

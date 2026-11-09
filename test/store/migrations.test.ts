@@ -20,7 +20,7 @@ describe('migracja 006', () => {
     expect(cols('messages')).toContain('integration_id');
     expect(cols('inbound_messages')).toEqual(expect.arrayContaining(['external_ref', 'external_integration_id']));
     expect(cols('webhook_deliveries')).toEqual(expect.arrayContaining(['integration_id', 'method', 'headers_enc', 'response_ref']));
-    expect(db.pragma('user_version', { simple: true })).toBe(12);
+    expect(db.pragma('user_version', { simple: true })).toBe(13);
   });
 });
 
@@ -88,7 +88,7 @@ describe('migracja 010 na bazie 1.8.7 z danymi', () => {
     old.close();
 
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(12);
+    expect(db.pragma('user_version', { simple: true })).toBe(13);
     expect(db.prepare('SELECT id, integration_id, mail_from, requested_by FROM messages').all())
       .toEqual([{ id: 'msg_1', integration_id: integrationId, mail_from: 'dyspozytor@firma.pl', requested_by: null }]);
     expect(db.prepare('SELECT id, integration_id, requested_by, idempotency_key FROM packages').all())
@@ -113,7 +113,7 @@ describe('migracja 011', () => {
   const cols = (db: ReturnType<typeof openDatabase>, t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((c) => c.name);
   it('zakłada konta Microsoft 365 i ustawienia kanału SMS, dokłada kolumny sposobu logowania SMTP, SMS w regułach i kolejce, wiadomości systemowe', () => {
     const db = openDatabase(':memory:');
-    expect(db.pragma('user_version', { simple: true })).toBe(12);
+    expect(db.pragma('user_version', { simple: true })).toBe(13);
     expect(cols(db, 'm365_accounts')).toEqual(expect.arrayContaining([
       'id', 'name', 'tenant', 'client_id', 'redirect_uri', 'address', 'refresh_enc', 'state', 'error_code', 'error_message',
       'error_since', 'notified_at', 'connected_at', 'connected_by', 'last_refresh_at', 'created_at', 'updated_at',
@@ -157,7 +157,7 @@ describe('migracja 011 na bazie 1.9.0 z danymi', () => {
     old.close();
 
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(12);
+    expect(db.pragma('user_version', { simple: true })).toBe(13);
     const notifications = new NotificationsRepo(db, randomBytes(32));
     expect(notifications.smtp()).toMatchObject({ host: 'smtp.firma.pl', authMode: 'password', m365AccountId: null });
     expect(db.prepare('SELECT config FROM integrations').get()).toEqual({ config });
@@ -200,7 +200,7 @@ describe('migracja 012 na bazie 1.10.0 z danymi', () => {
     old.close();
 
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(12);
+    expect(db.pragma('user_version', { simple: true })).toBe(13);
     const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>).map((r) => r.name);
     expect(tables).toEqual(expect.arrayContaining([
       'link_domains', 'api_key_link_domains', 'api_key_link_targets', 'campaigns', 'campaign_hours', 'campaign_targets', 'short_links',
@@ -232,5 +232,47 @@ describe('migracja 012 na bazie 1.10.0 z danymi', () => {
     const indexed = (db.prepare('PRAGMA index_list(short_links)').all() as Array<{ name: string }>)
       .map((i) => (db.prepare(`PRAGMA index_info(${i.name})`).all() as Array<{ name: string }>).map((c) => c.name).join(','));
     expect(indexed).toEqual(expect.arrayContaining(['campaign_id,recipient_key', 'message_id', 'package_id,seq', 'purge_after']));
+  });
+});
+
+const TWELVE = [...ELEVEN, '012-skracacz.sql'];
+
+describe('migracja 013 na bazie 1.11.3 z grupami', () => {
+  let root: string;
+  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'mig-013-')); });
+  afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+
+  it('odbiorcy osobnych list przechodzą na numer z nazwą w tej samej kolejności, reszta konfiguracji i inne integracje bez zmian, a 1.11.3 odmawia startu', () => {
+    const path = join(root, 'gate.sqlite');
+    const old = openDatabaseRaw(path);
+    applyMigrations(old, { migrations: TWELVE });
+    expect(old.pragma('user_version', { simple: true })).toBe(12);
+    const accountId = new AccountsRepo(old, randomBytes(32)).insert(accountInput());
+    old.prepare(`INSERT INTO api_keys (account_id, name, key_hash, key_prefix, max_parts, rate_per_min, created_at) VALUES (?, 'k', 'h', 'p', 3, 60, '2026-01-01')`).run(accountId);
+    const apiKeyId = (old.prepare('SELECT id FROM api_keys').get() as { id: number }).id;
+    const insert = old.prepare(`INSERT INTO integrations (name, kind, api_key_id, preset, config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, '2026-01-01', '2026-01-02')`);
+    const lists = { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: 'Dyspozytor' }], recipients: ['48601000013', '48601000011', '48601000012'], prefix: 'serwis' };
+    const closed = { ...defaultSmsGroupConfig(), mode: 'closed', members: [{ phone: '48601000001', name: 'Anna Nowak' }, { phone: '48601000002', name: '' }] };
+    const mail = JSON.stringify(defaultMailInConfig());
+    insert.run('Ekipa serwisowa', 'sms_group', apiKeyId, 'sms-grupa', JSON.stringify(lists));
+    insert.run('Dyżur IT', 'sms_group', apiKeyId, 'sms-grupa', JSON.stringify(closed));
+    insert.run('Alarmy', 'mail_in', apiKeyId, 'imap', mail);
+    old.close();
+
+    const db = openDatabase(path);
+    expect(db.pragma('user_version', { simple: true })).toBe(13);
+    const rows = db.prepare('SELECT name, config, updated_at FROM integrations ORDER BY id').all() as Array<{ name: string; config: string; updated_at: string }>;
+    expect(JSON.parse(rows[0]!.config)).toEqual({ ...lists, recipients: [
+      { phone: '48601000013', name: '' }, { phone: '48601000011', name: '' }, { phone: '48601000012', name: '' },
+    ] });
+    expect(JSON.parse(rows[1]!.config)).toEqual(closed);
+    expect(rows[2]!.config).toBe(mail);
+    expect(rows.map((r) => r.updated_at)).toEqual(['2026-01-02', '2026-01-02', '2026-01-02']);
+    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+    db.close();
+
+    const before = readFileSync(path);
+    expect(() => openDatabase(path, { migrations: TWELVE })).toThrow(NewerDatabaseError);
+    expect(readFileSync(path).equals(before)).toBe(true);
   });
 });

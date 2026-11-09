@@ -165,7 +165,7 @@ export const GROUP_LIMITS = { senders: 100, recipients: 500, members: 500, prefi
 
 /** Numer znormalizowany jak odbiorcy webhooków: same cyfry z kodem kraju. */
 const groupPhone = z.string().regex(/^\d{11,15}$/, 'numer nieznormalizowany');
-/** Pozycja listy nadawców albo członków: numer i opcjonalna nazwa do szablonu treści. */
+/** Pozycja listy nadawców, odbiorców albo członków: numer i opcjonalna nazwa do treści albo do rozpoznania w panelu. */
 export const groupMemberSchema = z.object({ phone: groupPhone, name: z.string().max(GROUP_LIMITS.name).default('') });
 export type GroupMember = z.infer<typeof groupMemberSchema>;
 /** Odbiorca osobnych list: numer z nazwą jak nadawca. Grupy zapisane przed 1.11.4 trzymają same numery i wczytują się bez nazw. */
