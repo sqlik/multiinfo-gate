@@ -636,6 +636,12 @@ przełącznika osoba znająca adres z listy może go podrobić w nagłówku `Fro
 zalecany u dostawców publicznych: Gmail, home.pl, OVH. Serwery wewnętrzne zwykle nie dodają
 tych nagłówków i wówczas każda wiadomość zostanie odrzucona. Domyślnie wyłączony.
 
+Niektórzy dostawcy nie sprawdzają SPF ani DKIM w poczcie przesyłanej między skrzynkami na tym
+samym koncie. Purelymail dopisuje wtedy wyłącznie wynik logowania `auth=pass`. Wiadomość wysłana
+na przykład z `biuro@firma.pl` do `alarmy@firma.pl` jest w takim przypadku pomijana z powodem
+„brak potwierdzenia SPF/DKIM od serwera”. Przed włączeniem przełącznika warto wysłać wiadomość
+próbną od każdego nadawcy z listy i sprawdzić wpis w dzienniku.
+
 W skrzynce Microsoft 365 przełącznik jest domyślnie włączony i uwzględnia pocztę wewnętrzną.
 Exchange Online nie dopisuje wyniku SPF ani DKIM do wiadomości wysłanej wewnątrz organizacji,
 na przykład przez pracownika z Outlooka. Taką wiadomość Exchange oznacza jako wewnętrzną
