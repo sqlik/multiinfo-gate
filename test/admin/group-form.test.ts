@@ -10,7 +10,7 @@ const base = { name: 'Ekipa serwisowa', apiKeyId: '1', serviceId: '', orig: '', 
 describe('groupFormToConfig', () => {
   it('tryb osobnych list: normalizacja, powtórzenia, prefiks zapisany jak wpisano', () => {
     const out = groupFormToConfig(groupFormValues(base), '48', engine);
-    expect(out).toMatchObject({ ok: true, config: { mode: 'lists', senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002', '48601000003'], members: [], prefix: 'Serwis', text: { mode: 'body' }, confirm: { enabled: false }, maxParts: 1, overflow: 'truncate' } });
+    expect(out).toMatchObject({ ok: true, config: { mode: 'lists', senders: [{ phone: '48601000001', name: 'Ania' }], recipients: [{ phone: '48601000002', name: '' }, { phone: '48601000003', name: '' }], members: [], prefix: 'Serwis', text: { mode: 'body' }, confirm: { enabled: false }, maxParts: 1, overflow: 'truncate' } });
   });
   it.each([
     [{ senders: '' }, 'Podaj co najmniej jeden numer uprawniony do pisania.'],
@@ -28,6 +28,17 @@ describe('groupFormToConfig', () => {
     [{ maxParts: '12' }, 'Limit części: podaj liczbę od 1 do 9.'],
     [{ name: '' }, 'Podaj nazwę integracji.'],
   ])('błąd %o', (over, error) => expect(groupFormToConfig(groupFormValues({ ...base, ...over }), '48', engine)).toEqual({ ok: false, error }));
+  it('osobne listy: nazwy odbiorców zapisują się i wracają do edycji', () => {
+    const out = groupFormToConfig(groupFormValues({ ...base, recipients: '601 000 011 Marek Kowalski\n601000012\n601 000 013 Jan Wiśniewski' }), '48', engine);
+    expect(out).toMatchObject({ ok: true, config: { recipients: [{ phone: '48601000011', name: 'Marek Kowalski' }, { phone: '48601000012', name: '' }, { phone: '48601000013', name: 'Jan Wiśniewski' }] } });
+    if (!out.ok) return;
+    const { senders, recipients } = groupConfigToValues(out.config, base as never);
+    expect(senders).toBe('48601000001 Ania');
+    expect(recipients).toBe('48601000011 Marek Kowalski\n48601000012\n48601000013 Jan Wiśniewski');
+  });
+  it('osobne listy: nazwa odbiorcy dłuższa niż 40 znaków zatrzymuje zapis', () => {
+    expect(groupFormToConfig(groupFormValues({ ...base, recipients: `601000011 ${'x'.repeat(41)}` }), '48', engine)).toEqual({ ok: false, error: 'Nazwa przy numerze 48601000011 ma więcej niż 40 znaków.' });
+  });
   it('grupa zamknięta: członkowie, listy trybu lists puste; potwierdzenie z pola wyboru', () => {
     const out = groupFormToConfig(groupFormValues({ ...base, mode: 'closed', members: '601000001 Ania\n601000002 Basia', confirmEnabled: 'on' }), '48', engine);
     expect(out).toMatchObject({ ok: true, config: { mode: 'closed', members: [{ phone: '48601000001', name: 'Ania' }, { phone: '48601000002', name: 'Basia' }], senders: [], recipients: [], confirm: { enabled: true } } });

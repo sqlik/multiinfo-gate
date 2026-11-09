@@ -59,7 +59,7 @@ export function groupConfigToValues(config: SmsGroupConfig, base: GroupFormBase)
     conditionMode: config.condition.mode,
     rules: config.condition.mode === 'builder' ? config.condition.rules.map((r) => ({ path: r.path, op: r.op, value: r.value })) : [],
     conditionExpr: config.condition.mode === 'liquid' ? config.condition.expr : '',
-    mode: config.mode, senders: memberLines(config.senders), recipients: config.recipients.join('\n'), members: memberLines(config.members),
+    mode: config.mode, senders: memberLines(config.senders), recipients: memberLines(config.recipients), members: memberLines(config.members),
     prefix: config.prefix,
     textMode: config.text.mode, textTemplate: config.text.mode === 'liquid' ? config.text.template : '',
     confirmEnabled: config.confirm.enabled,
@@ -87,7 +87,7 @@ export function groupFormToConfig(v: GroupFormValues, countryCode: string, engin
   if (typeof common === 'string') return fail(common);
 
   let senders: SmsGroupConfig['senders'] = [];
-  let recipients: string[] = [];
+  let recipients: SmsGroupConfig['recipients'] = [];
   let members: SmsGroupConfig['members'] = [];
   if (v.mode === 'lists') {
     const parsedSenders = parseMemberLines(v.senders, countryCode);
@@ -99,7 +99,7 @@ export function groupFormToConfig(v: GroupFormValues, countryCode: string, engin
     if (parsedRecipients.members.length === 0) return fail('Podaj co najmniej jeden numer odbiorcy.');
     if (parsedRecipients.members.length > GROUP_LIMITS.recipients) return fail(`Numery odbiorców: najwyżej ${GROUP_LIMITS.recipients}.`);
     senders = parsedSenders.members;
-    recipients = parsedRecipients.members.map((m) => m.phone);
+    recipients = parsedRecipients.members;
   } else {
     const parsedMembers = parseMemberLines(v.members, countryCode);
     if (!parsedMembers.ok) return fail(parsedMembers.error);

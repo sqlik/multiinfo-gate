@@ -52,7 +52,7 @@ describe('formularz SMS do grupy', () => {
     const row = groupRow();
     expect(res.headers.location).toBe(`/integracje/${row.id}`);
     expect(row).toMatchObject({ name: 'Ekipa serwisowa', preset: 'sms-grupa', enabled: 1, apiKeyId });
-    expect(row.config).toMatchObject({ mode: 'lists', senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002', '48601000003'], members: [], prefix: 'serwis', text: { mode: 'body' }, confirm: { enabled: false } });
+    expect(row.config).toMatchObject({ mode: 'lists', senders: [{ phone: '48601000001', name: 'Ania' }], recipients: [{ phone: '48601000002', name: '' }, { phone: '48601000003', name: '' }], members: [], prefix: 'serwis', text: { mode: 'body' }, confirm: { enabled: false } });
     expect(h.refreshed.at(-1)).toEqual({ retryAccount: h.apiKeys.get(apiKeyId)!.accountId });
     expect(h.audit.list(5, 0)[0]).toMatchObject({ action: 'integracja.utworzenie', target: `integracja:${row.id}` });
     const detail = (await get(`/integracje/${row.id}`)).body;
@@ -109,6 +109,15 @@ describe('formularz SMS do grupy', () => {
     expect(closedDetail).toContain('grupa zamknięta: 2 członków');
     expect(closedDetail).toContain('Grupa Zespół zapisana.');
   });
+  it('osobne listy: nazwy odbiorców w zapisie, szczegółach i edycji', async () => {
+    await create({ recipients: '601 000 002 Marek Kowalski\n601000003' });
+    const row = groupRow();
+    expect(row.config).toMatchObject({ recipients: [{ phone: '48601000002', name: 'Marek Kowalski' }, { phone: '48601000003', name: '' }] });
+    const detail = (await get(`/integracje/${row.id}`)).body;
+    expect(detail).toContain('Marek Kowalski (48601000002), 48601000003');
+    const edit = (await get(`/integracje/${row.id}/edytuj`)).body;
+    expect(edit).toContain('48601000002 Marek Kowalski\n48601000003');
+  });
   it('szczegół grupy nie podaje identyfikatora dla API ani konektora: grupy działają tylko przy SMS-ie od uprawnionego numeru', async () => {
     await create();
     const row = groupRow();
@@ -121,14 +130,14 @@ describe('formularz SMS do grupy', () => {
   it('edycja grupy z Liquidem otwiera się zaawansowana z wyjaśnieniem; odrzucanie nadmiaru zostaje w prostym', async () => {
     const id = h.integrations.insert({
       name: 'Kierownicy', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1,
-      config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], overflow: 'reject', text: { mode: 'liquid', template: '{{ body }}' } }, secrets: {}, storePayloads: 0, createdAt: NOW,
+      config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: [{ phone: '48601000002', name: '' }], overflow: 'reject', text: { mode: 'liquid', template: '{{ body }}' } }, secrets: {}, storePayloads: 0, createdAt: NOW,
     });
     const edit = (await get(`/integracje/${id}/edytuj`)).body;
     expect(edit).toContain('otwiera się w trybie zaawansowanym');
     expect(edit).toContain('Szablon Liquid');
     const plain = h.integrations.insert({
       name: 'Prosta', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1,
-      config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], overflow: 'reject', maxParts: 3 }, secrets: {}, storePayloads: 0, createdAt: NOW,
+      config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: [{ phone: '48601000002', name: '' }], overflow: 'reject', maxParts: 3 }, secrets: {}, storePayloads: 0, createdAt: NOW,
     });
     const simple = (await get(`/integracje/${plain}/edytuj`)).body;
     expect(simple).not.toContain('otwiera się w trybie zaawansowanym');

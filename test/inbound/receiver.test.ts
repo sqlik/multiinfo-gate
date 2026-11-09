@@ -178,7 +178,7 @@ describe('Receiver.pollOnce', () => {
     const integrations = new IntegrationsRepo(db, mk);
     const groupId = integrations.insert({
       name: 'Grupa', kind: 'sms_group', apiKeyId: keyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1,
-      config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], confirm: { enabled: true } },
+      config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: [{ phone: '48601000002', name: '' }], confirm: { enabled: true } },
       secrets: {}, storePayloads: 0, createdAt: NOW,
     });
     deps.integrations = integrations;

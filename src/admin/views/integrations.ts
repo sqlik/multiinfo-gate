@@ -925,7 +925,7 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
     rows.push(kvRow('Prefiks', cfg.prefix === '' ? '<span class="dim">bez prefiksu: każdy SMS od uprawnionego numeru</span>' : `<span class="m">${esc(cfg.prefix)}</span>`));
     if (cfg.mode === 'lists') {
       rows.push(kvRow('Nadawcy', memberWords(cfg.senders), true));
-      rows.push(kvRow('Odbiorcy', memberWords(cfg.recipients.map((phone) => ({ phone, name: '' }))), true));
+      rows.push(kvRow('Odbiorcy', memberWords(cfg.recipients), true));
     } else {
       rows.push(kvRow('Członkowie', memberWords(cfg.members), true));
     }
