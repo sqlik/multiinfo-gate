@@ -1,6 +1,7 @@
 import { GROUP_LIMITS, PA_RECIPIENT_LIMIT_MAX, parseConfig, type PowerAutomateConfig } from '../integrations/config.ts';
 import { memberLines, parseMemberLines } from '../integrations/group/members.ts';
 import { integrationNameError } from './integration-form.ts';
+import { validationMessage } from '../zod.ts';
 
 type Body = Record<string, string | string[] | undefined>;
 
@@ -74,6 +75,6 @@ export function paFormToConfig(v: PaFormValues, countryCode: string): { ok: true
     });
     return { ok: true, config };
   } catch (e) {
-    return fail(`Konfiguracja nie przeszła sprawdzenia: ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`);
+    return fail(`Konfiguracja nie przeszła sprawdzenia: ${validationMessage(e)}`);
   }
 }

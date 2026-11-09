@@ -61,3 +61,12 @@ export function polishMessage(issue: Issue): string | undefined {
 z.config({ customError: (issue) => polishMessage(issue as Issue) });
 
 export { z };
+
+/**
+ * Zdanie błędu walidacji do panelu. Komunikat `ZodError` jest tekstem JSON z listą problemów, dlatego
+ * formularz pokazuje zdanie pierwszego problemu, a nie pierwszy wiersz tego tekstu.
+ */
+export function validationMessage(e: unknown): string {
+  if (e instanceof z.ZodError) return e.issues[0]?.message ?? 'nieprawidłowa konfiguracja';
+  return e instanceof Error ? e.message.split('\n')[0]! : String(e);
+}

@@ -4,6 +4,7 @@ import { M365_IMAP } from '../m365/oauth.ts';
 import type { TemplateEngine } from '../integrations/templates.ts';
 import { commonFromValues } from './integration-form.ts';
 import type { RuleValues } from './views/integrations.ts';
+import { validationMessage } from '../zod.ts';
 
 type Body = Record<string, string | string[] | undefined>;
 
@@ -261,7 +262,7 @@ export function mailFormToConfig(v: MailFormValues, hasPassword: boolean, engine
   try {
     config = parseConfig('mail_in', config);
   } catch (e) {
-    return fail(`Konfiguracja nie przeszła sprawdzenia: ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`);
+    return fail(`Konfiguracja nie przeszła sprawdzenia: ${validationMessage(e)}`);
   }
   return { ok: true, config, password: v.authMode === 'password' && v.password !== '' ? v.password : null };
 }
