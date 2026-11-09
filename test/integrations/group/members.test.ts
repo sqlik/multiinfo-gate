@@ -43,7 +43,7 @@ describe('parseMemberLines', () => {
 
 describe('groupSender i groupRecipients', () => {
   it('w obu trybach; grupa zamknięta bez nadawcy, jedyny członek bez odbiorców', () => {
-    const lists = { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002', '48601000003', '48601000002'] };
+    const lists = { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: 'Ania' }], recipients: [{ phone: '48601000002', name: 'Marek' }, { phone: '48601000003', name: '' }, { phone: '48601000002', name: '' }] };
     expect(groupSender(lists, '48601000001')).toEqual({ phone: '48601000001', name: 'Ania' });
     expect(groupSender(lists, '48601000002')).toBeNull();
     expect(groupRecipients(lists, '48601000001')).toEqual(['48601000002', '48601000003']);
@@ -54,7 +54,7 @@ describe('groupSender i groupRecipients', () => {
     expect(groupSender(closed, '48601000009')).toBeNull();
   });
   it('tryb lists nie czyta członków, a closed nie czyta nadawców', () => {
-    const mixed = { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], members: [{ phone: '48601000005', name: '' }, { phone: '48601000006', name: '' }] };
+    const mixed = { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: [{ phone: '48601000002', name: '' }], members: [{ phone: '48601000005', name: '' }, { phone: '48601000006', name: '' }] };
     expect(groupSender(mixed, '48601000005')).toBeNull();
     expect(groupSender({ ...mixed, mode: 'closed' }, '48601000001')).toBeNull();
     expect(groupRecipients({ ...mixed, mode: 'closed' }, '48601000005')).toEqual(['48601000006']);

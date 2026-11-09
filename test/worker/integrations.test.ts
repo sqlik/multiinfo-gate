@@ -42,7 +42,7 @@ beforeEach(() => {
     group: { accounts, apiKeys, messages: new MessagesRepo(db), events: new MessageEventsRepo(db), jobs, inbound },
   };
 });
-const group = (config: Partial<SmsGroupConfig>, name = 'Grupa') => integrations.insert({ name, kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1, config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], prefix: 'pomoc', ...config }, secrets: {}, storePayloads: 0, createdAt: NOW });
+const group = (config: Partial<SmsGroupConfig>, name = 'Grupa') => integrations.insert({ name, kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa', enabled: 1, config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: [{ phone: '48601000002', name: '' }], prefix: 'pomoc', ...config }, secrets: {}, storePayloads: 0, createdAt: NOW });
 const sentMessages = () => deps.group!.messages.list({ limit: 10, offset: 0 }).map((m) => [m.dest, m.body]);
 
 const make = (config: Partial<OutboundConfig>, secrets: Record<string, string> = {}, name = 'HA') => integrations.insert({
@@ -127,7 +127,7 @@ describe('emitIntegrations: grupa SMS', () => {
   it('grupa z wybraną usługą pomija SMS odebrany w innej usłudze klucza, bez wpisu w dzienniku', () => {
     const g = integrations.insert({
       name: 'Grupa 24138', kind: 'sms_group', apiKeyId, serviceId: '24138', orig: null, preset: 'sms-grupa', enabled: 1,
-      config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], prefix: 'pomoc' },
+      config: { ...defaultSmsGroupConfig(), senders: [{ phone: '48601000001', name: '' }], recipients: [{ phone: '48601000002', name: '' }], prefix: 'pomoc' },
       secrets: {}, storePayloads: 0, createdAt: NOW,
     });
     emitIntegrations(deps, apiKeyId, 'message.received', { ...received, serviceId: '24902', text: 'Pomoc: inna usługa' }, NOW, { inboundId: 'in_1' });

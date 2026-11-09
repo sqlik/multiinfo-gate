@@ -49,7 +49,7 @@ const make = (config: Partial<SmsGroupConfig> & { name?: string }, storePayloads
   });
   return integrations.get(id) as SmsGroupIntegration;
 };
-const lists = (over: Partial<SmsGroupConfig> & { name?: string } = {}) => make({ senders: [{ phone: '48601000001', name: 'Ania' }], recipients: ['48601000002', '48601000003'], prefix: 'serwis', ...over });
+const lists = (over: Partial<SmsGroupConfig> & { name?: string } = {}) => make({ senders: [{ phone: '48601000001', name: 'Ania' }], recipients: [{ phone: '48601000002', name: 'Marek' }, { phone: '48601000003', name: '' }], prefix: 'serwis', ...over });
 const events = (id: number) => deps.integrationEvents.list(id, 10).map((e) => [e.result, e.reason]);
 const allMessages = () => deps.messages.list({ limit: 50, offset: 0 });
 
@@ -96,7 +96,7 @@ describe('runSmsGroup', () => {
     expect(events(g.id)).toEqual([['sent', '2 odbiorców']]);
   });
   it('potwierdzenie do jednego odbiorcy odmienia liczebnik', () => {
-    const out = runSmsGroup(deps, lists({ recipients: ['48601000002'], confirm: { enabled: true } }), event(), NOW) as Extract<SmsGroupOutcome, { kind: 'sent' }>;
+    const out = runSmsGroup(deps, lists({ recipients: [{ phone: '48601000002', name: '' }], confirm: { enabled: true } }), event(), NOW) as Extract<SmsGroupOutcome, { kind: 'sent' }>;
     expect(deps.messages.get(out.confirmId!)!.body).toBe('Wysłano do 1 odbiorcy');
   });
   it('przepełnienie z odrzuceniem: wpis błąd i potwierdzenie o długości; z przycięciem: wysłano', () => {
@@ -120,9 +120,14 @@ describe('runSmsGroup', () => {
     expect(allMessages()).toHaveLength(1);
   });
   it('osobne listy: nadawca wpisany także na listę odbiorców dostaje wiadomość jak każdy odbiorca', () => {
-    const out = runSmsGroup(deps, lists({ recipients: ['48601000001', '48601000002'], confirm: { enabled: true } }), event(), NOW);
+    const out = runSmsGroup(deps, lists({ recipients: [{ phone: '48601000001', name: 'Dyspozytor' }, { phone: '48601000002', name: '' }], confirm: { enabled: true } }), event(), NOW);
     expect(out).toMatchObject({ kind: 'sent', recipients: ['48601000001', '48601000002'] });
     expect(allMessages().filter((m) => m.dest === '48601000001').map((m) => m.body).sort()).toEqual(['Wysłano do 2 odbiorców', 'jutro odprawa 8:00']);
+  });
+  it('grupa zapisana przed 1.11.4 z samymi numerami odbiorców rozsyła bez zmian', () => {
+    const legacy = make({ name: 'Sprzed 1.11.4', senders: [{ phone: '48601000001', name: '' }], prefix: 'serwis', recipients: ['48601000002', '48601000003'] as never });
+    expect(legacy.config.recipients).toEqual([{ phone: '48601000002', name: '' }, { phone: '48601000003', name: '' }]);
+    expect(runSmsGroup(deps, legacy, event(), NOW)).toMatchObject({ kind: 'sent', recipients: ['48601000002', '48601000003'] });
   });
   it('sender_body bez nazwy na liście podstawia numer', () => {
     const out = runSmsGroup(deps, lists({ senders: [{ phone: '48601000001', name: '' }], text: { mode: 'sender_body' } }), event(), NOW);
@@ -163,7 +168,7 @@ describe('runSmsGroup', () => {
     const plain = lists();
     runSmsGroup(deps, plain, event(), NOW);
     expect(deps.integrationEvents.list(plain.id, 1)[0]!.payload).toBeNull();
-    const stored = make({ name: 'Z ładunkiem', senders: [{ phone: '48601000001', name: '' }], recipients: ['48601000002'], prefix: 'serwis' }, 1);
+    const stored = make({ name: 'Z ładunkiem', senders: [{ phone: '48601000001', name: '' }], recipients: [{ phone: '48601000002', name: '' }], prefix: 'serwis' }, 1);
     runSmsGroup(deps, stored, event(), NOW);
     expect(JSON.parse(deps.integrationEvents.list(stored.id, 1)[0]!.payload!)).toMatchObject({ from: '48601000001', text: 'Serwis: jutro odprawa 8:00' });
   });

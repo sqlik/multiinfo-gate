@@ -165,9 +165,11 @@ export const GROUP_LIMITS = { senders: 100, recipients: 500, members: 500, prefi
 
 /** Numer znormalizowany jak odbiorcy webhooków: same cyfry z kodem kraju. */
 const groupPhone = z.string().regex(/^\d{11,15}$/, 'numer nieznormalizowany');
-/** Pozycja listy nadawców albo członków: numer i opcjonalna nazwa do szablonu treści. */
+/** Pozycja listy nadawców, odbiorców albo członków: numer i opcjonalna nazwa do treści albo do rozpoznania w panelu. */
 export const groupMemberSchema = z.object({ phone: groupPhone, name: z.string().max(GROUP_LIMITS.name).default('') });
 export type GroupMember = z.infer<typeof groupMemberSchema>;
+/** Odbiorca osobnych list: numer z nazwą jak nadawca. Grupy zapisane przed 1.11.4 trzymają same numery i wczytują się bez nazw. */
+const groupRecipientSchema = z.union([groupMemberSchema, groupPhone.transform((phone) => ({ phone, name: '' }))]);
 
 /**
  * SMS do grupy: uprawniony numer wysyła SMS z prefiksem na numer bramki, bramka rozsyła treść bez prefiksu
@@ -179,7 +181,7 @@ export const smsGroupConfigSchema = z.object({
   ...common,
   mode: z.enum(GROUP_MODES),
   senders: z.array(groupMemberSchema).max(GROUP_LIMITS.senders),
-  recipients: z.array(groupPhone).max(GROUP_LIMITS.recipients),
+  recipients: z.array(groupRecipientSchema).max(GROUP_LIMITS.recipients),
   members: z.array(groupMemberSchema).max(GROUP_LIMITS.members),
   /** Słowo na początku SMS-a wybierające grupę; puste = każdy SMS od uprawnionego numeru. */
   prefix: z.string().max(GROUP_LIMITS.prefix).regex(/^\S*$/, 'prefiks bez białych znaków'),

@@ -367,6 +367,7 @@ describe('skrzynka Microsoft 365', () => {
     const own = (await get('/integracje/nowa?rodzaj=mail_in&ustawienie=poczta-wlasny')).body;
     expect(own).not.toContain(sentence);
     expect(own).toContain('Zalecane u dostawców publicznych');
+    expect(own).toContain('Po włączeniu wyślij wiadomość próbną od każdego nadawcy i sprawdź wpis w dzienniku');
   });
 
   it('zapis bez hasła wymusza serwer Microsoft 365 niezależnie od przesłanego serwera', async () => {

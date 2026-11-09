@@ -636,6 +636,15 @@ przełącznika osoba znająca adres z listy może go podrobić w nagłówku `Fro
 zalecany u dostawców publicznych: Gmail, home.pl, OVH. Serwery wewnętrzne zwykle nie dodają
 tych nagłówków i wówczas każda wiadomość zostanie odrzucona. Domyślnie wyłączony.
 
+Niektórzy dostawcy nie sprawdzają SPF ani DKIM w poczcie przesyłanej między skrzynkami na jednym
+koncie u dostawcy poczty. Purelymail dopisuje wtedy wyłącznie wynik logowania `auth=pass`. Wiadomość
+wysłana na przykład z `biuro@firma.pl` do `alarmy@firma.pl` jest w takim przypadku pomijana z powodem
+„brak potwierdzenia SPF/DKIM od serwera”. Bez przełącznika bramka nie sprawdza tego nagłówka, dlatego
+problem ujawnia się dopiero po jego włączeniu. Zalecane jest więc wysłanie wiadomości próbnej od
+każdego nadawcy z listy zaraz po włączeniu przełącznika. Wpis „pominięto” z tym powodem oznacza, że
+dostawca nie potwierdza danego nadawcy. Bramka przepuści wiadomości od takiego nadawcy wyłącznie przy
+wyłączonym przełączniku.
+
 W skrzynce Microsoft 365 przełącznik jest domyślnie włączony i uwzględnia pocztę wewnętrzną.
 Exchange Online nie dopisuje wyniku SPF ani DKIM do wiadomości wysłanej wewnątrz organizacji,
 na przykład przez pracownika z Outlooka. Taką wiadomość Exchange oznacza jako wewnętrzną
@@ -1021,6 +1030,8 @@ ustawienia. Formularz w trybie prostym ma pięć sekcji.
    „Numery uprawnione do pisania” i „Numery odbiorców”. Dla grupy zamkniętej jedno pole:
    „Numery członków”. W każdym polu jeden numer w wierszu. Po numerze można dopisać nazwę,
    na przykład `601 000 001 Anna Nowak`. Nazwa zaczyna się od pierwszej litery i sięga końca wiersza.
+   Nazwa nadawcy trafia do treści w wariancie „Nadawca i treść”, a nazwy odbiorców ułatwiają
+   rozpoznanie numerów w szczegółach grupy.
    Numer można zapisać ze spacjami, plusem, myślnikami albo nawiasami. Bramka sprowadza go do
    postaci z kodem kraju konta, tak jak odbiorców z rozdziału 3.3. Numer powtórzony w dwóch
    wierszach zostaje zapisany raz. Numer nieprawidłowy zatrzymuje zapis zdaniem z tym numerem.

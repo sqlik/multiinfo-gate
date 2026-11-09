@@ -158,7 +158,7 @@ function sectionSenders(v: MailFormValues, advanced: boolean): string {
       ${checkbox('requireAuthResults', v.requireAuthResults, 'Wymagaj potwierdzenia nadawcy przez serwer (SPF/DKIM)')}
       ${hint(v.authMode === 'm365'
     ? 'Zalecane w skrzynce Microsoft 365. Wiadomość przechodzi, gdy serwer potwierdził SPF albo DKIM domeny nadawcy. Wiadomość od nadawcy z domeny skrzynki przechodzi także wtedy, gdy Exchange oznaczył ją jako wysłaną wewnątrz organizacji'
-    : 'Zalecane u dostawców publicznych (Gmail, home.pl, OVH). Serwery wewnętrzne zwykle nie dodają tych nagłówków i wówczas każda wiadomość zostanie odrzucona')}
+    : 'Zalecane u dostawców publicznych (Gmail, home.pl, OVH). Serwery wewnętrzne zwykle nie dodają tych nagłówków i wówczas każda wiadomość zostanie odrzucona. Po włączeniu wyślij wiadomość próbną od każdego nadawcy i sprawdź wpis w dzienniku')}
     </div>
     ${advanced ? `<div class="field">
       <label for="authservId">Nazwa serwera w nagłówku Authentication-Results</label>

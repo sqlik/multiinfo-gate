@@ -60,6 +60,6 @@ export function groupSender(config: SmsGroupConfig, from: string): GroupMember |
 
 /** Odbiorcy jednego SMS-a: `lists` to cała lista odbiorców, `closed` to członkowie bez nadawcy; zawsze bez powtórzeń. */
 export function groupRecipients(config: SmsGroupConfig, from: string): string[] {
-  const phones = config.mode === 'closed' ? config.members.map((m) => m.phone).filter((p) => p !== from) : config.recipients;
+  const phones = config.mode === 'closed' ? config.members.map((m) => m.phone).filter((p) => p !== from) : config.recipients.map((m) => m.phone);
   return [...new Set(phones)];
 }

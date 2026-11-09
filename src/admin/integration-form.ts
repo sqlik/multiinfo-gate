@@ -7,6 +7,7 @@ import { isValidPath } from '../integrations/paths.ts';
 import { parseSourceEntry } from '../integrations/sources.ts';
 import type { TemplateEngine } from '../integrations/templates.ts';
 import { INBOUND_BASIC_REF, INBOUND_ENRICH_REF, INBOUND_PAYLOAD_REF, INBOUND_TOKEN_REF, type IntegrationFormValues } from './views/integrations.ts';
+import { validationMessage } from '../zod.ts';
 
 type Body = Record<string, string | string[] | undefined>;
 
@@ -276,7 +277,7 @@ export function formToConfig(kind: IntegrationKind, v: IntegrationFormValues, en
   try {
     config = parseConfig(kind, config);
   } catch (e) {
-    return fail(`Konfiguracja nie przeszła sprawdzenia: ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`);
+    return fail(`Konfiguracja nie przeszła sprawdzenia: ${validationMessage(e)}`);
   }
   return { ok: true, config, secrets, carried };
 }

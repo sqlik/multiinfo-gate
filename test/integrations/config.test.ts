@@ -117,6 +117,13 @@ describe('sms_group', () => {
     expect(() => parseConfig('sms_group', { ...base, senders: [{ phone: '48601000001', name: 'x'.repeat(41) }] })).toThrow();
     expect(() => parseConfig('sms_group', { ...base, mode: 'open' })).toThrow();
   });
+  it('odbiorcy osobnych list: numer z nazwą; zapis sprzed 1.11.4 z samymi numerami wczytuje się bez nazw', () => {
+    const base = defaultSmsGroupConfig();
+    expect(parseConfig('sms_group', { ...base, recipients: [{ phone: '48601000002', name: 'Marek Kowalski' }] }).recipients).toEqual([{ phone: '48601000002', name: 'Marek Kowalski' }]);
+    expect(parseConfig('sms_group', { ...base, recipients: ['48601000002', { phone: '48601000003' }] }).recipients).toEqual([{ phone: '48601000002', name: '' }, { phone: '48601000003', name: '' }]);
+    expect(() => parseConfig('sms_group', { ...base, recipients: [{ phone: '+48 601 000 002', name: '' }] })).toThrow();
+    expect(() => parseConfig('sms_group', { ...base, recipients: [{ phone: '48601000002', name: 'x'.repeat(41) }] })).toThrow();
+  });
   it('nazwa przy numerze jest opcjonalna i wczytuje się jako pusty ciąg', () => {
     expect(parseConfig('sms_group', { ...defaultSmsGroupConfig(), members: [{ phone: '48601000001' }] }).members[0]).toEqual({ phone: '48601000001', name: '' });
   });
