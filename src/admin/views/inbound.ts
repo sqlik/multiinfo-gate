@@ -111,29 +111,27 @@ export function inboundDetailPage(d: InboundDetail): string {
       <div class="panel-h"><div class="lab">Treść</div><div class="m dim">${r.kind === 'binary' ? 'wiadomość binarna (hex)' : 'wiadomość tekstowa'}</div></div>
       ${content}
     </div>
-    <div class="cols">
-      <div class="panel">
-        <div class="panel-h"><div class="lab">Dane wiadomości</div></div>
-        <div class="kv">
-          <div>Nadawca</div><div class="m">${esc(r.sender)}</div>
-          <div>Numer usługi</div><div class="m">${esc(r.dest)}</div>
-          <div>ID usługi</div><div class="m">${esc(r.serviceId)}</div>
-          <div>ID w Multiinfo</div><div class="m">${esc(r.miId)}</div>
-          <div>Protokół / kodowanie</div><div class="m">${esc(r.protocolId)} / ${esc(r.codingScheme)}</div>
-          <div>Konektor</div><div class="m">${esc(r.connectorId ?? '-')}</div>
-          <div>Zapisana</div><div class="m">${esc(warsawStamp(r.createdAt))}</div>
-          ${!d.ticket ? '' : `<div>Zgłoszenie</div><div class="m">${esc(d.ticket.ref)} (<a href="/integracje/${esc(d.ticket.integration.id)}">${esc(d.ticket.integration.name)}</a>)</div>`}
-          ${groups === '' ? '' : `<div>Grupy SMS</div><div>${groups}</div>`}
-          <div>Ostatnia wysłana do nadawcy</div><div class="m">${d.related === null ? '<span class="dim">brak w ciągu 48 godzin</span>' : `<a href="/wiadomosci/${esc(d.related.id)}">${esc(d.related.id)}</a> · ${esc(warsawStamp(d.related.createdAt))}`}</div>
-          <div style="border-bottom: none;">Odpowiedzi wysłane</div><div style="border-bottom: none;">${replies}</div>
-        </div>
+    <div class="panel">
+      <div class="panel-h"><div class="lab">Dane wiadomości</div></div>
+      <div class="kv">
+        <div>Nadawca</div><div class="m">${esc(r.sender)}</div>
+        <div>Numer usługi</div><div class="m">${esc(r.dest)}</div>
+        <div>ID usługi</div><div class="m">${esc(r.serviceId)}</div>
+        <div>ID w Multiinfo</div><div class="m">${esc(r.miId)}</div>
+        <div>Protokół / kodowanie</div><div class="m">${esc(r.protocolId)} / ${esc(r.codingScheme)}</div>
+        <div>Konektor</div><div class="m">${esc(r.connectorId ?? '-')}</div>
+        <div>Zapisana</div><div class="m">${esc(warsawStamp(r.createdAt))}</div>
+        ${!d.ticket ? '' : `<div>Zgłoszenie</div><div class="m">${esc(d.ticket.ref)} (<a href="/integracje/${esc(d.ticket.integration.id)}">${esc(d.ticket.integration.name)}</a>)</div>`}
+        ${groups === '' ? '' : `<div>Grupy SMS</div><div>${groups}</div>`}
+        <div>Ostatnia wysłana do nadawcy</div><div class="m">${d.related === null ? '<span class="dim">brak w ciągu 48 godzin</span>' : `<a href="/wiadomosci/${esc(d.related.id)}">${esc(d.related.id)}</a> · ${esc(warsawStamp(d.related.createdAt))}`}</div>
+        <div style="border-bottom: none;">Odpowiedzi wysłane</div><div style="border-bottom: none;">${replies}</div>
       </div>
-      <div class="panel">
-        <div class="panel-h"><div class="lab">Dostawy do aplikacji</div></div>
-        ${deliveriesTable(d.deliveries, r.system === 1
+    </div>
+    <div class="panel">
+      <div class="panel-h"><div class="lab">Dostawy do aplikacji</div></div>
+      ${deliveriesTable(d.deliveries, r.system === 1
     ? 'Odpowiedź na SMS powiadomienia bramki zostaje w panelu. Bramka nie przekazuje jej aplikacjom ani integracjom.'
     : 'Żaden klucz nie subskrybował tej usługi w chwili odbioru.')}
-      </div>
     </div>
   </div>`;
 }

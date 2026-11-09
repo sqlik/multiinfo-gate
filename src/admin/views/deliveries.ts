@@ -67,7 +67,7 @@ export function deliveriesTable(rows: DeliveryView[], emptyText: string, withEve
         <td>${action(delivery)}</td>
       </tr>`).join('');
   return `<table style="table-layout: fixed;">
-          <tr><th>Klucz albo integracja · adres</th>${withEvent ? '<th style="width: 130px;">Zdarzenie</th>' : ''}<th style="width: 36px;">Próby</th><th style="width: 80px;">Stan</th><th style="width: 72px;">Odpowiedź</th><th style="width: 76px;"></th></tr>
+          <tr><th>Klucz albo integracja · adres</th>${withEvent ? '<th style="width: 130px;">Zdarzenie</th>' : ''}<th style="width: 36px;">Próby</th><th style="width: 80px;">Stan</th><th style="width: 220px;">Odpowiedź</th><th style="width: 76px;"></th></tr>
           ${body}
         </table>`;
 }

@@ -296,6 +296,7 @@ describe('GET /wiadomosci/:id - dostawy do aplikacji', () => {
     expect(body).toContain('Dostawy do aplikacji');
     expect(body).toContain('message.sent');
     expect(body).toContain('503 Service Unavailable');
+    expect(body).toContain('<th style="width: 220px;">Odpowiedź</th>');
     expect(body).toContain(`action="/dostawy/${id}/ponow"`);
     const res = await h.app.inject({ method: 'POST', url: `/dostawy/${id}/ponow`, headers: { cookie: h.cookie, 'content-type': 'application/x-www-form-urlencoded' }, payload: '' });
     expect(res.headers.location).toBe('/wiadomosci/msg_1');

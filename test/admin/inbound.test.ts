@@ -130,6 +130,16 @@ describe('GET /odebrane/:id', () => {
     }
   });
 
+  it('panel dostaw stoi na pełnej szerokości pod danymi wiadomości, a kolumna odpowiedzi mieści jej początek', async () => {
+    seed('in_1');
+    const d = h.deliveries.insert({ apiKeyId, event: 'message.received', payload: '{}', url: 'https://migate.pl/dyzur/sms', createdAt: NOW, inboundId: 'in_1' });
+    h.deliveries.markDelivered(d, NOW, '200 {"status":"przyjete"}');
+    const body = (await page('/odebrane/in_1')).body;
+    expect(body).toContain('Dostawy do aplikacji');
+    expect(body).not.toMatch(/class="cols"[\s\S]*Dostawy do aplikacji/);
+    expect(body).toContain('<th style="width: 220px;">Odpowiedź</th>');
+  });
+
   it('bez subskrybentów mówi to wprost', async () => {
     seed('in_1');
     const res = await page('/odebrane/in_1');
