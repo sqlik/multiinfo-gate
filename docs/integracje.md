@@ -566,6 +566,12 @@ i `serwis@firma.pl`. Każda skrzynka wymaga osobnej integracji. Zmiana adresu sk
 działa jak zmiana folderu. Zmiana samego konta przy tym samym adresie skrzynki nie zmienia miejsca,
 od którego bramka odczytuje wiadomości, dlatego bramka sprawdza także maile z czasu przerwy.
 
+Uprawnienie pełnego dostępu nadaje także członkostwo w udostępnionej skrzynce. Członków skrzynki
+dodaje administrator w centrum administracyjnym Microsoft 365, w sekcji **Zespoły i grupy →
+Udostępnione skrzynki pocztowe**. Nowe uprawnienie zaczyna działać dopiero po kilkunastu minutach
+od nadania. Do tego czasu sprawdzenie skrzynki kończy się komunikatem „Logowanie odrzucone”, który
+opisuje punkt [Skrzynka Microsoft 365 odrzuca logowanie](problemy.md#m365-skrzynka).
+
 Pole **Pomijaj wiadomości starsze niż** chroni przed wysłaniem nieaktualnych alarmów po przerwie
 w dostępie do skrzynki. Przerwa powstaje na przykład wtedy, gdy konto Microsoft 365 przez cały
 weekend czeka na ponowne logowanie albo serwer poczty jest niedostępny. Po jej zakończeniu bramka
@@ -957,7 +963,7 @@ komunikatu.
 | sieć | komunikat wskazuje przyczynę: odrzucone połączenie na porcie, nazwa nieznana w DNS, brak odpowiedzi, certyfikat bez zaufanego urzędu, wygasły albo wystawiony na inną nazwę; połączenie można sprawdzić z maszyny bramki, na przykład `nc -vz imap.firma.pl 993`; przy własnym certyfikacie bez zaufanego urzędu pomaga wyłączenie sprawdzania certyfikatu w trybie zaawansowanym; serwer w sieci wewnętrznej bez `MIG_MAIL_ALLOW_PRIVATE=1` daje komunikat o tej zmiennej (rozdział 5.1) |
 | folder | nazwa folderu musi być dokładnie taka, jak na liście ze „Sprawdź połączenie”; folder docelowy przeniesienia bywa tylko do odczytu |
 | konto Microsoft 365 | konto wymaga ponownego logowania; stan skrzynki zawiera odnośnik do konta, a przycisk **Zaloguj ponownie** w szczegółach konta przywraca pracę skrzynki przy najbliższym sprawdzeniu |
-| logowanie w skrzynce Microsoft 365 | konto działa, ale Exchange odrzuca logowanie do skrzynki; przyczyną bywa wyłączony IMAP na koncie, literówka w adresie skrzynki albo brak uprawnienia pełnego dostępu do skrzynki współdzielonej; zmiana opcji IMAP obowiązuje po około 30 minutach |
+| logowanie w skrzynce Microsoft 365 | konto działa, ale Exchange odrzuca logowanie do skrzynki; przyczyną bywa wyłączony IMAP na koncie, literówka w adresie skrzynki albo brak uprawnienia pełnego dostępu do skrzynki współdzielonej; zmiana opcji IMAP obowiązuje po około 30 minutach, a nowe uprawnienie do skrzynki współdzielonej po kilkunastu minutach |
 | inny | pełny komunikat serwera w stanie skrzynki |
 
 Po błędzie bramka ponawia sprawdzenie z rosnącym odstępem, od ustawionej częstotliwości do

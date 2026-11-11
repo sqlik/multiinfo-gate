@@ -148,7 +148,9 @@ rozpoczęciem domena powinna wskazywać serwer bramki zgodnie z rozdziałem 3.
 | Adres strony głównej | adres, do którego prowadzi sama domena bez kodu, na przykład `https://firma.pl`; puste pole oznacza neutralną stronę z nazwą wyświetlaną |
 | Linki w treści bez https:// | krótki link w SMS-ie w postaci `l.firma.pl/aB3xK9q`, krótszy o 8 znaków; domyślnie wyłączone |
 
-Oczekiwany wynik: domena pojawia się na liście ze stanem „aktywna” i plakietką „niesprawdzona”.
+Oczekiwany wynik: panel otwiera stronę domeny z komunikatem „Domena zapisana”. Panel **Stan
+i usunięcie** podaje stan „aktywna”, a panel **Sprawdzenie domeny** wyświetla plakietkę
+„niesprawdzona”.
 
 Linki bez `https://` oszczędzają 8 znaków w każdym SMS-ie. Niektóre telefony nie rozpoznają
 jednak takiego zapisu jako linku, a odbiorca nie może go wtedy stuknąć. Opcja jest przeznaczona
@@ -163,7 +165,8 @@ i przypisanie domeny do tej bramki. Bramka pobiera jednorazowy token spod adresu
 wejście odbiorcy SMS-a, dlatego wynik pozytywny oznacza, że linki tej domeny trafiają do tej
 bramki.
 
-1. Otwórz domenę na liście przyciskiem **Otwórz**.
+1. Po zapisie domeny pozostań na jej stronie. Później stronę domeny otwiera przycisk **Otwórz**
+   na liście domen.
 2. W panelu **Sprawdzenie domeny** kliknij **Sprawdź domenę**.
 
 Ten sam przycisk znajduje się na liście domen.

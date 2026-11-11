@@ -502,6 +502,7 @@ Konto działa, ale Exchange odmawia dostępu do skrzynki. Odpowiedź serwera wsk
 | Odpowiedź serwera | Przyczyna | Rozwiązanie |
 |---|---|---|
 | `User is authenticated but not connected.` | IMAP wyłączony w skrzynce bramki | zaznaczyć IMAP na karcie Poczta skrzynki bramki i odczekać około 30 minut |
+| `User is authenticated but not connected.` | nowe uprawnienie do skrzynki współdzielonej, które zaczyna działać po kilkunastu minutach od nadania | odczekać kilkanaście minut i kliknąć **Sprawdź teraz** w szczegółach integracji |
 | `Login failed.` | skrzynka o podanym adresie nie istnieje, na przykład z powodu literówki | poprawić pole Adres skrzynki w integracji |
 
 Przy skrzynce współdzielonej sprawdź także, czy skrzynka bramki posiada do niej uprawnienie
