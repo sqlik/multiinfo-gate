@@ -19,6 +19,8 @@ export interface OverviewData {
   failures: MessageRow[];
   keyNames: Map<number, string>;
   webhooks: { pending: number; failed: number };
+  /** Rozsyłki z okna przeglądu i liczba ich SMS-ów, czyli suma odbiorców. */
+  packages: { packages: number; recipients: number };
   /** Odebrane od abonentów w oknie przeglądu. */
   inboundToday: number;
   /** Integracje z choć jednym błędem w oknie przeglądu. */
@@ -44,6 +46,13 @@ export function troubledIntegrations(n: number): string {
   return `${n} integracji zgłosiło błąd`;
 }
 
+/** Podpis kafelka „Rozsyłki”: „SMS-ów w rozsyłkach”, „SMS-ów w 1 rozsyłce”, „SMS-ów w 5 rozsyłkach”. */
+export function packagesTileNote(packages: number): string {
+  if (packages === 0) return 'SMS-ów w rozsyłkach';
+  if (packages === 1) return 'SMS-ów w 1 rozsyłce';
+  return `SMS-ów w ${packages} rozsyłkach`;
+}
+
 /** „1 webhook nie dotarł”, „3 webhooki nie dotarły”, „5 webhooków nie dotarło”. */
 export function undeliveredWebhooks(n: number): string {
   const last = n % 10;
@@ -51,6 +60,15 @@ export function undeliveredWebhooks(n: number): string {
   if (n === 1) return '1 webhook nie dotarł';
   if (last >= 2 && last <= 4 && (tens < 12 || tens > 14)) return `${n} webhooki nie dotarły`;
   return `${n} webhooków nie dotarło`;
+}
+
+/** „1 zadanie czeka”, „2 zadania czekają”, „5 zadań czeka” w kolejce workera. */
+export function queuedJobs(n: number): string {
+  const last = n % 10;
+  const tens = n % 100;
+  if (n === 1) return '1 zadanie czeka w kolejce workera';
+  if (last >= 2 && last <= 4 && (tens < 12 || tens > 14)) return `${n} zadania czekają w kolejce workera`;
+  return `${n} zadań czeka w kolejce workera`;
 }
 
 /** Od tylu dni do wygaśnięcia certyfikat trafia na pasek ostrzeżeń. */
@@ -237,11 +255,11 @@ export function overviewPage(data: OverviewData, now: Date): string {
   </div>
   <div class="scroll">
     ${alerts(data, now)}
-    <div class="tiles tiles-7">
+    <div class="tiles">
       <a class="tile" href="/wiadomosci">
         <div class="lab">Wychodzące</div>
         <div class="n">${esc(data.counts.total)}</div>
-        <div class="d">wiadomości zleconych do wysyłki przez aplikacje</div>
+        <div class="d">pojedynczych wiadomości zleconych przez aplikacje</div>
       </a>
       <a class="tile" href="/wiadomosci?status=delivered">
         <div class="lab">Doręczone</div>
@@ -261,7 +279,12 @@ export function overviewPage(data: OverviewData, now: Date): string {
       <a class="tile" href="/wiadomosci?status=transit">
         <div class="lab">W drodze</div>
         <div class="n">${esc(data.counts.transit)}</div>
-        <div class="d">${esc(share(data.counts.transit, data.counts.total))}<br>${esc(data.queueDepth)} zadań czeka w kolejce workera</div>
+        <div class="d">${esc(share(data.counts.transit, data.counts.total))}<br>${esc(queuedJobs(data.queueDepth))}</div>
+      </a>
+      <a class="tile" href="/rozsylki">
+        <div class="lab">Rozsyłki</div>
+        <div class="n">${esc(data.packages.recipients)}</div>
+        <div class="d">${esc(packagesTileNote(data.packages.packages))}</div>
       </a>
       <a class="tile" href="/odebrane">
         <div class="lab">Odebrane</div>

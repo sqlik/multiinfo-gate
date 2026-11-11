@@ -1,4 +1,5 @@
-// Rozpoznawanie wejść automatów: podglądów linków w komunikatorach, skanerów poczty i wstępnego pobierania.
+// Rozpoznawanie wejść automatów: podglądów linków w komunikatorach, skanerów poczty, wstępnego pobierania
+// i pobrań bez nagłówków, które wysyła każda przeglądarka.
 // Automat również otrzymuje przekierowanie, ale nie jest liczony jako otwarcie.
 
 /**
@@ -51,5 +52,8 @@ export function isAutomated(method: string, headers: Headers): boolean {
   if (header(headers, 'x-purpose').includes('preview')) return true;
   const agent = header(headers, 'user-agent').trim();
   if (agent === '') return true;
+  // Każda przeglądarka używana przez człowieka wysyła Accept-Language. Serwer Google, który pobiera podgląd
+  // linku dla Wiadomości Google, podaje User-Agent zwykłego Chrome, ale tego nagłówka nie wysyła.
+  if (header(headers, 'accept-language').trim() === '') return true;
   return AUTOMATED_AGENTS.some((fragment) => agent.includes(fragment));
 }

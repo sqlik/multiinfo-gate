@@ -88,6 +88,15 @@ describe('JobsRepo', () => {
     expect(again!.payload).toEqual({ packageId: 'pkg_1', sentAt: at(1000).toISOString() });
   });
 
+  it('znacznik pierwszego chwilowego błędu raportu zapisuje się raz i wraca w zadaniu', () => {
+    const repo = new JobsRepo(openDatabase(':memory:'));
+    const id = repo.enqueue('package.report', { packageId: 'pkg_1' }, at(0));
+    repo.markReportBusy(id, at(1000));
+    repo.markReportBusy(id, at(61_000));
+    const [job] = repo.claim(at(0), 10);
+    expect(job!.payload).toEqual({ packageId: 'pkg_1', reportBusySince: at(1000).toISOString() });
+  });
+
   it('usuwa zadanie zakończone niepowodzeniem i podaje głębokość kolejki', () => {
     const repo = new JobsRepo(openDatabase(':memory:'));
     repo.enqueue('send', { messageId: 'msg_1' }, at(0));

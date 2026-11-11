@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProviderError } from '../../src/multiinfo/response.ts';
 import {
-  PACKAGE_POLL_MS, PACKAGE_POLL_TAIL_MS, REPORT_RETRY_MS,
+  PACKAGE_POLL_MS, PACKAGE_POLL_TAIL_MS, REPORT_BUSY_LIMIT_MS, REPORT_RETRY_MS,
   handlePackageCreate, handlePackagePoll, handlePackageReport,
 } from '../../src/worker/packages.ts';
 import { SEND_BACKOFF_MS } from '../../src/worker/send.ts';
@@ -80,10 +80,14 @@ function seed(patch: Partial<{
   return id;
 }
 
-function job(type: 'package.create' | 'package.poll' | 'package.report', attempts = 0) {
-  const jobId = deps.jobs.enqueue(type, { packageId: 'pkg_1' }, NOW);
-  return { id: jobId, type, payload: { packageId: 'pkg_1' }, attempts, lastError: null };
+function job(type: 'package.create' | 'package.poll' | 'package.report', attempts = 0, extra: Record<string, unknown> = {}) {
+  const payload = { packageId: 'pkg_1', ...extra };
+  const jobId = deps.jobs.enqueue(type, payload, NOW);
+  return { id: jobId, type, payload, attempts, lastError: null };
 }
+
+/** Chwilowa odpowiedź packagefullinfo.aspx tuż po zakończeniu rozsyłki (2026-11-11). */
+const REPORT_BUSY = () => new ProviderError(-13, 'Blad podczas wykonywania polecenia PackageInfo. Zla komenda', 'permanent');
 
 const lastWebhook = () => JSON.parse(deps.deliveries.listRecent(1)[0]!.payload);
 
@@ -91,8 +95,8 @@ const DAY = 86_400_000;
 const SENT_CSV = '9001;48601135134;3;20260825100500\n9002;48501052442;3;20260825100501;faktura-114\n';
 const DELIVERED_CSV = '9001;48601135134;21;20260825101000\n9002;48501052442;21;20260825101001;faktura-114\n';
 
-function refreshJob(attempts = 0) {
-  const payload = { packageId: 'pkg_1', refresh: true };
+function refreshJob(attempts = 0, extra: Record<string, unknown> = {}) {
+  const payload = { packageId: 'pkg_1', refresh: true, ...extra };
   return { id: deps.jobs.enqueue('package.report', payload, NOW), type: 'package.report' as const, payload, attempts, lastError: null };
 }
 
@@ -166,6 +170,25 @@ describe('handlePackageReport - drugi raport rozsyłki z kampanią', () => {
     expect(deps.jobs.claim(new Date(later.getTime() + REPORT_RETRY_MS), 10).map((j) => j.payload)).toEqual([
       { packageId: 'pkg_1', refresh: true },
     ]);
+  });
+
+  it('kod -13 przy odświeżeniu ponawia, a po 10 minutach pozostawia pierwszy raport bez webhooka', async () => {
+    await campaignPackageAfterFirstReport();
+    drain(new Date(NOW.getTime() + DAY));
+    const later = new Date(NOW.getTime() + DAY);
+    packageFullInfo.mockRejectedValueOnce(REPORT_BUSY());
+    await handlePackageReport(refreshJob(), deps, later);
+    expect(deps.packages.get('pkg_1')).toMatchObject({ reportStatus: 'ready', reportId: '123' });
+    expect(deps.jobs.claim(new Date(later.getTime() + REPORT_RETRY_MS + 1), 10).map((j) => j.payload)).toEqual([
+      { packageId: 'pkg_1', refresh: true, reportBusySince: later.toISOString() },
+    ]);
+    drain(new Date(later.getTime() + DAY));
+    packageFullInfo.mockRejectedValueOnce(REPORT_BUSY());
+    const expired = new Date(later.getTime() + REPORT_BUSY_LIMIT_MS);
+    await handlePackageReport(refreshJob(0, { reportBusySince: later.toISOString() }), deps, expired);
+    expect(deps.packages.get('pkg_1')).toMatchObject({ reportStatus: 'ready', reportId: '123' });
+    expect(deps.deliveries.listRecent(10)).toHaveLength(1);
+    expect(deps.jobs.depth()).toBe(0);
   });
 
   it('rozsyłka z kampanią bez raportu doręczenia nie kolejkuje odświeżenia', async () => {
@@ -445,6 +468,88 @@ describe('handlePackageReport', () => {
     expect(deps.packages.get('pkg_1')!.status).toBe('completed');
     expect(lastWebhook()).toMatchObject({ event: 'package.completed', status: 'completed', report: 'failed' });
     expect(existsSync(join(reportsDir, 'pkg_1.csv'))).toBe(false);
+  });
+
+  it('kod -13 przy pobieraniu raportu ponawia za minutę, a gotowy raport kończy rozsyłkę', async () => {
+    packageFullInfo.mockRejectedValueOnce(REPORT_BUSY());
+    await handlePackageReport(job('package.report'), deps, NOW);
+    expect(deps.packages.get('pkg_1')!.reportStatus).toBe('pending');
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
+    expect(deps.jobs.claim(new Date(NOW.getTime() + REPORT_RETRY_MS - 1), 10)).toHaveLength(0);
+    const [retry] = deps.jobs.claim(new Date(NOW.getTime() + REPORT_RETRY_MS + 1), 10);
+    expect(retry!.payload).toEqual({ packageId: 'pkg_1', reportBusySince: NOW.toISOString() });
+    packageFullInfo.mockResolvedValueOnce({ reportId: '123', generation: 2, minutesLeft: 30 });
+    getReport.mockResolvedValueOnce(makeZip('raport.csv', Buffer.from(CSV)));
+    await handlePackageReport(retry!, deps, new Date(NOW.getTime() + REPORT_RETRY_MS + 1));
+    expect(deps.packages.get('pkg_1')!.reportStatus).toBe('ready');
+    expect(deps.deliveries.listRecent(10)).toHaveLength(1);
+    expect(lastWebhook()).toMatchObject({ event: 'package.completed', report: 'ready' });
+  });
+
+  it('kod -13 dłużej niż 10 minut kończy raport stanem nieudanym', async () => {
+    packageFullInfo.mockRejectedValue(REPORT_BUSY());
+    const since = { reportBusySince: NOW.toISOString() };
+    await handlePackageReport(job('package.report', 9, since), deps, new Date(NOW.getTime() + REPORT_BUSY_LIMIT_MS - 1));
+    expect(deps.packages.get('pkg_1')!.reportStatus).toBe('pending');
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
+    await handlePackageReport(job('package.report', 10, since), deps, new Date(NOW.getTime() + REPORT_BUSY_LIMIT_MS));
+    expect(deps.packages.get('pkg_1')!.reportStatus).toBe('failed');
+    expect(lastWebhook()).toMatchObject({ event: 'package.completed', status: 'completed', report: 'failed', providerCode: -13 });
+  });
+
+  it('oczekiwanie na kod -13 nie zużywa ponowień, dlatego późniejszy błąd sieci jest ponawiany', async () => {
+    let at = NOW;
+    let current: Parameters<typeof handlePackageReport>[0] = job('package.report');
+    for (let i = 0; i < SEND_BACKOFF_MS.length; i++) {
+      packageFullInfo.mockRejectedValueOnce(REPORT_BUSY());
+      await handlePackageReport(current, deps, at);
+      at = new Date(at.getTime() + REPORT_RETRY_MS + 1);
+      [current] = deps.jobs.claim(at, 10) as [typeof current];
+    }
+    expect(current.attempts).toBe(0);
+    packageFullInfo.mockRejectedValueOnce(Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }));
+    await handlePackageReport(current, deps, at);
+    expect(deps.packages.get('pkg_1')!.reportStatus).toBe('pending');
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
+    expect(deps.jobs.depth()).toBe(1);
+  });
+
+  it('raport w przygotowaniu nie zużywa ponowień błędu sieci', async () => {
+    packageFullInfo.mockResolvedValueOnce({ reportId: '123', generation: 1, minutesLeft: 0 });
+    await handlePackageReport(job('package.report'), deps, NOW);
+    const [next] = deps.jobs.claim(new Date(NOW.getTime() + REPORT_RETRY_MS + 1), 10);
+    expect(next!.attempts).toBe(0);
+  });
+
+  it('kod -13 przy pobieraniu pliku raportu kończy raport od razu, jak inny kod trwały', async () => {
+    packageFullInfo.mockResolvedValueOnce({ reportId: '123', generation: 2, minutesLeft: 30 });
+    getReport.mockRejectedValueOnce(new ProviderError(-13, 'Zla komenda', 'permanent'));
+    await handlePackageReport(job('package.report'), deps, NOW);
+    expect(deps.packages.get('pkg_1')!.reportStatus).toBe('failed');
+    expect(lastWebhook()).toMatchObject({ report: 'failed', providerCode: -13 });
+  });
+
+  it('odpowiedź inna niż -13 zdejmuje znacznik, dlatego późniejsze -13 otwiera nowe 10 minut', async () => {
+    packageFullInfo.mockRejectedValueOnce(REPORT_BUSY());
+    await handlePackageReport(job('package.report'), deps, NOW);
+    let at = new Date(NOW.getTime() + REPORT_RETRY_MS + 1);
+    let [current] = deps.jobs.claim(at, 10);
+    packageFullInfo.mockResolvedValueOnce({ reportId: '123', generation: 1, minutesLeft: 0 });
+    await handlePackageReport(current!, deps, at);
+    at = new Date(NOW.getTime() + REPORT_BUSY_LIMIT_MS + 60_000);
+    [current] = deps.jobs.claim(at, 10);
+    expect(current!.payload).toEqual({ packageId: 'pkg_1' });
+    packageFullInfo.mockRejectedValueOnce(REPORT_BUSY());
+    await handlePackageReport(current!, deps, at);
+    expect(deps.packages.get('pkg_1')!.reportStatus).toBe('pending');
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
+  });
+
+  it('inny kod trwały przy pobieraniu raportu od razu kończy raport stanem nieudanym', async () => {
+    packageFullInfo.mockRejectedValueOnce(new ProviderError(-1, 'Nieznany błąd', 'permanent'));
+    await handlePackageReport(job('package.report'), deps, NOW);
+    expect(deps.packages.get('pkg_1')!.reportStatus).toBe('failed');
+    expect(lastWebhook()).toMatchObject({ report: 'failed', providerCode: -1 });
   });
 
   it('po wyczerpaniu ponowień błędu przejściowego oznacza raport jako nieudany', async () => {

@@ -68,6 +68,21 @@ export class JobsRepo {
     this.db.prepare("UPDATE jobs SET payload = json_set(payload, '$.sentAt', ?) WHERE id = ?").run(iso(at), id);
   }
 
+  /**
+   * Zapisuje w zadaniu raportu chwilę pierwszej odpowiedzi „raport chwilowo niedostępny”. Kolejne wywołania
+   * nie przesuwają znacznika, a zapis w bazie przetrwa ponowne uruchomienie bramki.
+   */
+  markReportBusy(id: number, at: Date): void {
+    this.db
+      .prepare("UPDATE jobs SET payload = json_set(payload, '$.reportBusySince', ?) WHERE id = ? AND json_extract(payload, '$.reportBusySince') IS NULL")
+      .run(iso(at), id);
+  }
+
+  /** Zdejmuje znacznik „raport chwilowo niedostępny” po odpowiedzi innej niż -13. */
+  clearReportBusy(id: number): void {
+    this.db.prepare("UPDATE jobs SET payload = json_remove(payload, '$.reportBusySince') WHERE id = ?").run(id);
+  }
+
   /** Zdejmuje znacznik przekazania, gdy serwer odrzucił sesję, zanim obsłużył żądanie. */
   clearSent(id: number): void {
     this.db.prepare("UPDATE jobs SET payload = json_remove(payload, '$.sentAt') WHERE id = ?").run(id);

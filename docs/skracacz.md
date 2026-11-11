@@ -148,7 +148,9 @@ rozpoczęciem domena powinna wskazywać serwer bramki zgodnie z rozdziałem 3.
 | Adres strony głównej | adres, do którego prowadzi sama domena bez kodu, na przykład `https://firma.pl`; puste pole oznacza neutralną stronę z nazwą wyświetlaną |
 | Linki w treści bez https:// | krótki link w SMS-ie w postaci `l.firma.pl/aB3xK9q`, krótszy o 8 znaków; domyślnie wyłączone |
 
-Oczekiwany wynik: domena pojawia się na liście ze stanem „aktywna” i plakietką „niesprawdzona”.
+Oczekiwany wynik: panel otwiera stronę domeny z komunikatem „Domena zapisana”. Panel **Stan
+i usunięcie** podaje stan „aktywna”, a panel **Sprawdzenie domeny** wyświetla plakietkę
+„niesprawdzona”.
 
 Linki bez `https://` oszczędzają 8 znaków w każdym SMS-ie. Niektóre telefony nie rozpoznają
 jednak takiego zapisu jako linku, a odbiorca nie może go wtedy stuknąć. Opcja jest przeznaczona
@@ -163,7 +165,8 @@ i przypisanie domeny do tej bramki. Bramka pobiera jednorazowy token spod adresu
 wejście odbiorcy SMS-a, dlatego wynik pozytywny oznacza, że linki tej domeny trafiają do tej
 bramki.
 
-1. Otwórz domenę na liście przyciskiem **Otwórz**.
+1. Po zapisie domeny pozostań na jej stronie. Później stronę domeny otwiera przycisk **Otwórz**
+   na liście domen.
 2. W panelu **Sprawdzenie domeny** kliknij **Sprawdź domenę**.
 
 Ten sam przycisk znajduje się na liście domen.
@@ -415,15 +418,21 @@ napis „brak raportu”.
 
 ### 9.4. Automaty
 
-Część wejść w link nie pochodzi od odbiorcy. Wiadomości Google na Androidzie pobierają podgląd
-linku zaraz po doręczeniu SMS-a. Wiadomości Apple pobierają podgląd po stuknięciu „Stuknij, aby
-wczytać podgląd” przy SMS-ie od nieznanego nadawcy. Komunikatory, skanery poczty i programy
-zabezpieczające pobierają link w podobny sposób.
+Część wejść w link nie pochodzi od odbiorcy. Wiadomości Google na Androidzie pobierają podgląd linku
+przez serwer Google zaraz po doręczeniu SMS-a. Wiadomości Apple pobierają podgląd po stuknięciu
+„Stuknij, aby wczytać podgląd” przy SMS-ie od nieznanego nadawcy. Komunikatory, skanery poczty i
+programy zabezpieczające pobierają link w podobny sposób.
 
 Bramka rozpoznaje takie wejście po metodzie `HEAD`, po nagłówku wstępnego pobierania albo po
-nagłówku `User-Agent` znanego programu podglądu. Wejście automatu również otrzymuje
-przekierowanie, dzięki czemu podgląd linku działa. Nie liczy się jednak do otwarć ani kliknięć,
-tylko do kafelka „Automaty”. Bramka nie zapisuje nagłówka `User-Agent`.
+nagłówku `User-Agent` znanego programu podglądu. Automatem jest też wejście bez nagłówka
+`Accept-Language`, ponieważ każda przeglądarka wysyła ten nagłówek, a serwer Google go pomija.
+Wejście automatu również otrzymuje przekierowanie, dzięki czemu podgląd linku działa. Nie liczy
+się jednak do otwarć ani kliknięć, tylko do kafelka „Automaty”. Bramka nie zapisuje nagłówka
+`User-Agent`.
+
+Aplikacja zabezpieczająca na telefonie może otworzyć link w przeglądarce telefonu bez udziału
+odbiorcy, na przykład w celu sprawdzenia strony docelowej. Takie wejście nie różni się od
+stuknięcia odbiorcy, dlatego bramka liczy je jako otwarcie.
 
 ### 9.5. Wyłączenie linków kampanii
 

@@ -316,8 +316,9 @@ Oczekiwany wynik:
 
 - akcja „Wyślij SMS” od razu kończy się powodzeniem, oznaczonym zielonym znacznikiem. Bramka
   przyjmuje wiadomość do kolejki i natychmiast odpowiada, a doręczenie następuje później
-- dane wyjściowe akcji zawierają pola **Identyfikator wiadomości** i **Stan wiadomości**
-  z wartością `queued`
+- w wynikach przebiegu sekcja `body` danych wyjściowych akcji zawiera pole `id`
+  z identyfikatorem wiadomości i pole `status` z wartością `queued`. W zawartości dynamicznej
+  kolejnych akcji te same pola noszą nazwy **Identyfikator wiadomości** i **Stan wiadomości**
 - SMS dociera na numer odbiorcy
 - dziennik w szczegółach integracji zawiera wpis „wysłano” z powodem „Wyślij SMS”, a kolumna
   „Nadawca” pokazuje zlecającego i adres IP wywołania, na przykład `API · Dział obsługi klienta

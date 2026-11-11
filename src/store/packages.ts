@@ -102,6 +102,14 @@ export class PackagesRepo {
     return this.db.transaction(fn)();
   }
 
+  /** Rozsyłki utworzone od `since` we wszystkich stanach i suma ich odbiorców, czyli liczba SMS-ów. */
+  countSince(since: Date): { packages: number; recipients: number } {
+    const row = this.db
+      .prepare('SELECT COUNT(*) AS packages, COALESCE(SUM(recipients_count), 0) AS recipients FROM packages WHERE created_at >= ?')
+      .get(since.toISOString()) as { packages: number; recipients: number };
+    return { packages: row.packages, recipients: row.recipients };
+  }
+
   findByIdempotencyKey(apiKeyId: number, key: string): PackageRow | undefined {
     const row = this.db.prepare('SELECT * FROM packages WHERE api_key_id = ? AND idempotency_key = ?').get(apiKeyId, key) as Raw | undefined;
     return row ? toRow(row) : undefined;

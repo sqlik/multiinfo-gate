@@ -724,7 +724,7 @@ bramka z niego nie korzysta. Rejestracja wymaga adresu przekierowania, który po
 4. Kliknij **Rejestruj**. Jeżeli portal nie otworzy przeglądu nowej aplikacji, znajdziesz ją
    w **Rejestracjach aplikacji** na karcie **Wszystkie aplikacje**.
 5. Przejdź do sekcji **Uprawnienia interfejsu API** i kliknij **Dodaj uprawnienie**. Wybierz
-   **Microsoft Graph**, a następnie **Uprawnienia delegowane**.
+   **Microsoft Graph**, a następnie **Delegowane uprawnienia**.
 6. Zaznacz sześć uprawnień: `IMAP.AccessAsUser.All`, `SMTP.Send`, `offline_access`, `openid`,
    `email` i `profile`. Zatwierdź wybór przyciskiem **Dodaj uprawnienia**. Następnie usuń
    uprawnienie `User.Read`, które portal dodaje domyślnie. Portal ostrzega wtedy, że zakres jest
@@ -767,7 +767,8 @@ aplikację do kont przypisanych przez administratora Microsoft 365, czyli do skr
 3. Przejdź do sekcji **Użytkownicy i grupy** i kliknij **Dodaj użytkownika/grupę**.
 4. Kliknij **Niczego nie wybrano**, zaznacz skrzynkę bramki, na przykład „Alarmy SMS”, a następnie
    kliknij **Wybierz** i **Przypisz**.
-5. Jeżeli lista zawiera inne konta, zaznacz je i kliknij **Usuń przypisanie**.
+5. Lista zawiera zwykle także konto administratora, który zarejestrował aplikację. Zaznacz to
+   konto oraz każde inne konto poza skrzynką bramki, a następnie kliknij **Usuń przypisanie**.
 
 Oczekiwany wynik: lista w sekcji **Użytkownicy i grupy** zawiera wyłącznie skrzynkę bramki.
 Microsoft odrzuca logowanie każdego innego konta błędem AADSTS50105.

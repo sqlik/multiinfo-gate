@@ -502,6 +502,7 @@ Konto działa, ale Exchange odmawia dostępu do skrzynki. Odpowiedź serwera wsk
 | Odpowiedź serwera | Przyczyna | Rozwiązanie |
 |---|---|---|
 | `User is authenticated but not connected.` | IMAP wyłączony w skrzynce bramki | zaznaczyć IMAP na karcie Poczta skrzynki bramki i odczekać około 30 minut |
+| `User is authenticated but not connected.` | nowe uprawnienie do skrzynki współdzielonej, które zaczyna działać po kilkunastu minutach od nadania | odczekać kilkanaście minut i kliknąć **Sprawdź teraz** w szczegółach integracji |
 | `Login failed.` | skrzynka o podanym adresie nie istnieje, na przykład z powodu literówki | poprawić pole Adres skrzynki w integracji |
 
 Przy skrzynce współdzielonej sprawdź także, czy skrzynka bramki posiada do niej uprawnienie
@@ -639,14 +640,16 @@ Objaw: kafelek „Automaty” w szczegółach kampanii pokazuje wejścia, a kafe
 i „Kliknięcia” pokazują 0 albo wartości niższe od oczekiwanych.
 
 Wejście automatu oznacza pobranie linku przez program, a nie przez odbiorcę. Wiadomości Google
-pobierają podgląd linku zaraz po doręczeniu SMS-a. Wiadomości Apple pobierają podgląd po
-stuknięciu „Stuknij, aby wczytać podgląd” przy SMS-ie od nieznanego nadawcy. Komunikatory, skanery
-poczty i programy zabezpieczające pobierają link w podobny sposób. Bramka nie wlicza takich wejść
-do otwarć ani kliknięć, ponieważ nie świadczą o zainteresowaniu odbiorcy. Wiele automatów przy
-niewielu otwarciach oznacza więc zwykle, że SMS-y dotarły, ale odbiorcy nie stuknęli linku.
+pobierają podgląd linku przez serwer Google zaraz po doręczeniu SMS-a. Wiadomości Apple pobierają
+podgląd po stuknięciu „Stuknij, aby wczytać podgląd” przy SMS-ie od nieznanego nadawcy.
+Komunikatory, skanery poczty i programy zabezpieczające pobierają link w podobny sposób. Bramka nie
+wlicza takich wejść do otwarć ani kliknięć, ponieważ nie świadczą o zainteresowaniu odbiorcy. Wiele
+automatów przy niewielu otwarciach oznacza więc zwykle, że SMS-y dotarły, ale odbiorcy nie stuknęli
+linku.
 
 Bramka rozpoznaje automat po metodzie `HEAD`, po nagłówku wstępnego pobierania i po nazwie
-programu w nagłówku `User-Agent`. Do automatów należy też sprawdzenie linku z komputera
+programu w nagłówku `User-Agent`. Automatem jest też wejście bez nagłówka `Accept-Language`,
+który wysyła każda przeglądarka. Do automatów należy też sprawdzenie linku z komputera
 poleceniem `curl`. Link otwarty w przeglądarce telefonu liczy się jako otwarcie. Wejścia w czasie,
 gdy linki kampanii są wyłączone, nie liczą się do żadnej z tych liczb.
 

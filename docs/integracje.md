@@ -566,6 +566,12 @@ i `serwis@firma.pl`. Każda skrzynka wymaga osobnej integracji. Zmiana adresu sk
 działa jak zmiana folderu. Zmiana samego konta przy tym samym adresie skrzynki nie zmienia miejsca,
 od którego bramka odczytuje wiadomości, dlatego bramka sprawdza także maile z czasu przerwy.
 
+Uprawnienie pełnego dostępu nadaje także członkostwo w udostępnionej skrzynce. Członków skrzynki
+dodaje administrator w centrum administracyjnym Microsoft 365, w sekcji **Zespoły i grupy →
+Udostępnione skrzynki pocztowe**. Nowe uprawnienie zaczyna działać dopiero po kilkunastu minutach
+od nadania. Do tego czasu sprawdzenie skrzynki kończy się komunikatem „Logowanie odrzucone”, który
+opisuje punkt [Skrzynka Microsoft 365 odrzuca logowanie](problemy.md#m365-skrzynka).
+
 Pole **Pomijaj wiadomości starsze niż** chroni przed wysłaniem nieaktualnych alarmów po przerwie
 w dostępie do skrzynki. Przerwa powstaje na przykład wtedy, gdy konto Microsoft 365 przez cały
 weekend czeka na ponowne logowanie albo serwer poczty jest niedostępny. Po jej zakończeniu bramka
@@ -957,7 +963,7 @@ komunikatu.
 | sieć | komunikat wskazuje przyczynę: odrzucone połączenie na porcie, nazwa nieznana w DNS, brak odpowiedzi, certyfikat bez zaufanego urzędu, wygasły albo wystawiony na inną nazwę; połączenie można sprawdzić z maszyny bramki, na przykład `nc -vz imap.firma.pl 993`; przy własnym certyfikacie bez zaufanego urzędu pomaga wyłączenie sprawdzania certyfikatu w trybie zaawansowanym; serwer w sieci wewnętrznej bez `MIG_MAIL_ALLOW_PRIVATE=1` daje komunikat o tej zmiennej (rozdział 5.1) |
 | folder | nazwa folderu musi być dokładnie taka, jak na liście ze „Sprawdź połączenie”; folder docelowy przeniesienia bywa tylko do odczytu |
 | konto Microsoft 365 | konto wymaga ponownego logowania; stan skrzynki zawiera odnośnik do konta, a przycisk **Zaloguj ponownie** w szczegółach konta przywraca pracę skrzynki przy najbliższym sprawdzeniu |
-| logowanie w skrzynce Microsoft 365 | konto działa, ale Exchange odrzuca logowanie do skrzynki; przyczyną bywa wyłączony IMAP na koncie, literówka w adresie skrzynki albo brak uprawnienia pełnego dostępu do skrzynki współdzielonej; zmiana opcji IMAP obowiązuje po około 30 minutach |
+| logowanie w skrzynce Microsoft 365 | konto działa, ale Exchange odrzuca logowanie do skrzynki; przyczyną bywa wyłączony IMAP na koncie, literówka w adresie skrzynki albo brak uprawnienia pełnego dostępu do skrzynki współdzielonej; zmiana opcji IMAP obowiązuje po około 30 minutach, a nowe uprawnienie do skrzynki współdzielonej po kilkunastu minutach |
 | inny | pełny komunikat serwera w stanie skrzynki |
 
 Po błędzie bramka ponawia sprawdzenie z rosnącym odstępem, od ustawionej częstotliwości do
@@ -966,8 +972,12 @@ zablokowała konta pocztowego kolejnymi nieudanymi próbami. Po udanym sprawdzen
 ustawiona częstotliwość.
 
 Reguła powiadomień **Awaria skrzynki pocztowej** (rozdział 9.2) wysyła wiadomość do
-administratora. Błąd logowania zgłasza natychmiast, ponieważ nie ustąpi samoistnie. Błąd
-sieci, folderu albo inny zgłasza, gdy trwa dłużej niż zadana liczba minut, domyślnie 15. Jedna
+administratora. Błąd logowania zgłasza natychmiast, ponieważ nie ustąpi samoistnie. Wyjątkiem
+jest skrzynka Microsoft 365, którą reguła zgłasza po drugim odrzuceniu logowania z rzędu. Exchange
+odrzuca czasem pojedyncze logowanie przy sprawnym koncie, a następna próba kończy się powodzeniem.
+Dlatego po pierwszym odrzuceniu bramka ponawia logowanie po 5 minutach, także w skrzynce sprawdzanej
+rzadziej.
+Błąd sieci, folderu albo inny zgłasza, gdy trwa dłużej niż zadana liczba minut, domyślnie 15. Jedna
 awaria to jedna wiadomość. Powrót do pracy nie generuje wiadomości; stan jest widoczny
 w panelu. Podsumowanie dzienne zawiera liczbę skrzynek i liczbę skrzynek w błędzie.
 
@@ -2183,8 +2193,8 @@ Każdą regułę można wyłączyć, zmienić jej limit na godzinę i grupowanie
 wysyłkę powiadomienia także SMS-em, zgodnie z rozdziałem 9.5. Limit burzy zgłasza się
 raz na okno na integrację (rozdział 3.7). Certyfikat, konto, odbiór i skrzynka zgłaszają się
 raz na przyczynę: ten sam próg dni albo ta sama trwająca awaria nie dają drugiego maila. Błąd
-logowania do skrzynki jest zgłaszany natychmiast, pozostałe awarie skrzynki po zadanej liczbie
-minut. Nowe wydanie
+logowania do skrzynki jest zgłaszany natychmiast, a w skrzynce Microsoft 365 po drugim odrzuceniu
+z rzędu. Pozostałe awarie skrzynki są zgłaszane po zadanej liczbie minut. Nowe wydanie
 zgłasza się raz na numer wydania. Mail zawiera numer nowego i zainstalowanego wydania,
 odnośnik do opisu zmian i do instrukcji aktualizacji (rozdział 7.4 [Uruchomienia](uruchomienie.md)).
 Gdy jest nowsze wydanie, wspomina o nim także podsumowanie dzienne.

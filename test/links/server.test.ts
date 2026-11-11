@@ -10,8 +10,9 @@ const setup = (extra: Partial<LinksServerDeps> = {}) => {
   const clock = { now: LATER };
   const checks = new DomainChecks();
   const app = buildLinksServer({ ...f.deps, checks, now: () => clock.now, ...extra });
+  // Stuknięcie odbiorcy: przeglądarka zawsze wysyła Accept-Language, bez niego wejście liczy się jako automat.
   const get = (url: string, host = 'l.firma.pl', headers: Record<string, string> = {}, remoteAddress = '203.0.113.5') =>
-    app.inject({ method: 'GET', url, headers: { host, ...headers }, remoteAddress });
+    app.inject({ method: 'GET', url, headers: { host, 'accept-language': 'pl-PL,pl;q=0.9', ...headers }, remoteAddress });
   return { ...f, app, clock, checks, get };
 };
 
@@ -70,6 +71,22 @@ describe('serwer przekierowań - krótki link', () => {
     const res = await s.get(`/${code}`, 'l.firma.pl', { 'user-agent': 'WhatsApp/2.24.1 A' });
     expect(res.statusCode).toBe(302);
     expect(s.campaign()).toMatchObject({ clicks: 0, bots: 1 });
+  });
+
+  it('wejście z nagłówkami Chrome bez Accept-Language otrzymuje przekierowanie i liczy się jako automat', async () => {
+    const s = setup();
+    const code = s.addLink();
+    const res = await s.app.inject({
+      method: 'GET', url: `/${code}`, remoteAddress: '66.249.81.192',
+      headers: {
+        host: 'l.firma.pl',
+        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+        accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    });
+    expect(res.statusCode).toBe(302);
+    expect(s.campaign()).toMatchObject({ clicks: 0, opens: 0, bots: 1 });
+    expect(s.opened).toEqual([]);
   });
 
   it('przypadek 5 przeglądu: po odwołaniu klucza link działa, po wyłączeniu domeny daje 410', async () => {

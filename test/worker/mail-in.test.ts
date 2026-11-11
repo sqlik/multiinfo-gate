@@ -715,6 +715,68 @@ describe('MailInPoller: skrzynka Microsoft 365', () => {
     expect(m365.get(id)!.state).toBe('connected');
   });
 
+  // Exchange odrzuca czasem pojedyncze logowanie przy sprawnym koncie („Command Argument Error. 11”, 2026-11-10).
+  it('pojedyncze odrzucenie logowania przy sprawnym koncie nie wywołuje powiadomienia', async () => {
+    const row = mailbox(account('connected'));
+    const token = box.accessToken;
+    box.accessToken = 'inny-token';
+    await p.poll(row, NOW);
+    box.accessToken = token;
+    await p.poll(row, at(5 * 60_000));
+    expect(mailIn.state(row.id)).toMatchObject({ errorKind: null, error: null });
+    expect(notified).toEqual([]);
+  });
+
+  it('dwa odrzucenia logowania z rzędu wywołują jedno powiadomienie', async () => {
+    const row = mailbox(account('connected'));
+    box.accessToken = 'inny-token';
+    await p.poll(row, NOW);
+    expect(notified).toEqual([]);
+    await p.poll(row, at(5 * 60_000));
+    expect(notified).toHaveLength(1);
+    expect(notified[0]).toMatchObject({ event: 'mailbox_failure', subjectKey: `mailbox:${row.id}` });
+    expect(notified[0]!.summary).toContain('logowanie odrzucone od 12:00');
+    await p.poll(row, at(10 * 60_000));
+    expect(notified).toHaveLength(1);
+  });
+
+  it('skrzynka sprawdzana co godzinę potwierdza odrzucenie logowania po 5 minutach i wtedy zgłasza awarię', async () => {
+    const row = make({
+      imap: { ...M365_IMAP, user: 'alarmy@firma.pl', passRef: MAIL_IN_PASSWORD_REF, auth: { mode: 'm365', accountId: account('connected') } },
+      intervalSec: 3600,
+    }, { password: '' });
+    box.accessToken = 'inny-token';
+    await p.poll(row, NOW);
+    expect(Date.parse(mailIn.state(row.id)!.nextPollAt) - NOW.getTime()).toBe(AUTH_RETRY_MS);
+    expect(notified).toEqual([]);
+    await p.poll(row, at(AUTH_RETRY_MS));
+    expect(notified).toHaveLength(1);
+    // Po potwierdzeniu awarii skrzynka wraca do ustawionej częstotliwości.
+    expect(Date.parse(mailIn.state(row.id)!.nextPollAt) - at(AUTH_RETRY_MS).getTime()).toBe(3_600_000);
+  });
+
+  it('błąd sieci, a po nim jedno odrzucenie logowania nie wywołują powiadomienia', async () => {
+    const row = mailbox(account('connected'));
+    box.failConnect = Object.assign(new Error('connect ECONNREFUSED 203.0.113.9:993'), { code: 'ECONNREFUSED' });
+    await p.poll(row, NOW);
+    box.failConnect = null;
+    box.accessToken = 'inny-token';
+    await p.poll(row, at(60_000));
+    expect(mailIn.state(row.id)).toMatchObject({ errorKind: 'auth', failures: 2 });
+    expect(notified).toEqual([]);
+  });
+
+  it('odrzucenie logowania po stanie konta wymagającego logowania nie wywołuje powiadomienia', async () => {
+    const row = mailbox(account('connected'));
+    tokenError = new M365AuthError('needs_login', '50173', 'Konto Microsoft 365 wymaga logowania');
+    await p.poll(row, NOW);
+    tokenError = null;
+    box.accessToken = 'inny-token';
+    await p.poll(row, at(60_000));
+    expect(mailIn.state(row.id)).toMatchObject({ errorKind: 'auth' });
+    expect(notified).toEqual([]);
+  });
+
   it('dostawca tokenów: needs_login daje stan account bez połączenia, błąd usługi daje stan network', async () => {
     const row = mailbox(account('connected'));
     tokenError = new M365AuthError('needs_login', '50173', 'Konto Microsoft 365 wymaga logowania');

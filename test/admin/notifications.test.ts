@@ -43,6 +43,7 @@ describe('GET /powiadomienia', () => {
     const rules = await page('reguly');
     expect(rules.body).toContain('Awaria skrzynki pocztowej');
     expect(rules.body).toMatch(/name="afterMinutes_mailbox_failure"[^>]*value="15"/);
+    expect(rules.body).toContain('a w skrzynce Microsoft 365 po drugim odrzuceniu z rzędu');
   });
 });
 

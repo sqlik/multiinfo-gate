@@ -22,7 +22,7 @@ powiadamia administratora również SMS-em. Od wersji 1.11 bramka zamienia linki
 linki własnej domeny firmy, liczy ich otwarcia i przedstawia wyniki kampanii w panelu, w API
 i w zdarzeniu „link otwarty”.
 
-![Przegląd: liczniki wiadomości wychodzących i odebranych z ostatniej doby, stan połączeń z Multiinfo i ostatnie niepowodzenia](obrazki/przeglad.png)
+![Przegląd: liczniki pojedynczych wiadomości, rozsyłek i SMS-ów odebranych z ostatniej doby, stan połączeń z Multiinfo i ostatnie niepowodzenia](obrazki/przeglad.png)
 
 ## Dla kogo
 
