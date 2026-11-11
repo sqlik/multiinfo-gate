@@ -62,6 +62,15 @@ export function undeliveredWebhooks(n: number): string {
   return `${n} webhooków nie dotarło`;
 }
 
+/** „1 zadanie czeka”, „2 zadania czekają”, „5 zadań czeka” w kolejce workera. */
+export function queuedJobs(n: number): string {
+  const last = n % 10;
+  const tens = n % 100;
+  if (n === 1) return '1 zadanie czeka w kolejce workera';
+  if (last >= 2 && last <= 4 && (tens < 12 || tens > 14)) return `${n} zadania czekają w kolejce workera`;
+  return `${n} zadań czeka w kolejce workera`;
+}
+
 /** Od tylu dni do wygaśnięcia certyfikat trafia na pasek ostrzeżeń. */
 const CERT_WARNING_DAYS = 30;
 
@@ -270,7 +279,7 @@ export function overviewPage(data: OverviewData, now: Date): string {
       <a class="tile" href="/wiadomosci?status=transit">
         <div class="lab">W drodze</div>
         <div class="n">${esc(data.counts.transit)}</div>
-        <div class="d">${esc(share(data.counts.transit, data.counts.total))}<br>${esc(data.queueDepth)} zadań czeka w kolejce workera</div>
+        <div class="d">${esc(share(data.counts.transit, data.counts.total))}<br>${esc(queuedJobs(data.queueDepth))}</div>
       </a>
       <a class="tile" href="/rozsylki">
         <div class="lab">Rozsyłki</div>
