@@ -418,10 +418,10 @@ napis „brak raportu”.
 
 ### 9.4. Automaty
 
-Część wejść w link nie pochodzi od odbiorcy. Wiadomości Google na Androidzie pobierają podgląd
-linku przez serwer Google zaraz po doręczeniu SMS-a. Wiadomości Apple pobierają podgląd po stuknięciu „Stuknij, aby
-wczytać podgląd” przy SMS-ie od nieznanego nadawcy. Komunikatory, skanery poczty i programy
-zabezpieczające pobierają link w podobny sposób.
+Część wejść w link nie pochodzi od odbiorcy. Wiadomości Google na Androidzie pobierają podgląd linku
+przez serwer Google zaraz po doręczeniu SMS-a. Wiadomości Apple pobierają podgląd po stuknięciu
+„Stuknij, aby wczytać podgląd” przy SMS-ie od nieznanego nadawcy. Komunikatory, skanery poczty i
+programy zabezpieczające pobierają link w podobny sposób.
 
 Bramka rozpoznaje takie wejście po metodzie `HEAD`, po nagłówku wstępnego pobierania albo po
 nagłówku `User-Agent` znanego programu podglądu. Automatem jest też wejście bez nagłówka

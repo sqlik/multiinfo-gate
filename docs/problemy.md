@@ -640,11 +640,12 @@ Objaw: kafelek „Automaty” w szczegółach kampanii pokazuje wejścia, a kafe
 i „Kliknięcia” pokazują 0 albo wartości niższe od oczekiwanych.
 
 Wejście automatu oznacza pobranie linku przez program, a nie przez odbiorcę. Wiadomości Google
-pobierają podgląd linku przez serwer Google zaraz po doręczeniu SMS-a. Wiadomości Apple pobierają podgląd po
-stuknięciu „Stuknij, aby wczytać podgląd” przy SMS-ie od nieznanego nadawcy. Komunikatory, skanery
-poczty i programy zabezpieczające pobierają link w podobny sposób. Bramka nie wlicza takich wejść
-do otwarć ani kliknięć, ponieważ nie świadczą o zainteresowaniu odbiorcy. Wiele automatów przy
-niewielu otwarciach oznacza więc zwykle, że SMS-y dotarły, ale odbiorcy nie stuknęli linku.
+pobierają podgląd linku przez serwer Google zaraz po doręczeniu SMS-a. Wiadomości Apple pobierają
+podgląd po stuknięciu „Stuknij, aby wczytać podgląd” przy SMS-ie od nieznanego nadawcy.
+Komunikatory, skanery poczty i programy zabezpieczające pobierają link w podobny sposób. Bramka nie
+wlicza takich wejść do otwarć ani kliknięć, ponieważ nie świadczą o zainteresowaniu odbiorcy. Wiele
+automatów przy niewielu otwarciach oznacza więc zwykle, że SMS-y dotarły, ale odbiorcy nie stuknęli
+linku.
 
 Bramka rozpoznaje automat po metodzie `HEAD`, po nagłówku wstępnego pobierania i po nazwie
 programu w nagłówku `User-Agent`. Automatem jest też wejście bez nagłówka `Accept-Language`,

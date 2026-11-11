@@ -497,6 +497,54 @@ describe('handlePackageReport', () => {
     expect(lastWebhook()).toMatchObject({ event: 'package.completed', status: 'completed', report: 'failed', providerCode: -13 });
   });
 
+  it('oczekiwanie na kod -13 nie zużywa ponowień, dlatego późniejszy błąd sieci jest ponawiany', async () => {
+    let at = NOW;
+    let current: Parameters<typeof handlePackageReport>[0] = job('package.report');
+    for (let i = 0; i < SEND_BACKOFF_MS.length; i++) {
+      packageFullInfo.mockRejectedValueOnce(REPORT_BUSY());
+      await handlePackageReport(current, deps, at);
+      at = new Date(at.getTime() + REPORT_RETRY_MS + 1);
+      [current] = deps.jobs.claim(at, 10) as [typeof current];
+    }
+    expect(current.attempts).toBe(0);
+    packageFullInfo.mockRejectedValueOnce(Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }));
+    await handlePackageReport(current, deps, at);
+    expect(deps.packages.get('pkg_1')!.reportStatus).toBe('pending');
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
+    expect(deps.jobs.depth()).toBe(1);
+  });
+
+  it('raport w przygotowaniu nie zużywa ponowień błędu sieci', async () => {
+    packageFullInfo.mockResolvedValueOnce({ reportId: '123', generation: 1, minutesLeft: 0 });
+    await handlePackageReport(job('package.report'), deps, NOW);
+    const [next] = deps.jobs.claim(new Date(NOW.getTime() + REPORT_RETRY_MS + 1), 10);
+    expect(next!.attempts).toBe(0);
+  });
+
+  it('kod -13 przy pobieraniu pliku raportu kończy raport od razu, jak inny kod trwały', async () => {
+    packageFullInfo.mockResolvedValueOnce({ reportId: '123', generation: 2, minutesLeft: 30 });
+    getReport.mockRejectedValueOnce(new ProviderError(-13, 'Zla komenda', 'permanent'));
+    await handlePackageReport(job('package.report'), deps, NOW);
+    expect(deps.packages.get('pkg_1')!.reportStatus).toBe('failed');
+    expect(lastWebhook()).toMatchObject({ report: 'failed', providerCode: -13 });
+  });
+
+  it('odpowiedź inna niż -13 zdejmuje znacznik, dlatego późniejsze -13 otwiera nowe 10 minut', async () => {
+    packageFullInfo.mockRejectedValueOnce(REPORT_BUSY());
+    await handlePackageReport(job('package.report'), deps, NOW);
+    let at = new Date(NOW.getTime() + REPORT_RETRY_MS + 1);
+    let [current] = deps.jobs.claim(at, 10);
+    packageFullInfo.mockResolvedValueOnce({ reportId: '123', generation: 1, minutesLeft: 0 });
+    await handlePackageReport(current!, deps, at);
+    at = new Date(NOW.getTime() + REPORT_BUSY_LIMIT_MS + 60_000);
+    [current] = deps.jobs.claim(at, 10);
+    expect(current!.payload).toEqual({ packageId: 'pkg_1' });
+    packageFullInfo.mockRejectedValueOnce(REPORT_BUSY());
+    await handlePackageReport(current!, deps, at);
+    expect(deps.packages.get('pkg_1')!.reportStatus).toBe('pending');
+    expect(deps.deliveries.counts(new Date(0))).toEqual({ pending: 0, failed: 0 });
+  });
+
   it('inny kod trwały przy pobieraniu raportu od razu kończy raport stanem nieudanym', async () => {
     packageFullInfo.mockRejectedValueOnce(new ProviderError(-1, 'Nieznany błąd', 'permanent'));
     await handlePackageReport(job('package.report'), deps, NOW);

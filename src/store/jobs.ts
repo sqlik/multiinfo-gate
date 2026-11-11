@@ -78,6 +78,11 @@ export class JobsRepo {
       .run(iso(at), id);
   }
 
+  /** Zdejmuje znacznik „raport chwilowo niedostępny” po odpowiedzi innej niż -13. */
+  clearReportBusy(id: number): void {
+    this.db.prepare("UPDATE jobs SET payload = json_remove(payload, '$.reportBusySince') WHERE id = ?").run(id);
+  }
+
   /** Zdejmuje znacznik przekazania, gdy serwer odrzucił sesję, zanim obsłużył żądanie. */
   clearSent(id: number): void {
     this.db.prepare("UPDATE jobs SET payload = json_remove(payload, '$.sentAt') WHERE id = ?").run(id);

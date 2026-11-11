@@ -975,6 +975,8 @@ Reguła powiadomień **Awaria skrzynki pocztowej** (rozdział 9.2) wysyła wiado
 administratora. Błąd logowania zgłasza natychmiast, ponieważ nie ustąpi samoistnie. Wyjątkiem
 jest skrzynka Microsoft 365, którą reguła zgłasza po drugim odrzuceniu logowania z rzędu. Exchange
 odrzuca czasem pojedyncze logowanie przy sprawnym koncie, a następna próba kończy się powodzeniem.
+Dlatego po pierwszym odrzuceniu bramka ponawia logowanie po 5 minutach, także w skrzynce sprawdzanej
+rzadziej.
 Błąd sieci, folderu albo inny zgłasza, gdy trwa dłużej niż zadana liczba minut, domyślnie 15. Jedna
 awaria to jedna wiadomość. Powrót do pracy nie generuje wiadomości; stan jest widoczny
 w panelu. Podsumowanie dzienne zawiera liczbę skrzynek i liczbę skrzynek w błędzie.

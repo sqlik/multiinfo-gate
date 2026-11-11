@@ -275,16 +275,22 @@ export async function handlePackageReport(job: Job, deps: WorkerDeps, now: Date)
       log.warn('rozsylka.raport_nieudany', { packageId: pkg.id, code, error: message });
     };
 
+  // Kod -13 oznacza chwilową niedostępność tylko w odpowiedzi packagefullinfo.aspx, a nie przy pobieraniu pliku raportu.
+  let asking = true;
   try {
     const client = deps.clients.for(pkg.accountId);
     const info = await client.packageFullInfo(pkg.miPackageId, 'csv');
+    asking = false;
+    // Odpowiedź inna niż -13 kończy serię, dlatego następne -13 liczy 10 minut od nowa.
+    if (typeof job.payload.reportBusySince === 'string') deps.jobs.clearReportBusy(job.id);
     if (info.generation === 3) {
       reportFailed(null, 'Multiinfo nie wygenerowało raportu.');
       return;
     }
     if (info.generation !== 2) {
       if (!refresh) deps.packages.setReport(pkg.id, { status: 'pending', reportId: info.reportId });
-      deps.jobs.retry(job.id, new Date(now.getTime() + REPORT_RETRY_MS), 'raport w przygotowaniu');
+      // Czekanie na raport nie jest błędem zadania i nie zużywa ponowień błędów sieci.
+      deps.jobs.defer(job.id, new Date(now.getTime() + REPORT_RETRY_MS), 'raport w przygotowaniu');
       return;
     }
 
@@ -314,11 +320,11 @@ export async function handlePackageReport(job: Job, deps: WorkerDeps, now: Date)
     scheduleRefresh(deps, pkg, new Date(now.getTime() + info.minutesLeft * 60_000), now);
     log.info('rozsylka.raport', { packageId: pkg.id, rows: rows.length, reportId: info.reportId });
   } catch (error) {
-    if (error instanceof ProviderError && error.code === REPORT_BUSY_CODE) {
+    if (asking && error instanceof ProviderError && error.code === REPORT_BUSY_CODE) {
       const since = typeof job.payload.reportBusySince === 'string' ? Date.parse(job.payload.reportBusySince) : now.getTime();
       if (now.getTime() - since < REPORT_BUSY_LIMIT_MS) {
         deps.jobs.markReportBusy(job.id, now);
-        deps.jobs.retry(job.id, new Date(now.getTime() + REPORT_RETRY_MS), `raport w przygotowaniu (kod ${REPORT_BUSY_CODE})`);
+        deps.jobs.defer(job.id, new Date(now.getTime() + REPORT_RETRY_MS), `raport w przygotowaniu (kod ${REPORT_BUSY_CODE})`);
         log.warn('rozsylka.raport_chwilowy_blad', { packageId: pkg.id, code: REPORT_BUSY_CODE, refresh });
         return;
       }

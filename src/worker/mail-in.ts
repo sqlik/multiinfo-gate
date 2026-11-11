@@ -52,6 +52,15 @@ export function nextPollDelayMs(intervalSec: number, failures: number, kind: Mai
   return kind === 'auth' ? Math.max(grown, AUTH_RETRY_MS) : grown;
 }
 
+/**
+ * Pierwsze odrzucenie logowania z rzędu w skrzynce Microsoft 365. Exchange odrzuca czasem pojedyncze logowanie
+ * przy sprawnym koncie („Command Argument Error. 11”), dlatego takie odrzucenie nie wywołuje powiadomienia,
+ * a próba potwierdzająca przychodzi po AUTH_RETRY_MS także przy rzadszej częstotliwości sprawdzania.
+ */
+function firstM365Rejection(mode: MailInConfig['imap']['auth']['mode'], kind: MailboxErrorKind, previousKind: MailboxErrorKind | null): boolean {
+  return kind === 'auth' && mode === 'm365' && previousKind !== 'auth';
+}
+
 const KIND_WORDS: Record<MailboxErrorKind, string> = {
   auth: 'logowanie odrzucone', network: 'serwer nie odpowiada', folder: 'folder niedostępny', other: 'błąd odpytania',
   account: 'konto Microsoft 365 wymaga logowania',
@@ -184,7 +193,10 @@ export class MailInPoller {
       // Jak w recordPoll: przejście między czekaniem na konto a innym błędem liczy się od pierwszej próby.
       const fresh = !before || (before.errorKind === 'account') !== (kind === 'account');
       const failures = fresh ? 1 : before.failures + 1;
-      mailIn.recordPoll(integration.id, { ok: false, error, errorKind: kind, at: now, nextPollAt: new Date(now.getTime() + nextPollDelayMs(config.intervalSec, failures, kind)) });
+      const delay = firstM365Rejection(config.imap.auth.mode, kind, before?.errorKind ?? null)
+        ? AUTH_RETRY_MS
+        : nextPollDelayMs(config.intervalSec, failures, kind);
+      mailIn.recordPoll(integration.id, { ok: false, error, errorKind: kind, at: now, nextPollAt: new Date(now.getTime() + delay) });
       log.warn('skrzynka.blad', { integrationId: integration.id, kind, failures });
       this.notifyFailure(integration, kind, error, now, before?.errorKind ?? null);
     } finally {
@@ -364,9 +376,8 @@ export class MailInPoller {
     const state = this.deps.mailIn.state(integration.id);
     // Konto wymagające logowania zgłasza reguła konta Microsoft 365: jedna przyczyna, jedno powiadomienie, nie po jednym na skrzynkę.
     if (kind === 'account' || !state || state.notifiedAt !== null || state.errorSince === null) return;
-    // Exchange odrzuca czasem pojedyncze logowanie przy sprawnym koncie („Command Argument Error. 11”). Trwała awaria,
-    // na przykład odwołany sekret aplikacji, powtarza się przy następnej próbie, czyli po AUTH_RETRY_MS.
-    if (kind === 'auth' && integration.config.imap.auth.mode === 'm365' && previousKind !== 'auth') return;
+    // Trwała awaria, na przykład odwołany sekret aplikacji, powtarza się przy próbie potwierdzającej po AUTH_RETRY_MS.
+    if (firstM365Rejection(integration.config.imap.auth.mode, kind, previousKind)) return;
     const afterMinutes = Number(this.deps.notifications?.rule('mailbox_failure').params.afterMinutes ?? DEFAULT_AFTER_MINUTES);
     const lasting = now.getTime() - Date.parse(state.errorSince) >= afterMinutes * 60_000;
     if (kind !== 'auth' && !lasting) return;

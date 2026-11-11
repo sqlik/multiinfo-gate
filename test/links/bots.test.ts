@@ -54,7 +54,7 @@ describe('isAutomated', () => {
     expect(isAutomated('GET', { 'user-agent': [CHROME_ANDROID], 'accept-language': [LANG] })).toBe(false);
   });
 
-  // Nagłówki z diagnozy filmu 13 (2026-11-11): SMS z krótkim linkiem doręczony na Androida z Wiadomościami Google.
+  // Nagłówki zarejestrowane 2026-11-11: SMS z krótkim linkiem doręczony na Androida z Wiadomościami Google.
   it('uznaje pobranie podglądu Wiadomości Google przez serwer Google za automat', () => {
     const google = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
     expect(isAutomated('GET', { 'user-agent': google, 'accept-encoding': 'gzip, deflate, br' })).toBe(true);

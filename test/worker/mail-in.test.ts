@@ -740,6 +740,21 @@ describe('MailInPoller: skrzynka Microsoft 365', () => {
     expect(notified).toHaveLength(1);
   });
 
+  it('skrzynka sprawdzana co godzinę potwierdza odrzucenie logowania po 5 minutach i wtedy zgłasza awarię', async () => {
+    const row = make({
+      imap: { ...M365_IMAP, user: 'alarmy@firma.pl', passRef: MAIL_IN_PASSWORD_REF, auth: { mode: 'm365', accountId: account('connected') } },
+      intervalSec: 3600,
+    }, { password: '' });
+    box.accessToken = 'inny-token';
+    await p.poll(row, NOW);
+    expect(Date.parse(mailIn.state(row.id)!.nextPollAt) - NOW.getTime()).toBe(AUTH_RETRY_MS);
+    expect(notified).toEqual([]);
+    await p.poll(row, at(AUTH_RETRY_MS));
+    expect(notified).toHaveLength(1);
+    // Po potwierdzeniu awarii skrzynka wraca do ustawionej częstotliwości.
+    expect(Date.parse(mailIn.state(row.id)!.nextPollAt) - at(AUTH_RETRY_MS).getTime()).toBe(3_600_000);
+  });
+
   it('błąd sieci, a po nim jedno odrzucenie logowania nie wywołują powiadomienia', async () => {
     const row = mailbox(account('connected'));
     box.failConnect = Object.assign(new Error('connect ECONNREFUSED 203.0.113.9:993'), { code: 'ECONNREFUSED' });
