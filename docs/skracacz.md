@@ -416,14 +416,20 @@ napis „brak raportu”.
 ### 9.4. Automaty
 
 Część wejść w link nie pochodzi od odbiorcy. Wiadomości Google na Androidzie pobierają podgląd
-linku zaraz po doręczeniu SMS-a. Wiadomości Apple pobierają podgląd po stuknięciu „Stuknij, aby
+linku przez serwer Google zaraz po doręczeniu SMS-a. Wiadomości Apple pobierają podgląd po stuknięciu „Stuknij, aby
 wczytać podgląd” przy SMS-ie od nieznanego nadawcy. Komunikatory, skanery poczty i programy
 zabezpieczające pobierają link w podobny sposób.
 
 Bramka rozpoznaje takie wejście po metodzie `HEAD`, po nagłówku wstępnego pobierania albo po
-nagłówku `User-Agent` znanego programu podglądu. Wejście automatu również otrzymuje
-przekierowanie, dzięki czemu podgląd linku działa. Nie liczy się jednak do otwarć ani kliknięć,
-tylko do kafelka „Automaty”. Bramka nie zapisuje nagłówka `User-Agent`.
+nagłówku `User-Agent` znanego programu podglądu. Automatem jest też wejście bez nagłówka
+`Accept-Language`, ponieważ każda przeglądarka wysyła ten nagłówek, a serwer Google go pomija.
+Wejście automatu również otrzymuje przekierowanie, dzięki czemu podgląd linku działa. Nie liczy
+się jednak do otwarć ani kliknięć, tylko do kafelka „Automaty”. Bramka nie zapisuje nagłówka
+`User-Agent`.
+
+Aplikacja zabezpieczająca na telefonie może otworzyć link w przeglądarce telefonu bez udziału
+odbiorcy, na przykład w celu sprawdzenia strony docelowej. Takie wejście nie różni się od
+stuknięcia odbiorcy, dlatego bramka liczy je jako otwarcie.
 
 ### 9.5. Wyłączenie linków kampanii
 

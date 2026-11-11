@@ -10,8 +10,9 @@ const setup = (extra: Partial<LinksServerDeps> = {}) => {
   const clock = { now: LATER };
   const checks = new DomainChecks();
   const app = buildLinksServer({ ...f.deps, checks, now: () => clock.now, ...extra });
+  // Stuknięcie odbiorcy: przeglądarka zawsze wysyła Accept-Language, bez niego wejście liczy się jako automat.
   const get = (url: string, host = 'l.firma.pl', headers: Record<string, string> = {}, remoteAddress = '203.0.113.5') =>
-    app.inject({ method: 'GET', url, headers: { host, ...headers }, remoteAddress });
+    app.inject({ method: 'GET', url, headers: { host, 'accept-language': 'pl-PL,pl;q=0.9', ...headers }, remoteAddress });
   return { ...f, app, clock, checks, get };
 };
 
