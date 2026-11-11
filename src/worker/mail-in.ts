@@ -186,7 +186,7 @@ export class MailInPoller {
       const failures = fresh ? 1 : before.failures + 1;
       mailIn.recordPoll(integration.id, { ok: false, error, errorKind: kind, at: now, nextPollAt: new Date(now.getTime() + nextPollDelayMs(config.intervalSec, failures, kind)) });
       log.warn('skrzynka.blad', { integrationId: integration.id, kind, failures });
-      this.notifyFailure(integration, kind, error, now);
+      this.notifyFailure(integration, kind, error, now, before?.errorKind ?? null);
     } finally {
       if (timer) clearTimeout(timer);
     }
@@ -356,11 +356,17 @@ export class MailInPoller {
     if (content) this.deps.jobs.enqueue('mail', { ...content }, now);
   }
 
-  /** Jedno powiadomienie na awarię: logowanie od razu, reszta po `afterMinutes` trwania. */
-  private notifyFailure(integration: MailInIntegration, kind: MailboxErrorKind, error: string, now: Date): void {
+  /**
+   * Jedno powiadomienie na awarię: logowanie od razu, w skrzynce Microsoft 365 przy drugim odrzuceniu z rzędu,
+   * reszta po `afterMinutes` trwania. `previousKind` to rodzaj błędu sprzed bieżącego odpytania.
+   */
+  private notifyFailure(integration: MailInIntegration, kind: MailboxErrorKind, error: string, now: Date, previousKind: MailboxErrorKind | null): void {
     const state = this.deps.mailIn.state(integration.id);
     // Konto wymagające logowania zgłasza reguła konta Microsoft 365: jedna przyczyna, jedno powiadomienie, nie po jednym na skrzynkę.
     if (kind === 'account' || !state || state.notifiedAt !== null || state.errorSince === null) return;
+    // Exchange odrzuca czasem pojedyncze logowanie przy sprawnym koncie („Command Argument Error. 11”). Trwała awaria,
+    // na przykład odwołany sekret aplikacji, powtarza się przy następnej próbie, czyli po AUTH_RETRY_MS.
+    if (kind === 'auth' && integration.config.imap.auth.mode === 'm365' && previousKind !== 'auth') return;
     const afterMinutes = Number(this.deps.notifications?.rule('mailbox_failure').params.afterMinutes ?? DEFAULT_AFTER_MINUTES);
     const lasting = now.getTime() - Date.parse(state.errorSince) >= afterMinutes * 60_000;
     if (kind !== 'auth' && !lasting) return;

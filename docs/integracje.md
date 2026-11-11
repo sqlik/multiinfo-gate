@@ -966,8 +966,10 @@ zablokowała konta pocztowego kolejnymi nieudanymi próbami. Po udanym sprawdzen
 ustawiona częstotliwość.
 
 Reguła powiadomień **Awaria skrzynki pocztowej** (rozdział 9.2) wysyła wiadomość do
-administratora. Błąd logowania zgłasza natychmiast, ponieważ nie ustąpi samoistnie. Błąd
-sieci, folderu albo inny zgłasza, gdy trwa dłużej niż zadana liczba minut, domyślnie 15. Jedna
+administratora. Błąd logowania zgłasza natychmiast, ponieważ nie ustąpi samoistnie. Wyjątkiem
+jest skrzynka Microsoft 365, którą reguła zgłasza po drugim odrzuceniu logowania z rzędu. Exchange
+odrzuca czasem pojedyncze logowanie przy sprawnym koncie, a następna próba kończy się powodzeniem.
+Błąd sieci, folderu albo inny zgłasza, gdy trwa dłużej niż zadana liczba minut, domyślnie 15. Jedna
 awaria to jedna wiadomość. Powrót do pracy nie generuje wiadomości; stan jest widoczny
 w panelu. Podsumowanie dzienne zawiera liczbę skrzynek i liczbę skrzynek w błędzie.
 
@@ -2183,8 +2185,8 @@ Każdą regułę można wyłączyć, zmienić jej limit na godzinę i grupowanie
 wysyłkę powiadomienia także SMS-em, zgodnie z rozdziałem 9.5. Limit burzy zgłasza się
 raz na okno na integrację (rozdział 3.7). Certyfikat, konto, odbiór i skrzynka zgłaszają się
 raz na przyczynę: ten sam próg dni albo ta sama trwająca awaria nie dają drugiego maila. Błąd
-logowania do skrzynki jest zgłaszany natychmiast, pozostałe awarie skrzynki po zadanej liczbie
-minut. Nowe wydanie
+logowania do skrzynki jest zgłaszany natychmiast, a w skrzynce Microsoft 365 po drugim odrzuceniu
+z rzędu. Pozostałe awarie skrzynki są zgłaszane po zadanej liczbie minut. Nowe wydanie
 zgłasza się raz na numer wydania. Mail zawiera numer nowego i zainstalowanego wydania,
 odnośnik do opisu zmian i do instrukcji aktualizacji (rozdział 7.4 [Uruchomienia](uruchomienie.md)).
 Gdy jest nowsze wydanie, wspomina o nim także podsumowanie dzienne.

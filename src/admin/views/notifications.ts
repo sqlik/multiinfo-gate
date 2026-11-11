@@ -172,7 +172,7 @@ function paramsCell(rule: RuleRow, raw: Record<string, string> | null | undefine
     case 'inbound_failure':
       return cell(`<input class="cell" name="afterMinutes_inbound_failure" type="number" min="1" max="1440" value="${val('afterMinutes_inbound_failure', String(rule.params.afterMinutes ?? 15))}"${disabled}>`, 'po ilu minutach niepowodzeń');
     case 'mailbox_failure':
-      return cell(`<input class="cell" name="afterMinutes_mailbox_failure" type="number" min="1" max="1440" value="${val('afterMinutes_mailbox_failure', String(rule.params.afterMinutes ?? 15))}"${disabled}>`, 'po ilu minutach niepowodzeń, odrzucone logowanie natychmiast');
+      return cell(`<input class="cell" name="afterMinutes_mailbox_failure" type="number" min="1" max="1440" value="${val('afterMinutes_mailbox_failure', String(rule.params.afterMinutes ?? 15))}"${disabled}>`, 'po ilu minutach niepowodzeń, odrzucone logowanie natychmiast, a w skrzynce Microsoft 365 po drugiej próbie');
     case 'daily_summary':
       return cell(`<input class="cell" name="hour_daily_summary" type="number" min="0" max="23" value="${val('hour_daily_summary', String(rule.params.hour ?? 8))}"${disabled}>`, 'o której godzinie');
     case 'mail_undeliverable':
