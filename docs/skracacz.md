@@ -21,6 +21,11 @@ i przechowywanie danych. Wystawienie portu krótkich linków na serwerze pośred
 rozdział 6 [Uruchomienia](uruchomienie.md). Pola żądań i odpowiedzi opisuje artykuł
 [API dla aplikacji](api.md), a pola akcji konektora artykuł [Power Automate](power-automate.md).
 
+Film „Skracacz linków i kampanie” przedstawia przygotowanie domeny, ustawienia klucza API, rozsyłkę
+z nazwą kampanii oraz wyniki kampanii w panelu.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/973c1d37-af4c-4894-82bb-98ea03a2e232" title="Film „Skracacz linków i kampanie”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+
 ## 1. Przebieg pracy
 
 Pracę ze skracaczem dzielą między siebie dwie role. Administrator bramki przygotowuje domenę

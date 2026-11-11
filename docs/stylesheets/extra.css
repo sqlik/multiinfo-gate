@@ -25,3 +25,16 @@
   border: 1px solid rgba(26, 29, 27, 0.15);
   border-radius: 4px;
 }
+
+/* Odtwarzacz filmu instruktażowego z Bunny Stream: proporcje 16:9 na każdej szerokości strony */
+.md-typeset .film {
+  aspect-ratio: 16 / 9;
+  margin: 1em 0;
+}
+
+.md-typeset .film iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 4px;
+}

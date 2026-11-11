@@ -56,6 +56,12 @@ w ostatniej dobie miały błąd.
 
 ![Lista integracji: nazwa z ustawieniem, kierunek, klucz i konto, stan, ostatnie zdarzenie i liczniki z doby](obrazki/integracje.png)
 
+Film „Integracja z aplikacją przez webhook” przedstawia integrację, za pomocą której aplikacja
+wysyła SMS-y przez bramkę. Obejmuje gotowe ustawienie Prosty JSON w trybie prostym, dziennik
+integracji i sprawdzenie ładunku aplikacji jako próbki.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/2fbd77a8-57f6-430a-81f7-a5e94e25bdd5" title="Film „Integracja z aplikacją przez webhook”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+
 ### 2.1. Adres bramki
 
 Zanim dodasz pierwszą integrację, podaj raz **adres, pod którym aplikacje widzą bramkę**. Panel
@@ -493,6 +499,12 @@ wiadomości e-mail są widoczne na ekranie „Wiadomości” z nazwą klucza i n
 pozostałe. Szczegóły takiej wiadomości mają dodatkowo wiersz „E-mail nadawcy” z adresem, z którego
 przyszła wiadomość.
 
+Film „Mail2SMS z własną skrzynką IMAP” przedstawia integrację ze skrzynką u zewnętrznego dostawcy
+poczty. Obejmuje ustawienia skrzynki, listę dozwolonych nadawców i SMS wysłany na podstawie
+wiadomości z programu pocztowego.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/2e3a2480-2e72-4c20-9726-c8619c0bdfff" title="Film „Mail2SMS z własną skrzynką IMAP”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+
 ### 5.1. Skrzynka
 
 Przycisk **Dodaj integrację**, kierunek „Z poczty”, następnie kafelek z nazwą dostawcy. Kafelek
@@ -514,6 +526,11 @@ hasła skrzynki ani hasła aplikacji, dlatego bramka loguje się kontem Microsof
 na ekranie **Konta Microsoft 365**. Przygotowanie skrzynki bramki w Microsoft 365 i Entra ID opisuje
 rozdział 4.8 [Uruchomienia](uruchomienie.md#48-konto-microsoft-365). Skrzynki prywatne
 Outlook.com nie są obsługiwane.
+
+Użycie skrzynki Microsoft 365 w Mail2SMS oraz wysyłkę maili powiadomień przez skrzynkę bramki
+przedstawia film „Mail2SMS i powiadomienia przez Microsoft 365”.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/ef1cf5d0-b96e-4b45-9a21-22799ac0b523" title="Film „Mail2SMS i powiadomienia przez Microsoft 365”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
 
 Formularz w trybie prostym ma sekcje ułożone od najważniejszej. Sekcja **Skrzynka** zawiera
 serwer, port, zabezpieczenie, login, hasło, folder i częstotliwość sprawdzania.
@@ -1002,6 +1019,11 @@ Wystarczy zwykły SMS.
 Grupa działa w imieniu klucza API, tak jak pozostałe integracje. SMS-y do odbiorców są widoczne
 na ekranie „Wiadomości” z nazwą klucza i nazwą grupy. Każdy odbiorca otrzymuje osobną wiadomość.
 Jeden SMS do grupy 20 numerów to 20 wiadomości na koncie Multiinfo.
+
+Film „SMS do grupy” przedstawia dodanie grupy w trybie osobnych list oraz rozsyłkę SMS-a wysłanego z
+telefonu dyspozytora. Obejmuje także potwierdzenie do nadawcy i dziennik grupy.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/d512b31e-dfb2-434c-b024-509f5df11c79" title="Film „SMS do grupy”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
 
 ### 5a.1. Dwa tryby
 
@@ -2084,6 +2106,11 @@ zawiera trzy zakładki: **Konfiguracja** z formularzem SMTP, **Reguły** z tabel
 **SMS** z ustawieniami kanału SMS.
 
 ![Ekran Powiadomienia, zakładka Konfiguracja: formularz SMTP z przyciskiem maila testowego](obrazki/powiadomienia.png)
+
+Film „Powiadomienia administratora” przedstawia konfigurację serwera SMTP, kanał SMS i tabelę reguł
+oraz pierwsze powiadomienia w skrzynce i na telefonie administratora.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/9fe19919-f0c1-4fb7-b2ea-4bd0afac83b9" title="Film „Powiadomienia administratora”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
 
 ### 9.1. SMTP
 
