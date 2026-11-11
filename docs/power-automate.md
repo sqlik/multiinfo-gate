@@ -19,6 +19,11 @@ etykiety na ekranie mogą odbiegać od opisu.
 W wersji 1.9 konektor obsługuje wysyłkę SMS-ów i sprawdzanie ich stanu. Odbieranie SMS-ów
 w przepływie nie jest jeszcze dostępne.
 
+Film „Power Automate” prowadzi przez rozdziały 3-6, od integracji w panelu bramki i importu pliku
+konektora do pierwszego przepływu z SMS-em do jednego numeru.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/4995ec49-1d43-45f3-b4ea-105918ee8759" title="Film „Power Automate”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+
 ## 1. Jakie możliwości oferuje konektor
 
 Konektor udostępnia sześć akcji:

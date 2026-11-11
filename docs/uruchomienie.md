@@ -30,6 +30,11 @@ to ustala się w panelu Multiinfo i z opiekunem technicznym Polkomtel, zanim bra
 zainstalowana. Bez podpisanego certyfikatu nie można sprawdzić połączenia. Obieg certyfikatu
 warto więc rozpocząć jako pierwszy.
 
+Film „Multiinfo i Multiinfo Gate” przedstawia zależność między platformą Multiinfo a bramką oraz
+przygotowania opisane w tym rozdziale.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/8dcd9b92-76b1-48be-aba7-9c8d8b9f0eb0" title="Film „Multiinfo i Multiinfo Gate”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+
 ### 1.1. Użytkownik API
 
 W panelu Multiinfo administrator konta tworzy użytkownika API. Jest to użytkownik osobny od
@@ -168,6 +173,11 @@ do bramki. To bramka odczytuje i pokazuje potrzebne wartości.
 
 Jeżeli zamiast serwera z Dockerem masz własny Proxmox VE, przejdź do rozdziału 9. Rozdziały 2
 i 3 nie mają wtedy zastosowania.
+
+Film „Instalacja bramki” przedstawia kroki z rozdziałów 2 i 3 na czystym serwerze z Ubuntu. Obejmuje
+także certyfikat dla własnej domeny uzyskany przez Caddy, opisany w rozdziale 6.5.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/e275e596-4490-4e54-aea2-518e2cf12065" title="Film „Instalacja bramki”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
 
 ### 2.1. Wymagania
 
@@ -384,6 +394,11 @@ i `logowanie_zablokowane`.
 
 ## 4. Panel
 
+Film „Konto Multiinfo” przedstawia pierwsze logowanie do panelu, dodanie konta Multiinfo
+z certyfikatem oraz sprawdzenie połączenia.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/8fe35efd-6b8c-4eea-b4bd-62bc57030674" title="Film „Konto Multiinfo”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+
 ### 4.1. Dostęp przez tunel SSH
 
 Panel nasłuchuje wyłącznie na adresie lokalnym serwera (`127.0.0.1:8081`). Nie jest osiągalny
@@ -479,6 +494,11 @@ zamaskowanym.
 ![Karta konta po sprawdzeniu połączenia: odczytane dane certyfikatu i ślad zapytania z kodem -31](obrazki/polaczenie.png)
 
 ### 4.4. Nadpisy dozwolone dla konta
+
+Film „Klucze API i nadpisy” przedstawia listę nadpisów dozwolonych dla konta oraz klucz API dla
+aplikacji, opisany w rozdziale 4.5.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/d4aea851-794c-4827-820a-a4a29d3d041d" title="Film „Klucze API i nadpisy”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
 
 Listę nadpisów, z których wolno korzystać przy wysyłce z danego konta, prowadzisz w bramce
 ręcznie. Multiinfo nie udostępnia przez API listy nadpisów uruchomionych dla
@@ -646,6 +666,11 @@ połączenie skrzynki z bramką w panelu. Dwa pierwsze etapy wykonuje administra
 Użycie skrzynki w Mail2SMS opisuje rozdział 5.1 [Integracji z
 aplikacjami](integracje.md#51-skrzynka), a wysyłkę maili powiadomień rozdział 9.1 tego samego
 artykułu.
+
+Film „Konto Microsoft 365” przedstawia wszystkie trzy etapy, od skrzynki bramki w centrum
+administracyjnym Microsoft 365 do połączenia konta w panelu.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/59fa9fd8-422e-4b3d-8d07-712d9421e85c" title="Film „Konto Microsoft 365”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
 
 #### Skrzynka bramki
 
@@ -853,6 +878,11 @@ wymagają otwarcia żadnego portu.
 
 ## 5. Pierwsza wysyłka
 
+Film „Pierwsza wysyłka i dziennik” przedstawia wysłanie pierwszego SMS-a przez bramkę, jego stan
+doręczenia oraz szczegóły w dzienniku wiadomości.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/1d30fc98-f1b2-4c21-a8f1-ee7e2c03a7b1" title="Film „Pierwsza wysyłka i dziennik”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+
 ### 5.1. Tunel do API
 
 Do czasu wystawienia API pod domeną (rozdział 6) port 8080 jest dostępny tylko z serwera. Do
@@ -930,6 +960,11 @@ jako narzędzie testowe i jako wzorzec kodu do przeniesienia do własnej aplikac
 uruchomienia jest w `examples/php/README.md`.
 
 ### 5.5. Pierwsza wiadomość przychodząca
+
+Film „Odbiór SMS-ów od abonentów” przedstawia stan odbioru na karcie konta, zakładkę **Odebrane** oraz
+przekazanie odebranego SMS-a do aplikacji przez integrację.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/0a7485f3-884c-401b-8e90-6f9f287fce91" title="Film „Odbiór SMS-ów od abonentów”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
 
 Po ustawieniu kierowania do API w Multiinfo (punkt 1.6) i zaznaczeniu odbioru przy kluczu
 (punkt 4.5) wyślij z telefonu SMS-a na numer usługi. W ciągu kilku sekund wiadomość pojawi się

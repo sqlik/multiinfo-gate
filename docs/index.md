@@ -48,6 +48,32 @@ zamiast certyfikatów, oraz panel do zarządzania kontami, kluczami i podglądu 
 - [Przykład w PHP](https://github.com/sqlik/multiinfo-gate/tree/main/examples/php) - strona
   testowa i kod do skopiowania, w repozytorium
 
+## Filmy instruktażowe
+
+Seria filmów z polskim lektorem przedstawia konfigurację bramki, od przygotowań po stronie Polkomtel
+do kampanii z krótkimi linkami. Każdy film jest osadzony w rozdziale dokumentacji, którego dotyczy.
+Napisy w języku polskim włącza przycisk napisów w odtwarzaczu. Pierwszy film wyjaśnia, czym są
+Multiinfo i Multiinfo Gate oraz co należy przygotować przed instalacją bramki.
+
+<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/8dcd9b92-76b1-48be-aba7-9c8d8b9f0eb0" title="Film „Multiinfo i Multiinfo Gate”" loading="lazy" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+
+| Nr | Film | Zakres |
+|---|---|---|
+| 1 | [Multiinfo i Multiinfo Gate](uruchomienie.md#1-przygotowanie-po-stronie-multiinfo) | platforma Multiinfo, bramka i przygotowania po stronie Polkomtel |
+| 2 | [Instalacja bramki](uruchomienie.md#2-serwer) | Docker, uruchomienie bramki i certyfikat dla własnej domeny |
+| 3 | [Konto Multiinfo](uruchomienie.md#4-panel) | pierwsze logowanie, konto Multiinfo z certyfikatem i sprawdzenie połączenia |
+| 4 | [Klucze API i nadpisy](uruchomienie.md#44-nadpisy-dozwolone-dla-konta) | nadpisy dozwolone dla konta i klucz API dla aplikacji |
+| 5 | [Pierwsza wysyłka i dziennik](uruchomienie.md#5-pierwsza-wysyka) | pierwszy SMS, stan doręczenia i dziennik wiadomości |
+| 6 | [Integracja z aplikacją przez webhook](integracje.md#2-dodanie-integracji-w-panelu) | adres wejściowy dla aplikacji, tryb prosty i dziennik integracji |
+| 7 | [Odbiór SMS-ów od abonentów](uruchomienie.md#55-pierwsza-wiadomosc-przychodzaca) | odbiór na numer usługi i przekazanie SMS-a do aplikacji |
+| 8 | [Mail2SMS z własną skrzynką IMAP](integracje.md#5-mail2sms) | skrzynka u dostawcy poczty, dozwoleni nadawcy i treść SMS-a |
+| 9 | [SMS do grupy](integracje.md#5a-sms-do-grupy) | grupa numerów, prefiks i potwierdzenie do nadawcy |
+| 10 | [Powiadomienia administratora](integracje.md#9-powiadomienia-administratora) | serwer SMTP, kanał SMS i reguły powiadomień |
+| 11 | [Power Automate](power-automate.md) | integracja w panelu, import konektora i pierwszy przepływ |
+| 12a | [Konto Microsoft 365](uruchomienie.md#48-konto-microsoft-365) | skrzynka bramki, rejestracja aplikacji w Microsoft Entra i połączenie konta |
+| 12b | [Mail2SMS i powiadomienia przez Microsoft 365](integracje.md#51-skrzynka) | Mail2SMS w Exchange Online i maile powiadomień przez skrzynkę bramki |
+| 13 | [Skracacz linków i kampanie](skracacz.md) | domena skracacza, ustawienia klucza API i wyniki kampanii |
+
 ## Co trzeba mieć
 
 - Konto Multiinfo z użytkownikiem API i certyfikatem (`.pfx` z hasłem)
