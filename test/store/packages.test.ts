@@ -23,7 +23,7 @@ function setup() {
     { dest: '48601135134', text: null, clientId: null },
     { dest: '48501052442', text: 'Indywidualna', clientId: 'faktura-114' },
   ]);
-  return { repo, apiKeyId };
+  return { repo, apiKeyId, accountId };
 }
 
 describe('PackagesRepo', () => {
@@ -132,5 +132,24 @@ describe('PackagesRepo', () => {
     expect(repo.list({ apiKeyId, limit: 10, offset: 0 }).map((p) => p.id)).toEqual(['pkg_1']);
     expect(repo.list({ apiKeyId: apiKeyId + 1, limit: 10, offset: 0 })).toEqual([]);
     expect(repo.list({ limit: 10, offset: 0 })).toHaveLength(1);
+  });
+});
+
+describe('PackagesRepo.countSince', () => {
+  it('liczy rozsyłki z okna i ich odbiorców we wszystkich stanach', () => {
+    const { repo, apiKeyId, accountId } = setup();
+    const add = (id: string, createdAt: Date, dests: string[]) => repo.insert({
+      id, apiKeyId, accountId, serviceId: '24138', defaultText: 'Przegląd serwisowy', orig: null,
+      costCenter: null, startAt: null, deliveryReport: 0, encoding: 'gsm', multipart: 0, createdAt: createdAt.toISOString(),
+    }, dests.map((dest) => ({ dest, text: null, clientId: null })));
+    add('pkg_2', new Date(NOW.getTime() - 25 * 3600_000), ['48601000001', '48601000002']);
+    add('pkg_3', NOW, ['48601000003']);
+    repo.setFailed('pkg_3', -63, 'Zbyt wielu odbiorców', NOW);
+    expect(repo.countSince(new Date(NOW.getTime() - 24 * 3600_000))).toEqual({ packages: 2, recipients: 3 });
+  });
+
+  it('bez rozsyłek w oknie zwraca zera', () => {
+    const repo = new PackagesRepo(openDatabase(':memory:'));
+    expect(repo.countSince(NOW)).toEqual({ packages: 0, recipients: 0 });
   });
 });

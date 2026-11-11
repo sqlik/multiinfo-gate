@@ -95,7 +95,8 @@ describe('GET /przeglad - odebrane', () => {
     const res = await page('/przeglad');
     expect(res.body).toMatch(/Odebrane<\/div>\s*<div class="n">1<\/div>/);
     expect(res.body).toContain('href="/odebrane"');
-    expect(res.body).toContain('tiles-7');
+    expect(res.body).toContain('<div class="tiles">');
+    expect(res.body).not.toContain('tiles-7');
   });
 });
 
