@@ -19,6 +19,13 @@ export const PACKAGE_POLL_TAIL_MS = 900_000;
 export const REPORT_RETRY_MS = 60_000;
 
 /**
+ * packagefullinfo.aspx zwraca chwilowo kod -13 „Zla komenda” tuż po zakończeniu rozsyłki, a kolejne zapytanie
+ * zwraca gotowy raport (2026-11-11). Do tego limitu bramka traktuje ten kod jak raport w przygotowaniu.
+ */
+export const REPORT_BUSY_CODE = -13;
+export const REPORT_BUSY_LIMIT_MS = 10 * 60_000;
+
+/**
  * Rozsyłka z krótkimi linkami pobiera raport drugi raz po dobie, ponieważ potwierdzenia doręczenia
  * przychodzą także po pierwszym raporcie, a kafelek „Doręczone” kampanii liczy się z raportu.
  */
@@ -307,6 +314,15 @@ export async function handlePackageReport(job: Job, deps: WorkerDeps, now: Date)
     scheduleRefresh(deps, pkg, new Date(now.getTime() + info.minutesLeft * 60_000), now);
     log.info('rozsylka.raport', { packageId: pkg.id, rows: rows.length, reportId: info.reportId });
   } catch (error) {
+    if (error instanceof ProviderError && error.code === REPORT_BUSY_CODE) {
+      const since = typeof job.payload.reportBusySince === 'string' ? Date.parse(job.payload.reportBusySince) : now.getTime();
+      if (now.getTime() - since < REPORT_BUSY_LIMIT_MS) {
+        deps.jobs.markReportBusy(job.id, now);
+        deps.jobs.retry(job.id, new Date(now.getTime() + REPORT_RETRY_MS), `raport w przygotowaniu (kod ${REPORT_BUSY_CODE})`);
+        log.warn('rozsylka.raport_chwilowy_blad', { packageId: pkg.id, code: REPORT_BUSY_CODE, refresh });
+        return;
+      }
+    }
     handleProviderFailure(error, job, deps, pkg, now, log, reportFailed);
   }
 }
