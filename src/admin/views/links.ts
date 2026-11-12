@@ -152,14 +152,14 @@ const STEP_LABEL: Record<DomainCheckStep, string> = {
 function checkPanel(row: LinkDomainRow): string {
   const failure = row.checkOk === 0 ? parseCheckDetail(row.checkDetail) : null;
   const result = row.checkedAt === null
-    ? '<div class="hint">Domena nie była jeszcze sprawdzana. Sprawdzenie potwierdza za jednym razem rekord DNS, serwer pośredniczący, certyfikat i przypisanie domeny do tej bramki. Domena niesprawdzona może być używana</div>'
+    ? '<div class="hint">Domena nie była jeszcze sprawdzana. Sprawdzenie potwierdza za jednym razem rekord DNS, serwer pośredniczący, certyfikat i przypisanie domeny do tej bramki. Domena niesprawdzona może być używana.</div>'
     : failure === null
       ? (untrustedProxyOf(row) === null
-        ? '<div class="hint">Bramka pobrała token sprawdzenia spod adresu domeny. Linki tej domeny trafiają do tej bramki</div>'
+        ? '<div class="hint">Bramka pobrała token sprawdzenia spod adresu domeny. Linki tej domeny trafiają do tej bramki.</div>'
         : untrustedProxyWarning(untrustedProxyOf(row)!))
       : `<div class="warn">${esc(checkMessage(row.domain, failure.step, failure.detail))}</div>
         <div class="hint">Krok sprawdzenia: ${esc(STEP_LABEL[failure.step])}, kod błędu: <span class="m">${esc(detailLabel(failure.detail))}</span>.
-          Opis znajdziesz w <a href="${problemUrl('skracacz-sprawdzenie-domeny')}" target="_blank" rel="noopener noreferrer">rozwiązywaniu problemów, w punkcie „Sprawdzenie domeny skracacza kończy się błędem”</a></div>`;
+          Opis znajdziesz w <a href="${problemUrl('skracacz-sprawdzenie-domeny')}" target="_blank" rel="noopener noreferrer">rozwiązywaniu problemów, w punkcie „Sprawdzenie domeny skracacza kończy się błędem”</a>.</div>`;
   return `<div class="panel">
       <div class="panel-h"><div class="lab">Sprawdzenie domeny</div></div>
       <div class="form">
@@ -195,7 +195,7 @@ function statePanel(row: LinkDomainRow): string {
       <div class="panel-h"><div class="lab">Stan i usunięcie</div></div>
       <div class="form">
         <div>${statePill(row)}</div>
-        <div class="hint">Wyłączona domena nie przekierowuje linków do adresów docelowych, dlatego odbiorca widzi stronę „Link wygasł”. Usunięcie jest możliwe, gdy domena nie jest przypisana do klucza, a bramka usunęła dane wysłanych linków po okresie retencji</div>
+        <div class="hint">Wyłączona domena nie przekierowuje linków do adresów docelowych, dlatego odbiorca widzi stronę „Link wygasł”. Usunięcie jest możliwe, gdy domena nie jest przypisana do klucza, a bramka usunęła dane wysłanych linków po okresie przechowywania.</div>
         <div style="display: flex; gap: 8px;">
           ${toggle}
           <form method="post" action="/skracacz/${esc(row.id)}/usun" data-confirm="Usunąć domenę ${esc(row.domain)}?" data-confirm-ok="Usuń">
@@ -238,11 +238,11 @@ export function linkDomainFormPage(opts: {
         <div class="field">
           <label for="homeUrl">Adres strony głównej</label>
           <input id="homeUrl" name="homeUrl" value="${esc(v.homeUrl)}" maxlength="2000" placeholder="https://firma.pl">
-          <div class="hint">Adres, do którego prowadzi sama domena bez kodu. Puste pole oznacza neutralną stronę z nazwą wyświetlaną</div>
+          <div class="hint">Adres, do którego prowadzi sama domena bez kodu. Puste pole oznacza neutralną stronę z nazwą wyświetlaną.</div>
         </div>
         <div class="field">
           <label class="choice"><input type="checkbox" name="bareLinks" value="1"${v.bareLinks ? ' checked' : ''}> Linki w treści bez https://</label>
-          <div class="hint">Krótki link w SMS-ie bez https://, na przykład l.firma.pl/aB3xK9q, jest krótszy o 8 znaków. Niektóre telefony mogą nie rozpoznać takiego zapisu jako linku</div>
+          <div class="hint">Krótki link w SMS-ie bez https://, na przykład l.firma.pl/aB3xK9q, jest krótszy o 8 znaków. Niektóre telefony mogą nie rozpoznać takiego zapisu jako linku.</div>
         </div>
         <div><button class="btn btn-p" type="submit">Zapisz</button></div>
       </form>

@@ -13,7 +13,7 @@ export function apiAddressPanel(current: string | null, back: string, opts: { er
         <input id="apiUrl" name="apiUrl" value="${esc(current ?? '')}" placeholder="https://sms.firma.pl">
         <div class="hint">Bez ścieżki na końcu. Bramka pod domeną (Docker z Caddy, nginx albo Traefikiem): <code>https://sms.firma.pl</code>.
           Kontener na Proxmoxie dostępny w sieci firmowej: <code>http://10.10.10.159:8080</code> (adres kontenera i port API).
-          Ten sam adres poprzedza ścieżkę <code>/v1/messages</code> i adresy wejściowe integracji</div>
+          Ten sam adres poprzedza ścieżkę <code>/v1/messages</code> i adresy wejściowe integracji.</div>
       </div>
       <div class="bar">
         <button class="btn btn-p" type="submit">Zapisz adres</button>

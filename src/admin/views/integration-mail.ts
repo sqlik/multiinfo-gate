@@ -54,25 +54,25 @@ function mailboxCommon(v: MailFormValues): string {
   return `<div class="field">
       <label for="folder">Folder</label>
       <input id="folder" name="folder" value="${esc(v.folder)}" placeholder="INBOX">
-      ${hint('Bramka przetwarza wyłącznie wiadomości nieprzeczytane. Skrzynka albo folder powinny być przeznaczone dla bramki: wiadomość otwarta w programie pocztowym zostaje oznaczona jako przeczytana i nie zostanie przetworzona')}
+      ${hint('Bramka przetwarza wyłącznie wiadomości nieprzeczytane. Skrzynka albo folder powinny być przeznaczone dla bramki: wiadomość otwarta w programie pocztowym zostaje oznaczona jako przeczytana i nie zostanie przetworzona.')}
     </div>
     <div class="field">
       <label for="intervalSec">Częstotliwość sprawdzania</label>
       <select id="intervalSec" name="intervalSec">${MAIL_IN_INTERVALS.map((sec) => `<option value="${sec}"${v.intervalSec === String(sec) ? ' selected' : ''}>co ${esc(intervalWords(sec))}</option>`).join('')}</select>
-      ${hint('SMS jest wysyłany natychmiast po odczytaniu wiadomości. Minimalna częstotliwość to 30 sekund, ponieważ dostawcy poczty blokują konta logujące się częściej')}
+      ${hint('SMS jest wysyłany natychmiast po odczytaniu wiadomości. Minimalna częstotliwość to 30 sekund, ponieważ dostawcy poczty blokują konta logujące się częściej.')}
     </div>
     <div class="field">
       <label for="maxAgeHours">Pomijaj wiadomości starsze niż</label>
       <select id="maxAgeHours" name="maxAgeHours">${ages.map(([value, label]) => `<option value="${value}"${v.maxAgeHours === value ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>
-      ${hint('Ustawienie chroni przed wysłaniem nieaktualnych alarmów po przerwie w dostępie do skrzynki. Wiek jest liczony od chwili przyjęcia wiadomości przez serwer pocztowy. Starsza wiadomość zostaje w skrzynce nieprzeczytana i nie powoduje wysłania SMS-a. Dla alarmów zalecany jest limit 1 h, a dla zamówień i zgłoszeń wariant bez limitu')}
+      ${hint('Ustawienie chroni przed wysłaniem nieaktualnych alarmów po przerwie w dostępie do skrzynki. Wiek jest liczony od chwili przyjęcia wiadomości przez serwer pocztowy. Starsza wiadomość zostaje w skrzynce nieprzeczytana i nie powoduje wysłania SMS-a. Dla alarmów zalecany jest limit 1 h, a dla zamówień i zgłoszeń wariant bez limitu.')}
     </div>
     <div class="field">
       ${checkbox('backlog', v.backlog, 'Przetwórz także zaległe wiadomości nieprzeczytane')}
-      ${hint('Domyślnie bramka przetwarza wyłącznie wiadomości, które nadejdą po zapisaniu ustawień. Po zaznaczeniu przy najbliższym sprawdzeniu przetworzy także zaległe wiadomości nieprzeczytane, po 50 na jedno sprawdzenie. Przy dużej zaległości ochrona przed burzą zatrzyma wysyłkę na limicie integracji, a pozostałe wiadomości otrzymają w dzienniku wynik „limit”. Ustawienie „Pomijaj wiadomości starsze niż” obowiązuje także dla zaległych wiadomości')}
+      ${hint('Domyślnie bramka przetwarza wyłącznie wiadomości, które nadejdą po zapisaniu ustawień. Po zaznaczeniu przy najbliższym sprawdzeniu przetworzy także zaległe wiadomości nieprzeczytane, po 50 na jedno sprawdzenie. Przy dużej zaległości ochrona przed burzą zatrzyma wysyłkę na limicie integracji, a pozostałe wiadomości otrzymają w dzienniku wynik „limit”. Ustawienie „Pomijaj wiadomości starsze niż” obowiązuje także dla zaległych wiadomości.')}
     </div>
     <div class="field">
       <button class="btn btn-s" type="submit" name="action" value="polaczenie">Sprawdź połączenie</button>
-      ${hint('Bramka loguje się, otwiera folder i wyświetla liczbę wiadomości nieprzeczytanych oraz listę folderów. Niczego nie przetwarza ani nie zapisuje')}
+      ${hint('Bramka loguje się, otwiera folder i wyświetla liczbę wiadomości nieprzeczytanych oraz listę folderów. Niczego nie przetwarza ani nie zapisuje.')}
     </div>`;
 }
 
@@ -90,7 +90,7 @@ function sectionM365Mailbox(v: MailFormValues, opts: MailFormOptions): string {
       <select id="m365AccountId" name="m365AccountId">${accounts.map((a) =>
     `<option value="${esc(a.id)}"${String(a.id) === v.m365AccountId ? ' selected' : ''}${a.address ? ` data-address="${esc(a.address)}"` : ''}>${esc(a.name)} · ${esc(M365_STATE_WORDS[a.state])}</option>`).join('')}</select>
       ${accounts.some((a) => a.state === 'connected')
-    ? hint('Konto, którym bramka loguje się do skrzynki. Konta dodaje się i loguje na ekranie Konta Microsoft 365')
+    ? hint('Konto, którym bramka loguje się do skrzynki. Konta dodaje się i loguje na ekranie Konta Microsoft 365.')
     : `<div class="hint">Żadne z kont nie jest połączone, dlatego skrzynka zacznie działać po zalogowaniu konta na ekranie <a href="/microsoft-365">Konta Microsoft 365</a></div>`}
     </div>`;
   // Podpowiedź pola pokazuje adres wybranego konta; skrypt panelu podmienia ją po zmianie konta na liście.
@@ -103,7 +103,7 @@ function sectionM365Mailbox(v: MailFormValues, opts: MailFormOptions): string {
     <div class="field">
       <label for="user">Adres skrzynki</label>
       <input id="user" name="user" value="${esc(v.user)}" placeholder="${esc(placeholder)}" data-address-of="m365AccountId" data-placeholder="alarmy@firma.pl" autocomplete="off">
-      ${hint('Puste pole oznacza adres wybranego konta. Inny adres oznacza skrzynkę współdzieloną, do której konto posiada uprawnienie pełnego dostępu')}
+      ${hint('Puste pole oznacza adres wybranego konta. Inny adres oznacza skrzynkę współdzieloną, do której konto posiada uprawnienie pełnego dostępu.')}
     </div>
     ${mailboxCommon(v)}
   </details>`;
@@ -126,11 +126,11 @@ function sectionMailbox(v: MailFormValues, opts: MailFormOptions): string {
     <div class="field">
       <label for="security">Zabezpieczenie</label>
       <select id="security" name="security">${securities.map(([id, label]) => `<option value="${id}"${v.security === id ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>
-      ${hint('Przy wyborze „brak” hasło i treść wiadomości są przesyłane bez szyfrowania. Dopuszczalne wyłącznie dla serwera w sieci wewnętrznej')}
+      ${hint('Przy wyborze „brak” hasło i treść wiadomości są przesyłane bez szyfrowania. Dopuszczalne wyłącznie dla serwera w sieci wewnętrznej.')}
     </div>
     ${advanced ? `<div class="field">
       ${checkbox('verifyCert', v.verifyCert, 'Sprawdzaj certyfikat serwera')}
-      ${hint('Wyłącz wyłącznie dla serwera z własnym certyfikatem bez zaufanego urzędu. Połączenie bez sprawdzania certyfikatu jest podatne na podsłuch')}
+      ${hint('Wyłącz wyłącznie dla serwera z własnym certyfikatem bez zaufanego urzędu. Połączenie bez sprawdzania certyfikatu jest podatne na podsłuch.')}
     </div>` : `<input type="hidden" name="verifyCert" value="${v.verifyCert ? '1' : '0'}">`}
     <div class="field">
       <label for="user">Login</label>
@@ -139,7 +139,7 @@ function sectionMailbox(v: MailFormValues, opts: MailFormOptions): string {
     <div class="field">
       <label for="password">Hasło</label>
       <input id="password" name="password" type="password" value="${esc(v.password)}" autocomplete="new-password"${opts.hasPassword ? '' : ' required'}>
-      ${hint(opts.hasPassword ? 'Hasło jest zapisane. Puste pole zachowuje dotychczasowe' : 'Hasło jest przechowywane w postaci zaszyfrowanej i nie można go odczytać w panelu. W Gmailu jest to hasło aplikacji')}
+      ${hint(opts.hasPassword ? 'Hasło jest zapisane. Puste pole zachowuje dotychczasowe.' : 'Hasło jest przechowywane w postaci zaszyfrowanej i nie można go odczytać w panelu. W Gmailu jest to hasło aplikacji.')}
     </div>
     ${mailboxCommon(v)}
   </details>`;
@@ -152,18 +152,18 @@ function sectionSenders(v: MailFormValues, advanced: boolean): string {
     <div class="field">
       <label for="senders">Nadawcy</label>
       ${textarea('senders', v.senders, 5, ' placeholder="ups@przyklad.pl: 601000001, 601000002\n@przyklad.pl\njan@przyklad.pl"')}
-      ${hint('Jedna pozycja w wierszu: pełny adres albo domena poprzedzona znakiem @. Po dwukropku można podać numery, na które mają trafiać SMS-y od tego nadawcy. Pusta lista oznacza, że żadna wiadomość nie zostanie przetworzona')}
+      ${hint('Jedna pozycja w wierszu: pełny adres albo domena poprzedzona znakiem @. Po dwukropku można podać numery, na które trafiają SMS-y od tego nadawcy. Pusta lista oznacza, że żadna wiadomość nie zostanie przetworzona.')}
     </div>
     <div class="field">
       ${checkbox('requireAuthResults', v.requireAuthResults, 'Wymagaj potwierdzenia nadawcy przez serwer (SPF/DKIM)')}
       ${hint(v.authMode === 'm365'
-    ? 'Zalecane w skrzynce Microsoft 365. Wiadomość przechodzi, gdy serwer potwierdził SPF albo DKIM domeny nadawcy. Wiadomość od nadawcy z domeny skrzynki przechodzi także wtedy, gdy Exchange oznaczył ją jako wysłaną wewnątrz organizacji'
-    : 'Zalecane u dostawców publicznych (Gmail, home.pl, OVH). Serwery wewnętrzne zwykle nie dodają tych nagłówków i wówczas każda wiadomość zostanie odrzucona. Po włączeniu wyślij wiadomość próbną od każdego nadawcy i sprawdź wpis w dzienniku')}
+    ? 'Zalecane w skrzynce Microsoft 365. Wiadomość przechodzi, gdy serwer potwierdził SPF albo DKIM domeny nadawcy. Wiadomość od nadawcy z domeny skrzynki przechodzi także wtedy, gdy Exchange oznaczył ją jako wysłaną wewnątrz organizacji.'
+    : 'Zalecane u dostawców publicznych (Gmail, home.pl, OVH). Serwery wewnętrzne zwykle nie dodają tych nagłówków i wówczas każda wiadomość zostanie odrzucona. Po włączeniu wyślij wiadomość próbną od każdego nadawcy i sprawdź wpis w dzienniku.')}
     </div>
     ${advanced ? `<div class="field">
       <label for="authservId">Nazwa serwera w nagłówku Authentication-Results</label>
       <input id="authservId" name="authservId" value="${esc(v.authservId)}" placeholder="mx.google.com" maxlength="253">
-      ${hint('Identyfikator serwera (authserv-id, RFC 8601), którym serwer skrzynki podpisuje wynik sprawdzenia SPF i DKIM. Bramka odczytuje pierwszy nagłówek Authentication-Results od góry, czyli ten dopisany przez serwer skrzynki. Gdy pole jest wypełnione, nagłówek musi rozpoczynać się od tej nazwy, inaczej wiadomość jest odrzucana. Puste pole oznacza odczyt pierwszego nagłówka bez sprawdzania nazwy. Przycisk „Sprawdź połączenie” podpowiada nazwę z ostatniej wiadomości w folderze')}
+      ${hint('Identyfikator serwera (authserv-id, RFC 8601), którym serwer skrzynki podpisuje wynik sprawdzenia SPF i DKIM. Bramka odczytuje pierwszy nagłówek Authentication-Results od góry, czyli ten dopisany przez serwer skrzynki. Gdy pole jest wypełnione, nagłówek musi rozpoczynać się od tej nazwy, inaczej wiadomość jest odrzucana. Puste pole oznacza odczyt pierwszego nagłówka bez sprawdzania nazwy. Przycisk „Sprawdź połączenie” podpowiada nazwę z ostatniej wiadomości w folderze.')}
     </div>` : `<input type="hidden" name="authservId" value="${esc(v.authservId)}">`}
   </details>`;
 }
@@ -174,7 +174,7 @@ function sectionRecipients(v: MailFormValues): string {
     <div class="field">
       <label for="toFallback">Odbiorcy</label>
       ${textarea('toFallback', v.toFallback, 3, ' placeholder="601000001\n+48 602 000 002"')}
-      ${hint('Jeden numer w wierszu. Lista jest używana, gdy wiadomość nie zawiera numerów, a nadawca nie ma przypisanych')}
+      ${hint('Jeden numer w wierszu. Lista jest używana, gdy wiadomość nie zawiera numerów, a do nadawcy nie przypisano numerów.')}
     </div>
     <div class="field">
       ${checkbox('recipientsFromMail', v.recipientsFromMail, 'Nadawca może wskazać numery w wiadomości')}
@@ -183,7 +183,7 @@ function sectionRecipients(v: MailFormValues): string {
     <div class="field">
       <label>Gdzie szukać numerów</label>
       <div class="choices">${radio('recipientsWhere', 'subject', v.recipientsWhere, 'w temacie, przed dwukropkiem')}${radio('recipientsWhere', 'body', v.recipientsWhere, 'w pierwszej linii treści')}</div>
-      ${hint('W temacie: „600100200, 600100201: Serwer niedostępny”. W pierwszej linii treści: wyłącznie numery oddzielone przecinkiem albo spacją; linia jest usuwana z treści SMS-a')}
+      ${hint('W temacie: „600100200, 600100201: Serwer niedostępny”. W pierwszej linii treści: wyłącznie numery oddzielone przecinkiem albo spacją; linia jest usuwana z treści SMS-a.')}
     </div>
   </details>`;
 }
@@ -221,19 +221,19 @@ function sectionText(v: MailFormValues, opts: MailFormOptions): string {
     ${advanced ? `<div class="field">
       <label for="textTemplate">Szablon Liquid</label>
       ${textarea('textTemplate', v.textTemplate, 3, ' placeholder="UPS {{ fields.urzadzenie }}: {{ fields.stan }}, kod {{ fields.kod }}"')}
-      ${hint('Zmienne: from, from_name, subject, text, text_full, date, to, message_id, fields.nazwa, now, integration.name. Filtr sms_truncate: n skraca do n znaków')}
+      ${hint('Zmienne: from, from_name, subject, text, text_full, date, to, message_id, fields.nazwa, now, integration.name. Filtr sms_truncate: n skraca do n znaków.')}
     </div>` : ''}
     <div class="field">
       <label for="cutFrom">Pomijaj treść od frazy</label>
       ${textarea('cutFrom', v.cutFrom, 2, ' placeholder="Wygenerowano automatycznie"')}
-      ${hint('Jedna fraza w wierszu. Linia rozpoczynająca się od frazy i wszystko poniżej niej jest usuwane z treści, tak jak podpis i stopka')}
+      ${hint('Jedna fraza w wierszu. Linia rozpoczynająca się od frazy i wszystko poniżej niej jest usuwane z treści, tak jak podpis i stopka.')}
     </div>
     <div class="field">
       <label>Wycinki</label>
       ${fieldRows(v.fields, advanced)}
       ${hint(advanced
-        ? 'Wartość to tekst od frazy początkowej do frazy końcowej albo do końca linii, lub pierwsza grupa wyrażenia regularnego (flagi i, m). Wycinki odczytują tekst sprzed czyszczenia. W szablonie: {{ fields.nazwa }}'
-        : 'Wartość to tekst od frazy początkowej do frazy końcowej albo do końca linii. Wycinki odczytują tekst sprzed czyszczenia; podgląd pokazuje odczytane wartości')}
+        ? 'Wartością jest tekst od frazy początkowej do frazy końcowej albo do końca linii, lub pierwsza grupa wyrażenia regularnego (flagi i, m). Wycinki odczytują tekst sprzed czyszczenia. W szablonie: {{ fields.nazwa }}.'
+        : 'Wartością jest tekst od frazy początkowej do frazy końcowej albo do końca linii. Wycinki odczytują tekst sprzed czyszczenia; podgląd pokazuje odczytane wartości.')}
     </div>
     <div class="field">
       <label>Limit części</label>
@@ -255,7 +255,7 @@ function sectionWhen(v: MailFormValues, opts: MailFormOptions): string {
     <div class="field">
       <label>Reguły</label>
       ${ruleRows(v.rules, 'pole, np. subject albo fields.stan')}
-      ${hint('Bez reguł każda wiadomość od nadawcy z listy jest przetwarzana. Wszystkie reguły muszą być spełnione. Pola: subject, text, from, from_name, fields.nazwa')}
+      ${hint('Bez reguł każda wiadomość od nadawcy z listy jest przetwarzana. Wszystkie reguły muszą być spełnione. Pola: subject, text, from, from_name, fields.nazwa.')}
     </div>
     ${advanced ? `<div class="field">
       <label for="conditionExpr">Wyrażenie</label>
@@ -271,7 +271,7 @@ function sectionAfter(v: MailFormValues, opts: MailFormOptions): string {
     <div class="field">
       <label>Co zrobić z wiadomością</label>
       <div class="choices">${radio('afterAction', 'keep', v.afterAction, 'pozostaw w skrzynce')}${radio('afterAction', 'move', v.afterAction, 'przenieś do folderu')}${radio('afterAction', 'delete', v.afterAction, 'usuń')}</div>
-      ${hint('Dotyczy także wiadomości odrzuconych (nadawca spoza listy, pusta treść, brak numeru). Wiadomość zostaje oznaczona jako przeczytana. W Gmailu „usuń” oznacza przeniesienie do kosza')}
+      ${hint('Dotyczy także wiadomości odrzuconych (nadawca spoza listy, pusta treść, brak numeru). Wiadomość zostaje oznaczona jako przeczytana. W Gmailu „usuń” oznacza przeniesienie do kosza.')}
     </div>
     <div class="field">
       <label for="afterFolder">Folder docelowy</label>
@@ -281,8 +281,8 @@ function sectionAfter(v: MailFormValues, opts: MailFormOptions): string {
     <div class="field">
       ${checkbox('replyEnabled', v.replyEnabled, 'Odpowiadaj nadawcy wiadomością e-mail')}
       ${opts.smtpConfigured
-        ? hint('Nadawca z listy otrzymuje w wątku raport minutę po wysyłce: treść SMS-a, nadpis, czas i status doręczenia przy każdym numerze. Gdy któryś numer jest w drodze, nadawca otrzymuje drugą wiadomość z wynikiem końcowym, najpóźniej po 24 godzinach. Nieudana wysyłka jest zgłaszana od razu z powodem')
-        : '<div class="hint">Niedostępne: serwer SMTP nie jest skonfigurowany. Po <a href="/powiadomienia">konfiguracji SMTP</a> bramka będzie odpowiadać nadawcom</div>'}
+        ? hint('Nadawca z listy otrzymuje w wątku raport minutę po wysyłce: treść SMS-a, nadpis, czas i status doręczenia przy każdym numerze. Gdy któryś numer jest w drodze, nadawca otrzymuje drugą wiadomość z wynikiem końcowym, najpóźniej po 24 godzinach. Nieudana wysyłka jest zgłaszana od razu z powodem.')
+        : '<div class="hint">Niedostępne: serwer SMTP nie jest skonfigurowany. Po <a href="/powiadomienia">konfiguracji SMTP</a> bramka będzie odpowiadać nadawcom.</div>'}
     </div>
   </details>`;
 }

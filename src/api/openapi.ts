@@ -552,7 +552,7 @@ function lista(pozycja: JsonSchema, opis: string): JsonSchema {
   };
 }
 
-/** Pola bloku `links` w odczycie wiadomości i rozsyłki. Po retencji liczby, domena i wygaśnięcie przyjmują wartość null. */
+/** Pola bloku `links` w odczycie wiadomości i rozsyłki. Po okresie przechowywania liczby, domena i wygaśnięcie przyjmują wartość null. */
 const POLA_LINKOW_ODCZYTU: Record<string, JsonSchema> = {
   campaign: { type: 'string', description: 'Kampania, do której należą krótkie linki', example: 'przeglad-klimatyzacji-wiosna' },
   domain: { type: 'string', nullable: true, description: 'Domena skracacza użyta w krótkich linkach', example: 'l.firma.pl' },
@@ -575,7 +575,7 @@ const POLA_LINKOW_ODCZYTU: Record<string, JsonSchema> = {
   },
   detailsPurged: {
     type: 'boolean',
-    description: 'Czy bramka usunęła szczegóły krótkich linków zgodnie z retencją, 30 dni po wygaśnięciu linków. Liczby,'
+    description: 'Czy bramka usunęła szczegóły krótkich linków po okresie przechowywania, czyli 30 dni po wygaśnięciu linków. Liczby,'
       + ' domena i chwila wygaśnięcia przyjmują wtedy wartość null',
   },
 };
@@ -596,7 +596,7 @@ const LINKI_WIADOMOSCI: JsonSchema = {
     ...POLA_LINKOW_ODCZYTU,
     shortLinks: {
       type: 'array',
-      description: 'Krótkie linki w kolejności wystąpienia w treści. Po retencji lista jest pusta',
+      description: 'Krótkie linki w kolejności wystąpienia w treści. Po okresie przechowywania lista jest pusta',
       items: {
         type: 'object',
         required: ['url', 'target', 'clicks', 'firstOpenedAt'],
@@ -740,7 +740,7 @@ const ROZSYLKA: JsonSchema = {
   },
 };
 
-/** Liczby kampanii wspólne dla listy i szczegółów. Liczby zbiorcze zostają po retencji szczegółów odbiorców. */
+/** Liczby kampanii wspólne dla listy i szczegółów. Liczby zbiorcze zostają po okresie przechowywania szczegółów odbiorców. */
 const POLA_KAMPANII: Record<string, JsonSchema> = {
   name: {
     type: 'string',
@@ -788,18 +788,18 @@ const SZCZEGOLY_KAMPANII: JsonSchema = {
     },
     detailsPurgedAt: {
       type: 'string', format: 'date-time', nullable: true,
-      description: 'Chwila usunięcia szczegółów odbiorców zgodnie z retencją, 30 dni po wygaśnięciu linków. Liczby kampanii'
+      description: 'Chwila usunięcia szczegółów odbiorców po okresie przechowywania, czyli 30 dni po wygaśnięciu linków. Liczby kampanii'
         + ' pozostają bez zmian',
     },
-    domain: { type: 'string', nullable: true, description: 'Domena skracacza ostatniej wysyłki. Po retencji null', example: 'l.firma.pl' },
+    domain: { type: 'string', nullable: true, description: 'Domena skracacza ostatniej wysyłki. Po okresie przechowywania pole przyjmuje wartość null', example: 'l.firma.pl' },
     expiresAt: {
       type: 'string', format: 'date-time', nullable: true,
-      description: 'Chwila wygaśnięcia ostatnich ważnych linków kampanii. Po retencji null',
+      description: 'Chwila wygaśnięcia ostatnich ważnych linków kampanii. Po okresie przechowywania pole przyjmuje wartość null',
     },
     utm: {
       type: 'boolean', nullable: true,
       description: 'Czy bramka dopisuje do adresów docelowych parametry utm_source=sms, utm_medium=sms i utm_campaign'
-        + ' z nazwą kampanii. Po retencji null',
+        + ' z nazwą kampanii. Po okresie przechowywania pole przyjmuje wartość null',
     },
     links: {
       type: 'array',
@@ -822,7 +822,7 @@ const SZCZEGOLY_KAMPANII: JsonSchema = {
     },
     openers: {
       type: 'object',
-      description: 'Strona odbiorców, którzy otworzyli link, od pierwszego otwarcia. Po retencji lista jest pusta',
+      description: 'Strona odbiorców, którzy otworzyli link, od pierwszego otwarcia. Po okresie przechowywania lista jest pusta',
       required: ['data', 'hasMore'],
       properties: {
         data: {

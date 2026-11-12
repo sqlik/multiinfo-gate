@@ -60,7 +60,7 @@ function linkFields(section: LinkSection): string {
   const modes = LINK_MODES.map(([value, label]) =>
     `<option value="${value}"${v.mode === value ? ' selected' : ''}>${esc(label)}</option>`).join('');
   const domainChoices = section.domains.length === 0
-    ? '<div class="hint">Brak domen skracacza. Domenę dodaje się w elemencie <a href="/skracacz">Skracacz linków</a></div>'
+    ? '<div class="hint">Brak domen skracacza. Domenę dodaje się w elemencie <a href="/skracacz">Skracacz linków</a>.</div>'
     : section.domains.map((d) => `<label class="choice">
         <input type="checkbox" name="linkDomainIds" value="${esc(d.id)}"${v.domainIds.includes(String(d.id)) ? ' checked' : ''}> <span class="m">${esc(d.domain)}</span>${d.enabled === 1 ? '' : ' <span class="dim">wyłączona</span>'}
       </label>`).join('');
@@ -70,12 +70,12 @@ function linkFields(section: LinkSection): string {
   return `<div class="field">
       <div class="lab" style="margin-top: 6px;">Skracanie linków</div>
       <div class="hint">Bramka zamienia linki w SMS-ach wysyłanych tym kluczem na krótkie linki własnej domeny i liczy ich otwarcia.
-        Ustawienie obejmuje także integracje i konektor Power Automate korzystające z tego klucza</div>
+        Ustawienie obejmuje także integracje i konektor Power Automate korzystające z tego klucza.</div>
     </div>
     <div class="field">
       <label for="linkMode">Tryb</label>
       <select id="linkMode" name="linkMode">${modes}</select>
-      <div class="hint">„Decyduje wysyłający” skraca linki, chyba że wysyłka wyłącza skracanie w API albo w akcji Power Automate. „Zawsze” skraca niezależnie od wyboru wysyłającego</div>
+      <div class="hint">„Decyduje wysyłający” skraca linki, chyba że wysyłka wyłącza skracanie w API albo w akcji Power Automate. „Zawsze” skraca niezależnie od wyboru wysyłającego.</div>
     </div>
     <div data-show="linkMode!=off">
       <div class="field">
@@ -89,18 +89,18 @@ function linkFields(section: LinkSection): string {
           <option value="">pierwsza zaznaczona</option>
           ${defaultOptions}
         </select>
-        <div class="hint">Używana, gdy wysyłka nie wskazuje domeny skracacza w API albo w akcji Power Automate. Musi być jedną z zaznaczonych</div>
+        <div class="hint">Używana, gdy wysyłka nie wskazuje domeny skracacza w API albo w akcji Power Automate. Musi być jedną z zaznaczonych.</div>
       </div>
       <div class="field">
         <label for="linkTargets">Dozwolone domeny docelowe</label>
         <textarea id="linkTargets" name="linkTargets" rows="4" placeholder="firma.pl">${esc(v.targets)}</textarea>
         <div class="hint">Jedna domena w wierszu, na przykład firma.pl. Wpis obejmuje także subdomeny, a linki do innych domen
-          zostają wysłane bez zmian. Powód, dla którego lista jest obowiązkowa, wyjaśnia <a href="${LINKS_DOCS_URL}#obowiazkowa-lista-domen-docelowych" target="_blank" rel="noopener noreferrer">dokumentacja skracacza</a></div>
+          zostają wysłane bez zmian. Powód, dla którego lista jest obowiązkowa, wyjaśnia <a href="${LINKS_DOCS_URL}#obowiazkowa-lista-domen-docelowych" target="_blank" rel="noopener noreferrer">dokumentacja skracacza</a>.</div>
       </div>
       <div class="field">
         <label for="linkValidityDays">Ważność linków w dniach (1-365)</label>
         <input id="linkValidityDays" name="linkValidityDays" type="number" min="1" max="365" value="${esc(v.validityDays)}" required>
-        <div class="hint">Po tym czasie link prowadzi do strony „Link wygasł”. Wysyłka może podać inną ważność w API albo w akcji Power Automate</div>
+        <div class="hint">Po tym czasie link prowadzi do strony „Link wygasł”. Wysyłka może podać inną ważność w API albo w akcji Power Automate.</div>
       </div>
       <div class="field">
         <label class="choice"><input type="checkbox" name="linkUtm" value="1"${v.utm ? ' checked' : ''}> Dopisuj parametry UTM</label>
@@ -336,7 +336,7 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
 
   const origs = choice.origs.length === 0
     ? `<div class="hint">Konto nie ma jeszcze listy nadpisów. Nadpis uruchamia administrator Polkomtel na wniosek
-         złożony w panelu Multiinfo. Uruchomione nadpisy należy wpisać na ekranie konta</div>`
+         złożony w panelu Multiinfo. Uruchomione nadpisy należy wpisać na ekranie konta.</div>`
     : choice.origs.map((o) => `<label class="choice">
         <input type="checkbox" name="origs" value="${esc(o)}"${v.origs.includes(o) ? ' checked' : ''}> <span class="m">${esc(o)}</span>
       </label>`).join('');
@@ -350,7 +350,7 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
   return `<div class="field">
       <label for="name">Nazwa klucza</label>
       <input id="name" name="name" value="${esc(v.name)}" required>
-      <div class="hint">Widoczna tylko w panelu. Wskazuje, która aplikacja używa klucza</div>
+      <div class="hint">Widoczna tylko w panelu. Wskazuje, która aplikacja używa klucza.</div>
     </div>
     <div class="field">
       <label>ID usług</label>
@@ -365,7 +365,7 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
       <label>Nadpisy nadawcy</label>
       <div class="choices">${origs}</div>
       <div class="hint">Nadpisy, których ta aplikacja może używać.
-        Gdy żądanie nie wskazuje nadpisu, bramka użyje nadpisu domyślnego</div>
+        Gdy żądanie nie wskazuje nadpisu, bramka użyje nadpisu domyślnego.</div>
     </div>
     <div class="field">
       <label for="defaultOrig">Domyślny nadpis klucza</label>
@@ -397,7 +397,7 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
       <label class="choice"><input type="checkbox" name="integrationsOnly" value="1"${v.integrationsOnly ? ' checked' : ''}> Tylko integracje</label>
       <div class="hint">Klucz działa wyłącznie w integracjach, na przykład w konektorze Power Automate. Wysyłka przez
         /v1/messages i /v1/packages kończy się błędem, dzięki czemu klucz wklejony w Power Automate nie pozwala ominąć
-        limitu części, ochrony przed burzą ani dziennika integracji. Opcja jest zalecana dla klucza konektora</div>
+        limitu części, ochrony przed burzą ani dziennika integracji. Opcja jest zalecana dla klucza konektora.</div>
     </div>
     ${mode === 'edit' ? `<div class="field">
       <label for="webhookSecret">Sekret webhooka</label>
@@ -408,7 +408,7 @@ function keyFields(choice: AccountChoice, v: KeyFormValues, mode: 'new' | 'edit'
       <label for="expiresOn">Ważny do</label>
       <input id="expiresOn" name="expiresOn" type="date" value="${esc(v.expiresOn)}">
       <label class="choice"><input type="checkbox" name="noExpiry" value="1"${v.noExpiry ? ' checked' : ''}> Nie wygasa (niezalecane)</label>
-      <div class="hint">Po tej dacie żądania z tym kluczem otrzymują odpowiedź 401. Przedłużenie polega na zmianie daty, bez generowania nowego klucza</div>
+      <div class="hint">Po tej dacie żądania z tym kluczem otrzymują odpowiedź 401. Przedłużenie polega na zmianie daty, bez generowania nowego klucza.</div>
     </div>
     ${linkFields(links)}`;
 }

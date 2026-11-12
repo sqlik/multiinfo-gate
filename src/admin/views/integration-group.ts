@@ -35,25 +35,25 @@ function sectionWho(v: GroupFormValues): string {
     <div class="field">
       <label>Tryb grupy</label>
       <div class="choices">${radio('mode', 'lists', v.mode, 'Osobne listy')}${radio('mode', 'closed', v.mode, 'Grupa zamknięta')}</div>
-      ${hint('Osobne listy: wskazane numery piszą, inne numery odbierają. Grupa zamknięta: jedna lista członków, każdy pisze do pozostałych')}
+      ${hint('Osobne listy: wskazane numery piszą, inne numery odbierają. Grupa zamknięta: jedna lista członków, każdy pisze do pozostałych.')}
     </div>
     <div data-show="mode=lists">
       <div class="field">
         <label for="senders">Numery uprawnione do pisania</label>
         ${textarea('senders', v.senders, 4, ' placeholder="601 000 001 Anna Nowak\n601 000 002 Piotr Zieliński"')}
-        ${hint(`${MEMBER_HINT}. Do 100 numerów`)}
+        ${hint(`${MEMBER_HINT}. Do 100 numerów.`)}
       </div>
       <div class="field">
         <label for="recipients">Numery odbiorców</label>
         ${textarea('recipients', v.recipients, 6, ' placeholder="601 000 011 Marek Kowalski\n601 000 012\n601 000 013 Jan Wiśniewski"')}
-        ${hint(`${MEMBER_HINT}. Do 500 numerów`)}
+        ${hint(`${MEMBER_HINT}. Do 500 numerów.`)}
       </div>
     </div>
     <div data-show="mode=closed">
       <div class="field">
         <label for="members">Numery członków</label>
         ${textarea('members', v.members, 6, ' placeholder="601 000 001 Anna Nowak\n601 000 002 Piotr Zieliński\n601 000 003"')}
-        ${hint(`${MEMBER_HINT}. Od 2 do 500 numerów`)}
+        ${hint(`${MEMBER_HINT}. Od 2 do 500 numerów.`)}
       </div>
     </div>
   </details>`;
@@ -65,7 +65,7 @@ function sectionPrefix(v: GroupFormValues): string {
     <div class="field">
       <label for="prefix">Słowo wybierające grupę</label>
       <input id="prefix" name="prefix" value="${esc(v.prefix)}" placeholder="serwis" maxlength="20" style="max-width: 240px;">
-      ${hint('Słowo na początku SMS-a, które wybiera tę grupę. Wielkość liter bez znaczenia, po słowie spacja albo dwukropek. Puste pole oznacza każdy SMS od uprawnionego numeru')}
+      ${hint('Słowo na początku SMS-a, które wybiera tę grupę. Wielkość liter bez znaczenia, po słowie spacja albo dwukropek. Puste pole oznacza każdy SMS od uprawnionego numeru.')}
     </div>
   </details>`;
 }
@@ -85,7 +85,7 @@ function sectionText(v: GroupFormValues, advanced: boolean): string {
     ${advanced ? `<div class="field">
       <label for="textTemplate">Szablon Liquid</label>
       ${textarea('textTemplate', v.textTemplate, 3, ' placeholder="{{ sender }} do grupy: {{ body }}"')}
-      ${hint('Zmienne: body, prefix, sender, sender_name, recipients, from, to, text, serviceId, receivedAt, id, now, integration.name. Filtr sms_truncate: n skraca do n znaków')}
+      ${hint('Zmienne: body, prefix, sender, sender_name, recipients, from, to, text, serviceId, receivedAt, id, now, integration.name. Filtr sms_truncate: n skraca do n znaków.')}
     </div>` : ''}
     <div class="field">
       <label>Limit części</label>
@@ -93,7 +93,7 @@ function sectionText(v: GroupFormValues, advanced: boolean): string {
         <input name="maxParts" type="number" min="1" max="9" value="${esc(v.maxParts)}" style="width: 90px;">
         <div class="choices">${radio('overflow', 'truncate', v.overflow, 'skróć i wyślij')}${radio('overflow', 'reject', v.overflow, 'nie wysyłaj, zapisz błąd i powiadom')}</div>
       </div>
-      ${hint('Każdy odbiorca dostaje tyle części, ile ma wiadomość. Przy odrzuceniu nadawca z włączonym potwierdzeniem otrzymuje informację o długości')}
+      ${hint('Każdy odbiorca otrzymuje tyle części, ile liczy wiadomość. Przy odrzuceniu nadawca z włączonym potwierdzeniem otrzymuje informację o długości.')}
     </div>
   </details>`;
 }
@@ -103,7 +103,7 @@ function sectionConfirm(v: GroupFormValues): string {
     <summary>Potwierdzenie</summary>
     <div class="field">
       ${checkbox('confirmEnabled', v.confirmEnabled, 'Odsyłaj nadawcy potwierdzenie z liczbą odbiorców')}
-      ${hint('Potwierdzenie jest zwykłą wiadomością konta i kosztuje jak każda. Idzie wyłącznie do numeru z listy, po rozesłaniu albo po odrzuceniu z powodu długości. SMS pominięty zostaje bez odpowiedzi')}
+      ${hint('Potwierdzenie jest zwykłą wiadomością konta i kosztuje jak każda. Idzie wyłącznie do numeru z listy, po rozesłaniu albo po odrzuceniu z powodu długości. SMS pominięty zostaje bez odpowiedzi.')}
     </div>
   </details>`;
 }
@@ -117,7 +117,7 @@ function sectionWhen(v: GroupFormValues): string {
     <div class="field">
       <label>Reguły</label>
       ${ruleRows(v.rules, 'pole, np. body albo sender')}
-      ${hint('Bez reguł każdy SMS od uprawnionego numeru z prefiksem jest rozsyłany. Wszystkie reguły muszą być spełnione. Pola: body, prefix, sender, sender_name, from, text')}
+      ${hint('Bez reguł każdy SMS od uprawnionego numeru z prefiksem jest rozsyłany. Wszystkie reguły muszą być spełnione. Pola: body, prefix, sender, sender_name, from, text.')}
     </div>
     <div class="field">
       <label for="conditionExpr">Wyrażenie</label>
@@ -137,7 +137,7 @@ function sectionSample(v: GroupFormValues): string {
     <div class="field">
       <label for="sampleText">Treść SMS-a</label>
       ${textarea('sampleText', v.sampleText, 2, ' placeholder="serwis Awaria pompy w hali B, proszę o kontakt"')}
-      ${hint('Przycisk „Sprawdź” pokazuje, czy nadawca jest na liście, czy prefiks pasuje, kto otrzyma SMS i jak będzie wyglądał. Niczego nie wysyła ani nie zapisuje. Puste pola oznaczają pierwszy numer z listy i przykładową treść z prefiksem')}
+      ${hint('Przycisk „Sprawdź” pokazuje, czy nadawca jest na liście, czy prefiks pasuje, kto otrzyma SMS i jak będzie wyglądał. Niczego nie wysyła ani nie zapisuje. Puste pola oznaczają pierwszy numer z listy i przykładową treść z prefiksem.')}
     </div>
   </details>`;
 }

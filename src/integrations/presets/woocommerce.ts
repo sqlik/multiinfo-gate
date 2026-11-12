@@ -47,7 +47,7 @@ export const woocommerce: Preset = {
   simple: {
     inbound: {
       addressField: 'w sklepie w polu Adres dostarczenia webhooka',
-      recipients: { source: 'list', note: 'SMS o nowym zamówieniu jest wysyłany do obsługi sklepu na numery wpisane tutaj.' },
+      recipients: { source: 'list', note: 'SMS o nowym zamówieniu jest wysyłany do obsługi sklepu na numery wpisane tutaj' },
       when: [
         { id: 'kazde', label: 'przy każdym nowym zamówieniu', condition: { mode: 'builder', rules: [MA_ZAMOWIENIE] } },
         { id: 'poza-czekajacymi', label: 'bez zamówień czekających na płatność', condition: { mode: 'builder', rules: [MA_ZAMOWIENIE, { path: 'status', op: 'ne', value: 'pending' }] } },

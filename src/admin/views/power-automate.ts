@@ -28,7 +28,7 @@ export function powerAutomatePanel(apiUrl: string | null, back: string): string 
           <label for="pa-adres">Publiczny adres bramki dla Power Automate</label>
           <input id="pa-adres" name="adres" value="${esc(value)}" placeholder="https://sms.firma.pl">
           <div class="hint">Adres <code>https://</code> z domeną, dostępny z internetu, bez portu albo z portem 443. Power Automate
-            łączy się z bramką z chmury Microsoftu. Adres służy tylko do zbudowania pliku i nie jest zapisywany</div>
+            łączy się z bramką z chmury Microsoftu. Adres służy tylko do zbudowania pliku i nie jest zapisywany.</div>
         </div>
         <div class="bar">
           <button class="btn btn-p" type="submit">Pobierz konektor</button>

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Multiinfo Gate",
-    "version": "1.11.5",
+    "version": "1.11.6",
     "description": "Bramka SMS między aplikacjami a platformą Multiinfo operatora Plus. Opis obejmuje każde wywołanie API bramki: wysyłkę, odczyt wysłanych wiadomości, anulowanie, rozsyłkę wraz z raportem, odczyt wiadomości przychodzących oraz stan bramki. Powiadomienia webhook idą w drugą stronę, więc opisuje je dokumentacja bramki. Przyjęcie wiadomości i rozsyłki jest asynchroniczne: bramka odpowiada kodem 202 po zapisaniu żądania w kolejce, a wysyłka do Multiinfo następuje później.",
     "license": {
       "name": "MIT",
@@ -3511,11 +3511,11 @@
               },
               "detailsPurged": {
                 "type": "boolean",
-                "description": "Czy bramka usunęła szczegóły krótkich linków zgodnie z retencją, 30 dni po wygaśnięciu linków. Liczby, domena i chwila wygaśnięcia przyjmują wtedy wartość null"
+                "description": "Czy bramka usunęła szczegóły krótkich linków po okresie przechowywania, czyli 30 dni po wygaśnięciu linków. Liczby, domena i chwila wygaśnięcia przyjmują wtedy wartość null"
               },
               "shortLinks": {
                 "type": "array",
-                "description": "Krótkie linki w kolejności wystąpienia w treści. Po retencji lista jest pusta",
+                "description": "Krótkie linki w kolejności wystąpienia w treści. Po okresie przechowywania lista jest pusta",
                 "items": {
                   "type": "object",
                   "required": [
@@ -3831,7 +3831,7 @@
               },
               "detailsPurged": {
                 "type": "boolean",
-                "description": "Czy bramka usunęła szczegóły krótkich linków zgodnie z retencją, 30 dni po wygaśnięciu linków. Liczby, domena i chwila wygaśnięcia przyjmują wtedy wartość null"
+                "description": "Czy bramka usunęła szczegóły krótkich linków po okresie przechowywania, czyli 30 dni po wygaśnięciu linków. Liczby, domena i chwila wygaśnięcia przyjmują wtedy wartość null"
               }
             }
           }
@@ -4031,24 +4031,24 @@
             "type": "string",
             "format": "date-time",
             "nullable": true,
-            "description": "Chwila usunięcia szczegółów odbiorców zgodnie z retencją, 30 dni po wygaśnięciu linków. Liczby kampanii pozostają bez zmian"
+            "description": "Chwila usunięcia szczegółów odbiorców po okresie przechowywania, czyli 30 dni po wygaśnięciu linków. Liczby kampanii pozostają bez zmian"
           },
           "domain": {
             "type": "string",
             "nullable": true,
-            "description": "Domena skracacza ostatniej wysyłki. Po retencji null",
+            "description": "Domena skracacza ostatniej wysyłki. Po okresie przechowywania pole przyjmuje wartość null",
             "example": "l.firma.pl"
           },
           "expiresAt": {
             "type": "string",
             "format": "date-time",
             "nullable": true,
-            "description": "Chwila wygaśnięcia ostatnich ważnych linków kampanii. Po retencji null"
+            "description": "Chwila wygaśnięcia ostatnich ważnych linków kampanii. Po okresie przechowywania pole przyjmuje wartość null"
           },
           "utm": {
             "type": "boolean",
             "nullable": true,
-            "description": "Czy bramka dopisuje do adresów docelowych parametry utm_source=sms, utm_medium=sms i utm_campaign z nazwą kampanii. Po retencji null"
+            "description": "Czy bramka dopisuje do adresów docelowych parametry utm_source=sms, utm_medium=sms i utm_campaign z nazwą kampanii. Po okresie przechowywania pole przyjmuje wartość null"
           },
           "links": {
             "type": "array",
@@ -4088,7 +4088,7 @@
           },
           "openers": {
             "type": "object",
-            "description": "Strona odbiorców, którzy otworzyli link, od pierwszego otwarcia. Po retencji lista jest pusta",
+            "description": "Strona odbiorców, którzy otworzyli link, od pierwszego otwarcia. Po okresie przechowywania lista jest pusta",
             "required": [
               "data",
               "hasMore"

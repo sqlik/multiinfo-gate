@@ -130,7 +130,7 @@ export interface MessageDetail {
   deliveries: DeliveryView[];
   /** Integracja, z której wiadomość przyszła (webhook przychodzący albo skrzynka); brak dla wysyłki przez API. */
   integration?: { id: number; name: string } | null;
-  /** Krótkie linki wiadomości: kampania, kliknięcia ludzi i pierwsze otwarcie; null po retencji szczegółów. */
+  /** Krótkie linki wiadomości: kampania, kliknięcia ludzi i pierwsze otwarcie; null po okresie przechowywania szczegółów. */
   links?: { campaign: { id: number; name: string }; clicks: number | null; firstOpenedAt: string | null } | null;
 }
 
@@ -191,7 +191,7 @@ function tracePanel(trace: ProtocolTrace | null, host: string): string {
   if (trace === null) {
     return `<div class="panel">
       <div class="panel-h"><div class="lab">Ślad protokołu</div></div>
-      <div class="dim" style="padding: 14px 16px; font-size: 12.5px;">Ślad pojawi się po przekazaniu do Multiinfo.</div>
+      <div class="dim" style="padding: 14px 16px; font-size: 12.5px;">Ślad pojawi się po przekazaniu do Multiinfo</div>
     </div>`;
   }
   const params = Object.entries(trace.params).map(([k, v]) => traceParam(k, v)).join('\n');
@@ -234,11 +234,11 @@ function contentPanel(m: MessageRow, storeContent: boolean, accountName: string)
   }
 }
 
-/** Wiersze kampanii w danych wiadomości; po retencji liczby kliknięć już nie ma. */
+/** Wiersze kampanii w danych wiadomości. Po okresie przechowywania liczba kliknięć nie jest już dostępna. */
 function linkRows(links: MessageDetail['links']): string {
   if (!links) return '';
   const campaign = `<div>Kampania</div><div><a href="/kampanie/${esc(links.campaign.id)}">${esc(links.campaign.name)}</a></div>`;
-  if (links.clicks === null) return `${campaign}<div>Kliknięcia</div><div class="dim">szczegóły usunięte zgodnie z retencją</div>`;
+  if (links.clicks === null) return `${campaign}<div>Kliknięcia</div><div class="dim">szczegóły usunięte po okresie przechowywania</div>`;
   return `${campaign}<div>Kliknięcia</div><div class="m">${esc(links.clicks)}</div>`
     + `<div>Pierwsze otwarcie</div><div class="m">${links.firstOpenedAt === null ? '<span class="dim">brak</span>' : esc(stamp(links.firstOpenedAt))}</div>`;
 }

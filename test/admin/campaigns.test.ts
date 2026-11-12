@@ -155,7 +155,8 @@ describe('Kampanie: szczegóły', () => {
     h.shortLinks.purge(new Date(START.getTime() + 200 * 86_400_000));
     h.campaigns.setDetailsPurged(campaignId, NOW);
     const res = await page(`/kampanie/${campaignId}`);
-    expect(res.body).toContain('Szczegóły odbiorców zostały usunięte zgodnie z retencją');
+    expect(res.body).toContain('Szczegóły odbiorców zostały usunięte po okresie przechowywania');
+    expect(res.body).not.toMatch(/retencj/i);
     expect(res.body).toContain('1 240');
     expect(res.body).toContain('<svg');
     expect(res.body).toContain(FOLDER);
@@ -256,6 +257,14 @@ describe('Kampania w szczegółach rozsyłki i wiadomości', () => {
     expect(res.body).toContain(`<div>Kampania</div><div><a href="/kampanie/${id}">${SPRING}</a></div>`);
     expect(res.body).toContain('<div>Kliknięcia</div><div class="m">2</div>');
     expect(res.body).toContain('<div>Pierwsze otwarcie</div><div class="m">2026-11-05 11:05:00</div>');
+  });
+
+  it('wiadomość kampanii po usunięciu kodów podaje okres przechowywania zamiast liczby kliknięć', async () => {
+    const id = h.campaigns.open(apiKeyId, SPRING, START);
+    h.messages.insert(messageInput({ id: 'msg_3', apiKeyId, accountId, campaignId: id }));
+    const res = await page('/wiadomosci/msg_3');
+    expect(res.body).toContain('<div>Kliknięcia</div><div class="dim">szczegóły usunięte po okresie przechowywania</div>');
+    expect(res.body).not.toMatch(/retencj/i);
   });
 
   it('wiadomość bez kampanii nie ma tych wierszy', async () => {
