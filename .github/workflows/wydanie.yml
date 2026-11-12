@@ -46,6 +46,9 @@ jobs:
   obraz:
     needs: testy
     runs-on: ubuntu-24.04
+    # Budowa obu architektur trwa zwykle 3-5 minut. Zawieszony emulator arm64 kończy zadanie błędem
+    # po 20 minutach zamiast po domyślnych sześciu godzinach.
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: write
