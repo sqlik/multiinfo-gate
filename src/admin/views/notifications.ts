@@ -96,7 +96,7 @@ function m365AccountField(v: SmtpFormValues, accounts: NonNullable<Notifications
             <label for="m365AccountId">Konto Microsoft 365</label>
             <select id="m365AccountId" name="m365AccountId">${options}</select>
             ${accounts.some((a) => a.state === 'connected')
-    ? '<div class="hint">Konto, przez które bramka wysyła powiadomienia. Konta dodaje się i loguje na ekranie Konta Microsoft 365</div>'
+    ? '<div class="hint">Konto, przez które bramka wysyła powiadomienia. Konta dodaje się i loguje na ekranie Konta Microsoft 365.</div>'
     : '<div class="hint">Żadne z kont nie jest połączone, dlatego wysyłka zacznie działać po zalogowaniu konta na ekranie <a href="/microsoft-365">Konta Microsoft 365</a></div>'}
           </div>`;
 }
@@ -112,7 +112,7 @@ function smsPanel(d: NotificationsPageData): string {
   const expiry = chosen?.expired
     ? `<div class="warn">Klucz ${esc(chosen.name)} wygasł, dlatego kanał nie wysyła powiadomień. Wskaż czynny klucz API</div>`
     : chosen?.expiresOn
-      ? `<div class="hint">Wybrany klucz jest ważny do ${esc(chosen.expiresOn)}. Po tej dacie kanał przestaje wysyłać powiadomienia, a przegląd wyświetla ostrzeżenie</div>`
+      ? `<div class="hint">Wybrany klucz jest ważny do ${esc(chosen.expiresOn)}. Po tej dacie kanał przestaje wysyłać powiadomienia, a przegląd wyświetla ostrzeżenie.</div>`
       : '';
   // Wygasły klucz ma własne ostrzeżenie przy polu klucza.
   const problem = d.sms?.enabled && d.smsProblem && !chosen?.expired
@@ -131,7 +131,7 @@ function smsPanel(d: NotificationsPageData): string {
           <div class="field">
             <label for="smsRecipients">Numery</label>
             <textarea id="smsRecipients" name="recipients" rows="3" placeholder="48601000123">${esc(v.recipients)}</textarea>
-            <div class="hint">Jeden numer w wierszu, najwyżej 5. Numer bez numeru kierunkowego kraju otrzymuje numer kierunkowy z konta Multiinfo wybranego klucza</div>
+            <div class="hint">Jeden numer w wierszu, najwyżej 5. Numer bez numeru kierunkowego kraju otrzymuje numer kierunkowy z konta Multiinfo wybranego klucza.</div>
           </div>
           <div class="field">
             <label for="smsKey">Klucz API</label>
@@ -139,7 +139,7 @@ function smsPanel(d: NotificationsPageData): string {
               <option value="">wybierz klucz</option>
               ${keys.map((k) => `<option value="${esc(k.id)}"${String(k.id) === v.apiKeyId ? ' selected' : ''}>${esc(keyLabel(k))}</option>`).join('')}
             </select>
-            <div class="hint">Bramka wysyła powiadomienia SMS w imieniu klucza, czyli z jego konta Multiinfo, usługi, limitów i nadpisu. Lista wiadomości oznacza te SMS-y jako „powiadomienie bramki”. Aplikacje klienta nie otrzymują ich przez API, webhook klucza ani integracje</div>
+            <div class="hint">Bramka wysyła powiadomienia SMS w imieniu klucza, czyli z jego konta Multiinfo, usługi, limitów i nadpisu. Lista wiadomości oznacza te SMS-y jako „powiadomienie bramki”. Aplikacje klienta nie otrzymują ich przez API, webhook klucza ani integracje.</div>
             ${expiry}
           </div>
           <div class="field">
@@ -290,7 +290,7 @@ ${d.tab === 'sms' ? `      ${smsPanel(d)}` : d.tab === 'konfiguracja' ? `      <
           <div class="field">
             <label for="fromAddress">Adres nadawcy</label>
             <input id="fromAddress" name="fromAddress" value="${esc(v.fromAddress)}" placeholder="${esc(fromPlaceholder)}" data-address-of="m365AccountId" data-address-when="authMode=m365" data-placeholder="bramka@firma.example">
-            <div class="hint" data-show="authMode=m365">Puste pole oznacza adres skrzynki wybranego konta. Inny adres wymaga, aby konto posiadało do niego uprawnienie „Wyślij jako”</div>
+            <div class="hint" data-show="authMode=m365">Puste pole oznacza adres skrzynki wybranego konta. Inny adres wymaga, aby konto posiadało do niego uprawnienie „Wyślij jako”.</div>
           </div>
           <div class="field">
             <label for="fromName">Nazwa wyświetlana nadawcy</label>
@@ -304,12 +304,12 @@ ${d.tab === 'sms' ? `      ${smsPanel(d)}` : d.tab === 'konfiguracja' ? `      <
           <div class="field">
             <label for="instanceName">Nazwa instancji</label>
             <input id="instanceName" name="instanceName" value="${esc(v.instanceName)}" placeholder="np. Firma - produkcja">
-            <div class="hint">Umieszczana w temacie każdego maila. Pozwala odróżnić powiadomienia z kilku bramek</div>
+            <div class="hint">Umieszczana w temacie każdego maila. Pozwala odróżnić powiadomienia z kilku bramek.</div>
           </div>
           <div class="field">
             <label for="panelUrl">Adres panelu</label>
             <input id="panelUrl" name="panelUrl" value="${esc(v.panelUrl)}" placeholder="https://sms.firma.example:8081">
-            <div class="hint">Opcjonalny. Powiadomienia zawierają ten adres jako odnośnik do panelu</div>
+            <div class="hint">Opcjonalny. Powiadomienia zawierają ten adres jako odnośnik do panelu.</div>
           </div>
           <div class="bar">
             <button class="btn btn-p" type="submit">Zapisz SMTP</button>
@@ -325,7 +325,7 @@ ${d.tab === 'sms' ? `      ${smsPanel(d)}` : d.tab === 'konfiguracja' ? `      <
           <div class="bar" style="padding: 12px 16px; align-items: flex-start;">
             <button class="btn btn-p" type="submit"${rulesEditable ? '' : ' disabled'}>Zapisz reguły</button>
             <div class="hint dim" style="font-size: 11.5px; margin: 0;">
-              <div>Grupowanie 0 oznacza osobny mail dla każdego zdarzenia, do limitu na godzinę. Zdarzenia ponad limit są zliczane i podawane w następnym mailu</div>
+              <div>Grupowanie 0 oznacza osobny mail dla każdego zdarzenia, do limitu na godzinę. Zdarzenia ponad limit są zliczane i podawane w następnym mailu.</div>
               <div>Zaznaczone pole SMS powoduje wysłanie powiadomienia także SMS-em na numery z zakładki SMS. Limit na godzinę obejmuje również SMS-y. Bramka wysyła najwyżej 10 SMS-ów powiadomień na dobę, licząc każdy numer osobno. SMS-y o koncie Microsoft 365 wymagającym logowania i o niewysłanym mailu korzystają z osobnej puli 5 na dobę</div>
               ${d.sms?.enabled === true ? '' : '<div>Kanał SMS jest wyłączony, dlatego zaznaczone pola SMS nie powodują wysyłki</div>'}
             </div>

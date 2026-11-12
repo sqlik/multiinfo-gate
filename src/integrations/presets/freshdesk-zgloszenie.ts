@@ -30,7 +30,7 @@ export const freshdeskZgloszenie: Preset = {
   simple: {
     inbound: {
       addressField: 'we Freshdesku w obu regułach automatyzacji jako adres elementu webhook',
-      recipients: { source: 'list', note: 'Freshdesk nie przesyła numerów agentów, więc SMS jest zawsze wysyłany na numery wpisane tutaj.' },
+      recipients: { source: 'list', note: 'Freshdesk nie przesyła numerów agentów, więc SMS jest zawsze wysyłany na numery wpisane tutaj' },
       when: [
         { id: 'nowe-i-odpowiedzi', label: 'przy nowym zgłoszeniu i przy odpowiedzi klienta', condition: { mode: 'builder', rules: [] } },
         { id: 'tylko-nowe', label: 'tylko przy nowym zgłoszeniu', condition: { mode: 'builder', rules: [{ path: 'event', op: 'eq', value: 'nowe' }] } },

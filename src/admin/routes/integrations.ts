@@ -159,7 +159,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     if (!hasSimple(preset, kind)) return { mode: 'zaawansowany' };
     if (tryb === 'zaawansowany') return { mode: 'zaawansowany' };
     if (values === null || detectSimple(preset, kind, values) !== null) return { mode: 'prosty' };
-    return { mode: 'zaawansowany', note: 'Ta integracja ma ustawienia spoza list trybu prostego (np. własny szablon albo warunek), dlatego otwiera się w trybie zaawansowanym.' };
+    return { mode: 'zaawansowany', note: 'Ta integracja ma ustawienia spoza list trybu prostego (np. własny szablon albo warunek), dlatego otwiera się w trybie zaawansowanym' };
   };
 
   const simplePage = (request: FastifyRequest, ctx: FormContext, sv: SimpleValues, opts: { error?: string; created?: CreatedHook } = {}) =>
@@ -299,7 +299,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
   const mailModeOf = (tryb: string | undefined, config: MailInConfig | null): { mode: MailFormOptions['mode']; note?: string } => {
     if (tryb === 'zaawansowany') return { mode: 'zaawansowany' };
     if (config !== null && needsAdvanced(config)) {
-      return { mode: 'zaawansowany', note: 'Ta skrzynka ma ustawienia spoza trybu prostego (szablon Liquid, wyrażenie regularne, warunek Liquid, wyłączone sprawdzanie certyfikatu albo nazwa serwera w nagłówku Authentication-Results), dlatego otwiera się w trybie zaawansowanym.' };
+      return { mode: 'zaawansowany', note: 'Ta skrzynka ma ustawienia spoza trybu prostego (szablon Liquid, wyrażenie regularne, warunek Liquid, wyłączone sprawdzanie certyfikatu albo nazwa serwera w nagłówku Authentication-Results), dlatego otwiera się w trybie zaawansowanym' };
     }
     return { mode: 'prosty' };
   };
@@ -425,7 +425,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
   const groupModeOf = (tryb: string | undefined, config: SmsGroupConfig | null): { mode: GroupFormOptions['mode']; note?: string } => {
     if (tryb === 'zaawansowany') return { mode: 'zaawansowany' };
     if (config !== null && groupNeedsAdvanced(config)) {
-      return { mode: 'zaawansowany', note: 'Ta grupa ma ustawienia spoza trybu prostego (warunek albo szablon Liquid), dlatego otwiera się w trybie zaawansowanym.' };
+      return { mode: 'zaawansowany', note: 'Ta grupa ma ustawienia spoza trybu prostego (warunek albo szablon Liquid), dlatego otwiera się w trybie zaawansowanym' };
     }
     return { mode: 'prosty' };
   };

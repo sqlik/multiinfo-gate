@@ -286,7 +286,7 @@ describe('POST /integracje', () => {
       toPath: 'e.mobile_phone', toFallback: '',
     }));
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('nie ma przykładowej odpowiedzi');
+    expect(res.body).toContain('nie zawiera przykładowej odpowiedzi');
     expect(res.body).not.toContain('Pola spod <code>e</code> pochodzą z przykładowej');
     expect(h.integrations.list()).toHaveLength(0);
   });

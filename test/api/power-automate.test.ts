@@ -178,6 +178,12 @@ describe('buildPowerAutomateConnector', () => {
     expect(new Set(labels)).toEqual(new Set(['Zgłoszenie skracania']));
   });
 
+  it('etykiety i opisy mówią o okresie przechowywania, a nie o retencji, tak jak panel i dokumentacja', () => {
+    const tekst = JSON.stringify(doc);
+    expect(tekst).not.toMatch(/retencj/i);
+    expect(tekst).toContain('"x-ms-summary":"Szczegóły usunięte po okresie przechowywania"');
+  });
+
   it('nie ma śladu OpenAPI 3', () => {
     const forbidden = ['openapi', 'servers', 'components', 'requestBody', 'oneOf', 'anyOf', 'allOf', 'nullable'];
     walk(doc, '$', (obj, path) => {

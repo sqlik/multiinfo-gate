@@ -414,7 +414,7 @@ export function sectionBasics(
     ? `<div class="field">
       <label>Klucz API</label>
       <div class="box">${esc(ctx.keys.find((k) => k.id === ctx.row!.apiKeyId)?.name ?? `klucz ${ctx.row.apiKeyId}`)}</div>
-      <div class="hint">Klucz jest przypisany na stałe. Integracja pod innym kluczem wymaga utworzenia nowej</div>
+      <div class="hint">Klucz jest przypisany na stałe. Integracja pod innym kluczem wymaga utworzenia nowej.</div>
     </div>`
     : `<div class="field">
       <label for="apiKeyId">Klucz API</label>
@@ -525,7 +525,7 @@ function sectionOutput(ctx: FormContext, v: IntegrationFormValues): string {
     </div>
     <div class="field">
       ${checkbox('sign', v.sign, 'Podpisuj żądania nagłówkiem X-MIG-Signature (sekret webhooka klucza)')}
-      <div class="hint">Dla własnej aplikacji sprawdzającej podpis. Gotowe aplikacje nie obsługują tego nagłówka</div>
+      <div class="hint">Dla własnej aplikacji sprawdzającej podpis. Gotowe aplikacje nie obsługują tego nagłówka.</div>
     </div>
   </details>`;
 }
@@ -567,17 +567,17 @@ function sectionEnrich(ctx: FormContext, v: IntegrationFormValues): string {
     <summary>Zapytanie uzupełniające</summary>
     <div class="hint" style="margin: 0 0 10px;">Bramka odpytuje aplikację o dane, których nie ma w ładunku, na przykład o numer telefonu klienta.
       Pola z odpowiedzi wstawia się tak samo jak pola ładunku, z przedrostkiem <code>e</code> zamiast <code>p</code>:
-      numer komórki z kartoteki to <code>{{ e.mobile_phone }}</code>, a nazwa klienta to <code>{{ e.name }}</code></div>
+      numer komórki z kartoteki to <code>{{ e.mobile_phone }}</code>, a nazwa klienta to <code>{{ e.name }}</code>.</div>
     <div class="field">
       <label for="enrichUrl">Adres zapytania</label>
       <input id="enrichUrl" name="enrichUrl" value="${esc(v.enrichUrl)}" placeholder="https://firma.aplikacja.pl/clients/{{ p.client_id | url_encode }}.json">
       <div class="hint">Szablon Liquid, tak jak treść. Wartość z ładunku należy wstawiać przez <code>{{ p.pole | url_encode }}</code>,
-        aby ukośnik albo znak zapytania w wartości nie zmienił adresu docelowego. Puste pole wyłącza zapytanie</div>
+        aby ukośnik albo znak zapytania w wartości nie zmienił adresu docelowego. Puste pole wyłącza zapytanie.</div>
     </div>
     <div class="field">
       <label for="enrichToken">Kod autoryzacyjny API</label>
       <input id="enrichToken" name="enrichToken" type="password" autocomplete="off" placeholder="${zapisany ? 'zapisany, puste zachowuje dotychczasowy' : 'wartość z aplikacji'}">
-      <div class="hint">Bramka dodaje go do adresu jako parametr <code>api_token</code>. Jest przechowywany w postaci zaszyfrowanej i nie trafia do szablonu ani do dziennika</div>
+      <div class="hint">Bramka dodaje go do adresu jako parametr <code>api_token</code>. Jest przechowywany w postaci zaszyfrowanej i nie trafia do szablonu ani do dziennika.</div>
     </div>
     <div class="field">
       <label for="enrichOnError">Gdy aplikacja nie odpowie</label>
@@ -609,7 +609,7 @@ function sectionRecipient(v: IntegrationFormValues): string {
         <option value="error"${v.invalidRecipient === 'error' ? ' selected' : ''}>zgłoś błąd aplikacji źródłowej</option>
         <option value="skip"${v.invalidRecipient === 'skip' ? ' selected' : ''}>pomiń zdarzenie</option>
       </select>
-      <div class="hint">Błąd oznacza odpowiedź 422 i mail do administratora. Pominięcie oznacza odpowiedź 200 i wpis w dzienniku. Przeznaczone dla sklepów, które po kilku kolejnych błędach wyłączają webhook</div>
+      <div class="hint">Błąd oznacza odpowiedź 422 i mail do administratora. Pominięcie oznacza odpowiedź 200 i wpis w dzienniku. Przeznaczone dla sklepów, które po kilku kolejnych błędach wyłączają webhook.</div>
     </div>
     <div class="field">
       <label for="ticketRefPath">Ścieżka identyfikatora zgłoszenia</label>
@@ -619,7 +619,7 @@ function sectionRecipient(v: IntegrationFormValues): string {
     <div class="field">
       <label for="eventIdPath">Ścieżka identyfikatora zdarzenia</label>
       <input id="eventIdPath" name="eventIdPath" value="${esc(v.eventIdPath)}" placeholder="np. alert.id">
-      <div class="hint">To samo zdarzenie jest przetwarzane raz na dobę. Powtórzenie otrzymuje odpowiedź „duplikat” bez wysyłki SMS-a</div>
+      <div class="hint">To samo zdarzenie jest przetwarzane raz na dobę. Powtórzenie otrzymuje odpowiedź „duplikat” bez wysyłki SMS-a.</div>
     </div>
   </details>`;
 }
@@ -645,7 +645,7 @@ function sectionTextInbound(ctx: FormContext, v: IntegrationFormValues): string 
       <label for="textTemplate">Szablon</label>
       ${textarea('textTemplate', v.textTemplate, 4)}
       ${fieldsHint(ctx.preset)}
-      <div class="hint">Filtry bramki: <code>gsm</code> (bez polskich znaków), <code>sms_truncate: 100</code>, <code>phone</code>, <code>date_pl</code>, <code>html_text</code> (HTML na tekst).</div>
+      <div class="hint">Filtry bramki: <code>gsm</code> (bez polskich znaków), <code>sms_truncate: 100</code>, <code>phone</code>, <code>date_pl</code>, <code>html_text</code> (HTML na tekst)</div>
     </div>
     <div class="field">
       <label for="textPath">Ścieżka pola z treścią</label>
@@ -694,7 +694,7 @@ function sectionBodyOutbound(v: IntegrationFormValues): string {
     <div class="field">
       <label for="responseRefPath">Ścieżka identyfikatora w odpowiedzi</label>
       <input id="responseRefPath" name="responseRefPath" value="${esc(v.responseRefPath)}" placeholder="np. id">
-      <div class="hint">Identyfikator zgłoszenia z odpowiedzi aplikacji jest zapisywany przy odebranym SMS-ie. Odpowiedź agenta trafia wówczas do tego samego wątku</div>
+      <div class="hint">Identyfikator zgłoszenia z odpowiedzi aplikacji jest zapisywany przy odebranym SMS-ie. Odpowiedź agenta trafia wówczas do tego samego wątku.</div>
     </div>
   </details>`;
 }
@@ -744,9 +744,9 @@ function previewPanel(kind: IntegrationKind, p: FormPreview): string {
     rows.push(`<div>Treść</div><div>${p.text ? `<div class="ruler" style="padding: 0 0 4px;">${esc(p.text)}</div>` : '<span class="dim">pusta</span>'}</div>`);
     rows.push(`<div>Części</div><div class="m">${esc(p.parts ?? 0)}</div>`);
     if (p.enriched === 'z-probka') {
-      rows.push('<div>Dopytanie</div><div class="dim">Pola spod <code>e</code> pochodzą z przykładowej odpowiedzi tej aplikacji. Podgląd o nic jej nie pyta</div>');
+      rows.push('<div>Dopytanie</div><div class="dim">Pola spod <code>e</code> pochodzą z przykładowej odpowiedzi tej aplikacji. Podgląd o nic jej nie pyta.</div>');
     } else if (p.enriched === 'bez-probki') {
-      rows.push('<div>Dopytanie</div><div class="dim">To ustawienie nie ma przykładowej odpowiedzi, więc pola spod <code>e</code> są w podglądzie puste. Podgląd o nic aplikacji nie pyta</div>');
+      rows.push('<div>Dopytanie</div><div class="dim">To ustawienie nie zawiera przykładowej odpowiedzi, więc pola spod <code>e</code> są w podglądzie puste. Podgląd o nic aplikacji nie pyta.</div>');
     }
   } else {
     const headers = Object.entries(p.headers ?? {}).map(([k, val]) => `${esc(k)}: ${esc(val)}`).join('<br>');

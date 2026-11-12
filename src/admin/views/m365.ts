@@ -129,7 +129,7 @@ export function m365FormPage(opts: {
   const action = opts.mode === 'new' ? '/microsoft-365' : `/microsoft-365/${esc(opts.id)}`;
   const title = opts.mode === 'new' ? 'Nowe konto Microsoft 365' : `Edycja konta ${v.name}`;
   const editNote = opts.mode === 'edit'
-    ? '<div class="hint">Zmiana identyfikatora katalogu albo identyfikatora aplikacji rozłącza konto, dlatego po zapisie należy zalogować się ponownie.</div>'
+    ? '<div class="hint">Zmiana identyfikatora katalogu albo identyfikatora aplikacji rozłącza konto, dlatego po zapisie należy zalogować się ponownie</div>'
     : '';
 
   return `<div class="head">
@@ -215,7 +215,7 @@ export function m365DetailPage(v: M365AccountView, opts: { redirectUri: string |
     // Komunikat z podpowiedzią zaczyna się zwykle od kodu, więc kod przed nim pojawia się tylko wtedy, gdy go tam brak.
     : `${row.errorCode === null || (row.errorMessage ?? '').startsWith(`AADSTS${row.errorCode}`) ? '' : `AADSTS${esc(row.errorCode)} · `}${esc(row.errorMessage ?? '')}`;
   const users = v.users.length === 0
-    ? '<div class="dim">Konta nie używa jeszcze żadna skrzynka Mail2SMS ani wysyłka maili powiadomień.</div>'
+    ? '<div class="dim">Konta nie używa jeszcze żadna skrzynka Mail2SMS ani wysyłka maili powiadomień</div>'
     : `<ul style="margin: 0; padding-left: 18px;">${v.users.map((u) => `<li>${userLink(u)}</li>`).join('')}</ul>`;
   const disconnect = row.state === 'new' ? '' : `<form method="post" action="/microsoft-365/${esc(row.id)}/rozlacz"
         data-confirm="Rozłączyć konto „${esc(row.name)}”? Skrzynki Mail2SMS korzystające z tego konta zostaną wstrzymane do ponownego logowania, a maile powiadomień nie będą wysyłane." data-confirm-ok="Rozłącz">

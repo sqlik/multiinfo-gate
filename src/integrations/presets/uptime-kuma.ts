@@ -42,7 +42,7 @@ export const uptimeKuma: Preset = {
   simple: {
     inbound: {
       addressField: 'w Uptime Kumie w polu Post URL powiadomienia typu Webhook',
-      recipients: { source: 'list', note: 'Uptime Kuma nie przesyła numerów telefonów, więc SMS jest zawsze wysyłany na numery wpisane tutaj.' },
+      recipients: { source: 'list', note: 'Uptime Kuma nie przesyła numerów telefonów, więc SMS jest zawsze wysyłany na numery wpisane tutaj' },
       when: [
         { id: 'awaria', label: 'tylko gdy monitor przestanie działać', condition: { mode: 'builder', rules: [{ path: 'heartbeat.status', op: 'eq', value: '0' }] } },
         { id: 'awaria-i-powrot', label: 'gdy przestanie działać i gdy zacznie działać ponownie', condition: { mode: 'builder', rules: [{ path: 'heartbeat', op: 'exists', value: '' }] } },

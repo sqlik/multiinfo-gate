@@ -93,7 +93,7 @@ export interface InboundDetail {
 export function inboundDetailPage(d: InboundDetail): string {
   const r = d.row;
   const content = r.body === null
-    ? `<div class="ruler dim" style="font-size: 13px; line-height: 1.7;">Treść nieprzechowywana - konto ${esc(d.accountName)} ma wyłączone przechowywanie treści.</div>`
+    ? `<div class="ruler dim" style="font-size: 13px; line-height: 1.7;">Treść nieprzechowywana - przechowywanie treści na koncie ${esc(d.accountName)} jest wyłączone</div>`
     : `<div class="ruler"${r.kind === 'binary' ? ' style="font-family: monospace;"' : ''}>${esc(r.body)}</div>`;
   const replies = d.replies.length === 0
     ? '<span class="dim">brak</span>'

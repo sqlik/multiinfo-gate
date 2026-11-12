@@ -287,7 +287,7 @@ describe('nazwa serwera w nagłówku Authentication-Results', () => {
     const id = h.integrations.list()[0]!.id;
     expect(h.integrations.get(id)!.config).toMatchObject({ authservId: 'mx.google.com' });
     const edit = await get(`/integracje/${id}/edytuj`);
-    expect(edit.body).toContain('albo nazwa serwera w nagłówku Authentication-Results), dlatego otwiera się w trybie zaawansowanym.');
+    expect(edit.body).toContain('albo nazwa serwera w nagłówku Authentication-Results), dlatego otwiera się w trybie zaawansowanym</div>');
     expect(edit.body).toContain('value="mx.google.com"');
     expect((await get(`/integracje/${id}`)).body).toContain('· wymagane SPF/DKIM od mx.google.com');
   });

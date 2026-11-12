@@ -127,7 +127,10 @@ describe('Skracacz linków: formularz domeny', () => {
     }
     const id = h.linkDomains.create({ domain: 'l.firma.pl', displayName: 'Firma Serwis', homeUrl: null, bareLinks: false }, new Date());
     const body = (await page(`/skracacz/${id}`)).body;
-    expect(body).toContain('Domenę przypisuje się do klucza w sekcji „Skracanie linków” formularza klucza, w elemencie „Klucze API”.');
+    // Wielozdaniowe teksty paneli strony domeny kończą się kropką, tak jak w całym panelu.
+    expect(body).toContain('Domenę przypisuje się do klucza w sekcji „Skracanie linków” formularza klucza, w elemencie „Klucze API”.</div>');
+    expect(body).toContain('a bramka usunęła dane wysłanych linków po okresie przechowywania.</div>');
+    expect(body).not.toMatch(/retencj/i);
   });
 
   it('zapis tworzy domenę niesprawdzoną i prowadzi do jej strony', async () => {

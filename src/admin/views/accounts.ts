@@ -100,12 +100,12 @@ export function newAccountPage(error: string | null = null, values: Record<strin
           <select id="baseUrl" name="baseUrl">
             ${BASE_URLS.map((u) => `<option value="${esc(u)}"${(values.baseUrl ?? BASE_URLS[1]) === u ? ' selected' : ''}>${esc(u)}</option>`).join('')}
           </select>
-          <div class="hint">api1 albo api2. Właściwą instancję wskazuje przedstawiciel Polkomtel</div>
+          <div class="hint">api1 albo api2. Właściwą instancję wskazuje przedstawiciel Polkomtel.</div>
         </div>
         <div class="field">
           <label for="login">Login</label>
           <input id="login" name="login" value="${val('login')}" required>
-          <div class="hint">Musi być zgodny z polem CN certyfikatu. W przeciwnym razie Multiinfo odrzuca wysyłkę błędem -85</div>
+          <div class="hint">Musi być zgodny z polem CN certyfikatu. W przeciwnym razie Multiinfo odrzuca wysyłkę błędem -85.</div>
         </div>
         <div class="field">
           <label for="password">Hasło konta Multiinfo</label>
@@ -225,7 +225,7 @@ function baseUrlSelect(current: string): string {
   const options = [...new Set<string>([...BASE_URLS, current])].filter((u) => u !== '').map((u) =>
     `<option value="${esc(u)}"${u === current ? ' selected' : ''}>${esc(u)}</option>`).join('');
   return `<select id="baseUrl" name="baseUrl">${options}</select>
-    <div class="hint">api1 albo api2. Właściwą instancję wskazuje przedstawiciel Polkomtel</div>`;
+    <div class="hint">api1 albo api2. Właściwą instancję wskazuje przedstawiciel Polkomtel.</div>`;
 }
 
 export function editAccountPage(v: AccountView, error: string | null = null,
@@ -234,7 +234,7 @@ export function editAccountPage(v: AccountView, error: string | null = null,
     <div>
       <div class="crumb"><a href="/konta">Konta Multiinfo</a> / <a href="/konta/${esc(v.row.id)}">${esc(v.row.name)}</a> / edycja</div>
       <h1 class="h1">${esc(v.row.name)}</h1>
-      <p class="sub">Certyfikat wymienia się na ekranie konta, nadpisy na liście kont.</p>
+      <p class="sub">Certyfikat wymienia się na ekranie konta, nadpisy na liście kont</p>
     </div>
   </div>
   <div class="scroll">
@@ -262,7 +262,7 @@ export function editAccountPage(v: AccountView, error: string | null = null,
         <div class="field">
           <label for="serviceIds">ID usług, jedno w wierszu</label>
           <textarea id="serviceIds" name="serviceIds" rows="3" required>${esc(values.serviceIds)}</textarea>
-          <div class="hint">ID usługi używane przez czynny klucz API nie może zostać usunięte. Najpierw należy zmienić klucz</div>
+          <div class="hint">ID usługi używane przez czynny klucz API nie może zostać usunięte. Najpierw należy zmienić klucz.</div>
         </div>
         <div class="field">
           <label for="defaultCountryCode">Domyślny kraj numerów</label>

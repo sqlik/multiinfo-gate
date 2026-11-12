@@ -156,7 +156,7 @@ describe('GET /odebrane/:id', () => {
 
   it('treść nieprzechowywana - podpis z nazwą konta', async () => {
     seed('in_1', { body: null });
-    expect((await page('/odebrane/in_1')).body).toContain('Treść nieprzechowywana - konto Firma Info');
+    expect((await page('/odebrane/in_1')).body).toContain('Treść nieprzechowywana - przechowywanie treści na koncie Firma Info jest wyłączone');
   });
 
   it('404 dla nieznanego identyfikatora', async () => {

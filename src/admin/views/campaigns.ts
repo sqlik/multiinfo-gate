@@ -200,7 +200,7 @@ function openersPanel(d: CampaignDetail, shown: number): string {
   if (d.row.detailsPurgedAt !== null) {
     return `<div class="panel">
       <div class="panel-h"><div class="lab">Odbiorcy, którzy otworzyli link</div></div>
-      <div class="form"><div class="dim">Szczegóły odbiorców zostały usunięte zgodnie z retencją. Bramka usuwa numery, krótkie kody
+      <div class="form"><div class="dim">Szczegóły odbiorców zostały usunięte po okresie przechowywania. Bramka usuwa numery, krótkie kody
         i adresy docelowe 30 dni po wygaśnięciu linków, a liczby kampanii pozostają bez zmian.</div></div>
     </div>`;
   }

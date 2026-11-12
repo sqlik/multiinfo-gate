@@ -40,7 +40,7 @@ function firstAccountHint(install: InstallKind | null): string {
     <p>W bazie nie ma jeszcze żadnego konta panelu. Bramka nie ma konta domyślnego. Pierwsze konto
        zakłada się poleceniem na serwerze:</p>
     ${addAdminCommand(install)}
-    <p class="sub"><a href="${esc(problemUrl('pierwsze-konto'))}">Opis w dokumentacji</a></p>
+    <p class="sub"><a href="${esc(problemUrl('pierwsze-konto'))}">Opis w dokumentacji</a></p>.
   </div>`;
 }
 

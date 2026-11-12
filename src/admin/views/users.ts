@@ -35,7 +35,7 @@ export function usersPage(rows: AdminUserRow[], currentUserId: number): string {
   return `<div class="head">
     <div>
       <h1 class="h1">Użytkownicy panelu</h1>
-      <p class="sub">Wszyscy użytkownicy mają pełne uprawnienia, panel nie rozróżnia ról. Czas polski</p>
+      <p class="sub">Panel nie rozróżnia ról, dlatego wszyscy użytkownicy posiadają pełne uprawnienia. Godziny są podane w czasie polskim.</p>
     </div>
     <a class="btn btn-p" href="/uzytkownicy/nowy">Dodaj użytkownika</a>
   </div>
@@ -64,7 +64,7 @@ export function newUserPage(error: string | null = null, values: { login: string
     <div>
       <div class="crumb"><a href="/uzytkownicy">Użytkownicy</a> / nowy</div>
       <h1 class="h1">Nowy użytkownik panelu</h1>
-      <p class="sub">Hasło startowe należy przekazać użytkownikowi bezpośrednio. Panel nie wyświetli go ponownie</p>
+      <p class="sub">Hasło startowe należy przekazać użytkownikowi bezpośrednio. Panel nie wyświetli go ponownie.</p>
     </div>
   </div>
   <div class="scroll">
@@ -79,7 +79,7 @@ export function newUserPage(error: string | null = null, values: { login: string
         <div class="field">
           <label for="haslo">Hasło startowe</label>
           <input id="haslo" name="haslo" type="password" autocomplete="new-password" required>
-          <div class="hint">${esc(PASSWORD_RULE)}. Przy pierwszym logowaniu panel poprosi o włączenie drugiego składnika</div>
+          <div class="hint">${esc(PASSWORD_RULE)}. Przy pierwszym logowaniu panel poprosi o włączenie drugiego składnika.</div>
         </div>
         <div class="field">
           <label for="haslo2">Hasło startowe ponownie</label>
@@ -95,7 +95,7 @@ export function passwordPage(error: string | null = null): string {
   return `<div class="head">
     <div>
       <h1 class="h1">Zmiana hasła</h1>
-      <p class="sub">Po zapisie pozostałe sesje tego konta zostaną zamknięte. Bieżąca sesja pozostaje aktywna</p>
+      <p class="sub">Po zapisie pozostałe sesje tego konta zostaną zamknięte. Bieżąca sesja pozostaje aktywna.</p>
     </div>
   </div>
   <div class="scroll">

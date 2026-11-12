@@ -167,6 +167,13 @@ describe('opis API', () => {
     for (const d of descriptions) expect(d).toMatch(/link_domain_not_allowed.*domain_unavailable/s);
   });
 
+  it('opisy pól mówią o okresie przechowywania, a nie o retencji, tak jak dokumentacja skracacza', () => {
+    const tekst = JSON.stringify(doc);
+    expect(tekst).not.toMatch(/retencj/i);
+    expect(tekst).toContain('Czy bramka usunęła szczegóły krótkich linków po okresie przechowywania, czyli 30 dni po wygaśnięciu linków');
+    expect(tekst).toContain('Chwila usunięcia szczegółów odbiorców po okresie przechowywania, czyli 30 dni po wygaśnięciu linków');
+  });
+
   it('zapisany plik zgadza się z modułem', () => {
     const zapisany = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
     expect(zapisany).toEqual(JSON.parse(JSON.stringify(doc)));

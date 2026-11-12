@@ -253,7 +253,7 @@ describe('GET /wiadomosci/:id', () => {
 
   it('bez śladu informuje, że pojawi się po przekazaniu', async () => {
     seed('m1');
-    expect((await page('/wiadomosci/m1')).body).toContain('Ślad pojawi się po przekazaniu do Multiinfo.');
+    expect((await page('/wiadomosci/m1')).body).toContain('Ślad pojawi się po przekazaniu do Multiinfo</div>');
   });
 
   it('buduje przebieg ze zdarzeń, gdy są zapisane', async () => {

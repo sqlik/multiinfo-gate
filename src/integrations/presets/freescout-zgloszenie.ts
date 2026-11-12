@@ -44,7 +44,7 @@ export const freescoutZgloszenie: Preset = {
   simple: {
     inbound: {
       addressField: 'we FreeScoucie w polu URL webhooka',
-      recipients: { source: 'list', note: 'FreeScout nie przesyła numerów agentów, więc SMS jest zawsze wysyłany na numery wpisane tutaj.' },
+      recipients: { source: 'list', note: 'FreeScout nie przesyła numerów agentów, więc SMS jest zawsze wysyłany na numery wpisane tutaj' },
       when: [
         { id: 'nowe-i-odpowiedzi', label: 'przy nowej rozmowie i przy odpowiedzi klienta', condition: { mode: 'builder', rules: [] } },
         { id: 'tylko-nowe', label: 'tylko przy nowej rozmowie', condition: { mode: 'builder', rules: [{ path: 'threadsCount', op: 'lt', value: '2' }] } },

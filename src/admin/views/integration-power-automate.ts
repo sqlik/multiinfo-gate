@@ -38,7 +38,7 @@ function sectionRecipients(v: PaFormValues): string {
     <div class="field">
       <label for="recipients">Numery odbiorców</label>
       ${textarea('recipients', v.recipients, 6, ' placeholder="601 000 011 Marek Kowalski\n601 000 012\n601 000 013 Jan Wiśniewski"')}
-      ${hint('Lista służy wyłącznie akcji „Wyślij SMS do grupy”. Jeden numer w wierszu, po numerze opcjonalna nazwa, do 500 numerów. Pole nie jest wymagane. Przy pustej liście akcja „Wyślij SMS do grupy” kończy się błędem, a pozostałe akcje działają')}
+      ${hint('Lista służy wyłącznie akcji „Wyślij SMS do grupy”. Jeden numer w wierszu, po numerze opcjonalna nazwa, do 500 numerów. Pole nie jest wymagane. Przy pustej liście akcja „Wyślij SMS do grupy” kończy się błędem, a pozostałe akcje działają.')}
     </div>
   </details>`;
 }
@@ -52,7 +52,7 @@ function sectionText(v: PaFormValues): string {
         <input name="maxParts" type="number" min="1" max="9" value="${esc(v.maxParts)}" style="width: 90px;">
         <div class="choices">${radio('overflow', 'truncate', v.overflow, 'skróć i wyślij')}${radio('overflow', 'reject', v.overflow, 'nie wysyłaj, zapisz błąd i powiadom')}</div>
       </div>
-      ${hint('Limit obowiązuje SMS do jednego numeru, każdą treść w rozsyłce oraz SMS do grupy. Treść przygotowuje przepływ. Przy odrzuceniu przepływ otrzymuje błąd z liczbą części, a administrator powiadomienie')}
+      ${hint('Limit obowiązuje SMS do jednego numeru, każdą treść w rozsyłce oraz SMS do grupy. Treść przygotowuje przepływ. Przy odrzuceniu przepływ otrzymuje błąd z liczbą części, a administrator powiadomienie.')}
     </div>
   </details>`;
 }
@@ -70,7 +70,7 @@ function recipientLimitField(v: PaFormValues): string {
       <div class="inline">
         <input id="throttleRecipients" name="throttleRecipients" type="number" min="1" max="${PA_RECIPIENT_LIMIT_MAX}" value="${esc(v.throttleRecipients)}" style="width: 110px;"> <span class="dim">odbiorców w tym samym oknie</span>
       </div>
-      ${hint('Liczy numery ze wszystkich wywołań w oknie. SMS do jednego numeru zajmuje jedno miejsce, a rozsyłka i SMS do grupy tyle miejsc, ilu obejmują odbiorców. Wywołanie, które przekroczyłoby limit, kończy się błędem i wpisem „limit”')}
+      ${hint('Liczy numery ze wszystkich wywołań w oknie. SMS do jednego numeru zajmuje jedno miejsce, a rozsyłka i SMS do grupy tyle miejsc, ilu obejmują odbiorców. Wywołanie, które przekroczyłoby limit, kończy się błędem i wpisem „limit”.')}
     </div>`;
 }
 

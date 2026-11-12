@@ -51,7 +51,7 @@ export const grafana: Preset = {
   simple: {
     inbound: {
       addressField: 'w Grafanie w polu URL punktu kontaktu typu Webhook',
-      recipients: { source: 'list', note: 'Grafana nie przesyła numerów telefonów, więc SMS jest zawsze wysyłany na numery wpisane tutaj.' },
+      recipients: { source: 'list', note: 'Grafana nie przesyła numerów telefonów, więc SMS jest zawsze wysyłany na numery wpisane tutaj' },
       when: [
         { id: 'alarm', label: 'tylko gdy alert staje się aktywny', condition: { mode: 'builder', rules: [{ path: 'status', op: 'eq', value: 'firing' }] } },
         { id: 'alarm-i-powrot', label: 'gdy alert staje się aktywny i gdy ustaje', condition: { mode: 'builder', rules: [] } },

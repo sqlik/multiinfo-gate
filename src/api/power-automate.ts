@@ -254,7 +254,7 @@ const LABELS_BY_NAME: Record<string, string> = {
   opens: 'Odbiorcy z otwarciem',
   clicks: 'Kliknięcia',
   firstOpenedAt: 'Pierwsze otwarcie',
-  detailsPurged: 'Szczegóły usunięte po retencji',
+  detailsPurged: 'Szczegóły usunięte po okresie przechowywania',
   shortLinks: 'Lista krótkich linków',
   target: 'Adres docelowy',
 };
