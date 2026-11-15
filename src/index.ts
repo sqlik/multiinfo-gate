@@ -6,7 +6,12 @@ import { buildAdminServer } from './admin/server.ts';
 import { nodemailerMailer } from './worker/mail.ts';
 import { SessionStore } from './admin/session.ts';
 import { RateLimiter } from './api/rate-limit.ts';
-import { buildApiServer } from './api/server.ts';
+import { buildApiServer, type AgentServerDeps } from './api/server.ts';
+import { ConnectionService } from './agents/connections.ts';
+import { AgentConnectionsRepo } from './store/agent-connections.ts';
+import { AgentDraftsRepo } from './store/agent-drafts.ts';
+import { DownloadLinksRepo } from './store/download-links.ts';
+import { OAuthRepo } from './store/oauth.ts';
 import { loadEnv, MissingMasterKeyError, type AppConfig } from './config/env.ts';
 import { detectInstall, type InstallKind } from './config/install.ts';
 import { Receiver } from './inbound/receiver.ts';
@@ -196,12 +201,19 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     integrations, integrationEmit, notifier,
   });
 
+  const agentConnectionsRepo = new AgentConnectionsRepo(db);
+  const oauth = new OAuthRepo(db);
+  const agentConnections = new ConnectionService({ connections: agentConnectionsRepo, oauth, integrations, apiKeys, accounts });
+  const agents: AgentServerDeps = {
+    settings, oauth, connectionsRepo: agentConnectionsRepo, connections: agentConnections, audit, notifier, masterKey: config.masterKey,
+    resolve: systemResolver, log, drafts: new AgentDraftsRepo(db), downloads: new DownloadLinksRepo(db),
+  };
   const api = buildApiServer({
     accounts, apiKeys, messages, events, packages, jobs, clients, inbound, rateLimiter: new RateLimiter(), log,
     inboundHealth: () => receiver.health(),
     integrations, integrationEvents, guards, engine, sources: new SourceMatcher(systemResolver),
     hookLimiter: new RateLimiter(), trustedProxies: config.trustedProxies, notifier,
-    allowPrivateWebhooks: config.webhookAllowPrivate, ...links,
+    allowPrivateWebhooks: config.webhookAllowPrivate, ...links, agents,
   });
   // Tokeny sprawdzenia domeny wystawia panel, a odpowiada na nie serwer przekierowań.
   const domainChecks = new DomainChecks();

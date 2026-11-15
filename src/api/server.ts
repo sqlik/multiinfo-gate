@@ -17,6 +17,9 @@ import type { MessageEventsRepo } from '../store/message-events.ts';
 import type { MessagesRepo } from '../store/messages.ts';
 import type { PackagesRepo } from '../store/packages.ts';
 import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
+import type { AgentDraftsRepo } from '../store/agent-drafts.ts';
+import type { DownloadLinksRepo } from '../store/download-links.ts';
+import { registerOAuthRoutes, type OAuthDeps } from '../oauth/routes.ts';
 import type { CampaignsRepo } from '../store/campaigns.ts';
 import type { LinkDomainsRepo } from '../store/link-domains.ts';
 import type { ShortLinksRepo } from '../store/short-links.ts';
@@ -33,6 +36,12 @@ import { registerInboundRoutes } from './inbound.ts';
 import { registerPaIntegrationRoutes } from './pa-integrations.ts';
 import { registerPackageRoutes } from './packages.ts';
 import type { RateLimiter } from './rate-limit.ts';
+
+/** Agenci AI: serwer autoryzacji OAuth, a od zadania 6 serwer MCP. */
+export interface AgentServerDeps extends OAuthDeps {
+  drafts: AgentDraftsRepo;
+  downloads: DownloadLinksRepo;
+}
 
 export interface ApiDeps {
   accounts: AccountsRepo;
@@ -70,6 +79,8 @@ export interface ApiDeps {
   healthMode?: 'public' | 'admin';
   /** Stan odbiornika do /healthz; bez niego pole nie występuje. */
   inboundHealth?: () => InboundHealth;
+  /** Agenci AI; bez tego pola bramka nie wystawia tras OAuth. */
+  agents?: AgentServerDeps;
   now?: () => Date;
   log?: Logger;
 }
@@ -95,6 +106,13 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
       const status = (error as { statusCode?: number }).statusCode;
       if (status === 413) return reply.code(413).send({ accepted: false, reason: 'too_large' });
       if (status === 400 || status === 415) return reply.code(400).send({ accepted: false, reason: 'invalid_body' });
+    }
+    if (_request.url.startsWith('/oauth/')) {
+      // Punkty OAuth odpowiadają błędem w kształcie RFC 6749, a nie strukturą błędów API.
+      const status = (error as { statusCode?: number }).statusCode;
+      if (status === 400 || status === 413 || status === 415) {
+        return reply.code(400).send({ error: 'invalid_request', error_description: 'Treść żądania jest nieprawidłowa.' });
+      }
     }
     if (error instanceof ApiError) {
       return reply.code(error.httpStatus).send(error.toBody());
@@ -126,6 +144,7 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
   registerPaIntegrationRoutes(app, deps);
   registerInboundRoutes(app, deps);
   registerHookRoutes(app, deps);
+  if (deps.agents) registerOAuthRoutes(app, deps.agents);
   registerHealthRoute(
     app,
     {

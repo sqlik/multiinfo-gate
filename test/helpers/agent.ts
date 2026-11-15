@@ -6,6 +6,9 @@ import { AgentConnectionsRepo, type ConnectionMethod } from '../../src/store/age
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
 import { IntegrationsRepo } from '../../src/store/integrations.ts';
 import { OAuthRepo } from '../../src/store/oauth.ts';
+import { SettingsRepo } from '../../src/store/settings.ts';
+import { AuditRepo } from '../../src/store/audit.ts';
+import type { OAuthDeps } from '../../src/oauth/routes.ts';
 import { accountInput } from '../store/helpers.ts';
 
 /** Chwila, w której pomocnik zakłada integrację i połączenie. */
@@ -35,4 +38,20 @@ export function seedAgent(db: Database, masterKey: Buffer, opts: {
   const service = new ConnectionService({ connections: new AgentConnectionsRepo(db), oauth: new OAuthRepo(db), integrations, apiKeys, accounts });
   const created = service.create(integrationId, { name: 'Ewa Nowak', method: opts.method ?? 'token', codeValidity: '24h', validity: '90d' }, 'admin', AGENT_SEED_AT);
   return { keyId, accountId, integrationId, connectionId: created.id, secret: created.secret, service };
+}
+
+/** Zależności tras OAuth na bazie z `seedAgent`; adres bramki ustawiony, chyba że `apiUrl: null`. */
+export function oauthDeps(db: Database, masterKey: Buffer, over: Partial<OAuthDeps> & { apiUrl?: string | null } = {}): OAuthDeps {
+  const { apiUrl = 'https://bramka.serwis.example', ...rest } = over;
+  const settings = new SettingsRepo(db);
+  if (apiUrl !== null) settings.setApiUrl(apiUrl, AGENT_SEED_AT);
+  const connectionsRepo = new AgentConnectionsRepo(db);
+  const oauth = new OAuthRepo(db);
+  const connections = new ConnectionService({
+    connections: connectionsRepo, oauth, integrations: new IntegrationsRepo(db, masterKey), apiKeys: new ApiKeysRepo(db, masterKey), accounts: new AccountsRepo(db, masterKey),
+  });
+  return {
+    settings, oauth, connectionsRepo, connections, audit: new AuditRepo(db), masterKey,
+    resolve: async () => ['198.51.100.20'], fetchMetadata: async () => ({ status: 404, body: '' }), now: () => AGENT_SEED_AT, ...rest,
+  };
 }
