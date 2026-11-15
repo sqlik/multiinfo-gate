@@ -5,15 +5,16 @@ import { esc } from './bridge.js';
 export const DELIVERY_REFRESH_MS = 15_000;
 export const DELIVERY_REFRESH_MAX_MS = 900_000;
 const TRANSIT = new Set(['queued', 'sent', 'throttled']);
-const COUNT_LABELS = {
-  queued: 'w kolejce', sent: 'w drodze', throttled: 'wstrzymane', delivered: 'doręczone', failed: 'niedoręczone', expired: 'wygasłe',
+/** Nazwy stanów przy liczbach, wspólne dla doręczeń i raportu rozsyłki; „przedawnione” jak „przedawniona” w panelu. */
+export const STATE_LABELS = {
+  queued: 'w kolejce', sent: 'w drodze', throttled: 'wstrzymane', delivered: 'doręczone', failed: 'niedoręczone', expired: 'przedawnione',
   cancelled: 'anulowane', blocked: 'zablokowane', unknown: 'w stanie nieznanym',
 };
 
 /** Liczby doręczeń `n` wiadomości według odczytu `d` = { counts, done }. */
 export function deliveryLine(n, d) {
   const counts = d.counts ?? {};
-  const others = Object.entries(counts).filter(([k, v]) => k !== 'delivered' && v > 0).map(([k, v]) => `${COUNT_LABELS[k] ?? k} ${v}`);
+  const others = Object.entries(counts).filter(([k, v]) => k !== 'delivered' && v > 0).map(([k, v]) => `${STATE_LABELS[k] ?? k} ${v}`);
   return `Doręczone: <b>${counts.delivered ?? 0}</b> z ${n}`
     + (others.length > 0 ? ` · ${esc(others.join(', '))}` : '') + (d.done ? '' : ' · stan odświeża się sam');
 }

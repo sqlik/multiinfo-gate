@@ -104,6 +104,9 @@ describe('dokumenty widoków', () => {
       { uri: 'ui://multiinfo-gate/wysylka', name: 'wysylka', title: 'Wysyłka SMS', mimeType: APP_MIME, _meta: meta },
       { uri: 'ui://multiinfo-gate/grupa', name: 'grupa', title: 'SMS do grupy', mimeType: APP_MIME, _meta: meta },
       { uri: 'ui://multiinfo-gate/przebieg', name: 'przebieg', title: 'Przebieg doręczenia', mimeType: APP_MIME, _meta: meta },
+      { uri: 'ui://multiinfo-gate/kampania', name: 'kampania', title: 'Wyniki kampanii', mimeType: APP_MIME, _meta: meta },
+      { uri: 'ui://multiinfo-gate/rozsylka', name: 'rozsylka', title: 'Postęp rozsyłki', mimeType: APP_MIME, _meta: meta },
+      { uri: 'ui://multiinfo-gate/odpowiedzi', name: 'odpowiedzi', title: 'Odpowiedzi klientów', mimeType: APP_MIME, _meta: meta },
     ]);
   });
 

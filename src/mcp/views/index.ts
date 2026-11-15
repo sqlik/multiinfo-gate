@@ -23,6 +23,7 @@ interface ViewDef {
   body: string;
 }
 
+const REFRESH = '<button type="button" id="odswiez" class="btn">Odśwież</button>';
 const NOTICE = '<div class="foot"><p id="komunikat" class="notice" role="status" hidden></p></div>';
 const waiting = (text: string) => `<main id="tresc" class="body"><p class="muted">${text}</p></main>${NOTICE}`;
 
@@ -38,7 +39,17 @@ const VIEWS: Partial<Record<ViewId, ViewDef>> = {
   grupa: { title: 'SMS do grupy', files: ['doreczenia.js', 'grupa.js'], entry: 'startGroup', tools: '', body: waiting('Oczekiwanie na podgląd SMS-a do grupy z bramki') },
   przebieg: {
     title: 'Przebieg doręczenia', files: ['measure.js', 'doreczenia.js', 'send.js', 'przebieg.js'], entry: 'startTrace',
-    tools: '<button type="button" id="odswiez" class="btn">Odśwież</button>', body: waiting('Oczekiwanie na przebieg doręczenia z bramki'),
+    tools: REFRESH, body: waiting('Oczekiwanie na przebieg doręczenia z bramki'),
+  },
+  kampania: {
+    title: 'Wyniki kampanii', files: ['chart.js', 'kampania.js'], entry: 'startCampaign', tools: REFRESH, body: waiting('Oczekiwanie na wyniki kampanii z bramki'),
+  },
+  rozsylka: {
+    title: 'Postęp rozsyłki', files: ['chart.js', 'doreczenia.js', 'rozsylka.js'], entry: 'startPackage',
+    tools: `<span id="na-zywo" class="live" role="status"></span>${REFRESH}`, body: waiting('Oczekiwanie na stan rozsyłki z bramki'),
+  },
+  odpowiedzi: {
+    title: 'Odpowiedzi klientów', files: ['measure.js', 'odpowiedzi.js'], entry: 'startReplies', tools: REFRESH, body: waiting('Oczekiwanie na odebrane SMS-y z bramki'),
   },
 };
 

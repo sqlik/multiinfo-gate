@@ -21,6 +21,9 @@ export function stamp(iso) {
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
+/** Liczba z odstępem tysięcy, jak w panelu kampanii: 1 240. */
+export const num = (n) => Number(n).toLocaleString('pl-PL', { useGrouping: 'always' });
+
 /** Forma rzeczownika po liczebniku: 1 część, 2 części, 5 części. */
 export function pluralWord(n, one, few, many) {
   if (n === 1) return one;
@@ -54,6 +57,16 @@ export function sayIn(doc) {
     notice.className = `notice n-${tone}`;
     notice.textContent = text;
   };
+}
+
+/**
+ * Link do pliku z wyniku narzędzia { url, expiresAt }: otwiera go aplikacja AI, a bez tej możliwości komunikat
+ * pokazuje adres do skopiowania.
+ */
+export async function openDownload(bridge, say, link) {
+  const until = stamp(link.expiresAt);
+  if (await bridge.openLink(link.url)) return say('ok', `Plik zawiera numery telefonów odbiorców. Link jest ważny do ${until}.`);
+  return say('plain', `Aplikacja AI nie otwiera linków z widoku, dlatego skopiuj adres pliku ważnego do ${until}: ${link.url}`);
 }
 
 /** Komunikat o wywołaniu przerwanym przez aplikację. */
