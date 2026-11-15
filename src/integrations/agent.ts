@@ -159,12 +159,55 @@ function throttledError(ctx: ConnectionContext, by: 'calls' | 'recipients', n: n
     resetsAt === null ? undefined : secondsUntil(resetsAt, now));
 }
 
-/** Szkic, który przekroczyłby okno ochrony, odpada już przy przygotowaniu. */
+/** Powód odmowy ochrony przed burzą integracji agenta w dzienniku. */
+function throttleReason(ctx: ConnectionContext, by: 'calls' | 'recipients'): string {
+  const { limit, windowMinutes, recipients } = ctx.integration.config.throttle;
+  return by === 'calls' ? `ponad ${limit} w ${windowMinutes} min` : `ponad ${recipients} odbiorców w ${windowMinutes} min`;
+}
+
+/** Zgłoszenie burzy integracji agenta administratorowi, wysyłane raz w oknie. */
+function notifyThrottled(deps: AgentDeps, ctx: ConnectionContext, by: 'calls' | 'recipients', now: Date): void {
+  const { limit, windowMinutes, recipients } = ctx.integration.config.throttle;
+  deps.notifier?.notify('integration_throttled', `integration:${ctx.integration.id}`,
+    `${ctx.integration.name}: przekroczony limit ${by === 'calls' ? `${limit}` : `${recipients} odbiorców`} w ${windowMinutes} min`, now);
+}
+
+/**
+ * Szkic, który przekroczyłby okno ochrony, odpada już przy przygotowaniu. Odmowa zapisuje wpis w dzienniku
+ * i zgłasza burzę jak odmowa przy wysyłce, ale nie zużywa limitu (spec 4.5).
+ */
 function checkWindow(deps: AgentDeps, ctx: ConnectionContext, n: number, now: Date): GuardLeft {
   const left = guardLeft(deps, ctx, now);
-  if (left.calls < 1) throw throttledError(ctx, 'calls', n, left.resetsAt, now);
-  if (left.recipients !== null && left.recipients < n) throw throttledError(ctx, 'recipients', n, left.resetsAt, now);
-  return left;
+  const by = left.calls < 1 ? 'calls' : left.recipients !== null && left.recipients < n ? 'recipients' : null;
+  if (by === null) return left;
+  const integration = ctx.integration;
+  deps.integrationEvents.record({
+    integrationId: integration.id, at: now, result: 'throttled', reason: `podgląd: ${throttleReason(ctx, by)}`,
+    sourceIp: `MCP · ${ctx.connection.name}`, payload: null, logLimit: integration.config.eventLogLimit,
+  });
+  if (deps.guards.refuse(integration.id, integration.config.throttle.windowMinutes, now).notify) notifyThrottled(deps, ctx, by, now);
+  throw throttledError(ctx, by, n, left.resetsAt, now);
+}
+
+/**
+ * Podgląd do grupy z wyczerpanym limitem: wpisy w dziennikach grupy i agenta oraz zgłoszenie burzy grupy raz
+ * w oknie, bez zużycia limitów, tak jak przy odmowie szkicu agenta.
+ */
+function refuseGroup(deps: AgentDeps, ctx: ConnectionContext, group: SmsGroupIntegration, resetsAt: string | null, now: Date): never {
+  const { limit, windowMinutes } = group.config.throttle;
+  const reason = `ponad ${limit} w ${windowMinutes} min`;
+  deps.integrationEvents.record({
+    integrationId: group.id, at: now, result: 'throttled', reason: `podgląd: ${reason}`,
+    sourceIp: `agent ${ctx.integration.name} · ${ctx.connection.name}`, payload: null, logLimit: group.config.eventLogLimit,
+  });
+  deps.integrationEvents.record({
+    integrationId: ctx.integration.id, at: now, result: 'throttled', reason: `podgląd: ochrona grupy ${group.name}: ${reason}`,
+    sourceIp: `MCP · ${ctx.connection.name}`, payload: null, logLimit: ctx.integration.config.eventLogLimit,
+  });
+  if (deps.guards.refuse(group.id, windowMinutes, now).notify) {
+    deps.notifier?.notify('integration_throttled', `integration:${group.id}`, `${group.name}: przekroczony limit ${limit} w ${windowMinutes} min`, now);
+  }
+  throw groupThrottledError(group, resetsAt, now);
 }
 
 /** Odmowa ochrony przed burzą grupy SMS, która liczy wyłącznie wysyłki. */
@@ -333,7 +376,7 @@ export function prepareGroup(
   const shaped = shape(deps, ctx, text, {}, 'auto', 'messages', groupLimit(ctx, group));
   const guard = checkWindow(deps, ctx, members.length, now);
   const groupGuard = windowLeft(deps, group.id, group.config.throttle, now);
-  if (groupGuard.calls < 1) throw groupThrottledError(group, groupGuard.resetsAt, now);
+  if (groupGuard.calls < 1) refuseGroup(deps, ctx, group, groupGuard.resetsAt, now);
 
   const confirm = newConfirm(opts.apps);
   const expiresAt = new Date(now.getTime() + DRAFT_TTL_MS);
@@ -456,11 +499,8 @@ function throttleAgent(deps: AgentDeps, ctx: ConnectionContext, count: number, n
   const gate = deps.guards.throttle(integration.id, limit, windowMinutes, now, { count, limit: recipients });
   if (gate.allowed) return;
   const by = gate.by ?? 'calls';
-  note('throttled', { reason: by === 'calls' ? `ponad ${limit} w ${windowMinutes} min` : `ponad ${recipients} odbiorców w ${windowMinutes} min` });
-  if (gate.notify) {
-    deps.notifier?.notify('integration_throttled', `integration:${integration.id}`,
-      `${integration.name}: przekroczony limit ${by === 'calls' ? `${limit}` : `${recipients} odbiorców`} w ${windowMinutes} min`, now);
-  }
+  note('throttled', { reason: throttleReason(ctx, by) });
+  if (gate.notify) notifyThrottled(deps, ctx, by, now);
   throw throttledError(ctx, by, count, guardLeft(deps, ctx, now).resetsAt, now);
 }
 

@@ -159,6 +159,22 @@ describe('wysyłka szkicu grupy', () => {
     expect(count('messages')).toBe(2);
   });
 
+  it('limit grupy wyczerpany przy podglądzie: wpisy w dziennikach grupy i agenta, jedno zgłoszenie burzy grupy', () => {
+    setGroup(serwis, { throttle: { limit: 1, windowMinutes: 10 } });
+    sendDraft(deps, ctx(), prepare().preview.draftId, NOW);
+    expect(agentError(() => prepare()).code).toBe('throttled');
+    expect(agentError(() => prepare()).code).toBe('throttled');
+    const notify = (deps.notifier as unknown as { notify: ReturnType<typeof vi.fn> }).notify;
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith('integration_throttled', `integration:${serwis}`, expect.stringContaining('przekroczony limit 1 w 10 min'), NOW);
+    expect(deps.integrationEvents.list(serwis, 10).filter((r) => r.result === 'throttled')).toHaveLength(2);
+    expect(deps.integrationEvents.list(serwis, 10)[0]).toMatchObject({ result: 'throttled', sourceIp: AGENT_SOURCE, reason: 'podgląd: ponad 1 w 10 min' });
+    expect(deps.integrationEvents.list(seed.integrationId, 10)[0]).toMatchObject({
+      result: 'throttled', sourceIp: 'MCP · Ewa Nowak', reason: 'podgląd: ochrona grupy SERWIS: ponad 1 w 10 min',
+    });
+    expect(deps.guards.peek(serwis, 10, NOW).count).toBe(1);
+  });
+
   it('wiadomości grupy mają integration_id grupy i agent_connection_id', () => {
     const { preview } = prepare('flota');
     const out = sendDraft(deps, ctx(), preview.draftId, NOW);

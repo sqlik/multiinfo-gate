@@ -133,6 +133,20 @@ describe('prepareSms', () => {
     expect(e.retryAfterSec).toBe(3600);
     expect(guardLeft(deps, ctx(), NOW)).toEqual({ calls: 0, recipients: 999, resetsAt: new Date(NOW.getTime() + 3_600_000).toISOString() });
   });
+
+  it('szkic odrzucony przy przygotowaniu zapisuje wpis w dzienniku i zgłasza integration_throttled raz w oknie, bez zużycia okna', () => {
+    setup({ throttle: { limit: 1 } });
+    sendDraft(deps, ctx(), sms().preview.draftId, NOW);
+    agentError(() => sms());
+    agentError(() => prepareReplies(deps, ctx(), [{ inboundId: inbound(), group: 'Termin', text: 'Dziękujemy.' }], NOW));
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith('integration_throttled', `integration:${seed.integrationId}`, 'Agent AI - dyspozytornia: przekroczony limit 1 w 60 min', NOW);
+    const refused = deps.integrationEvents.list(seed.integrationId, 10).filter((r) => r.result === 'throttled');
+    expect(refused).toHaveLength(2);
+    expect(refused[0]).toMatchObject({ sourceIp: 'MCP · Ewa Nowak', reason: 'podgląd: ponad 1 w 60 min', payload: null });
+    expect(guardLeft(deps, ctx(), NOW).calls).toBe(0);
+    expect(db.prepare('SELECT count FROM integration_throttle WHERE integration_id = ?').get(seed.integrationId)).toEqual({ count: 1 });
+  });
 });
 
 describe('sendDraft', () => {

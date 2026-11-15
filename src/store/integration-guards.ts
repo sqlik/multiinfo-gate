@@ -36,6 +36,29 @@ export class IntegrationGuardsRepo {
   }
 
   /**
+   * Odmowa bez zużycia limitu, na przykład szkic agenta odrzucony już przy podglądzie. Zapisuje w oknie
+   * zgłoszenie burzy, dzięki czemu `notify` jest prawdą tylko przy pierwszej odmowie w oknie, łącznie
+   * z odmowami `throttle`. Okno, które minęło, otwiera się od nowa, tak jak przy odrzuceniu w `throttle`.
+   */
+  refuse(integrationId: number, windowMinutes: number, now: Date): { notify: boolean } {
+    return this.db.transaction(() => {
+      const row = this.db.prepare('SELECT window_start, notified FROM integration_throttle WHERE integration_id = ?')
+        .get(integrationId) as { window_start: string; notified: 0 | 1 } | undefined;
+      const fresh = !row || now.getTime() - Date.parse(row.window_start) >= windowMinutes * 60_000;
+      if (fresh) {
+        this.db.prepare(
+          `INSERT INTO integration_throttle (integration_id, window_start, count, recipients, notified) VALUES (?, ?, 0, 0, 1)
+           ON CONFLICT(integration_id) DO UPDATE SET window_start = excluded.window_start, count = 0, recipients = 0, notified = 1`,
+        ).run(integrationId, now.toISOString());
+        return { notify: true };
+      }
+      if (row!.notified === 1) return { notify: false };
+      this.db.prepare('UPDATE integration_throttle SET notified = 1 WHERE integration_id = ?').run(integrationId);
+      return { notify: true };
+    })();
+  }
+
+  /**
    * Okno stałe od pierwszego zdarzenia: `limit` przechodzi, reszta odpada do końca okna.
    * `notify` tylko przy pierwszym odrzuceniu w oknie - jeden mail na burzę, nie na każdy alert.
    * `recipients` (integracja z Power Automate) dokłada w tym samym oknie limit odbiorców: wywołanie,
