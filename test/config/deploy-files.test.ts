@@ -89,12 +89,26 @@ describe('pliki wdrożenia agentów AI', () => {
     expect(caddy).toMatch(/^\{\$MIG_DOMENA\} \{\n\treverse_proxy multiinfo-gate:8080\n\}$/m);
     expect(caddy).not.toMatch(/header_(up|down)|header\s+-/);
     const nginx = read('docker/nginx/multiinfo-gate.conf');
-    expect(nginx.match(/location\s+\S+/g)).toEqual(['location /']);
+    expect(nginx.match(/location\s+\S+/g)).toEqual(['location /pobierz/', 'location /']);
     expect(nginx).toMatch(/proxy_pass http:\/\/127\.0\.0\.1:8080;/);
     expect(nginx.split('\n').filter((l) => /proxy_(hide|set)_header|more_clear/.test(l) && headers.test(l))).toEqual([]);
     const traefik = read('docker/docker-compose.traefik.yml');
     expect(traefik).toMatch(/traefik\.http\.routers\.multiinfo-gate\.rule: "Host\(`\$\{MIG_DOMENA:\?[^}]*\}`\)"$/m);
     expect(traefik).not.toMatch(/middlewares|PathPrefix|customrequestheaders|customresponseheaders/i);
+  });
+});
+
+describe('linki do pobrania za proxy', () => {
+  it('nginx nie zapisuje w dzienniku dostępu adresów /pobierz/, a przekazuje je do bramki jak pozostałe żądania', () => {
+    const nginx = read('docker/nginx/multiinfo-gate.conf');
+    const block = (path: string): string[] => {
+      const body = new RegExp(`location ${path.replace(/\//g, '\\/')} \\{\\n([\\s\\S]*?)\\n    \\}`).exec(nginx)?.[1] ?? '';
+      return body.split('\n').map((l) => l.trim()).filter((l) => l !== '' && !l.startsWith('#'));
+    };
+    const download = block('/pobierz/');
+    expect(download[0]).toBe('access_log off;');
+    expect(block('/')).toContain('proxy_pass http://127.0.0.1:8080;');
+    expect(download.slice(1)).toEqual(block('/'));
   });
 });
 
