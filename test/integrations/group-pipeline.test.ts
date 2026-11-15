@@ -65,6 +65,12 @@ describe('runSmsGroup', () => {
     expect(events(g.id)).toEqual([['sent', '2 odbiorców']]);
     expect(deps.integrationEvents.list(g.id, 1)[0]).toMatchObject({ inboundId: 'in_1', sourceIp: '48601000001', messageId: ids[0] });
   });
+  it('dispatch bez nowych pól działa jak dotąd (test grupy z SMS-a bez zmian)', () => {
+    const out = runSmsGroup(deps, lists(), event(), NOW) as { messageIds: string[] };
+    for (const id of out.messageIds) {
+      expect(deps.messages.get(id)).toMatchObject({ agentConnectionId: null, requestedBy: null, idempotencyKey: null });
+    }
+  });
   it('nadawca spoza listy, brak prefiksu, pusta treść i SMS binarny to pominięto bez wysyłki i bez potwierdzenia', () => {
     const g = lists({ confirm: { enabled: true } });
     expect(runSmsGroup(deps, g, event({ from: '48601000009' }), NOW)).toEqual({ kind: 'skipped', reason: 'sender_not_allowed' });

@@ -45,6 +45,30 @@ function countingPrepare(db: ReturnType<typeof openDatabase>): { db: ReturnType<
   return { db: proxy, prepared: () => n };
 }
 
+describe('ShortLinksRepo.recipients', () => {
+  it('odbiorcy bez otwarcia: odbiorca z dwoma kodami, jednym otwartym, liczy się jako otwierający', () => {
+    const { links, campaignId, otherCampaignId, input } = setup();
+    links.insert(input('aB3xK9q', { recipientKey: 'msg_a', messageId: 'msg_a', dest: '48601000051' }));
+    links.insert(input('aB3xK9r', { recipientKey: 'msg_a', messageId: 'msg_a', dest: '48601000051' }));
+    links.insert(input('cD4yL0s', { recipientKey: 'pkg_1#1', messageId: null, packageId: 'pkg_1', seq: 1, dest: '48601000052', clientId: 'K-17' }));
+    links.insert(input('eF5zM1t', { recipientKey: 'pkg_1#2', messageId: null, packageId: 'pkg_1', seq: 2, dest: '48601000052' }));
+    links.insert(input('gH6aN2u', { recipientKey: 'msg_c', messageId: 'msg_c', dest: '48601000053', campaignId: otherCampaignId }));
+    links.click('aB3xK9r', t(5), false);
+    links.click('cD4yL0s', t(6), true);
+    expect(links.recipients(campaignId, 'opened')).toEqual([{ dest: '48601000051', clientId: null }]);
+    expect(links.recipients(campaignId, 'unopened')).toEqual([{ dest: '48601000052', clientId: 'K-17' }]);
+  });
+
+  it('numer otwarty w jednej wysyłce kampanii nie trafia do odbiorców bez otwarcia', () => {
+    const { links, campaignId, input } = setup();
+    links.insert(input('aB3xK9q', { recipientKey: 'msg_a', messageId: 'msg_a', dest: '48601000051' }));
+    links.insert(input('aB3xK9r', { recipientKey: 'msg_b', messageId: 'msg_b', dest: '48601000051' }));
+    links.click('aB3xK9q', t(5), false);
+    expect(links.recipients(campaignId, 'unopened')).toEqual([]);
+    expect(links.recipients(campaignId, 'opened')).toEqual([{ dest: '48601000051', clientId: null }]);
+  });
+});
+
 describe('ShortLinksRepo', () => {
   it('retencja odczytuje i usuwa kody po indeksie terminu, a nie przeglądem całej tabeli', () => {
     const { db, links, input } = setup();

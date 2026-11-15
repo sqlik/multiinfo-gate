@@ -195,6 +195,26 @@ export class ShortLinksRepo {
     for (const r of this.db.prepare(OPENERS).iterate(campaignId) as IterableIterator<RawOpener>) yield toOpener(r);
   }
 
+  /**
+   * Odbiorcy kampanii według otwarcia, do przypomnienia przygotowanego przez agenta. Odbiorca (`recipient_key`)
+   * otworzył, gdy którykolwiek z jego kodów ma `first_opened_at`. Numer występuje raz w kolejności pierwszej wysyłki,
+   * a numer otwarty w którejkolwiek wysyłce kampanii liczy się jako otwierający: przypomnienie nie trafia do osoby,
+   * która już skorzystała z linku.
+   */
+  recipients(campaignId: number, segment: 'opened' | 'unopened'): Array<{ dest: string; clientId: string | null }> {
+    const rows = this.db.prepare(
+      `SELECT dest, MAX(client_id) AS client_id, MAX(first_opened_at IS NOT NULL) AS opened, MIN(rowid) AS first
+       FROM short_links WHERE campaign_id = ? GROUP BY recipient_key ORDER BY first`,
+    ).all(campaignId) as Array<{ dest: string; client_id: string | null; opened: 0 | 1 }>;
+    const byDest = new Map<string, { clientId: string | null; opened: boolean }>();
+    for (const r of rows) {
+      const seen = byDest.get(r.dest);
+      if (seen) seen.opened ||= r.opened === 1;
+      else byDest.set(r.dest, { clientId: r.client_id, opened: r.opened === 1 });
+    }
+    return [...byDest].filter(([, v]) => v.opened === (segment === 'opened')).map(([dest, v]) => ({ dest, clientId: v.clientId }));
+  }
+
   remaining(campaignId: number): number {
     return (this.db.prepare('SELECT COUNT(*) AS n FROM short_links WHERE campaign_id = ?').get(campaignId) as { n: number }).n;
   }

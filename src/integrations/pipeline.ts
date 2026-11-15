@@ -202,7 +202,11 @@ export function passGuards(
 export function dispatch(
   deps: PipelineDeps, integration: IntegrationRow, key: ApiKeyRow, text: string, recipients: string[],
   config: { maxParts: number; overflow: 'truncate' | 'reject' }, note: Noter, now: Date,
-  extra: { inReplyTo?: string; sentReason?: string; mailFrom?: string } = {},
+  extra: {
+    inReplyTo?: string; sentReason?: string; mailFrom?: string;
+    /** Wysyłka do grupy przez agenta AI: połączenie, jego nazwa jako zlecający i identyfikator szkicu jako klucz idempotencji. */
+    agentConnectionId?: number; requestedBy?: string; idempotencyKey?: string;
+  } = {},
 ): { kind: 'sent'; messageIds: string[]; parts: number; text: string } | { kind: 'error'; code: InboundErrorCode; detail: string } {
   // Integracje nie mają pól skracania w żądaniu, dlatego obowiązuje ustawienie klucza jak przy pustym polu.
   const fitted = fitPrepared(prepareLinks(deps, key.id, text, {}, {}), config.maxParts);
@@ -218,6 +222,9 @@ export function dispatch(
       ...(integration.orig ? { orig: integration.orig } : {}),
       ...(extra.inReplyTo ? { inReplyTo: extra.inReplyTo } : {}),
       ...(extra.mailFrom ? { mailFrom: extra.mailFrom } : {}),
+      ...(extra.agentConnectionId !== undefined ? { agentConnectionId: extra.agentConnectionId } : {}),
+      ...(extra.requestedBy ? { requestedBy: extra.requestedBy } : {}),
+      ...(extra.idempotencyKey ? { idempotencyKey: extra.idempotencyKey } : {}),
     }, now);
     const messageIds = results.map((r) => r.id);
     const reason = [messageIds.length > 1 ? `${messageIds.length} odbiorców` : null, extra.sentReason ?? null].filter((r) => r !== null).join('; ');
@@ -578,6 +585,20 @@ export function buildGroupContext(
     ...event, body, prefix: config.prefix, sender: sender.name || sender.phone, sender_name: sender.name, recipients: [...recipients],
   };
   return { ...p, now: now.toISOString(), integration: { name: integration.name }, p };
+}
+
+/**
+ * Kontekst szablonu grupy dla wysyłki przez agenta AI, bez odebranego SMS-a (spec 6.3): nadawcą jest nazwa połączenia,
+ * `from` i `to` są puste, `receivedAt` to chwila przygotowania szkicu, a pod `p` jest wyłącznie treść.
+ */
+export function buildAgentGroupContext(
+  body: string, connectionName: string, recipients: string[], config: SmsGroupConfig, integration: { name: string }, at: Date,
+): Record<string, unknown> {
+  return {
+    id: '', serviceId: '', from: '', to: '', kind: 'text', text: body, receivedAt: at.toISOString(), relatedMessageId: null,
+    body, prefix: config.prefix, sender: connectionName, sender_name: connectionName, recipients: [...recipients],
+    now: at.toISOString(), integration: { name: integration.name }, p: { body },
+  };
 }
 
 export function renderGroupText(engine: TemplateEngine, config: SmsGroupConfig, context: Record<string, unknown>): string {

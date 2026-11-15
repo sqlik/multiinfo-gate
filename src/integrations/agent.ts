@@ -13,13 +13,14 @@ import { findLinks } from '../links/detect.ts';
 import { fitPrepared, onceSettings, prepareLinks, type LinkRequest, type PreparedText } from '../links/shortener.ts';
 import type { AgentDraftsRepo } from '../store/agent-drafts.ts';
 import type { LinkMode } from '../store/api-keys.ts';
-import type { IntegrationEventInput } from '../store/integration-events.ts';
 import { measureText, type EncodingRequest } from '../text/measure.ts';
 import { InvalidPhoneError, normalizePhone, normalizeRecipient } from '../text/phone.ts';
 import { segmentText } from '../text/segment.ts';
-import type { AgentScope } from './config.ts';
-import type { PipelineDeps } from './pipeline.ts';
+import type { AgentScope, GroupMember, SmsGroupConfig } from './config.ts';
+import { foldText } from './group/prefix.ts';
+import { buildAgentGroupContext, dispatch, renderGroupText, type Noter, type PipelineDeps, type SmsGroupIntegration } from './pipeline.ts';
 import { payloadForLog } from './power-automate.ts';
+import { TemplateError } from './templates.ts';
 
 /**
  * Błąd potoku agenta z komunikatem dla człowieka. Narzędzie MCP zamienia go na błąd narzędzia, a przy limicie
@@ -50,7 +51,8 @@ const MIN = 60_000;
 
 export interface SenderOption { value: string | null; label: string }
 export interface ServiceOption { id: string; label: string }
-export interface GuardLeft { calls: number; recipients: number; resetsAt: string | null }
+/** Pozostałe wysyłki i odbiorcy w oknie ochrony przed burzą; `recipients` null, gdy integracja nie liczy odbiorców (grupa SMS). */
+export interface GuardLeft { calls: number; recipients: number | null; resetsAt: string | null }
 
 export interface PrepareSmsInput {
   to?: string[];
@@ -73,7 +75,15 @@ export interface SmsPreview {
 export interface ReplyItem { inboundId: string; group: string; text: string }
 export interface ReplyDraft { draftId: string; inboundId: string; to: string; group: string; text: string; parts: number; characters: number; expiresAt: string }
 
-export type SendOutcome = { kind: 'messages'; ids: string[]; repeated: boolean } | { kind: 'package'; id: string; recipients: number; repeated: boolean };
+export interface GroupPreview {
+  draftId: string; expiresAt: string; group: { id: number; name: string }; groups: string[]; recipients: number;
+  text: string; parts: number; characters: number; encoding: 'gsm' | 'ucs2'; truncated: boolean; guard: GuardLeft; groupGuard: GuardLeft;
+}
+
+export type SendOutcome =
+  | { kind: 'messages'; ids: string[]; repeated: boolean }
+  | { kind: 'package'; id: string; recipients: number; repeated: boolean }
+  | { kind: 'group'; ids: string[]; group: string; repeated: boolean };
 
 /** Wynik przygotowania: klucz potwierdzenia trafia wyłącznie do `_meta` wyniku narzędzia, nigdy do podglądu. */
 export interface Prepared<T> { confirm: string | null; preview: T }
@@ -83,7 +93,9 @@ interface SmsDraftPayload {
   route: 'messages' | 'package'; to: string[]; text: string; links: LinkRequest; serviceId: string; orig: string | null; encoding: EncodingRequest;
 }
 interface ReplyDraftPayload { inboundId: string; to: string; group: string; text: string; serviceId: string; orig: string | null }
-type StoredOutcome = { kind: 'messages'; ids: string[] } | { kind: 'package'; id: string; recipients: number };
+/** Szkic grupy: odbiorcy i treść po szablonie grupy w chwili przygotowania, tak jak widział je człowiek. */
+interface GroupDraftPayload { groupId: number; group: string; to: string[]; text: string }
+type StoredOutcome = { kind: 'messages'; ids: string[] } | { kind: 'package'; id: string; recipients: number } | { kind: 'group'; ids: string[]; group: string };
 
 const recipientsWord = (n: number): string => `${n} ${n === 1 ? 'odbiorca' : 'odbiorców'}`;
 const serviceLabel = (s: ServiceOption): string => (s.label === s.id ? s.id : `${s.label} (${s.id})`);
@@ -108,14 +120,19 @@ export function senderOptions(deps: AgentDeps, ctx: ConnectionContext): { sender
   return { senders, orig, services, serviceId };
 }
 
+/** Stan okna ochrony przed burzą bez zapisu; limit odbiorców tylko dla integracji, która go ma. */
+function windowLeft(deps: AgentDeps, integrationId: number, throttle: { limit: number; windowMinutes: number; recipients?: number }, now: Date): GuardLeft {
+  const window = deps.guards.peek(integrationId, throttle.windowMinutes, now);
+  return {
+    calls: Math.max(0, throttle.limit - window.count),
+    recipients: throttle.recipients === undefined ? null : Math.max(0, throttle.recipients - window.recipients),
+    resetsAt: window.windowStart === null ? null : new Date(Date.parse(window.windowStart) + throttle.windowMinutes * MIN).toISOString(),
+  };
+}
+
 /** Ile wysyłek i odbiorców zostało w bieżącym oknie ochrony przed burzą integracji agenta. */
 export function guardLeft(deps: AgentDeps, ctx: ConnectionContext, now: Date): GuardLeft {
-  const { limit, windowMinutes, recipients } = ctx.integration.config.throttle;
-  const window = deps.guards.peek(ctx.integration.id, windowMinutes, now);
-  return {
-    calls: Math.max(0, limit - window.count), recipients: Math.max(0, recipients - window.recipients),
-    resetsAt: window.windowStart === null ? null : new Date(Date.parse(window.windowStart) + windowMinutes * MIN).toISOString(),
-  };
+  return windowLeft(deps, ctx.integration.id, ctx.integration.config.throttle, now);
 }
 
 /** Sekundy do końca okna ochrony, najmniej jedna. */
@@ -142,29 +159,50 @@ function throttledError(ctx: ConnectionContext, by: 'calls' | 'recipients', n: n
 function checkWindow(deps: AgentDeps, ctx: ConnectionContext, n: number, now: Date): GuardLeft {
   const left = guardLeft(deps, ctx, now);
   if (left.calls < 1) throw throttledError(ctx, 'calls', n, left.resetsAt, now);
-  if (left.recipients < n) throw throttledError(ctx, 'recipients', n, left.resetsAt, now);
+  if (left.recipients !== null && left.recipients < n) throw throttledError(ctx, 'recipients', n, left.resetsAt, now);
   return left;
 }
 
+/** Odmowa ochrony przed burzą grupy SMS, która liczy wyłącznie wysyłki. */
+function groupThrottledError(group: SmsGroupIntegration, resetsAt: string | null, now: Date): AgentError {
+  const { limit, windowMinutes } = group.config.throttle;
+  return new AgentError('throttled', `Grupa ${group.name} wykorzystała limit ${limit} wysyłek na ${windowMinutes} min.`,
+    resetsAt === null ? undefined : secondsUntil(resetsAt, now));
+}
+
+/** Limit części i zachowanie przy nadmiarze; `whose` nazywa właściciela limitu w komunikacie. */
+interface PartsLimit { maxParts: number; overflow: 'truncate' | 'reject'; whose: string }
+
 /** Limit części wysyłki agenta: limit integracji, ale nigdy więcej niż limit klucza. */
-const partsLimit = (ctx: ConnectionContext): number => Math.min(ctx.integration.config.maxParts, ctx.key.maxParts);
+function agentLimit(ctx: ConnectionContext): PartsLimit {
+  const { maxParts, overflow } = ctx.integration.config;
+  return { maxParts: Math.min(maxParts, ctx.key.maxParts), overflow, whose: maxParts <= ctx.key.maxParts ? 'integracji' : 'klucza API' };
+}
+
+/** Wysyłka do grupy stosuje limit części grupy i jej zachowanie przy zbyt długiej treści, nigdy ponad limit klucza. */
+function groupLimit(ctx: ConnectionContext, group: SmsGroupIntegration): PartsLimit {
+  const { maxParts, overflow } = group.config;
+  return { maxParts: Math.min(maxParts, ctx.key.maxParts), overflow, whose: maxParts <= ctx.key.maxParts ? `grupy ${group.name}` : 'klucza API' };
+}
 
 interface Shaped { template: PreparedText; prepared: PreparedText; parts: number; characters: number; encoding: 'gsm' | 'ucs2'; truncated: boolean }
 
 /**
  * Treść tak, jak ją wyśle bramka: skracanie linków według klucza, kodowanie (rozsyłka ma jedno kodowanie),
- * limit części z zachowaniem integracji przy nadmiarze. Rzuca `ApiError` skracacza i `AgentError` limitu części.
+ * limit części z zachowaniem przy nadmiarze. Rzuca `ApiError` skracacza i `AgentError` limitu części.
  */
-function shape(deps: AgentDeps, ctx: ConnectionContext, text: string, links: LinkRequest, encoding: EncodingRequest, route: 'messages' | 'package'): Shaped {
+function shape(
+  deps: AgentDeps, ctx: ConnectionContext, text: string, links: LinkRequest, encoding: EncodingRequest, route: 'messages' | 'package',
+  limits: PartsLimit = agentLimit(ctx),
+): Shaped {
   if (text.trim() === '') throw new AgentError('empty_text', 'Treść SMS-a jest pusta.');
   const template = prepareLinks(onceSettings(deps), ctx.key.id, text, links, {});
   const enc: EncodingRequest = route === 'package' ? packageEncoding([template.text], encoding) : encoding;
-  const limit = partsLimit(ctx);
+  const limit = limits.maxParts;
   const fitted = fitPrepared(template, limit, enc);
-  if (fitted.over && ctx.integration.config.overflow === 'reject') {
+  if (fitted.over && limits.overflow === 'reject') {
     const needed = segmentText(template.text, measureText(template.text, enc), Number.MAX_SAFE_INTEGER).parts;
-    const whose = limit === ctx.integration.config.maxParts ? 'integracji' : 'klucza API';
-    throw new AgentError('too_many_parts', `Treść wymaga ${needed} części, a limit ${whose} wynosi ${limit}. Skróć treść.`);
+    throw new AgentError('too_many_parts', `Treść wymaga ${needed} części, a limit ${limits.whose} wynosi ${limit}. Skróć treść.`);
   }
   const measured = measureText(fitted.prepared.text, enc);
   return { template, prepared: fitted.prepared, parts: fitted.parts, characters: measured.characters, encoding: measured.encoding, truncated: fitted.over };
@@ -202,15 +240,109 @@ function pickOrig(deps: AgentDeps, ctx: ConnectionContext, input: string | null 
 
 const newConfirm = (apps: boolean | undefined) => (apps ? generateSecret(CONFIRM_PREFIX) : null);
 
+const scopeError = (scope: AgentScope): AgentError =>
+  new AgentError('scope', `Połączenie nie ma uprawnienia „${SCOPE_LABELS[scope]}”. Uprawnienia nadaje administrator bramki w integracji Agent AI.`);
+
+/**
+ * Numery odbiorców kampanii klucza według otwarcia linku (zakresy `campaigns` i `send`). Agent otrzymuje tylko
+ * ich liczbę, a szkic przechowuje numery. Po usunięciu szczegółów kampanii listy nie można odtworzyć.
+ */
+function campaignRecipients(deps: AgentDeps, ctx: ConnectionContext, ref: NonNullable<PrepareSmsInput['campaignRecipients']>): string[] {
+  if (!ctx.scopes.has('campaigns')) throw scopeError('campaigns');
+  const campaign = deps.campaigns.byName(ctx.key.id, ref.campaign);
+  if (!campaign) throw new AgentError('campaign_unknown', `Kampania „${ref.campaign}” nie istnieje w kluczu integracji.`);
+  if (campaign.detailsPurgedAt !== null) {
+    throw new AgentError('campaign_purged', 'Szczegóły kampanii zostały usunięte po okresie przechowywania, dlatego listy odbiorców nie można odtworzyć.');
+  }
+  const list = deps.shortLinks.recipients(campaign.id, ref.segment).map((r) => r.dest);
+  if (list.length === 0) {
+    throw new AgentError('no_recipient', ref.segment === 'unopened'
+      ? `Wszyscy odbiorcy kampanii ${campaign.name} otworzyli link.`
+      : `Żaden odbiorca kampanii ${campaign.name} nie otworzył linku.`);
+  }
+  return list;
+}
+
+/** Włączone grupy SMS klucza integracji agenta, w kolejności nazw. */
+function agentGroups(deps: AgentDeps, ctx: ConnectionContext): SmsGroupIntegration[] {
+  return deps.integrations.listForKey(ctx.key.id).filter((i) => i.kind === 'sms_group' && i.enabled === 1) as SmsGroupIntegration[];
+}
+
+/** Grupa po nazwie, a gdy żadna nazwa nie pasuje, po prefiksie; bez rozróżniania wielkości liter i polskich znaków. */
+function findGroup(deps: AgentDeps, ctx: ConnectionContext, query: string): { group: SmsGroupIntegration; names: string[] } {
+  const groups = agentGroups(deps, ctx);
+  const names = groups.map((g) => g.name);
+  const wanted = foldText(query.trim());
+  const byName = groups.filter((g) => foldText(g.name) === wanted);
+  const found = byName.length > 0 ? byName : groups.filter((g) => g.config.prefix !== '' && foldText(g.config.prefix) === wanted);
+  if (found.length === 1) return { group: found[0]!, names };
+  if (found.length > 1) {
+    throw new AgentError('group_ambiguous', `Nazwa „${query}” pasuje do kilku grup: ${found.map((g) => g.name).join(', ')}. Podaj pełną nazwę grupy.`);
+  }
+  throw new AgentError('group_unknown', groups.length === 0
+    ? 'Klucz integracji nie ma włączonych grup SMS. Grupy zakłada administrator bramki.'
+    : `Grupa „${query}” nie istnieje albo jest wyłączona. Dostępne grupy: ${names.join(', ')}.`);
+}
+
+/** Odbiorcy jak w `runSmsGroup`: lista odbiorców w trybie dwóch list, wszyscy członkowie w trybie wspólnej listy. */
+function groupMembers(config: SmsGroupConfig): GroupMember[] {
+  const seen = new Set<string>();
+  return (config.mode === 'closed' ? config.members : config.recipients).filter((m) => !seen.has(m.phone) && seen.add(m.phone));
+}
+
+/**
+ * SMS do grupy: odbiorcy i treść według ustawień grupy, bez warunku grupy, który dotyczy odebranego SMS-a.
+ * Agent otrzymuje liczbę odbiorców, a numery i nazwy trafiają wyłącznie do widoku przez `recipients`.
+ * Podgląd sprawdza okna ochrony integracji agenta i grupy.
+ */
+export function prepareGroup(
+  deps: AgentDeps, ctx: ConnectionContext, input: { group: string; text: string }, now: Date, opts: { apps?: boolean } = {},
+): { preview: GroupPreview; recipients: GroupMember[]; confirm: string | null } {
+  const { group, names } = findGroup(deps, ctx, input.group);
+  const members = groupMembers(group.config);
+  if (members.length === 0) {
+    throw new AgentError('group_empty', `Grupa ${group.name} nie ma odbiorców. Listę uzupełnia administrator w panelu bramki.`);
+  }
+  const body = input.text.trim();
+  if (body === '') throw new AgentError('empty_text', 'Treść SMS-a jest pusta.');
+  const phones = members.map((m) => m.phone);
+  let text: string;
+  try {
+    text = renderGroupText(deps.engine, group.config, buildAgentGroupContext(body, ctx.connection.name, phones, group.config, group, now));
+  } catch (e) {
+    if (e instanceof TemplateError) throw new AgentError('template', `Szablon treści grupy ${group.name} zawiera błąd: ${e.message}`);
+    throw e;
+  }
+  if (text === '') throw new AgentError('empty_text', `Szablon treści grupy ${group.name} nie tworzy żadnego tekstu.`);
+  const shaped = shape(deps, ctx, text, {}, 'auto', 'messages', groupLimit(ctx, group));
+  const guard = checkWindow(deps, ctx, members.length, now);
+  const groupGuard = windowLeft(deps, group.id, group.config.throttle, now);
+  if (groupGuard.calls < 1) throw groupThrottledError(group, groupGuard.resetsAt, now);
+
+  const confirm = newConfirm(opts.apps);
+  const expiresAt = new Date(now.getTime() + DRAFT_TTL_MS);
+  const payload: GroupDraftPayload = { groupId: group.id, group: group.name, to: phones, text };
+  const draftId = deps.drafts.insert({ connectionId: ctx.connection.id, kind: 'group', payload, createdAt: now, expiresAt, confirmHash: confirm?.hash ?? null });
+  return {
+    confirm: confirm?.value ?? null,
+    recipients: members,
+    preview: {
+      draftId, expiresAt: expiresAt.toISOString(), group: { id: group.id, name: group.name }, groups: names, recipients: members.length,
+      text: shaped.prepared.text, parts: shaped.parts, characters: shaped.characters, encoding: shaped.encoding, truncated: shaped.truncated,
+      guard, groupGuard,
+    },
+  };
+}
+
 /**
  * Przygotowanie SMS-a: sprawdza wszystko, co sprawdziłaby wysyłka, i zapisuje szkic ważny 30 minut. Niczego
  * nie wysyła. W sesji z widokami szkic otrzymuje jednorazowy klucz potwierdzenia.
  */
 export function prepareSms(deps: AgentDeps, ctx: ConnectionContext, input: PrepareSmsInput, now: Date, opts: { apps?: boolean } = {}): Prepared<SmsPreview> {
-  if (input.campaignRecipients !== undefined) {
-    throw new AgentError('invalid', 'Wysyłka do odbiorców kampanii nie jest jeszcze dostępna. Podaj numery odbiorców.');
+  if (input.campaignRecipients !== undefined && (input.to?.length ?? 0) > 0) {
+    throw new AgentError('invalid', 'Podaj numery odbiorców albo odbiorców kampanii, a nie oba rodzaje naraz.');
   }
-  const raw = input.to ?? [];
+  const raw = input.campaignRecipients === undefined ? input.to ?? [] : campaignRecipients(deps, ctx, input.campaignRecipients);
   if (raw.length === 0) throw new AgentError('no_recipient', 'Podaj co najmniej jeden numer odbiorcy.');
   const to = [...new Set(raw.map((r) => normalize(r, ctx.account.defaultCountryCode)))];
   if (to.length > PACKAGE_RECIPIENTS_MAX) {
@@ -287,6 +419,82 @@ export function prepareReplies(deps: AgentDeps, ctx: ConnectionContext, items: R
   };
 }
 
+/**
+ * Ochrona przed burzą integracji agenta: wywołania i odbiorcy w oknie. Odmowa zapisuje wpis w dzienniku,
+ * pierwsza w oknie zgłasza `integration_throttled`, a agent otrzymuje czas do ponowienia.
+ */
+function throttleAgent(deps: AgentDeps, ctx: ConnectionContext, count: number, note: Noter, now: Date): void {
+  const integration = ctx.integration;
+  const { limit, windowMinutes, recipients } = integration.config.throttle;
+  const gate = deps.guards.throttle(integration.id, limit, windowMinutes, now, { count, limit: recipients });
+  if (gate.allowed) return;
+  const by = gate.by ?? 'calls';
+  note('throttled', { reason: by === 'calls' ? `ponad ${limit} w ${windowMinutes} min` : `ponad ${recipients} odbiorców w ${windowMinutes} min` });
+  if (gate.notify) {
+    deps.notifier?.notify('integration_throttled', `integration:${integration.id}`,
+      `${integration.name}: przekroczony limit ${by === 'calls' ? `${limit}` : `${recipients} odbiorców`} w ${windowMinutes} min`, now);
+  }
+  throw throttledError(ctx, by, count, guardLeft(deps, ctx, now).resetsAt, now);
+}
+
+/**
+ * Wysyłka szkicu grupy: integracja agenta i integracja grupy liczą własne limity i zapisują własne wpisy. Grupa
+ * wyczerpana nie zużywa okna agenta, dlatego okno agenta jest sprawdzane przed grupą, a zużywane po niej.
+ * Wysyłka idzie przez `dispatch` z usługą i nadpisem grupy, bez potwierdzenia SMS-em zwrotnym.
+ */
+function sendGroup(deps: AgentDeps, ctx: ConnectionContext, draftId: string, payload: GroupDraftPayload, note: Noter, now: Date): SendOutcome {
+  const row = deps.integrations.get(payload.groupId);
+  if (!row || row.kind !== 'sms_group' || row.enabled !== 1 || row.apiKeyId !== ctx.key.id) {
+    throw new AgentError('group_unknown', `Grupa ${payload.group} nie istnieje albo jest wyłączona. Przygotuj wysyłkę ponownie.`);
+  }
+  const group = row as SmsGroupIntegration;
+  const count = payload.to.length;
+  const label = `Wyślij SMS do grupy ${group.name}`;
+  const groupNote: Noter = (result, extra = {}) => {
+    deps.integrationEvents.record({
+      integrationId: group.id, at: now, result, sourceIp: `agent ${ctx.integration.name} · ${ctx.connection.name}`,
+      payload: group.storePayloads === 1 ? payloadForLog(payload) : null, logLimit: group.config.eventLogLimit, ...extra,
+    });
+  };
+
+  const left = guardLeft(deps, ctx, now);
+  if (left.calls < 1 || (left.recipients !== null && left.recipients < count)) throttleAgent(deps, ctx, count, note, now);
+  const { limit, windowMinutes } = group.config.throttle;
+  const gate = deps.guards.throttle(group.id, limit, windowMinutes, now);
+  if (!gate.allowed) {
+    groupNote('throttled', { reason: `ponad ${limit} w ${windowMinutes} min` });
+    note('throttled', { reason: `ochrona grupy ${group.name}: ponad ${limit} w ${windowMinutes} min` });
+    if (gate.notify) {
+      deps.notifier?.notify('integration_throttled', `integration:${group.id}`, `${group.name}: przekroczony limit ${limit} w ${windowMinutes} min`, now);
+    }
+    throw groupThrottledError(group, windowLeft(deps, group.id, group.config.throttle, now).resetsAt, now);
+  }
+  throttleAgent(deps, ctx, count, note, now);
+
+  const outcome = deps.messages.transaction(() => {
+    const sent = dispatch(deps, group, ctx.key, payload.text, payload.to, groupLimit(ctx, group), groupNote, now, {
+      agentConnectionId: ctx.connection.id, requestedBy: ctx.connection.name, idempotencyKey: draftId,
+    });
+    if (sent.kind === 'error') return sent;
+    const result: StoredOutcome = { kind: 'group', ids: sent.messageIds, group: group.name };
+    deps.drafts.markSent(draftId, result, now);
+    return result;
+  });
+  if (outcome.kind === 'error') {
+    note('error', { reason: `${label}: ${outcome.detail}` });
+    const summary = outcome.code === 'invalid_phone' ? 'nieprawidłowy numer odbiorcy' : outcome.detail;
+    deps.notifier?.notify('integration_error', `integration:${ctx.integration.id}`, `${ctx.integration.name}: ${label}: ${summary}`, now);
+    throw new AgentError(outcome.code, outcome.detail);
+  }
+  // Wysyłka jest już w kolejce, dlatego błąd zapisu wpisu nie może zamienić wyniku w błąd.
+  try {
+    note('sent', { reason: `${label}, ${recipientsWord(count)}`, ...(outcome.kind === 'group' ? { messageId: outcome.ids[0]! } : {}) });
+  } catch (error) {
+    deps.log?.error('integracja.dziennik_blad', { integrationId: ctx.integration.id, error });
+  }
+  return { ...(outcome as Extract<StoredOutcome, { kind: 'group' }>), repeated: false };
+}
+
 /** Porównanie klucza potwierdzenia ze skrótem w stałym czasie. */
 function confirmMatches(hash: string, confirm: string | undefined): boolean {
   if (confirm === undefined) return false;
@@ -310,47 +518,35 @@ export function sendDraft(deps: AgentDeps, ctx: ConnectionContext, draftId: stri
   if (Date.parse(draft.expiresAt) <= now.getTime()) {
     throw new AgentError('draft_expired', `Podgląd wygasł po 30 minutach. Przygotuj ${draft.kind === 'reply' ? 'odpowiedź' : 'SMS'} ponownie.`);
   }
-  if (draft.kind === 'group') throw new AgentError('invalid', 'Wysyłka do grupy nie jest jeszcze dostępna.');
 
   const resolved = deps.connections.resolve(ctx.connection.id, now);
   if (!resolved.ok) {
     throw new AgentError('unavailable', `Połączenie jest chwilowo niedostępne: ${resolved.reason}. Dostęp przywraca administrator bramki.`);
   }
   const fresh = resolved.ctx;
-  const scope: AgentScope = draft.kind === 'reply' ? 'reply' : 'send';
-  if (!fresh.scopes.has(scope)) {
-    throw new AgentError('scope', `Połączenie nie ma uprawnienia „${SCOPE_LABELS[scope]}”. Uprawnienia nadaje administrator bramki w integracji Agent AI.`);
-  }
+  const scope: AgentScope = draft.kind === 'reply' ? 'reply' : draft.kind === 'group' ? 'send_group' : 'send';
+  if (!fresh.scopes.has(scope)) throw scopeError(scope);
 
   const integration = fresh.integration;
   const config = integration.config;
-  const sms = draft.kind === 'sms' ? draft.payload as SmsDraftPayload : null;
-  const reply = draft.kind === 'reply' ? draft.payload as ReplyDraftPayload : null;
-  const count = sms ? sms.to.length : 1;
-  const label = sms ? 'Wyślij SMS' : `Odpowiedź na ${reply!.inboundId}`;
   const stored = integration.storePayloads === 1 ? payloadForLog(draft.payload) : null;
-  const note = (result: IntegrationEventInput['result'], extra: Partial<IntegrationEventInput> = {}): void => {
+  const note: Noter = (result, extra = {}) => {
     deps.integrationEvents.record({
       integrationId: integration.id, at: now, result, sourceIp: `MCP · ${fresh.connection.name}`, payload: stored, logLimit: config.eventLogLimit, ...extra,
     });
   };
-  const subject = `integration:${integration.id}`;
+  if (draft.kind === 'group') return sendGroup(deps, fresh, draft.id, draft.payload as GroupDraftPayload, note, now);
 
-  const { limit, windowMinutes, recipients: recipientLimit } = config.throttle;
-  const gate = deps.guards.throttle(integration.id, limit, windowMinutes, now, { count, limit: recipientLimit });
-  if (!gate.allowed) {
-    const by = gate.by ?? 'calls';
-    note('throttled', { reason: by === 'calls' ? `ponad ${limit} w ${windowMinutes} min` : `ponad ${recipientLimit} odbiorców w ${windowMinutes} min` });
-    if (gate.notify) {
-      deps.notifier?.notify('integration_throttled', subject,
-        `${integration.name}: przekroczony limit ${by === 'calls' ? `${limit}` : `${recipientLimit} odbiorców`} w ${windowMinutes} min`, now);
-    }
-    throw throttledError(fresh, by, count, guardLeft(deps, fresh, now).resetsAt, now);
-  }
+  const sms = draft.kind === 'sms' ? draft.payload as SmsDraftPayload : null;
+  const reply = draft.kind === 'reply' ? draft.payload as ReplyDraftPayload : null;
+  const count = sms ? sms.to.length : 1;
+  const label = sms ? 'Wyślij SMS' : `Odpowiedź na ${reply!.inboundId}`;
+  const subject = `integration:${integration.id}`;
+  throttleAgent(deps, fresh, count, note, now);
 
   const via = {
     integrationId: integration.id, agentConnectionId: fresh.connection.id, requestedBy: fresh.connection.name,
-    campaignFallback: integration.name, idempotencyKey: draft.id, maxParts: partsLimit(fresh),
+    campaignFallback: integration.name, idempotencyKey: draft.id, maxParts: agentLimit(fresh).maxParts,
   };
   let truncated = false;
   let outcome: StoredOutcome;
@@ -401,7 +597,7 @@ export function sendDraft(deps: AgentDeps, ctx: ConnectionContext, draftId: stri
   try {
     const reason = sms ? `${label}, ${recipientsWord(count)}` : label;
     note('sent', {
-      reason: truncated ? `${reason}; skrócono do ${partsLimit(fresh)} części` : reason,
+      reason: truncated ? `${reason}; skrócono do ${agentLimit(fresh).maxParts} części` : reason,
       ...(outcome.kind === 'package' ? { packageId: outcome.id } : { messageId: outcome.ids[0]! }),
     });
   } catch (error) {
