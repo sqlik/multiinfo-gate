@@ -89,3 +89,13 @@ describe('AccountsRepo', () => {
     expect(repo.serviceIds(id)).toEqual(['99001']);
   });
 });
+
+describe('AccountsRepo.services', () => {
+  it('services zwraca usługi konta z etykietami w kolejności identyfikatorów', () => {
+    const db = openDatabase(':memory:');
+    const repo = new AccountsRepo(db, testKey());
+    const id = repo.insert(accountInput({ serviceIds: ['24138', '11002'] }));
+    db.prepare('UPDATE account_services SET label = ? WHERE account_id = ? AND service_id = ?').run('Powiadomienia serwisowe', id, '24138');
+    expect(repo.services(id)).toEqual([{ id: '11002', label: null }, { id: '24138', label: 'Powiadomienia serwisowe' }]);
+  });
+});

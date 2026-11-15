@@ -1,5 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import type { AccountInput } from '../../src/store/accounts.ts';
+import type { Database } from 'better-sqlite3';
+import { defaultAgentConfig } from '../../src/integrations/config.ts';
+import { AccountsRepo, type AccountInput } from '../../src/store/accounts.ts';
+import { ApiKeysRepo } from '../../src/store/api-keys.ts';
+import { IntegrationsRepo } from '../../src/store/integrations.ts';
 import type { MessageInput } from '../../src/store/messages.ts';
 
 export const testKey = () => randomBytes(32);
@@ -44,4 +48,18 @@ export function messageInput(overrides: Partial<MessageInput> = {}): MessageInpu
     idempotencyKey: null,
     ...overrides,
   };
+}
+
+/** Konto, klucz API i integracja „Agent AI” do testów repozytoriów połączeń agentów. */
+export function seedAgentIntegration(db: Database, key: Buffer, name = 'Agent AI - dyspozytornia'): { accountId: number; apiKeyId: number; integrationId: number } {
+  const accountId = new AccountsRepo(db, key).insert(accountInput());
+  const apiKeyId = new ApiKeysRepo(db, key).insert({
+    accountId, name: 'dyspozytornia', keyHash: 'h', keyPrefix: 'p', defaultServiceId: '24138', defaultOrig: null,
+    maxParts: 9, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'],
+  });
+  const integrationId = new IntegrationsRepo(db, key).insert({
+    name, kind: 'agent', apiKeyId, serviceId: null, orig: null, preset: 'agent', enabled: 1,
+    config: defaultAgentConfig(), secrets: {}, storePayloads: 0, createdAt: new Date('2026-11-15T08:00:00Z'),
+  });
+  return { accountId, apiKeyId, integrationId };
 }

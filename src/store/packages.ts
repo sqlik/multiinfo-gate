@@ -15,8 +15,10 @@ export interface PackageRow {
   createdAt: string; completedAt: string | null;
   /** Integracja z Power Automate, która zleciła rozsyłkę; `null` dla żądań z API. */
   integrationId: number | null;
-  /** Zlecający z przepływu Power Automate; `null` dla pozostałych źródeł. */
+  /** Zlecający z przepływu Power Automate albo nazwa połączenia agenta AI; `null` dla pozostałych źródeł. */
   requestedBy: string | null;
+  /** Połączenie agenta AI, które zleciło rozsyłkę; `null` dla pozostałych źródeł i po usunięciu połączenia. */
+  agentConnectionId: number | null;
   /** Klucz idempotencji z nagłówka `Idempotency-Key` i skrót żądania, z którym go użyto. */
   idempotencyKey: string | null;
   requestHash: string | null;
@@ -29,7 +31,7 @@ export interface PackageInput {
   defaultText: string | null; orig: string | null; costCenter: string | null; startAt: string | null;
   deliveryReport: 0 | 1; encoding: 'gsm' | 'ucs2'; multipart: 0 | 1; createdAt: string;
   integrationId?: number | null; requestedBy?: string | null; idempotencyKey?: string | null; requestHash?: string | null;
-  campaignId?: number | null;
+  campaignId?: number | null; agentConnectionId?: number | null;
 }
 
 export interface RecipientInput {
@@ -58,7 +60,7 @@ interface Raw {
   status: PackageStatus; provider_code: number | null; error: string | null;
   report_status: ReportStatus; report_id: string | null; report_expires_at: string | null; report_path: string | null;
   created_at: string; completed_at: string | null; integration_id: number | null; requested_by: string | null;
-  idempotency_key: string | null; request_hash: string | null; campaign_id: number | null;
+  idempotency_key: string | null; request_hash: string | null; campaign_id: number | null; agent_connection_id: number | null;
 }
 
 interface RawRecipient {
@@ -75,7 +77,7 @@ function toRow(r: Raw): PackageRow {
     miStatus: r.mi_status, status: r.status, providerCode: r.provider_code, error: r.error,
     reportStatus: r.report_status, reportId: r.report_id, reportExpiresAt: r.report_expires_at,
     reportPath: r.report_path, createdAt: r.created_at, completedAt: r.completed_at,
-    integrationId: r.integration_id, requestedBy: r.requested_by,
+    integrationId: r.integration_id, requestedBy: r.requested_by, agentConnectionId: r.agent_connection_id,
     idempotencyKey: r.idempotency_key, requestHash: r.request_hash, campaignId: r.campaign_id,
   };
 }
@@ -120,12 +122,12 @@ export class PackagesRepo {
       this.db.prepare(
         `INSERT INTO packages (id, api_key_id, account_id, service_id, default_text, orig, cost_center, start_at,
            delivery_report, encoding, multipart, recipients_count, created_at, integration_id, requested_by,
-           idempotency_key, request_hash, campaign_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           idempotency_key, request_hash, campaign_id, agent_connection_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(input.id, input.apiKeyId, input.accountId, input.serviceId, input.defaultText, input.orig,
         input.costCenter, input.startAt, input.deliveryReport, input.encoding, input.multipart,
         recipients.length, input.createdAt, input.integrationId ?? null, input.requestedBy ?? null,
-        input.idempotencyKey ?? null, input.requestHash ?? null, input.campaignId ?? null);
+        input.idempotencyKey ?? null, input.requestHash ?? null, input.campaignId ?? null, input.agentConnectionId ?? null);
       const add = this.db.prepare(
         'INSERT INTO package_recipients (package_id, seq, dest, text, client_id, links) VALUES (?, ?, ?, ?, ?, ?)');
       recipients.forEach((r, i) => add.run(input.id, i + 1, r.dest, r.text, r.clientId, r.links ?? 0));

@@ -25,6 +25,17 @@ export class IntegrationGuardsRepo {
   }
 
   /**
+   * Stan okna ochrony przed burzą bez zapisu, na potrzeby podglądu przed wysyłką. Okno, które minęło,
+   * daje zera, tak jak potraktowałby je `throttle`.
+   */
+  peek(integrationId: number, windowMinutes: number, now: Date): { count: number; recipients: number; windowStart: string | null } {
+    const row = this.db.prepare('SELECT window_start, count, recipients FROM integration_throttle WHERE integration_id = ?')
+      .get(integrationId) as { window_start: string; count: number; recipients: number } | undefined;
+    if (!row || now.getTime() - Date.parse(row.window_start) >= windowMinutes * 60_000) return { count: 0, recipients: 0, windowStart: null };
+    return { count: row.count, recipients: row.recipients, windowStart: row.window_start };
+  }
+
+  /**
    * Okno stałe od pierwszego zdarzenia: `limit` przechodzi, reszta odpada do końca okna.
    * `notify` tylko przy pierwszym odrzuceniu w oknie - jeden mail na burzę, nie na każdy alert.
    * `recipients` (integracja z Power Automate) dokłada w tym samym oknie limit odbiorców: wywołanie,

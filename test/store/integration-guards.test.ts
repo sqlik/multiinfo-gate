@@ -58,3 +58,15 @@ describe('throttle', () => {
     expect(guards.throttle(integrationId, 1, 10, later(1), { count: 1, limit: 1000 })).toEqual({ allowed: false, notify: true, by: 'calls' });
   });
 });
+
+describe('peek', () => {
+  it('peek nie zmienia licznika, a po minionym oknie zwraca zera', () => {
+    expect(guards.peek(integrationId, 60, NOW)).toEqual({ count: 0, recipients: 0, windowStart: null });
+    guards.throttle(integrationId, 30, 60, NOW, { count: 120, limit: 1000 });
+    guards.throttle(integrationId, 30, 60, later(5), { count: 30, limit: 1000 });
+    expect(guards.peek(integrationId, 60, later(10))).toEqual({ count: 2, recipients: 150, windowStart: NOW.toISOString() });
+    expect(guards.peek(integrationId, 60, later(10))).toEqual({ count: 2, recipients: 150, windowStart: NOW.toISOString() });
+    expect(guards.throttle(integrationId, 3, 60, later(11))).toEqual({ allowed: true, notify: false });
+    expect(guards.peek(integrationId, 60, later(60))).toEqual({ count: 0, recipients: 0, windowStart: null });
+  });
+});

@@ -2,7 +2,7 @@ import { z } from '../zod.ts';
 import { RULE_OPS } from './conditions.ts';
 import { isValidPath } from './paths.ts';
 
-export type IntegrationKind = 'webhook_in' | 'webhook_out' | 'mail_in' | 'sms_group' | 'power_automate';
+export type IntegrationKind = 'webhook_in' | 'webhook_out' | 'mail_in' | 'sms_group' | 'power_automate' | 'agent';
 export const INTEGRATION_KINDS: IntegrationKind[] = ['webhook_in', 'webhook_out', 'mail_in', 'sms_group', 'power_automate'];
 
 export const OUTBOUND_EVENTS = ['message.received', 'message.sent', 'message.delivered', 'message.failed', 'link.opened'] as const;
@@ -216,7 +216,23 @@ export const powerAutomateConfigSchema = z.object({
 });
 export type PowerAutomateConfig = z.infer<typeof powerAutomateConfigSchema>;
 
-export type IntegrationConfig = InboundConfig | OutboundConfig | MailInConfig | SmsGroupConfig | PowerAutomateConfig;
+/**
+ * Integracja „Agent AI”: pracownicy łączą z nią aplikacje AI przez MCP. Zakresy określają, co agent może zrobić,
+ * a każda wysyłka przechodzi przez limit części, ochronę przed burzą (wywołania i odbiorcy) i dziennik.
+ */
+export const AGENT_SCOPES = ['send', 'send_group', 'read_sent', 'campaigns', 'read_inbound', 'reply'] as const;
+export type AgentScope = (typeof AGENT_SCOPES)[number];
+
+export const agentConfigSchema = z.object({
+  scopes: z.array(z.enum(AGENT_SCOPES)).min(1).refine((list) => new Set(list).size === list.length, 'zakres powtórzony'),
+  throttle: common.throttle.extend({ recipients: z.number().int().min(1).max(PA_RECIPIENT_LIMIT_MAX).default(1000) }),
+  eventLogLimit: common.eventLogLimit,
+  maxParts: z.number().int().min(1).max(9),
+  overflow: z.enum(['truncate', 'reject']),
+});
+export type AgentConfig = z.infer<typeof agentConfigSchema>;
+
+export type IntegrationConfig = InboundConfig | OutboundConfig | MailInConfig | SmsGroupConfig | PowerAutomateConfig | AgentConfig;
 export type IntegrationSecrets = Record<string, string>;
 
 export function parseConfig(kind: 'webhook_in', raw: unknown): InboundConfig;
@@ -224,12 +240,14 @@ export function parseConfig(kind: 'webhook_out', raw: unknown): OutboundConfig;
 export function parseConfig(kind: 'mail_in', raw: unknown): MailInConfig;
 export function parseConfig(kind: 'sms_group', raw: unknown): SmsGroupConfig;
 export function parseConfig(kind: 'power_automate', raw: unknown): PowerAutomateConfig;
+export function parseConfig(kind: 'agent', raw: unknown): AgentConfig;
 export function parseConfig(kind: IntegrationKind, raw: unknown): IntegrationConfig;
 export function parseConfig(kind: IntegrationKind, raw: unknown): IntegrationConfig {
   if (kind === 'webhook_in') return inboundConfigSchema.parse(raw);
   if (kind === 'mail_in') return mailInConfigSchema.parse(raw);
   if (kind === 'sms_group') return smsGroupConfigSchema.parse(raw);
   if (kind === 'power_automate') return powerAutomateConfigSchema.parse(raw);
+  if (kind === 'agent') return agentConfigSchema.parse(raw);
   return outboundConfigSchema.parse(raw);
 }
 
@@ -270,4 +288,13 @@ export const defaultSmsGroupConfig = (): SmsGroupConfig => ({
  */
 export const defaultPowerAutomateConfig = (): PowerAutomateConfig => ({
   throttle: { limit: 30, windowMinutes: 10, recipients: 5000 }, eventLogLimit: 200, recipients: [], maxParts: 3, overflow: 'reject',
+});
+
+/**
+ * Wysyłka i odczyt wysłanych: najczęstszy zakres pracy dyspozytora. Burza 30 wywołań i 1000 odbiorców
+ * w godzinie: zapętlony agent zatrzymuje się, zanim wyśle więcej niż jedną dużą wysyłkę. Trzy części
+ * i odrzucenie nadmiaru, tak jak w integracji z Power Automate.
+ */
+export const defaultAgentConfig = (): AgentConfig => ({
+  scopes: ['send', 'read_sent'], throttle: { limit: 30, windowMinutes: 60, recipients: 1000 }, eventLogLimit: 200, maxParts: 3, overflow: 'reject',
 });

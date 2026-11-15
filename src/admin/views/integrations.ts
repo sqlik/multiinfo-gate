@@ -28,7 +28,7 @@ export interface IntegrationsFilter { kind: 'in' | 'out' | 'mail' | 'grupa' | nu
 /** Klucz do wyboru w formularzu: czynne klucze z usługami i nadpisami, po których wybiera się usługę i nadawcę. */
 export interface KeyOption { id: number; name: string; accountName: string; serviceIds: string[]; origs: string[] }
 
-const KIND_LABEL: Record<IntegrationKind, string> = { webhook_in: 'do SMS', webhook_out: 'z SMS-a', mail_in: 'z poczty', sms_group: 'do grupy', power_automate: 'do SMS' };
+const KIND_LABEL: Record<IntegrationKind, string> = { webhook_in: 'do SMS', webhook_out: 'z SMS-a', mail_in: 'z poczty', sms_group: 'do grupy', power_automate: 'do SMS', agent: 'do SMS' };
 export const kindLabel = (kind: IntegrationKind): string => KIND_LABEL[kind];
 
 const RESULT_LABELS: Record<EventResult, string> = {
