@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApiServer, type ApiDeps } from '../../src/api/server.ts';
 import { defaultSmsGroupConfig, type AgentConfig, type SmsGroupConfig } from '../../src/integrations/config.ts';
+import { SERVER_INSTRUCTIONS } from '../../src/mcp/instructions.ts';
 import { openDatabase } from '../../src/store/db.ts';
 import { AGENT_SEED_AT, agentApiDeps, seedAgent } from '../helpers/agent.ts';
 import { mcpSession, textOf } from '../helpers/mcp.ts';
@@ -95,6 +96,16 @@ describe('narzędzia wysyłki przez POST /mcp', () => {
     expect(byName.get('cancel_message')!._meta).toBeUndefined();
     expect(byName.get('prepare_sms')!.title).toBe('Przygotuj SMS');
     expect(byName.get('prepare_sms')!.inputSchema.properties.text.description).toBe('Treść SMS-a');
+  });
+
+  it('cancel_message i instrukcje serwera nie obiecują anulowania SMS-a przekazanego do sieci', async () => {
+    setup(['send']);
+    const tools = await (await mcpSession(app, seed.secret, { apps: true })).tools();
+    const description = tools.find((t) => t.name === 'cancel_message')!.description;
+    expect(description).toContain('nie przekazało jeszcze do sieci operatora');
+    expect(description).toContain('Wiadomości przekazanej do sieci nie można anulować');
+    expect(description).not.toContain('abonent');
+    expect(SERVER_INSTRUCTIONS).toContain('Nie obiecuj anulowania wiadomości, którą bramka już wysłała.');
   });
 
   it('send_prepared szkicu group przy połączeniu bez send_group: isError', async () => {

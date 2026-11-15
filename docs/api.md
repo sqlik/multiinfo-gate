@@ -800,9 +800,11 @@ się je, zwiększając `offset` o wartość `limit`.
 
 ### 4.3. Anulowanie: `POST /v1/messages/{id}/cancel`
 
-**Przeznaczenie.** Zatrzymanie wiadomości, która nie dotarła jeszcze do odbiorcy. Wiadomość
-w kolejce bramki jest anulowana natychmiast. Wiadomość przekazana już do Multiinfo jest
-anulowana po stronie operatora, o ile nie została jeszcze doręczona.
+**Przeznaczenie.** Zatrzymanie wiadomości, której Multiinfo nie przekazało jeszcze do sieci
+operatora. Wiadomość w kolejce bramki jest anulowana natychmiast. Wiadomość przekazaną już do
+Multiinfo bramka anuluje po stronie operatora, o ile Multiinfo nie przekazało jej jeszcze do
+sieci. Multiinfo przekazuje wiadomość do sieci zwykle kilka sekund po przyjęciu, dlatego
+w praktyce można anulować wiadomość w stanie `queued` albo `throttled`.
 
 === "curl"
 

@@ -198,6 +198,22 @@ describe('deliveryTrace', () => {
     expect(agentError(() => deliveryTrace(deps, ctx(), { to: '601000011', from: 'wczoraj' }, NOW)).code).toBe('invalid');
   });
 
+  it('anulowanie tylko przed przekazaniem do sieci: kolejka bramki, status 0 i limit, bez statusu 1 i 3', () => {
+    const state = (id: string, status: 'queued' | 'sent' | 'throttled', miStatus: number | null): boolean => {
+      message(id, { createdAt: at(-60_000) });
+      if (miStatus !== null) {
+        deps.messages.setSent(id, ['55' + id.length], new Date(at(-50_000)));
+        deps.messages.setStatus(id, { status, miStatus, miSubstatus: 0 });
+      }
+      return deliveryTrace(deps, ctx(), { id }, NOW).entries[0]!.cancellable;
+    };
+    expect(state('msg_k', 'queued', null)).toBe(true);
+    expect(state('msg_m0', 'queued', 0)).toBe(true);
+    expect(state('msg_m7', 'throttled', 7)).toBe(true);
+    expect(state('msg_m1', 'sent', 1)).toBe(false);
+    expect(state('msg_m3', 'sent', 3)).toBe(false);
+  });
+
   it('przebieg po identyfikatorze innego klucza albo wiadomości systemowej jest pusty', () => {
     message('msg_sys', { system: 1 });
     expect(deliveryTrace(deps, ctx(), { id: 'msg_sys' }, NOW).entries).toEqual([]);

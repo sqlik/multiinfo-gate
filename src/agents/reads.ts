@@ -1,5 +1,4 @@
 import { packageStatusLabel, stageLabel, statusLabel } from '../admin/views/status-labels.ts';
-import { FINAL_STATUSES } from '../api/cancel-message.ts';
 import { presentMessage } from '../api/messages.ts';
 import type { ApiDeps } from '../api/server.ts';
 import { AgentError } from '../integrations/agent.ts';
@@ -57,6 +56,11 @@ const PAGE_DEFAULT = 25;
 /** Porcja odebranych przeglądanych przy zestawieniu odpowiedzi na jedną wysyłkę. */
 const SCAN_BATCH = 500;
 const FINAL_PACKAGE: ReadonlySet<PackageStatus> = new Set(['completed', 'cancelled', 'failed']);
+/**
+ * Stany przed przekazaniem do sieci operatora: kolejka bramki, status 0 Multiinfo i wstrzymanie limitem. Wiadomość
+ * przekazaną do sieci Multiinfo odrzuca przy anulowaniu kodem -41, dlatego przebieg nie proponuje wtedy „Anuluj”.
+ */
+const BEFORE_NETWORK: ReadonlySet<string> = new Set(['queued', 'throttled']);
 
 const stamp = (iso: string): Stamp => ({ at: new Date(iso).toISOString(), local: warsawShort(iso) });
 
@@ -168,7 +172,7 @@ function messageEntry(deps: ReadDeps, m: MessageRow, canCancel: boolean): TraceE
     operator: m.miStatus === null ? null : {
       code: `${m.miStatus}/${m.miSubstatus ?? 0}`, description: describeSubstatus(m.miStatus, m.miSubstatus ?? 0),
     },
-    cancellable: canCancel && !FINAL_STATUSES.has(m.status), text: m.body, packageId: null,
+    cancellable: canCancel && BEFORE_NETWORK.has(m.status), text: m.body, packageId: null,
   };
 }
 

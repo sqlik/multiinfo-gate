@@ -180,8 +180,9 @@ const cancelInput = z.object({ id: z.string().min(1).describe('Identyfikator wia
 export const cancelMessageTool: ToolDef = {
   name: 'cancel_message',
   title: 'Anuluj wiadomość',
-  description: 'Anuluje wiadomość, która nie została jeszcze przekazana abonentowi. '
-    + 'Wiadomości doręczonej albo w innym stanie ostatecznym nie można anulować.',
+  description: 'Anuluje wiadomość, której Multiinfo nie przekazało jeszcze do sieci operatora, na przykład oczekującą w kolejce bramki albo wstrzymaną limitem. '
+    + 'Multiinfo przekazuje wiadomość do sieci zwykle kilka sekund po wysyłce. '
+    + 'Wiadomości przekazanej do sieci nie można anulować, a przebieg doręczenia informuje, czy anulowanie jest jeszcze możliwe.',
   scopes: ['send'],
   input: cancelInput,
   annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: true },
