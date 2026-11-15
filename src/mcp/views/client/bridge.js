@@ -123,7 +123,11 @@ export function createBridge(win, handlers = {}) {
     appInfo: { name: 'multiinfo-gate', version: handlers.version ?? '' },
     appCapabilities: { availableDisplayModes: ['inline', 'fullscreen'] },
   }).then((result) => {
-    host = { capabilities: isObject(result.hostCapabilities) ? result.hostCapabilities : {}, context: isObject(result.hostContext) ? result.hostContext : {} };
+    host = {
+      info: isObject(result.hostInfo) ? result.hostInfo : {},
+      capabilities: isObject(result.hostCapabilities) ? result.hostCapabilities : {},
+      context: isObject(result.hostContext) ? result.hostContext : {},
+    };
     notify('ui/notifications/initialized');
     handlers.onContext?.(host.context);
     watchSize();

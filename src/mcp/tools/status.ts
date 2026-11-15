@@ -63,6 +63,8 @@ export const connectionStatusTool: ToolDef = {
         maxParts: config.maxParts, overflow: config.overflow, ratePerMin: conn.key.ratePerMin,
         guard: { calls: window.count, callLimit: limit, recipients: window.recipients, recipientLimit, windowMinutes, resetsAt }, groups,
       },
+      // Punkt kontrolny A: znacznik pokazuje, czy agent aplikacji widzi _meta wyniku. Zadanie 13 go usuwa.
+      meta: { 'multiinfo-gate/proba': 'Znacznik _meta: MIG-META-PROBA' },
     };
   },
 };

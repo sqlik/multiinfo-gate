@@ -28,6 +28,10 @@ const VIEWS: Partial<Record<ViewId, ViewDef>> = {
     tools: '<button type="button" id="odswiez" class="btn">Odśwież</button>',
     body: '<main id="tresc" class="body"><p class="muted">Oczekiwanie na dane połączenia z bramki</p></main>'
       + '<div class="foot"><button type="button" id="proba" class="btn">Sprawdź wywołanie z widoku</button>'
+      // Próby punktu kontrolnego A (spec 13, punkty 2 i 6); zadanie 13 usuwa je razem z view_probe.
+      + '<button type="button" id="proba-wiadomosc" class="btn">Wyślij wiadomość próbną</button>'
+      + '<button type="button" id="proba-link" class="btn">Otwórz link próbny</button>'
+      + '<button type="button" id="proba-ekran" class="btn">Pełny ekran</button>'
       + '<p id="komunikat" class="notice" role="status" hidden></p></div>',
   },
 };

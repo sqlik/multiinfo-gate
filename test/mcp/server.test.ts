@@ -151,6 +151,8 @@ describe('nowa era 2026-07-28', () => {
     expect(withApps.tools[0]._meta).toEqual({ ui: { resourceUri: 'ui://multiinfo-gate/co-moge' } });
     const call = (await modern('tools/call', { name: 'connection_status', arguments: {} })).json().result;
     expect(call).toMatchObject({ resultType: 'complete', content: [{ type: 'text' }] });
+    // Punkt kontrolny A: znacznik pokazuje, czy agent widzi _meta wyniku; zadanie 13 go usuwa.
+    expect(call._meta).toEqual({ 'multiinfo-gate/proba': 'Znacznik _meta: MIG-META-PROBA' });
     expect((await modern('resources/list')).json().result).toEqual({ resultType: 'complete', resources: viewResources(), ttlMs: 3_600_000, cacheScope: 'private' });
     expect((await modern('prompts/list')).json().result).toEqual({ resultType: 'complete', prompts: [], ttlMs: 0, cacheScope: 'private' });
   });

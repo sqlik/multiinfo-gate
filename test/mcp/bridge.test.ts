@@ -30,6 +30,11 @@ async function connected(hostCapabilities: Record<string, unknown> = { serverToo
 }
 
 describe('most widoku z aplikacją AI', () => {
+  it('host() zwraca hostInfo, możliwości i kontekst aplikacji z wyniku ui/initialize', async () => {
+    const { bridge } = await connected({ serverTools: {} });
+    expect(bridge.host()).toEqual({ info: { name: 'aplikacja', version: '1.0' }, capabilities: { serverTools: {} }, context: { theme: 'dark', displayMode: 'inline' } });
+  });
+
   it('ui/initialize z wersją 2026-01-26, appInfo i trybami, potem ui/notifications/initialized i kontekst aplikacji', async () => {
     const onContext = vi.fn();
     const { sent, init } = await connected(undefined, { onContext });
