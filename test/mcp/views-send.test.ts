@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderStatus } from '../../src/mcp/views/client/co-moge.js';
 import { renderGroup } from '../../src/mcp/views/client/grupa.js';
 import { renderTrace, sayAt } from '../../src/mcp/views/client/przebieg.js';
 import { linkMarkup, renderSend } from '../../src/mcp/views/client/send.js';
@@ -132,6 +133,21 @@ describe('widok przebiegu doręczenia', () => {
     expect(cancellable).toContain('Anuluj');
     expect(cancellable).not.toContain('Wyślij ponownie');
     expect(renderTrace([])).toContain('Bramka nie znalazła wiadomości');
+  });
+});
+
+describe('jednostka limitu ochrony przed burzą', () => {
+  it('widoki wysyłki, grupy i Co mogę? liczą limit w wysyłkach, jak panel', () => {
+    expect(renderSend(PREVIEW, {})).toContain('można jeszcze wykonać 28 wysyłek i wysłać SMS-y do 990 odbiorców');
+    const group = renderGroup(GROUP, []);
+    expect(group).toContain('można jeszcze wykonać 28 wysyłek');
+    expect(group).toContain('można jeszcze wykonać 9 wysyłek');
+    const status = renderStatus({
+      available: true, connection: 'Ewa Nowak', integration: 'Agent AI - dyspozytornia', scopes: [], expiresAt: null, services: [], maxParts: 3,
+      overflow: 'reject', ratePerMin: 60, guard: { calls: 2, callLimit: 30, recipients: 15, recipientLimit: 1000, windowMinutes: 60, resetsAt: null }, groups: 0,
+    }, { scopes: {} });
+    expect(status).toContain('<dt>Wysyłki</dt><dd>2 z 30</dd>');
+    for (const html of [renderSend(PREVIEW, {}), group, status]) expect(html.toLowerCase()).not.toContain('wywoła');
   });
 });
 

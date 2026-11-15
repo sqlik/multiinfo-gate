@@ -15,7 +15,7 @@ const encodingName = (e: 'gsm' | 'ucs2') => (e === 'gsm' ? 'GSM' : 'Unicode');
 
 function guardLine(guard: GuardLeft, what = 'Ochrona przed burzą'): string {
   const recipients = guard.recipients === null ? '' : ` i wysłać SMS-y do ${plural(guard.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}`;
-  return `${what}: w bieżącym oknie można jeszcze wykonać ${plural(guard.calls, 'wywołanie wysyłające', 'wywołania wysyłające', 'wywołań wysyłających')}${recipients}.`;
+  return `${what}: w bieżącym oknie można jeszcze wykonać ${plural(guard.calls, 'wysyłkę', 'wysyłki', 'wysyłek')}${recipients}.`;
 }
 
 /** Ostatnie zdanie podglądu: w aplikacji z widokami wysyła człowiek, bez widoków agent prosi o potwierdzenie. */

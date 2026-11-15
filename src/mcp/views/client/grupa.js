@@ -12,7 +12,7 @@ const people = (n) => plural(n, 'osoba', 'osoby', 'osób');
 /** Nadawca grupy: nadpis albo numer usługi z nazwą nadaną w panelu. */
 const groupSenderLabel = (p) => p.orig ?? `numer usługi ${p.service.label === p.service.id ? p.service.id : `${p.service.label} (${p.service.id})`}`;
 const groupGuardNote = (guard, what) => note(`${what}: w bieżącym oknie można jeszcze wykonać `
-  + `${plural(guard.calls, 'wywołanie wysyłające', 'wywołania wysyłające', 'wywołań wysyłających')}`
+  + `${plural(guard.calls, 'wysyłkę', 'wysyłki', 'wysyłek')}`
   + (guard.recipients === null ? '' : ` i wysłać SMS-y do ${plural(guard.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}`));
 
 /**

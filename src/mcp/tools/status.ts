@@ -56,7 +56,7 @@ export const connectionStatusTool: ToolDef = {
       `Nadawca domyślny: ${defaultSender}.` + (others.length > 0 ? ` Inni nadawcy do wyboru: ${others.join(', ')}.` : ''),
       `Limit części SMS-a: ${config.maxParts}. ${config.overflow === 'reject' ? 'Dłuższa treść zostaje odrzucona.' : 'Dłuższa treść zostaje skrócona do tego limitu.'}`,
       `Limit żądań klucza: ${conn.key.ratePerMin} na minutę.`,
-      `Ochrona przed burzą: wykorzystano ${window.count} z ${limit} wywołań wysyłających i ${window.recipients} z ${recipientLimit} odbiorców w oknie ${windowMinutes} minut.`
+      `Ochrona przed burzą: wykorzystano ${window.count} z ${limit} wysyłek i ${window.recipients} z ${recipientLimit} odbiorców w oknie ${windowMinutes} minut.`
         + (resetsAt === null ? '' : ` Okno kończy się ${warsawStamp(resetsAt)} czasu polskiego.`),
       `Grupy SMS klucza: ${groups}.`,
     ];

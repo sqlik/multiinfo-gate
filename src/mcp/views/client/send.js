@@ -30,10 +30,10 @@ export function linkMarkup(text, preview) {
   return out + esc(text.slice(at));
 }
 
-/** Ochrona przed burzą: ile wywołań wysyłających i odbiorców zostało w oknie. */
+/** Ochrona przed burzą: ile wysyłek i odbiorców zostało w oknie. */
 export function guardNote(guard, what = 'Ochrona przed burzą') {
   const recipients = guard.recipients === null ? '' : ` i wysłać SMS-y do ${plural(guard.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}`;
-  return note(`${what}: w bieżącym oknie można jeszcze wykonać ${plural(guard.calls, 'wywołanie wysyłające', 'wywołania wysyłające', 'wywołań wysyłających')}${recipients}`);
+  return note(`${what}: w bieżącym oknie można jeszcze wykonać ${plural(guard.calls, 'wysyłkę', 'wysyłki', 'wysyłek')}${recipients}`);
 }
 
 function counter(p) {

@@ -108,6 +108,16 @@ describe('narzędzia wysyłki przez POST /mcp', () => {
     expect(SERVER_INSTRUCTIONS).toContain('Nie obiecuj anulowania wiadomości, którą bramka już wysłała.');
   });
 
+  it('limit ochrony przed burzą w tekstach narzędzi liczony w wysyłkach, jak w panelu', async () => {
+    setup(['send']);
+    const mcp = await mcpSession(app, seed.secret);
+    const prepared = textOf(await mcp.call('prepare_sms', { to: ['48601000011'], text: TEXT }));
+    const status = textOf(await mcp.call('connection_status', {}));
+    expect(prepared).toMatch(/można jeszcze wykonać \d+ wysył(ek|ki|kę) i wysłać SMS-y do/);
+    expect(status).toMatch(/wykorzystano 0 z \d+ wysyłek i 0 z \d+ odbiorców/);
+    for (const text of [prepared, status]) expect(text).not.toMatch(/wywoła[nń][a-z]* wysyłając/);
+  });
+
   it('send_prepared szkicu group przy połączeniu bez send_group: isError', async () => {
     setup(['send', 'send_group']);
     group('SERWIS', { mode: 'lists', prefix: 'serwis', recipients: [{ phone: '48601000021', name: 'Jan Kowalski' }] });

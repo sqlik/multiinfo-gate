@@ -29,7 +29,7 @@ export function renderStatus(data, env = {}) {
 
   const limits = '<dl class="kv">'
     + `<dt>Żądania klucza</dt><dd>${esc(data.ratePerMin)} na minutę</dd>`
-    + `<dt>Wywołania wysyłające</dt><dd>${esc(guard.calls)} z ${esc(guard.callLimit)}</dd>`
+    + `<dt>Wysyłki</dt><dd>${esc(guard.calls)} z ${esc(guard.callLimit)}</dd>`
     + `<dt>Odbiorcy</dt><dd>${esc(guard.recipients)} z ${esc(guard.recipientLimit)}</dd>`
     + '</dl>'
     + note(guard.resetsAt
