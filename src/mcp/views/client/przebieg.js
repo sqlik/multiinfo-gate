@@ -34,7 +34,22 @@ function traceEntry(e, i) {
   return `<section class="entry"><h2 class="entry-title">${title}</h2>`
     + `<div class="grid2"><div>${details}</div><div>${timeline}</div></div>`
     + (actions.length > 0 ? `<div class="row actions">${actions.join('')}</div>` : '')
+    + `<p class="notice" data-say="${i}" role="status" hidden></p>`
     + `<div class="resend" data-resend="${i}"></div></section>`;
+}
+
+/**
+ * Komunikat przy pozycji przebiegu, pod jej przyciskami. Element jest wyszukiwany przy każdym komunikacie,
+ * ponieważ odświeżenie po anulowaniu rysuje pozycje od nowa.
+ */
+export function sayAt(root, index) {
+  return (tone, text) => {
+    const notice = root.querySelector(`[data-say="${index}"]`);
+    if (!notice) return;
+    notice.hidden = !text;
+    notice.className = `notice n-${tone}`;
+    notice.textContent = text;
+  };
 }
 
 /** HTML przebiegu: każda pozycja z osią czasu, „Anuluj” przy `cancellable`, „Wyślij ponownie” przy zapisanej treści. */
@@ -80,12 +95,12 @@ export function startTrace(win, env) {
     return show(await bridge.callTool('delivery_trace', q));
   }
 
-  const guarded = (button, task) => async () => {
+  const guarded = (button, task, tell = say) => async () => {
     button.disabled = true;
     try {
       await task();
     } catch (error) {
-      say('fail', error instanceof Error ? error.message : String(error));
+      tell('fail', error instanceof Error ? error.message : String(error));
     } finally {
       button.disabled = false;
     }
@@ -100,25 +115,28 @@ export function startTrace(win, env) {
     const index = Number(button.dataset.index);
     const entry = entries[index];
     if (!entry) return;
+    // Wynik akcji pojawia się przy pozycji, której dotyczy, a nie pod ostatnią pozycją przebiegu.
+    const tell = sayAt(content, index);
     if (button.dataset.act === 'cancel') {
       guarded(button, async () => {
         const result = await bridge.callTool('cancel_message', { id: entry.id });
-        if (result.isError) return say('fail', textOf(result));
+        if (result.isError) return tell('fail', textOf(result));
         await refresh();
-        return say('ok', `Wiadomość ${entry.id} została anulowana`);
-      })();
+        return tell('ok', `Wiadomość ${entry.id} została anulowana`);
+      }, tell)();
     } else {
       guarded(button, async () => {
+        tell('plain', '');
         const q = { to: [entry.to], text: entry.text };
         const result = await bridge.callTool('prepare_sms', q);
-        if (result.isError) return say('fail', textOf(result));
+        if (result.isError) return tell('fail', textOf(result));
         let panel = panels.get(index);
         if (!panel) {
-          panel = mountSend(content.querySelector(`[data-resend="${index}"]`), { bridge, say, win });
+          panel = mountSend(content.querySelector(`[data-resend="${index}"]`), { bridge, say: tell, win });
           panels.set(index, panel);
         }
         return panel.show(result, q);
-      })();
+      }, tell)();
     }
   });
 }

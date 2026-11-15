@@ -69,6 +69,7 @@ export const VIEW_STYLE = [
   '.sent{margin-top:14px;padding:8px 10px;background:var(--ok-bg);color:var(--ok-ink);border-radius:3px;font-size:13px}.sent .note{color:inherit}',
   '.entry+.entry{border-top:1px solid var(--rule);margin-top:14px;padding-top:14px}',
   '.entry-title{margin:0 0 10px;font-size:13px;font-weight:600}',
+  '.entry>.notice{margin-top:10px}',
   '.timeline{list-style:none;margin:4px 0 0;padding:0}',
   '.timeline li{position:relative;padding:0 0 14px 22px;font-size:13px}',
   '.timeline li::before{content:"";position:absolute;left:5px;top:6px;width:9px;height:9px;border-radius:50%;background:var(--ok-ink)}',

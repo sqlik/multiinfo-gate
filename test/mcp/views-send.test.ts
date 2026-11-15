@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderGroup } from '../../src/mcp/views/client/grupa.js';
-import { renderTrace } from '../../src/mcp/views/client/przebieg.js';
+import { renderTrace, sayAt } from '../../src/mcp/views/client/przebieg.js';
 import { linkMarkup, renderSend } from '../../src/mcp/views/client/send.js';
 import { TOOLS } from '../../src/mcp/tools/index.ts';
 import { BUILT_VIEWS, viewHtml } from '../../src/mcp/views/index.ts';
@@ -123,6 +123,28 @@ describe('widok przebiegu doręczenia', () => {
     expect(cancellable).toContain('Anuluj');
     expect(cancellable).not.toContain('Wyślij ponownie');
     expect(renderTrace([])).toContain('Bramka nie znalazła wiadomości');
+  });
+});
+
+describe('komunikaty akcji przebiegu', () => {
+  it('renderTrace: ukryty komunikat każdej pozycji pod jej przyciskami, przed panelem ponownej wysyłki', () => {
+    const html = renderTrace([{ ...ENTRY, cancellable: true }, ENTRY]);
+    const [first, second] = html.split('</section>');
+    expect(first).toContain('<p class="notice" data-say="0" role="status" hidden></p>');
+    expect(first!.indexOf('data-act="resend"')).toBeLessThan(first!.indexOf('data-say="0"'));
+    expect(first!.indexOf('data-say="0"')).toBeLessThan(first!.indexOf('data-resend="0"'));
+    expect(second).toContain('data-say="1"');
+  });
+
+  it('sayAt pisze komunikat przy wskazanej pozycji, a pusty tekst go ukrywa', () => {
+    const notices = new Map([['0', { hidden: true, className: '', textContent: '' }], ['1', { hidden: true, className: '', textContent: '' }]]);
+    const root = { querySelector: (sel: string) => notices.get(/data-say="(\d+)"/.exec(sel)![1]!) ?? null };
+    sayAt(root, 1)('fail', 'Wiadomość została już przekazana do sieci operatora i nie można jej anulować.');
+    expect(notices.get('1')).toEqual({ hidden: false, className: 'notice n-fail', textContent: 'Wiadomość została już przekazana do sieci operatora i nie można jej anulować.' });
+    expect(notices.get('0')!.hidden).toBe(true);
+    sayAt(root, 1)('plain', '');
+    expect(notices.get('1')!.hidden).toBe(true);
+    expect(() => sayAt({ querySelector: () => null }, 5)('ok', 'x')).not.toThrow();
   });
 });
 
