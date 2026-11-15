@@ -100,12 +100,15 @@ export class AgentConnectionsRepo {
     this.db.prepare('DELETE FROM agent_connections WHERE id = ?').run(id);
   }
 
-  /** Połączenia w użyciu: z użytym kodem albo z tokenem, bez odwołanych i wygasłych. Termin klucza sprawdza usługa połączeń. */
+  /**
+   * Połączenia w użyciu: z użytym kodem, z klientem OAuth z wcześniejszego użycia kodu albo z tokenem, bez odwołanych
+   * i wygasłych. Termin klucza sprawdza usługa połączeń.
+   */
   countActive(integrationId: number, now: Date): number {
     return (this.db.prepare(
       `SELECT COUNT(*) AS n FROM agent_connections
        WHERE integration_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)
-         AND (code_used_at IS NOT NULL OR token_hash IS NOT NULL)`,
+         AND (code_used_at IS NOT NULL OR client_id IS NOT NULL OR token_hash IS NOT NULL)`,
     ).get(integrationId, now.toISOString()) as { n: number }).n;
   }
 }

@@ -112,5 +112,7 @@ describe('AgentConnectionsRepo', () => {
 
     expect(repo.countActive(integrationId, later(10))).toBe(3);
     expect(repo.countActive(integrationId, later(31))).toBe(2);
+    repo.setCode(used, 'k3', later(90).toISOString());
+    expect(repo.countActive(integrationId, later(32))).toBe(2);
   });
 });

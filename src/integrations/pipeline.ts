@@ -160,7 +160,7 @@ import type { ApiKeyRow } from '../store/api-keys.ts';
 export type Noter = (result: IntegrationEventInput['result'], extra?: Partial<IntegrationEventInput>) => void;
 
 /** Klucz i konto integracji; powody niedostępności słowami, do wpisu dziennika. */
-export function resolveKeyAccount(deps: PipelineDeps, integration: IntegrationRow, now: Date):
+export function resolveKeyAccount(deps: Pick<PipelineDeps, 'apiKeys' | 'accounts'>, integration: Pick<IntegrationRow, 'apiKeyId'>, now: Date):
   { ok: true; key: ApiKeyRow; account: AccountRow } | { ok: false; detail: string } {
   const key = deps.apiKeys.get(integration.apiKeyId);
   if (!key) return { ok: false, detail: 'klucz API nie istnieje' };
