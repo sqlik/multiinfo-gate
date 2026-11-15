@@ -39,6 +39,13 @@ describe('GET /powiadomienia', () => {
     expect(body).toContain('Które zdarzenia są zgłaszane mailem albo SMS-em, jak często i z jakimi progami');
   });
 
+  it('reguła Połączenie agenta AI na stronie powiadomień, domyślnie włączona', async () => {
+    const rules = (await page('reguly')).body;
+    expect(rules).toContain('Połączenie agenta AI');
+    expect(rules).toContain('pracownik połączył aplikację AI z bramką kodem jednorazowym');
+    expect(rules).toMatch(/name="enabled_agent_connected" value="1" checked/);
+  });
+
   it('ekran reguł pokazuje „Awaria skrzynki pocztowej” z parametrem minut', async () => {
     const rules = await page('reguly');
     expect(rules.body).toContain('Awaria skrzynki pocztowej');

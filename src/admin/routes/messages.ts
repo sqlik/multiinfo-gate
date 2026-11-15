@@ -3,7 +3,7 @@ import { messageLinks } from '../../links/campaigns.ts';
 import type { MessageRow } from '../../store/messages.ts';
 import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
-import { deliveryView, integrationLink } from '../views/deliveries.ts';
+import { connectionLink, deliveryView, integrationLink, sourceWords } from '../views/deliveries.ts';
 import { messagePage, messagesPage, type MessageDetail } from '../views/messages.ts';
 import { parseOffset } from '../../paging.ts';
 
@@ -57,6 +57,7 @@ export function registerMessageViewRoutes(app: FastifyInstance, deps: AdminDeps,
           limit: PAGE_SIZE,
           keyNames: new Map(deps.apiKeys.list().map((k) => [k.id, k.name])),
           accountNames: new Map(deps.accounts.list().map((a) => [a.id, a.name])),
+          sources: new Map(rows.map((m) => [m.id, sourceWords(deps, m)])),
         }),
       });
     },
@@ -82,6 +83,8 @@ export function registerMessageViewRoutes(app: FastifyInstance, deps: AdminDeps,
         events: deps.events.list(row.id),
         deliveries: deps.deliveries.listForMessage(row.id).map((delivery) => deliveryView(deps, delivery)),
         integration: row.integrationId === null ? null : integrationLink(deps, row.integrationId),
+        source: sourceWords(deps, row),
+        connection: connectionLink(deps, row.agentConnectionId),
         links: messageLinkRows(deps, row),
       }),
     });

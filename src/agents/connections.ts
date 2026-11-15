@@ -106,12 +106,12 @@ export class ConnectionService {
   }
 
   /** Usunąć można wyłącznie połączenie, które nigdy nie działało: czekające na kod albo z kodem po terminie. */
-  remove(id: number): void {
+  remove(id: number, now: Date = new Date()): void {
     const connection = this.deps.connections.get(id);
     if (!connection) throw new Error('Połączenie nie istnieje.');
     const integration = this.deps.integrations.get(connection.integrationId);
     const key = integration ? this.deps.apiKeys.get(integration.apiKeyId) : undefined;
-    const state = connectionState(connection, key?.expiresAt ?? null, new Date());
+    const state = connectionState(connection, key?.expiresAt ?? null, now);
     if (state !== 'waiting' && state !== 'code_expired') throw new Error('Połączenie, które było używane, można tylko odwołać.');
     this.deps.connections.remove(id);
   }
@@ -167,7 +167,7 @@ export class ConnectionService {
   private usable(id: number): AgentConnectionRow {
     const connection = this.deps.connections.get(id);
     if (!connection) throw new Error('Połączenie nie istnieje.');
-    if (connection.revokedAt !== null) throw new Error('Odwołanego połączenia nie można przywrócić. Załóż nowe połączenie.');
+    if (connection.revokedAt !== null) throw new Error('Odwołanego połączenia nie można przywrócić. Dodaj nowe połączenie.');
     return connection;
   }
 }

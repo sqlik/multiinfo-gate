@@ -8,6 +8,7 @@ import type { MailInState } from '../../store/mail-in.ts';
 import { warsawStamp } from '../../time/warsaw.ts';
 import { powerAutomatePanel } from './power-automate.ts';
 import { gatewayAddressPanel, gatewayAddressWarning, scopesWords } from './agent.ts';
+import { connectionsSection, type ConnectionListItem } from './agent-connections.ts';
 import { esc } from './layout.ts';
 import { apiAddressPanel, fullUrl } from './settings.ts';
 
@@ -848,6 +849,8 @@ export interface IntegrationDetail {
   view: IntegrationView; events: DetailEvent[]; apiUrl: string | null;
   /** Wybrane warianty trybu prostego w słowach; null, gdy konfiguracja jest spoza list. */
   simple?: { when: string; text: string } | null;
+  /** Połączenia integracji agenta ze stanem; brak dla pozostałych rodzajów. */
+  connections?: ConnectionListItem[];
 }
 
 /** Warunek w słowach: „heartbeat.status równe 0; monitor.name zawiera prod” albo wyrażenie Liquid. */
@@ -1068,6 +1071,7 @@ export function integrationDetailPage(d: IntegrationDetail): string {
       <div class="kv">${configRows(row, d.apiUrl, d.simple ?? null)}</div>
     </div>
     ${row.kind === 'power_automate' ? powerAutomatePanel(d.apiUrl, `/integracje/${row.id}`) : ''}
+    ${row.kind === 'agent' ? connectionsSection(d.connections ?? [], row, d.view.now) : ''}
     <div class="panel">
       <div class="panel-h"><div class="lab">Dziennik</div>
         <div class="m dim">${row.storePayloads === 1 ? 'ładunki przechowywane 7 dni' : 'Ładunki nieprzechowywane. Przechowywanie można włączyć w edycji na czas konfiguracji.'}</div></div>

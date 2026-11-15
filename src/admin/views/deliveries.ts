@@ -1,3 +1,4 @@
+import { sourceLabel } from '../../integrations/source-label.ts';
 import type { DeliveryRow } from '../../store/webhook-deliveries.ts';
 import type { AdminDeps } from '../server.ts';
 import { esc } from './layout.ts';
@@ -11,6 +12,30 @@ export interface DeliveryView {
 /** Odnośnik do integracji; usunięta zostaje jako numer, żeby ślad nie zniknął. */
 export function integrationLink(deps: Pick<AdminDeps, 'integrations'>, id: number): { id: number; name: string } {
   return { id, name: deps.integrations.get(id)?.name ?? `integracja ${id}` };
+}
+
+/** Źródło wiadomości albo rozsyłki słowami (`sourceLabel`); powiadomienie bramki jest oznaczone źródłem „bramka”. */
+export function sourceWords(
+  deps: Pick<AdminDeps, 'integrations' | 'agentConnections'>,
+  row: { integrationId: number | null; agentConnectionId: number | null; requestedBy: string | null; system?: number },
+): string {
+  if (row.system === 1) return 'bramka';
+  return sourceLabel({ integrations: deps.integrations, connectionsRepo: deps.agentConnections }, row);
+}
+
+/** Wiersz „Połączenie” w szczegółach: nazwa osoby i odnośnik do integracji agenta. Nazwa zastępuje wiersz „Zlecający”. */
+export function connectionRow(connection: { name: string; integration: { id: number; name: string } } | null | undefined): string {
+  if (!connection) return '';
+  return `<div>Połączenie</div><div>${esc(connection.name)} · <a href="/integracje/${esc(connection.integration.id)}">${esc(connection.integration.name)}</a></div>`;
+}
+
+/** Połączenie agenta, które zleciło wysyłkę, z integracją agenta; brak dla wysyłek bez połączenia. */
+export function connectionLink(
+  deps: Pick<AdminDeps, 'integrations' | 'agentConnections'>, id: number | null,
+): { name: string; integration: { id: number; name: string } } | null {
+  const connection = id === null ? undefined : deps.agentConnections.get(id);
+  if (!connection) return null;
+  return { name: connection.name, integration: integrationLink(deps, connection.integrationId) };
 }
 
 /** Widok dostawy dla obu szczegółów: klucz po nazwie, a dla dostawy integracji także integracja. */

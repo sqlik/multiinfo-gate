@@ -1,6 +1,7 @@
 import type { PackageRow, RecipientRow } from '../../store/packages.ts';
 import { problemUrl } from '../../docs-links.ts';
 import { warsawStamp } from '../../time/warsaw.ts';
+import { connectionRow } from './deliveries.ts';
 import { esc } from './layout.ts';
 import {
   packageStatusLabel, packageStatusTone, reportStatusLabel, statusLabel, statusTone,
@@ -19,16 +20,20 @@ export interface PackagesData {
   limit: number;
   keyNames: Map<number, string>;
   accountNames: Map<number, string>;
-  /** Nazwy integracji z Power Automate, z których przyszły rozsyłki. */
-  integrationNames: Map<number, string>;
+  /** Źródło rozsyłki słowami według identyfikatora: „API”, „Power Automate …”, „agent … · …”. */
+  sources: Map<string, string>;
 }
 
 export interface PackageDetail {
   row: PackageRow;
   accountName: string;
   keyName: string;
-  /** Integracja z Power Automate, która zleciła rozsyłkę; brak dla rozsyłki z API. */
+  /** Integracja, która zleciła rozsyłkę (Power Automate albo agent); brak dla rozsyłki z API. */
   integration: { id: number; name: string } | null;
+  /** Źródło słowami (`sourceWords`); brak w starszych wywołaniach. */
+  source?: string;
+  /** Połączenie agenta, które zleciło rozsyłkę, z integracją agenta. */
+  connection?: { name: string; integration: { id: number; name: string } } | null;
   recipients: RecipientRow[];
   /** Ilu odbiorców pokazujemy; reszta jest w CSV. */
   shown: number;
@@ -49,6 +54,13 @@ function reportCell(p: PackageRow): string {
   return `<span class="${p.reportStatus === 'failed' ? 'fail' : 'dim'}">${esc(reportStatusLabel(p.reportStatus))}</span>`;
 }
 
+/** Źródło pod nazwą klucza: integracja albo agent z połączeniem, z odnośnikiem do integracji. Rozsyłka z API nie zawiera tego wiersza. */
+function sourceLine(p: PackageRow, source: string): string {
+  if (source === 'API') return '';
+  const text = p.integrationId === null ? esc(source) : `<a href="/integracje/${esc(p.integrationId)}">${esc(source)}</a>`;
+  return `<div style="font-size: 11.5px; margin-top: 2px;">${text}</div>`;
+}
+
 export function packagesPage(data: PackagesData): string {
   const rows = data.rows.length === 0
     ? '<tr><td class="dim" colspan="8">Brak rozsyłek.</td></tr>'
@@ -56,8 +68,7 @@ export function packagesPage(data: PackagesData): string {
         <td class="m dim">${esc(stamp(p.createdAt))}</td>
         <td class="m"><a href="/rozsylki/${esc(p.id)}">${esc(p.id)}</a></td>
         <td>${esc(data.accountNames.get(p.accountId) ?? `konto ${p.accountId}`)}</td>
-        <td class="dim">${esc(data.keyNames.get(p.apiKeyId) ?? `klucz ${p.apiKeyId}`)}${p.integrationId === null ? ''
-          : `<div style="font-size: 11.5px; margin-top: 2px;"><a href="/integracje/${esc(p.integrationId)}">${esc(data.integrationNames.get(p.integrationId) ?? `integracja ${p.integrationId}`)}</a></div>`}</td>
+        <td class="dim">${esc(data.keyNames.get(p.apiKeyId) ?? `klucz ${p.apiKeyId}`)}${sourceLine(p, data.sources.get(p.id) ?? 'API')}</td>
         <td class="m">${esc(p.recipientsCount)}</td>
         <td class="m">${p.remainingCount === null ? '<span class="dim">-</span>' : esc(p.remainingCount)}</td>
         <td>${state(p)}</td>
@@ -177,8 +188,10 @@ export function packagePage(d: PackageDetail): string {
       <div class="panel">
         <div class="panel-h"><div class="lab">Parametry</div></div>
         <div class="kv">
+          ${d.source === undefined ? '' : `<div>Źródło</div><div>${esc(d.source)}</div>`}
           ${d.integration === null ? '' : `<div>Integracja</div><div><a href="/integracje/${esc(d.integration.id)}">${esc(d.integration.name)}</a></div>`}
-          ${p.requestedBy === null ? '' : `<div>Zlecający</div><div>${esc(p.requestedBy)}</div>`}
+          ${connectionRow(d.connection)}
+          ${p.requestedBy === null || d.connection ? '' : `<div>Zlecający</div><div>${esc(p.requestedBy)}</div>`}
           ${!d.campaign ? '' : `<div>Kampania</div><div><a href="/kampanie/${esc(d.campaign.id)}">${esc(d.campaign.name)}</a></div>`}
           <div>ID usługi</div><div class="m">${esc(p.serviceId)}</div>
           <div>Nadpis</div><div class="m">${esc(p.orig ?? '-')}</div>

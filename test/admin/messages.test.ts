@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
-import { defaultInboundConfig } from '../../src/integrations/config.ts';
+import { defaultAgentConfig, defaultInboundConfig, defaultSmsGroupConfig } from '../../src/integrations/config.ts';
 
 const NOW = new Date('2026-08-25T10:00:00Z');
 
@@ -319,6 +319,59 @@ describe('GET /wiadomosci/:id - odpowiedź w wątku', () => {
 });
 
 describe('ślady integracji', () => {
+  /** Integracja agenta z połączeniem i wiadomość wysłana przez to połączenie, opcjonalnie przez grupę. */
+  function agentMessage(id: string, agent: string, group?: string): { agentId: number; connectionId: number; groupId: number | null } {
+    const agentId = h.integrations.insert({
+      name: agent, kind: 'agent', apiKeyId, serviceId: null, orig: null, preset: 'agent-ai', enabled: 1,
+      config: defaultAgentConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const groupId = group === undefined ? null : h.integrations.insert({
+      name: group, kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-group', enabled: 1,
+      config: defaultSmsGroupConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const connectionId = h.agentConnections.insert({ integrationId: agentId, name: 'Ewa Nowak', method: 'token', expiresAt: null, createdBy: 'janek', createdAt: NOW });
+    h.messages.insert({
+      id, apiKeyId, accountId, serviceId: '24138', dest: '48601000011', body: 'Serwis przyjedzie jutro', bodyHash: 'h', encoding: 'gsm', parts: 1, slots: 22,
+      orig: null, costCenter: null, validTo: null, idempotencyKey: null, createdAt: NOW.toISOString(),
+      integrationId: groupId ?? agentId, agentConnectionId: connectionId, requestedBy: 'Ewa Nowak',
+    });
+    return { agentId, connectionId, groupId };
+  }
+
+  it('wiadomość z agenta: źródło „agent Agent AI - marketing · Ewa Nowak” na liście i w szczegółach', async () => {
+    const { agentId } = agentMessage('m_agent', 'Agent AI - marketing');
+    seed('m_api');
+    const list = (await page('/wiadomosci')).body;
+    expect(list).toMatch(/Serwis przyjedzie jutro<div class="dim"[^>]*>agent Agent AI - marketing · Ewa Nowak<\/div>/);
+    // Wysyłka z API nie ma wiersza źródła.
+    expect(list).toMatch(/Przypominamy o wizycie<\/td>/);
+    const detail = (await page('/wiadomosci/m_agent')).body;
+    expect(detail).toContain('<div>Źródło</div><div>agent Agent AI - marketing · Ewa Nowak</div>');
+    expect(detail).toContain(`<div>Połączenie</div><div>Ewa Nowak · <a href="/integracje/${agentId}">Agent AI - marketing</a></div>`);
+    // Nazwa osoby jest w wierszu „Połączenie”, więc „Zlecający” jej nie powtarza.
+    expect(detail).not.toContain('>Zlecający<');
+  });
+
+  it('wiadomość grupy przez agenta: źródło „grupa SERWIS · agent Agent AI - dyspozytornia · Ewa Nowak”', async () => {
+    const { agentId, groupId } = agentMessage('m_grupa', 'Agent AI - dyspozytornia', 'SERWIS');
+    const list = (await page('/wiadomosci')).body;
+    expect(list).toContain('grupa SERWIS · agent Agent AI - dyspozytornia · Ewa Nowak');
+    const detail = (await page('/wiadomosci/m_grupa')).body;
+    expect(detail).toContain('<div>Źródło</div><div>grupa SERWIS · agent Agent AI - dyspozytornia · Ewa Nowak</div>');
+    expect(detail).toContain(`href="/integracje/${groupId}">SERWIS</a>`);
+    expect(detail).toContain(`<div>Połączenie</div><div>Ewa Nowak · <a href="/integracje/${agentId}">Agent AI - dyspozytornia</a></div>`);
+  });
+
+  it('powiadomienie bramki ma źródło „bramka” w szczegółach, a na liście plakietkę bez wiersza źródła', async () => {
+    h.messages.insert({
+      id: 'm_sys', apiKeyId, accountId, serviceId: '24138', dest: '48601000011', body: 'Awaria skrzynki', bodyHash: 'h', encoding: 'gsm', parts: 1, slots: 22,
+      orig: null, costCenter: null, validTo: null, idempotencyKey: null, createdAt: NOW.toISOString(), system: 1,
+    });
+    const list = (await page('/wiadomosci')).body;
+    expect(list).toMatch(/powiadomienie bramki<\/span> Awaria skrzynki<\/td>/);
+    expect((await page('/wiadomosci/m_sys')).body).toContain('<div>Źródło</div><div>bramka</div>');
+  });
+
   it('szczegół wiadomości z integrationId pokazuje wiersz „Integracja” z odnośnikiem', async () => {
     const integrationId = h.integrations.insert({
       name: 'Kuma', kind: 'webhook_in', apiKeyId, serviceId: null, orig: null, preset: 'uptime-kuma', enabled: 1,

@@ -11,6 +11,7 @@ import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import type { AccountsRepo } from '../store/accounts.ts';
 import type { AgentConnectionsRepo } from '../store/agent-connections.ts';
+import type { ConnectionService } from '../agents/connections.ts';
 import type { AdminUsersRepo } from '../store/admin-users.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { AuditRepo } from '../store/audit.ts';
@@ -52,6 +53,7 @@ import { registerUserRoutes } from './routes/users.ts';
 import { registerDeliveryRoutes } from './routes/deliveries.ts';
 import { registerInboundViewRoutes } from './routes/inbound.ts';
 import { registerIntegrationRoutes } from './routes/integrations.ts';
+import { registerAgentConnectionRoutes } from './routes/agent-connections.ts';
 import { registerCampaignRoutes } from './routes/campaigns.ts';
 import { registerLinkRoutes } from './routes/links.ts';
 import { registerMessageViewRoutes } from './routes/messages.ts';
@@ -86,8 +88,10 @@ export interface AdminDeps {
   integrations: IntegrationsRepo;
   integrationEvents: IntegrationEventsRepo;
   guards: IntegrationGuardsRepo;
-  /** Połączenia agentów AI: liczba aktywnych na liście integracji. */
+  /** Połączenia agentów AI: liczba aktywnych na liście integracji, sekcja „Połączenia” i źródło wysyłek. */
   agentConnections: AgentConnectionsRepo;
+  /** Kody, tokeny, odwołanie i usunięcie połączeń agentów z panelu. */
+  connectionService: ConnectionService;
   /** Skracacz: domeny, kampanie i kody; SMS testowy kanału powiadomień przekazuje je do wspólnej drogi wysyłki. */
   linkDomains: LinkDomainsRepo;
   campaigns: CampaignsRepo;
@@ -466,6 +470,7 @@ export function buildAdminServer(deps: AdminDeps): FastifyInstance {
   registerAccountRoutes(app, deps, render);
   registerKeyRoutes(app, deps, render);
   registerIntegrationRoutes(app, deps, render);
+  registerAgentConnectionRoutes(app, deps, render);
   registerLinkRoutes(app, deps, render);
   registerNotificationRoutes(app, deps, render);
   registerSettingsRoutes(app, deps, render);

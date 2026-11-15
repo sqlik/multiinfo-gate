@@ -223,7 +223,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
-    integrationEvents, guards, agentConnections: agentConnectionsRepo, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
+    integrationEvents, guards, agentConnections: agentConnectionsRepo, connectionService: agentConnections, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
     trustedProxies: config.trustedProxies,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate, allowPrivateMail: config.mailAllowPrivate,
     allowPrivateLinks: config.linksAllowPrivate, log, install, nodeVersion, m365, m365Accounts, m365Tokens, ...links, domainChecks,

@@ -18,6 +18,8 @@ import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { InboundServicesRepo } from '../../src/store/inbound-services.ts';
 import { IntegrationsRepo } from '../../src/store/integrations.ts';
 import { AgentConnectionsRepo } from '../../src/store/agent-connections.ts';
+import { OAuthRepo } from '../../src/store/oauth.ts';
+import { ConnectionService } from '../../src/agents/connections.ts';
 import { IntegrationEventsRepo } from '../../src/store/integration-events.ts';
 import { IntegrationGuardsRepo } from '../../src/store/integration-guards.ts';
 import { MailInRepo } from '../../src/store/mail-in.ts';
@@ -54,6 +56,10 @@ export interface AdminHarness {
   integrationEvents: IntegrationEventsRepo;
   guards: IntegrationGuardsRepo;
   agentConnections: AgentConnectionsRepo;
+  /** Usługa połączeń agentów na wspólnej bazie: kody, tokeny, odwołanie. */
+  connectionService: ConnectionService;
+  /** Tokeny OAuth połączeń: odwołanie z panelu je usuwa. */
+  oauth: OAuthRepo;
   mailIn: MailInRepo;
   /** Repozytoria skracacza: domeny, kampanie i kody. */
   linkDomains: ReturnType<typeof linkDeps>['linkDomains'];
@@ -141,6 +147,8 @@ export async function startAdminHarness(
   const integrationEvents = new IntegrationEventsRepo(db, masterKey);
   const guards = new IntegrationGuardsRepo(db);
   const agentConnections = new AgentConnectionsRepo(db);
+  const oauth = new OAuthRepo(db);
+  const connectionService = new ConnectionService({ connections: agentConnections, oauth, integrations, apiKeys, accounts });
   const mailIn = new MailInRepo(db);
   const links = linkDeps(db);
   const mailbox = new FakeMailbox({ password: 'TajneHaslo9', uidValidity: 7 });
@@ -188,7 +196,7 @@ export async function startAdminHarness(
   };
   const app = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, receiver,
-    integrationEvents, guards, agentConnections, mailIn, mailboxConnect: fakeConnect(mailbox), engine: new TemplateEngine(), notifications, settings, notifier,
+    integrationEvents, guards, agentConnections, connectionService, mailIn, mailboxConnect: fakeConnect(mailbox), engine: new TemplateEngine(), notifications, settings, notifier,
     m365, m365Accounts, m365Tokens, ...links, domainChecks,
     domainFetch: ((input, init) => domainNet.fetch(input, init)) as typeof fetch,
     mailer: async (settings, mail) => { mailSettings.push(settings); if (harness.mailError) throw harness.mailError; mails.push(mail); },
@@ -206,7 +214,7 @@ export async function startAdminHarness(
 
   return {
     app, db, accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, refreshed,
-    integrationEvents, guards, agentConnections, mailIn, ...links, mailbox, notifications, settings, notified, mails, mailSettings, m365Accounts, m365, m365Forms, m365Reply,
+    integrationEvents, guards, agentConnections, connectionService, oauth, mailIn, ...links, mailbox, notifications, settings, notified, mails, mailSettings, m365Accounts, m365, m365Forms, m365Reply,
     get mailError() { return harness.mailError; },
     set mailError(e: Error | null) { harness.mailError = e; },
     sessions, userId, masterKey,

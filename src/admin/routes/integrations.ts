@@ -15,6 +15,7 @@ import { paConfigToValues, paFormToConfig, paFormValues, type PaFormValues } fro
 import { paFormPage, type PaFormOptions } from '../views/integration-power-automate.ts';
 import { agentConfigToValues, agentFormToConfig, agentFormValues, type AgentFormValues } from '../agent-form.ts';
 import { agentFormPage, type AgentFormOptions } from '../views/integration-agent.ts';
+import { connectionItems } from './agent-connections.ts';
 import { needsWarning } from '../../agents/scopes.ts';
 import { PRIVATE_MAIL_MESSAGE, PRIVATE_TARGET_MESSAGE, hostTarget, systemResolver, webhookTarget } from '../../net/private-address.ts';
 import { guardedConnect, type MailboxAuth } from '../../integrations/mail/client.ts';
@@ -748,6 +749,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       body: integrationDetailPage({
         view: viewOf(row, since), events, apiUrl: deps.settings.apiUrl(),
         simple: simpleLabels(presetOf(row), row.kind, valuesOf(row, null)),
+        ...(row.kind === 'agent' ? { connections: connectionItems(deps, row, now()) } : {}),
       }),
     });
   });
