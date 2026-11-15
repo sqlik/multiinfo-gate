@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { ApiKeysRepo, ApiKeyRow } from '../store/api-keys.ts';
 import { lastValidDay } from '../time/warsaw.ts';
+import { ACCESS_TOKEN_PREFIX, CONNECTION_TOKEN_PREFIX } from '../agents/codes.ts';
 import { API_KEY_PREFIX, hashApiKey, prefixOf } from './keys.ts';
 
 export interface AuthContext {
@@ -45,6 +46,9 @@ export function authenticate(
   }
 
   const key = match[2]!;
+  if (key.startsWith(CONNECTION_TOKEN_PREFIX) || key.startsWith(ACCESS_TOKEN_PREFIX)) {
+    throw new AuthError(401, 'agent_token', 'Token połączenia agenta AI działa wyłącznie pod adresem /mcp. Do API użyj klucza API.');
+  }
   const prefix = prefixOf(key);
   if (!prefix) throw new AuthError(401, 'invalid_api_key', 'Klucz API ma nieprawidłowy format.');
 

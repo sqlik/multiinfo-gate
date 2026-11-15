@@ -9,6 +9,19 @@ import { OAuthRepo } from '../../src/store/oauth.ts';
 import { SettingsRepo } from '../../src/store/settings.ts';
 import { AuditRepo } from '../../src/store/audit.ts';
 import type { OAuthDeps } from '../../src/oauth/routes.ts';
+import { RateLimiter } from '../../src/api/rate-limit.ts';
+import type { AgentServerDeps, ApiDeps } from '../../src/api/server.ts';
+import type { Logger } from '../../src/log.ts';
+import { McpSessions } from '../../src/mcp/sessions.ts';
+import type { AgentToolDeps, ToolDef } from '../../src/mcp/tools.ts';
+import { AgentDraftsRepo } from '../../src/store/agent-drafts.ts';
+import { DownloadLinksRepo } from '../../src/store/download-links.ts';
+import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
+import { JobsRepo } from '../../src/store/jobs.ts';
+import { MessageEventsRepo } from '../../src/store/message-events.ts';
+import { MessagesRepo } from '../../src/store/messages.ts';
+import { PackagesRepo } from '../../src/store/packages.ts';
+import { integrationDeps } from './api-deps.ts';
 import { accountInput } from '../store/helpers.ts';
 
 /** Chwila, w której pomocnik zakłada integrację i połączenie. */
@@ -54,4 +67,30 @@ export function oauthDeps(db: Database, masterKey: Buffer, over: Partial<OAuthDe
     settings, oauth, connectionsRepo, connections, audit: new AuditRepo(db), masterKey,
     resolve: async () => ['198.51.100.20'], fetchMetadata: async () => ({ status: 404, body: '' }), now: () => AGENT_SEED_AT, ...rest,
   };
+}
+
+/** Zależności agentów w serwerze API: OAuth, szkice, linki do pobrania i sesje MCP. */
+export function agentServerDeps(db: Database, masterKey: Buffer, over: Partial<AgentServerDeps> & { apiUrl?: string | null } = {}): AgentServerDeps {
+  return { drafts: new AgentDraftsRepo(db), downloads: new DownloadLinksRepo(db), sessions: new McpSessions(), ...oauthDeps(db, masterKey, over) } as AgentServerDeps;
+}
+
+/** Pełne zależności serwera API z agentami na wspólnej bazie i wspólnym zegarze. */
+export function agentApiDeps(db: Database, masterKey: Buffer, over: {
+  now?: () => Date; apiUrl?: string | null; tools?: readonly ToolDef[]; log?: Logger;
+} = {}): ApiDeps & { agents: AgentServerDeps } {
+  const now = over.now ?? (() => AGENT_SEED_AT);
+  const agents = agentServerDeps(db, masterKey, {
+    now, ...(over.apiUrl !== undefined ? { apiUrl: over.apiUrl } : {}), ...(over.tools ? { tools: over.tools } : {}), ...(over.log ? { log: over.log } : {}),
+  });
+  return {
+    accounts: new AccountsRepo(db, masterKey), apiKeys: new ApiKeysRepo(db, masterKey), messages: new MessagesRepo(db), events: new MessageEventsRepo(db),
+    packages: new PackagesRepo(db), jobs: new JobsRepo(db), clients: {} as never, inbound: new InboundMessagesRepo(db),
+    rateLimiter: new RateLimiter(() => now().getTime()), ...integrationDeps(db, masterKey), agents, now, ...(over.log ? { log: over.log } : {}),
+  };
+}
+
+/** To, co serwer API przekazuje narzędziom MCP. */
+export function agentToolDeps(db: Database, masterKey: Buffer, over: Parameters<typeof agentApiDeps>[2] = {}): AgentToolDeps {
+  const deps = agentApiDeps(db, masterKey, over);
+  return { ...deps, ...deps.agents };
 }

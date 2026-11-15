@@ -20,6 +20,10 @@ import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
 import type { AgentDraftsRepo } from '../store/agent-drafts.ts';
 import type { DownloadLinksRepo } from '../store/download-links.ts';
 import { registerOAuthRoutes, type OAuthDeps } from '../oauth/routes.ts';
+import { AGENT_TOOLS, registerMcpRoutes } from '../mcp/server.ts';
+import type { McpSessions } from '../mcp/sessions.ts';
+import type { ToolDef } from '../mcp/tools.ts';
+import { RPC, rpcError } from '../mcp/protocol.ts';
 import type { CampaignsRepo } from '../store/campaigns.ts';
 import type { LinkDomainsRepo } from '../store/link-domains.ts';
 import type { ShortLinksRepo } from '../store/short-links.ts';
@@ -41,6 +45,10 @@ import type { RateLimiter } from './rate-limit.ts';
 export interface AgentServerDeps extends OAuthDeps {
   drafts: AgentDraftsRepo;
   downloads: DownloadLinksRepo;
+  /** Sesje MCP ery poprzedniej. */
+  sessions: McpSessions;
+  /** Rejestr narzędzi MCP; domyślnie AGENT_TOOLS, testy podstawiają narzędzia próbne. */
+  tools?: readonly ToolDef[];
 }
 
 export interface ApiDeps {
@@ -113,6 +121,13 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
       if (status === 413) return reply.code(413).send({ accepted: false, reason: 'too_large' });
       if (status === 400 || status === 415) return reply.code(400).send({ accepted: false, reason: 'invalid_body' });
     }
+    if (_request.url.split('?')[0] === '/mcp') {
+      // Serwer MCP odpowiada błędem JSON-RPC także wtedy, gdy Fastify odrzuci treść przed trasą.
+      const status = (error as { statusCode?: number }).statusCode;
+      if (status === 400) return reply.code(400).send(rpcError(null, RPC.parse, 'Treść żądania nie jest poprawnym dokumentem JSON.'));
+      if (status === 413) return reply.code(413).send(rpcError(null, RPC.invalidRequest, `Treść żądania przekracza ${sizeLabel(API_BODY_LIMIT)}.`));
+      if (status === 415) return reply.code(415).send(rpcError(null, RPC.invalidRequest, 'Treść żądania musi mieć format JSON (Content-Type: application/json).'));
+    }
     if (_request.url.startsWith('/oauth/')) {
       // Punkty OAuth odpowiadają błędem w kształcie RFC 6749, a nie strukturą błędów API.
       const status = (error as { statusCode?: number }).statusCode;
@@ -150,7 +165,10 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
   registerPaIntegrationRoutes(app, deps);
   registerInboundRoutes(app, deps);
   registerHookRoutes(app, deps);
-  if (deps.agents) registerOAuthRoutes(app, deps.agents);
+  if (deps.agents) {
+    registerOAuthRoutes(app, deps.agents);
+    registerMcpRoutes(app, { ...deps, ...deps.agents }, deps.agents.tools ?? AGENT_TOOLS);
+  }
   registerHealthRoute(
     app,
     {

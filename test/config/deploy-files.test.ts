@@ -81,6 +81,23 @@ describe('pliki wdrożenia skracacza', () => {
   });
 });
 
+describe('pliki wdrożenia agentów AI', () => {
+  it('Caddy, nginx i Traefik przepuszczają Authorization, WWW-Authenticate i Mcp-Session-Id', () => {
+    const headers = /Authorization|WWW-Authenticate|Mcp-Session-Id/i;
+    const caddy = read('docker/Caddyfile');
+    // Domena bramki trafia w całości do portu API, bez dopasowań ścieżek i bez zmiany nagłówków.
+    expect(caddy).toMatch(/^\{\$MIG_DOMENA\} \{\n\treverse_proxy multiinfo-gate:8080\n\}$/m);
+    expect(caddy).not.toMatch(/header_(up|down)|header\s+-/);
+    const nginx = read('docker/nginx/multiinfo-gate.conf');
+    expect(nginx.match(/location\s+\S+/g)).toEqual(['location /']);
+    expect(nginx).toMatch(/proxy_pass http:\/\/127\.0\.0\.1:8080;/);
+    expect(nginx.split('\n').filter((l) => /proxy_(hide|set)_header|more_clear/.test(l) && headers.test(l))).toEqual([]);
+    const traefik = read('docker/docker-compose.traefik.yml');
+    expect(traefik).toMatch(/traefik\.http\.routers\.multiinfo-gate\.rule: "Host\(`\$\{MIG_DOMENA:\?[^}]*\}`\)"$/m);
+    expect(traefik).not.toMatch(/middlewares|PathPrefix|customrequestheaders|customresponseheaders/i);
+  });
+});
+
 describe('obraz Dockera', () => {
   // `docker compose exec multiinfo-gate npm run admin:dodaj` z instrukcji uruchomienia: npm w kontenerze
   // dopisywał pod komunikatem o założeniu konta zachętę do aktualizacji npm.

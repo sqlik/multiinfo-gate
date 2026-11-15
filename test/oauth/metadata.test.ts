@@ -7,17 +7,15 @@ import { buildApiServer } from '../../src/api/server.ts';
 import { authorizationServerMetadata, gatewayBase, protectedResourceMetadata } from '../../src/oauth/metadata.ts';
 import { registerOAuthRoutes } from '../../src/oauth/routes.ts';
 import { AccountsRepo } from '../../src/store/accounts.ts';
-import { AgentDraftsRepo } from '../../src/store/agent-drafts.ts';
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
 import { openDatabase } from '../../src/store/db.ts';
-import { DownloadLinksRepo } from '../../src/store/download-links.ts';
 import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
 import { MessageEventsRepo } from '../../src/store/message-events.ts';
 import { MessagesRepo } from '../../src/store/messages.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { integrationDeps } from '../helpers/api-deps.ts';
-import { oauthDeps } from '../helpers/agent.ts';
+import { agentServerDeps, oauthDeps } from '../helpers/agent.ts';
 
 const BASE = 'https://bramka.serwis.example';
 let db: Database;
@@ -101,7 +99,7 @@ describe('metadane', () => {
     };
     const without = buildApiServer(base);
     expect((await without.inject({ method: 'GET', url: '/.well-known/oauth-authorization-server' })).statusCode).toBe(404);
-    const withAgents = buildApiServer({ ...base, agents: { ...oauthDeps(db, key), drafts: new AgentDraftsRepo(db), downloads: new DownloadLinksRepo(db) } });
+    const withAgents = buildApiServer({ ...base, agents: agentServerDeps(db, key) });
     expect((await withAgents.inject({ method: 'GET', url: '/.well-known/oauth-authorization-server' })).statusCode).toBe(200);
     const broken = await withAgents.inject({ method: 'POST', url: '/oauth/register', headers: { 'content-type': 'application/json' }, payload: '{nie json' });
     expect([broken.statusCode, broken.json().error]).toEqual([400, 'invalid_request']);

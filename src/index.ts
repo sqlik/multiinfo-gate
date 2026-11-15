@@ -12,6 +12,7 @@ import { AgentConnectionsRepo } from './store/agent-connections.ts';
 import { AgentDraftsRepo } from './store/agent-drafts.ts';
 import { DownloadLinksRepo } from './store/download-links.ts';
 import { OAuthRepo } from './store/oauth.ts';
+import { McpSessions } from './mcp/sessions.ts';
 import { loadEnv, MissingMasterKeyError, type AppConfig } from './config/env.ts';
 import { detectInstall, type InstallKind } from './config/install.ts';
 import { Receiver } from './inbound/receiver.ts';
@@ -206,7 +207,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const agentConnections = new ConnectionService({ connections: agentConnectionsRepo, oauth, integrations, apiKeys, accounts });
   const agents: AgentServerDeps = {
     settings, oauth, connectionsRepo: agentConnectionsRepo, connections: agentConnections, audit, notifier, masterKey: config.masterKey,
-    resolve: systemResolver, log, drafts: new AgentDraftsRepo(db), downloads: new DownloadLinksRepo(db),
+    resolve: systemResolver, log, drafts: new AgentDraftsRepo(db), downloads: new DownloadLinksRepo(db), sessions: new McpSessions(),
   };
   const api = buildApiServer({
     accounts, apiKeys, messages, events, packages, jobs, clients, inbound, rateLimiter: new RateLimiter(), log,
