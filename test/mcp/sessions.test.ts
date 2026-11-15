@@ -30,6 +30,22 @@ describe('sesje MCP ery poprzedniej', () => {
     expect(sessions.get(s.id, 1)).toBeUndefined();
   });
 
+  it('ponad 20 sesji jednego połączenia ustępuje najstarsza sesja tego połączenia, sesje innych zostają', () => {
+    let now = 0;
+    const sessions = new McpSessions({ now: () => now });
+    const other = sessions.create(2, false, '2025-11-25');
+    const own = Array.from({ length: 20 }, () => { now += 1; return sessions.create(1, false, '2025-11-25'); });
+    now += 1;
+    sessions.get(own[0]!.id, 1);
+    now += 1;
+    const extra = sessions.create(1, false, '2025-11-25');
+    expect(sessions.get(other.id, 2)).toBeDefined();
+    expect(sessions.get(own[0]!.id, 1)).toBeDefined();
+    expect(sessions.get(own[1]!.id, 1)).toBeUndefined();
+    expect(sessions.get(extra.id, 1)).toBeDefined();
+    expect(own.slice(2).every((s) => sessions.get(s.id, 1) !== undefined)).toBe(true);
+  });
+
   it('ponad limit sesji ustępuje najdawniej używana', () => {
     let now = 0;
     const sessions = new McpSessions({ max: 2, now: () => now });
