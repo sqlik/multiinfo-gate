@@ -87,6 +87,15 @@ describe('widok wyników kampanii', () => {
     expect(html).toContain('https://serwis.pl/przeglad');
   });
 
+  it('renderCampaign: odbiorcy bez otwarcia z numerem przy lewej krawędzi, identyfikator klienta tylko wtedy, gdy istnieje', () => {
+    const list = (html: string) => /<div class="recips">([\s\S]*?)<\/div><div class="row">/.exec(html)![1]!;
+    const withIds = list(renderCampaign(CAMPAIGN));
+    expect(withIds).toContain('<div><span class="mono">+48 601 000 051</span><span class="muted">K-1042</span></div>');
+    expect(withIds).toContain('<div><span class="mono">+48 601 000 052</span></div>');
+    const bare = list(renderCampaign({ ...CAMPAIGN, unopened: { ...CAMPAIGN.unopened, items: [{ to: '48601000053', clientId: null }] } }));
+    expect(bare).toBe('<div><span class="mono">+48 601 000 053</span></div>');
+  });
+
   it('renderCampaign: tryb godzin pokazuje kliknięcia od godziny pierwszej wysyłki w czasie polskim', () => {
     const html = renderCampaign(CAMPAIGN, { mode: 'hours' });
     expect(html).toContain('<title>2026-11-05 09:00, kliknięcia: 38</title>');

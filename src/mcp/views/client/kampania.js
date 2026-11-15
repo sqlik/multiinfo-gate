@@ -85,8 +85,9 @@ function targetsTable(targets) {
 function unopenedPanel(d, busy) {
   const u = d.unopened;
   if (u === null) return '';
-  const list = u.items.length === 0 ? '' : `<div class="recips">${u.items.map((r) => `<div><span>${esc(r.clientId ?? '')}</span>`
-    + `<span class="mono">${esc(phoneLabel(r.to))}</span></div>`).join('')}</div>`;
+  // Numer przy lewej krawędzi, a identyfikator klienta obok, tylko gdy kampania go zapisała.
+  const list = u.items.length === 0 ? '' : `<div class="recips">${u.items.map((r) => `<div><span class="mono">${esc(phoneLabel(r.to))}</span>`
+    + `${r.clientId ? `<span class="muted">${esc(r.clientId)}</span>` : ''}</div>`).join('')}</div>`;
   const more = u.hasMore ? `<button type="button" class="btn" data-act="more"${off(busy)}>Pokaż kolejnych odbiorców</button>` : '';
   const remind = u.total > 0
     ? `<button type="button" class="btn btn-primary" data-act="remind"${off(busy)}>Przygotuj przypomnienie dla odbiorców bez otwarcia</button>` : '';
