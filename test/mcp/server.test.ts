@@ -323,7 +323,7 @@ describe('zasoby widoków', () => {
     expect((await legacy(session, rpc(2, 'resources/read', { uri: 'ui://multiinfo-gate/co-moge' }))).json().result).toEqual(expected);
     const modernRead = (await modern('resources/read', { uri: 'ui://multiinfo-gate/co-moge' }, { caps: APPS })).json().result;
     expect(modernRead).toEqual({ resultType: 'complete', ...expected, ttlMs: 3_600_000, cacheScope: 'private' });
-    expect((await legacy(session, rpc(3, 'resources/read', { uri: 'ui://multiinfo-gate/wysylka' }))).json().error.code).toBe(-32002);
+    expect((await legacy(session, rpc(3, 'resources/read', { uri: 'ui://multiinfo-gate/nieznany' }))).json().error.code).toBe(-32002);
     expect((await legacy(session, rpc(4, 'resources/read', { uri: 'ui://multiinfo-gate/../co-moge' }))).json().error.code).toBe(-32002);
   });
 });

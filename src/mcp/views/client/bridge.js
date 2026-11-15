@@ -21,6 +21,44 @@ export function stamp(iso) {
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
+/** Forma rzeczownika po liczebniku: 1 część, 2 części, 5 części. */
+export function pluralWord(n, one, few, many) {
+  if (n === 1) return one;
+  const tens = n % 100;
+  return n % 10 >= 2 && n % 10 <= 4 && (tens < 12 || tens > 14) ? few : many;
+}
+
+/** Liczebnik z rzeczownikiem: 1 SMS, 2 SMS-y, 12 SMS-ów. */
+export const plural = (n, one, few, many) => `${n} ${pluralWord(n, one, few, many)}`;
+
+/** Tekst wyniku narzędzia, także komunikat błędu. */
+export const textOf = (result) => (result?.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join(' ');
+
+/** Plakietka stanu: ok, wait, fail albo plain. */
+export const badge = (tone, text) => `<span class="badge b-${tone}">${esc(text)}</span>`;
+
+/** Notatka pod polem albo sekcją. */
+export const note = (text) => `<p class="note">${esc(text)}</p>`;
+
+/** Numer w zapisie czytelnym: 48601000021 jako +48 601 000 021, inne numery bez zmian. */
+export function phoneLabel(phone) {
+  const p = String(phone ?? '');
+  return /^48\d{9}$/.test(p) ? `+48 ${p.slice(2, 5)} ${p.slice(5, 8)} ${p.slice(8)}` : p;
+}
+
+/** Komunikat pod widokiem w elemencie #komunikat; pusty tekst ukrywa komunikat. */
+export function sayIn(doc) {
+  const notice = doc.getElementById('komunikat');
+  return (tone, text) => {
+    notice.hidden = !text;
+    notice.className = `notice n-${tone}`;
+    notice.textContent = text;
+  };
+}
+
+/** Komunikat o wywołaniu przerwanym przez aplikację. */
+export const cancelledText = (reason) => (reason ? `Aplikacja AI przerwała wywołanie narzędzia: ${reason}` : 'Aplikacja AI przerwała wywołanie narzędzia');
+
 /** Motyw aplikacji w dokumencie widoku; bez motywu widok kieruje się ustawieniem systemu. */
 export function applyTheme(doc, context) {
   const theme = context && (context.theme === 'dark' || context.theme === 'light') ? context.theme : null;

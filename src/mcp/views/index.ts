@@ -7,27 +7,38 @@ import { GATE_VERSION } from '../../version.ts';
 import { APP_MIME } from '../apps.ts';
 import { VIEW_STYLE } from './style.ts';
 
-/** Widoki MCP Apps bramki. Zadania 14 i 15 dopisują dokumenty pozostałych widoków. */
+/** Widoki MCP Apps bramki. Zadanie 15 dopisuje dokumenty widoków kampanii, rozsyłki i odpowiedzi. */
 export type ViewId = 'wysylka' | 'grupa' | 'przebieg' | 'co-moge' | 'kampania' | 'rozsylka' | 'odpowiedzi';
 
 export const viewUri = (id: ViewId): string => `ui://multiinfo-gate/${id}`;
 
 interface ViewDef {
   title: string;
-  /** Pliki z `client/` po moście, w kolejności wklejenia; ostatni eksportuje `start(win, env)`. */
+  /** Pliki z `client/` po moście, w kolejności wklejenia; pliki dzielą jeden moduł, więc nazwy nie mogą się powtarzać. */
   files: readonly string[];
+  /** Funkcja uruchamiająca widok, `(win, env)`, z jednego z plików. */
+  entry: string;
   /** Przyciski w nagłówku widoku. */
   tools: string;
   body: string;
 }
 
+const NOTICE = '<div class="foot"><p id="komunikat" class="notice" role="status" hidden></p></div>';
+const waiting = (text: string) => `<main id="tresc" class="body"><p class="muted">${text}</p></main>${NOTICE}`;
+
 const VIEWS: Partial<Record<ViewId, ViewDef>> = {
   'co-moge': {
     title: 'Co mogę?',
     files: ['co-moge.js'],
+    entry: 'start',
     tools: '<button type="button" id="odswiez" class="btn">Odśwież</button>',
-    body: '<main id="tresc" class="body"><p class="muted">Oczekiwanie na dane połączenia z bramki</p></main>'
-      + '<div class="foot"><p id="komunikat" class="notice" role="status" hidden></p></div>',
+    body: waiting('Oczekiwanie na dane połączenia z bramki'),
+  },
+  wysylka: { title: 'Wysyłka SMS', files: ['measure.js', 'send.js'], entry: 'startSend', tools: '', body: waiting('Oczekiwanie na podgląd SMS-a z bramki') },
+  grupa: { title: 'SMS do grupy', files: ['grupa.js'], entry: 'startGroup', tools: '', body: waiting('Oczekiwanie na podgląd SMS-a do grupy z bramki') },
+  przebieg: {
+    title: 'Przebieg doręczenia', files: ['measure.js', 'send.js', 'przebieg.js'], entry: 'startTrace',
+    tools: '<button type="button" id="odswiez" class="btn">Odśwież</button>', body: waiting('Oczekiwanie na przebieg doręczenia z bramki'),
   },
 };
 
@@ -73,7 +84,7 @@ export function viewHtml(id: ViewId): string {
   const def = VIEWS[id];
   if (!def) throw new Error(`Widok ${id} nie ma dokumentu.`);
   const env = { version: GATE_VERSION, scopes: SCOPE_LABELS };
-  const script = [client('bridge.js'), ...def.files.map(client), `start(window, ${scriptJson(env)});`].join('\n');
+  const script = [client('bridge.js'), ...def.files.map(client), `${def.entry}(window, ${scriptJson(env)});`].join('\n');
   const html = '<!doctype html><html lang="pl"><head><meta charset="utf-8">'
     + '<meta name="viewport" content="width=device-width, initial-scale=1">'
     + `<title>${esc(def.title)} - Multiinfo Gate</title><style>${VIEW_STYLE}</style></head><body>`

@@ -98,10 +98,13 @@ describe('dokumenty widoków', () => {
 
   it('zasoby widoków: adres ui://multiinfo-gate, typ APP_MIME i _meta.ui bez domen zewnętrznych', () => {
     expect(viewUri('co-moge')).toBe('ui://multiinfo-gate/co-moge');
-    expect(viewResources()).toEqual([{
-      uri: 'ui://multiinfo-gate/co-moge', name: 'co-moge', title: 'Co mogę?', mimeType: APP_MIME,
-      _meta: { ui: { csp: { connectDomains: [], resourceDomains: [] }, prefersBorder: true } },
-    }]);
+    const meta = { ui: { csp: { connectDomains: [], resourceDomains: [] }, prefersBorder: true } };
+    expect(viewResources()).toEqual([
+      { uri: 'ui://multiinfo-gate/co-moge', name: 'co-moge', title: 'Co mogę?', mimeType: APP_MIME, _meta: meta },
+      { uri: 'ui://multiinfo-gate/wysylka', name: 'wysylka', title: 'Wysyłka SMS', mimeType: APP_MIME, _meta: meta },
+      { uri: 'ui://multiinfo-gate/grupa', name: 'grupa', title: 'SMS do grupy', mimeType: APP_MIME, _meta: meta },
+      { uri: 'ui://multiinfo-gate/przebieg', name: 'przebieg', title: 'Przebieg doręczenia', mimeType: APP_MIME, _meta: meta },
+    ]);
   });
 
   it('skrypt build kopiuje src/mcp/views/client do dist/mcp/views/client', () => {

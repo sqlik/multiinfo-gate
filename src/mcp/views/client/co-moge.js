@@ -1,10 +1,8 @@
 // Widok „Co mogę?”: uprawnienia, usługi, limity i ważność połączenia według wyniku connection_status.
 // Odświeżenie woła to samo narzędzie przez aplikację AI, bez kolejnego pytania do agenta.
-import { applyTheme, createBridge, esc, stamp } from './bridge.js';
+import { applyTheme, badge, createBridge, esc, note, stamp, textOf } from './bridge.js';
 
-const badge = (tone, text) => `<span class="badge b-${tone}">${esc(text)}</span>`;
 const box = (title, inner) => `<section class="box"><h2>${esc(title)}</h2>${inner}</section>`;
-const note = (text) => `<p class="note">${esc(text)}</p>`;
 
 function unavailable(data) {
   return `<p class="who">Połączenie <b>${esc(data.connection)}</b> w integracji <b>${esc(data.integration)}</b></p>`
@@ -45,8 +43,6 @@ export function renderStatus(data, env = {}) {
     + `<div class="grid">${box('Uprawnienia połączenia', scopes)}${box('Usługi Multiinfo', services)}`
     + `${box('Limity i ochrona przed burzą', limits)}${box('Grupy SMS', groups)}</div>`;
 }
-
-const textOf = (result) => (result.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join(' ');
 
 /** Uruchomienie widoku w dokumencie: most, rysowanie wyniku i przycisk „Odśwież”. */
 export function start(win, env) {
