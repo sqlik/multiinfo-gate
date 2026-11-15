@@ -280,3 +280,20 @@ describe('ShortLinksRepo', () => {
     });
   });
 });
+
+describe('ShortLinksRepo: odczyty agenta', () => {
+  it('firstOpens podaje pierwsze otwarcie każdego odbiorcy, a recipientsPage odbiorców porcjami', () => {
+    const { links, campaignId, input } = setup();
+    links.insert(input('aB3xK9q', { recipientKey: 'msg_a', messageId: 'msg_a', dest: '48601000051' }));
+    links.insert(input('aB3xK9r', { recipientKey: 'msg_a', messageId: 'msg_a', dest: '48601000051' }));
+    links.insert(input('cD4yL0s', { recipientKey: 'msg_b', messageId: 'msg_b', dest: '48601000052' }));
+    links.insert(input('eF5zM1t', { recipientKey: 'msg_c', messageId: 'msg_c', dest: '48601000053' }));
+    links.insert(input('gH6aN2u', { recipientKey: 'msg_d', messageId: 'msg_d', dest: '48601000054' }));
+    links.click('aB3xK9r', t(7), false);
+    links.click('aB3xK9q', t(5), false);
+    links.click('cD4yL0s', t(6), true);
+    expect(links.firstOpens(campaignId)).toEqual([t(5).toISOString()]);
+    expect(links.recipientsPage(campaignId, 'unopened', 1, 1)).toEqual({ total: 3, items: [{ dest: '48601000053', clientId: null }] });
+    expect(links.recipientsPage(campaignId, 'opened', 0, 10)).toEqual({ total: 1, items: [{ dest: '48601000051', clientId: null }] });
+  });
+});

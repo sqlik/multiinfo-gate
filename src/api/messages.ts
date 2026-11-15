@@ -84,7 +84,7 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
       throw new ApiError(404, 'message_not_found', 'Nie ma wiadomości o tym identyfikatorze.');
     }
     const links = messageLinks(deps, message);
-    return links === undefined ? present(message) : { ...present(message), links };
+    return links === undefined ? presentMessage(message) : { ...presentMessage(message), links };
   });
 
   app.get<{ Querystring: Record<string, string> }>('/v1/messages', async (request) => {
@@ -104,12 +104,12 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
       offset,
     });
 
-    return { data: rows.slice(0, limit).map(present), hasMore: rows.length > limit };
+    return { data: rows.slice(0, limit).map(presentMessage), hasMore: rows.length > limit };
   });
 }
 
-/** Kształt wiadomości widziany z zewnątrz. Treść pokazujemy tylko, jeśli jest przechowywana. */
-function present(m: MessageRow) {
+/** Kształt wiadomości widziany z zewnątrz, w API i w odczytach agenta. Treść pokazujemy tylko, jeśli jest przechowywana. */
+export function presentMessage(m: MessageRow) {
   return {
     id: m.id,
     status: m.status,

@@ -1,6 +1,6 @@
 import type { Database } from 'better-sqlite3';
 import type { ReportRow } from '../multiinfo/report.ts';
-import { mapStatus, type GatewayStatus } from '../multiinfo/status.ts';
+import { describeReportStatus, mapStatus, type GatewayStatus } from '../multiinfo/status.ts';
 
 export type PackageStatus = 'queued' | 'open' | 'sending' | 'completed' | 'cancelled' | 'failed';
 export type ReportStatus = 'none' | 'pending' | 'ready' | 'failed';
@@ -149,11 +149,67 @@ export class PackagesRepo {
     return rows.map(toRow);
   }
 
-  recipients(id: string, limit = 100_000): RecipientRow[] {
+  recipients(id: string, limit = 100_000, offset = 0): RecipientRow[] {
     const rows = this.db
-      .prepare('SELECT * FROM package_recipients WHERE package_id = ? ORDER BY seq LIMIT ?')
-      .all(id, limit) as RawRecipient[];
+      .prepare('SELECT * FROM package_recipients WHERE package_id = ? ORDER BY seq LIMIT ? OFFSET ?')
+      .all(id, limit, offset) as RawRecipient[];
     return rows.map(toRecipient);
+  }
+
+  /** Odbiorcy rozsyłek klucza o tym numerze, z rozsyłek utworzonych w przedziale, od najnowszej rozsyłki. */
+  recipientsTo(apiKeyId: number, dest: string, from: string, until: string): Array<RecipientRow & { packageId: string }> {
+    const rows = this.db
+      .prepare(`SELECT r.*, r.package_id AS package_id FROM package_recipients r JOIN packages p ON p.id = r.package_id
+                WHERE p.api_key_id = ? AND p.created_at >= ? AND p.created_at <= ? AND r.dest = ?
+                ORDER BY p.created_at DESC, p.id DESC, r.seq`)
+      .all(apiKeyId, from, until, dest) as Array<RawRecipient & { package_id: string }>;
+    return rows.map((r) => ({ ...toRecipient(r), packageId: r.package_id }));
+  }
+
+  /** Najpóźniejsza rozsyłka klucza do tego numeru utworzona przed `before`, nie wcześniej niż `since`. */
+  lastRecipientBefore(apiKeyId: number, dest: string, before: Date, since: Date): { packageId: string; createdAt: string } | undefined {
+    const row = this.db
+      .prepare(`SELECT p.id AS package_id, p.created_at AS created_at FROM packages p
+                WHERE p.api_key_id = ? AND p.created_at < ? AND p.created_at >= ?
+                  AND EXISTS (SELECT 1 FROM package_recipients r WHERE r.package_id = p.id AND r.dest = ?)
+                ORDER BY p.created_at DESC, p.id DESC LIMIT 1`)
+      .get(apiKeyId, before.toISOString(), since.toISOString(), dest) as { package_id: string; created_at: string } | undefined;
+    return row ? { packageId: row.package_id, createdAt: row.created_at } : undefined;
+  }
+
+  /**
+   * Zestawienie raportu: odbiorcy w stanach (bez pozycji w raporcie jako `unknown`), przyczyny niedoręczeń według
+   * stanu z raportu z liczbami oraz doręczenia w kolejnych godzinach według daty stanu, która jest czasem polskim.
+   */
+  reportBreakdown(id: string): {
+    byStatus: Record<string, number>;
+    reasons: Array<{ miStatus: number | null; description: string; count: number }>;
+    deliveredByHour: Array<{ hour: string; count: number }>;
+  } {
+    const states = this.db
+      .prepare(`SELECT COALESCE(status, 'unknown') AS status, COUNT(*) AS n FROM package_recipients WHERE package_id = ?
+                GROUP BY COALESCE(status, 'unknown') ORDER BY n DESC, status`)
+      .all(id) as Array<{ status: string; n: number }>;
+    const reasons = this.db
+      .prepare(`SELECT mi_status, status IS NULL AS missing, COUNT(*) AS n FROM package_recipients
+                WHERE package_id = ? AND (status IS NULL OR status <> 'delivered')
+                GROUP BY mi_status, status IS NULL ORDER BY n DESC, mi_status IS NULL, mi_status`)
+      .all(id) as Array<{ mi_status: number | null; missing: 0 | 1; n: number }>;
+    const hours = this.db
+      .prepare(`SELECT substr(status_changed_at, 1, 13) || ':00' AS hour, COUNT(*) AS n FROM package_recipients
+                WHERE package_id = ? AND status = 'delivered'
+                  AND status_changed_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]*'
+                GROUP BY hour ORDER BY hour`)
+      .all(id) as Array<{ hour: string; n: number }>;
+    return {
+      byStatus: Object.fromEntries(states.map((r) => [r.status, r.n])),
+      reasons: reasons.map((r) => ({
+        miStatus: r.mi_status, count: r.n,
+        // Wiersz raportu z opisem spoza słownika ma status `unknown` bez kodu, odbiorca bez wiersza nie ma statusu.
+        description: r.mi_status !== null ? describeReportStatus(r.mi_status) : r.missing === 1 ? 'Brak pozycji w raporcie' : 'Opis stanu spoza słownika bramki',
+      })),
+      deliveredByHour: hours.map((r) => ({ hour: r.hour, count: r.n })),
+    };
   }
 
   setCreated(id: string, miPackageId: string): void {

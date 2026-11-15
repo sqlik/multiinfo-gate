@@ -215,6 +215,22 @@ export class ShortLinksRepo {
     return [...byDest].filter(([, v]) => v.opened === (segment === 'opened')).map(([dest, v]) => ({ dest, clientId: v.clientId }));
   }
 
+  /** Strona odbiorców według otwarcia, w kolejności z `recipients`, z liczbą wszystkich odbiorców segmentu. */
+  recipientsPage(campaignId: number, segment: 'opened' | 'unopened', offset: number, limit: number): {
+    total: number; items: Array<{ dest: string; clientId: string | null }>;
+  } {
+    const all = this.recipients(campaignId, segment);
+    return { total: all.length, items: all.slice(offset, offset + limit) };
+  }
+
+  /** Chwila pierwszego otwarcia każdego odbiorcy (`recipient_key`) kampanii; wejścia automatów nie są otwarciem. */
+  firstOpens(campaignId: number): string[] {
+    return (this.db
+      .prepare(`SELECT MIN(first_opened_at) AS at FROM short_links WHERE campaign_id = ? AND first_opened_at IS NOT NULL
+                GROUP BY recipient_key ORDER BY at`)
+      .all(campaignId) as Array<{ at: string }>).map((r) => r.at);
+  }
+
   remaining(campaignId: number): number {
     return (this.db.prepare('SELECT COUNT(*) AS n FROM short_links WHERE campaign_id = ?').get(campaignId) as { n: number }).n;
   }

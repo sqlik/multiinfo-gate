@@ -120,6 +120,39 @@ function toRow(r: RawMessage): MessageRow {
   };
 }
 
+/** Warunek listy i liczb w stanach; brak pola nie zawęża wyniku. */
+function whereOf(filter: Omit<MessageFilter, 'limit' | 'offset'>): { clause: string; params: Array<string | number> } {
+  const where: string[] = [];
+  const params: Array<string | number> = [];
+
+  if (filter.includeSystem !== true) where.push('system = 0');
+  if (filter.apiKeyId !== undefined) {
+    where.push('api_key_id = ?');
+    params.push(filter.apiKeyId);
+  }
+  if (filter.status === 'transit') {
+    // Zakładka „W drodze” panelu: jeden filtr, trzy statusy.
+    where.push(`status IN (${TRANSIT_STATUSES.map(() => '?').join(', ')})`);
+    params.push(...TRANSIT_STATUSES);
+  } else if (filter.status !== undefined) {
+    where.push('status = ?');
+    params.push(filter.status);
+  }
+  if (filter.dest !== undefined) {
+    where.push('dest = ?');
+    params.push(filter.dest);
+  }
+  if (filter.from !== undefined) {
+    where.push('created_at >= ?');
+    params.push(filter.from);
+  }
+  if (filter.until !== undefined) {
+    where.push('created_at <= ?');
+    params.push(filter.until);
+  }
+  return { clause: where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '', params };
+}
+
 export class MessagesRepo {
   constructor(private readonly db: Database) {}
 
@@ -196,40 +229,42 @@ export class MessagesRepo {
 
   /** Buduje warunek wyłącznie z pól obecnych w filtrze - brak pola nie zawęża wyniku. */
   list(filter: MessageFilter): MessageRow[] {
-    const where: string[] = [];
-    const params: Array<string | number> = [];
-
-    if (filter.includeSystem !== true) where.push('system = 0');
-    if (filter.apiKeyId !== undefined) {
-      where.push('api_key_id = ?');
-      params.push(filter.apiKeyId);
-    }
-    if (filter.status === 'transit') {
-      // Zakładka „W drodze” panelu: jeden filtr, trzy statusy.
-      where.push(`status IN (${TRANSIT_STATUSES.map(() => '?').join(', ')})`);
-      params.push(...TRANSIT_STATUSES);
-    } else if (filter.status !== undefined) {
-      where.push('status = ?');
-      params.push(filter.status);
-    }
-    if (filter.dest !== undefined) {
-      where.push('dest = ?');
-      params.push(filter.dest);
-    }
-    if (filter.from !== undefined) {
-      where.push('created_at >= ?');
-      params.push(filter.from);
-    }
-    if (filter.until !== undefined) {
-      where.push('created_at <= ?');
-      params.push(filter.until);
-    }
-
-    const clause = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
+    const { clause, params } = whereOf(filter);
     const rows = this.db
       .prepare(`SELECT * FROM messages${clause} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`)
       .all(...params, filter.limit, filter.offset) as RawMessage[];
     return rows.map(toRow);
+  }
+
+  /** Liczba wiadomości w każdym stanie dla tego samego warunku, co lista; stany bez wiadomości nie występują. */
+  statusCounts(filter: Omit<MessageFilter, 'limit' | 'offset'>): Record<string, number> {
+    const { clause, params } = whereOf(filter);
+    const rows = this.db
+      .prepare(`SELECT status, COUNT(*) AS n FROM messages${clause} GROUP BY status ORDER BY status`)
+      .all(...params) as Array<{ status: string; n: number }>;
+    return Object.fromEntries(rows.map((r) => [r.status, r.n]));
+  }
+
+  /**
+   * Wiadomości szkicu agenta: klucz idempotencji równy identyfikatorowi szkicu albo z przyrostkiem `#n`
+   * kolejnego odbiorcy. Porównanie przedrostka z `#` nie łapie szkicu o dłuższym identyfikatorze.
+   */
+  forDraft(apiKeyId: number, draftId: string): MessageRow[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM messages WHERE api_key_id = @apiKeyId AND system = 0
+                  AND (idempotency_key = @draftId OR substr(idempotency_key, 1, length(@draftId) + 1) = @draftId || '#')
+                ORDER BY created_at DESC, id DESC`)
+      .all({ apiKeyId, draftId }) as RawMessage[];
+    return rows.map(toRow);
+  }
+
+  /** Najpóźniejsza wiadomość klucza na ten numer utworzona przed `before`, nie wcześniej niż `since`; bez systemowych. */
+  lastToBefore(apiKeyId: number, dest: string, before: Date, since: Date): MessageRow | undefined {
+    const row = this.db
+      .prepare(`SELECT * FROM messages WHERE api_key_id = ? AND dest = ? AND system = 0 AND created_at < ? AND created_at >= ?
+                ORDER BY created_at DESC, id DESC LIMIT 1`)
+      .get(apiKeyId, dest, before.toISOString(), since.toISOString()) as RawMessage | undefined;
+    return row ? toRow(row) : undefined;
   }
 
   /**

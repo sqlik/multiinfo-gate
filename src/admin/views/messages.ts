@@ -8,7 +8,7 @@ import { segmentText } from '../../text/segment.ts';
 import { warsawStamp, warsawStampMs } from '../../time/warsaw.ts';
 import { esc, preview } from './layout.ts';
 import { segmentPanel } from './segments.ts';
-import { statusLabel, statusTone } from './status-labels.ts';
+import { stageLabel, statusLabel, statusTone } from './status-labels.ts';
 
 export interface MessageFilters {
   status: string | null;
@@ -138,25 +138,26 @@ type Tone = 'ok' | 'wait' | 'fail' | 'dim';
 
 interface Step { at: string; tone: Tone; text: string }
 
-/** Kropka i opis zdarzenia z przebiegu. Rodzaje zapisuje API, worker i anulowanie. */
+/** Kropka i opis zdarzenia z przebiegu. Rodzaje zapisuje API, worker i anulowanie, nazwy etapów są wspólne z agentem. */
 function stepOf(e: MessageEvent): Step {
   const detail = e.detail === null ? '' : esc(e.detail);
+  const label = stageLabel(e.kind);
   switch (e.kind) {
-    case 'queued': return { at: e.at, tone: 'dim', text: 'Przyjęta przez bramkę, zapisana w kolejce' };
-    case 'sent': return { at: e.at, tone: 'dim', text: `Przekazana do Multiinfo - ${detail}` };
-    case 'retry': return { at: e.at, tone: 'dim', text: `Ponowienie: ${detail}` };
-    case 'paused': return { at: e.at, tone: 'dim', text: `Konto wstrzymane: ${detail}` };
+    case 'queued': return { at: e.at, tone: 'dim', text: label };
+    case 'sent': return { at: e.at, tone: 'dim', text: `${label} - ${detail}` };
+    case 'retry':
+    case 'paused': return { at: e.at, tone: 'dim', text: `${label}: ${detail}` };
     case 'status': {
       const codes = /status (\d+) \/ (\d+)/.exec(e.detail ?? '');
       const tone: Tone = codes ? statusTone(mapStatus(Number(codes[1]), Number(codes[2]))) : 'wait';
-      return { at: e.at, tone, text: `Multiinfo: ${detail}` };
+      return { at: e.at, tone, text: `${label}: ${detail}` };
     }
-    case 'failed': return { at: e.at, tone: 'fail', text: `Niepowodzenie: ${detail}` };
-    case 'expired': return { at: e.at, tone: 'fail', text: `Przedawniona: ${detail}` };
-    case 'cancelled': return { at: e.at, tone: 'fail', text: `Anulowana - ${detail}` };
-    case 'cancel_partial': return { at: e.at, tone: 'fail', text: `Anulowanie częściowe: ${detail}` };
-    case 'cancel_failed': return { at: e.at, tone: 'fail', text: `Anulowanie nieskuteczne: ${detail}` };
-    case 'abandoned': return { at: e.at, tone: 'fail', text: `Odpytywanie przerwane: ${detail}` };
+    case 'cancelled': return { at: e.at, tone: 'fail', text: `${label} - ${detail}` };
+    case 'failed':
+    case 'expired':
+    case 'cancel_partial':
+    case 'cancel_failed':
+    case 'abandoned': return { at: e.at, tone: 'fail', text: `${label}: ${detail}` };
     case 'webhook': return { at: e.at, tone: 'ok', text: `Webhook <span class="m">${detail}</span> zakolejkowany` };
     default: return { at: e.at, tone: 'dim', text: `${esc(e.kind)}${detail === '' ? '' : `: ${detail}`}` };
   }
@@ -165,7 +166,7 @@ function stepOf(e: MessageEvent): Step {
 /** Wiadomości sprzed migracji nie mają zdarzeń - pokazujemy trzy daty, jak dotąd. */
 function legacySteps(m: MessageRow, substatus: { opis: string } | null): Step[] {
   return [
-    { at: m.createdAt, tone: 'dim', text: 'Przyjęta przez bramkę, zapisana w kolejce' },
+    { at: m.createdAt, tone: 'dim', text: stageLabel('queued') },
     ...(m.sentAt === null ? [] : [{
       at: m.sentAt, tone: 'dim' as Tone,
       text: `Przekazana do Multiinfo - identyfikatory ${m.miIds.map((x) => `<span class="m">${esc(x)}</span>`).join(', ')}`,
