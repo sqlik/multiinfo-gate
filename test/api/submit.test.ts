@@ -13,12 +13,14 @@ import { IntegrationsRepo } from '../../src/store/integrations.ts';
 import { defaultInboundConfig } from '../../src/integrations/config.ts';
 import { accountInput } from '../store/helpers.ts';
 import { linkDeps } from '../helpers/api-deps.ts';
+import { AgentConnectionsRepo } from '../../src/store/agent-connections.ts';
 
 const NOW = new Date('2026-09-02T10:00:00Z');
 let deps: Parameters<typeof submitMessages>[0];
 let apiKeys: ApiKeysRepo;
 let apiKeyId: number;
 let integrationId: number;
+let connectionId: number;
 
 beforeEach(() => {
   const db = openDatabase(':memory:');
@@ -30,6 +32,7 @@ beforeEach(() => {
   integrationId = new IntegrationsRepo(db, key).insert({ name: 'Kuma', kind: 'webhook_in', apiKeyId, serviceId: null, orig: null, preset: 'custom', enabled: 1, config: defaultInboundConfig(), secrets: {}, storePayloads: 0, createdAt: NOW });
   deps = { accounts, messages: new MessagesRepo(db), events: new MessageEventsRepo(db), jobs: new JobsRepo(db), inbound: new InboundMessagesRepo(db),
     apiKeys, ...linkDeps(db) };
+  connectionId = new AgentConnectionsRepo(db).insert({ integrationId, name: 'Ewa Nowak', method: 'token', expiresAt: null, createdBy: 'admin', createdAt: NOW });
 });
 
 describe('submitMessages', () => {
@@ -54,6 +57,13 @@ describe('submitMessages', () => {
     const [b] = submitMessages(deps, auth, { to: ['48601000002'], text: 'x' }, NOW);
     expect(deps.messages.get(z!.id)!.requestedBy).toBe('jan.nowak@firma.pl');
     expect(deps.messages.get(b!.id)!.requestedBy).toBeNull();
+  });
+  it('zapisuje połączenie agenta przy wiadomości, bez pola połączenie jest puste', () => {
+    const auth = authFromKey(apiKeys.get(apiKeyId)!);
+    const [a] = submitMessages(deps, auth, { to: ['48601000001'], text: 'x', integrationId, agentConnectionId: connectionId, requestedBy: 'Ewa Nowak' }, NOW);
+    const [b] = submitMessages(deps, auth, { to: ['48601000002'], text: 'x' }, NOW);
+    expect(deps.messages.get(a!.id)!.agentConnectionId).toBe(connectionId);
+    expect(deps.messages.get(b!.id)!.agentConnectionId).toBeNull();
   });
   it('zły numer to ApiError invalid_phone bez zapisu', () => {
     const auth = authFromKey(apiKeys.get(apiKeyId)!);

@@ -28,7 +28,13 @@ describe('AgentDraftsRepo', () => {
     expect(id).toMatch(/^drf_[0-9a-f]{20}$/);
     expect(drafts.get(id, ewa)).toEqual({
       id, connectionId: ewa, kind: 'sms', payload, createdAt: NOW.toISOString(), expiresAt: later(30).toISOString(), sentAt: null, result: null,
+      confirmHash: null,
     });
+  });
+
+  it('insert zapisuje skrót klucza potwierdzenia szkicu z sesji z widokami', () => {
+    const id = drafts.insert({ connectionId: ewa, kind: 'sms', payload, createdAt: NOW, expiresAt: later(30), confirmHash: 'a'.repeat(64) });
+    expect(drafts.get(id, ewa)?.confirmHash).toBe('a'.repeat(64));
   });
 
   it('get szkicu innego połączenia zwraca undefined', () => {

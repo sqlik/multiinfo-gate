@@ -42,6 +42,8 @@ export interface SubmitInput {
   prepared?: PreparedText;
   /** Nazwa kampanii, gdy żądanie jej nie podaje: nazwa integracji; bez niej nazwa klucza. */
   campaignFallback?: string;
+  /** Połączenie agenta AI, które zleciło wysyłkę; brak dla pozostałych źródeł. */
+  agentConnectionId?: number;
 }
 
 export interface SubmitResult {
@@ -215,6 +217,7 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
       integrationId: input.integrationId ?? null,
       mailFrom: input.mailFrom ?? null,
       requestedBy: input.requestedBy ?? null,
+      agentConnectionId: input.agentConnectionId ?? null,
       system: input.system ? 1 : 0,
       campaignId: campaign?.id ?? null,
       createdAt: now.toISOString(),

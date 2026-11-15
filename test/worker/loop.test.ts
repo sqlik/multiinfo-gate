@@ -94,6 +94,13 @@ describe('Worker.tick - tura utrzymaniowa', () => {
     await worker.tick();
     expect(error).toHaveBeenCalledWith('worker.utrzymanie_blad', expect.objectContaining({ step: 'oauth' }));
   });
+
+  it('krok szkice usuwa szkice starsze niż doba po terminie', async () => {
+    const pruneBefore = vi.fn(() => 0);
+    const worker = new Worker({ ...deps, drafts: { pruneBefore } }, { now: () => clock, maintenanceMs: 60_000 });
+    await worker.tick();
+    expect(pruneBefore).toHaveBeenCalledWith(new Date(clock.getTime() - 86_400_000));
+  });
 });
 
 describe('Worker.tick - retencja skracacza', () => {

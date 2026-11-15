@@ -12,11 +12,13 @@ import { JobsRepo } from '../../src/store/jobs.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { accountInput } from '../store/helpers.ts';
 import { linkDeps } from '../helpers/api-deps.ts';
+import { AgentConnectionsRepo } from '../../src/store/agent-connections.ts';
 
 const NOW = new Date('2026-11-03T10:00:00Z');
 let deps: Parameters<typeof submitPackage>[0];
 let auth: ReturnType<typeof authFromKey>;
 let integrationId: number;
+let connectionId: number;
 
 const base = { deliveryReport: true, encoding: 'auto' as const };
 
@@ -30,6 +32,7 @@ beforeEach(() => {
   integrationId = new IntegrationsRepo(db, key).insert({ name: 'Dyspozytornia', kind: 'power_automate', apiKeyId, serviceId: null, orig: null, preset: 'power-automate', enabled: 1, config: defaultPowerAutomateConfig(), secrets: {}, storePayloads: 0, createdAt: NOW });
   auth = authFromKey(apiKeys.get(apiKeyId)!);
   deps = { accounts, packages: new PackagesRepo(db), jobs: new JobsRepo(db), apiKeys, ...linkDeps(db) };
+  connectionId = new AgentConnectionsRepo(db).insert({ integrationId, name: 'Ewa Nowak', method: 'token', expiresAt: null, createdBy: 'admin', createdAt: NOW });
 });
 
 describe('submitPackage', () => {
@@ -49,6 +52,13 @@ describe('submitPackage', () => {
     const row = deps.packages.get(out.id)!;
     expect(row.integrationId).toBe(integrationId);
     expect(row.requestedBy).toBe('jan.nowak@firma.pl');
+  });
+
+  it('zapisuje połączenie agenta przy rozsyłce, bez pola połączenie jest puste', () => {
+    const a = submitPackage(deps, auth, { ...base, recipients: [{ to: '601000001' }], defaultText: 'Przegląd', integrationId, agentConnectionId: connectionId }, NOW);
+    const b = submitPackage(deps, auth, { ...base, recipients: [{ to: '601000002' }], defaultText: 'Przegląd' }, NOW);
+    expect(deps.packages.get(a.id)!.agentConnectionId).toBe(connectionId);
+    expect(deps.packages.get(b.id)!.agentConnectionId).toBeNull();
   });
 
   it('limit części z wywołania niższy niż klucza odrzuca treść na 2 części z indeksem odbiorcy, bez rozsyłki', () => {

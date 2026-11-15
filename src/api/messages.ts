@@ -10,12 +10,15 @@ import type { ApiDeps } from './server.ts';
 import { submitMessages } from './submit.ts';
 import { parseOffset } from '../paging.ts';
 
+/** Najwięcej odbiorców jednego `POST /v1/messages`; agent AI wysyła ponad tę liczbę jako rozsyłkę. */
+export const MESSAGE_RECIPIENTS_MAX = 500;
+
 /**
  * Schemat body wysyłki. Poza trasą używa go opis API w formacie OpenAPI
  * (`src/api/openapi.ts`), żeby nowe pole nie mogło umknąć opisowi.
  */
 export const messageBodySchema = z.object({
-  to: z.union([z.string(), z.array(z.string()).min(1).max(500)], {
+  to: z.union([z.string(), z.array(z.string()).min(1).max(MESSAGE_RECIPIENTS_MAX)], {
     error: (issue) => (issue.input === undefined ? 'Numer odbiorcy jest pusty.' : 'Pole to musi być numerem w postaci tekstu albo listą numerów.'),
   }),
   text: z.string({ error: (issue) => (issue.input === undefined ? 'Treść jest pusta.' : undefined) }).min(1, 'Treść jest pusta.'),

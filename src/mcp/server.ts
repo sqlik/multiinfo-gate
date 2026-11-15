@@ -180,9 +180,21 @@ export function registerMcpRoutes(app: FastifyInstance, deps: AgentToolDeps, too
     }
   }
 
-  app.post('/mcp', async (request, reply) => {
+  /**
+   * Uwierzytelnienie przed odczytem treści i przed sprawdzeniem metody: aplikacja bez tokenu zawsze otrzymuje 401
+   * z adresem metadanych, także dla GET i treści innego typu niż JSON, i dzięki temu rozpoczyna logowanie.
+   */
+  const admitted = new WeakMap<FastifyRequest, number>();
+  const gate = async (request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> => {
     const connectionId = admit(request, reply);
+    // Odpowiedź wysłana w haku kończy obsługę żądania, jeżeli hak zwraca obiekt odpowiedzi.
     if (connectionId === null) return reply;
+    admitted.set(request, connectionId);
+    return undefined;
+  };
+
+  app.post('/mcp', { onRequest: gate }, async (request, reply) => {
+    const connectionId = admitted.get(request)!;
     const body = request.body;
     if (Array.isArray(body)) {
       return reply.code(400).send(rpcError(null, RPC.invalidRequest, 'Bramka nie przyjmuje paczek komunikatów JSON-RPC. Wyślij jeden komunikat w żądaniu.'));
@@ -205,12 +217,11 @@ export function registerMcpRoutes(app: FastifyInstance, deps: AgentToolDeps, too
   });
 
   // Bramka nie wysyła komunikatów z własnej inicjatywy, więc nie otwiera strumienia SSE.
-  app.get('/mcp', async (_request, reply) =>
+  app.get('/mcp', { onRequest: gate }, async (_request, reply) =>
     reply.code(405).header('allow', 'POST, DELETE').send(rpcError(null, RPC.invalidRequest, 'Adres /mcp przyjmuje wyłącznie żądania POST.')));
 
-  app.delete('/mcp', async (request, reply) => {
-    const connectionId = admit(request, reply);
-    if (connectionId === null) return reply;
+  app.delete('/mcp', { onRequest: gate }, async (request, reply) => {
+    const connectionId = admitted.get(request)!;
     const sessionId = header(request, 'mcp-session-id');
     if (sessionId === undefined) return reply.code(405).header('allow', 'POST').send();
     if (!deps.sessions.get(sessionId, connectionId)) return reply.code(404).send();

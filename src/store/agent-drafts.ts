@@ -13,20 +13,22 @@ export interface DraftRow {
   expiresAt: string;
   sentAt: string | null;
   result: unknown;
+  /** Skrót SHA-256 klucza potwierdzenia; null dla szkicu z sesji bez widoków. */
+  confirmHash: string | null;
 }
 
 interface RawDraft {
-  id: string; connection_id: number; kind: DraftKind; payload: string; created_at: string; expires_at: string; sent_at: string | null; result: string | null;
+  id: string; connection_id: number; kind: DraftKind; payload: string; created_at: string; expires_at: string; sent_at: string | null; result: string | null; confirm_hash: string | null;
 }
 
 export class AgentDraftsRepo {
   constructor(private readonly db: Database) {}
 
   /** Zwraca identyfikator `drf_…`. */
-  insert(d: { connectionId: number; kind: DraftKind; payload: unknown; createdAt: Date; expiresAt: Date }): string {
+  insert(d: { connectionId: number; kind: DraftKind; payload: unknown; createdAt: Date; expiresAt: Date; confirmHash?: string | null }): string {
     const id = shortId('drf');
-    this.db.prepare('INSERT INTO agent_drafts (id, connection_id, kind, payload, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(id, d.connectionId, d.kind, JSON.stringify(d.payload), d.createdAt.toISOString(), d.expiresAt.toISOString());
+    this.db.prepare('INSERT INTO agent_drafts (id, connection_id, kind, payload, created_at, expires_at, confirm_hash) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(id, d.connectionId, d.kind, JSON.stringify(d.payload), d.createdAt.toISOString(), d.expiresAt.toISOString(), d.confirmHash ?? null);
     return id;
   }
 
@@ -37,6 +39,7 @@ export class AgentDraftsRepo {
     return {
       id: row.id, connectionId: row.connection_id, kind: row.kind, payload: JSON.parse(row.payload) as unknown, createdAt: row.created_at,
       expiresAt: row.expires_at, sentAt: row.sent_at, result: row.result === null ? null : JSON.parse(row.result) as unknown,
+      confirmHash: row.confirm_hash,
     };
   }
 

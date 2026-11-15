@@ -113,12 +113,13 @@ describe('connection_status', () => {
     expect(text).toContain('Uprawnienia: Wysyłka SMS-ów, Odczyt wysłanych.');
     expect(text).toContain('Połączenie jest ważne do 2027-02-13 09:00:00 czasu polskiego.');
     expect(text).toContain('Usługi Multiinfo: 24138.');
+    expect(text).toContain('Nadawca domyślny: numer usługi 24138.');
     expect(text).toContain('Limit żądań klucza: 60 na minutę.');
     expect(result.structuredContent).toMatchObject({
       available: true, connection: 'Ewa Nowak', integration: 'Agent AI - dyspozytornia',
       scopes: [{ id: 'send', label: 'Wysyłka SMS-ów' }, { id: 'read_sent', label: 'Odczyt wysłanych' }],
       expiresAt: new Date(AGENT_SEED_AT.getTime() + 90 * 86_400_000).toISOString(),
-      services: [{ id: '24138', label: null }], maxParts: 3, overflow: 'reject', ratePerMin: 60,
+      services: [{ id: '24138', label: null }], senders: [{ value: null, label: 'numer usługi 24138' }], orig: null, maxParts: 3, overflow: 'reject', ratePerMin: 60,
       guard: { calls: 0, callLimit: 30, recipients: 0, recipientLimit: 1000, windowMinutes: 60, resetsAt: null }, groups: 0,
     });
   });

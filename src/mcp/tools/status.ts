@@ -1,5 +1,6 @@
 import { effectiveExpiry } from '../../agents/connections.ts';
 import { SCOPE_LABELS } from '../../agents/scopes.ts';
+import { senderOptions } from '../../integrations/agent.ts';
 import { warsawStamp } from '../../time/warsaw.ts';
 import { z } from '../../zod.ts';
 import type { ToolContext, ToolDef, ToolResult } from '../tools.ts';
@@ -37,9 +38,11 @@ export const connectionStatusTool: ToolDef = {
     const config = conn.integration.config;
     const scopes = [...conn.scopes].map((id) => ({ id, label: SCOPE_LABELS[id] }));
     const expiresAt = effectiveExpiry(conn.connection, conn.key.expiresAt);
-    const labels = new Map(deps.accounts.services(conn.account.id).map((s) => [s.id, s.label]));
-    const serviceIds = conn.auth.allowedServiceIds.length > 0 ? conn.auth.allowedServiceIds : [...labels.keys()];
-    const services = serviceIds.map((id) => ({ id, label: labels.get(id) ?? null }));
+    const options = senderOptions(deps, conn);
+    // Usługa bez nazwy w koncie ma w senderOptions etykietę równą identyfikatorowi; widok pokazuje wtedy sam identyfikator.
+    const services = options.services.map((s) => ({ id: s.id, label: s.label === s.id ? null : s.label }));
+    const defaultSender = options.senders.find((s) => s.value === options.orig)?.label ?? options.orig ?? '-';
+    const others = options.senders.filter((s) => s.value !== options.orig).map((s) => s.label);
     const { limit, windowMinutes, recipients: recipientLimit } = config.throttle;
     const window = deps.guards.peek(conn.integration.id, windowMinutes, now);
     const resetsAt = window.windowStart === null ? null : new Date(Date.parse(window.windowStart) + windowMinutes * MIN).toISOString();
@@ -50,6 +53,7 @@ export const connectionStatusTool: ToolDef = {
       `Uprawnienia: ${scopes.map((s) => s.label).join(', ')}.`,
       expiresAt === null ? 'Połączenie jest ważne bez terminu.' : `Połączenie jest ważne do ${warsawStamp(expiresAt)} czasu polskiego.`,
       `Usługi Multiinfo: ${services.map((s) => (s.label ? `${s.id} ${s.label}` : s.id)).join(', ')}.`,
+      `Nadawca domyślny: ${defaultSender}.` + (others.length > 0 ? ` Inni nadawcy do wyboru: ${others.join(', ')}.` : ''),
       `Limit części SMS-a: ${config.maxParts}. ${config.overflow === 'reject' ? 'Dłuższa treść zostaje odrzucona.' : 'Dłuższa treść zostaje skrócona do tego limitu.'}`,
       `Limit żądań klucza: ${conn.key.ratePerMin} na minutę.`,
       `Ochrona przed burzą: wykorzystano ${window.count} z ${limit} wywołań wysyłających i ${window.recipients} z ${recipientLimit} odbiorców w oknie ${windowMinutes} minut.`
@@ -59,7 +63,7 @@ export const connectionStatusTool: ToolDef = {
     return {
       text: lines.join('\n'),
       structured: {
-        available: true, connection: conn.connection.name, integration: conn.integration.name, scopes, expiresAt, services,
+        available: true, connection: conn.connection.name, integration: conn.integration.name, scopes, expiresAt, services, senders: options.senders, orig: options.orig,
         maxParts: config.maxParts, overflow: config.overflow, ratePerMin: conn.key.ratePerMin,
         guard: { calls: window.count, callLimit: limit, recipients: window.recipients, recipientLimit, windowMinutes, resetsAt }, groups,
       },

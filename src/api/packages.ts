@@ -11,7 +11,7 @@ import { submitPackage } from './submit-package.ts';
 import { csvCell } from '../text/csv.ts';
 
 /** Górna granica jednej rozsyłki - powyżej niej body żądania i wywołanie package.aspx rosną bez sensu. */
-const MAX_RECIPIENTS = 5000;
+export const PACKAGE_RECIPIENTS_MAX = 5000;
 
 /**
  * Limit body tras rozsyłki: 5000 odbiorców z własnymi treściami zajmuje około 1 MB, więc
@@ -39,7 +39,7 @@ export const packageBodySchema = z.object({
   defaultText: z.string().min(1).optional(),
   recipients: z.array(recipientSchema, { error: (issue) => (issue.input === undefined ? 'Lista odbiorców jest pusta.' : undefined) })
     .min(1, 'Lista odbiorców jest pusta.')
-    .max(MAX_RECIPIENTS, `Rozsyłka może objąć najwyżej ${MAX_RECIPIENTS} odbiorców.`),
+    .max(PACKAGE_RECIPIENTS_MAX, `Rozsyłka może objąć najwyżej ${PACKAGE_RECIPIENTS_MAX} odbiorców.`),
   orig: z.string().optional(),
   startAt: z.string().datetime().optional(),
   deliveryReport: z.boolean().default(true),

@@ -117,6 +117,21 @@ describe('era poprzednia: initialize i sesje', () => {
     expect(without.statusCode).toBe(405);
   });
 
+  it('/mcp bez tokenu: GET i POST z Content-Type application/octet-stream dają 401 z WWW-Authenticate', async () => {
+    const get = await app.inject({ method: 'GET', url: '/mcp' });
+    expect(get.statusCode).toBe(401);
+    expect(get.headers['www-authenticate']).toBe(`Bearer resource_metadata="${BASE}/.well-known/oauth-protected-resource/mcp"`);
+    const binary = await app.inject({ method: 'POST', url: '/mcp', payload: Buffer.from('x'), headers: { 'content-type': 'application/octet-stream' } });
+    expect(binary.statusCode).toBe(401);
+    expect(binary.headers['www-authenticate']).toMatch(/^Bearer resource_metadata=/);
+    const broken = await post('{nie json', {}, null);
+    expect(broken.statusCode).toBe(401);
+    const withToken = await app.inject({
+      method: 'POST', url: '/mcp', payload: Buffer.from('x'), headers: { 'content-type': 'application/octet-stream', authorization: `Bearer ${seed.secret}` },
+    });
+    expect(withToken.statusCode).toBe(415);
+  });
+
   it('nieznana metoda -32601, treść spoza JSON-RPC 400', async () => {
     const { session } = await initialize();
     expect((await legacy(session, rpc(2, 'sampling/createMessage'))).json().error.code).toBe(-32601);

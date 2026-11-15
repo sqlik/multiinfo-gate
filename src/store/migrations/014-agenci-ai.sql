@@ -78,7 +78,9 @@ CREATE TABLE agent_drafts (
   created_at     TEXT    NOT NULL,
   expires_at     TEXT    NOT NULL,
   sent_at        TEXT,
-  result         TEXT
+  result         TEXT,
+  -- Skrót jednorazowego klucza potwierdzenia: szkic z sesji z widokami wysyła wyłącznie przycisk w widoku.
+  confirm_hash   TEXT
 );
 CREATE INDEX idx_agent_drafts_expires ON agent_drafts(expires_at);
 
