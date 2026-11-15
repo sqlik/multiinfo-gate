@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { forwardedText } from '../../src/mcp/views/client/bridge.js';
 import { barChart } from '../../src/mcp/views/client/chart.js';
 import { REMIND_MESSAGE, renderCampaign } from '../../src/mcp/views/client/kampania.js';
-import { refreshQuery, renderReplies } from '../../src/mcp/views/client/odpowiedzi.js';
+import { refreshQuery, renderReplies, startReplies } from '../../src/mcp/views/client/odpowiedzi.js';
 import { PACKAGE_REFRESH_MAX_MS, PACKAGE_REFRESH_MS, packageSettled, renderPackage, watchPackage } from '../../src/mcp/views/client/rozsylka.js';
 import { TOOLS } from '../../src/mcp/tools/index.ts';
 import { BUILT_VIEWS, viewHtml } from '../../src/mcp/views/index.ts';
@@ -124,6 +124,50 @@ describe('wiadomości widoków do rozmowy', () => {
         expect(arg, file).toMatch(/^[A-Z_]+$/);
       }
     }
+  });
+});
+
+/** Atrapa dokumentu widoku odpowiedzi: elementy z identyfikatorami, kliknięcie odgrywane na korzeniu. */
+function repliesWindow() {
+  const listeners: Array<(event: { data: unknown; source: unknown }) => void> = [];
+  const sent: Array<{ id?: number; method?: string; params?: Record<string, unknown> }> = [];
+  const element = () => {
+    const handlers = new Map<string, (event: unknown) => void>();
+    return { innerHTML: '', textContent: '', hidden: false, className: '', handlers, addEventListener: (type: string, fn: (event: unknown) => void) => handlers.set(type, fn) };
+  };
+  const nodes = { tresc: element(), odswiez: element(), komunikat: element() };
+  const parent = { postMessage: (msg: (typeof sent)[number]) => sent.push(msg) };
+  const win = {
+    parent, document: { getElementById: (id: keyof typeof nodes) => nodes[id], documentElement: { dataset: {}, style: { setProperty: () => undefined } } },
+    addEventListener: (type: string, fn: (event: { data: unknown; source: unknown }) => void) => { if (type === 'message') listeners.push(fn); },
+  };
+  const deliver = (data: unknown) => { for (const fn of listeners) fn({ data, source: parent }); };
+  const click = (act: string, id: string) => {
+    const button = { dataset: { act, id }, disabled: false };
+    nodes.tresc.handlers.get('click')!({ target: { closest: (sel: string) => (sel.includes('data-act') ? button : null) } });
+  };
+  return { win, nodes, sent, deliver, click };
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe('wysłanie odpowiedzi w widoku', () => {
+  it('potwierdzenie wysłania odpowiedzi pojawia się raz, przy pozycji, a komunikat pod tabelą zostaje pusty', async () => {
+    const w = repliesWindow();
+    startReplies(w.win, { version: '1.12.0' });
+    w.deliver({ jsonrpc: '2.0', id: w.sent[0]!.id, result: { protocolVersion: '2026-01-26', hostInfo: { name: 'a', version: '1' }, hostCapabilities: { serverTools: {} }, hostContext: {} } });
+    await tick();
+    w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { items: [ITEMS[0]], drafts: [DRAFTS[0]] }, _meta: { confirm: 'k' } } });
+    w.click('send', 'in_1');
+    await tick();
+    const call = w.sent.find((m) => m.method === 'tools/call')!;
+    expect(call.params).toEqual({ name: 'send_reply', arguments: { draftId: 'drf_in_1', confirm: 'k' } });
+    w.deliver({ jsonrpc: '2.0', id: call.id, result: { content: [], structuredContent: { kind: 'messages', ids: ['msg_9'] } } });
+    await tick();
+    expect(w.nodes.tresc.innerHTML.split('przyjęta do wysyłki').length - 1).toBe(1);
+    expect(w.nodes.tresc.innerHTML).toContain('<span class="mono">msg_9</span>');
+    expect(w.nodes.komunikat.textContent).toBe('');
+    expect(w.nodes.komunikat.hidden).toBe(true);
   });
 });
 

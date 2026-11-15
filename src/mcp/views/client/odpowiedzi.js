@@ -139,7 +139,8 @@ export function startReplies(win, env) {
     if (result.isError) return say('fail', textOf(result));
     const out = result.structuredContent;
     s.sent.set(id, out.kind === 'package' ? out.id : out.ids[0]);
-    return say('ok', `Odpowiedź do ${phoneLabel(item.from)} została przyjęta do wysyłki`);
+    // Potwierdzenie z identyfikatorem wiadomości pokazuje wiersz odpowiedzi, dlatego komunikat pod tabelą znika.
+    return say('plain', '');
   }
 
   refreshButton.addEventListener('click', () => run(async () => {
