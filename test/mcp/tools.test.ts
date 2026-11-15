@@ -22,7 +22,7 @@ function context(over: Partial<ToolContext> = {}): ToolContext {
   const deps = agentToolDeps(db, key, { now: () => NOW });
   const resolved = deps.connections.resolve(seed.connectionId, NOW);
   if (!resolved.ok) throw new Error(resolved.reason);
-  return { connectionId: seed.connectionId, conn: resolved.ctx, unavailable: null, apps: false, protocolVersion: '2025-11-25', deps, base: 'https://bramka.serwis.example', now: NOW, ...over };
+  return { connectionId: seed.connectionId, sessionId: null, conn: resolved.ctx, unavailable: null, apps: false, protocolVersion: '2025-11-25', deps, base: 'https://bramka.serwis.example', now: NOW, ...over };
 }
 
 describe('lista narzędzi', () => {

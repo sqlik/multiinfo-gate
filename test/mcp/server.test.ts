@@ -6,7 +6,9 @@ import { buildApiServer } from '../../src/api/server.ts';
 import { SERVER_INSTRUCTIONS } from '../../src/mcp/instructions.ts';
 import { SUPPORTED_PROTOCOL_VERSIONS } from '../../src/mcp/protocol.ts';
 import type { ToolDef } from '../../src/mcp/tools.ts';
+import { viewProbeTool } from '../../src/mcp/tools/probe.ts';
 import { connectionStatusTool } from '../../src/mcp/tools/status.ts';
+import { viewHtml, viewResources } from '../../src/mcp/views/index.ts';
 import { openDatabase } from '../../src/store/db.ts';
 import { SettingsRepo } from '../../src/store/settings.ts';
 import { AGENT_SEED_AT, agentApiDeps, seedAgent } from '../helpers/agent.ts';
@@ -118,7 +120,7 @@ describe('era poprzednia: initialize i sesje', () => {
   it('nieznana metoda -32601, treść spoza JSON-RPC 400', async () => {
     const { session } = await initialize();
     expect((await legacy(session, rpc(2, 'sampling/createMessage'))).json().error.code).toBe(-32601);
-    expect((await legacy(session, rpc(3, 'resources/list'))).json().result).toEqual({ resources: [] });
+    expect((await legacy(session, rpc(3, 'resources/list'))).json().result).toEqual({ resources: viewResources() });
     expect((await legacy(session, rpc(4, 'prompts/list'))).json().result).toEqual({ prompts: [] });
     const batch = await post([rpc(1, 'ping'), rpc(2, 'ping')]);
     expect([batch.statusCode, batch.json().error.code]).toEqual([400, -32600]);
@@ -149,7 +151,7 @@ describe('nowa era 2026-07-28', () => {
     expect(withApps.tools[0]._meta).toEqual({ ui: { resourceUri: 'ui://multiinfo-gate/co-moge' } });
     const call = (await modern('tools/call', { name: 'connection_status', arguments: {} })).json().result;
     expect(call).toMatchObject({ resultType: 'complete', content: [{ type: 'text' }] });
-    expect((await modern('resources/list')).json().result).toEqual({ resultType: 'complete', resources: [], ttlMs: 3_600_000, cacheScope: 'private' });
+    expect((await modern('resources/list')).json().result).toEqual({ resultType: 'complete', resources: viewResources(), ttlMs: 3_600_000, cacheScope: 'private' });
     expect((await modern('prompts/list')).json().result).toEqual({ resultType: 'complete', prompts: [], ttlMs: 0, cacheScope: 'private' });
   });
 
@@ -281,5 +283,48 @@ describe('narzędzia według zakresów i stanu integracji', () => {
     expect(bad).toEqual({ content: [{ type: 'text', text: 'Nieprawidłowe argumenty narzędzia. text: Pole nie może być puste.' }], isError: true });
     expect((await legacy(session, rpc(4, 'tools/call', { name: 'nieznane', arguments: {} }))).json().error.code).toBe(-32602);
     expect((await legacy(session, rpc(5, 'tools/call', {}))).json().error.code).toBe(-32602);
+  });
+});
+
+describe('zasoby widoków i narzędzie próbne', () => {
+  it('resources/list zawiera ui://multiinfo-gate/co-moge z typem APP_MIME', async () => {
+    const { session } = await initialize(APPS);
+    const list = (await legacy(session, rpc(2, 'resources/list'))).json().result.resources;
+    expect(list).toContainEqual(expect.objectContaining({ uri: 'ui://multiinfo-gate/co-moge', mimeType: 'text/html;profile=mcp-app', title: 'Co mogę?' }));
+  });
+
+  it('resources/read zwraca dokument widoku z _meta.ui w elemencie contents, nieznany adres -32002', async () => {
+    const expected = {
+      contents: [{
+        uri: 'ui://multiinfo-gate/co-moge', mimeType: 'text/html;profile=mcp-app', text: viewHtml('co-moge'),
+        _meta: { ui: { csp: { connectDomains: [], resourceDomains: [] }, prefersBorder: true } },
+      }],
+    };
+    const { session } = await initialize(APPS);
+    expect((await legacy(session, rpc(2, 'resources/read', { uri: 'ui://multiinfo-gate/co-moge' }))).json().result).toEqual(expected);
+    const modernRead = (await modern('resources/read', { uri: 'ui://multiinfo-gate/co-moge' }, { caps: APPS })).json().result;
+    expect(modernRead).toEqual({ resultType: 'complete', ...expected, ttlMs: 3_600_000, cacheScope: 'private' });
+    expect((await legacy(session, rpc(3, 'resources/read', { uri: 'ui://multiinfo-gate/wysylka' }))).json().error.code).toBe(-32002);
+    expect((await legacy(session, rpc(4, 'resources/read', { uri: 'ui://multiinfo-gate/../co-moge' }))).json().error.code).toBe(-32002);
+  });
+
+  it('view_probe: tylko dla widoku, zwraca chwilę wywołania i początek identyfikatora sesji, w nowej erze bez sesji', async () => {
+    app = server({ tools: [connectionStatusTool, viewProbeTool] });
+    const { session } = await initialize(APPS);
+    const listed = (await legacy(session, rpc(2, 'tools/list'))).json().result.tools.find((t: { name: string }) => t.name === 'view_probe');
+    expect(listed).toMatchObject({ title: 'Próba wywołania z widoku', annotations: { readOnlyHint: true }, _meta: { ui: { visibility: ['app'] } } });
+    const legacyCall = (await legacy(session, rpc(3, 'tools/call', { name: 'view_probe', arguments: {} }))).json().result;
+    expect(legacyCall.structuredContent).toEqual({ at: clock.toISOString(), session: session.slice(0, 8), protocolVersion: '2025-11-25' });
+    expect(legacyCall.content[0].text).toContain(session.slice(0, 8));
+    expect(legacyCall.content[0].text).not.toContain(session);
+    const modernCall = (await modern('tools/call', { name: 'view_probe', arguments: {} }, { caps: APPS })).json().result;
+    expect(modernCall.structuredContent).toEqual({ at: clock.toISOString(), session: null, protocolVersion: '2026-07-28' });
+  });
+
+  it('view_probe bez widoków jest widoczne dla agenta bez destructiveHint, bo tylko odczytuje', async () => {
+    app = server({ tools: [connectionStatusTool, viewProbeTool] });
+    const plain = (await modern('tools/list')).json().result.tools.find((t: { name: string }) => t.name === 'view_probe');
+    expect(plain.annotations.destructiveHint).toBeUndefined();
+    expect(plain._meta).toBeUndefined();
   });
 });

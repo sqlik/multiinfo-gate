@@ -22,6 +22,8 @@ export interface ToolResult { text: string; structured?: Record<string, unknown>
  */
 export interface ToolContext {
   connectionId: number;
+  /** Sesja ery poprzedniej; nowa era nie ma sesji. */
+  sessionId: string | null;
   conn: ConnectionContext | null;
   unavailable: string | null;
   apps: boolean;
@@ -57,7 +59,8 @@ const allowedBy = (def: ToolDef, scopes: ReadonlySet<AgentScope> | null): boolea
 export function visibleTools(defs: readonly ToolDef[], scopes: ReadonlySet<AgentScope> | null, apps: boolean): Array<Record<string, unknown>> {
   return defs.filter((def) => allowedBy(def, scopes)).map((def) => {
     // Bez widoków narzędzie wysyłki jest widoczne dla agenta, dlatego aplikacja musi wiedzieć, że działa nieodwracalnie.
-    const annotations = { title: def.title, ...def.annotations, ...(!apps && def.appOnly ? { destructiveHint: true } : {}) };
+    const destructive = !apps && def.appOnly === true && def.annotations.readOnlyHint !== true;
+    const annotations = { title: def.title, ...def.annotations, ...(destructive ? { destructiveHint: true } : {}) };
     const ui = apps ? { ...(def.view ? { resourceUri: viewUri(def.view) } : {}), ...(def.appOnly ? { visibility: ['app'] } : {}) } : {};
     return {
       name: def.name, title: def.title, description: def.description, inputSchema: inputSchema(def.input), annotations,

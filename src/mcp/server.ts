@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { silentLogger } from '../log.ts';
 import { gatewayBase } from '../oauth/metadata.ts';
 import { GATE_VERSION } from '../version.ts';
-import { clientSupportsApps } from './apps.ts';
+import { APP_MIME, clientSupportsApps } from './apps.ts';
 import { SERVER_INSTRUCTIONS } from './instructions.ts';
 import {
   HEADER_MISMATCH, isObject, LEGACY_PROTOCOL_VERSIONS, META_CLIENT_CAPABILITIES, META_PROTOCOL_VERSION, META_SERVER_INFO, MODERN_PROTOCOL_VERSIONS,
@@ -11,10 +11,12 @@ import {
   type RpcId,
 } from './protocol.ts';
 import { callTool, visibleTools, type AgentToolDeps, type ToolContext, type ToolDef } from './tools.ts';
+import { viewProbeTool } from './tools/probe.ts';
 import { connectionStatusTool } from './tools/status.ts';
+import { viewByUri, viewHtml, viewMeta, viewResources } from './views/index.ts';
 
-/** Narzędzia bramki. Kolejne zadania programu 1.12 dopisują wysyłkę, odczyty i kampanie. */
-export const AGENT_TOOLS: readonly ToolDef[] = [connectionStatusTool];
+/** Narzędzia bramki. Kolejne zadania programu 1.12 dopisują wysyłkę, odczyty i kampanie, a zadanie 13 usuwa narzędzie próbne. */
+export const AGENT_TOOLS: readonly ToolDef[] = [connectionStatusTool, viewProbeTool];
 
 const SERVER_INFO = { name: 'multiinfo-gate', title: 'Multiinfo Gate', version: GATE_VERSION };
 const CAPABILITIES = { tools: {}, resources: {}, prompts: {} };
@@ -79,10 +81,10 @@ export function registerMcpRoutes(app: FastifyInstance, deps: AgentToolDeps, too
     return null;
   }
 
-  function toolContext(connectionId: number, apps: boolean, protocolVersion: string, at: Date): ToolContext {
+  function toolContext(connectionId: number, sessionId: string | null, apps: boolean, protocolVersion: string, at: Date): ToolContext {
     const resolved = deps.connections.resolve(connectionId, at);
     return {
-      connectionId, conn: resolved.ok ? resolved.ctx : null, unavailable: resolved.ok ? null : resolved.reason, apps, protocolVersion, deps, base: base(), now: at,
+      connectionId, sessionId, conn: resolved.ok ? resolved.ctx : null, unavailable: resolved.ok ? null : resolved.reason, apps, protocolVersion, deps, base: base(), now: at,
     };
   }
 
@@ -92,10 +94,18 @@ export function registerMcpRoutes(app: FastifyInstance, deps: AgentToolDeps, too
     return resolved.ok ? visibleTools(tools, resolved.ctx.scopes, apps) : visibleTools(tools.filter((t) => t.scopes === 'any'), null, apps);
   }
 
-  async function call(connectionId: number, apps: boolean, protocolVersion: string, params: unknown, at: Date): Promise<Record<string, unknown>> {
+  async function call(connectionId: number, sessionId: string | null, apps: boolean, protocolVersion: string, params: unknown, at: Date):
+    Promise<Record<string, unknown>> {
     const p = isObject(params) ? params : {};
     if (typeof p.name !== 'string') throw new RpcError(RPC.invalidParams, 'Wywołanie narzędzia wymaga pola name z nazwą narzędzia.');
-    return callTool(tools, toolContext(connectionId, apps, protocolVersion, at), p.name, p.arguments ?? {});
+    return callTool(tools, toolContext(connectionId, sessionId, apps, protocolVersion, at), p.name, p.arguments ?? {});
+  }
+
+  /** Dokument widoku z `_meta.ui` w elemencie `contents`, bo aplikacja czyta je stamtąd w pierwszej kolejności. */
+  function readResource(params: unknown): Record<string, unknown> {
+    const id = viewByUri(isObject(params) ? params.uri : undefined);
+    if (id === null) throw noResource(params);
+    return { contents: [{ uri: (params as { uri: string }).uri, mimeType: APP_MIME, text: viewHtml(id), _meta: viewMeta() }] };
   }
 
   const noResource = (params: unknown) =>
@@ -128,9 +138,9 @@ export function registerMcpRoutes(app: FastifyInstance, deps: AgentToolDeps, too
           _meta: { [META_SERVER_INFO]: SERVER_INFO },
         });
       case 'tools/list': return complete({ tools: listTools(connectionId, apps, at), ttlMs: 0, cacheScope: 'private' });
-      case 'tools/call': return complete(await call(connectionId, apps, version, params, at));
-      case 'resources/list': return complete({ resources: [], ttlMs: VIEW_TTL_MS, cacheScope: 'private' });
-      case 'resources/read': throw noResource(params);
+      case 'tools/call': return complete(await call(connectionId, null, apps, version, params, at));
+      case 'resources/list': return complete({ resources: viewResources(), ttlMs: VIEW_TTL_MS, cacheScope: 'private' });
+      case 'resources/read': return complete({ ...readResource(params), ttlMs: VIEW_TTL_MS, cacheScope: 'private' });
       case 'prompts/list': return complete({ prompts: [], ttlMs: 0, cacheScope: 'private' });
       case 'prompts/get': throw noPrompt(params);
       default: throw noMethod(method);
@@ -161,9 +171,9 @@ export function registerMcpRoutes(app: FastifyInstance, deps: AgentToolDeps, too
     switch (method) {
       case 'ping': return {};
       case 'tools/list': return { tools: listTools(connectionId, session.apps, at) };
-      case 'tools/call': return call(connectionId, session.apps, session.protocolVersion, params, at);
-      case 'resources/list': return { resources: [] };
-      case 'resources/read': throw noResource(params);
+      case 'tools/call': return call(connectionId, session.id, session.apps, session.protocolVersion, params, at);
+      case 'resources/list': return { resources: viewResources() };
+      case 'resources/read': return readResource(params);
       case 'prompts/list': return { prompts: [] };
       case 'prompts/get': throw noPrompt(params);
       default: throw noMethod(method);
