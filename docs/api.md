@@ -892,7 +892,7 @@ Krótkie linki anulowanej wiadomości prowadzą od tej chwili do strony „Link 
 |---|---|---|---|
 | 404 | `message_not_found` | brak wiadomości albo wiadomość innego klucza | sprawdzić identyfikator |
 | 409 | `already_final` | wiadomość ma już stan ostateczny (`delivered`, `failed` itd.) | anulowanie nie jest możliwe |
-| 409 | `already_passed` | Multiinfo odmówiło (`providerCode: -41`): wiadomość została już przekazana do sieci | anulowanie nie jest możliwe |
+| 409 | `already_passed` | Multiinfo odmówiło (`providerCode: -41`): wiadomość została już przekazana do sieci operatora | anulowanie nie jest możliwe |
 | 502 | `provider_error` | inny błąd Multiinfo; `providerCode` w body odpowiedzi | ponowić po chwili; przy powtarzaniu przekazać `providerCode` administratorowi |
 | 503 | `account_certificate` | Multiinfo odrzuciło certyfikat bramki | przekazać administratorowi; wymaga interwencji po stronie certyfikatu |
 

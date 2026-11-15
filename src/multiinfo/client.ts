@@ -344,7 +344,7 @@ export class MultiinfoClient {
     MultiinfoClient.unwrap(await this.text('confirmsms.aspx', { smsId: miId }));
   }
 
-  /** Anuluje jedną część wiadomości; -41 znaczy, że część poszła już do abonenta. */
+  /** Anuluje jedną część wiadomości; -41 znaczy, że Multiinfo przekazało już część do sieci operatora. */
   async cancel(smsId: string): Promise<void> {
     MultiinfoClient.unwrap(await this.text('cancelsms.aspx', { smsId }));
   }

@@ -900,7 +900,7 @@
             }
           },
           "409": {
-            "description": "Anulowanie nie jest już możliwe: already_final, gdy wiadomość ma stan ostateczny, albo already_passed, gdy Multiinfo przekazało ją do abonenta",
+            "description": "Anulowanie nie jest już możliwe: already_final, gdy wiadomość ma stan ostateczny, albo already_passed, gdy Multiinfo przekazało ją do sieci operatora",
             "content": {
               "application/json": {
                 "schema": {

@@ -1175,7 +1175,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             ),
             '409': blad(
               'Anulowanie nie jest już możliwe: already_final, gdy wiadomość ma stan ostateczny, albo already_passed,'
-                + ' gdy Multiinfo przekazało ją do abonenta',
+                + ' gdy Multiinfo przekazało ją do sieci operatora',
               'already_final',
               'Wiadomość ma już stan ostateczny: delivered.',
             ),
