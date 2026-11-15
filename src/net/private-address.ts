@@ -28,7 +28,7 @@ function privateV4(ip: string): boolean {
 }
 
 /** Adres IPv6 jako 16 bajtów: rozwija `::` i końcówkę w zapisie IPv4; `null`, gdy zapis jest nieprawidłowy. */
-function v6ToBytes(ip: string): Uint8Array | null {
+export function v6ToBytes(ip: string): Uint8Array | null {
   const groups: number[] = [];
   const pushPart = (part: string): boolean => {
     if (part.includes('.')) {

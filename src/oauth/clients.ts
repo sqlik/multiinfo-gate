@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { hostTarget, systemResolver } from '../net/private-address.ts';
 import type { OAuthClientRow } from '../store/oauth.ts';
-import { WindowLimiter } from './limits.ts';
+import { WindowLimiter, sourceKey } from './limits.ts';
 import type { OAuthDeps } from './routes.ts';
 
 /** Pobranie dokumentu metadanych klienta: bez przekierowań, 5 s, 64 KB. */
@@ -106,23 +106,26 @@ function limitsFor(deps: OAuthDeps): { source: WindowLimiter; all: WindowLimiter
 }
 
 /**
- * Dynamiczna rejestracja klienta (RFC 7591), otwarta, z limitem 10 rejestracji na adres i 100 łącznie na godzinę.
- * Klient zawsze publiczny: bez sekretu, także gdy aplikacja prosi o inną metodę uwierzytelnienia.
+ * Dynamiczna rejestracja klienta (RFC 7591), otwarta, z limitem 10 prób na źródło (adres IPv4 albo sieć IPv6 /64)
+ * i 100 udanych rejestracji łącznie na godzinę. Nieudane próby nie zużywają limitu łącznego, żeby zalanie
+ * błędnymi żądaniami z wielu adresów nie blokowało rejestracji wszystkim. Klient zawsze publiczny: bez sekretu,
+ * także gdy aplikacja prosi o inną metodę uwierzytelnienia.
  */
 export async function registerClient(deps: OAuthDeps, body: unknown, sourceIp: string, now: Date):
   Promise<{ status: 201 | 400 | 429; body: Record<string, unknown> }> {
   const limits = limitsFor(deps);
-  if (limits.source.blocked(sourceIp) || limits.all.blocked('*')) {
+  const source = sourceKey(sourceIp);
+  if (limits.source.blocked(source) || limits.all.blocked('*')) {
     return { status: 429, body: { error: 'too_many_requests', error_description: 'Zbyt wiele rejestracji aplikacji. Spróbuj ponownie za godzinę.' } };
   }
-  limits.source.hit(sourceIp);
-  limits.all.hit('*');
+  limits.source.hit(source);
   if (!isObject(body)) return { status: 400, body: { error: 'invalid_client_metadata', error_description: 'Treść rejestracji musi być obiektem JSON.' } };
   const uris = redirectUris(body.redirect_uris);
   if (typeof uris === 'string') return { status: 400, body: { error: 'invalid_redirect_uri', error_description: uris } };
   const name = clientName(body.client_name);
   const applicationType = body.application_type === 'web' || body.application_type === 'native' ? body.application_type : undefined;
   const clientId = `cli_${randomBytes(16).toString('base64url')}`;
+  limits.all.hit('*');
   deps.oauth.upsertClient({ clientId, kind: 'dynamic', name, redirectUris: uris, sourceIp, createdAt: now.toISOString(), fetchedAt: null });
   return {
     status: 201,

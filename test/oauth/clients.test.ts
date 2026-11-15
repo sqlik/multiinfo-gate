@@ -98,6 +98,19 @@ describe('rejestracja dynamiczna', () => {
     expect((await register(deps, { redirect_uris: ['https://claude.ai/cb'] }, '203.0.113.11')).status).toBe(201);
   });
 
+  it('nieudane próby z wielu adresów nie zużywają limitu łącznego', async () => {
+    const deps = oauthDeps(db, key);
+    for (let i = 0; i < 120; i += 1) expect((await register(deps, { redirect_uris: ['http://evil.example/cb'] }, `198.51.100.${i}`)).status).toBe(400);
+    expect((await register(deps, { redirect_uris: ['https://claude.ai/cb'] }, '203.0.113.50')).status).toBe(201);
+  });
+
+  it('adresy IPv6 z tej samej sieci /64 liczą się do jednego limitu', async () => {
+    const deps = oauthDeps(db, key);
+    for (let i = 1; i <= 10; i += 1) expect((await register(deps, { redirect_uris: ['https://claude.ai/cb'] }, `2001:db8:1:2::${i.toString(16)}`)).status).toBe(201);
+    expect((await register(deps, { redirect_uris: ['https://claude.ai/cb'] }, '2001:db8:1:2::ff')).status).toBe(429);
+    expect((await register(deps, { redirect_uris: ['https://claude.ai/cb'] }, '2001:db8:1:3::1')).status).toBe(201);
+  });
+
   it('POST /oauth/register przyjmuje JSON i odpowiada 201', async () => {
     const server = Fastify();
     registerOAuthRoutes(server, oauthDeps(db, key));
