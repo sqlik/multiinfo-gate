@@ -10,6 +10,7 @@ import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import type { AccountsRepo } from '../store/accounts.ts';
+import type { AgentConnectionsRepo } from '../store/agent-connections.ts';
 import type { AdminUsersRepo } from '../store/admin-users.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
 import type { AuditRepo } from '../store/audit.ts';
@@ -85,6 +86,8 @@ export interface AdminDeps {
   integrations: IntegrationsRepo;
   integrationEvents: IntegrationEventsRepo;
   guards: IntegrationGuardsRepo;
+  /** Połączenia agentów AI: liczba aktywnych na liście integracji. */
+  agentConnections: AgentConnectionsRepo;
   /** Skracacz: domeny, kampanie i kody; SMS testowy kanału powiadomień przekazuje je do wspólnej drogi wysyłki. */
   linkDomains: LinkDomainsRepo;
   campaigns: CampaignsRepo;

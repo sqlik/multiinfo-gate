@@ -154,7 +154,7 @@ describe('edycja', () => {
   it('tryb prosty mówi o ochronie przed burzą zmienionej w trybie zaawansowanym', async () => {
     await create({ throttleLimit: '1000', throttleWindow: '1', tryb: 'zaawansowany' });
     const form = (await get(`/integracje/${paRow().id}/edytuj`)).body;
-    expect(form).toContain('Ochrona przed burzą: najwyżej 1000 wywołań i 5000 odbiorców w ciągu 1 minuty. Wartości zmienia tryb zaawansowany');
+    expect(form).toContain('Ochrona przed burzą: najwyżej 1000 wywołań i 5000 odbiorców w ciągu 1 minuty. Wartości zmienia tryb zaawansowany.');
   });
 
   it('tryb prosty z domyślną ochroną nie pokazuje zdania o ochronie', async () => {

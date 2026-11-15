@@ -167,6 +167,7 @@ describe('agent', () => {
     expect(parseConfig('agent', defaultAgentConfig())).toEqual({
       scopes: ['send', 'read_sent'], throttle: { limit: 30, windowMinutes: 60, recipients: 1000 }, eventLogLimit: 200, maxParts: 3, overflow: 'reject',
     });
+    expect(INTEGRATION_KINDS).toContain('agent');
     expect(AGENT_SCOPES).toEqual(['send', 'send_group', 'read_sent', 'campaigns', 'read_inbound', 'reply']);
   });
   it('agentConfigSchema odrzuca pustą listę zakresów, powtórzenie i limit odbiorców 50 001', () => {

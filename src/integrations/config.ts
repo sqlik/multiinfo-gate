@@ -3,7 +3,7 @@ import { RULE_OPS } from './conditions.ts';
 import { isValidPath } from './paths.ts';
 
 export type IntegrationKind = 'webhook_in' | 'webhook_out' | 'mail_in' | 'sms_group' | 'power_automate' | 'agent';
-export const INTEGRATION_KINDS: IntegrationKind[] = ['webhook_in', 'webhook_out', 'mail_in', 'sms_group', 'power_automate'];
+export const INTEGRATION_KINDS: IntegrationKind[] = ['webhook_in', 'webhook_out', 'mail_in', 'sms_group', 'power_automate', 'agent'];
 
 export const OUTBOUND_EVENTS = ['message.received', 'message.sent', 'message.delivered', 'message.failed', 'link.opened'] as const;
 export type OutboundEvent = (typeof OUTBOUND_EVENTS)[number];

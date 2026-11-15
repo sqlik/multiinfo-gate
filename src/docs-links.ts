@@ -9,6 +9,9 @@ export const M365_DOCS_URL = 'https://sqlik.github.io/multiinfo-gate/uruchomieni
 /** Artykuł „Skracacz linków”; formularz domeny odsyła do niego przy rekordach DNS. */
 export const LINKS_DOCS_URL = 'https://sqlik.github.io/multiinfo-gate/skracacz/';
 
+/** Artykuł „Agenci AI”; formularz integracji Agent AI odsyła do niego z przewodnika. */
+export const AGENTS_DOCS_URL = 'https://sqlik.github.io/multiinfo-gate/agenci-ai/';
+
 /**
  * Stałe kotwice punktów artykułu (`{#…}` w docs/problemy.md); panel i dziennik odsyłają do nich wprost.
  * Zgodność z artykułem pilnuje test docs-links.

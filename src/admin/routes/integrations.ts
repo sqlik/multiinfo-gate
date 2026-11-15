@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { matches } from '../../integrations/conditions.ts';
-import { INTEGRATION_KINDS, MAIL_IN_PASSWORD_REF, defaultInboundConfig, defaultMailInConfig, defaultPowerAutomateConfig, defaultSmsGroupConfig, type InboundConfig, type IntegrationKind, type MailInConfig, type OutboundConfig, type PowerAutomateConfig, type SmsGroupConfig } from '../../integrations/config.ts';
+import { INTEGRATION_KINDS, MAIL_IN_PASSWORD_REF, defaultAgentConfig, defaultInboundConfig, defaultMailInConfig, defaultPowerAutomateConfig, defaultSmsGroupConfig, type AgentConfig, type InboundConfig, type IntegrationKind, type MailInConfig, type OutboundConfig, type PowerAutomateConfig, type SmsGroupConfig } from '../../integrations/config.ts';
 import { previewInbound, previewMailIn, previewSmsGroup, type Shorten } from '../../integrations/pipeline.ts';
 import { prepareLinks } from '../../links/shortener.ts';
 import { checkMailbox } from '../../worker/mail-in.ts';
@@ -13,6 +13,9 @@ import { buildPowerAutomateConnector, connectorAddress } from '../../api/power-a
 import { keyUsable } from '../../api/submit.ts';
 import { paConfigToValues, paFormToConfig, paFormValues, type PaFormValues } from '../power-automate-form.ts';
 import { paFormPage, type PaFormOptions } from '../views/integration-power-automate.ts';
+import { agentConfigToValues, agentFormToConfig, agentFormValues, type AgentFormValues } from '../agent-form.ts';
+import { agentFormPage, type AgentFormOptions } from '../views/integration-agent.ts';
+import { needsWarning } from '../../agents/scopes.ts';
 import { PRIVATE_MAIL_MESSAGE, PRIVATE_TARGET_MESSAGE, hostTarget, systemResolver, webhookTarget } from '../../net/private-address.ts';
 import { guardedConnect, type MailboxAuth } from '../../integrations/mail/client.ts';
 import { imapTarget, m365MailboxAuth } from '../../m365/mailbox.ts';
@@ -63,13 +66,14 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       counts: deps.integrationEvents.countsSince(row.id, since),
       lastEvent: deps.integrationEvents.latest(row.id) ?? null,
       mailbox: row.kind === 'mail_in' ? deps.mailIn?.state(row.id) ?? null : null,
+      activeConnections: row.kind === 'agent' ? deps.agentConnections.countActive(row.id, now()) : null,
       now: now(),
     };
   };
 
-  /** Przycisk „Do SMS” obejmuje także integracje z Power Automate: obie wysyłają SMS na wywołanie aplikacji. */
+  /** Przycisk „Do SMS” obejmuje także integracje z Power Automate i agentów AI: wysyłają SMS na wywołanie aplikacji. */
   const KIND_OF_FILTER: Record<'in' | 'out' | 'mail' | 'grupa', IntegrationKind[]> = {
-    in: ['webhook_in', 'power_automate'], out: ['webhook_out'], mail: ['mail_in'], grupa: ['sms_group'],
+    in: ['webhook_in', 'power_automate', 'agent'], out: ['webhook_out'], mail: ['mail_in'], grupa: ['sms_group'],
   };
 
   const listBody = (request: FastifyRequest, filter: IntegrationsFilter, created: CreatedHook | null = null) => {
@@ -499,6 +503,49 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     }
   };
 
+  /** Wartości formularza agenta z wiersza albo z wartości domyślnych. */
+  const agentValuesOf = (preset: Preset, row?: IntegrationRow): AgentFormValues => (row
+    ? agentConfigToValues(row.config as AgentConfig, { name: row.name, apiKeyId: String(row.apiKeyId), serviceId: row.serviceId ?? '', orig: row.orig ?? '', enabled: row.enabled === 1, preset: row.preset, storePayloads: row.storePayloads === 1 })
+    : agentConfigToValues(defaultAgentConfig(), { name: '', apiKeyId: '', serviceId: '', orig: '', enabled: true, preset: preset.id, storePayloads: false }));
+
+  const agentPage = (request: FastifyRequest, ctx: FormContext, v: AgentFormValues, opts: Omit<AgentFormOptions, 'apiUrl'>) =>
+    render.page(request, { title: ctx.row ? ctx.row.name : 'Nowa integracja', active: 'integracje', body: agentFormPage(ctx, v, { ...opts, apiUrl: deps.settings.apiUrl() }) });
+
+  interface SavedAgentForm { config: AgentConfig; keyId: number; v: AgentFormValues; addedReadInbound: boolean; warning: boolean }
+
+  /** Droga POST integracji agenta: walidacja i zapis przez `save`. Tryb jak w Power Automate. */
+  const handleAgentForm = async (request: FastifyRequest, reply: FastifyReply, preset: Preset, row: IntegrationRow | undefined, save: (saved: SavedAgentForm) => string) => {
+    reply.type('text/html; charset=utf-8');
+    const body = (request.body ?? {}) as Body;
+    const ctx = formContext('agent', preset, row);
+    const v = agentFormValues(body);
+    const mode = paModeOf(String(body.tryb ?? ''));
+    const fail = (error: string) => {
+      reply.code(400);
+      return agentPage(request, ctx, v, { mode, error });
+    };
+    const key = keyCheck(v, row?.apiKeyId);
+    if (!key.ok) return fail(key.error);
+    const built = agentFormToConfig(v);
+    if (!built.ok) return fail(built.error);
+    try {
+      return save({ config: built.config, keyId: key.keyId, v, addedReadInbound: built.addedReadInbound, warning: built.warning });
+    } catch (e) {
+      if ((e as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') return fail(`Integracja o tej nazwie już istnieje przy tym kluczu: ${v.name}.`);
+      throw e;
+    }
+  };
+
+  /** Świadome połączenie wysyłki z odczytem odebranych: wpis przy zapisie, który to połączenie wprowadza. */
+  const recordScopeWarning = (request: FastifyRequest, id: number, name: string, config: AgentConfig) => {
+    deps.audit.record({
+      actor: actorOf(request.adminUserId), action: 'agent.zakresy_ostrzezenie', target: `integracja:${id}`,
+      meta: { nazwa: name, zakresy: config.scopes }, ip: request.ip,
+    });
+  };
+
+  const READ_INBOUND_ADDED = ' Zakres „Odpowiedź nadawcy” wymaga odczytu odebranych, dlatego zapis zaznaczył także „Odczyt odebranych”.';
+
   /**
    * Powrót z pobrania konektora: wyłącznie strony, na których panel pokazuje pobranie (lista,
    * szczegóły, edycja, nowa integracja), bez znaków spoza ASCII i bez segmentów „..”.
@@ -564,6 +611,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     // Grupa ma jedno ustawienie: krok wyboru jest zbędny, kafelek prowadzi od razu do formularza.
     if (rodzaj === 'sms_group' && ustawienie === undefined) return reply.redirect('/integracje/nowa?rodzaj=sms_group&ustawienie=sms-grupa', 302);
     if (rodzaj === 'power_automate' && ustawienie === undefined) return reply.redirect('/integracje/nowa?rodzaj=power_automate&ustawienie=power-automate', 302);
+    if (rodzaj === 'agent' && ustawienie === undefined) return reply.redirect('/integracje/nowa?rodzaj=agent&ustawienie=agent-ai', 302);
     if (ustawienie === undefined) {
       reply.type('text/html; charset=utf-8');
       return render.page(request, { title: 'Nowa integracja', active: 'integracje', body: choosePresetPage(rodzaj, catalogFor(rodzaj)) });
@@ -574,6 +622,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     if (rodzaj === 'mail_in') return mailPage(request, formContext('mail_in', preset), mailValuesOf(preset), { mode: mailModeOf(tryb, null).mode });
     if (rodzaj === 'sms_group') return groupPage(request, formContext('sms_group', preset), groupValuesOf(preset), { mode: groupModeOf(tryb, null).mode });
     if (rodzaj === 'power_automate') return paPage(request, formContext('power_automate', preset), paValuesOf(preset), { mode: paModeOf(tryb) });
+    if (rodzaj === 'agent') return agentPage(request, formContext('agent', preset), agentValuesOf(preset), { mode: paModeOf(tryb) });
     const ctx = formContext(rodzaj, preset);
     const values = valuesFromPreset(rodzaj, preset);
     const mode = modeOf(tryb, preset, rodzaj, null);
@@ -635,6 +684,24 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
           ip: request.ip,
         });
         render.flash(request, 'ok', `Integracja ${v.name} utworzona.`);
+        reply.redirect(`/integracje/${id}`, 302);
+        return '';
+      });
+    }
+
+    if (kind === 'agent') {
+      return handleAgentForm(request, reply, preset, undefined, ({ config, keyId, v, addedReadInbound, warning }) => {
+        const id = deps.integrations.insert({
+          name: v.name, kind, apiKeyId: keyId, serviceId: v.serviceId || null, orig: v.orig || null, preset: preset.id,
+          enabled: v.enabled ? 1 : 0, config, secrets: {}, storePayloads: v.storePayloads ? 1 : 0, createdAt: now(),
+        });
+        deps.audit.record({
+          actor: actorOf(request.adminUserId), action: 'integracja.utworzenie', target: `integracja:${id}`,
+          meta: { nazwa: v.name, rodzaj: kind, ustawienie: preset.id, klucz: keyId, wlaczona: v.enabled, sekrety: [] },
+          ip: request.ip,
+        });
+        if (warning) recordScopeWarning(request, id, v.name, config);
+        render.flash(request, 'ok', `Integracja ${v.name} utworzona.${addedReadInbound ? READ_INBOUND_ADDED : ''}`);
         reply.redirect(`/integracje/${id}`, 302);
         return '';
       });
@@ -708,6 +775,9 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     if (row.kind === 'power_automate') {
       return paPage(request, formContext('power_automate', preset, row), paValuesOf(preset, row), { mode: paModeOf(request.query.tryb) });
     }
+    if (row.kind === 'agent') {
+      return agentPage(request, formContext('agent', preset, row), agentValuesOf(preset, row), { mode: paModeOf(request.query.tryb) });
+    }
     const values = valuesOf(row, null);
     const mode = modeOf(request.query.probka === undefined ? request.query.tryb : 'zaawansowany', preset, row.kind, values);
     if (mode.mode === 'prosty') return simplePage(request, formContext(row.kind, preset, row), simpleDefaults(preset, values));
@@ -769,6 +839,23 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
           meta: { nazwa: v.name, pola: changedFields(row, after) }, ip: request.ip,
         });
         render.flash(request, 'ok', `Integracja ${v.name} zapisana.`);
+        reply.redirect(`/integracje/${row.id}`, 302);
+        return '';
+      });
+    }
+    if (row.kind === 'agent') {
+      return handleAgentForm(request, reply, presetOf(row), row, ({ config, v, addedReadInbound, warning }) => {
+        deps.integrations.update(row.id, {
+          name: v.name, serviceId: v.serviceId || null, orig: v.orig || null, preset: row.preset, enabled: v.enabled ? 1 : 0,
+          config, storePayloads: v.storePayloads ? 1 : 0,
+        }, now());
+        const after = deps.integrations.get(row.id)!;
+        deps.audit.record({
+          actor: actorOf(request.adminUserId), action: 'integracja.edycja', target: `integracja:${row.id}`,
+          meta: { nazwa: v.name, pola: changedFields(row, after) }, ip: request.ip,
+        });
+        if (warning && !needsWarning((row.config as AgentConfig).scopes)) recordScopeWarning(request, row.id, v.name, config);
+        render.flash(request, 'ok', `Integracja ${v.name} zapisana.${addedReadInbound ? READ_INBOUND_ADDED : ''}`);
         reply.redirect(`/integracje/${row.id}`, 302);
         return '';
       });
@@ -868,7 +955,10 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       actor: actorOf(request.adminUserId), action: 'integracja.kopia', target: `integracja:${copyId}`,
       meta: { z: row.id, nazwa: name }, ip: request.ip,
     });
-    render.flash(request, 'ok', 'Kopia utworzona jako wyłączona. Po uzupełnieniu ustawień należy ją włączyć.');
+    // Połączenia agenta należą do osób i nie przechodzą do kopii: kopia zaczyna bez połączeń.
+    render.flash(request, 'ok', row.kind === 'agent'
+      ? 'Kopia utworzona jako wyłączona, bez połączeń. Po uzupełnieniu ustawień należy ją włączyć i dodać połączenia.'
+      : 'Kopia utworzona jako wyłączona. Po uzupełnieniu ustawień należy ją włączyć.');
     return reply.redirect(`/integracje/${copyId}/edytuj`, 302);
   });
 

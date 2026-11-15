@@ -40,7 +40,8 @@ export function paConfigToValues(config: PowerAutomateConfig, base: PaFormBase):
   };
 }
 
-function int(raw: string, min: number, max: number, what: string): number | string {
+/** Liczba całkowita z pola formularza albo błąd jako zdanie po polsku. Wspólna z formularzem agenta. */
+export function int(raw: string, min: number, max: number, what: string): number | string {
   const n = Number.parseInt(raw, 10);
   if (!Number.isFinite(n) || n < min || n > max || String(n) !== raw.trim()) return `${what}: podaj liczbę od ${min} do ${max}.`;
   return n;

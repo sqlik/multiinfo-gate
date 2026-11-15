@@ -133,6 +133,37 @@
   apply();
 })();
 
+// Ostrzeżenia i informacje zależne od zaznaczonych zakresów agenta: element z data-scopes="a,b,!c" jest widoczny,
+// gdy w tym samym formularzu zaznaczone są pola scopes o wartościach a i b, a pole c nie jest zaznaczone. Stan
+// początkowy ustawia serwer według zapisanych zakresów, skrypt zmienia go od razu po zaznaczeniu, bez zapisu.
+(function () {
+  var forms = document.querySelectorAll('form');
+  for (var f = 0; f < forms.length; f += 1) {
+    (function (form) {
+      var shown = form.querySelectorAll('[data-scopes]');
+      if (shown.length === 0) return;
+      var checked = function (value) {
+        var box = form.querySelector('input[name="scopes"][value="' + value + '"]');
+        return box !== null && box.checked;
+      };
+      var apply = function () {
+        for (var i = 0; i < shown.length; i += 1) {
+          var rules = (shown[i].getAttribute('data-scopes') || '').split(',');
+          var visible = true;
+          for (var r = 0; r < rules.length; r += 1) {
+            var negated = rules[r].charAt(0) === '!';
+            if (checked(negated ? rules[r].slice(1) : rules[r]) === negated) visible = false;
+          }
+          shown[i].hidden = !visible;
+        }
+      };
+      var boxes = form.querySelectorAll('input[name="scopes"]');
+      for (var b = 0; b < boxes.length; b += 1) boxes[b].addEventListener('change', apply);
+      apply();
+    })(forms[f]);
+  }
+})();
+
 // Podpowiedź pola adresu z wybranego konta: element z data-address-of="idListy" pokazuje w podpowiedzi adres
 // zaznaczonej pozycji (data-address). Bez adresu albo przy niespełnionym warunku data-address-when="nazwa=wartość"
 // wraca do data-placeholder. Bez skryptu podpowiedź ustawia serwer według zapisanego wyboru.

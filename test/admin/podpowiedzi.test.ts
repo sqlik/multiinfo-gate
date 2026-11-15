@@ -41,9 +41,11 @@ function plain(text: string): string {
 const SENTENCE_BREAK = /(?<=[a-ząćęłńóśźż0-9”»)\]}`’])(?<!\bnp)(?<!\btzn)\.\s+[A-ZĄĆĘŁŃÓŚŹŻ„«]/;
 const ELEMENT = /<(div|p|span|small|li)\b[^>]*class="[^"]*\b(hint|dim|note|notes|help-body|sub)\b[^"]*"[^>]*>([\s\S]*?)<\/\1>/g;
 const LITERALS = String.raw`(?:'(?:[^'\\]|\\.)*'|\`(?:[^\`\\]|\\.)*\`)(?:\s*\+\s*(?:'(?:[^'\\]|\\.)*'|\`(?:[^\`\\]|\\.)*\`))*`;
-const HINT_CALL = new RegExp(String.raw`\bhint\(\s*((?:[^()]|\([^()]*\))*?)\)`, 'g');
+// Argument z wywołaniami w środku wstawek, na przykład `countForms(n(v.limit), …)`, do trzech poziomów nawiasów.
+const HINT_CALL = new RegExp(String.raw`\bhint\(\s*((?:[^()]|\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*?)\)`, 'g');
 const GROUP = new RegExp(LITERALS, 'g');
-const FIELD = new RegExp(String.raw`\b(?:hint|note|notes|help|description|lead)\s*:\s*(${LITERALS})`, 'g');
+// Pola obiektów z tekstem podpowiedzi, także złożone nazwy jak `throttleHint` albo `nameHint`.
+const FIELD = new RegExp(String.raw`\b(?:hint|note|notes|help|description|lead|[a-z]\w*Hint)\s*:\s*(${LITERALS})`, 'g');
 const LITERAL = /'((?:[^'\\]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g;
 
 const joined = (group: string) => [...group.matchAll(LITERAL)].map((m) => m[1] ?? m[2] ?? '').join('');
