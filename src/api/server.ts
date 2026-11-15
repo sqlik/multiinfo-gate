@@ -85,6 +85,12 @@ export interface ApiDeps {
   log?: Logger;
 }
 
+/** Adres w logu błędów: bez zapytania i bez tokenu linku do pobrania, który działa bez logowania. */
+export function loggedUrl(url: string): string {
+  const path = url.split('?')[0]!;
+  return path.startsWith('/pobierz/') ? '/pobierz/…' : path;
+}
+
 /** Limit body żądania API; trasy rozsyłki mają własny, wyższy (`PACKAGE_BODY_LIMIT`). */
 const API_BODY_LIMIT = 512 * 1024;
 
@@ -132,7 +138,7 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
     if (status === 400) {
       return reply.code(400).send({ error: { code: 'invalid_body', message: 'Body żądania jest puste albo nie jest poprawnym dokumentem JSON.' } });
     }
-    (deps.log ?? silentLogger).error('api.wyjatek', { method: _request.method, url: _request.url.split('?')[0], error });
+    (deps.log ?? silentLogger).error('api.wyjatek', { method: _request.method, url: loggedUrl(_request.url), error });
     return reply.code(500).send({ error: { code: 'internal', message: 'Błąd wewnętrzny bramki.' } });
   });
 

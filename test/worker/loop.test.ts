@@ -82,6 +82,18 @@ describe('Worker.tick - tura utrzymaniowa', () => {
     await worker.tick();
     expect(flushN).toHaveBeenCalledTimes(2);
   });
+
+  it('tura utrzymaniowa woła krok oauth', async () => {
+    const prune = vi.fn(() => ({ codes: 0, tokens: 0, clients: 0 }));
+    const error = vi.fn();
+    const worker = new Worker({ ...deps, oauth: { prune }, log: { error, warn: vi.fn(), info: vi.fn(), debug: vi.fn() } }, { now: () => clock, maintenanceMs: 60_000 });
+    await worker.tick();
+    expect(prune).toHaveBeenCalledWith(clock);
+    prune.mockImplementation(() => { throw new Error('baza zajęta'); });
+    clock = new Date(clock.getTime() + 60_000);
+    await worker.tick();
+    expect(error).toHaveBeenCalledWith('worker.utrzymanie_blad', expect.objectContaining({ step: 'oauth' }));
+  });
 });
 
 describe('Worker.tick - retencja skracacza', () => {

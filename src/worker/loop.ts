@@ -94,6 +94,7 @@ export class Worker {
       ['kolejka_powiadomien', () => this.deps.notifications?.pruneBefore(new Date(now.getTime() - 30 * DAY_MS))],
       ['skrzynki_przetworzone', () => this.deps.mailInRepo?.pruneSeenBefore(new Date(now.getTime() - 180 * DAY_MS))],
       ['skracacz', () => this.purgeLinks(now)],
+      ['oauth', () => this.deps.oauth?.prune(now)],
     ];
     for (const [name, step] of steps) {
       try {

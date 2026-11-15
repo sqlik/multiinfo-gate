@@ -187,12 +187,13 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     mailIn, connect: imapConnect, resolve: systemResolver, allowPrivateMail: config.mailAllowPrivate, notifier, notifications, log,
     m365: { tokens: m365Tokens, accounts: m365Accounts }, ...links,
   });
+  const oauth = new OAuthRepo(db);
   const worker = new Worker({
     accounts, apiKeys, messages, events, deliveries, packages, jobs, clients, inbound,
     reportsDir: join(config.dataDir, 'reports'), log, allowPrivateWebhooks: config.webhookAllowPrivate,
     integrationEmit, integrations, integrationEvents, guards, notifier, notifications, scanner, releases,
     mailIn: mailInPoller, mailInRepo: mailIn, m365: { tokens: m365Tokens, accounts: m365Accounts }, m365KeepAlive: m365Tokens,
-    links: { campaigns, shortLinks },
+    links: { campaigns, shortLinks }, oauth,
   });
 
   const receiver = new Receiver({
@@ -202,7 +203,6 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   });
 
   const agentConnectionsRepo = new AgentConnectionsRepo(db);
-  const oauth = new OAuthRepo(db);
   const agentConnections = new ConnectionService({ connections: agentConnectionsRepo, oauth, integrations, apiKeys, accounts });
   const agents: AgentServerDeps = {
     settings, oauth, connectionsRepo: agentConnectionsRepo, connections: agentConnections, audit, notifier, masterKey: config.masterKey,

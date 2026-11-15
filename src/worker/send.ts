@@ -23,6 +23,7 @@ import type { ClientPool } from './clients.ts';
 import { pauseForCertificate } from './certificate.ts';
 import { emitIntegrations, isOutboundEvent, type IntegrationEmitDeps } from './integrations.ts';
 import { emitWebhook, type HttpPost, type WebhookEvent } from './webhook.ts';
+import type { OAuthRepo } from '../store/oauth.ts';
 
 export interface WorkerDeps {
   accounts: AccountsRepo;
@@ -62,6 +63,8 @@ export interface WorkerDeps {
   m365?: M365MailboxDeps;
   /** Skaner stanu (certyfikaty, konta, odbiór, podsumowanie) - tura utrzymaniowa. */
   scanner?: { scan(now: Date): void };
+  /** Kody autoryzacji, tokeny i porzuceni klienci OAuth agentów AI - sprzątanie w turze utrzymaniowej. */
+  oauth?: Pick<OAuthRepo, 'prune'>;
   /** Strażnicy integracji - sprzątanie idempotencji w turze utrzymaniowej. */
   guards?: IntegrationGuardsRepo;
   /** Tor skrzynek pocztowych: odpytania poza tabelą zadań, obok torów zadań. */

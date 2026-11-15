@@ -155,6 +155,15 @@ export class ConnectionService {
     };
   }
 
+  /** Połączenie z nazwą integracji i końcem ważności liczonym razem z kluczem, bez oceny odwołania i terminu. */
+  details(connectionId: number): { connection: AgentConnectionRow; integrationName: string | null; expiresAt: string | null } | undefined {
+    const connection = this.deps.connections.get(connectionId);
+    if (!connection) return undefined;
+    const integration = this.deps.integrations.get(connection.integrationId);
+    const key = integration ? this.deps.apiKeys.get(integration.apiKeyId) : undefined;
+    return { connection, integrationName: integration?.name ?? null, expiresAt: effectiveExpiry(connection, key?.expiresAt ?? null) };
+  }
+
   private usable(id: number): AgentConnectionRow {
     const connection = this.deps.connections.get(id);
     if (!connection) throw new Error('Połączenie nie istnieje.');
