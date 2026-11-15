@@ -64,6 +64,15 @@ describe('widok wysyłki SMS', () => {
     expect(renderSend({ ...PREVIEW, recipients: 600, route: 'package' }, {})).toContain('Wyślij rozsyłkę do 600 odbiorców');
   });
 
+  it('renderSend: wariant bez polskich znaków pokazuje w dymku łacińskie odpowiedniki, z polskimi znakami treść bez zmian', () => {
+    const text = 'Zażółć gęślą jaźń. ŻÓŁTY ĆMA, ŚLĄSK, ŹREBIĘ, ŃANDU. Zapisy: https://l.firma.pl/0000000';
+    const bubble = (html: string) => /<div class="bubble">([\s\S]*?)<\/div>/.exec(html)![1];
+    expect(bubble(renderSend({ ...PREVIEW, text, encoding: 'gsm' }, {})))
+      .toBe('Zazolc gesla jazn. ZOLTY CMA, SLASK, ZREBIE, NANDU. Zapisy: <span class="lnk">https://l.firma.pl/0000000</span>');
+    expect(bubble(renderSend({ ...PREVIEW, text, encoding: 'ucs2' }, {}))).toContain('Zażółć gęślą jaźń.');
+    expect(bubble(renderGroup({ ...GROUP, text: 'Ewa Nowak: Awaria śluzy', encoding: 'gsm' }, []))).toBe('Ewa Nowak: Awaria sluzy');
+  });
+
   it('renderSend po wysyłce: bez przycisku wysyłki, liczby doręczeń albo samo przyjęcie bez odczytu wysłanych', () => {
     const sent = { kind: 'messages', ids: Array.from({ length: 12 }, (_, i) => `msg_${i}`), repeated: false };
     const live = renderSend(PREVIEW, { sent, deliveries: { counts: { delivered: 5, sent: 7 }, done: false } });

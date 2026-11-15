@@ -3,6 +3,7 @@
 // po czym widok sam odświeża stan doręczeń.
 import { applyTheme, cancelledText, createBridge, esc, note, phoneLabel, plural, pluralWord, sayIn, stamp, textOf } from './bridge.js';
 import { deliveryLine, watchDeliveries } from './doreczenia.js';
+import { latinText } from './measure.js';
 
 /** Stała treść wiadomości do rozmowy, bez treści SMS-a. */
 const GROUP_FIX_MESSAGE = 'Chcę poprawić treść tego SMS-a do grupy';
@@ -27,7 +28,7 @@ export function renderGroup(p, recipients = [], state = {}) {
   const list = recipients.length === 0 ? ''
     : `<div class="recips">${recipients.map((r) => `<div><span>${esc(r.name || 'bez nazwy')}</span><span class="mono">${esc(phoneLabel(r.phone))}</span></div>`).join('')}</div>`;
   const sender = esc(groupSenderLabel(p));
-  const left = `<div class="phone"><div class="phone-from">${sender}</div><div class="bubble">${esc(p.text)}</div></div>`
+  const left = `<div class="phone"><div class="phone-from">${sender}</div><div class="bubble">${esc(p.encoding === 'gsm' ? latinText(p.text) : p.text)}</div></div>`
     + `<div class="counter"><b>${p.characters}</b> ${pluralWord(p.characters, 'znak', 'znaki', 'znaków')} · <b>${p.parts}</b> `
     + `${pluralWord(p.parts, 'część', 'części', 'części')} · ${p.encoding === 'gsm' ? 'GSM' : 'UCS-2'}</div>`
     + (p.truncated ? note('Treść została skrócona do limitu części grupy') : '');

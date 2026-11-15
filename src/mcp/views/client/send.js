@@ -3,7 +3,7 @@
 // z kluczem potwierdzenia z _meta. Po wysyłce widok sam odświeża stan doręczeń.
 import { applyTheme, cancelledText, createBridge, esc, note, phoneLabel, plural, pluralWord, sayIn, stamp, textOf } from './bridge.js';
 import { deliveryLine, watchDeliveries } from './doreczenia.js';
-import { measure } from './measure.js';
+import { latinText, measure } from './measure.js';
 
 /** Kod zastępczy krótkiego linku w podglądzie; prawdziwy kod powstaje przy wysyłce. */
 const PLACEHOLDER = '0000000';
@@ -124,7 +124,7 @@ export function renderSend(p, state = {}) {
   const sent = state.sent ?? null;
   const locked = sent !== null || state.sending === true || state.busy === true || state.editable === false;
   const sender = p.senders.find((s) => s.value === p.orig)?.label ?? p.orig ?? '';
-  const left = `<div class="phone"><div class="phone-from">${esc(sender)}</div><div class="bubble">${linkMarkup(p.text, p)}</div></div>${counter(p)}`
+  const left = `<div class="phone"><div class="phone-from">${esc(sender)}</div><div class="bubble">${linkMarkup(p.encoding === 'gsm' ? latinText(p.text) : p.text, p)}</div></div>${counter(p)}`
     + (p.truncated ? note('Treść została skrócona do limitu części integracji') : '')
     + (p.links?.shortened > 0 ? note('Krótki link zawiera kod zastępczy. Każdy odbiorca otrzyma przy wysyłce własny kod.') : '')
     + (p.links?.notice ? note(p.links.notice) : '')

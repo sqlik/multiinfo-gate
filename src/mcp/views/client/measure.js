@@ -10,6 +10,11 @@ const PART_LIMITS = { gsm: { single: 160, multi: 153 }, ucs2: { single: 70, mult
 const gsmSlots = (ch) => (GSM_EXTENDED.has(ch) ? 2 : 1);
 const isGsm = (ch) => GSM_BASIC.has(ch) || GSM_EXTENDED.has(ch);
 
+const LATIN = { ą: 'a', ć: 'c', ę: 'e', ł: 'l', ń: 'n', ó: 'o', ś: 's', ź: 'z', ż: 'z', Ą: 'A', Ć: 'C', Ę: 'E', Ł: 'L', Ń: 'N', Ó: 'O', Ś: 'S', Ź: 'Z', Ż: 'Z' };
+
+/** Treść tak, jak odbierze ją telefon przy wymuszonym GSM: Multiinfo zamienia polskie litery na łacińskie odpowiedniki. */
+export const latinText = (text) => String(text ?? '').replace(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g, (ch) => LATIN[ch]);
+
 /**
  * Kodowanie, liczba znaków i części treści. `encoding` to żądanie: auto, gsm albo unicode. Części liczone
  * jak w bramce: znak albo para zastępcza nie trafia do dwóch części naraz.
