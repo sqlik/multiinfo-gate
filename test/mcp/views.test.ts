@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { APP_MIME } from '../../src/mcp/apps.ts';
-import { hostSummary, renderStatus } from '../../src/mcp/views/client/co-moge.js';
+import { renderStatus } from '../../src/mcp/views/client/co-moge.js';
 import { BUILT_VIEWS, viewHtml, viewResources, viewUri } from '../../src/mcp/views/index.ts';
 
 const LABELS = {
@@ -86,30 +86,14 @@ describe('dokumenty widoków', () => {
     }
   });
 
-  it('dokument Co mogę? zawiera most, rysowanie, etykiety zakresów i przyciski Odśwież oraz próbę wywołania', () => {
+  it('dokument Co mogę? zawiera most, rysowanie, etykiety zakresów i przycisk Odśwież, bez prób punktu kontrolnego A', () => {
     const html = viewHtml('co-moge');
     expect(html).toContain('function createBridge');
     expect(html).toContain('function renderStatus');
     expect(html).toContain('Odczyt odebranych');
     expect(html).toContain('Odśwież');
-    expect(html).toContain('Sprawdź wywołanie z widoku');
     expect(html).toContain('prefers-color-scheme: dark');
-  });
-
-  it('punkt kontrolny A: dokument Co mogę? zawiera próby wiadomości, linku i pełnego ekranu', () => {
-    const html = viewHtml('co-moge');
-    for (const id of ['proba-wiadomosc', 'proba-link', 'proba-ekran']) expect(html).toContain(`id="${id}"`);
-    expect(html).toContain('Wyślij wiadomość próbną');
-    expect(html).toContain('Otwórz link próbny');
-    expect(html).toContain('Pełny ekran');
-  });
-
-  it('hostSummary: nazwa i wersja aplikacji, możliwości i tryby wyświetlania jako tekst', () => {
-    expect(hostSummary({
-      info: { name: 'claude-ai', version: '2026.11' }, capabilities: { serverTools: {}, message: {}, openLinks: {} },
-      context: { displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'] },
-    })).toBe('Aplikacja claude-ai 2026.11. Możliwości: message, openLinks, serverTools. Tryb inline, dostępne: inline, fullscreen.');
-    expect(hostSummary({ info: {}, capabilities: {}, context: {} })).toBe('Aplikacja bez nazwy. Możliwości: brak. Tryb nieznany, dostępne: brak danych.');
+    expect(html).not.toMatch(/id="proba|view_probe|hostSummary/);
   });
 
   it('zasoby widoków: adres ui://multiinfo-gate, typ APP_MIME i _meta.ui bez domen zewnętrznych', () => {

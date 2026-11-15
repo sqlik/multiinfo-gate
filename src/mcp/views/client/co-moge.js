@@ -48,23 +48,7 @@ export function renderStatus(data, env = {}) {
 
 const textOf = (result) => (result.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join(' ');
 
-/** Opis aplikacji z wyniku ui/initialize do próby punktu kontrolnego A; zadanie 13 usuwa go razem z view_probe. */
-export function hostSummary(host) {
-  const info = host?.info ?? {};
-  const caps = Object.keys(host?.capabilities ?? {}).sort();
-  const context = host?.context ?? {};
-  const modes = Array.isArray(context.availableDisplayModes) ? context.availableDisplayModes.join(', ') : 'brak danych';
-  return `Aplikacja ${info.name ? `${info.name}${info.version ? ` ${info.version}` : ''}` : 'bez nazwy'}. `
-    + `Możliwości: ${caps.length > 0 ? caps.join(', ') : 'brak'}. `
-    + `Tryb ${context.displayMode ?? 'nieznany'}, dostępne: ${modes}.`;
-}
-
-const PROBE_MESSAGE = 'Próba widoku bramki: tę wiadomość wysłał widok „Co mogę?”. Odpowiedz jednym zdaniem, że ją otrzymałeś.';
-const PROBE_LINK = 'https://sqlik.github.io/multiinfo-gate/';
-
-const clock = (iso) => new Date(iso).toLocaleTimeString('pl-PL', { timeZone: 'Europe/Warsaw' });
-
-/** Uruchomienie widoku w dokumencie: most, rysowanie wyniku, przyciski „Odśwież” i próba wywołania. */
+/** Uruchomienie widoku w dokumencie: most, rysowanie wyniku i przycisk „Odśwież”. */
 export function start(win, env) {
   const doc = win.document;
   const content = doc.getElementById('tresc');
@@ -102,19 +86,4 @@ export function start(win, env) {
   });
 
   action('odswiez', async () => show(await bridge.callTool('connection_status', {})));
-  action('proba', async () => {
-    const result = await bridge.callTool('view_probe', {});
-    if (result.isError) return say('fail', textOf(result));
-    const probe = result.structuredContent ?? {};
-    say('ok', `Wywołanie z widoku działa: bramka odpowiedziała o ${clock(probe.at)}${probe.session ? `, sesja ${probe.session}` : ''}. ${hostSummary(bridge.host())}`);
-  });
-  action('proba-wiadomosc', async () => {
-    const sent = await bridge.sendMessage(PROBE_MESSAGE);
-    say(sent ? 'ok' : 'fail', sent ? 'Aplikacja przyjęła wiadomość z widoku' : 'Aplikacja nie obsługuje wiadomości z widoku albo ją odrzuciła');
-  });
-  action('proba-link', async () => {
-    const opened = await bridge.openLink(PROBE_LINK);
-    say(opened ? 'ok' : 'fail', opened ? 'Aplikacja przyjęła prośbę o otwarcie linku' : 'Aplikacja nie obsługuje otwierania linków albo odmówiła');
-  });
-  action('proba-ekran', async () => say('plain', `Aplikacja ustawiła tryb: ${await bridge.requestDisplayMode('fullscreen')}`));
 }

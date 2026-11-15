@@ -119,4 +119,10 @@ describe('obraz Dockera', () => {
     const stages = read('docker/Dockerfile').split(/^FROM /m);
     expect(stages.at(-1)).toMatch(/^ENV .*\bNPM_CONFIG_UPDATE_NOTIFIER=false\b/m);
   });
+
+  // Serwer MCP udostępnia artykuły dokumentacji jako zasoby i czyta je z katalogu docs obok dist.
+  it('obraz Dockera kopiuje docs', () => {
+    const stages = read('docker/Dockerfile').split(/^FROM /m);
+    expect(stages.at(-1)).toMatch(/^COPY docs\/\*\.md \.\/docs\/$/m);
+  });
 });

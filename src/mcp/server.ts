@@ -10,19 +10,21 @@ import {
   negotiateVersion, requestEra, requestMeta, RESOURCE_NOT_FOUND, RPC, RpcError, rpcError, rpcResult, SUPPORTED_PROTOCOL_VERSIONS, UNSUPPORTED_VERSION,
   type RpcId,
 } from './protocol.ts';
+import type { AgentScope } from '../integrations/config.ts';
+import { listedPrompt, missingArgument, visiblePrompts } from './prompts.ts';
+import { docResources, DOCS_DIR, readDoc } from './resources.ts';
 import { callTool, visibleTools, type AgentToolDeps, type ToolContext, type ToolDef } from './tools.ts';
-import { viewProbeTool } from './tools/probe.ts';
-import { connectionStatusTool } from './tools/status.ts';
+import { TOOLS } from './tools/index.ts';
 import { viewByUri, viewHtml, viewMeta, viewResources } from './views/index.ts';
 
-/** Narzędzia bramki. Kolejne zadania programu 1.12 dopisują wysyłkę, odczyty i kampanie, a zadanie 13 usuwa narzędzie próbne. */
-export const AGENT_TOOLS: readonly ToolDef[] = [connectionStatusTool, viewProbeTool];
+/** Narzędzia bramki według zakresów integracji Agent AI. */
+export const AGENT_TOOLS: readonly ToolDef[] = TOOLS;
 
 const SERVER_INFO = { name: 'multiinfo-gate', title: 'Multiinfo Gate', version: GATE_VERSION };
 const CAPABILITIES = { tools: {}, resources: {}, prompts: {} };
 /** Pole treści, które nowa era powtarza w nagłówku Mcp-Name. */
 const NAMED: Record<string, 'name' | 'uri'> = { 'tools/call': 'name', 'prompts/get': 'name', 'resources/read': 'uri' };
-const VIEW_TTL_MS = 3_600_000;
+const RESOURCE_TTL_MS = 3_600_000;
 
 export const API_KEY_REFUSED = 'Adres /mcp nie przyjmuje klucza API. Użyj tokenu połączenia z panelu bramki.';
 const MISSING_TOKEN = 'Adres /mcp wymaga tokenu połączenia z panelu bramki albo połączenia aplikacji kodem jednorazowym.';
@@ -59,6 +61,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: AgentToolDeps, too
   const now = () => (deps.now ? deps.now() : new Date());
   const base = () => gatewayBase(deps.settings.apiUrl());
   const log = deps.log ?? silentLogger;
+  const docsDir = deps.docsDir ?? DOCS_DIR;
 
   const challenge = (error?: string): string => {
     const b = base();
@@ -88,11 +91,32 @@ export function registerMcpRoutes(app: FastifyInstance, deps: AgentToolDeps, too
     };
   }
 
+  /** Zakresy połączenia; `null`, gdy integracja, klucz albo konto są chwilowo niedostępne. */
+  function scopesOf(connectionId: number, at: Date): ReadonlySet<AgentScope> | null {
+    const resolved = deps.connections.resolve(connectionId, at);
+    return resolved.ok ? resolved.ctx.scopes : null;
+  }
+
   /** Bez działającej integracji agent widzi tylko „Co mogę?”, które podaje powód. */
   function listTools(connectionId: number, apps: boolean, at: Date): Array<Record<string, unknown>> {
-    const resolved = deps.connections.resolve(connectionId, at);
-    return resolved.ok ? visibleTools(tools, resolved.ctx.scopes, apps) : visibleTools(tools.filter((t) => t.scopes === 'any'), null, apps);
+    const scopes = scopesOf(connectionId, at);
+    return scopes !== null ? visibleTools(tools, scopes, apps) : visibleTools(tools.filter((t) => t.scopes === 'any'), null, apps);
   }
+
+  const listPrompts = (connectionId: number, at: Date) => visiblePrompts(scopesOf(connectionId, at)).map(listedPrompt);
+
+  /** Scenariusz z zakresów połączenia jako wiadomość użytkownika; scenariusz bez zakresu jest dla połączenia nieznany. */
+  function getPrompt(connectionId: number, params: unknown, at: Date): Record<string, unknown> {
+    const p = isObject(params) ? params : {};
+    const def = visiblePrompts(scopesOf(connectionId, at)).find((d) => d.name === p.name);
+    if (!def) throw noPrompt(params);
+    const args = isObject(p.arguments) ? p.arguments : {};
+    const missing = missingArgument(def, args);
+    if (missing !== null) throw new RpcError(RPC.invalidParams, `Scenariusz ${def.name} wymaga argumentu ${missing}.`);
+    return { description: def.description, messages: [{ role: 'user', content: { type: 'text', text: def.message(args as Record<string, string>) } }] };
+  }
+
+  const listResources = () => [...docResources(docsDir), ...viewResources()];
 
   async function call(connectionId: number, sessionId: string | null, apps: boolean, protocolVersion: string, params: unknown, at: Date):
     Promise<Record<string, unknown>> {
@@ -101,8 +125,10 @@ export function registerMcpRoutes(app: FastifyInstance, deps: AgentToolDeps, too
     return callTool(tools, toolContext(connectionId, sessionId, apps, protocolVersion, at), p.name, p.arguments ?? {});
   }
 
-  /** Dokument widoku z `_meta.ui` w elemencie `contents`, bo aplikacja czyta je stamtąd w pierwszej kolejności. */
+  /** Artykuł dokumentacji albo dokument widoku z `_meta.ui` w elemencie `contents`, bo aplikacja czyta je stamtąd w pierwszej kolejności. */
   function readResource(params: unknown): Record<string, unknown> {
+    const doc = readDoc(isObject(params) ? params.uri : undefined, docsDir);
+    if (doc !== null) return { contents: [doc] };
     const id = viewByUri(isObject(params) ? params.uri : undefined);
     if (id === null) throw noResource(params);
     return { contents: [{ uri: (params as { uri: string }).uri, mimeType: APP_MIME, text: viewHtml(id), _meta: viewMeta() }] };
@@ -139,10 +165,10 @@ export function registerMcpRoutes(app: FastifyInstance, deps: AgentToolDeps, too
         });
       case 'tools/list': return complete({ tools: listTools(connectionId, apps, at), ttlMs: 0, cacheScope: 'private' });
       case 'tools/call': return complete(await call(connectionId, null, apps, version, params, at));
-      case 'resources/list': return complete({ resources: viewResources(), ttlMs: VIEW_TTL_MS, cacheScope: 'private' });
-      case 'resources/read': return complete({ ...readResource(params), ttlMs: VIEW_TTL_MS, cacheScope: 'private' });
-      case 'prompts/list': return complete({ prompts: [], ttlMs: 0, cacheScope: 'private' });
-      case 'prompts/get': throw noPrompt(params);
+      case 'resources/list': return complete({ resources: listResources(), ttlMs: RESOURCE_TTL_MS, cacheScope: 'private' });
+      case 'resources/read': return complete({ ...readResource(params), ttlMs: RESOURCE_TTL_MS, cacheScope: 'private' });
+      case 'prompts/list': return complete({ prompts: listPrompts(connectionId, at), ttlMs: 0, cacheScope: 'private' });
+      case 'prompts/get': return complete(getPrompt(connectionId, params, at));
       default: throw noMethod(method);
     }
   }
@@ -172,10 +198,10 @@ export function registerMcpRoutes(app: FastifyInstance, deps: AgentToolDeps, too
       case 'ping': return {};
       case 'tools/list': return { tools: listTools(connectionId, session.apps, at) };
       case 'tools/call': return call(connectionId, session.id, session.apps, session.protocolVersion, params, at);
-      case 'resources/list': return { resources: viewResources() };
+      case 'resources/list': return { resources: listResources() };
       case 'resources/read': return readResource(params);
-      case 'prompts/list': return { prompts: [] };
-      case 'prompts/get': throw noPrompt(params);
+      case 'prompts/list': return { prompts: listPrompts(connectionId, at) };
+      case 'prompts/get': return getPrompt(connectionId, params, at);
       default: throw noMethod(method);
     }
   }

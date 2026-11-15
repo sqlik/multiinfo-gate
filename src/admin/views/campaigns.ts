@@ -4,6 +4,7 @@ import type { CampaignRow } from '../../store/campaigns.ts';
 import { warsawStamp } from '../../time/warsaw.ts';
 import { clicksChart } from './chart.ts';
 import { esc } from './layout.ts';
+import { plural } from '../../text/plural.ts';
 
 export interface CampaignsData {
   rows: CampaignRow[];
@@ -28,13 +29,6 @@ const minute = (iso: string) => warsawStamp(iso).slice(0, 16);
 /** `14.04 10:02` w tabeli odbiorców, gdzie rok wynika z okresu kampanii. */
 const short = (iso: string) => { const s = warsawStamp(iso); return `${s.slice(8, 10)}.${s.slice(5, 7)} ${s.slice(11, 16)}`; };
 const percent = (part: number, whole: number) => `${((part / whole) * 100).toFixed(1).replace('.', ',')} %`;
-
-/** Forma liczebnika: 1 rozsyłka, 2 rozsyłki, 5 rozsyłek. */
-function plural(n: number, one: string, few: string, many: string): string {
-  if (n === 1) return `${n} ${one}`;
-  const tens = n % 100;
-  return n % 10 >= 2 && n % 10 <= 4 && (tens < 12 || tens > 14) ? `${n} ${few}` : `${n} ${many}`;
-}
 
 const period = (c: CampaignRow) => {
   const from = minute(c.firstSentAt);

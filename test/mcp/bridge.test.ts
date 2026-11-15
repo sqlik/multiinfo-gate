@@ -69,7 +69,7 @@ describe('most widoku z aplikacją AI', () => {
   it('bridge: callTool wysyła tools/call i rozwiązuje obietnicę odpowiedzią o tym samym id', async () => {
     const { sent, deliver, bridge } = await connected();
     const first = bridge.callTool('connection_status', {});
-    const second = bridge.callTool('view_probe', { a: 1 });
+    const second = bridge.callTool('delivery_trace', { id: 'msg_1' });
     await flush();
     const [a, b] = sent.filter((m) => m.method === 'tools/call');
     expect(a).toMatchObject({ jsonrpc: '2.0', method: 'tools/call', params: { name: 'connection_status', arguments: {} } });

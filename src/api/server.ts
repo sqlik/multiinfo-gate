@@ -50,6 +50,8 @@ export interface AgentServerDeps extends OAuthDeps {
   sessions: McpSessions;
   /** Rejestr narzędzi MCP; domyślnie AGENT_TOOLS, testy podstawiają narzędzia próbne. */
   tools?: readonly ToolDef[];
+  /** Katalog dokumentacji udostępnianej jako zasoby MCP; domyślnie `docs` obok `src` albo `dist`. */
+  docsDir?: string;
 }
 
 export interface ApiDeps {

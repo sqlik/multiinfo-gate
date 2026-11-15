@@ -124,7 +124,7 @@ const matchesStatus = (status: string, wanted: string | undefined): boolean =>
  * Wysłane wiadomości klucza, także z innych integracji, z filtrami jak `GET /v1/messages` oraz szkicem agenta.
  * Liczby w stanach obejmują wszystkie wiadomości spełniające filtry poza stanem, dzięki czemu agent widzi cały rozkład.
  */
-export function listSent(deps: ReadDeps, ctx: ConnectionContext, q: { status?: string; to?: string; from?: string; until?: string; draftId?: string } & Page): {
+export function listSent(deps: ReadDeps, ctx: ConnectionContext, q: { status?: string | undefined; to?: string | undefined; from?: string | undefined; until?: string | undefined; draftId?: string | undefined } & Page): {
   items: Array<ReturnType<typeof presentMessage> & { source: string }>; counts: Record<string, number>; hasMore: boolean;
 } {
   const { offset, limit } = pageOf(q);
@@ -201,7 +201,7 @@ function recipientEntry(deps: ReadDeps, p: PackageRow, r: RecipientRow & { packa
  * w obrębie wiadomości i odbiorców rozsyłek klucza, do 20 pozycji od najnowszej. Wiadomość innego klucza, systemowa
  * i nieznana dają pustą listę - nie potwierdzamy istnienia.
  */
-export function deliveryTrace(deps: ReadDeps, ctx: ConnectionContext, q: { id?: string; to?: string; from?: string; until?: string }, now: Date): { entries: TraceEntry[] } {
+export function deliveryTrace(deps: ReadDeps, ctx: ConnectionContext, q: { id?: string | undefined; to?: string | undefined; from?: string | undefined; until?: string | undefined }, now: Date): { entries: TraceEntry[] } {
   const canCancel = ctx.scopes.has('send');
   if (q.id !== undefined) {
     const m = deps.messages.get(q.id);
@@ -303,11 +303,16 @@ export function answersTo(deps: Pick<ReadDeps, 'messages' | 'packages'>, apiKeyI
   return p ? { packageId: p.packageId } : null;
 }
 
+/** Pozycja odebranego SMS-a dla agenta: treść tylko dla SMS-a tekstowego, zawsze oznaczona jako od zewnętrznego nadawcy. */
+export function inboundItem(r: InboundRow, answer: AnswersTo): InboundItem {
+  return { id: r.id, from: r.sender, received: stamp(r.receivedAt), text: r.kind === 'text' ? r.body : null, source: 'external_sender', answersTo: answer };
+}
+
 const sameAnswer = (a: AnswersTo, b: NonNullable<AnswersTo>): boolean =>
   a !== null && ('messageId' in b ? 'messageId' in a && a.messageId === b.messageId : 'packageId' in a && a.packageId === b.packageId);
 
 /** Wysyłka z filtra odpowiedzi: jej odbiorcy i okno odpowiedzi; wysyłka innego klucza albo nieznana daje `null`. */
-function answerTarget(deps: ReadDeps, ctx: ConnectionContext, q: { answersToPackage?: string; answersToMessage?: string }):
+function answerTarget(deps: ReadDeps, ctx: ConnectionContext, q: { answersToPackage?: string | undefined; answersToMessage?: string | undefined }):
   { answer: NonNullable<AnswersTo>; dests: Set<string>; start: string; end: string } | null {
   const window = (start: string) => ({ start, end: new Date(Date.parse(start) + ANSWER_WINDOW_MS).toISOString() });
   if (q.answersToMessage !== undefined) {
@@ -326,7 +331,7 @@ function answerTarget(deps: ReadDeps, ctx: ConnectionContext, q: { answersToPack
  * odebrane z okna 7 dni po wysyłce.
  */
 export function listInbound(deps: ReadDeps, ctx: ConnectionContext, q: {
-  since?: string; until?: string; sender?: string; answersToPackage?: string; answersToMessage?: string;
+  since?: string | undefined; until?: string | undefined; sender?: string | undefined; answersToPackage?: string | undefined; answersToMessage?: string | undefined;
 } & Page): { items: InboundItem[]; hasMore: boolean } {
   if (q.answersToPackage !== undefined && q.answersToMessage !== undefined) {
     throw new AgentError('invalid', 'Podaj jedną wysyłkę: rozsyłkę albo wiadomość.');
@@ -336,13 +341,10 @@ export function listInbound(deps: ReadDeps, ctx: ConnectionContext, q: {
   let until = q.until === undefined ? undefined : instant('until', q.until, true);
   const sender = q.sender === undefined ? undefined : phone(ctx, q.sender);
   const base = { accountId: ctx.account.id, serviceIds: ctx.auth.allowedServiceIds };
-  const item = (r: InboundRow, answer: AnswersTo): InboundItem => ({
-    id: r.id, from: r.sender, received: stamp(r.receivedAt), text: r.kind === 'text' ? r.body : null, source: 'external_sender', answersTo: answer,
-  });
 
   if (q.answersToPackage === undefined && q.answersToMessage === undefined) {
     const rows = deps.inbound.list({ ...base, ...(sender ? { sender } : {}), ...(since ? { since } : {}), ...(until ? { until } : {}), limit: limit + 1, offset });
-    return { items: rows.slice(0, limit).map((r) => item(r, answersTo(deps, ctx.key.id, r))), hasMore: rows.length > limit };
+    return { items: rows.slice(0, limit).map((r) => inboundItem(r, answersTo(deps, ctx.key.id, r))), hasMore: rows.length > limit };
   }
 
   const target = answerTarget(deps, ctx, q);
@@ -363,7 +365,7 @@ export function listInbound(deps: ReadDeps, ctx: ConnectionContext, q: {
         skipped++;
         continue;
       }
-      found.push(item(r, answer));
+      found.push(inboundItem(r, answer));
       if (found.length > limit) break;
     }
     if (rows.length < SCAN_BATCH) break;

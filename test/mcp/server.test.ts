@@ -6,8 +6,8 @@ import { buildApiServer } from '../../src/api/server.ts';
 import { SERVER_INSTRUCTIONS } from '../../src/mcp/instructions.ts';
 import { SUPPORTED_PROTOCOL_VERSIONS } from '../../src/mcp/protocol.ts';
 import type { ToolDef } from '../../src/mcp/tools.ts';
-import { viewProbeTool } from '../../src/mcp/tools/probe.ts';
 import { connectionStatusTool } from '../../src/mcp/tools/status.ts';
+import { docResources } from '../../src/mcp/resources.ts';
 import { viewHtml, viewResources } from '../../src/mcp/views/index.ts';
 import { openDatabase } from '../../src/store/db.ts';
 import { SettingsRepo } from '../../src/store/settings.ts';
@@ -135,8 +135,8 @@ describe('era poprzednia: initialize i sesje', () => {
   it('nieznana metoda -32601, treść spoza JSON-RPC 400', async () => {
     const { session } = await initialize();
     expect((await legacy(session, rpc(2, 'sampling/createMessage'))).json().error.code).toBe(-32601);
-    expect((await legacy(session, rpc(3, 'resources/list'))).json().result).toEqual({ resources: viewResources() });
-    expect((await legacy(session, rpc(4, 'prompts/list'))).json().result).toEqual({ prompts: [] });
+    expect((await legacy(session, rpc(3, 'resources/list'))).json().result).toEqual({ resources: [...docResources(), ...viewResources()] });
+    expect((await legacy(session, rpc(4, 'prompts/list'))).json().result.prompts.map((p: { name: string }) => p.name)).toEqual(['sprawdz_doreczenie']);
     const batch = await post([rpc(1, 'ping'), rpc(2, 'ping')]);
     expect([batch.statusCode, batch.json().error.code]).toEqual([400, -32600]);
     const broken = await post('{nie json');
@@ -166,10 +166,12 @@ describe('nowa era 2026-07-28', () => {
     expect(withApps.tools[0]._meta).toEqual({ ui: { resourceUri: 'ui://multiinfo-gate/co-moge' } });
     const call = (await modern('tools/call', { name: 'connection_status', arguments: {} })).json().result;
     expect(call).toMatchObject({ resultType: 'complete', content: [{ type: 'text' }] });
-    // Punkt kontrolny A: znacznik pokazuje, czy agent widzi _meta wyniku; zadanie 13 go usuwa.
-    expect(call._meta).toEqual({ 'multiinfo-gate/proba': 'Znacznik _meta: MIG-META-PROBA' });
-    expect((await modern('resources/list')).json().result).toEqual({ resultType: 'complete', resources: viewResources(), ttlMs: 3_600_000, cacheScope: 'private' });
-    expect((await modern('prompts/list')).json().result).toEqual({ resultType: 'complete', prompts: [], ttlMs: 0, cacheScope: 'private' });
+    expect(call._meta).toBeUndefined();
+    expect((await modern('resources/list')).json().result)
+      .toEqual({ resultType: 'complete', resources: [...docResources(), ...viewResources()], ttlMs: 3_600_000, cacheScope: 'private' });
+    expect((await modern('prompts/list')).json().result).toMatchObject({ resultType: 'complete', prompts: [{ name: 'sprawdz_doreczenie' }], ttlMs: 0, cacheScope: 'private' });
+    const prompt = (await modern('prompts/get', { name: 'sprawdz_doreczenie', arguments: { numer_albo_id: '48601000011' } })).json().result;
+    expect(prompt).toMatchObject({ resultType: 'complete', messages: [{ role: 'user', content: { type: 'text' } }] });
   });
 
   it('nowa era: niezgodny MCP-Protocol-Version albo Mcp-Method daje 400 z -32020', async () => {
@@ -303,7 +305,7 @@ describe('narzędzia według zakresów i stanu integracji', () => {
   });
 });
 
-describe('zasoby widoków i narzędzie próbne', () => {
+describe('zasoby widoków', () => {
   it('resources/list zawiera ui://multiinfo-gate/co-moge z typem APP_MIME', async () => {
     const { session } = await initialize(APPS);
     const list = (await legacy(session, rpc(2, 'resources/list'))).json().result.resources;
@@ -323,25 +325,5 @@ describe('zasoby widoków i narzędzie próbne', () => {
     expect(modernRead).toEqual({ resultType: 'complete', ...expected, ttlMs: 3_600_000, cacheScope: 'private' });
     expect((await legacy(session, rpc(3, 'resources/read', { uri: 'ui://multiinfo-gate/wysylka' }))).json().error.code).toBe(-32002);
     expect((await legacy(session, rpc(4, 'resources/read', { uri: 'ui://multiinfo-gate/../co-moge' }))).json().error.code).toBe(-32002);
-  });
-
-  it('view_probe: tylko dla widoku, zwraca chwilę wywołania i początek identyfikatora sesji, w nowej erze bez sesji', async () => {
-    app = server({ tools: [connectionStatusTool, viewProbeTool] });
-    const { session } = await initialize(APPS);
-    const listed = (await legacy(session, rpc(2, 'tools/list'))).json().result.tools.find((t: { name: string }) => t.name === 'view_probe');
-    expect(listed).toMatchObject({ title: 'Próba wywołania z widoku', annotations: { readOnlyHint: true }, _meta: { ui: { visibility: ['app'] } } });
-    const legacyCall = (await legacy(session, rpc(3, 'tools/call', { name: 'view_probe', arguments: {} }))).json().result;
-    expect(legacyCall.structuredContent).toEqual({ at: clock.toISOString(), session: session.slice(0, 8), protocolVersion: '2025-11-25' });
-    expect(legacyCall.content[0].text).toContain(session.slice(0, 8));
-    expect(legacyCall.content[0].text).not.toContain(session);
-    const modernCall = (await modern('tools/call', { name: 'view_probe', arguments: {} }, { caps: APPS })).json().result;
-    expect(modernCall.structuredContent).toEqual({ at: clock.toISOString(), session: null, protocolVersion: '2026-07-28' });
-  });
-
-  it('view_probe bez widoków jest widoczne dla agenta bez destructiveHint, bo tylko odczytuje', async () => {
-    app = server({ tools: [connectionStatusTool, viewProbeTool] });
-    const plain = (await modern('tools/list')).json().result.tools.find((t: { name: string }) => t.name === 'view_probe');
-    expect(plain.annotations.destructiveHint).toBeUndefined();
-    expect(plain._meta).toBeUndefined();
   });
 });
