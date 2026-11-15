@@ -105,6 +105,25 @@ describe('prepareGroup', () => {
     expect(count('messages')).toBe(2);
   });
 
+  it('nadawca grupy: nadpis grupy, potem klucza i konta, a bez nich numer usługi; wysyłka używa tego samego nadawcy', () => {
+    const orig = (): Array<string | null> => (db.prepare('SELECT orig FROM messages ORDER BY rowid').all() as Array<{ orig: string | null }>).map((r) => r.orig);
+    const bare = prepare().preview;
+    expect(bare.orig).toBeNull();
+    expect(bare.service).toEqual({ id: '24138', label: '24138' });
+    deps.accounts.setDefaultOrig(seed.accountId, 'SERWIS');
+    expect(prepare().preview.orig).toBe('SERWIS');
+    deps.accounts.setOrigs(seed.accountId, [{ orig: 'DYSPOZYTOR', label: null }]);
+    db.prepare('INSERT INTO api_key_origs (api_key_id, account_id, orig) VALUES (?, ?, ?)').run(seed.keyId, seed.accountId, 'DYSPOZYTOR');
+    const row = deps.integrations.get(serwis)!;
+    deps.integrations.update(serwis, {
+      name: row.name, serviceId: row.serviceId, orig: 'DYSPOZYTOR', preset: row.preset, enabled: row.enabled, config: row.config, storePayloads: row.storePayloads,
+    }, NOW);
+    const own = prepare().preview;
+    expect(own.orig).toBe('DYSPOZYTOR');
+    sendDraft(deps, ctx(), own.draftId, NOW);
+    expect(orig()).toEqual(['DYSPOZYTOR', 'DYSPOZYTOR']);
+  });
+
   it('w sesji z widokami szkic grupy otrzymuje klucz potwierdzenia', () => {
     const { preview, confirm } = prepareGroup(deps, ctx(), { group: 'serwis', text: TEXT }, NOW, { apps: true });
     expect(agentError(() => sendDraft(deps, ctx(), preview.draftId, NOW)).code).toBe('confirm_required');

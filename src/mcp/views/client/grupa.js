@@ -1,4 +1,4 @@
-// Widok „SMS do grupy” według wyniku prepare_group_sms: treść po szablonie grupy, lista odbiorców z _meta,
+// Widok „SMS do grupy” według wyniku prepare_group_sms: nadawca i treść po szablonie grupy, lista odbiorców z _meta,
 // okna ochrony agenta i grupy. Zmiana grupy tworzy nowy szkic, a „Wyślij do N osób” woła send_prepared.
 import { applyTheme, cancelledText, createBridge, esc, note, phoneLabel, plural, pluralWord, sayIn, stamp, textOf } from './bridge.js';
 
@@ -6,6 +6,8 @@ import { applyTheme, cancelledText, createBridge, esc, note, phoneLabel, plural,
 const GROUP_FIX_MESSAGE = 'Chcę poprawić treść tego SMS-a do grupy';
 
 const people = (n) => plural(n, 'osoba', 'osoby', 'osób');
+/** Nadawca grupy: nadpis albo numer usługi z nazwą nadaną w panelu. */
+const groupSenderLabel = (p) => p.orig ?? `numer usługi ${p.service.label === p.service.id ? p.service.id : `${p.service.label} (${p.service.id})`}`;
 const groupGuardNote = (guard, what) => note(`${what}: w bieżącym oknie można jeszcze wykonać `
   + `${plural(guard.calls, 'wywołanie wysyłające', 'wywołania wysyłające', 'wywołań wysyłających')}`
   + (guard.recipients === null ? '' : ` i wysłać SMS-y do ${plural(guard.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}`));
@@ -22,12 +24,14 @@ export function renderGroup(p, recipients = [], state = {}) {
     : esc(p.group.name);
   const list = recipients.length === 0 ? ''
     : `<div class="recips">${recipients.map((r) => `<div><span>${esc(r.name || 'bez nazwy')}</span><span class="mono">${esc(phoneLabel(r.phone))}</span></div>`).join('')}</div>`;
-  const left = `<div class="phone"><div class="phone-from">nadawca według ustawień grupy</div><div class="bubble">${esc(p.text)}</div></div>`
+  const sender = esc(groupSenderLabel(p));
+  const left = `<div class="phone"><div class="phone-from">${sender}</div><div class="bubble">${esc(p.text)}</div></div>`
     + `<div class="counter"><b>${p.characters}</b> ${pluralWord(p.characters, 'znak', 'znaki', 'znaków')} · <b>${p.parts}</b> `
     + `${pluralWord(p.parts, 'część', 'części', 'części')} · ${p.encoding === 'gsm' ? 'GSM' : 'UCS-2'}</div>`
     + (p.truncated ? note('Treść została skrócona do limitu części grupy') : '');
   const right = `<dl class="kv"><dt>Grupa</dt><dd>${groups}</dd>`
     + '<dt>Treść</dt><dd>według szablonu treści grupy</dd>'
+    + `<dt>Nadawca SMS-a</dt><dd>${sender}, według ustawień grupy</dd>`
     + `<dt>Odbiorcy</dt><dd>${people(p.recipients)} z listy grupy</dd>`
     + '<dt>Potwierdzenie</dt><dd>w tym widoku, bez SMS-a zwrotnego</dd></dl>'
     + list + groupGuardNote(p.guard, 'Ochrona przed burzą') + groupGuardNote(p.groupGuard, `Ochrona przed burzą grupy ${p.group.name}`)

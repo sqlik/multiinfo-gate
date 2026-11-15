@@ -19,7 +19,7 @@ const PREVIEW = {
 const GROUP = {
   draftId: 'drf_2', expiresAt: '2026-11-15T09:30:00.000Z', group: { id: 4, name: 'SERWIS' }, groups: ['SERWIS', 'FLOTA'], recipients: 2,
   text: 'Ewa Nowak: Awaria w hali B.', parts: 1, characters: 27, encoding: 'gsm', truncated: false, guard: GUARD,
-  groupGuard: { calls: 9, recipients: null, resetsAt: null },
+  groupGuard: { calls: 9, recipients: null, resetsAt: null }, orig: null, service: { id: '12345', label: 'Serwis' },
 };
 
 const stage = (local: string, label: string, detail: string | null = null) => ({ at: '2026-11-15T07:02:11.000Z', local, kind: 'queued', label, detail });
@@ -76,6 +76,14 @@ describe('widok SMS do grupy', () => {
     expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(html).toContain('Anna &quot;Ania&quot; Wiśniewska');
     expect(html).toContain('Wyślij do 2 osób');
+  });
+
+  it('renderGroup: nadawca grupy w dymku i w wierszu „Nadawca SMS-a”, bez nadpisu numer usługi', () => {
+    const own = renderGroup({ ...GROUP, orig: 'SERWIS-ABC' }, []);
+    expect(own).toContain('<div class="phone-from">SERWIS-ABC</div>');
+    expect(own).toContain('<dt>Nadawca SMS-a</dt><dd>SERWIS-ABC, według ustawień grupy</dd>');
+    expect(renderGroup(GROUP, [])).toContain('<div class="phone-from">numer usługi Serwis (12345)</div>');
+    expect(renderGroup({ ...GROUP, service: { id: '24138', label: '24138' } }, [])).toContain('<dd>numer usługi 24138, według ustawień grupy</dd>');
   });
 
   it('renderGroup: nazwa grupy nadana przez agenta z <script> jako tekst', () => {

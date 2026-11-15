@@ -78,6 +78,8 @@ export interface ReplyDraft { draftId: string; inboundId: string; to: string; gr
 export interface GroupPreview {
   draftId: string; expiresAt: string; group: { id: number; name: string }; groups: string[]; recipients: number;
   text: string; parts: number; characters: number; encoding: 'gsm' | 'ucs2'; truncated: boolean; guard: GuardLeft; groupGuard: GuardLeft;
+  /** Nadawca wysyłki do grupy; null oznacza numer usługi `service`. */
+  orig: string | null; service: ServiceOption;
 }
 
 export type SendOutcome =
@@ -291,6 +293,16 @@ function groupMembers(config: SmsGroupConfig): GroupMember[] {
 }
 
 /**
+ * Nadawca i usługa wysyłki do grupy, tak jak ustala je `dispatch`: nadpis i usługa grupy, a bez nich ustawienia
+ * klucza i konta. Bez żadnego nadpisu SMS wychodzi z numeru usługi.
+ */
+function groupSender(deps: AgentDeps, ctx: ConnectionContext, group: SmsGroupIntegration): { orig: string | null; service: ServiceOption } {
+  const serviceId = group.serviceId ? group.serviceId : ctx.auth.defaultServiceId ?? '';
+  const label = deps.accounts.services(ctx.account.id).find((s) => s.id === serviceId)?.label ?? serviceId;
+  return { orig: group.orig ? group.orig : keyOrigs(ctx.auth, ctx.account, deps.accounts).fallback, service: { id: serviceId, label } };
+}
+
+/**
  * SMS do grupy: odbiorcy i treść według ustawień grupy, bez warunku grupy, który dotyczy odebranego SMS-a.
  * Agent otrzymuje liczbę odbiorców, a numery i nazwy trafiają wyłącznie do widoku przez `recipients`.
  * Podgląd sprawdza okna ochrony integracji agenta i grupy.
@@ -329,7 +341,7 @@ export function prepareGroup(
     preview: {
       draftId, expiresAt: expiresAt.toISOString(), group: { id: group.id, name: group.name }, groups: names, recipients: members.length,
       text: shaped.prepared.text, parts: shaped.parts, characters: shaped.characters, encoding: shaped.encoding, truncated: shaped.truncated,
-      guard, groupGuard,
+      guard, groupGuard, ...groupSender(deps, ctx, group),
     },
   };
 }
