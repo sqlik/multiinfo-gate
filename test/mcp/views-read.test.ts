@@ -1,6 +1,7 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { barChart } from '../../src/mcp/views/client/chart.js';
-import { renderCampaign } from '../../src/mcp/views/client/kampania.js';
+import { REMIND_MESSAGE, renderCampaign } from '../../src/mcp/views/client/kampania.js';
 import { renderReplies } from '../../src/mcp/views/client/odpowiedzi.js';
 import { PACKAGE_REFRESH_MAX_MS, PACKAGE_REFRESH_MS, packageSettled, renderPackage, watchPackage } from '../../src/mcp/views/client/rozsylka.js';
 import { TOOLS } from '../../src/mcp/tools/index.ts';
@@ -101,6 +102,18 @@ describe('widok wyników kampanii', () => {
     expect(html).not.toContain('data-act="csv"');
     expect(html).not.toContain('data-act="remind"');
     expect(html).not.toContain('data-act="more"');
+  });
+});
+
+describe('wiadomości widoków do rozmowy', () => {
+  it('ui/message wyłącznie ze stałym tekstem bramki: przypomnienie bez nazwy kampanii, którą może nadać agent', () => {
+    expect(REMIND_MESSAGE).toBe('Przygotuj przypomnienie dla odbiorców bez otwarcia kampanii pokazanej w widoku wyników');
+    const dir = new URL('../../src/mcp/views/client/', import.meta.url);
+    for (const file of readdirSync(dir).filter((f) => f.endsWith('.js') && f !== 'bridge.js')) {
+      for (const [, arg] of readFileSync(new URL(file, dir), 'utf8').matchAll(/sendMessage\(([^)]*)\)/g)) {
+        expect(arg, file).toMatch(/^[A-Z_]+$/);
+      }
+    }
   });
 });
 

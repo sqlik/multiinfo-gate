@@ -4,6 +4,11 @@
 import { applyTheme, cancelledText, createBridge, esc, note, num, openDownload, phoneLabel, sayIn, stamp, textOf } from './bridge.js';
 import { barChart } from './chart.js';
 
+/**
+ * Stały tekst prośby o przypomnienie, bez nazwy kampanii: nazwę może nadać agent w prepare_sms, a ChatGPT wstawia
+ * wiadomość z widoku jako wiadomość użytkownika. Agent zna kampanię z własnego wywołania campaign_results.
+ */
+export const REMIND_MESSAGE = 'Przygotuj przypomnienie dla odbiorców bez otwarcia kampanii pokazanej w widoku wyników';
 /** Wykres godzinowy obejmuje 48 godzin od pierwszej wysyłki, jak wykres kliknięć w panelu. */
 const CAMPAIGN_HOURS = 48;
 const HOUR_MS = 3_600_000;
@@ -179,10 +184,9 @@ export function startCampaign(win, env) {
       });
     } else if (act === 'remind') {
       run(async () => {
-        // Stały tekst bramki z nazwą kampanii nadaną przez system firmy, bez numerów i treści SMS-ów.
-        const text = `Przygotuj przypomnienie dla odbiorców kampanii ${s.data.name} bez otwarcia`;
-        const sent = await bridge.sendMessage(text);
-        say(sent ? 'ok' : 'plain', sent ? 'Prośba o przypomnienie trafiła do rozmowy' : `Napisz w rozmowie: ${text}`);
+        const sent = await bridge.sendMessage(REMIND_MESSAGE);
+        say(sent ? 'ok' : 'plain', sent ? 'Prośba o przypomnienie trafiła do rozmowy'
+          : `Napisz w rozmowie, że chcesz przypomnienia dla odbiorców bez otwarcia kampanii ${s.data.name}`);
       });
     }
   });
