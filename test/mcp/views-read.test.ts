@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { barChart } from '../../src/mcp/views/client/chart.js';
 import { REMIND_MESSAGE, renderCampaign } from '../../src/mcp/views/client/kampania.js';
-import { renderReplies } from '../../src/mcp/views/client/odpowiedzi.js';
+import { refreshQuery, renderReplies } from '../../src/mcp/views/client/odpowiedzi.js';
 import { PACKAGE_REFRESH_MAX_MS, PACKAGE_REFRESH_MS, packageSettled, renderPackage, watchPackage } from '../../src/mcp/views/client/rozsylka.js';
 import { TOOLS } from '../../src/mcp/tools/index.ts';
 import { BUILT_VIEWS, viewHtml } from '../../src/mcp/views/index.ts';
@@ -184,6 +184,13 @@ describe('widok odpowiedzi klientów', () => {
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(html).toContain('&lt;script&gt;x&lt;/script&gt; 1');
+  });
+
+  it('refreshQuery pomija until, gdy bramka zgłosiła koniec przedziału bliski chwili odczytu', () => {
+    const input = { since: '2026-11-15 08:00', until: '2026-11-15 09:55', sender: '601234567' };
+    expect(refreshQuery(input, true)).toEqual({ since: '2026-11-15 08:00', sender: '601234567' });
+    expect(refreshQuery(input, false)).toBe(input);
+    expect(input.until).toBe('2026-11-15 09:55');
   });
 
   it('renderReplies oznacza każdą treść jako od zewnętrznego nadawcy', () => {

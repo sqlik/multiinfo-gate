@@ -20,6 +20,9 @@ const itemLines = (item: InboundItem): string[] => [
   item.text === null ? 'SMS bez treści tekstowej.' : `${UNTRUSTED_NOTICE} ${item.text}`,
 ];
 
+/** Koniec przedziału najwyżej 15 minut przed odczytem traktujemy jako „do teraz”. */
+const UNTIL_NEAR_READ_MS = 15 * 60_000;
+
 const timeField = (what: string) => z.string().optional()
   .describe(`${what}, na przykład 2026-11-14 14:00 albo 2026-11-14. Czas bez strefy oznacza czas polski.`);
 
@@ -49,7 +52,10 @@ export const listInboundTool: ToolDef = {
       ...data.items.flatMap(itemLines),
       ...(data.hasMore ? ['Kolejne SMS-y pokazuje następna strona z większą wartością offset.'] : []),
     ];
-    return { text: lines.join('\n'), structured: { items: data.items.map(marked), hasMore: data.hasMore } };
+    // „Odśwież” w widoku powtarza zapytanie. Koniec przedziału bliski chwili odczytu, na przykład „do teraz” zapisane
+    // przez agenta jako godzina, zatrzymałby listę, dlatego widok odświeża ją wtedy bez until.
+    const fresh = ctx.apps && data.until !== null && Date.parse(data.until) >= ctx.now.getTime() - UNTIL_NEAR_READ_MS;
+    return { text: lines.join('\n'), structured: { items: data.items.map(marked), hasMore: data.hasMore }, ...(fresh ? { meta: { refreshWithoutUntil: true } } : {}) };
   },
 };
 

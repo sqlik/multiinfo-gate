@@ -73,6 +73,18 @@ describe('narzędzia odczytu przez POST /mcp', () => {
     for (const item of result.structuredContent!.items) expect(item).toMatchObject({ untrusted: true, notice: NOTICE, source: 'external_sender' });
   });
 
+  it('list_inbound: koniec przedziału bliski chwili odczytu daje widokowi odświeżenie bez until', async () => {
+    inbound('in_1', 'Potwierdzam termin przeglądu.');
+    const mcp = await mcpSession(app, seed.secret, { apps: true });
+    // NOW to 2026-11-15 10:00 w Polsce: „do teraz” podane przez agenta jako stała godzina sprzed kilku minut.
+    expect((await mcp.call('list_inbound', { until: '2026-11-15 09:55' }))._meta).toEqual({ refreshWithoutUntil: true });
+    expect((await mcp.call('list_inbound', { until: '2026-11-15' }))._meta).toEqual({ refreshWithoutUntil: true });
+    expect((await mcp.call('list_inbound', { until: '2026-11-15 09:40' }))._meta).toBeUndefined();
+    expect((await mcp.call('list_inbound', {}))._meta).toBeUndefined();
+    const plain = await mcpSession(app, seed.secret);
+    expect((await plain.call('list_inbound', { until: '2026-11-15 09:55' }))._meta).toBeUndefined();
+  });
+
   it('prepare_replies: znacznik przed treścią odebranego SMS-a, szkice bez wysyłki, send_reply wysyła odpowiedź', async () => {
     inbound('in_1', 'Czy mogę przełożyć przegląd na piątek?');
     const mcp = await mcpSession(app, seed.secret);

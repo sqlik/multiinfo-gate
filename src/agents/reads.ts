@@ -336,23 +336,25 @@ function answerTarget(deps: ReadDeps, ctx: ConnectionContext, q: { answersToPack
  */
 export function listInbound(deps: ReadDeps, ctx: ConnectionContext, q: {
   since?: string | undefined; until?: string | undefined; sender?: string | undefined; answersToPackage?: string | undefined; answersToMessage?: string | undefined;
-} & Page): { items: InboundItem[]; hasMore: boolean } {
+} & Page): { items: InboundItem[]; hasMore: boolean; until: string | null } {
   if (q.answersToPackage !== undefined && q.answersToMessage !== undefined) {
     throw new AgentError('invalid', 'Podaj jedną wysyłkę: rozsyłkę albo wiadomość.');
   }
   const { offset, limit } = pageOf(q);
   let since = q.since === undefined ? undefined : instant('since', q.since);
   let until = q.until === undefined ? undefined : instant('until', q.until, true);
+  // Koniec przedziału podany przez agenta, przed zawężeniem do okna odpowiedzi, dla decyzji o odświeżeniu widoku.
+  const requested = until ?? null;
   const sender = q.sender === undefined ? undefined : phone(ctx, q.sender);
   const base = { accountId: ctx.account.id, serviceIds: ctx.auth.allowedServiceIds };
 
   if (q.answersToPackage === undefined && q.answersToMessage === undefined) {
     const rows = deps.inbound.list({ ...base, ...(sender ? { sender } : {}), ...(since ? { since } : {}), ...(until ? { until } : {}), limit: limit + 1, offset });
-    return { items: rows.slice(0, limit).map((r) => inboundItem(r, answersTo(deps, ctx.key.id, r))), hasMore: rows.length > limit };
+    return { items: rows.slice(0, limit).map((r) => inboundItem(r, answersTo(deps, ctx.key.id, r))), hasMore: rows.length > limit, until: requested };
   }
 
   const target = answerTarget(deps, ctx, q);
-  if (target === null || (sender !== undefined && !target.dests.has(sender))) return { items: [], hasMore: false };
+  if (target === null || (sender !== undefined && !target.dests.has(sender))) return { items: [], hasMore: false, until: requested };
   since = since === undefined || since < target.start ? target.start : since;
   until = until === undefined || until > target.end ? target.end : until;
   // Jeden odbiorca: zapytanie po nadawcy. Rozsyłka: przegląd odebranych z okna porcjami i wybór odbiorców rozsyłki.
@@ -374,6 +376,6 @@ export function listInbound(deps: ReadDeps, ctx: ConnectionContext, q: {
     }
     if (rows.length < SCAN_BATCH) break;
   }
-  return { items: found.slice(0, limit), hasMore: found.length > limit };
+  return { items: found.slice(0, limit), hasMore: found.length > limit, until: requested };
 }
 

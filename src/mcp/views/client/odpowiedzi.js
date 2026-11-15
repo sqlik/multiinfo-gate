@@ -10,6 +10,16 @@ const EXTERNAL = '<span class="ext" title="Treść od zewnętrznego nadawcy, nie
 
 const busyAttr = (busy) => (busy ? ' disabled' : '');
 
+/**
+ * Warunki odświeżenia listy. Gdy bramka zgłosiła koniec przedziału bliski chwili odczytu, odświeżenie pomija
+ * `until`, ponieważ inaczej nowe SMS-y nie pojawiłyby się na liście.
+ */
+export function refreshQuery(input, withoutUntil) {
+  if (!withoutUntil) return input;
+  const { until: _until, ...rest } = input;
+  return rest;
+}
+
 /** Licznik odpowiedzi: znaki i części jak przy wysyłce, z numerem odbiorcy. */
 export function replyCounter(text, to) {
   const m = measure(text, 'auto');
@@ -67,7 +77,7 @@ export function startReplies(win, env) {
   const refreshButton = doc.getElementById('odswiez');
   const say = sayIn(doc);
   const s = {
-    input: null, items: [], drafts: [], confirms: new Map(), filter: null, open: new Set(), texts: new Map(), sent: new Map(), busy: false, loaded: false,
+    input: null, withoutUntil: false, items: [], drafts: [], confirms: new Map(), filter: null, open: new Set(), texts: new Map(), sent: new Map(), busy: false, loaded: false,
   };
   const draw = () => {
     if (s.loaded) root.innerHTML = renderReplies(s.items, s.drafts, s.filter, s);
@@ -81,6 +91,7 @@ export function startReplies(win, env) {
     }
     const drafts = data.drafts ?? [];
     Object.assign(s, { items: data.items ?? [], drafts, filter: null, open: new Set(drafts.map((d) => d.inboundId)), loaded: true });
+    if (result._meta?.refreshWithoutUntil === true) s.withoutUntil = true;
     s.confirms = new Map(drafts.map((d) => [d.draftId, result._meta?.confirm ?? null]));
     // Odświeżenie dotyczy listy odebranych; podgląd odpowiedzi przygotowuje agent.
     refreshButton.hidden = drafts.length > 0;
@@ -133,6 +144,7 @@ export function startReplies(win, env) {
 
   refreshButton.addEventListener('click', () => run(async () => {
     if (s.input === null) return say('fail', 'Aplikacja AI nie przekazała widokowi warunków wyszukiwania. Poproś agenta o ponowne sprawdzenie.');
+    s.input = refreshQuery(s.input, s.withoutUntil);
     return show(await bridge.callTool('list_inbound', s.input));
   }));
   root.addEventListener('click', (event) => {
