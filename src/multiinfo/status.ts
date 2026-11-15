@@ -10,8 +10,9 @@ export function isFinal(status: number): boolean {
 export function mapStatus(status: number, substatus: number): GatewayStatus {
   switch (status) {
     case 0:
-    case 1:
       return 'queued';
+    case 1:
+      // „Oczekiwanie na raport doręczenia”: Multiinfo przekazało wiadomość do sieci operatora.
     case 3:
       return 'sent';
     case 7:

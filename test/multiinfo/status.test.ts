@@ -4,7 +4,8 @@ import { combineStatuses, describeSubstatus, isFinal, mapStatus } from '../../sr
 describe('mapStatus', () => {
   it('mapuje statusy nieostateczne', () => {
     expect(mapStatus(0, 0)).toBe('queued');
-    expect(mapStatus(1, 0)).toBe('queued');
+    // Status 1 oznacza przekazanie do sieci operatora i oczekiwanie na raport, dlatego jest to już „sent”.
+    expect(mapStatus(1, 0)).toBe('sent');
     expect(mapStatus(3, 0)).toBe('sent');
     expect(mapStatus(7, 0)).toBe('throttled');
   });
