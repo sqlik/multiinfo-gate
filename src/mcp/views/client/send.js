@@ -2,19 +2,13 @@
 // krótkie linki i ochrona przed burzą. Zmiana ustawienia tworzy nowy szkic, a „Wyślij” woła send_prepared
 // z kluczem potwierdzenia z _meta. Po wysyłce widok sam odświeża stan doręczeń.
 import { applyTheme, cancelledText, createBridge, esc, note, phoneLabel, plural, pluralWord, sayIn, stamp, textOf } from './bridge.js';
+import { deliveryLine, watchDeliveries } from './doreczenia.js';
 import { measure } from './measure.js';
 
 /** Kod zastępczy krótkiego linku w podglądzie; prawdziwy kod powstaje przy wysyłce. */
 const PLACEHOLDER = '0000000';
-export const DELIVERY_REFRESH_MS = 15_000;
-export const DELIVERY_REFRESH_MAX_MS = 900_000;
 /** Stała treść wiadomości do rozmowy: bez treści SMS-a (punkt kontrolny A, rozstrzygnięcie 2). */
 export const FIX_MESSAGE = 'Chcę poprawić treść tego SMS-a';
-const TRANSIT = new Set(['queued', 'sent', 'throttled']);
-const COUNT_LABELS = {
-  queued: 'w kolejce', sent: 'w drodze', throttled: 'wstrzymane', delivered: 'doręczone', failed: 'niedoręczone', expired: 'wygasłe',
-  cancelled: 'anulowane', blocked: 'zablokowane', unknown: 'w stanie nieznanym',
-};
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const disabled = (off) => (off ? ' disabled' : '');
@@ -95,18 +89,12 @@ function linkFields(p, locked) {
   return out;
 }
 
-/** Numery odbiorców z `_meta.recipients`, przy odbiorcach kampanii z identyfikatorem klienta. */
+/** Numery odbiorców z `_meta.recipients`; przy odbiorcach kampanii z identyfikatorami klientów wiersze mają dwie kolumny. */
 function recipientList(recipients) {
   if (!recipients || recipients.length === 0) return '';
-  return `<div class="recips">${recipients.map((r) => `<div>${r.clientId ? `<span>${esc(r.clientId)}</span>` : ''}`
+  const clients = recipients.some((r) => r.clientId);
+  return `<div class="recips">${recipients.map((r) => `<div>${clients ? `<span>${esc(r.clientId ?? '')}</span>` : ''}`
     + `<span class="mono">${esc(phoneLabel(r.phone))}</span></div>`).join('')}</div>`;
-}
-
-function deliveryText(n, d) {
-  const counts = d.counts ?? {};
-  const others = Object.entries(counts).filter(([k, v]) => k !== 'delivered' && v > 0).map(([k, v]) => `${COUNT_LABELS[k] ?? k} ${v}`);
-  return `Przyjęto ${sms(n)}. Doręczone: <b>${counts.delivered ?? 0}</b> z ${n}`
-    + (others.length > 0 ? ` · ${esc(others.join(', '))}` : '') + (d.done ? '' : ' · stan odświeża się sam');
 }
 
 function progressText(pr) {
@@ -123,7 +111,7 @@ function sentBox(p, sent, state) {
   }
   const n = sent.ids.length;
   const d = state.deliveries;
-  const text = !d ? `Przyjęto ${sms(n)}` : d.unavailable ? `Przyjęto ${plural(n, 'wiadomość', 'wiadomości', 'wiadomości')}` : deliveryText(n, d);
+  const text = !d ? `Przyjęto ${sms(n)}` : d.unavailable ? `Przyjęto ${plural(n, 'wiadomość', 'wiadomości', 'wiadomości')}` : `Przyjęto ${sms(n)}. ${deliveryLine(n, d)}`;
   return `<div class="sent">${text}${repeated}</div>`;
 }
 
@@ -208,27 +196,6 @@ export function mountSend(root, { bridge, say, win }) {
     return show(result);
   });
 
-  async function poll(started) {
-    let result;
-    try {
-      result = await bridge.callTool('list_messages', { draftId: s.preview.draftId, limit: 1 });
-    } catch {
-      result = { isError: true };
-    }
-    // Bez uprawnienia „Odczyt wysłanych” widok pokazuje samo przyjęcie, a błąd po udanym odczycie kończy odświeżanie.
-    if (result.isError) {
-      s.deliveries = s.deliveries ? { ...s.deliveries, done: true } : { unavailable: true };
-      return draw();
-    }
-    const counts = result.structuredContent?.counts ?? {};
-    const expired = Date.now() - started >= DELIVERY_REFRESH_MAX_MS;
-    const done = expired || Object.entries(counts).every(([k, v]) => v === 0 || !TRANSIT.has(k));
-    s.deliveries = { counts, done };
-    draw();
-    if (!done) win.setTimeout(() => poll(started), DELIVERY_REFRESH_MS);
-    return undefined;
-  }
-
   const send = () => run(async () => {
     s.sending = true;
     draw();
@@ -236,7 +203,7 @@ export function mountSend(root, { bridge, say, win }) {
     if (result.isError) return say('fail', textOf(result));
     s.sent = result.structuredContent;
     say('plain', '');
-    if (s.sent.kind === 'messages') win.setTimeout(() => poll(Date.now()), 0);
+    if (s.sent.kind === 'messages') watchDeliveries(bridge, win, s.preview.draftId, (d) => { s.deliveries = d; draw(); });
     return undefined;
   });
 

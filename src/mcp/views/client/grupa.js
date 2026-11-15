@@ -1,6 +1,8 @@
 // Widok „SMS do grupy” według wyniku prepare_group_sms: nadawca i treść po szablonie grupy, lista odbiorców z _meta,
-// okna ochrony agenta i grupy. Zmiana grupy tworzy nowy szkic, a „Wyślij do N osób” woła send_prepared.
+// okna ochrony agenta i grupy. Zmiana grupy tworzy nowy szkic, a „Wyślij do N osób” woła send_prepared,
+// po czym widok sam odświeża stan doręczeń.
 import { applyTheme, cancelledText, createBridge, esc, note, phoneLabel, plural, pluralWord, sayIn, stamp, textOf } from './bridge.js';
+import { deliveryLine, watchDeliveries } from './doreczenia.js';
 
 /** Stała treść wiadomości do rozmowy, bez treści SMS-a. */
 const GROUP_FIX_MESSAGE = 'Chcę poprawić treść tego SMS-a do grupy';
@@ -14,7 +16,7 @@ const groupGuardNote = (guard, what) => note(`${what}: w bieżącym oknie można
 
 /**
  * HTML widoku grupy. `recipients` to numery i nazwy z `_meta.recipients`; `state`: `busy`, `sending`,
- * `editable` false bez danych wejściowych narzędzia, `sent` wynik send_prepared.
+ * `editable` false bez danych wejściowych narzędzia, `sent` wynik send_prepared, `deliveries` liczby w stanach.
  */
 export function renderGroup(p, recipients = [], state = {}) {
   const sent = state.sent ?? null;
@@ -36,9 +38,10 @@ export function renderGroup(p, recipients = [], state = {}) {
     + '<dt>Potwierdzenie</dt><dd>w tym widoku, bez SMS-a zwrotnego</dd></dl>'
     + list + groupGuardNote(p.guard, 'Ochrona przed burzą') + groupGuardNote(p.groupGuard, `Ochrona przed burzą grupy ${p.group.name}`)
     + (sent ? '' : note(`Podgląd jest ważny do ${stamp(p.expiresAt)}`));
+  const d = state.deliveries;
   const actions = sent
     ? `<div class="sent">Przyjęto SMS do grupy ${esc(sent.group)}: ${plural(sent.ids.length, 'wiadomość', 'wiadomości', 'wiadomości')}`
-      + `${sent.repeated ? note('Ten szkic został wysłany wcześniej, dlatego widok pokazuje poprzedni wynik') : ''}</div>`
+      + `${d && !d.unavailable ? `. ${deliveryLine(sent.ids.length, d)}` : ''}${sent.repeated ? note('Ten szkic został wysłany wcześniej, dlatego widok pokazuje poprzedni wynik') : ''}</div>`
     : `<div class="row actions"><button type="button" class="btn btn-primary" data-act="send"${state.sending || state.busy ? ' disabled' : ''}>`
       + `${state.sending ? 'Wysyłanie…' : `Wyślij do ${plural(p.recipients, 'osoby', 'osób', 'osób')}`}</button>`
       + `<button type="button" class="btn" data-act="fix"${state.sending || state.busy ? ' disabled' : ''}>Popraw treść w rozmowie</button>`
@@ -51,7 +54,7 @@ export function startGroup(win, env) {
   const doc = win.document;
   const root = doc.getElementById('tresc');
   const say = sayIn(doc);
-  const s = { input: null, preview: null, recipients: [], confirm: null, busy: false, sending: false, sent: null };
+  const s = { input: null, preview: null, recipients: [], confirm: null, busy: false, sending: false, sent: null, deliveries: null };
   const draw = () => {
     if (s.preview) root.innerHTML = renderGroup(s.preview, s.recipients, { ...s, editable: s.input !== null });
   };
@@ -61,7 +64,9 @@ export function startGroup(win, env) {
       root.textContent = textOf(result);
       return undefined;
     }
-    Object.assign(s, { preview: result.structuredContent, recipients: result._meta?.recipients ?? [], confirm: result._meta?.confirm ?? null, sent: null });
+    Object.assign(s, {
+      preview: result.structuredContent, recipients: result._meta?.recipients ?? [], confirm: result._meta?.confirm ?? null, sent: null, deliveries: null,
+    });
     say('plain', '');
     return draw();
   };
@@ -98,6 +103,8 @@ export function startGroup(win, env) {
         const result = await bridge.callTool('send_prepared', { draftId: s.preview.draftId, ...(s.confirm ? { confirm: s.confirm } : {}) });
         if (result.isError) return say('fail', textOf(result));
         s.sent = result.structuredContent;
+        // Wiadomości grupy mają identyfikator szkicu jako klucz idempotencji, dlatego list_messages z draftId je znajduje.
+        watchDeliveries(bridge, win, s.preview.draftId, (d) => { s.deliveries = d; draw(); });
         return say('plain', '');
       });
     } else if (button.dataset.act === 'fix') {

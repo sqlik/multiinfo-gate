@@ -42,8 +42,11 @@ describe('widok wysyłki SMS', () => {
 
   it('renderSend: lista odbiorców z _meta z identyfikatorem klienta, wartości jako tekst', () => {
     const html = renderSend(PREVIEW, { recipients: [{ phone: '48601000021', clientId: null }, { phone: '48601000022', clientId: '<b>K-1042</b>' }] });
-    expect(html).toContain('<div class="recips"><div><span class="mono">+48 601 000 021</span></div>');
+    // Przy identyfikatorach klientów każdy wiersz ma dwie kolumny, dlatego numery stoją w jednej kolumnie.
+    expect(html).toContain('<div class="recips"><div><span></span><span class="mono">+48 601 000 021</span></div>');
     expect(html).toContain('<div><span>&lt;b&gt;K-1042&lt;/b&gt;</span><span class="mono">+48 601 000 022</span></div>');
+    expect(renderSend(PREVIEW, { recipients: [{ phone: '48601000021', clientId: null }] }))
+      .toContain('<div class="recips"><div><span class="mono">+48 601 000 021</span></div></div>');
     expect(renderSend(PREVIEW, {})).not.toContain('class="recips"');
   });
 
@@ -91,6 +94,16 @@ describe('widok SMS do grupy', () => {
     expect(own).toContain('<dt>Nadawca SMS-a</dt><dd>SERWIS-ABC, według ustawień grupy</dd>');
     expect(renderGroup(GROUP, [])).toContain('<div class="phone-from">numer usługi Serwis (12345)</div>');
     expect(renderGroup({ ...GROUP, service: { id: '24138', label: '24138' } }, [])).toContain('<dd>numer usługi 24138, według ustawień grupy</dd>');
+  });
+
+  it('renderGroup po wysyłce: liczby doręczeń albo samo przyjęcie bez odczytu wysłanych', () => {
+    const sent = { kind: 'group', ids: ['msg_1', 'msg_2'], group: 'SERWIS', repeated: false };
+    const live = renderGroup(GROUP, [], { sent, deliveries: { counts: { delivered: 1, sent: 1 }, done: false } });
+    expect(live).not.toContain('data-act="send"');
+    expect(live).toContain('Przyjęto SMS do grupy SERWIS: 2 wiadomości. Doręczone: <b>1</b> z 2 · w drodze 1 · stan odświeża się sam');
+    const bare = renderGroup(GROUP, [], { sent, deliveries: { unavailable: true } });
+    expect(bare).toContain('Przyjęto SMS do grupy SERWIS: 2 wiadomości');
+    expect(bare).not.toContain('Doręczone');
   });
 
   it('renderGroup: nazwa grupy nadana przez agenta z <script> jako tekst', () => {

@@ -34,10 +34,10 @@ const VIEWS: Partial<Record<ViewId, ViewDef>> = {
     tools: '<button type="button" id="odswiez" class="btn">Odśwież</button>',
     body: waiting('Oczekiwanie na dane połączenia z bramki'),
   },
-  wysylka: { title: 'Wysyłka SMS', files: ['measure.js', 'send.js'], entry: 'startSend', tools: '', body: waiting('Oczekiwanie na podgląd SMS-a z bramki') },
-  grupa: { title: 'SMS do grupy', files: ['grupa.js'], entry: 'startGroup', tools: '', body: waiting('Oczekiwanie na podgląd SMS-a do grupy z bramki') },
+  wysylka: { title: 'Wysyłka SMS', files: ['measure.js', 'doreczenia.js', 'send.js'], entry: 'startSend', tools: '', body: waiting('Oczekiwanie na podgląd SMS-a z bramki') },
+  grupa: { title: 'SMS do grupy', files: ['doreczenia.js', 'grupa.js'], entry: 'startGroup', tools: '', body: waiting('Oczekiwanie na podgląd SMS-a do grupy z bramki') },
   przebieg: {
-    title: 'Przebieg doręczenia', files: ['measure.js', 'send.js', 'przebieg.js'], entry: 'startTrace',
+    title: 'Przebieg doręczenia', files: ['measure.js', 'doreczenia.js', 'send.js', 'przebieg.js'], entry: 'startTrace',
     tools: '<button type="button" id="odswiez" class="btn">Odśwież</button>', body: waiting('Oczekiwanie na przebieg doręczenia z bramki'),
   },
 };
