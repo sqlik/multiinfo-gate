@@ -1,4 +1,5 @@
 import { cancelMessage } from '../../api/cancel-message.ts';
+import { PLACEHOLDER_CODE } from '../../links/codes.ts';
 import { linkFieldsSchema, linkRequest } from '../../api/link-fields.ts';
 import { PACKAGE_RECIPIENTS_MAX } from '../../api/packages.ts';
 import {
@@ -25,6 +26,13 @@ function confirmLine(ctx: ToolContext, tool: string): string {
     : `Pokaż użytkownikowi treść, liczbę odbiorców i nadawcę, a po wyraźnym potwierdzeniu wywołaj ${tool} z identyfikatorem szkicu.`;
 }
 
+/** Adres krótkiego linku z kodem zastępczym w treści podglądu, z przedrostkiem https:// albo bez niego. */
+function placeholderIn(text: string, domain: string | null): string | null {
+  if (domain === null) return null;
+  const escaped = domain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:https://)?${escaped}/${PLACEHOLDER_CODE}`).exec(text)?.[0] ?? null;
+}
+
 function smsText(ctx: ToolContext, p: SmsPreview): string {
   const sender = p.senders.find((s) => s.value === p.orig)?.label ?? p.orig ?? '-';
   const service = p.services.find((s) => s.id === p.serviceId);
@@ -41,6 +49,11 @@ function smsText(ctx: ToolContext, p: SmsPreview): string {
     lines.push(p.links.shortened > 0
       ? `Krótkie linki: ${p.links.shortened}, domena ${p.links.domain ?? '-'}, kampania ${p.links.campaign ?? '-'}.`
       : 'Linki w treści nie zostaną skrócone.');
+    const marker = p.links.shortened > 0 ? placeholderIn(p.text, p.links.domain) : null;
+    if (marker !== null) {
+      lines.push(`Adres ${marker} jest znacznikiem miejsca na krótki link, a nie działającym linkiem. `
+        + 'Każdy odbiorca otrzyma przy wysyłce link z własnym kodem, dlatego nie przedstawiaj tego adresu użytkownikowi jako linku.');
+    }
     if (p.links.notice) lines.push(p.links.notice);
   }
   lines.push(guardLine(p.guard), confirmLine(ctx, 'send_prepared'));

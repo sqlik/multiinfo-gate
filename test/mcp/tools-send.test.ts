@@ -118,6 +118,18 @@ describe('narzędzia wysyłki przez POST /mcp', () => {
     for (const text of [prepared, status]) expect(text).not.toMatch(/wywoła[nń][a-z]* wysyłając/);
   });
 
+  it('prepare_sms z krótkim linkiem: tekst dla agenta oznacza adres z kodem 0000000 jako znacznik, a nie link', async () => {
+    setup(['send']);
+    const domainId = deps.linkDomains.create({ domain: 'l.serwis.pl', displayName: 'Serwis', homeUrl: null, bareLinks: false }, NOW);
+    deps.apiKeys.setLinkSettings(seed.keyId, { mode: 'always', domainIds: [domainId], defaultDomainId: domainId, targets: ['serwis.pl'], validityDays: 30, utm: false });
+    const text = textOf(await (await mcpSession(app, seed.secret)).call('prepare_sms', { to: ['48601000011'], text: 'Umów przegląd: https://serwis.pl/przeglad' }));
+    expect(text).toContain('Umów przegląd: https://l.serwis.pl/0000000');
+    expect(text).toContain('Adres https://l.serwis.pl/0000000 jest znacznikiem miejsca na krótki link, a nie działającym linkiem. '
+      + 'Każdy odbiorca otrzyma przy wysyłce link z własnym kodem, dlatego nie przedstawiaj tego adresu użytkownikowi jako linku.');
+    const plain = textOf(await (await mcpSession(app, seed.secret)).call('prepare_sms', { to: ['48601000011'], text: TEXT }));
+    expect(plain).not.toContain('znacznikiem');
+  });
+
   it('send_prepared szkicu group przy połączeniu bez send_group: isError', async () => {
     setup(['send', 'send_group']);
     group('SERWIS', { mode: 'lists', prefix: 'serwis', recipients: [{ phone: '48601000021', name: 'Jan Kowalski' }] });
