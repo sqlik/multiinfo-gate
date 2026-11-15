@@ -96,6 +96,7 @@ export class Worker {
       ['skracacz', () => this.purgeLinks(now)],
       ['oauth', () => this.deps.oauth?.prune(now)],
       ['szkice', () => this.deps.drafts?.pruneBefore(new Date(now.getTime() - DAY_MS))],
+      ['pobrania', () => this.deps.downloads?.pruneBefore(now)],
     ];
     for (const [name, step] of steps) {
       try {

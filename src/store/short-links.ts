@@ -223,6 +223,15 @@ export class ShortLinksRepo {
     return { total: all.length, items: all.slice(offset, offset + limit) };
   }
 
+  /** Adresy docelowe i kliknięcia ludzi według numeru, do pliku odbiorców bez otwarcia. */
+  linksByDest(campaignId: number): Map<string, { targets: string[]; clicks: number }> {
+    const rows = this.db
+      .prepare(`SELECT dest, json_group_array(DISTINCT target) AS targets, SUM(clicks) AS clicks FROM short_links
+                WHERE campaign_id = ? GROUP BY dest`)
+      .all(campaignId) as Array<{ dest: string; targets: string; clicks: number }>;
+    return new Map(rows.map((r) => [r.dest, { targets: (JSON.parse(r.targets) as string[]).sort(), clicks: r.clicks }]));
+  }
+
   /** Chwila pierwszego otwarcia każdego odbiorcy (`recipient_key`) kampanii; wejścia automatów nie są otwarciem. */
   firstOpens(campaignId: number): string[] {
     return (this.db

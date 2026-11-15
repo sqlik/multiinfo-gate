@@ -19,6 +19,7 @@ import type { PackagesRepo } from '../store/packages.ts';
 import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
 import type { AgentDraftsRepo } from '../store/agent-drafts.ts';
 import type { DownloadLinksRepo } from '../store/download-links.ts';
+import { registerDownloadRoute } from '../agents/downloads.ts';
 import { registerOAuthRoutes, type OAuthDeps } from '../oauth/routes.ts';
 import { AGENT_TOOLS, registerMcpRoutes } from '../mcp/server.ts';
 import type { McpSessions } from '../mcp/sessions.ts';
@@ -168,6 +169,10 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
   if (deps.agents) {
     registerOAuthRoutes(app, deps.agents);
     registerMcpRoutes(app, { ...deps, ...deps.agents }, deps.agents.tools ?? AGENT_TOOLS);
+    registerDownloadRoute(app, {
+      downloads: deps.agents.downloads, packages: deps.packages, shortLinks: deps.shortLinks, campaigns: deps.campaigns,
+      ...(deps.log ? { log: deps.log } : {}), ...(deps.now ? { now: deps.now } : {}),
+    });
   }
   registerHealthRoute(
     app,
