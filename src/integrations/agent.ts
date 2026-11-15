@@ -89,6 +89,8 @@ export type SendOutcome =
 
 /** Wynik przygotowania: klucz potwierdzenia trafia wyłącznie do `_meta` wyniku narzędzia, nigdy do podglądu. */
 export interface Prepared<T> { confirm: string | null; preview: T }
+/** Odbiorca szkicu SMS-a po normalizacji, z identyfikatorem klienta z kampanii, jeżeli był podany przy wysyłce. */
+export interface SmsRecipient { phone: string; clientId: string | null }
 
 /** Szkic SMS-a: odbiorcy po normalizacji, treść przed skróceniem i wszystko, czego wymaga wysyłka. */
 interface SmsDraftPayload {
@@ -249,14 +251,16 @@ const scopeError = (scope: AgentScope): AgentError =>
  * Numery odbiorców kampanii klucza według otwarcia linku (zakresy `campaigns` i `send`). Agent otrzymuje tylko
  * ich liczbę, a szkic przechowuje numery. Po usunięciu szczegółów kampanii listy nie można odtworzyć.
  */
-function campaignRecipients(deps: AgentDeps, ctx: ConnectionContext, ref: NonNullable<PrepareSmsInput['campaignRecipients']>): string[] {
+function campaignRecipients(
+  deps: AgentDeps, ctx: ConnectionContext, ref: NonNullable<PrepareSmsInput['campaignRecipients']>,
+): Array<{ dest: string; clientId: string | null }> {
   if (!ctx.scopes.has('campaigns')) throw scopeError('campaigns');
   const campaign = deps.campaigns.byName(ctx.key.id, ref.campaign);
   if (!campaign) throw new AgentError('campaign_unknown', `Kampania „${ref.campaign}” nie istnieje w kluczu integracji.`);
   if (campaign.detailsPurgedAt !== null) {
     throw new AgentError('campaign_purged', 'Szczegóły kampanii zostały usunięte po okresie przechowywania, dlatego listy odbiorców nie można odtworzyć.');
   }
-  const list = deps.shortLinks.recipients(campaign.id, ref.segment).map((r) => r.dest);
+  const list = deps.shortLinks.recipients(campaign.id, ref.segment);
   if (list.length === 0) {
     throw new AgentError('no_recipient', ref.segment === 'unopened'
       ? `Wszyscy odbiorcy kampanii ${campaign.name} otworzyli link.`
@@ -348,15 +352,25 @@ export function prepareGroup(
 
 /**
  * Przygotowanie SMS-a: sprawdza wszystko, co sprawdziłaby wysyłka, i zapisuje szkic ważny 30 minut. Niczego
- * nie wysyła. W sesji z widokami szkic otrzymuje jednorazowy klucz potwierdzenia.
+ * nie wysyła. W sesji z widokami szkic otrzymuje jednorazowy klucz potwierdzenia. Podgląd zawiera liczbę
+ * odbiorców, a numery po normalizacji wynik zwraca osobno w `recipients`, dla widoku.
  */
-export function prepareSms(deps: AgentDeps, ctx: ConnectionContext, input: PrepareSmsInput, now: Date, opts: { apps?: boolean } = {}): Prepared<SmsPreview> {
+export function prepareSms(
+  deps: AgentDeps, ctx: ConnectionContext, input: PrepareSmsInput, now: Date, opts: { apps?: boolean } = {},
+): Prepared<SmsPreview> & { recipients: SmsRecipient[] } {
   if (input.campaignRecipients !== undefined && (input.to?.length ?? 0) > 0) {
     throw new AgentError('invalid', 'Podaj numery odbiorców albo odbiorców kampanii, a nie oba rodzaje naraz.');
   }
-  const raw = input.campaignRecipients === undefined ? input.to ?? [] : campaignRecipients(deps, ctx, input.campaignRecipients);
+  const raw = input.campaignRecipients === undefined
+    ? (input.to ?? []).map((dest) => ({ dest, clientId: null }))
+    : campaignRecipients(deps, ctx, input.campaignRecipients);
   if (raw.length === 0) throw new AgentError('no_recipient', 'Podaj co najmniej jeden numer odbiorcy.');
-  const to = [...new Set(raw.map((r) => normalize(r, ctx.account.defaultCountryCode)))];
+  const clients = new Map<string, string | null>();
+  for (const r of raw) {
+    const phone = normalize(r.dest, ctx.account.defaultCountryCode);
+    if (!clients.has(phone)) clients.set(phone, r.clientId);
+  }
+  const to = [...clients.keys()];
   if (to.length > PACKAGE_RECIPIENTS_MAX) {
     throw new AgentError('too_many_recipients',
       `Wysyłka może objąć najwyżej ${PACKAGE_RECIPIENTS_MAX} odbiorców, a lista bez powtórzeń zawiera ${to.length} numerów.`);
@@ -380,6 +394,7 @@ export function prepareSms(deps: AgentDeps, ctx: ConnectionContext, input: Prepa
   const draftId = deps.drafts.insert({ connectionId: ctx.connection.id, kind: 'sms', payload, createdAt: now, expiresAt, confirmHash: confirm?.hash ?? null });
   return {
     confirm: confirm?.value ?? null,
+    recipients: to.map((phone) => ({ phone, clientId: clients.get(phone) ?? null })),
     preview: {
       draftId, expiresAt: expiresAt.toISOString(), recipients: to.length, duplicatesRemoved: raw.length - to.length, route,
       text: shaped.prepared.text, parts: shaped.parts, characters: shaped.characters, encoding: shaped.encoding, truncated: shaped.truncated,

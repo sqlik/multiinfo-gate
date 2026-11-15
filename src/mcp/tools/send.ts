@@ -113,7 +113,7 @@ export const prepareSmsTool: ToolDef = {
   view: 'wysylka',
   run(ctx, raw) {
     const input = raw as z.infer<typeof smsInput>;
-    const { confirm, preview } = prepareSms(ctx.deps, connOf(ctx), {
+    const { confirm, preview, recipients } = prepareSms(ctx.deps, connOf(ctx), {
       ...(input.to !== undefined ? { to: input.to } : {}),
       ...(input.campaignRecipients !== undefined ? { campaignRecipients: input.campaignRecipients } : {}),
       text: input.text,
@@ -122,7 +122,9 @@ export const prepareSmsTool: ToolDef = {
       ...(input.encoding !== undefined ? { encoding: input.encoding } : {}),
       links: linkRequest(input),
     }, ctx.now, { apps: ctx.apps });
-    return { text: smsText(ctx, preview), structured: asRecord(preview), ...(confirm === null ? {} : { meta: { confirm } }) };
+    // Numery trafiają wyłącznie do widoku przez _meta, dlatego tylko w sesji z widokami: bez widoku nikt ich nie zobaczy,
+    // a lista rozsyłki obejmuje do 5000 numerów.
+    return { text: smsText(ctx, preview), structured: asRecord(preview), ...(ctx.apps ? { meta: { ...(confirm === null ? {} : { confirm }), recipients } } : {}) };
   },
 };
 

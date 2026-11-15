@@ -123,7 +123,9 @@ describe('narzędzia wysyłki przez POST /mcp', () => {
     expect(text).not.toMatch(/48601000011|48601000012/);
     expect(JSON.stringify(prepared.structuredContent)).not.toMatch(/48601000011|48601000012/);
     // Sesja z widokami: klucz potwierdzenia wyłącznie w _meta, a agent nie widzi narzędzia wysyłki.
-    expect(prepared._meta).toEqual({ confirm: expect.stringMatching(/^mig_cf_/) });
+    expect(prepared._meta).toEqual({
+      confirm: expect.stringMatching(/^mig_cf_/), recipients: [{ phone: '48601000011', clientId: null }, { phone: '48601000012', clientId: null }],
+    });
     expect(text).not.toContain(prepared._meta!.confirm);
     expect(text).toContain('przyciskiem „Wyślij”');
 

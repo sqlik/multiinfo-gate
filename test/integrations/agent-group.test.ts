@@ -192,13 +192,13 @@ describe('odbiorcy kampanii', () => {
   beforeEach(() => {
     const domainId = deps.linkDomains.create({ domain: 'l.serwis.pl', displayName: 'Serwis', homeUrl: null, bareLinks: false }, NOW);
     campaignId = deps.campaigns.open(seed.keyId, 'przeglad-klimatyzacji-wiosna', AGENT_SEED_AT);
-    const link = (code: string, recipientKey: string, dest: string) => deps.shortLinks.insert({
+    const link = (code: string, recipientKey: string, dest: string, clientId: string | null = null) => deps.shortLinks.insert({
       code, domainId, apiKeyId: seed.keyId, campaignId, target: 'https://serwis.pl/przeglad', utm: 0, recipientKey, messageId: recipientKey, packageId: null,
-      seq: null, dest, clientId: null, expiresAt: '2027-02-15T08:00:00.000Z', purgeAfter: '2027-03-15T08:00:00.000Z', createdAt: AGENT_SEED_AT.toISOString(),
+      seq: null, dest, clientId, expiresAt: '2027-02-15T08:00:00.000Z', purgeAfter: '2027-03-15T08:00:00.000Z', createdAt: AGENT_SEED_AT.toISOString(),
     });
     link('aB3xK9q', 'msg_a', '48601000051');
     link('aB3xK9r', 'msg_a', '48601000051');
-    link('cD4yL0s', 'msg_b', '48601000052');
+    link('cD4yL0s', 'msg_b', '48601000052', 'K-1042');
     deps.shortLinks.click('aB3xK9r', AGENT_SEED_AT, false);
   });
 
@@ -206,8 +206,9 @@ describe('odbiorcy kampanii', () => {
     prepareSms(deps, ctx(), { campaignRecipients: { campaign, segment }, text: 'Przypominamy o przeglądzie klimatyzacji.' }, NOW);
 
   it('odbiorcy bez otwarcia: odbiorca z dwoma kodami, jednym otwartym, liczy się jako otwierający', () => {
-    const unopened = toCampaign('unopened').preview;
+    const { preview: unopened, recipients } = toCampaign('unopened');
     expect(unopened.recipients).toBe(1);
+    expect(recipients).toEqual([{ phone: '48601000052', clientId: 'K-1042' }]);
     expect((deps.drafts.get(unopened.draftId, seed.connectionId)!.payload as { to: string[] }).to).toEqual(['48601000052']);
     const opened = toCampaign('opened').preview;
     expect((deps.drafts.get(opened.draftId, seed.connectionId)!.payload as { to: string[] }).to).toEqual(['48601000051']);

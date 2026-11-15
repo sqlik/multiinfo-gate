@@ -78,9 +78,12 @@ describe('prepareSms', () => {
   });
 
   it('numery +48 601 000 011, 0048601000011 i 601-000-011 to jeden odbiorca, duplicatesRemoved 2', () => {
-    const { preview } = sms({ to: ['+48 601 000 011', '0048601000011', '601-000-011'] });
+    const { preview, recipients } = sms({ to: ['+48 601 000 011', '0048601000011', '601-000-011'] });
     expect(preview.recipients).toBe(1);
     expect(preview.duplicatesRemoved).toBe(2);
+    // Numery po normalizacji trafiają wyłącznie do widoku, poza podglądem dla agenta.
+    expect(recipients).toEqual([{ phone: '48601000011', clientId: null }]);
+    expect(JSON.stringify(preview)).not.toContain('48601000011');
     expect((deps.drafts.get(preview.draftId, seed.connectionId)!.payload as { to: string[] }).to).toEqual(['48601000011']);
   });
 

@@ -40,6 +40,13 @@ describe('widok wysyłki SMS', () => {
     expect(html).toContain('<span class="lnk">https://l.firma.pl/0000000</span>');
   });
 
+  it('renderSend: lista odbiorców z _meta z identyfikatorem klienta, wartości jako tekst', () => {
+    const html = renderSend(PREVIEW, { recipients: [{ phone: '48601000021', clientId: null }, { phone: '48601000022', clientId: '<b>K-1042</b>' }] });
+    expect(html).toContain('<div class="recips"><div><span class="mono">+48 601 000 021</span></div>');
+    expect(html).toContain('<div><span>&lt;b&gt;K-1042&lt;/b&gt;</span><span class="mono">+48 601 000 022</span></div>');
+    expect(renderSend(PREVIEW, {})).not.toContain('class="recips"');
+  });
+
   it('renderSend: numer usługi jako „numer usługi Serwis (12345)”', () => {
     const html = renderSend(PREVIEW, {});
     expect(html).toContain('numer usługi Serwis (12345)');

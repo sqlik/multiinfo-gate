@@ -1,7 +1,7 @@
 // Widok „Wysyłka SMS” według wyniku prepare_sms: podgląd w dymku telefonu, nadawca, usługa, kodowanie,
 // krótkie linki i ochrona przed burzą. Zmiana ustawienia tworzy nowy szkic, a „Wyślij” woła send_prepared
 // z kluczem potwierdzenia z _meta. Po wysyłce widok sam odświeża stan doręczeń.
-import { applyTheme, cancelledText, createBridge, esc, note, plural, pluralWord, sayIn, stamp, textOf } from './bridge.js';
+import { applyTheme, cancelledText, createBridge, esc, note, phoneLabel, plural, pluralWord, sayIn, stamp, textOf } from './bridge.js';
 import { measure } from './measure.js';
 
 /** Kod zastępczy krótkiego linku w podglądzie; prawdziwy kod powstaje przy wysyłce. */
@@ -95,6 +95,13 @@ function linkFields(p, locked) {
   return out;
 }
 
+/** Numery odbiorców z `_meta.recipients`, przy odbiorcach kampanii z identyfikatorem klienta. */
+function recipientList(recipients) {
+  if (!recipients || recipients.length === 0) return '';
+  return `<div class="recips">${recipients.map((r) => `<div>${r.clientId ? `<span>${esc(r.clientId)}</span>` : ''}`
+    + `<span class="mono">${esc(phoneLabel(r.phone))}</span></div>`).join('')}</div>`;
+}
+
 function deliveryText(n, d) {
   const counts = d.counts ?? {};
   const others = Object.entries(counts).filter(([k, v]) => k !== 'delivered' && v > 0).map(([k, v]) => `${COUNT_LABELS[k] ?? k} ${v}`);
@@ -121,8 +128,9 @@ function sentBox(p, sent, state) {
 }
 
 /**
- * HTML widoku wysyłki. `state`: `sending` w trakcie wysyłki, `busy` w trakcie wywołania, `editable` false bez
- * danych wejściowych narzędzia, `sent` wynik send_prepared, `deliveries` liczby w stanach, `progress` stan rozsyłki.
+ * HTML widoku wysyłki. `state`: `recipients` numery z `_meta`, `sending` w trakcie wysyłki, `busy` w trakcie wywołania,
+ * `editable` false bez danych wejściowych narzędzia, `sent` wynik send_prepared, `deliveries` liczby w stanach,
+ * `progress` stan rozsyłki.
  */
 export function renderSend(p, state = {}) {
   const sent = state.sent ?? null;
@@ -138,7 +146,7 @@ export function renderSend(p, state = {}) {
     + `<dt>Odbiorcy</dt><dd>${plural(p.recipients, 'numer', 'numery', 'numerów')}`
     + `${p.duplicatesRemoved > 0 ? `, usunięte powtórzenia: ${p.duplicatesRemoved}` : ''}${note(route)}</dd>`
     + `<dt>Części razem</dt><dd>${p.recipients * p.parts}, ${plural(p.recipients, 'odbiorca', 'odbiorców', 'odbiorców')} po ${parts(p.parts)}</dd>`
-    + `${linkFields(p, locked)}</dl>`
+    + `${linkFields(p, locked)}</dl>${recipientList(state.recipients)}`
     + guardNote(p.guard) + (sent ? '' : note(`Podgląd jest ważny do ${stamp(p.expiresAt)}`));
   const label = p.route === 'package' ? `Wyślij rozsyłkę do ${plural(p.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}` : `Wyślij ${sms(p.recipients)}`;
   const actions = sent ? sentBox(p, sent, state)
@@ -156,7 +164,7 @@ const errorText = (error) => (error instanceof Error ? error.message : String(er
  * zmianie ustawień, wysyła i odświeża doręczenia. Zwraca `show(result, input)`.
  */
 export function mountSend(root, { bridge, say, win }) {
-  const s = { input: null, preview: null, confirm: null, busy: false, sending: false, sent: null, deliveries: null, progress: null };
+  const s = { input: null, preview: null, recipients: [], confirm: null, busy: false, sending: false, sent: null, deliveries: null, progress: null };
   const draw = () => {
     if (s.preview) root.innerHTML = renderSend(s.preview, { ...s, editable: s.input !== null });
   };
@@ -182,7 +190,10 @@ export function mountSend(root, { bridge, say, win }) {
       root.textContent = textOf(result);
       return undefined;
     }
-    Object.assign(s, { preview: result.structuredContent, confirm: result._meta?.confirm ?? null, sent: null, deliveries: null, progress: null });
+    Object.assign(s, {
+      preview: result.structuredContent, recipients: result._meta?.recipients ?? [], confirm: result._meta?.confirm ?? null,
+      sent: null, deliveries: null, progress: null,
+    });
     say('plain', '');
     draw();
     return undefined;
