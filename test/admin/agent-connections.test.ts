@@ -294,8 +294,10 @@ describe('handoffText', () => {
     const text = handoffText({ method: 'oauth', mcpUrl: 'https://sms.firma.pl/mcp', secret: 'ABCD-EFGH-JKMN', secretExpiresAt: '2026-11-16T10:00:00.000Z', effectiveExpiry: '2027-02-13T10:00:00.000Z' });
     expect(text).toContain('Adres serwera MCP: https://sms.firma.pl/mcp');
     expect(text).toContain('Kod jednorazowy: ABCD-EFGH-JKMN');
-    expect(text).toContain('16.11.2026 11:00');
-    expect(text).toContain('13.02.2027');
+    // Zapis dat jak w tabeli połączeń na tej samej stronie panelu.
+    expect(text).toContain('Kod jest ważny do 2026-11-16 11:00 i działa tylko raz.');
+    expect(text).toContain('Połączenie będzie ważne do 2027-02-13.');
+    expect(text).not.toMatch(/\d{2}\.\d{2}\.\d{4}/);
     expect(text).toContain(AGENTS_DOCS_URL);
     expect(text).not.toMatch(/[\u2013\u2014]/);
   });

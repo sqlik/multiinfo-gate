@@ -2,7 +2,7 @@ import { CODE_VALIDITY, CONNECTION_VALIDITY, type ConnectionState } from '../../
 import { AGENTS_DOCS_URL } from '../../docs-links.ts';
 import type { AgentConnectionRow, ConnectionMethod } from '../../store/agent-connections.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
-import { warsawShort, warsawStamp } from '../../time/warsaw.ts';
+import { warsawStamp } from '../../time/warsaw.ts';
 import { gatewayAddressPanel, gatewayAddressWarning } from './agent.ts';
 import { esc } from './layout.ts';
 
@@ -226,12 +226,12 @@ export function connectionErrorPage(integration: IntegrationRow, message: string
 }
 
 const validityWords = (effectiveExpiry: string | null): string =>
-  effectiveExpiry === null ? 'Połączenie jest ważne bezterminowo.' : `Połączenie będzie ważne do ${warsawShort(effectiveExpiry).slice(0, 10)}.`;
+  effectiveExpiry === null ? 'Połączenie jest ważne bezterminowo.' : `Połączenie będzie ważne do ${minute(effectiveExpiry).slice(0, 10)}.`;
 
 /** Gotowa wiadomość dla pracownika: adres serwera MCP, kod albo nagłówek, terminy i odnośnik do artykułu. */
 export function handoffText(v: { method: ConnectionMethod; mcpUrl: string; secret: string; secretExpiresAt: string | null; effectiveExpiry: string | null }): string {
   if (v.method === 'oauth') {
-    const code = v.secretExpiresAt === null ? 'Kod działa tylko raz.' : `Kod jest ważny do ${warsawShort(v.secretExpiresAt)} i działa tylko raz.`;
+    const code = v.secretExpiresAt === null ? 'Kod działa tylko raz.' : `Kod jest ważny do ${minute(v.secretExpiresAt)} i działa tylko raz.`;
     return [
       'Przekazuję dane do połączenia aplikacji AI z bramką SMS.',
       '',
