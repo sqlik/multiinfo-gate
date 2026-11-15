@@ -1,7 +1,7 @@
 // Widok „Wyniki kampanii” według wyniku campaign_results: liczby jak w panelu, otwarcia dzień po dniu albo
 // kliknięcia w kolejnych godzinach, cele linków, odbiorcy bez otwarcia porcjami, pliki CSV i przypomnienie.
 // Po usunięciu szczegółów kampanii zostają liczby i kliknięcia w kolejnych godzinach.
-import { applyTheme, cancelledText, createBridge, esc, note, num, openDownload, phoneLabel, sayIn, stamp, textOf } from './bridge.js';
+import { applyTheme, cancelledText, createBridge, esc, forwardedText, note, num, openDownload, phoneLabel, sayIn, stamp, textOf } from './bridge.js';
 import { barChart } from './chart.js';
 
 /**
@@ -185,7 +185,7 @@ export function startCampaign(win, env) {
     } else if (act === 'remind') {
       run(async () => {
         const sent = await bridge.sendMessage(REMIND_MESSAGE);
-        say(sent ? 'ok' : 'plain', sent ? 'Prośba o przypomnienie trafiła do rozmowy'
+        say(sent ? 'ok' : 'plain', sent ? forwardedText('Prośba o przypomnienie')
           : `Napisz w rozmowie, że chcesz przypomnienia dla odbiorców bez otwarcia kampanii ${s.data.name}`);
       });
     }

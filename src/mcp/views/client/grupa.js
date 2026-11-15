@@ -1,7 +1,7 @@
 // Widok „SMS do grupy” według wyniku prepare_group_sms: nadawca i treść po szablonie grupy, lista odbiorców z _meta,
 // okna ochrony agenta i grupy. Zmiana grupy tworzy nowy szkic, a „Wyślij do N osób” woła send_prepared,
 // po czym widok sam odświeża stan doręczeń.
-import { applyTheme, cancelledText, createBridge, esc, note, phoneLabel, plural, pluralWord, sayIn, stamp, textOf } from './bridge.js';
+import { applyTheme, cancelledText, createBridge, esc, forwardedText, note, phoneLabel, plural, pluralWord, sayIn, stamp, textOf } from './bridge.js';
 import { deliveryLine, watchDeliveries } from './doreczenia.js';
 import { latinText } from './measure.js';
 
@@ -111,7 +111,7 @@ export function startGroup(win, env) {
     } else if (button.dataset.act === 'fix') {
       run(async () => {
         const sent = await bridge.sendMessage(GROUP_FIX_MESSAGE);
-        say(sent ? 'ok' : 'plain', sent ? 'Prośba o poprawę treści trafiła do rozmowy' : 'Napisz w rozmowie, co zmienić w treści SMS-a');
+        say(sent ? 'ok' : 'plain', sent ? forwardedText('Prośba o poprawę treści') : 'Napisz w rozmowie, co zmienić w treści SMS-a');
       });
     }
   });

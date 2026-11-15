@@ -69,6 +69,12 @@ export async function openDownload(bridge, say, link) {
   return say('plain', `Aplikacja AI nie otwiera linków z widoku, dlatego skopiuj adres pliku ważnego do ${until}: ${link.url}`);
 }
 
+/**
+ * Komunikat po wiadomości do rozmowy (`ui/message`). Aplikacja przyjmuje wiadomość, ale może jeszcze poprosić
+ * człowieka o zgodę, dlatego widok nie twierdzi, że wiadomość jest już w rozmowie.
+ */
+export const forwardedText = (what) => `${what} została przekazana aplikacji AI. Jeżeli aplikacja poprosi o zgodę na wiadomość, zatwierdź ją w rozmowie.`;
+
 /** Komunikat o wywołaniu przerwanym przez aplikację. */
 export const cancelledText = (reason) => (reason ? `Aplikacja AI przerwała wywołanie narzędzia: ${reason}` : 'Aplikacja AI przerwała wywołanie narzędzia');
 

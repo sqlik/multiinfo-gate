@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { forwardedText } from '../../src/mcp/views/client/bridge.js';
 import { barChart } from '../../src/mcp/views/client/chart.js';
 import { REMIND_MESSAGE, renderCampaign } from '../../src/mcp/views/client/kampania.js';
 import { refreshQuery, renderReplies } from '../../src/mcp/views/client/odpowiedzi.js';
@@ -113,6 +114,17 @@ describe('wiadomości widoków do rozmowy', () => {
       for (const [, arg] of readFileSync(new URL(file, dir), 'utf8').matchAll(/sendMessage\(([^)]*)\)/g)) {
         expect(arg, file).toMatch(/^[A-Z_]+$/);
       }
+    }
+  });
+});
+
+describe('potwierdzenie wiadomości do rozmowy', () => {
+  it('po ui/message widok nie twierdzi, że prośba trafiła do rozmowy, bo aplikacja może czekać na zgodę człowieka', () => {
+    expect(forwardedText('Prośba o przypomnienie'))
+      .toBe('Prośba o przypomnienie została przekazana aplikacji AI. Jeżeli aplikacja poprosi o zgodę na wiadomość, zatwierdź ją w rozmowie.');
+    const dir = new URL('../../src/mcp/views/client/', import.meta.url);
+    for (const file of readdirSync(dir).filter((f) => f.endsWith('.js'))) {
+      expect(readFileSync(new URL(file, dir), 'utf8'), file).not.toContain('trafiła do rozmowy');
     }
   });
 });

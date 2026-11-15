@@ -1,7 +1,7 @@
 // Widok „Wysyłka SMS” według wyniku prepare_sms: podgląd w dymku telefonu, nadawca, usługa, kodowanie,
 // krótkie linki i ochrona przed burzą. Zmiana ustawienia tworzy nowy szkic, a „Wyślij” woła send_prepared
 // z kluczem potwierdzenia z _meta. Po wysyłce widok sam odświeża stan doręczeń.
-import { applyTheme, cancelledText, createBridge, esc, note, phoneLabel, plural, pluralWord, sayIn, stamp, textOf } from './bridge.js';
+import { applyTheme, cancelledText, createBridge, esc, forwardedText, note, phoneLabel, plural, pluralWord, sayIn, stamp, textOf } from './bridge.js';
 import { deliveryLine, watchDeliveries } from './doreczenia.js';
 import { latinText, measure } from './measure.js';
 
@@ -216,7 +216,7 @@ export function mountSend(root, { bridge, say, win }) {
 
   const fix = () => run(async () => {
     const sent = await bridge.sendMessage(FIX_MESSAGE);
-    say(sent ? 'ok' : 'plain', sent ? 'Prośba o poprawę treści trafiła do rozmowy' : 'Napisz w rozmowie, co zmienić w treści SMS-a');
+    say(sent ? 'ok' : 'plain', sent ? forwardedText('Prośba o poprawę treści') : 'Napisz w rozmowie, co zmienić w treści SMS-a');
   });
 
   root.addEventListener('click', (event) => {
