@@ -11,6 +11,9 @@ export const STATE_LABELS = {
   cancelled: 'anulowane', blocked: 'zablokowane', unknown: 'w stanie nieznanym',
 };
 
+/** Zdanie po wysyłce, gdy połączenie nie może odczytać doręczeń. */
+export const NO_READ_SENT = 'Stan doręczeń wymaga uprawnienia „Odczyt wysłanych”, które nadaje administrator bramki w integracji Agent AI';
+
 /** Liczby doręczeń `n` wiadomości według odczytu `d` = { counts, done }. */
 export function deliveryLine(n, d) {
   const counts = d.counts ?? {};

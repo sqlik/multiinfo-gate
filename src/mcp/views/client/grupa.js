@@ -2,7 +2,7 @@
 // okna ochrony agenta i grupy. Zmiana grupy tworzy nowy szkic, a „Wyślij do N osób” woła send_prepared,
 // po czym widok sam odświeża stan doręczeń.
 import { applyTheme, cancelledText, createBridge, esc, forwardedText, note, phoneLabel, plural, pluralWord, sayIn, stamp, textOf } from './bridge.js';
-import { deliveryLine, watchDeliveries } from './doreczenia.js';
+import { deliveryLine, NO_READ_SENT, watchDeliveries } from './doreczenia.js';
 import { latinText } from './measure.js';
 
 /** Stała treść wiadomości do rozmowy, bez treści SMS-a. */
@@ -42,7 +42,8 @@ export function renderGroup(p, recipients = [], state = {}) {
   const d = state.deliveries;
   const actions = sent
     ? `<div class="sent">Przyjęto SMS do grupy ${esc(sent.group)}: ${plural(sent.ids.length, 'wiadomość', 'wiadomości', 'wiadomości')}`
-      + `${d && !d.unavailable ? `. ${deliveryLine(sent.ids.length, d)}` : ''}${sent.repeated ? note('Ten szkic został wysłany wcześniej, dlatego widok pokazuje poprzedni wynik') : ''}</div>`
+      + `${d && !d.unavailable ? `. ${deliveryLine(sent.ids.length, d)}` : ''}${d?.unavailable ? note(NO_READ_SENT) : ''}`
+      + `${sent.repeated ? note('Ten szkic został wysłany wcześniej, dlatego widok pokazuje poprzedni wynik') : ''}</div>`
     : `<div class="row actions"><button type="button" class="btn btn-primary" data-act="send"${state.sending || state.busy ? ' disabled' : ''}>`
       + `${state.sending ? 'Wysyłanie…' : `Wyślij do ${plural(p.recipients, 'osoby', 'osób', 'osób')}`}</button>`
       + `<button type="button" class="btn" data-act="fix"${state.sending || state.busy ? ' disabled' : ''}>Popraw treść w rozmowie</button>`

@@ -2,7 +2,7 @@
 // krótkie linki i ochrona przed burzą. Zmiana ustawienia tworzy nowy szkic, a „Wyślij” woła send_prepared
 // z kluczem potwierdzenia z _meta. Po wysyłce widok sam odświeża stan doręczeń.
 import { applyTheme, cancelledText, createBridge, esc, forwardedText, note, phoneLabel, plural, pluralWord, sayIn, stamp, textOf } from './bridge.js';
-import { deliveryLine, watchDeliveries } from './doreczenia.js';
+import { deliveryLine, NO_READ_SENT, watchDeliveries } from './doreczenia.js';
 import { latinText, measure } from './measure.js';
 
 /** Kod zastępczy krótkiego linku w podglądzie; prawdziwy kod powstaje przy wysyłce. */
@@ -111,7 +111,7 @@ function sentBox(p, sent, state) {
   }
   const n = sent.ids.length;
   const d = state.deliveries;
-  const text = !d ? `Przyjęto ${sms(n)}` : d.unavailable ? `Przyjęto ${plural(n, 'wiadomość', 'wiadomości', 'wiadomości')}` : `Przyjęto ${sms(n)}. ${deliveryLine(n, d)}`;
+  const text = !d ? `Przyjęto ${sms(n)}` : d.unavailable ? `Przyjęto ${plural(n, 'wiadomość', 'wiadomości', 'wiadomości')}${note(NO_READ_SENT)}` : `Przyjęto ${sms(n)}. ${deliveryLine(n, d)}`;
   return `<div class="sent">${text}${repeated}</div>`;
 }
 

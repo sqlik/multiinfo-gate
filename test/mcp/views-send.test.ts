@@ -136,6 +136,18 @@ describe('widok przebiegu doręczenia', () => {
   });
 });
 
+describe('doręczenia bez uprawnienia Odczyt wysłanych', () => {
+  it('widoki wysyłki i grupy po wysyłce wyjaśniają, że stan doręczeń wymaga uprawnienia Odczyt wysłanych', () => {
+    const NOTE = 'Stan doręczeń wymaga uprawnienia „Odczyt wysłanych”, które nadaje administrator bramki w integracji Agent AI';
+    const group = renderGroup(GROUP, [], { sent: { kind: 'group', ids: ['msg_1', 'msg_2'], group: 'SERWIS', repeated: false }, deliveries: { unavailable: true } });
+    const send = renderSend(PREVIEW, { sent: { kind: 'messages', ids: ['msg_1'], repeated: false }, deliveries: { unavailable: true } });
+    expect(group).toContain(NOTE);
+    expect(send).toContain(NOTE);
+    const live = renderGroup(GROUP, [], { sent: { kind: 'group', ids: ['msg_1'], group: 'SERWIS', repeated: false }, deliveries: { counts: { delivered: 1 }, done: true } });
+    expect(live).not.toContain(NOTE);
+  });
+});
+
 describe('jednostka limitu ochrony przed burzą', () => {
   it('widoki wysyłki, grupy i Co mogę? liczą limit w wysyłkach, jak panel', () => {
     expect(renderSend(PREVIEW, {})).toContain('można jeszcze wykonać 28 wysyłek i wysłać SMS-y do 990 odbiorców');
