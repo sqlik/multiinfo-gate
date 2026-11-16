@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { button, buttons, tile, tiles } from '../../src/mcp/views/client/bridge.js';
 import { renderStatus } from '../../src/mcp/views/client/co-moge.js';
 import { renderGroup } from '../../src/mcp/views/client/grupa.js';
 import { renderTrace, sayAt } from '../../src/mcp/views/client/przebieg.js';
@@ -33,84 +34,125 @@ const ENTRY = {
   text: 'Serwisant odwiedzi Państwa jutro między 10 a 12.', packageId: null,
 };
 
+/** Nazwy sekcji karty w kolejności. */
+const sections = (html: string) => [...html.matchAll(/<h3>(.*?)<\/h3>/g)].map((m) => m[1]);
+const msgText = (html: string) => /<div class="msg-text">([\s\S]*?)<\/div><\/div>/.exec(html)![1];
+const SENT = { kind: 'messages', ids: Array.from({ length: 12 }, (_, i) => `msg_${i}`), repeated: false };
+
 describe('widok wysyłki SMS', () => {
-  it('renderSend: nazwa kampanii z <script> jako tekst, krótki link podświetlony', () => {
+  it('renderSend: sekcje treści, ustawień, odbiorców, podsumowania i zatwierdzenia z równymi przyciskami', () => {
+    const html = renderSend(PREVIEW, {});
+    expect(sections(html)).toEqual(['Treść SMS-a', 'Ustawienia wysyłki', 'Odbiorcy: 12 numerów', 'Podsumowanie', 'Zatwierdzenie']);
+    expect(html).toContain('<p class="say">Wysyłkę zatwierdza człowiek w tym widoku. Agent sam jej nie wykona.</p>');
+    expect(html).toContain(buttons(button('Wyślij 12 SMS-ów', { act: 'send', kind: 'primary' }), button('Popraw treść w rozmowie', { act: 'fix' })));
+  });
+
+  it('renderSend: nazwa kampanii z <script> jako tekst, krótki link z kodem zastępczym w oknie treści', () => {
     const html = renderSend({ ...PREVIEW, links: { ...PREVIEW.links, campaign: '<script>alert(1)</script>' } }, {});
     expect(html).not.toContain('<script>');
-    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
-    expect(html).toContain('<span class="lnk">https://l.firma.pl/0000000</span>');
+    expect(html).toContain('value="&lt;script&gt;alert(1)&lt;/script&gt;"');
+    expect(msgText(html)).toContain('<span class="lnk">https://l.firma.pl/<span class="slot">0000000</span></span>');
+    expect(html).toContain('<p class="note"><span class="slot">0000000</span> oznacza kod zastępczy. Każdy odbiorca otrzyma przy wysyłce link z własnym kodem.</p>');
+    expect(html).toContain('Nadawca na telefonie: <b>numer usługi Serwis (12345)</b></span><span><b>75</b> znaków · <b>2</b> części · UCS-2</span>');
   });
 
-  it('renderSend: lista odbiorców z _meta z identyfikatorem klienta, wartości jako tekst', () => {
+  it('renderSend: numery z _meta po przecinku, identyfikator klienta przed numerem, wartości jako tekst', () => {
     const html = renderSend(PREVIEW, { recipients: [{ phone: '48601000021', clientId: null }, { phone: '48601000022', clientId: '<b>K-1042</b>' }] });
-    // Przy identyfikatorach klientów każdy wiersz ma dwie kolumny, dlatego numery stoją w jednej kolumnie.
-    expect(html).toContain('<div class="recips"><div><span></span><span class="mono">48601000021</span></div>');
-    expect(html).toContain('<div><span>&lt;b&gt;K-1042&lt;/b&gt;</span><span class="mono">48601000022</span></div>');
-    expect(renderSend(PREVIEW, { recipients: [{ phone: '48601000021', clientId: null }] }))
-      .toContain('<div class="recips"><div><span class="mono">48601000021</span></div></div>');
-    expect(renderSend(PREVIEW, {})).not.toContain('class="recips"');
+    expect(html).toContain('<p class="nums">48601000021, &lt;b&gt;K-1042&lt;/b&gt; 48601000022</p>');
+    expect(html).toContain('<p class="lead">Pojedyncze wiadomości z raportem doręczenia każdej</p>');
+    expect(html).toContain('Bramka usunęła powtórzone numery: 1');
+    expect(renderSend(PREVIEW, {})).not.toContain('class="nums"');
   });
 
-  it('renderSend: numer usługi jako „numer usługi Serwis (12345)”', () => {
+  it('renderSend: nadawca, usługa i domena zawsze jako lista wyboru, także z jedną pozycją', () => {
+    const html = renderSend({ ...PREVIEW, links: { ...PREVIEW.links, domains: ['l.firma.pl'] } }, {});
+    expect(html).toContain('<select class="sel" name="orig"><option value="" selected>numer usługi Serwis (12345)</option><option value="SERWIS-ABC">SERWIS-ABC</option></select>');
+    expect(html).toContain('<select class="sel" name="service"><option value="12345" selected>Serwis (12345)</option></select>');
+    expect(html).toContain('<select class="sel" name="domain"><option value="l.firma.pl" selected>l.firma.pl</option></select>');
+  });
+
+  it('renderSend: przełączniki kodowania i skracania w ustawieniach, rozsyłka powyżej 500 odbiorców', () => {
     const html = renderSend(PREVIEW, {});
-    expect(html).toContain('numer usługi Serwis (12345)');
-    expect(html).toContain('Wyślij 12 SMS-ów');
-    expect(html).toContain('Popraw treść w rozmowie');
+    expect(html).toContain('<button type="button" class="on" data-act="encoding" data-enc="unicode">z polskimi · 2 części</button>');
+    expect(html).toContain('<button type="button" data-act="encoding" data-enc="gsm">bez polskich · 1 część</button>');
+    expect(html).toContain('<button type="button" class="on" data-act="shorten" data-on="1">skracaj</button>');
+    expect(html).toContain('<button type="button" data-act="shorten" data-on="0">nie skracaj</button>');
+    const pkg = renderSend({ ...PREVIEW, recipients: 600, route: 'package' }, {});
+    expect(pkg).toContain('Wyślij rozsyłkę do 600 odbiorców');
+    expect(pkg).toContain('<p class="lead">Rozsyłka ze wspólną treścią, raport doręczeń po zakończeniu rozsyłki</p>');
   });
 
-  it('renderSend: przełącznik kodowania z liczbą części obu wariantów, rozsyłka powyżej 500 odbiorców', () => {
-    const html = renderSend(PREVIEW, {});
-    expect(html).toContain('data-enc="unicode"');
-    expect(html).toContain('data-enc="gsm"');
-    expect(renderSend({ ...PREVIEW, recipients: 600, route: 'package' }, {})).toContain('Wyślij rozsyłkę do 600 odbiorców');
-  });
-
-  it('renderSend: wariant bez polskich znaków pokazuje w dymku łacińskie odpowiedniki, z polskimi znakami treść bez zmian', () => {
+  it('renderSend: wariant bez polskich znaków pokazuje w oknie treści łacińskie odpowiedniki, z polskimi znakami treść bez zmian', () => {
     const text = 'Zażółć gęślą jaźń. ŻÓŁTY ĆMA, ŚLĄSK, ŹREBIĘ, ŃANDU. Zapisy: https://l.firma.pl/0000000';
-    const bubble = (html: string) => /<div class="bubble">([\s\S]*?)<\/div>/.exec(html)![1];
-    expect(bubble(renderSend({ ...PREVIEW, text, encoding: 'gsm' }, {})))
-      .toBe('Zazolc gesla jazn. ZOLTY CMA, SLASK, ZREBIE, NANDU. Zapisy: <span class="lnk">https://l.firma.pl/0000000</span>');
-    expect(bubble(renderSend({ ...PREVIEW, text, encoding: 'ucs2' }, {}))).toContain('Zażółć gęślą jaźń.');
-    expect(bubble(renderGroup({ ...GROUP, text: 'Ewa Nowak: Awaria śluzy', encoding: 'gsm' }, []))).toBe('Ewa Nowak: Awaria sluzy');
+    expect(msgText(renderSend({ ...PREVIEW, text, encoding: 'gsm' }, {})))
+      .toBe('Zazolc gesla jazn. ZOLTY CMA, SLASK, ZREBIE, NANDU. Zapisy: <span class="lnk">https://l.firma.pl/<span class="slot">0000000</span></span>');
+    expect(msgText(renderSend({ ...PREVIEW, text, encoding: 'ucs2' }, {}))).toContain('Zażółć gęślą jaźń.');
+    expect(msgText(renderGroup({ ...GROUP, text: 'Ewa Nowak: Awaria śluzy', encoding: 'gsm' }, []))).toBe('Ewa Nowak: Awaria sluzy');
   });
 
-  it('renderSend po wysyłce: bez przycisku wysyłki, liczby doręczeń albo samo przyjęcie bez odczytu wysłanych', () => {
-    const sent = { kind: 'messages', ids: Array.from({ length: 12 }, (_, i) => `msg_${i}`), repeated: false };
-    const live = renderSend(PREVIEW, { sent, deliveries: { counts: { delivered: 5, sent: 7 }, done: false } });
+  it('renderSend: podsumowanie w czterech kaflach z ochroną przed burzą i ważnością podglądu', () => {
+    const html = renderSend(PREVIEW, {});
+    expect(html).toContain(tiles(tile('Części SMS razem', 24, '12 × 2 części'), tile('Zostało wysyłek', 28, 'w oknie ochrony'),
+      tile('Zostało odbiorców', 990, 'w oknie ochrony'), tile('Podgląd ważny do', '10:30', 'potem nowy podgląd')));
+    expect(html).toContain('<p class="note">Okno ochrony przed burzą kończy się o 11:00</p>');
+    const open = renderSend({ ...PREVIEW, guard: { calls: 30, recipients: null, resetsAt: null } }, {});
+    expect(open).toContain(tile('Zostało odbiorców', 'bez limitu', 'w oknie ochrony'));
+    expect(open).toContain('<p class="note">Okno ochrony przed burzą otworzy się przy pierwszej wysyłce</p>');
+  });
+
+  it('renderSend po wysyłce: listy wyłączone, kafel doręczeń i sekcja Wysyłka bez przycisków wysyłki', () => {
+    const live = renderSend(PREVIEW, { sent: SENT, deliveries: { counts: { delivered: 5, sent: 7 }, done: false } });
+    expect(sections(live).at(-1)).toBe('Wysyłka');
     expect(live).not.toContain('data-act="send"');
-    expect(live).toContain('Doręczone: <b>5</b> z 12');
-    expect(renderSend(PREVIEW, { sent, deliveries: { unavailable: true } })).toContain('Przyjęto 12 wiadomości');
+    expect(live).toContain('<select class="sel" name="orig" disabled>');
+    expect(live).toContain(tile('Doręczone', '5 z 12', 'stan odświeża się sam', 'ok'));
+    expect(live).toContain('<div class="sent">Przyjęto 12 SMS-ów. Doręczone: <b>5</b> z 12 · w drodze 7 · stan odświeża się sam</div>');
+    const bare = renderSend(PREVIEW, { sent: SENT, deliveries: { unavailable: true } });
+    expect(bare).toContain('Przyjęto 12 wiadomości');
+    expect(bare).toContain(tile('Wysyłka', 'przyjęta', '12 SMS-ów'));
   });
 
   it('linkMarkup ucieka treść poza krótkim linkiem', () => {
     expect(linkMarkup('<b>Zapisy</b> l.firma.pl/0000000', { links: { shortened: 1, domain: 'l.firma.pl' } }))
-      .toBe('&lt;b&gt;Zapisy&lt;/b&gt; <span class="lnk">l.firma.pl/0000000</span>');
+      .toBe('&lt;b&gt;Zapisy&lt;/b&gt; <span class="lnk">l.firma.pl/<span class="slot">0000000</span></span>');
     expect(linkMarkup('Bez linku <i>', { links: null })).toBe('Bez linku &lt;i&gt;');
   });
 });
 
 describe('widok SMS do grupy', () => {
-  it('renderGroup pokazuje nazwę odbiorcy <img src=x onerror=alert(1)> jako tekst', () => {
+  it('renderGroup: sekcje karty, nazwa odbiorcy <img src=x onerror=alert(1)> jako tekst przed numerem', () => {
     const html = renderGroup(GROUP, [{ phone: '48601000021', name: '<img src=x onerror=alert(1)>' }, { phone: '48601000022', name: 'Anna "Ania" Wiśniewska' }]);
+    expect(sections(html)).toEqual(['Treść SMS-a', 'Ustawienia wysyłki', 'Odbiorcy: 2 osoby', 'Podsumowanie', 'Zatwierdzenie']);
     expect(html).not.toContain('<img');
-    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
-    expect(html).toContain('Anna &quot;Ania&quot; Wiśniewska');
-    expect(html).toContain('Wyślij do 2 osób');
+    expect(html).toContain('<p class="nums">&lt;img src=x onerror=alert(1)&gt; 48601000021, Anna &quot;Ania&quot; Wiśniewska 48601000022</p>');
+    expect(html).toContain('<p class="lead">Lista grupy SERWIS</p>');
+    expect(html).toContain(buttons(button('Wyślij do 2 osób', { act: 'send', kind: 'primary' }), button('Popraw treść w rozmowie', { act: 'fix' })));
   });
 
-  it('renderGroup: nadawca grupy w dymku i w wierszu „Nadawca SMS-a”, bez nadpisu numer usługi', () => {
+  it('renderGroup: grupa i nadawca jako listy wyboru, nadawca grupy w oknie treści, bez nadpisu numer usługi', () => {
     const own = renderGroup({ ...GROUP, orig: 'SERWIS-ABC' }, []);
-    expect(own).toContain('<div class="phone-from">SERWIS-ABC</div>');
-    expect(own).toContain('<dt>Nadawca SMS-a</dt><dd>SERWIS-ABC, według ustawień grupy</dd>');
-    expect(renderGroup(GROUP, [])).toContain('<div class="phone-from">numer usługi Serwis (12345)</div>');
-    expect(renderGroup({ ...GROUP, service: { id: '24138', label: '24138' } }, [])).toContain('<dd>numer usługi 24138, według ustawień grupy</dd>');
+    expect(own).toContain('Nadawca na telefonie: <b>SERWIS-ABC</b>');
+    expect(own).toContain('<select class="sel" name="group"><option value="SERWIS" selected>SERWIS</option><option value="FLOTA">FLOTA</option></select>');
+    expect(own).toContain('<select class="sel" aria-label="Nadawca SMS-a"><option selected>SERWIS-ABC</option></select>');
+    expect(own).toContain('Nadawcę i szablon treści określa grupa. Wysyłka nie wymaga potwierdzenia SMS-em zwrotnym.');
+    expect(renderGroup(GROUP, [])).toContain('Nadawca na telefonie: <b>numer usługi Serwis (12345)</b>');
+    expect(renderGroup({ ...GROUP, service: { id: '24138', label: '24138' } }, [])).toContain('<option selected>numer usługi 24138</option>');
+  });
+
+  it('renderGroup: podsumowanie z oknami ochrony agenta i grupy', () => {
+    const html = renderGroup(GROUP, []);
+    expect(html).toContain(tiles(tile('Części SMS razem', 2, '2 × 1 część'), tile('Zostało wysyłek', 28, 'w oknie ochrony agenta'),
+      tile('Zostało wysyłek grupy', 9, 'w oknie ochrony grupy'), tile('Podgląd ważny do', '10:30', 'potem nowy podgląd')));
+    expect(html).toContain('<p class="note">Okno ochrony agenta kończy się o 11:00. Okno grupy otworzy się przy pierwszej wysyłce.</p>');
   });
 
   it('renderGroup po wysyłce: liczby doręczeń albo samo przyjęcie bez odczytu wysłanych', () => {
     const sent = { kind: 'group', ids: ['msg_1', 'msg_2'], group: 'SERWIS', repeated: false };
     const live = renderGroup(GROUP, [], { sent, deliveries: { counts: { delivered: 1, sent: 1 }, done: false } });
     expect(live).not.toContain('data-act="send"');
+    expect(live).toContain('<select class="sel" name="group" disabled>');
     expect(live).toContain('Przyjęto SMS do grupy SERWIS: 2 wiadomości. Doręczone: <b>1</b> z 2 · w drodze 1 · stan odświeża się sam');
+    expect(live).toContain(tile('Doręczone', '1 z 2', 'stan odświeża się sam', 'ok'));
     const bare = renderGroup(GROUP, [], { sent, deliveries: { unavailable: true } });
     expect(bare).toContain('Przyjęto SMS do grupy SERWIS: 2 wiadomości');
     expect(bare).not.toContain('Doręczone');
@@ -150,10 +192,9 @@ describe('doręczenia bez uprawnienia Odczyt wysłanych', () => {
 
 describe('jednostka limitu ochrony przed burzą', () => {
   it('widoki wysyłki, grupy i Co mogę? liczą limit w wysyłkach, jak panel', () => {
-    expect(renderSend(PREVIEW, {})).toContain('można jeszcze wykonać 28 wysyłek i wysłać SMS-y do 990 odbiorców');
+    expect(renderSend(PREVIEW, {})).toContain(tile('Zostało wysyłek', 28, 'w oknie ochrony'));
     const group = renderGroup(GROUP, []);
-    expect(group).toContain('można jeszcze wykonać 28 wysyłek');
-    expect(group).toContain('można jeszcze wykonać 9 wysyłek');
+    expect(group).toContain(tile('Zostało wysyłek grupy', 9, 'w oknie ochrony grupy'));
     const status = renderStatus({
       available: true, connection: 'Ewa Nowak', integration: 'Agent AI - dyspozytornia', scopes: [], expiresAt: null, services: [], maxParts: 3,
       overflow: 'reject', ratePerMin: 60, guard: { calls: 2, callLimit: 30, recipients: 15, recipientLimit: 1000, windowMinutes: 60, resetsAt: null }, groups: 0,

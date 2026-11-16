@@ -1,22 +1,29 @@
-// Widok „Wysyłka SMS” według wyniku prepare_sms: podgląd w dymku telefonu, nadawca, usługa, kodowanie,
-// krótkie linki i ochrona przed burzą. Zmiana ustawienia tworzy nowy szkic, a „Wyślij” woła send_prepared
-// z kluczem potwierdzenia z _meta. Po wysyłce widok sam odświeża stan doręczeń.
-import { applyTheme, cancelledText, createBridge, esc, forwardedText, note, phoneLabel, plural, pluralWord, sayIn, stamp, textOf } from './bridge.js';
-import { deliveryLine, NO_READ_SENT, watchDeliveries } from './doreczenia.js';
+// Widok „Wysyłka SMS” według wyniku prepare_sms: treść w oknie z nadawcą i licznikiem, ustawienia wysyłki, odbiorcy,
+// podsumowanie z ochroną przed burzą i zatwierdzenie. Zmiana ustawienia tworzy nowy szkic, a „Wyślij” woła
+// send_prepared z kluczem potwierdzenia z _meta. Po wysyłce widok sam odświeża stan doręczeń.
+import {
+  applyTheme, button, buttons, cancelledText, createBridge, esc, field, fields, forwardedText, messageBox, note, numbers, plural, sayIn, section,
+  smsCounter, stamp, textOf, tile, tiles, txt,
+} from './bridge.js';
+import { deliveryLine, deliveryTile, NO_READ_SENT, watchDeliveries } from './doreczenia.js';
 import { latinText, measure } from './measure.js';
 
 /** Kod zastępczy krótkiego linku w podglądzie; prawdziwy kod powstaje przy wysyłce. */
 const PLACEHOLDER = '0000000';
 /** Stała treść wiadomości do rozmowy: bez treści SMS-a (punkt kontrolny A, rozstrzygnięcie 2). */
 export const FIX_MESSAGE = 'Chcę poprawić treść tego SMS-a';
+/** Zdanie nad przyciskami zatwierdzenia w widokach wysyłki i grupy. */
+export const APPROVAL_TEXT = 'Wysyłkę zatwierdza człowiek w tym widoku. Agent sam jej nie wykona.';
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const disabled = (off) => (off ? ' disabled' : '');
 const option = (value, label, selected) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(label)}</option>`;
 const sms = (n) => plural(n, 'SMS', 'SMS-y', 'SMS-ów');
 const parts = (n) => plural(n, 'część', 'części', 'części');
+/** Godzina w czasie polskim: GG:MM. */
+export const clock = (iso) => stamp(iso).slice(11);
 
-/** Treść z podświetlonym krótkim linkiem; reszta treści trafia do widoku jako tekst. */
+/** Treść z podświetlonym krótkim linkiem i oznaczonym kodem zastępczym; reszta treści trafia do widoku jako tekst. */
 export function linkMarkup(text, preview) {
   const domain = preview?.links?.shortened > 0 ? preview.links.domain : null;
   if (!domain) return esc(text);
@@ -24,77 +31,59 @@ export function linkMarkup(text, preview) {
   let out = '';
   let at = 0;
   for (const m of String(text).matchAll(re)) {
-    out += `${esc(text.slice(at, m.index))}<span class="lnk">${esc(m[0])}</span>`;
+    const address = m[0].slice(0, -PLACEHOLDER.length);
+    out += `${esc(text.slice(at, m.index))}<span class="lnk">${esc(address)}<span class="slot">${PLACEHOLDER}</span></span>`;
     at = m.index + m[0].length;
   }
   return out + esc(text.slice(at));
 }
 
-/** Ochrona przed burzą: ile wysyłek i odbiorców zostało w oknie. */
-export function guardNote(guard, what = 'Ochrona przed burzą') {
-  const recipients = guard.recipients === null ? '' : ` i wysłać SMS-y do ${plural(guard.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}`;
-  return note(`${what}: w bieżącym oknie można jeszcze wykonać ${plural(guard.calls, 'wysyłkę', 'wysyłki', 'wysyłek')}${recipients}`);
-}
+/** Kafel ochrony przed burzą: ile odbiorców zostało w oknie, a bez limitu odbiorców „bez limitu”. */
+export const recipientsLeftTile = (guard, sub) => tile('Zostało odbiorców', guard.recipients === null ? 'bez limitu' : guard.recipients, sub);
 
-function counter(p) {
-  const polish = measure(p.text, 'auto').encoding === 'ucs2';
-  const why = p.encoding === 'ucs2' && polish ? ' · polskie znaki wymuszają kodowanie UCS-2'
-    : p.encoding === 'gsm' && polish ? ' · Multiinfo zamieni polskie znaki na łacińskie odpowiedniki' : '';
-  return `<div class="counter"><b>${p.characters}</b> ${pluralWord(p.characters, 'znak', 'znaki', 'znaków')} · `
-    + `<b>${p.parts}</b> ${pluralWord(p.parts, 'część', 'części', 'części')} · ${p.encoding === 'gsm' ? 'GSM' : 'UCS-2'}${why}</div>`;
-}
+/** Lista wyboru: zawsze lista, także z jedną pozycją; po wysyłce wyłączona. */
+const select = (name, options, locked) => `<select class="sel" name="${name}"${disabled(locked)}>${options.join('')}</select>`;
 
-/** Przełącznik kodowania z liczbą części obu wariantów, gdy treść zawiera znaki spoza alfabetu GSM. */
-function encodingSwitch(p, locked) {
+/** Przełącznik z równymi polami; `items` to [etykieta, atrybuty data-*, włączony]. */
+const segment = (items, locked) => `<div class="seg2">${items.map(([label, attrs, on]) => `<button type="button"${on ? ' class="on"' : ''} ${attrs}`
+  + `${disabled(locked)}>${esc(label)}</button>`).join('')}</div>`;
+
+/** Kodowanie: przełącznik z liczbą części obu wariantów, gdy treść zawiera znaki spoza alfabetu GSM. */
+function encodingField(p, locked) {
   if (measure(p.text, 'auto').encoding !== 'ucs2' && p.encoding !== 'ucs2') return '';
-  const button = (enc, label) => `<button type="button" data-act="encoding" data-enc="${enc}"`
-    + `${(enc === 'gsm') === (p.encoding === 'gsm') ? ' class="on"' : ''}${disabled(locked)}>${esc(label)}</button>`;
-  return `<div class="row"><span class="seg">${button('unicode', `z polskimi znakami · ${parts(measure(p.text, 'unicode').parts)}`)}`
-    + `${button('gsm', `bez polskich znaków · ${parts(measure(p.text, 'gsm').parts)}`)}</span></div>`;
+  const gsm = p.encoding === 'gsm';
+  return field('Kodowanie', segment([
+    [`z polskimi · ${parts(measure(p.text, 'unicode').parts)}`, 'data-act="encoding" data-enc="unicode"', !gsm],
+    [`bez polskich · ${parts(measure(p.text, 'gsm').parts)}`, 'data-act="encoding" data-enc="gsm"', gsm],
+  ], locked), 'W wariancie bez polskich znaków Multiinfo zamienia polskie litery na łacińskie odpowiedniki');
 }
 
-function senderField(p, locked) {
-  const selected = p.senders.find((s) => s.value === p.orig);
-  const control = p.senders.length > 1
-    ? `<select class="sel" name="orig"${disabled(locked)}>${p.senders.map((s) => option(s.value ?? '', s.label, s.value === p.orig)).join('')}</select>`
-    : esc(selected?.label ?? p.orig ?? '');
-  const hint = p.orig === null ? note('Integracja, klucz i konto nie mają nadpisu domyślnego, dlatego SMS zostanie wysłany z numeru usługi, a odbiorca będzie mógł odpowiedzieć') : '';
-  return `<dt>Nadawca</dt><dd>${control}${hint}</dd>`;
-}
-
-function serviceField(p, locked) {
-  const label = (s) => (s.label === s.id ? s.id : `${s.label} (${s.id})`);
-  const control = p.services.length > 1
-    ? `<select class="sel" name="service"${disabled(locked)}>${p.services.map((s) => option(s.id, label(s), s.id === p.serviceId)).join('')}</select>`
-    : `<span class="mono">${esc(label(p.services.find((s) => s.id === p.serviceId) ?? { id: p.serviceId, label: p.serviceId }))}</span>`;
-  return `<dt>Usługa</dt><dd>${control}</dd>`;
-}
-
-/** Skracanie: przełącznik tylko wtedy, gdy klucz pozwala nadawcy decydować, domena i kampania przy skróconych linkach. */
+/** Krótkie linki: przełącznik tylko wtedy, gdy klucz pozwala nadawcy decydować, domena i kampania przy skróconych linkach. */
 function linkFields(p, locked) {
   const l = p.links;
-  if (l === null) return '';
+  if (l === null) return [];
+  const on = l.shortened > 0;
   const shorten = l.mode === 'sender'
-    ? `<label><input type="checkbox" name="shorten"${l.shortened > 0 ? ' checked' : ''}${disabled(locked)}> Skróć linki</label>`
-    : l.mode === 'always' ? 'linki skracane zawsze, według ustawień klucza' : 'skracanie wyłączone w ustawieniach klucza';
-  let out = `<dt>Skracanie</dt><dd>${shorten}</dd>`;
-  if (l.shortened > 0) {
-    const domain = l.domains.length > 1
-      ? `<select class="sel" name="domain"${disabled(locked)}>${l.domains.map((d) => option(d, d, d === l.domain)).join('')}</select>`
-      : esc(l.domain ?? '');
-    out += `<dt>Domena</dt><dd>${domain}</dd>`
-      + `<dt>Kampania</dt><dd><input class="inp" name="campaign" value="${esc(l.campaign ?? '')}"${disabled(locked)}></dd>`
-      + `<dt>UTM</dt><dd>${l.utm ? 'parametry UTM dopisywane według ustawień klucza' : 'bez parametrów UTM'}</dd>`;
-  }
-  return out;
+    ? field('Krótkie linki', segment([['skracaj', 'data-act="shorten" data-on="1"', on], ['nie skracaj', 'data-act="shorten" data-on="0"', !on]], locked),
+      'Otwarcia linków trafiają do wyników kampanii')
+    : field('Krótkie linki', txt(l.mode === 'always' ? 'skracane zawsze, według ustawień klucza' : 'skracanie wyłączone w ustawieniach klucza'));
+  if (!on) return [shorten];
+  return [shorten,
+    field('Domena linków', select('domain', l.domains.map((d) => option(d, d, d === l.domain)), locked), 'Domeny do wyboru określa klucz API'),
+    field('Kampania', `<input class="inp" name="campaign" value="${esc(l.campaign ?? '')}"${disabled(locked)}>`,
+      l.utm ? 'Parametry UTM dopisuje bramka według ustawień klucza' : 'Linki bez parametrów UTM')];
 }
 
-/** Numery odbiorców z `_meta.recipients`; przy odbiorcach kampanii z identyfikatorami klientów wiersze mają dwie kolumny. */
-function recipientList(recipients) {
-  if (!recipients || recipients.length === 0) return '';
-  const clients = recipients.some((r) => r.clientId);
-  return `<div class="recips">${recipients.map((r) => `<div>${clients ? `<span>${esc(r.clientId ?? '')}</span>` : ''}`
-    + `<span class="mono">${esc(phoneLabel(r.phone))}</span></div>`).join('')}</div>`;
+function settings(p, locked) {
+  const service = (s) => (s.label === s.id ? s.id : `${s.label} (${s.id})`);
+  const services = p.services.some((s) => s.id === p.serviceId) ? p.services : [...p.services, { id: p.serviceId, label: p.serviceId }];
+  return section('Ustawienia wysyłki', fields(
+    field('Nadawca', select('orig', p.senders.map((s) => option(s.value ?? '', s.label, s.value === p.orig)), locked),
+      p.orig === null ? 'Integracja, klucz i konto nie mają nadpisu domyślnego, dlatego SMS zostanie wysłany z numeru usługi, a odbiorca będzie mógł odpowiedzieć' : ''),
+    field('Usługa Multiinfo', select('service', services.map((s) => option(s.id, service(s), s.id === p.serviceId)), locked)),
+    encodingField(p, locked),
+    ...linkFields(p, locked),
+  ));
 }
 
 function progressText(pr) {
@@ -102,17 +91,20 @@ function progressText(pr) {
   return `Stan rozsyłki: ${esc(pr.statusLabel)}` + (pr.remaining === null || pr.final ? '' : `. Do wysłania pozostało ${pr.remaining} z ${pr.recipients}`);
 }
 
-function sentBox(p, sent, state) {
-  const repeated = sent.repeated ? note('Ten szkic został wysłany wcześniej, dlatego widok pokazuje poprzedni wynik') : '';
+/** Zdanie o wysyłce szkicu wysłanego wcześniej. */
+export const REPEATED_NOTE = 'Ten szkic został wysłany wcześniej, dlatego widok pokazuje poprzedni wynik';
+
+function sentSection(sent, state) {
+  const repeated = sent.repeated ? note(REPEATED_NOTE) : '';
   if (sent.kind === 'package') {
-    return `<div class="sent">Przyjęto rozsyłkę <span class="mono">${esc(sent.id)}</span> do ${plural(sent.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}`
-      + `${state.progress ? `<br>${progressText(state.progress)}` : ''}`
-      + `<div class="row"><button type="button" class="btn" data-act="progress"${disabled(state.busy)}>Sprawdź postęp rozsyłki</button></div>${repeated}</div>`;
+    return section('Wysyłka', `<div class="sent">Przyjęto rozsyłkę <span class="mono">${esc(sent.id)}</span> do `
+      + `${plural(sent.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}${state.progress ? `<br>${progressText(state.progress)}` : ''}</div>`
+      + buttons(button('Sprawdź postęp rozsyłki', { act: 'progress', disabled: state.busy })) + repeated);
   }
   const n = sent.ids.length;
   const d = state.deliveries;
   const text = !d ? `Przyjęto ${sms(n)}` : d.unavailable ? `Przyjęto ${plural(n, 'wiadomość', 'wiadomości', 'wiadomości')}${note(NO_READ_SENT)}` : `Przyjęto ${sms(n)}. ${deliveryLine(n, d)}`;
-  return `<div class="sent">${text}${repeated}</div>`;
+  return section('Wysyłka', `<div class="sent">${text}</div>${repeated}`);
 }
 
 /**
@@ -124,25 +116,31 @@ export function renderSend(p, state = {}) {
   const sent = state.sent ?? null;
   const locked = sent !== null || state.sending === true || state.busy === true || state.editable === false;
   const sender = p.senders.find((s) => s.value === p.orig)?.label ?? p.orig ?? '';
-  const left = `<div class="phone"><div class="phone-from">${esc(sender)}</div><div class="bubble">${linkMarkup(p.encoding === 'gsm' ? latinText(p.text) : p.text, p)}</div></div>${counter(p)}`
+  const content = section('Treść SMS-a', messageBox({
+    sender, counter: smsCounter(p), body: linkMarkup(p.encoding === 'gsm' ? latinText(p.text) : p.text, p),
+  })
     + (p.truncated ? note('Treść została skrócona do limitu części integracji') : '')
-    + (p.links?.shortened > 0 ? note('Krótki link zawiera kod zastępczy. Każdy odbiorca otrzyma przy wysyłce własny kod.') : '')
-    + (p.links?.notice ? note(p.links.notice) : '')
-    + encodingSwitch(p, locked);
-  const route = p.route === 'messages' ? 'pojedyncze wiadomości z raportem doręczenia każdej' : 'rozsyłka ze wspólną treścią';
-  const right = `<dl class="kv">${senderField(p, locked)}${serviceField(p, locked)}`
-    + `<dt>Odbiorcy</dt><dd>${plural(p.recipients, 'numer', 'numery', 'numerów')}`
-    + `${p.duplicatesRemoved > 0 ? `, usunięte powtórzenia: ${p.duplicatesRemoved}` : ''}${note(route)}</dd>`
-    + `<dt>Części razem</dt><dd>${p.recipients * p.parts}, ${plural(p.recipients, 'odbiorca', 'odbiorców', 'odbiorców')} po ${parts(p.parts)}</dd>`
-    + `${linkFields(p, locked)}</dl>${recipientList(state.recipients)}`
-    + guardNote(p.guard) + (sent ? '' : note(`Podgląd jest ważny do ${stamp(p.expiresAt)}`));
+    + (p.links?.shortened > 0 ? `<p class="note"><span class="slot">${PLACEHOLDER}</span> oznacza kod zastępczy. Każdy odbiorca otrzyma przy wysyłce link z własnym kodem.</p>` : '')
+    + (p.links?.notice ? note(p.links.notice) : ''));
+  const route = p.route === 'messages' ? 'Pojedyncze wiadomości z raportem doręczenia każdej' : 'Rozsyłka ze wspólną treścią, raport doręczeń po zakończeniu rozsyłki';
+  const recipients = section(`Odbiorcy: ${plural(p.recipients, 'numer', 'numery', 'numerów')}`,
+    numbers((state.recipients ?? []).map((r) => ({ phone: r.phone, label: r.clientId })))
+    + (p.duplicatesRemoved > 0 ? note(`Bramka usunęła powtórzone numery: ${p.duplicatesRemoved}`) : ''), route);
+  const accepted = sent?.kind === 'package' ? plural(sent.recipients, 'odbiorca', 'odbiorców', 'odbiorców') : sms(sent?.ids?.length ?? 0);
+  const summary = section('Podsumowanie', tiles(
+    tile('Części SMS razem', p.recipients * p.parts, `${p.recipients} × ${parts(p.parts)}`),
+    tile('Zostało wysyłek', p.guard.calls, 'w oknie ochrony'),
+    recipientsLeftTile(p.guard, 'w oknie ochrony'),
+    sent ? deliveryTile(sent.ids?.length ?? 0, sent.kind === 'messages' ? state.deliveries : null, accepted)
+      : tile('Podgląd ważny do', clock(p.expiresAt), 'potem nowy podgląd'),
+  ) + note(p.guard.resetsAt ? `Okno ochrony przed burzą kończy się o ${clock(p.guard.resetsAt)}` : 'Okno ochrony przed burzą otworzy się przy pierwszej wysyłce'));
   const label = p.route === 'package' ? `Wyślij rozsyłkę do ${plural(p.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}` : `Wyślij ${sms(p.recipients)}`;
-  const actions = sent ? sentBox(p, sent, state)
-    : `<div class="row actions"><button type="button" class="btn btn-primary" data-act="send"${disabled(state.sending || state.busy)}>`
-      + `${state.sending ? 'Wysyłanie…' : esc(label)}</button>`
-      + `<button type="button" class="btn" data-act="fix"${disabled(state.sending || state.busy)}>Popraw treść w rozmowie</button>`
-      + '<span class="note">Wysyłkę zatwierdza człowiek w tym widoku. Agent sam jej nie wykona.</span></div>';
-  return `<div class="split2"><div>${left}</div><div>${right}</div></div>${actions}`;
+  const busy = state.sending === true || state.busy === true;
+  const finish = sent ? sentSection(sent, state)
+    : section('Zatwierdzenie', `<p class="say">${APPROVAL_TEXT}</p>`
+      + buttons(button(state.sending ? 'Wysyłanie…' : label, { act: 'send', kind: 'primary', disabled: busy }),
+        button('Popraw treść w rozmowie', { act: 'fix', disabled: busy })));
+  return content + settings(p, locked) + recipients + summary + finish;
 }
 
 const errorText = (error) => (error instanceof Error ? error.message : String(error));
@@ -227,12 +225,12 @@ export function mountSend(root, { bridge, say, win }) {
     else if (act === 'fix') fix();
     else if (act === 'progress') progress();
     else if (act === 'encoding' && !button.classList.contains('on')) prepare({ encoding: button.dataset.enc });
+    else if (act === 'shorten' && !button.classList.contains('on')) prepare({ shortenLinks: button.dataset.on === '1' });
   });
   root.addEventListener('change', (event) => {
     const t = event.target;
     if (t.name === 'orig') prepare({ orig: t.value === '' ? null : t.value });
     else if (t.name === 'service') prepare({ serviceId: t.value });
-    else if (t.name === 'shorten') prepare({ shortenLinks: t.checked });
     else if (t.name === 'domain') prepare({ linkDomain: t.value });
     else if (t.name === 'campaign') prepare({ campaign: t.value.trim() === '' ? undefined : t.value.trim() });
   });

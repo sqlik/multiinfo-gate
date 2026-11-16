@@ -1,6 +1,6 @@
 // Doręczenia po wysyłce, wspólne dla widoków wysyłki, grupy i przebiegu: odczyt list_messages z identyfikatorem
 // szkicu co 15 s, do stanów ostatecznych albo 15 minut, oraz zdanie z liczbami w stanach.
-import { esc } from './bridge.js';
+import { esc, tile } from './bridge.js';
 
 export const DELIVERY_REFRESH_MS = 15_000;
 export const DELIVERY_REFRESH_MAX_MS = 900_000;
@@ -20,6 +20,12 @@ export function deliveryLine(n, d) {
   const others = Object.entries(counts).filter(([k, v]) => k !== 'delivered' && v > 0).map(([k, v]) => `${STATE_LABELS[k] ?? k} ${v}`);
   return `Doręczone: <b>${counts.delivered ?? 0}</b> z ${n}`
     + (others.length > 0 ? ` · ${esc(others.join(', '))}` : '') + (d.done ? '' : ' · stan odświeża się sam');
+}
+
+/** Kafel podsumowania po wysyłce `n` wiadomości: liczba doręczonych albo samo przyjęcie, gdy odczytu brak. */
+export function deliveryTile(n, d, accepted) {
+  if (!d || d.unavailable) return tile('Wysyłka', 'przyjęta', accepted);
+  return tile('Doręczone', `${d.counts?.delivered ?? 0} z ${n}`, d.done ? 'stan ostateczny' : 'stan odświeża się sam', 'ok');
 }
 
 /**

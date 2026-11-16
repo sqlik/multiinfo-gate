@@ -36,7 +36,7 @@ const VIEWS: Partial<Record<ViewId, ViewDef>> = {
     body: waiting('Oczekiwanie na dane połączenia z bramki'),
   },
   wysylka: { title: 'Wysyłka SMS', files: ['measure.js', 'doreczenia.js', 'send.js'], entry: 'startSend', tools: '', body: waiting('Oczekiwanie na podgląd SMS-a z bramki') },
-  grupa: { title: 'SMS do grupy', files: ['measure.js', 'doreczenia.js', 'grupa.js'], entry: 'startGroup', tools: '', body: waiting('Oczekiwanie na podgląd SMS-a do grupy z bramki') },
+  grupa: { title: 'SMS do grupy', files: ['measure.js', 'doreczenia.js', 'send.js', 'grupa.js'], entry: 'startGroup', tools: '', body: waiting('Oczekiwanie na podgląd SMS-a do grupy z bramki') },
   przebieg: {
     title: 'Przebieg doręczenia', files: ['measure.js', 'doreczenia.js', 'send.js', 'przebieg.js'], entry: 'startTrace',
     tools: REFRESH, body: waiting('Oczekiwanie na przebieg doręczenia z bramki'),
@@ -85,7 +85,7 @@ const documents = new Map<ViewId, string>();
 function client(file: string): string {
   let source = sources.get(file);
   if (source === undefined) {
-    source = readFileSync(join(CLIENT_DIR, file), 'utf8').replace(/^import\s[^\n]*\n/gm, '');
+    source = readFileSync(join(CLIENT_DIR, file), 'utf8').replace(/^import\s[^;]*;\n/gm, '');
     if (/<\/script/i.test(source)) throw new Error(`Plik widoku ${file} zawiera znacznik zamykający script.`);
     sources.set(file, source);
   }

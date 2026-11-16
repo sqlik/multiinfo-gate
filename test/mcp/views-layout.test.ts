@@ -87,7 +87,7 @@ describe('pliki dokumentów widoków', () => {
     for (const id of BUILT_VIEWS) {
       const files = viewFiles(id);
       files.forEach((file, at) => {
-        for (const [, dep] of readFileSync(new URL(file, dir), 'utf8').matchAll(/^import\s[^\n]*from '\.\/([\w-]+\.js)';$/gm)) {
+        for (const [, dep] of readFileSync(new URL(file, dir), 'utf8').matchAll(/^import\s[^;]*?from '\.\/([\w-]+\.js)';$/gm)) {
           expect(files.indexOf(dep!), `${id}: ${file} importuje ${dep}`).toBeGreaterThanOrEqual(0);
           expect(files.indexOf(dep!), `${id}: ${dep} przed ${file}`).toBeLessThan(at);
         }
