@@ -741,6 +741,24 @@ describe('handlePackageCreate - rozsyłka zaplanowana', () => {
     expect(deps.packages.recipients('pkg_1').map((r) => r.text)).toEqual([null, null]);
   });
 
+  it('„Wyślij teraz”: klucz odwołany po decyzji administratora - failed z powodem, bez żądania do Multiinfo', async () => {
+    seed({ startAt: at(-120 * MIN).toISOString(), status: 'queued' });
+    const created = job('package.create', 0, { sendNow: true });
+    db.prepare('UPDATE api_keys SET revoked_at = ?').run(NOW.toISOString());
+    await handlePackageCreate(created, deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    expect(deps.packages.get('pkg_1')).toMatchObject({ status: 'failed', error: 'Klucz API rozsyłki został odwołany przed przekazaniem do Multiinfo' });
+    expect(lastWebhook()).toMatchObject({ event: 'package.completed', id: 'pkg_1', status: 'failed' });
+  });
+
+  it('„Wyślij teraz”: klucz nadal obejmuje rozsyłkę - przekazanie bez terminu po stronie Multiinfo', async () => {
+    createPackage.mockResolvedValue('14');
+    seed({ startAt: at(-120 * MIN).toISOString(), status: 'queued' });
+    await handlePackageCreate(job('package.create', 0, { sendNow: true }), deps, NOW);
+    expect(sentFields()).not.toHaveProperty('startAt');
+    expect(deps.packages.get('pkg_1')!.status).toBe('open');
+  });
+
   it('klucz po terminie ważności: cancelled jak przy odwołaniu', async () => {
     db.prepare('UPDATE api_keys SET expires_at = ?').run(at(-1000).toISOString());
     await handlePackageCreate(scheduled(at(10 * MIN)), deps, NOW);

@@ -432,11 +432,37 @@ describe('rozsyłka z terminem przechowywana przez bramkę', () => {
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe('/rozsylki/pkg_o');
     expect(h.packages.get('pkg_o')!.status).toBe('queued');
-    expect(jobs()).toEqual([{ packageId: 'pkg_o' }]);
+    expect(jobs()).toEqual([{ packageId: 'pkg_o', sendNow: true }]);
     expect(h.guards.peek(integrationId, 60, NOW)).toEqual(guardsBefore);
     const entry = h.audit.list(10, 0).find((e) => e.action === 'rozsylka.wyslanie_teraz');
     expect(entry).toMatchObject({ actor: 'janek', target: 'rozsylka:pkg_o', meta: { odbiorcy: 2 } });
     expect((await page('/rozsylki/pkg_o')).body).toContain('Bramka przekaże rozsyłkę pkg_o do Multiinfo, które rozpocznie wysyłkę natychmiast.');
+  });
+
+  it('POST wyslij-teraz przy odwołanym kluczu: bramka anuluje rozsyłkę z powodem zamiast ją wysłać', async () => {
+    seedPending('pkg_o', 'overdue');
+    h.db.prepare('UPDATE api_keys SET revoked_at = ?').run(NOW.toISOString());
+    const res = await post('/rozsylki/pkg_o/wyslij-teraz');
+    expect(res.statusCode).toBe(302);
+    const reason = 'Klucz API rozsyłki został odwołany przed przekazaniem do Multiinfo';
+    expect(h.packages.get('pkg_o')).toMatchObject({ status: 'cancelled', error: reason });
+    expect(jobs()).toEqual([]);
+    expect(h.audit.list(10, 0).find((e) => e.action === 'rozsylka.anulowanie')).toMatchObject({ actor: 'janek', meta: { powod: reason } });
+    expect(h.audit.list(10, 0).filter((e) => e.action === 'rozsylka.wyslanie_teraz')).toEqual([]);
+    expect((await page('/rozsylki/pkg_o')).body).toContain(`Bramka anulowała rozsyłkę pkg_o zamiast ją wysłać. ${reason}.`);
+  });
+
+  it('POST wyslij-teraz przy wyłączonej integracji zlecającej: ostrzeżenie, stan bez zmian', async () => {
+    const integrationId = h.integrations.insert({
+      name: 'Dyspozytornia', kind: 'power_automate', apiKeyId, serviceId: null, orig: null, preset: 'power-automate',
+      enabled: 0, config: defaultPowerAutomateConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    seedPending('pkg_o', 'overdue', integrationId);
+    await post('/rozsylki/pkg_o/wyslij-teraz');
+    expect(h.packages.get('pkg_o')!.status).toBe('overdue');
+    expect(jobs()).toEqual([]);
+    expect((await page('/rozsylki/pkg_o')).body)
+      .toContain('Integracja Dyspozytornia, która zleciła rozsyłkę, jest wyłączona. Należy ją włączyć albo anulować rozsyłkę.');
   });
 
   it('POST wyslij-teraz dla scheduled: ostrzeżenie, stan bez zmian', async () => {

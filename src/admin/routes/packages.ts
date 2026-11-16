@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { cancelPackage } from '../../api/cancel-package.ts';
 import { ApiError } from '../../api/errors.ts';
 import { reportCsv } from '../../api/packages.ts';
+import { cancelReason } from '../../worker/packages.ts';
 import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
 import { connectionLink, integrationLink, sourceWords } from '../views/deliveries.ts';
@@ -97,17 +98,39 @@ export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps,
   /**
    * Decyzja administratora po terminie: rozsyłka `overdue` wraca do kolejki bez terminu, a nowe zadanie przekazania
    * powstaje w tej samej transakcji. Ochrona przed burzą policzyła rozsyłkę przy przyjęciu, dlatego nie liczy jej ponownie.
+   * Klucz i integrację bramka sprawdza tak jak przy przekazaniu z terminem: klucz, który nie obejmuje już rozsyłki,
+   * oznacza anulowanie z powodem, a wyłączona integracja zlecająca wstrzymuje decyzję.
    */
   app.post<{ Params: { id: string } }>('/rozsylki/:id/wyslij-teraz', async (request, reply) => {
     const row = deps.packages.get(request.params.id);
     if (!row) return reply.callNotFound();
     const back = `/rozsylki/${encodeURIComponent(row.id)}`;
     const at = now();
+    const actor = actorOf(request.adminUserId);
+    if (row.status === 'overdue') {
+      const reason = cancelReason(deps, row, at);
+      if (reason !== null) {
+        try {
+          cancelPackage(deps, row, at, { actor, ip: request.ip, reason });
+          render.flash(request, 'warn', `Bramka anulowała rozsyłkę ${row.id} zamiast ją wysłać. ${reason}.`);
+        } catch (e) {
+          if (!(e instanceof ApiError)) throw e;
+          render.flash(request, 'warn', e.message);
+        }
+        return reply.redirect(back, 302);
+      }
+      const integration = row.integrationId === null ? undefined : deps.integrations?.get(row.integrationId);
+      if (integration?.enabled === 0) {
+        render.flash(request, 'warn', `Integracja ${integration.name}, która zleciła rozsyłkę, jest wyłączona. Należy ją włączyć albo anulować rozsyłkę.`);
+        return reply.redirect(back, 302);
+      }
+    }
     const done = row.status === 'overdue' && deps.packages.transaction(() => {
       if (!deps.packages.sendNow(row.id)) return false;
       // Rozsyłka po terminie nie ma zadania przekazania, a gdyby zostało, nie mogą istnieć dwa.
       deps.jobs.removeFor('package.create', row.id);
-      deps.jobs.enqueue('package.create', { packageId: row.id }, at);
+      // Znacznik `sendNow` każe workerowi sprawdzić klucz ponownie w chwili przekazania.
+      deps.jobs.enqueue('package.create', { packageId: row.id, sendNow: true }, at);
       return true;
     });
     if (!done) {
@@ -115,7 +138,7 @@ export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps,
       return reply.redirect(back, 302);
     }
     deps.audit.record({
-      actor: actorOf(request.adminUserId), action: 'rozsylka.wyslanie_teraz', target: `rozsylka:${row.id}`,
+      actor, action: 'rozsylka.wyslanie_teraz', target: `rozsylka:${row.id}`,
       meta: { odbiorcy: row.recipientsCount, termin: row.startAt }, ip: request.ip,
     });
     render.flash(request, 'ok', `Bramka przekaże rozsyłkę ${row.id} do Multiinfo, które rozpocznie wysyłkę natychmiast.`);

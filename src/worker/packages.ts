@@ -148,9 +148,10 @@ export function overdueSweep(deps: WorkerDeps, now: Date): number {
 /**
  * Powód anulowania zaplanowanej rozsyłki w chwili przekazania; `null`, gdy klucz i konto nadal ją obejmują.
  * Usługę i nadpis podany jawnie klucz musi obejmować tak jak przy przyjęciu, ponieważ administrator mógł je
- * odebrać po zaplanowaniu. Nadpis domyślny bramka pomija, jak `resolveOrig`.
+ * odebrać po zaplanowaniu. Nadpis domyślny bramka pomija, jak `resolveOrig`. Panel sprawdza to samo przed
+ * „Wyślij teraz”, a worker ponownie w chwili przekazania.
  */
-function cancelReason(deps: WorkerDeps, pkg: PackageRow, now: Date): string | null {
+export function cancelReason(deps: Pick<WorkerDeps, 'accounts' | 'apiKeys'>, pkg: PackageRow, now: Date): string | null {
   const account = deps.accounts.get(pkg.accountId);
   if (!account) return 'Konto Multiinfo rozsyłki zostało usunięte przed jej przekazaniem';
   const key = deps.apiKeys.get(pkg.apiKeyId);
@@ -266,6 +267,15 @@ export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date)
   if (typeof job.payload.sentAt === 'string') {
     fail(deps, job, pkg, UNCERTAIN_CODE, `Bramka zatrzymała się po przekazaniu rozsyłki do Multiinfo, zanim nadeszła odpowiedź. ${PACKAGE_NOT_RETRIED}`, now, log);
     return;
+  }
+  // „Wyślij teraz” przekazuje rozsyłkę przechowywaną przez bramkę, dlatego klucz musi ją nadal obejmować,
+  // tak jak przy przekazaniu z terminem. Zadanie mogło czekać na wstrzymane konto, gdy administrator odwołał klucz.
+  if (job.payload.sendNow === true) {
+    const reason = cancelReason(deps, pkg, now);
+    if (reason !== null) {
+      fail(deps, job, pkg, null, reason, now, log);
+      return;
+    }
   }
   await createAtMultiinfo(job, deps, pkg, storeContent, now, log, scheduled);
 }
