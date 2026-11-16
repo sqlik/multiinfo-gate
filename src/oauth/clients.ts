@@ -154,26 +154,28 @@ function fetchGuardFor(deps: OAuthDeps): FetchGuard {
   let guard = fetchGuards.get(deps.oauth);
   if (!guard) {
     const clock = () => (deps.now ? deps.now() : new Date()).getTime();
-    guard = { source: new WindowLimiter(10, HOUR, clock), all: new WindowLimiter(1000, HOUR, clock), failed: new Map() };
+    guard = { source: new WindowLimiter(10, HOUR, clock), all: new WindowLimiter(100, HOUR, clock), failed: new Map() };
     fetchGuards.set(deps.oauth, guard);
   }
   return guard;
 }
 
 /**
- * Dokument metadanych klienta pod adresem `client_id`: pobrany raz na dobę, nigdy z sieci wewnętrznej. Pobrania nowych
- * dokumentów mają limit 10 na źródło i 1000 łącznie na godzinę, a nieudane pobranie bramka pamięta 10 minut. Dzięki temu
- * obcy nie zamieni bramki w narzędzie do żądań wychodzących ani nie zapełni bazy dokumentami spod kolejnych adresów.
- * Odświeżenie dokumentu znanego klienta, na przykład claude.ai po dobie, nie podlega limitom, więc obcy nie zablokuje
- * połączeń z aplikacjami, które bramka już zna.
+ * Dokument metadanych klienta pod adresem `client_id`: pobrany raz na dobę, nigdy z sieci wewnętrznej. Pobrania mają
+ * limit 10 na źródło i 100 łącznie na godzinę, a nieudane pobranie bramka pamięta 10 minut. Dzięki temu obcy nie
+ * zamieni bramki w narzędzie do żądań wychodzących ani nie zapełni bazy dokumentami spod kolejnych adresów.
+ * Wyjątkiem jest aplikacja, z którą pracownik połączył się kodem, na przykład claude.ai: odświeżenie jej dokumentu
+ * nie podlega limitom, a nieudane odświeżenie zostawia zapisany dokument. Obcy nie zablokuje więc połączeń
+ * z aplikacjami, które już działają, a połączenia kodem nie uzyska bez kodu od administratora.
  */
 async function metadataClient(deps: OAuthDeps, clientId: string, sourceIp: string, now: Date): Promise<OAuthClientRow | ClientError> {
   const cached = deps.oauth.getClient(clientId);
   if (cached?.kind === 'metadata' && cached.fetchedAt !== null && now.getTime() - Date.parse(cached.fetchedAt) < METADATA_CACHE_MS) return cached;
+  const connected = cached?.kind === 'metadata' && cached.connectedAt !== null ? cached : null;
   const guard = fetchGuardFor(deps);
   const failed = guard.failed.get(clientId);
-  if (failed && now.getTime() - failed.at < FAILED_FETCH_MS) return { error: failed.error };
-  if (cached?.kind !== 'metadata') {
+  if (failed && now.getTime() - failed.at < FAILED_FETCH_MS) return connected ?? { error: failed.error };
+  if (connected === null) {
     const source = sourceKey(sourceIp);
     if (guard.source.blocked(source) || guard.all.blocked('*')) {
       return { error: 'Bramka pobrała w ostatniej godzinie zbyt wiele dokumentów metadanych aplikacji. Spróbuj ponownie za godzinę.', status: 429 };
@@ -186,6 +188,7 @@ async function metadataClient(deps: OAuthDeps, clientId: string, sourceIp: strin
     guard.failed.delete(clientId);
     if (guard.failed.size >= FAILED_FETCH_MAX) guard.failed.delete(guard.failed.keys().next().value!);
     guard.failed.set(clientId, { at: now.getTime(), error: result.error });
+    if (connected !== null) return connected;
   }
   return result;
 }

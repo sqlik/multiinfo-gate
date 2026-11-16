@@ -5,7 +5,7 @@ import fastifyFormbody from '@fastify/formbody';
 import type { Database } from 'better-sqlite3';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerClient, type MetadataFetch } from '../../src/oauth/clients.ts';
+import { registerClient, resolveClient, type MetadataFetch } from '../../src/oauth/clients.ts';
 import { registerOAuthRoutes, type OAuthDeps } from '../../src/oauth/routes.ts';
 import { openDatabase } from '../../src/store/db.ts';
 import { AGENT_SEED_AT, oauthDeps, seedAgent } from '../helpers/agent.ts';
@@ -94,29 +94,52 @@ async function connect(code: string, clientId = 'cli_claude', redirect = REDIREC
 const docUrl = (n: number) => `https://napastnik.example/doc/${n}`;
 
 describe('dokumenty metadanych klienta', () => {
-  it('pobranie nowych dokumentów jest ograniczone: 10 na źródło i 1000 łącznie na godzinę', async () => {
+  it('pobranie nowych dokumentów jest ograniczone: 10 na źródło i 100 łącznie na godzinę', async () => {
     for (let n = 0; n < 30; n += 1) await start(pkce().challenge, { client_id: docUrl(n), redirect_uri: 'https://napastnik.example/0/x' }, '203.0.113.66');
     expect(fetches).toHaveLength(10);
-    for (let n = 30; n < 1300; n += 1) {
+    for (let n = 30; n < 300; n += 1) {
       await start(pkce().challenge, { client_id: docUrl(n), redirect_uri: 'https://napastnik.example/0/x' }, `10.${Math.floor(n / 250)}.${n % 250}.1`);
     }
-    expect(fetches.length).toBeLessThanOrEqual(1000);
+    expect(fetches.length).toBeLessThanOrEqual(100);
     const blocked = await start(pkce().challenge, { client_id: docUrl(5000), redirect_uri: 'https://napastnik.example/0/x' }, '198.51.100.99');
     expect(blocked.res.statusCode).toBe(429);
   });
 
-  it('znany klient odświeża dokument także po wyczerpaniu limitu łącznego przez obcych', async () => {
+  /** Wyczerpanie limitu łącznego przez obcego ze 150 adresów po dobie od pierwszego pobrania dokumentu 0. */
+  async function exhaustAfterDay(): Promise<void> {
     await start(pkce().challenge, { client_id: docUrl(0), redirect_uri: 'https://napastnik.example/0/x' }, '198.51.100.7');
-    expect(fetches).toHaveLength(1);
     clock = new Date(clock.getTime() + 25 * 3_600_000);
-    for (let n = 1; n <= 1100; n += 1) {
-      await start(pkce().challenge, { client_id: docUrl(n), redirect_uri: 'https://napastnik.example/0/x' }, `10.${Math.floor(n / 250)}.${n % 250}.9`);
+    for (let n = 1; n <= 150; n += 1) {
+      await start(pkce().challenge, { client_id: docUrl(n), redirect_uri: 'https://napastnik.example/0/x' }, `10.0.${n}.9`);
     }
-    expect(fetches.length).toBeLessThanOrEqual(1001);
+  }
+
+  it('aplikacja połączona kodem odświeża dokument także po wyczerpaniu limitu łącznego przez obcych', async () => {
+    await exhaustAfterDay();
+    deps.oauth.markConnected(docUrl(0), clock);
     const before = fetches.length;
     const known = await start(pkce().challenge, { client_id: docUrl(0), redirect_uri: 'https://napastnik.example/0/x' }, '198.51.100.7');
     expect(known.res.statusCode).not.toBe(429);
     expect(fetches).toHaveLength(before + 1);
+  });
+
+  it('dokument zapisany bez połączenia podlega limitom jak nowy', async () => {
+    await exhaustAfterDay();
+    const before = fetches.length;
+    const stale = await start(pkce().challenge, { client_id: docUrl(0), redirect_uri: 'https://napastnik.example/0/x' }, '198.51.100.7');
+    expect(stale.res.statusCode).toBe(429);
+    expect(fetches).toHaveLength(before);
+  });
+
+  it('nieudane odświeżenie dokumentu połączonej aplikacji zostawia zapisany dokument', async () => {
+    await start(pkce().challenge, { client_id: docUrl(0), redirect_uri: 'https://napastnik.example/0/x' }, '198.51.100.7');
+    deps.oauth.markConnected(docUrl(0), clock);
+    clock = new Date(clock.getTime() + 25 * 3_600_000);
+    deps = { ...deps, fetchMetadata: async (url) => { fetches.push(url); return { status: 503, body: '' }; } };
+    const client = await resolveClient(deps, docUrl(0), '198.51.100.7', clock);
+    expect(client).toMatchObject({ clientId: docUrl(0), kind: 'metadata' });
+    expect(await resolveClient(deps, docUrl(0), '198.51.100.7', clock)).toMatchObject({ clientId: docUrl(0) });
+    expect(fetches).toHaveLength(2);
   });
 
   it('żądanie bez poprawnego adresu powrotu nie pobiera dokumentu', async () => {
