@@ -43,6 +43,8 @@ export interface TraceEntry {
   kind: 'message' | 'package_recipient'; id: string; to: string; status: string; statusLabel: string; source: string; created: Stamp;
   stages: Array<Stamp & { kind: string; label: string; detail: string | null }>; operator: { code: string; description: string } | null;
   cancellable: boolean; text: string | null; packageId: string | null;
+  /** Nadawca, usługa i kodowanie treści dla okna treści w widoku; `sender` null oznacza numer usługi, `parts` tylko przy wiadomości. */
+  sender: string | null; serviceId: string; encoding: 'gsm' | 'ucs2'; parts: number | null;
 }
 
 const DAY = 86_400_000;
@@ -173,6 +175,7 @@ function messageEntry(deps: ReadDeps, m: MessageRow, canCancel: boolean): TraceE
       code: `${m.miStatus}/${m.miSubstatus ?? 0}`, description: describeSubstatus(m.miStatus, m.miSubstatus ?? 0),
     },
     cancellable: canCancel && BEFORE_NETWORK.has(m.status), text: m.body, packageId: null,
+    sender: m.orig, serviceId: m.serviceId, encoding: m.encoding, parts: m.parts,
   };
 }
 
@@ -196,7 +199,7 @@ function recipientEntry(deps: ReadDeps, p: PackageRow, r: RecipientRow & { packa
   return {
     kind: 'package_recipient', id: `${p.id}#${r.seq}`, to: r.dest, ...recipientState(r, p.reportStatus === 'ready'),
     source: sourceLabel(deps, p), created: stamp(p.createdAt), stages, operator: null, cancellable: false,
-    text: r.text ?? p.defaultText, packageId: p.id,
+    text: r.text ?? p.defaultText, packageId: p.id, sender: p.orig, serviceId: p.serviceId, encoding: p.encoding, parts: null,
   };
 }
 

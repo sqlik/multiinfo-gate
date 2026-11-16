@@ -1,10 +1,15 @@
-// Widok „Przebieg doręczenia” według wyniku delivery_trace: oś czasu etapów, stan, źródło i kod operatora.
-// „Anuluj” woła cancel_message, „Wyślij ponownie” przygotowuje SMS z tą samą treścią i rysuje panel wysyłki.
-// Czas w zapisie panelu, jak w pozostałych widokach, a nie w zapisie tekstu dla agenta.
-import { applyTheme, badge, cancelledText, createBridge, esc, note, phoneLabel, sayIn, stamp, textOf } from './bridge.js';
+// Widok „Przebieg doręczenia” według wyniku delivery_trace: pola pozycji, treść w oknie z nadawcą, oś czasu etapów
+// i kod operatora. „Anuluj wiadomość” jest zawsze widoczny: czerwony, gdy wiadomość czeka w kolejce bramki, a w pozostałych
+// stanach i po odmowie bramki wyszarzony z przyczyną. „Wyślij ponownie” przygotowuje SMS z tą samą treścią.
+import {
+  applyTheme, badge, button, buttons, cancelledText, createBridge, esc, field, fields, messageBox, note, phoneLabel, sayIn, section, smsCounter,
+  stamp, textOf, txt,
+} from './bridge.js';
+import { latinText, measure } from './measure.js';
 import { mountSend } from './send.js';
 
 const WAITING = new Set(['queued', 'sent', 'throttled', 'pending']);
+const BEFORE_NETWORK = new Set(['queued', 'throttled']);
 
 function statusTone(status) {
   if (status === 'delivered') return 'ok';
@@ -12,30 +17,47 @@ function statusTone(status) {
   return status === 'cancelled' ? 'plain' : 'fail';
 }
 
-function traceEntry(e, i) {
-  const title = e.kind === 'message'
-    ? `Wiadomość <span class="mono">${esc(e.id)}</span>`
-    : `Odbiorca rozsyłki <span class="mono">${esc(e.packageId)}</span>`;
-  const details = '<dl class="kv">'
-    + `<dt>Odbiorca</dt><dd class="mono">${esc(phoneLabel(e.to))}</dd>`
-    + `<dt>Stan</dt><dd>${badge(statusTone(e.status), e.statusLabel)}</dd>`
-    + `<dt>Źródło</dt><dd>${esc(e.source)}</dd>`
-    + `<dt>Przyjęta</dt><dd>${esc(stamp(e.created.at))}</dd>`
-    + (e.text ? `<dt>Treść</dt><dd>${esc(e.text)}</dd>` : '')
-    + '</dl>';
+/** Zdanie przy przycisku anulowania: dlaczego można albo dlaczego nie można anulować pozycji. */
+export function cancelReason(e) {
+  if (e.kind !== 'message') return 'Odbiorcy rozsyłki nie można anulować pojedynczo';
+  if (e.cancellable) return 'Wiadomość czeka w kolejce bramki, dlatego można ją jeszcze anulować';
+  if (BEFORE_NETWORK.has(e.status)) return 'Anulowanie wymaga uprawnienia „Wysyłka SMS-ów”, które nadaje administrator bramki w integracji Agent AI';
+  if (e.status === 'delivered') return 'Wiadomość została doręczona, dlatego anulowanie nie jest możliwe';
+  if (e.status === 'sent') return 'Wiadomość została przekazana do sieci operatora, dlatego anulowanie nie jest możliwe';
+  if (e.status === 'cancelled') return 'Wiadomość została anulowana';
+  if (e.status === 'unknown') return 'Stan wiadomości jest nieznany, dlatego anulowanie nie jest możliwe';
+  return 'Wiadomość ma stan ostateczny, dlatego anulowanie nie jest możliwe';
+}
+
+/** Okno treści pozycji: nadawca albo numer usługi, licznik według kodowania wysyłki i treść, przy GSM z łacińskimi literami. */
+function contentBox(e) {
+  const gsm = e.encoding === 'gsm';
+  const m = measure(e.text, gsm ? 'gsm' : 'unicode');
+  return '<span class="sub-lbl">Treść</span>' + messageBox({
+    sender: e.sender ?? `numer usługi ${e.serviceId}`,
+    counter: smsCounter({ characters: m.characters, parts: e.parts ?? m.parts, encoding: gsm ? 'gsm' : 'ucs2' }),
+    body: esc(gsm ? latinText(e.text) : e.text),
+  });
+}
+
+function traceEntry(e, i, refused) {
+  const title = e.kind === 'message' ? `Wiadomość ${e.id}` : `Odbiorca rozsyłki ${e.packageId}`;
+  const details = fields(
+    field('Odbiorca', txt(phoneLabel(e.to))), field('Stan', `<div class="txt">${badge(statusTone(e.status), e.statusLabel)}</div>`),
+    field('Źródło', txt(e.source)), field('Przyjęta', txt(stamp(e.created.at))),
+  );
   const stages = e.stages.map((s) => `<li>${esc(s.label)}<span class="t">${esc(stamp(s.at))}</span>${s.detail ? `<div class="note">${esc(s.detail)}</div>` : ''}</li>`);
   if (WAITING.has(e.status)) stages.push('<li class="pending">Oczekiwanie na raport doręczenia</li>');
-  const timeline = `<ul class="timeline">${stages.join('')}</ul>`
+  const timeline = `<span class="sub-lbl">Przebieg</span><ul class="timeline">${stages.join('')}</ul>`
     + (e.operator ? note(`Kod operatora ${e.operator.code}: ${e.operator.description}`) : '');
-  const actions = [
-    ...(e.cancellable ? [`<button type="button" class="btn" data-act="cancel" data-index="${i}">Anuluj</button>`] : []),
-    ...(e.text ? [`<button type="button" class="btn" data-act="resend" data-index="${i}">Wyślij ponownie</button>`] : []),
-  ];
-  return `<section class="entry"><h2 class="entry-title">${title}</h2>`
-    + `<div class="grid2"><div>${details}</div><div>${timeline}</div></div>`
-    + (actions.length > 0 ? `<div class="row actions">${actions.join('')}</div>` : '')
-    + `<p class="notice" data-say="${i}" role="status" hidden></p>`
-    + `<div class="resend" data-resend="${i}"></div></section>`;
+  const refusal = refused?.get(e.id) ?? null;
+  const actions = buttons(
+    button('Anuluj wiadomość', { act: 'cancel', kind: 'danger', disabled: !e.cancellable || refusal !== null, data: { index: i } }),
+    e.text ? button('Wyślij ponownie', { act: 'resend', kind: 'primary', data: { index: i } }) : '',
+  );
+  const notice = refusal === null ? `${note(cancelReason(e))}<p class="notice" data-say="${i}" role="status" hidden></p>`
+    : `<p class="notice n-fail" data-say="${i}" role="status">${esc(refusal)}</p>`;
+  return section(title, details + (e.text ? contentBox(e) : '') + timeline + actions + notice + `<div class="resend" data-resend="${i}"></div>`);
 }
 
 /**
@@ -52,10 +74,13 @@ export function sayAt(root, index) {
   };
 }
 
-/** HTML przebiegu: każda pozycja z osią czasu, „Anuluj” przy `cancellable`, „Wyślij ponownie” przy zapisanej treści. */
-export function renderTrace(entries) {
+/**
+ * HTML przebiegu: każda pozycja z osią czasu, „Anuluj wiadomość” i „Wyślij ponownie” przy zapisanej treści.
+ * `state.refused` to odmowy anulowania według identyfikatora wiadomości.
+ */
+export function renderTrace(entries, state = {}) {
   if (!entries || entries.length === 0) return '<p class="muted">Bramka nie znalazła wiadomości spełniających warunki</p>';
-  return entries.map(traceEntry).join('');
+  return entries.map((e, i) => traceEntry(e, i, state.refused)).join('');
 }
 
 /** Uruchomienie widoku przebiegu w dokumencie. */
@@ -66,6 +91,12 @@ export function startTrace(win, env) {
   let input = null;
   let entries = [];
   let panels = new Map();
+  /** Odmowy anulowania zostają po odświeżeniu, dlatego przycisk odmówionej wiadomości pozostaje wyszarzony. */
+  const refused = new Map();
+  const draw = () => {
+    panels = new Map();
+    content.innerHTML = renderTrace(entries, { refused });
+  };
 
   const show = (result) => {
     if (result.isError) return say('fail', textOf(result));
@@ -74,8 +105,7 @@ export function startTrace(win, env) {
       return undefined;
     }
     entries = result.structuredContent.entries ?? [];
-    panels = new Map();
-    content.innerHTML = renderTrace(entries);
+    draw();
     return say('plain', '');
   };
 
@@ -120,7 +150,10 @@ export function startTrace(win, env) {
     if (button.dataset.act === 'cancel') {
       guarded(button, async () => {
         const result = await bridge.callTool('cancel_message', { id: entry.id });
-        if (result.isError) return tell('fail', textOf(result));
+        if (result.isError) {
+          refused.set(entry.id, textOf(result));
+          return draw();
+        }
         await refresh();
         return tell('ok', `Wiadomość ${entry.id} została anulowana`);
       }, tell)();

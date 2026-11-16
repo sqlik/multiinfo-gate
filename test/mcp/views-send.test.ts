@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { button, buttons, tile, tiles } from '../../src/mcp/views/client/bridge.js';
+import { button, buttons, field, tile, tiles, txt } from '../../src/mcp/views/client/bridge.js';
 import { renderStatus } from '../../src/mcp/views/client/co-moge.js';
 import { renderGroup } from '../../src/mcp/views/client/grupa.js';
-import { renderTrace, sayAt } from '../../src/mcp/views/client/przebieg.js';
+import { renderTrace, sayAt, startTrace } from '../../src/mcp/views/client/przebieg.js';
 import { linkMarkup, renderSend } from '../../src/mcp/views/client/send.js';
 import { TOOLS } from '../../src/mcp/tools/index.ts';
 import { BUILT_VIEWS, viewHtml } from '../../src/mcp/views/index.ts';
@@ -31,8 +31,35 @@ const ENTRY = {
   created: { at: '2026-11-15T07:02:11.000Z', local: '15.11.2026 08:02' },
   stages: [stage('15.11.2026 08:02', 'Przyjęta przez bramkę, zapisana w kolejce'), stage('15.11.2026 20:02', 'Multiinfo', 'status 12 / 3 - <b>poza zasięgiem</b>')],
   operator: { code: '12/3', description: 'Telefon poza zasięgiem' }, cancellable: false,
-  text: 'Serwisant odwiedzi Państwa jutro między 10 a 12.', packageId: null,
+  text: 'Serwisant odwiedzi Państwa jutro między 10 a 12.', packageId: null, sender: null, serviceId: '12345', encoding: 'ucs2', parts: 1,
 };
+
+/** Atrapa dokumentu widoku: elementy z identyfikatorami, kliknięcie odgrywane na korzeniu treści. */
+function viewWindow() {
+  const listeners: Array<(event: { data: unknown; source: unknown }) => void> = [];
+  const sent: Array<{ id?: number; method?: string; params?: Record<string, unknown> }> = [];
+  const element = () => {
+    const handlers = new Map<string, (event: unknown) => void>();
+    return {
+      innerHTML: '', textContent: '', hidden: false, className: '', handlers, querySelector: () => null,
+      addEventListener: (type: string, fn: (event: unknown) => void) => handlers.set(type, fn),
+    };
+  };
+  const nodes = { tresc: element(), odswiez: element(), komunikat: element() };
+  const parent = { postMessage: (msg: (typeof sent)[number]) => sent.push(msg) };
+  const win = {
+    parent, document: { getElementById: (id: keyof typeof nodes) => nodes[id], documentElement: { dataset: {}, style: { setProperty: () => undefined } } },
+    addEventListener: (type: string, fn: (event: { data: unknown; source: unknown }) => void) => { if (type === 'message') listeners.push(fn); },
+  };
+  const deliver = (data: unknown) => { for (const fn of listeners) fn({ data, source: parent }); };
+  const click = (dataset: Record<string, string>) => {
+    const button = { dataset, disabled: false };
+    nodes.tresc.handlers.get('click')!({ target: { closest: (sel: string) => (sel.includes('data-act') ? button : null) } });
+  };
+  return { win, nodes, sent, deliver, click };
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Nazwy sekcji karty w kolejności. */
 const sections = (html: string) => [...html.matchAll(/<h3>(.*?)<\/h3>/g)].map((m) => m[1]);
@@ -164,17 +191,64 @@ describe('widok SMS do grupy', () => {
   });
 });
 
+const REFUSAL = 'Wiadomość została już przekazana do sieci operatora i nie można jej anulować.';
+const cancelButton = (disabled: boolean) => button('Anuluj wiadomość', { act: 'cancel', kind: 'danger', disabled, data: { index: 0 } });
+
 describe('widok przebiegu doręczenia', () => {
-  it('renderTrace: „Anuluj” tylko przy cancellable, „Wyślij ponownie” tylko przy treści', () => {
-    const plain = renderTrace([ENTRY]);
-    expect(plain).not.toContain('Anuluj');
-    expect(plain).toContain('Wyślij ponownie');
-    expect(plain).not.toContain('<b>poza zasięgiem</b>');
-    expect(plain).toContain('Telefon poza zasięgiem');
-    const cancellable = renderTrace([{ ...ENTRY, status: 'queued', statusLabel: 'w kolejce', cancellable: true, text: null }]);
-    expect(cancellable).toContain('Anuluj');
-    expect(cancellable).not.toContain('Wyślij ponownie');
+  it('renderTrace: sekcja pozycji z polami, oknem treści i osią czasu', () => {
+    const html = renderTrace([ENTRY]);
+    expect(sections(html)).toEqual(['Wiadomość msg_1']);
+    expect(html).toContain(field('Odbiorca', txt('48602345678')));
+    expect(html).toContain(field('Stan', '<div class="txt"><span class="badge b-fail">wygasła</span></div>'));
+    expect(html).toContain(field('Przyjęta', txt('2026-11-15 08:02')));
+    expect(html).toContain('Nadawca na telefonie: <b>numer usługi 12345</b></span><span><b>48</b> znaków · <b>1</b> część · UCS-2</span>');
+    expect(html).toContain('<span class="sub-lbl">Przebieg</span><ul class="timeline">');
+    expect(html).toContain('Kod operatora 12/3: Telefon poza zasięgiem');
+    expect(html).not.toContain('<b>poza zasięgiem</b>');
+    expect(renderTrace([{ ...ENTRY, sender: 'SERWIS', encoding: 'gsm', text: 'Śluza' }])).toContain('Nadawca na telefonie: <b>SERWIS</b>');
     expect(renderTrace([])).toContain('Bramka nie znalazła wiadomości');
+  });
+
+  it('renderTrace: „Anuluj wiadomość” zawsze widoczny, czerwony przy cancellable, wyszarzony z przyczyną w pozostałych stanach', () => {
+    const queued = renderTrace([{ ...ENTRY, status: 'queued', statusLabel: 'w kolejce', cancellable: true }]);
+    expect(queued).toContain(buttons(cancelButton(false), button('Wyślij ponownie', { act: 'resend', kind: 'primary', data: { index: 0 } })));
+    expect(queued).toContain('Wiadomość czeka w kolejce bramki, dlatego można ją jeszcze anulować');
+    const reason = (over: object) => renderTrace([{ ...ENTRY, ...over }]);
+    expect(reason({ status: 'delivered' })).toContain(cancelButton(true));
+    expect(reason({ status: 'delivered' })).toContain('Wiadomość została doręczona, dlatego anulowanie nie jest możliwe');
+    expect(reason({ status: 'sent' })).toContain('Wiadomość została przekazana do sieci operatora, dlatego anulowanie nie jest możliwe');
+    expect(reason({ status: 'expired' })).toContain('Wiadomość ma stan ostateczny, dlatego anulowanie nie jest możliwe');
+    expect(reason({ status: 'cancelled' })).toContain('Wiadomość została anulowana');
+    expect(reason({ status: 'unknown' })).toContain('Stan wiadomości jest nieznany, dlatego anulowanie nie jest możliwe');
+    expect(reason({ status: 'queued' })).toContain('Anulowanie wymaga uprawnienia „Wysyłka SMS-ów”, które nadaje administrator bramki w integracji Agent AI');
+    expect(reason({ kind: 'package_recipient', id: 'pkg_1#1', packageId: 'pkg_1', status: 'pending' })).toContain('Odbiorcy rozsyłki nie można anulować pojedynczo');
+    const bare = reason({ status: 'queued', cancellable: true, text: null });
+    expect(bare).toContain(buttons(cancelButton(false)));
+    expect(bare).not.toContain('Wyślij ponownie');
+  });
+
+  it('renderTrace: po odmowie anulowania przycisk wyszarzony, a komunikat odmowy zostaje przy pozycji', () => {
+    const html = renderTrace([{ ...ENTRY, status: 'throttled', statusLabel: 'wstrzymana limitem', cancellable: true }], { refused: new Map([['msg_1', REFUSAL]]) });
+    expect(html).toContain(cancelButton(true));
+    expect(html).toContain(`<p class="notice n-fail" data-say="0" role="status">${REFUSAL}</p>`);
+    expect(html).not.toContain('można ją jeszcze anulować');
+  });
+
+  it('startTrace: odmowa anulowania z bramki wyszarza przycisk także po ponownym rysowaniu', async () => {
+    const w = viewWindow();
+    startTrace(w.win, { version: '1.12.0' });
+    w.deliver({ jsonrpc: '2.0', id: w.sent[0]!.id, result: { protocolVersion: '2026-01-26', hostInfo: { name: 'a', version: '1' }, hostCapabilities: { serverTools: {} }, hostContext: {} } });
+    await tick();
+    w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { entries: [{ ...ENTRY, status: 'throttled', cancellable: true }] } } });
+    expect(w.nodes.tresc.innerHTML).toContain(cancelButton(false));
+    w.click({ act: 'cancel', index: '0' });
+    await tick();
+    const call = w.sent.find((m) => m.method === 'tools/call')!;
+    expect(call.params).toEqual({ name: 'cancel_message', arguments: { id: 'msg_1' } });
+    w.deliver({ jsonrpc: '2.0', id: call.id, result: { isError: true, content: [{ type: 'text', text: REFUSAL }] } });
+    await tick();
+    expect(w.nodes.tresc.innerHTML).toContain(cancelButton(true));
+    expect(w.nodes.tresc.innerHTML).toContain(`role="status">${REFUSAL}</p>`);
   });
 });
 

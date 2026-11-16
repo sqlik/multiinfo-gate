@@ -154,6 +154,14 @@ describe('deliveryTrace', () => {
     expect(agentError(() => deliveryTrace(deps, ctx(), { to: 'abc' }, NOW)).code).toBe('invalid_phone');
   });
 
+  it('pozycja przebiegu podaje nadawcę, usługę i kodowanie treści dla okna treści w widoku', () => {
+    message('msg_s', { orig: 'SERWIS', encoding: 'ucs2', parts: 2 });
+    pkg('pkg_s', ['48601000011']);
+    const entries = deliveryTrace(deps, ctx(), { to: '601000011' }, NOW).entries;
+    expect(entries.find((e) => e.id === 'msg_s')).toMatchObject({ sender: 'SERWIS', serviceId: '24138', encoding: 'ucs2', parts: 2 });
+    expect(entries.find((e) => e.kind === 'package_recipient')).toMatchObject({ sender: null, serviceId: '24138', encoding: 'gsm', parts: null });
+  });
+
   it('przebieg odbiorcy rozsyłki bez kodu szczegółowego', () => {
     pkg('pkg_1', ['48601000011'], at(-2 * 3_600_000));
     deps.packages.setCompleted('pkg_1', new Date(at(-90 * 60_000)));
