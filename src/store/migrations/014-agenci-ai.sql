@@ -37,9 +37,11 @@ CREATE TABLE agent_connections (
   created_by       TEXT    NOT NULL,
   last_used_at     TEXT,
   revoked_at       TEXT,
-  revoked_reason   TEXT    CHECK (revoked_reason IN ('admin', 'reuse')),
-  UNIQUE (integration_id, name)
+  revoked_reason   TEXT    CHECK (revoked_reason IN ('admin', 'reuse'))
 );
+-- Nazwa jest unikalna tylko wśród połączeń aktywnych i oczekujących, dlatego pilnuje jej panel:
+-- termin wygaśnięcia zależy od klucza API, którego baza tu nie zna.
+CREATE INDEX idx_agent_connections_integration ON agent_connections(integration_id);
 CREATE UNIQUE INDEX idx_agent_connections_code ON agent_connections(code_hash) WHERE code_hash IS NOT NULL;
 CREATE UNIQUE INDEX idx_agent_connections_token ON agent_connections(token_hash) WHERE token_hash IS NOT NULL;
 

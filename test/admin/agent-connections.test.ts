@@ -118,6 +118,21 @@ describe('dodanie połączenia', () => {
     expect((await addConnection({}, other)).statusCode).toBe(200);
   });
 
+  it('nazwa odwołanego albo wygasłego połączenia wraca do użytku (decyzja Tomka 2026-11-16)', async () => {
+    expect((await addConnection()).statusCode).toBe(200);
+    h.connectionService.revoke(connections()[0]!.id, NOW);
+    const again = await addConnection();
+    expect(again.statusCode).toBe(200);
+    expect(again.body).toMatch(CODE);
+    expect(connections().filter((c) => c.revokedAt === null)).toHaveLength(1);
+
+    // Połączenie wygasłe według własnego terminu zwalnia nazwę tak samo.
+    const expired = h.connectionService.create(agentId, { name: 'Marek Kowalski', method: 'token', codeValidity: '24h', validity: '90d' }, 'janek', new Date('2026-07-01T10:00:00Z'));
+    expect(expired.id).toBeGreaterThan(0);
+    expect((await addConnection({ name: 'Marek Kowalski', method: 'token' })).statusCode).toBe(200);
+    expect(connections().filter((c) => c.name === 'Marek Kowalski')).toHaveLength(2);
+  });
+
   it('pusta nazwa, nieznany sposób i ważność spoza listy: błąd formularza bez zapisu', async () => {
     for (const over of [{ name: '  ' }, { method: 'haslo' }, { validity: '2d' }, { codeValidity: '30d' }, { name: 'x'.repeat(81) }]) {
       const res = await addConnection(over);

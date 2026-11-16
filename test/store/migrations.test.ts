@@ -303,7 +303,7 @@ describe('migracja 014', () => {
     expect(db.pragma('foreign_key_check')).toEqual([]);
   });
 
-  it('kody i tokeny połączeń są unikalne, a nazwa połączenia unikalna w obrębie integracji', () => {
+  it('kody i tokeny połączeń są unikalne, a nazwę pilnuje panel, bo odwołana nazwa wraca do użytku', () => {
     const db = openDatabase(':memory:');
     const { integrationId } = seedAgentIntegration(db, randomBytes(32));
     const add = db.prepare(`INSERT INTO agent_connections (integration_id, name, method, code_hash, token_hash, created_at, created_by) VALUES (?, ?, 'oauth', ?, ?, '2026-11-15', 'admin')`);
@@ -311,8 +311,11 @@ describe('migracja 014', () => {
     add.run(integrationId, 'Marek Kowalski', null, null);
     add.run(integrationId, 'Anna Wiśniewska', null, null);
     expect(() => add.run(integrationId, 'Jan Zieliński', 'kod-1', null)).toThrow(/UNIQUE/);
-    expect(() => add.run(integrationId, 'Ewa Nowak', null, null)).toThrow(/UNIQUE/);
+    expect(() => add.run(integrationId, 'Ewa Nowak', null, null)).not.toThrow();
     expect(() => db.prepare("UPDATE agent_connections SET method = 'haslo'").run()).toThrow(/CHECK/);
+    // Bez UNIQUE kaskada z integrations i lista połączeń integracji korzystają z osobnego indeksu.
+    const plan = db.prepare('EXPLAIN QUERY PLAN SELECT id FROM agent_connections WHERE integration_id = ?').all(integrationId) as { detail: string }[];
+    expect(plan.map((p) => p.detail).join(' ')).toMatch(/USING (COVERING )?INDEX idx_agent_connections_integration/);
   });
 
   it('usunięcie integracji usuwa połączenia, a wiadomość traci agent_connection_id i zachowuje requested_by', () => {

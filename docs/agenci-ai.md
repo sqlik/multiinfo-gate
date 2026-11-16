@@ -248,7 +248,8 @@ Jeżeli wynik jest inny:
 
 - **Adres serwera MCP jest nieznany.** Panel nie zna adresu bramki. Ustaw adres według rozdziału 2.2,
   a następnie wygeneruj nowy kod, aby panel przygotował tekst do przekazania
-- **Panel odrzuca nazwę.** Nazwa połączenia musi być unikalna w obrębie integracji
+- **Panel odrzuca nazwę.** Integracja zawiera już aktywne albo oczekujące połączenie o tej nazwie.
+  Podaj inną nazwę albo odwołaj dotychczasowe połączenie, którego nazwa wróci wtedy do użytku
 
 Bramka przechowuje wyłącznie skrót kodu i tokenu, tak jak przy kluczach API. Panel nie pokaże tych
 wartości ponownie, dlatego tekst do przekazania należy od razu wysłać pracownikowi. Token należy
