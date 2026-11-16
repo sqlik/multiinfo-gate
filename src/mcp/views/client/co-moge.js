@@ -1,16 +1,17 @@
 // Widok „Co mogę?”: uprawnienia, usługi, limity i ważność połączenia według wyniku connection_status.
 // Odświeżenie woła to samo narzędzie przez aplikację AI, bez kolejnego pytania do agenta.
-import { applyTheme, badge, createBridge, esc, note, stamp, textOf } from './bridge.js';
+import { applyTheme, badge, createBridge, field, fields, note, plural, pluralWord, section, stamp, textOf, tile, tiles, txt } from './bridge.js';
 
-const box = (title, inner) => `<section class="box"><h2>${esc(title)}</h2>${inner}</section>`;
+const connectionFields = (data) => [field('Nazwa połączenia', txt(data.connection)), field('Integracja', txt(data.integration))];
 
 function unavailable(data) {
-  return `<p class="who">Połączenie <b>${esc(data.connection)}</b> w integracji <b>${esc(data.integration)}</b></p>`
-    + '<section class="box box-wide"><h2>Połączenie jest chwilowo niedostępne</h2>'
-    + `<p>${badge('fail', 'niedostępne')} ${esc(data.reason)}</p>`
-    + note('Dostęp przywraca administrator bramki, a połączenie zadziała ponownie bez nowego kodu')
-    + '</section>';
+  return section('Połączenie', fields(...connectionFields(data)))
+    + section('Połączenie jest chwilowo niedostępne', `<div class="badges">${badge('fail', 'niedostępne')}</div>`
+      + note(`Przyczyna: ${data.reason}. Dostęp przywraca administrator bramki, a połączenie zadziała ponownie bez nowego kodu.`));
 }
+
+const groupsText = (n) => (n > 0
+  ? `${plural(n, 'grupa', 'grupy', 'grup')} ${pluralWord(n, 'dostępna', 'dostępne', 'dostępnych')} dla klucza` : 'Do klucza nie przypisano grup SMS');
 
 /** HTML treści widoku z `structuredContent` narzędzia connection_status; `env.scopes` to etykiety wszystkich zakresów. */
 export function renderStatus(data, env = {}) {
@@ -18,30 +19,27 @@ export function renderStatus(data, env = {}) {
   const granted = new Set((data.scopes ?? []).map((s) => s.id));
   const missing = Object.entries(env.scopes ?? {}).filter(([id]) => !granted.has(id));
   const guard = data.guard ?? {};
+  const window = `w oknie ${guard.windowMinutes} minut`;
+  const ends = guard.resetsAt ? stamp(guard.resetsAt) : null;
 
-  const scopes = `<div class="badges">${(data.scopes ?? []).map((s) => badge('ok', s.label)).join('')}</div>`
+  const connection = section('Połączenie', fields(...connectionFields(data),
+    field('Ważne do', txt(data.expiresAt ? stamp(data.expiresAt) : 'bez terminu')), field('Grupy SMS', txt(groupsText(data.groups)))));
+
+  const scopes = section('Uprawnienia', `<div class="badges">${(data.scopes ?? []).map((s) => badge('ok', s.label)).join('')}</div>`
     + (missing.length > 0 ? `<div class="badges">${missing.map(([, label]) => badge('plain', `${label}: brak`)).join('')}</div>` : '')
-    + note(data.expiresAt ? `Połączenie jest ważne do ${stamp(data.expiresAt)}` : 'Połączenie jest ważne bez terminu');
+    + note('Uprawnienia zmienia administrator bramki w integracji Agent AI'));
 
-  const services = `<ul class="list">${(data.services ?? []).map((s) =>
-    `<li><span class="mono">${esc(s.id)}</span>${s.label ? ` ${esc(s.label)}` : ''}</li>`).join('')}</ul>`
-    + note(`Limit części SMS-a: ${data.maxParts}. ${data.overflow === 'reject' ? 'Dłuższa treść zostaje odrzucona.' : 'Dłuższa treść zostaje skrócona do tego limitu.'}`);
+  const services = section('Usługi Multiinfo', fields(...(data.services ?? []).map((s) => field(`Usługa ${s.id}`, txt(s.label || 'bez nazwy w panelu'))))
+    + note(`Limit części SMS-a wynosi ${data.maxParts}. ${data.overflow === 'reject' ? 'Dłuższa treść zostaje odrzucona.' : 'Dłuższa treść zostaje skrócona do tego limitu.'}`));
 
-  const limits = '<dl class="kv">'
-    + `<dt>Żądania klucza</dt><dd>${esc(data.ratePerMin)} na minutę</dd>`
-    + `<dt>Wysyłki</dt><dd>${esc(guard.calls)} z ${esc(guard.callLimit)}</dd>`
-    + `<dt>Odbiorcy</dt><dd>${esc(guard.recipients)} z ${esc(guard.recipientLimit)}</dd>`
-    + '</dl>'
-    + note(guard.resetsAt
-      ? `Okno ochrony przed burzą trwa ${guard.windowMinutes} minut i kończy się ${stamp(guard.resetsAt)}`
-      : `Okno ochrony przed burzą trwa ${guard.windowMinutes} minut i otwiera się przy pierwszej wysyłce`);
+  const limits = section('Limity', tiles(
+    tile('Żądania klucza', data.ratePerMin, 'na minutę'),
+    tile('Wysyłki', `${guard.calls} z ${guard.callLimit}`, window),
+    tile('Odbiorcy', `${guard.recipients} z ${guard.recipientLimit}`, window),
+    ends ? tile('Okno kończy się', ends.slice(11), ends.slice(0, 10)) : tile('Okno ochrony', 'nie otwarte', 'otworzy się przy wysyłce'),
+  ) + note(`Ochrona przed burzą liczy wysyłki i odbiorców w oknie ${guard.windowMinutes} minut`));
 
-  const groups = `<p>${data.groups > 0 ? `Grupy SMS dostępne dla klucza: ${esc(data.groups)}` : 'Do klucza nie przypisano grup SMS'}</p>`
-    + note('Grupy zmienia administrator w panelu bramki');
-
-  return `<p class="who">Połączenie <b>${esc(data.connection)}</b> w integracji <b>${esc(data.integration)}</b></p>`
-    + `<div class="grid">${box('Uprawnienia połączenia', scopes)}${box('Usługi Multiinfo', services)}`
-    + `${box('Limity i ochrona przed burzą', limits)}${box('Grupy SMS', groups)}</div>`;
+  return connection + scopes + services + limits;
 }
 
 /** Uruchomienie widoku w dokumencie: most, rysowanie wyniku i przycisk „Odśwież”. */

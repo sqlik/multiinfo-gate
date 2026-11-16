@@ -158,7 +158,7 @@ describe('jednostka limitu ochrony przed burzą', () => {
       available: true, connection: 'Ewa Nowak', integration: 'Agent AI - dyspozytornia', scopes: [], expiresAt: null, services: [], maxParts: 3,
       overflow: 'reject', ratePerMin: 60, guard: { calls: 2, callLimit: 30, recipients: 15, recipientLimit: 1000, windowMinutes: 60, resetsAt: null }, groups: 0,
     }, { scopes: {} });
-    expect(status).toContain('<dt>Wysyłki</dt><dd>2 z 30</dd>');
+    expect(status).toContain('<div class="lbl">Wysyłki</div><div class="v">2 z 30</div>');
     for (const html of [renderSend(PREVIEW, {}), group, status]) expect(html.toLowerCase()).not.toContain('wywoła');
   });
 });

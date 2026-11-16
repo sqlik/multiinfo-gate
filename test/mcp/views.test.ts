@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { APP_MIME } from '../../src/mcp/apps.ts';
+import { field, tile, tiles, txt } from '../../src/mcp/views/client/bridge.js';
 import { renderStatus } from '../../src/mcp/views/client/co-moge.js';
 import { BUILT_VIEWS, viewHtml, viewResources, viewUri } from '../../src/mcp/views/index.ts';
 
@@ -20,6 +21,9 @@ const STATUS = {
   guard: { calls: 2, callLimit: 30, recipients: 15, recipientLimit: 1000, windowMinutes: 60, resetsAt: '2026-11-15T11:40:00.000Z' }, groups: 2,
 };
 
+/** Nazwy sekcji karty w kolejności. */
+const sections = (html: string) => [...html.matchAll(/<h3>(.*?)<\/h3>/g)].map((m) => m[1]);
+
 describe('widok Co mogę?', () => {
   it('renderStatus ucieka nazwę połączenia z <script>', () => {
     const html = renderStatus({ ...STATUS, connection: '<script>alert(1)</script>', integration: 'Agent "AI" & <i>' }, { scopes: LABELS });
@@ -29,31 +33,48 @@ describe('widok Co mogę?', () => {
     expect(html).toContain('Agent &quot;AI&quot; &amp; &lt;i&gt;');
   });
 
-  it('renderStatus: uprawnienia nadane i brakujące, ważność, usługi, limity i okno ochrony w czasie polskim', () => {
+  it('renderStatus: sekcje Połączenie, Uprawnienia, Usługi Multiinfo i Limity, informacje w polach', () => {
     const html = renderStatus(STATUS, { scopes: LABELS });
-    expect(html).toContain('Wysyłka SMS-ów');
-    expect(html).toContain('Odczyt odebranych: brak');
-    expect(html).toContain('2027-02-12 10:00');
-    expect(html).toContain('20841');
-    expect(html).toContain('Dyspozytornia');
-    expect(html).toContain('20842');
-    expect(html).toContain('60 na minutę');
-    expect(html).toContain('2 z 30');
-    expect(html).toContain('15 z 1000');
-    expect(html).toContain('2026-11-15 12:40');
+    expect(sections(html)).toEqual(['Połączenie', 'Uprawnienia', 'Usługi Multiinfo', 'Limity']);
+    expect(html).toContain(field('Nazwa połączenia', txt('Ewa Nowak')));
+    expect(html).toContain(field('Integracja', txt('Agent AI - dyspozytornia')));
+    expect(html).toContain(field('Ważne do', txt('2027-02-12 10:00')));
+    expect(html).toContain(field('Grupy SMS', txt('2 grupy dostępne dla klucza')));
+    expect(html).toContain(field('Usługa 20841', txt('Dyspozytornia')));
+    expect(html).toContain(field('Usługa 20842', txt('bez nazwy w panelu')));
+    expect(html).toContain('Limit części SMS-a wynosi 3. Dłuższa treść zostaje odrzucona.');
     expect(html).not.toMatch(/undefined|null|NaN/);
   });
 
-  it('renderStatus: połączenie bez terminu i bez otwartego okna ochrony', () => {
-    const html = renderStatus({ ...STATUS, expiresAt: null, guard: { ...STATUS.guard, calls: 0, recipients: 0, resetsAt: null } }, { scopes: LABELS });
-    expect(html).toContain('bez terminu');
+  it('renderStatus: uprawnienia nadane i brakujące w plakietkach, zdanie o tym, kto je zmienia', () => {
+    const html = renderStatus(STATUS, { scopes: LABELS });
+    expect(html).toContain('<span class="badge b-ok">Wysyłka SMS-ów</span>');
+    expect(html).toContain('<span class="badge b-plain">Odczyt odebranych: brak</span>');
+    expect(html).toContain('Uprawnienia zmienia administrator bramki w integracji Agent AI');
+  });
+
+  it('renderStatus: limity w czterech kaflach z oknem ochrony w czasie polskim', () => {
+    const html = renderStatus(STATUS, { scopes: LABELS });
+    expect(html).toContain(tiles(tile('Żądania klucza', '60', 'na minutę'), tile('Wysyłki', '2 z 30', 'w oknie 60 minut'),
+      tile('Odbiorcy', '15 z 1000', 'w oknie 60 minut'), tile('Okno kończy się', '12:40', '2026-11-15')));
+    expect(html).toContain('Ochrona przed burzą liczy wysyłki i odbiorców w oknie 60 minut');
+  });
+
+  it('renderStatus: połączenie bez terminu, bez grup i bez otwartego okna ochrony', () => {
+    const html = renderStatus({ ...STATUS, expiresAt: null, groups: 0, guard: { ...STATUS.guard, calls: 0, recipients: 0, resetsAt: null } }, { scopes: LABELS });
+    expect(html).toContain(field('Ważne do', txt('bez terminu')));
+    expect(html).toContain(field('Grupy SMS', txt('Do klucza nie przypisano grup SMS')));
+    expect(html).toContain(tile('Okno ochrony', 'nie otwarte', 'otworzy się przy wysyłce'));
+    expect(renderStatus({ ...STATUS, groups: 1 }, { scopes: LABELS })).toContain(txt('1 grupa dostępna dla klucza'));
+    expect(renderStatus({ ...STATUS, groups: 5 }, { scopes: LABELS })).toContain(txt('5 grup dostępnych dla klucza'));
     expect(html).not.toMatch(/undefined|null|NaN/);
   });
 
-  it('renderStatus: niedostępne połączenie pokazuje powód jako tekst', () => {
+  it('renderStatus: niedostępne połączenie pokazuje sekcję z plakietką i powodem jako tekst', () => {
     const html = renderStatus({ available: false, connection: 'Ewa Nowak', integration: 'Agent AI - dyspozytornia', reason: 'integracja <i>wyłączona</i>' }, { scopes: LABELS });
-    expect(html).toContain('integracja &lt;i&gt;wyłączona&lt;/i&gt;');
-    expect(html).toContain('bez nowego kodu');
+    expect(sections(html)).toEqual(['Połączenie', 'Połączenie jest chwilowo niedostępne']);
+    expect(html).toContain('<span class="badge b-fail">niedostępne</span>');
+    expect(html).toContain('Przyczyna: integracja &lt;i&gt;wyłączona&lt;/i&gt;. Dostęp przywraca administrator bramki, a połączenie zadziała ponownie bez nowego kodu.');
   });
 });
 
