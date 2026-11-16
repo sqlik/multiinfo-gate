@@ -6,7 +6,7 @@ import { handleMail } from './mail.ts';
 import { handleMailReport } from './mail-report.ts';
 import { handlePoll } from './poll.ts';
 import { handleWebhook } from './webhook.ts';
-import { handlePackageCreate, handlePackagePoll, handlePackageReport } from './packages.ts';
+import { handlePackageCreate, handlePackagePoll, handlePackageReport, overdueSweep } from './packages.ts';
 
 /**
  * Wyjątek spoza obsługi zadania (błąd bazy, nieczytelny sekret, błąd w kodzie) ponawiamy
@@ -85,6 +85,7 @@ export class Worker {
       ['powiadomienia', () => this.deps.notifier?.flush?.(now)],
       ['powiadomienia_sms', () => this.deps.notifier?.flushSms?.(now)],
       ['skaner', () => this.deps.scanner?.scan(now)],
+      ['spoznione', () => overdueSweep(this.deps, now)],
       ['wydania', () => { void this.deps.releases?.check(now); }],
       ['konta_m365', () => {
         void this.deps.m365KeepAlive?.keepAlive(now).catch((error: unknown) => log.error('worker.utrzymanie_blad', { step: 'konta_m365', error }));

@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { MI_START_MARGIN_MS, OVERDUE_AFTER_MS } from '../api/schedule.ts';
 import { silentLogger, type Logger } from '../log.ts';
 import { parseReport } from '../multiinfo/report.ts';
 import { PACKAGE_NOT_RETRIED } from '../multiinfo/client.ts';
@@ -7,7 +8,9 @@ import { ProviderError } from '../multiinfo/response.ts';
 import { pauseForCertificate } from './certificate.ts';
 import { unzipFirstFile } from '../multiinfo/zip.ts';
 import type { Job } from '../store/jobs.ts';
+import type { AccountRow } from '../store/accounts.ts';
 import type { PackageRow } from '../store/packages.ts';
+import { warsawShort } from '../time/warsaw.ts';
 import { SEND_BACKOFF_MS, type WorkerDeps } from './send.ts';
 import { emitWebhook } from './webhook.ts';
 
@@ -61,24 +64,25 @@ function fail(deps: WorkerDeps, job: Job, pkg: PackageRow, code: number | null, 
  * Wspólna obsługa błędu Multiinfo dla zadań rozsyłki. Certyfikat wstrzymuje konto,
  * błąd przejściowy ponawia według harmonogramu wysyłki, trwały kończy zadanie
  * przez `onPermanent` - bo utworzenie kończy rozsyłkę, a raport tylko raport.
+ * Wynik `pending` oznacza, że zadanie zostało w kolejce, a `done`, że `onPermanent` je zakończyło.
  */
 function handleProviderFailure(
   error: unknown, job: Job, deps: WorkerDeps, pkg: PackageRow, now: Date, log: Logger,
   onPermanent: (code: number | null, message: string) => void,
-): void {
+): 'pending' | 'done' {
   const provider = error instanceof ProviderError ? error : null;
   const message = error instanceof Error ? error.message : String(error);
 
   if (provider?.kind === 'certificate') {
     const reason = pauseForCertificate(deps, pkg.accountId, provider, log, now);
     deps.jobs.defer(job.id, new Date(now.getTime() + PAUSED_RECHECK_MS), reason);
-    return;
+    return 'pending';
   }
 
   // Wynik nieznany kończy jak błąd trwały: ponowienie mogłoby utworzyć rozsyłkę drugi raz.
   if (provider !== null && (provider.kind === 'permanent' || provider.kind === 'uncertain')) {
     onPermanent(provider.code, provider.message);
-    return;
+    return 'done';
   }
 
   // Awaria sieci, nieprzewidziany wyjątek albo błąd przejściowy - ponawiamy.
@@ -86,10 +90,11 @@ function handleProviderFailure(
   const delay = SEND_BACKOFF_MS[job.attempts];
   if (delay === undefined) {
     onPermanent(code, `Wyczerpano ponowienia. Ostatni błąd: ${message}`);
-    return;
+    return 'done';
   }
   log.warn('rozsylka.blad_przejsciowy', { packageId: pkg.id, jobType: job.type, code, attempt: job.attempts + 1 });
   deps.jobs.retry(job.id, new Date(now.getTime() + delay), message);
+  return 'pending';
 }
 
 /** Wspólny wstęp: rozsyłka i konto muszą istnieć, konto nie może być wstrzymane ani wyłączone. */
@@ -116,8 +121,107 @@ function prepare(job: Job, deps: WorkerDeps, now: Date, log: Logger): { pkg: Pac
   return { pkg, storeContent: account.storeContent };
 }
 
+const odbiorcow = (n: number): string => `${n} ${n === 1 ? 'odbiorcy' : 'odbiorców'}`;
+
+/**
+ * Przegląd spóźnionych: rozsyłki `scheduled`, których bramka nie przekazała w ciągu `OVERDUE_AFTER_MS` od terminu,
+ * przechodzą w `overdue` i czekają na decyzję administratora. Zadanie przekazania znika, dlatego po decyzji
+ * nie istnieją dwa zadania tej samej rozsyłki.
+ */
+export function overdueSweep(deps: WorkerDeps, now: Date): number {
+  const log = deps.log ?? silentLogger;
+  const moved = deps.packages.markOverdue(new Date(now.getTime() - OVERDUE_AFTER_MS));
+  for (const pkg of moved) {
+    deps.jobs.removeFor('package.create', pkg.id);
+    const term = pkg.startAt === null ? '' : ` od terminu ${warsawShort(pkg.startAt)}`;
+    deps.notifier?.notify('package_overdue', `package:${pkg.id}`,
+      `Bramka nie przekazała rozsyłki ${pkg.id} do ${odbiorcow(pkg.recipientsCount)} w ciągu 60 minut${term}. Rozsyłka czeka na decyzję administratora w panelu bramki.`, now);
+    log.warn('rozsylka.po_terminie', { packageId: pkg.id, accountId: pkg.accountId, startAt: pkg.startAt });
+  }
+  return moved.length;
+}
+
+/** Powód anulowania zaplanowanej rozsyłki w chwili przekazania; `null`, gdy klucz i konto nadal ją obejmują. */
+function cancelReason(deps: WorkerDeps, pkg: PackageRow, now: Date): string | null {
+  if (!deps.accounts.get(pkg.accountId)) return 'Konto Multiinfo rozsyłki zostało usunięte przed jej przekazaniem';
+  const key = deps.apiKeys.get(pkg.apiKeyId);
+  if (!key) return 'Klucz API rozsyłki został usunięty przed przekazaniem do Multiinfo';
+  if (key.revokedAt !== null) return 'Klucz API rozsyłki został odwołany przed przekazaniem do Multiinfo';
+  if (key.expiresAt !== null && Date.parse(key.expiresAt) <= now.getTime()) return 'Klucz API rozsyłki utracił ważność przed przekazaniem do Multiinfo';
+  return null;
+}
+
+/**
+ * Przeszkoda, która wstrzymuje przekazanie bez anulowania: konto wstrzymane albo wyłączone, integracja zlecająca
+ * wyłączona. Odwołanie połączenia agenta nie wstrzymuje, ponieważ wysyłkę zatwierdził człowiek.
+ */
+function waitReason(deps: WorkerDeps, pkg: PackageRow, account: AccountRow): string | null {
+  if (account.pausedReason) return account.pausedReason;
+  if (account.active === 0) return 'Konto jest wyłączone.';
+  if (pkg.integrationId !== null && deps.integrations?.get(pkg.integrationId)?.enabled === 0) return 'Integracja zlecająca rozsyłkę jest wyłączona.';
+  return null;
+}
+
+function cancelBeforeHandover(deps: WorkerDeps, job: Job, pkg: PackageRow, reason: string, now: Date, log: Logger): void {
+  if (deps.packages.cancelPending(pkg.id, now, reason)) {
+    notifyCompleted(deps, pkg, { status: 'cancelled' }, now);
+    const integration = pkg.integrationId === null ? undefined : deps.integrations?.get(pkg.integrationId);
+    if (integration) {
+      deps.integrationEvents?.record({
+        integrationId: integration.id, at: now, result: 'error', reason, packageId: pkg.id, payload: null, logLimit: integration.config.eventLogLimit,
+      });
+    }
+    log.warn('rozsylka.anulowana_przed_przekazaniem', { packageId: pkg.id, accountId: pkg.accountId, reason });
+  }
+  deps.jobs.complete(job.id);
+}
+
+/**
+ * Sprawdzenia zaplanowanej rozsyłki w kolejności: anulowanie, spóźnienie, przeszkoda, przejście w `queued`.
+ * Zwraca konto, gdy rozsyłka przeszła w `queued` i bramka może wysłać żądanie.
+ */
+function beginScheduledHandover(job: Job, deps: WorkerDeps, pkg: PackageRow, now: Date, log: Logger): AccountRow | null {
+  const reason = cancelReason(deps, pkg, now);
+  if (reason !== null) {
+    cancelBeforeHandover(deps, job, pkg, reason, now, log);
+    return null;
+  }
+  if (pkg.startAt !== null && now.getTime() - Date.parse(pkg.startAt) > OVERDUE_AFTER_MS) {
+    overdueSweep(deps, now);
+    deps.jobs.complete(job.id);
+    return null;
+  }
+  const account = deps.accounts.get(pkg.accountId)!;
+  const wait = waitReason(deps, pkg, account);
+  if (wait !== null) {
+    deps.jobs.defer(job.id, new Date(now.getTime() + PAUSED_RECHECK_MS), wait);
+    return null;
+  }
+  // Anulowanie mogło nastąpić po odczycie rozsyłki; wtedy przejście się nie powiedzie i żądanie nie wychodzi.
+  if (!deps.packages.beginHandover(pkg.id)) {
+    deps.jobs.complete(job.id);
+    return null;
+  }
+  return account;
+}
+
 export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date): Promise<void> {
   const log = deps.log ?? silentLogger;
+  const scheduled = job.payload.scheduled === true;
+  if (scheduled) {
+    const pkg = deps.packages.get(String(job.payload.packageId));
+    // Rozsyłka po terminie, anulowana albo przekazana: zadanie nie ma już nic do zrobienia.
+    if (!pkg || (pkg.status !== 'scheduled' && pkg.status !== 'queued')) {
+      deps.jobs.complete(job.id);
+      return;
+    }
+    // Rozsyłka `queued` z tym znacznikiem przeszła w ten stan, a proces zatrzymał się przed odpowiedzią: droga jak dziś.
+    if (pkg.status === 'scheduled') {
+      const account = beginScheduledHandover(job, deps, pkg, now, log);
+      if (account) await createAtMultiinfo(job, deps, { ...pkg, status: 'queued' }, account.storeContent, now, log, true);
+      return;
+    }
+  }
   const ready = prepare(job, deps, now, log);
   if (!ready) return;
   const { pkg, storeContent } = ready;
@@ -131,11 +235,24 @@ export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date)
     fail(deps, job, pkg, UNCERTAIN_CODE, `Bramka zatrzymała się po przekazaniu rozsyłki do Multiinfo, zanim nadeszła odpowiedź. ${PACKAGE_NOT_RETRIED}`, now, log);
     return;
   }
+  await createAtMultiinfo(job, deps, pkg, storeContent, now, log, scheduled);
+}
 
+/**
+ * Żądanie `package.aspx`. Termin trafia do Multiinfo, gdy przypada co najmniej `MI_START_MARGIN_MS` później;
+ * bliższy albo miniony termin oznacza wysyłkę natychmiastową. Pierwsze pytanie o postęp przypada minutę po terminie,
+ * ponieważ do terminu Multiinfo trzyma rozsyłkę bez zmian. Zaplanowana rozsyłka, której żądanie nie dotarło
+ * do Multiinfo, a zadanie zostało w kolejce, wraca do `scheduled`.
+ */
+async function createAtMultiinfo(
+  job: Job, deps: WorkerDeps, pkg: PackageRow, storeContent: 0 | 1, now: Date, log: Logger, scheduled: boolean,
+): Promise<void> {
   // Znacznik w zadaniu chroni przed powtórzeniem po awarii procesu. Jego brak nie może jednak
   // przerwać wysyłki, a wyjątek ze zdarzenia gniazda zatrzymałby cały proces. Dlatego błąd
   // zapisu trafia tylko do dziennika.
+  let sent = false;
   const onSent = () => {
+    sent = true;
     try {
       deps.jobs.markSent(job.id, now);
     } catch (error) {
@@ -144,12 +261,14 @@ export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date)
   };
   // Serwer odrzucił sesję TLS, zanim obsłużył żądanie: rozsyłka nie powstała i może zostać ponowiona.
   const onRejected = () => {
+    sent = false;
     try {
       deps.jobs.clearSent(job.id);
     } catch (error) {
       log.error('rozsylka.znacznik_przekazania', { packageId: pkg.id, error: error instanceof Error ? error.message : String(error) });
     }
   };
+  const startAt = pkg.startAt !== null && Date.parse(pkg.startAt) - now.getTime() >= MI_START_MARGIN_MS ? new Date(pkg.startAt) : undefined;
 
   try {
     const miPackageId = await deps.clients.for(pkg.accountId).createPackage({
@@ -158,7 +277,7 @@ export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date)
       recipients: deps.packages.recipients(pkg.id).map((r) => ({ dest: r.dest, text: r.text, clientId: r.clientId })),
       ...(pkg.orig ? { orig: pkg.orig } : {}),
       ...(pkg.costCenter ? { costCenter: pkg.costCenter } : {}),
-      ...(pkg.startAt ? { startAt: new Date(pkg.startAt) } : {}),
+      ...(startAt ? { startAt } : {}),
       deliveryReport: pkg.deliveryReport === 1,
       advancedEncoding: pkg.encoding === 'ucs2',
       multipart: pkg.multipart === 1,
@@ -168,12 +287,15 @@ export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date)
     // Treści to dane osobowe - konto bez przechowywania nie zostawia ich po przekazaniu.
     if (storeContent === 0) deps.packages.clearTexts(pkg.id);
     deps.jobs.complete(job.id);
-    deps.jobs.enqueue('package.poll', { packageId: pkg.id }, new Date(now.getTime() + PACKAGE_POLL_MS[0]));
+    deps.jobs.enqueue('package.poll', { packageId: pkg.id }, new Date(Math.max(now.getTime(), startAt?.getTime() ?? 0) + PACKAGE_POLL_MS[0]));
     log.info('rozsylka.utworzona', {
       packageId: pkg.id, accountId: pkg.accountId, miPackageId, recipients: pkg.recipientsCount, attempt: job.attempts + 1,
     });
   } catch (error) {
-    handleProviderFailure(error, job, deps, pkg, now, log, (code, message) => fail(deps, job, pkg, code, message, now, log));
+    const outcome = handleProviderFailure(error, job, deps, pkg, now, log, (code, message) => fail(deps, job, pkg, code, message, now, log));
+    if (scheduled && outcome === 'pending' && !sent && deps.packages.returnToScheduled(pkg.id)) {
+      log.info('rozsylka.przekazanie_odlozone', { packageId: pkg.id, attempt: job.attempts + 1 });
+    }
   }
 }
 

@@ -6,8 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProviderError } from '../../src/multiinfo/response.ts';
 import {
   PACKAGE_POLL_MS, PACKAGE_POLL_TAIL_MS, REPORT_BUSY_LIMIT_MS, REPORT_RETRY_MS,
-  handlePackageCreate, handlePackagePoll, handlePackageReport,
+  handlePackageCreate, handlePackagePoll, handlePackageReport, overdueSweep,
 } from '../../src/worker/packages.ts';
+import { defaultPowerAutomateConfig } from '../../src/integrations/config.ts';
+import { AgentConnectionsRepo } from '../../src/store/agent-connections.ts';
+import { IntegrationEventsRepo } from '../../src/store/integration-events.ts';
+import { IntegrationsRepo } from '../../src/store/integrations.ts';
 import { SEND_BACKOFF_MS } from '../../src/worker/send.ts';
 import { openDatabase } from '../../src/store/db.ts';
 import { AccountsRepo } from '../../src/store/accounts.ts';
@@ -67,12 +71,14 @@ afterEach(() => rmSync(join(reportsDir, '..'), { recursive: true, force: true })
 
 function seed(patch: Partial<{
   startAt: string | null; orig: string | null; encoding: 'gsm' | 'ucs2'; multipart: 0 | 1; campaignId: number | null; deliveryReport: 0 | 1;
+  status: 'scheduled' | 'queued'; integrationId: number | null; agentConnectionId: number | null;
 }> = {}) {
   const id = 'pkg_1';
   deps.packages.insert({
     id, apiKeyId, accountId, serviceId: '24138', defaultText: 'Domyślna', orig: patch.orig ?? 'Firma Info',
     costCenter: null, startAt: patch.startAt ?? null, deliveryReport: patch.deliveryReport ?? 1, encoding: patch.encoding ?? 'gsm',
     multipart: patch.multipart ?? 0, createdAt: NOW.toISOString(), campaignId: patch.campaignId ?? null,
+    status: patch.status ?? 'queued', integrationId: patch.integrationId ?? null, agentConnectionId: patch.agentConnectionId ?? null,
   }, [
     { dest: '48601135134', text: null, clientId: null },
     { dest: '48501052442', text: 'Indywidualna', clientId: 'faktura-114' },
@@ -220,8 +226,10 @@ describe('handlePackageCreate', () => {
     expect(pkg.miPackageId).toBe('14');
     expect(pkg.status).toBe('open');
     expect(pkg.defaultText).toBe('Domyślna');
-    expect(deps.jobs.claim(new Date(NOW.getTime() + PACKAGE_POLL_MS[0] - 1), 10)).toHaveLength(0);
-    const [poll] = deps.jobs.claim(new Date(NOW.getTime() + PACKAGE_POLL_MS[0] + 1), 10);
+    // Przed terminem Multiinfo trzyma rozsyłkę bez zmian, dlatego pierwsze pytanie o postęp przypada minutę po terminie.
+    const term = Date.parse('2026-08-26T06:00:00.000Z');
+    expect(deps.jobs.claim(new Date(term + PACKAGE_POLL_MS[0] - 1), 10)).toHaveLength(0);
+    const [poll] = deps.jobs.claim(new Date(term + PACKAGE_POLL_MS[0] + 1), 10);
     expect(poll!.type).toBe('package.poll');
     expect(poll!.payload).toEqual({ packageId: 'pkg_1' });
   });
@@ -574,5 +582,227 @@ describe('handlePackageReport', () => {
     await handlePackageReport(job('package.report'), deps, NOW);
     expect(packageFullInfo).not.toHaveBeenCalled();
     expect(deps.jobs.depth()).toBe(0);
+  });
+});
+
+describe('handlePackageCreate - rozsyłka zaplanowana', () => {
+  const MIN = 60_000;
+  const at = (ms: number) => new Date(NOW.getTime() + ms);
+  let notify: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    notify = vi.fn();
+    deps.notifier = { notify };
+    deps.integrations = new IntegrationsRepo(db, masterKey);
+    deps.integrationEvents = new IntegrationEventsRepo(db, masterKey);
+  });
+
+  function scheduled(startAt: Date, extra: { integrationId?: number; agentConnectionId?: number } = {}) {
+    seed({ startAt: startAt.toISOString(), status: 'scheduled', ...extra });
+    return job('package.create', 0, { scheduled: true });
+  }
+  const integration = (enabled: 0 | 1) => deps.integrations!.insert({
+    name: 'Dyspozytornia', kind: 'power_automate', apiKeyId, serviceId: null, orig: null, preset: 'power-automate',
+    enabled, config: defaultPowerAutomateConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+  });
+  const sentFields = () => createPackage.mock.calls[0]![0] as Record<string, unknown>;
+
+  it('przekazanie: stan queued w chwili żądania, potem open; Multiinfo otrzymuje termin rozsyłki', async () => {
+    const start = at(10 * MIN);
+    let statusAtRequest: string | undefined;
+    createPackage.mockImplementation(async () => {
+      statusAtRequest = deps.packages.get('pkg_1')!.status;
+      return '28197391';
+    });
+    await handlePackageCreate(scheduled(start), deps, NOW);
+    expect(statusAtRequest).toBe('queued');
+    expect(sentFields().startAt).toEqual(start);
+    expect(deps.packages.get('pkg_1')).toMatchObject({ status: 'open', miPackageId: '28197391' });
+    expect(deps.jobs.claim(new Date(start.getTime() + PACKAGE_POLL_MS[0] - 1), 10)).toEqual([]);
+    expect(deps.jobs.claim(new Date(start.getTime() + PACKAGE_POLL_MS[0]), 10)).toEqual([expect.objectContaining({ type: 'package.poll' })]);
+  });
+
+  it('bramka nie działała 30 min po terminie: przekazanie bez terminu po stronie Multiinfo', async () => {
+    createPackage.mockResolvedValue('14');
+    await handlePackageCreate(scheduled(at(-30 * MIN)), deps, NOW);
+    expect(sentFields()).not.toHaveProperty('startAt');
+    expect(deps.packages.get('pkg_1')!.status).toBe('open');
+    expect(deps.jobs.claim(new Date(NOW.getTime() + PACKAGE_POLL_MS[0]), 10)).toEqual([expect.objectContaining({ type: 'package.poll' })]);
+  });
+
+  it('termin za 30 s w chwili przekazania: bez terminu po stronie Multiinfo', async () => {
+    createPackage.mockResolvedValue('14');
+    await handlePackageCreate(scheduled(at(30_000)), deps, NOW);
+    expect(sentFields()).not.toHaveProperty('startAt');
+  });
+
+  it('termin dokładnie 60 s po przekazaniu: termin trafia do Multiinfo', async () => {
+    createPackage.mockResolvedValue('14');
+    await handlePackageCreate(scheduled(at(MIN)), deps, NOW);
+    expect(sentFields().startAt).toEqual(at(MIN));
+  });
+
+  it('bramka nie działała 90 min: overdue, jedno powiadomienie package_overdue, zadanie usunięte, zero żądań package.aspx', async () => {
+    await handlePackageCreate(scheduled(new Date('2026-08-25T08:30:00Z')), deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    expect(deps.packages.get('pkg_1')!.status).toBe('overdue');
+    expect(deps.jobs.depth()).toBe(0);
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith('package_overdue', 'package:pkg_1',
+      'Bramka nie przekazała rozsyłki pkg_1 do 2 odbiorców w ciągu 60 minut od terminu 25.08.2026 10:30. Rozsyłka czeka na decyzję administratora w panelu bramki.', NOW);
+    expect(overdueSweep(deps, at(MIN))).toBe(0);
+    expect(notify).toHaveBeenCalledTimes(1);
+  });
+
+  it('konto wstrzymane: zadanie odłożone, stan scheduled; 61 min po terminie przegląd spóźnionych przenosi w overdue', async () => {
+    deps.accounts.pause(accountId, 'Certyfikat odrzucony (-85)');
+    const start = at(10 * MIN);
+    await handlePackageCreate(scheduled(start), deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    expect(deps.packages.get('pkg_1')!.status).toBe('scheduled');
+    const [deferred] = deps.jobs.claim(at(MIN), 10);
+    expect(deferred).toMatchObject({ type: 'package.create', attempts: 0, lastError: 'Certyfikat odrzucony (-85)' });
+    deps.jobs.retry(deferred!.id, at(MIN), '');
+    expect(overdueSweep(deps, new Date(start.getTime() + 60 * MIN))).toBe(0);
+    expect(overdueSweep(deps, new Date(start.getTime() + 61 * MIN))).toBe(1);
+    expect(deps.packages.get('pkg_1')!.status).toBe('overdue');
+    expect(deps.jobs.depth()).toBe(0);
+    expect(notify).toHaveBeenCalledWith('package_overdue', 'package:pkg_1', expect.stringContaining('od terminu 25.08.2026 12:10.'), expect.any(Date));
+  });
+
+  it('konto wyłączone w panelu wstrzymuje przekazanie jak konto wstrzymane', async () => {
+    db.prepare('UPDATE accounts SET active = 0').run();
+    await handlePackageCreate(scheduled(at(10 * MIN)), deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    expect(deps.packages.get('pkg_1')!.status).toBe('scheduled');
+    expect(deps.jobs.claim(at(MIN), 10)).toEqual([expect.objectContaining({ type: 'package.create', attempts: 0 })]);
+  });
+
+  it('integracja zlecająca wyłączona na 5 min: rozsyłka czeka i zostaje przekazana po włączeniu', async () => {
+    const integrationId = integration(0);
+    const start = at(10 * MIN);
+    await handlePackageCreate(scheduled(start, { integrationId }), deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    expect(deps.packages.get('pkg_1')!.status).toBe('scheduled');
+    db.prepare('UPDATE integrations SET enabled = 1 WHERE id = ?').run(integrationId);
+    const [deferred] = deps.jobs.claim(at(5 * MIN), 10);
+    createPackage.mockResolvedValue('14');
+    await handlePackageCreate(deferred!, deps, at(5 * MIN));
+    expect(createPackage).toHaveBeenCalledTimes(1);
+    expect(sentFields().startAt).toEqual(start);
+    expect(deps.packages.get('pkg_1')!.status).toBe('open');
+  });
+
+  it('klucz odwołany: cancelled z powodem, webhook package.completed cancelled, wpis w dzienniku integracji', async () => {
+    const integrationId = integration(1);
+    db.prepare('UPDATE api_keys SET revoked_at = ?').run(at(-MIN).toISOString());
+    await handlePackageCreate(scheduled(at(10 * MIN), { integrationId }), deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    const reason = 'Klucz API rozsyłki został odwołany przed przekazaniem do Multiinfo';
+    expect(deps.packages.get('pkg_1')).toMatchObject({ status: 'cancelled', error: reason, completedAt: NOW.toISOString() });
+    expect(lastWebhook()).toMatchObject({ event: 'package.completed', id: 'pkg_1', recipients: 2, status: 'cancelled' });
+    expect(deps.integrationEvents!.list(integrationId, 10)).toEqual([expect.objectContaining({ result: 'error', reason, packageId: 'pkg_1' })]);
+    expect(deps.jobs.claim(at(86_400_000), 10).map((j) => j.type)).toEqual(['webhook']);
+  });
+
+  it('klucz po terminie ważności: cancelled jak przy odwołaniu', async () => {
+    db.prepare('UPDATE api_keys SET expires_at = ?').run(at(-1000).toISOString());
+    await handlePackageCreate(scheduled(at(10 * MIN)), deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    expect(deps.packages.get('pkg_1')).toMatchObject({
+      status: 'cancelled', error: 'Klucz API rozsyłki utracił ważność przed przekazaniem do Multiinfo',
+    });
+    expect(lastWebhook()).toMatchObject({ event: 'package.completed', status: 'cancelled' });
+  });
+
+  it('połączenie agenta odwołane: przekazanie bez zmian', async () => {
+    const integrationId = integration(1);
+    const connections = new AgentConnectionsRepo(db);
+    const agentConnectionId = connections.insert({ integrationId, name: 'Ewa Nowak', method: 'token', expiresAt: null, createdBy: 'admin', createdAt: NOW });
+    connections.revoke(agentConnectionId, 'admin', NOW);
+    createPackage.mockResolvedValue('14');
+    await handlePackageCreate(scheduled(at(10 * MIN), { integrationId, agentConnectionId }), deps, NOW);
+    expect(createPackage).toHaveBeenCalledTimes(1);
+    expect(deps.packages.get('pkg_1')!.status).toBe('open');
+  });
+
+  it('błąd sieci przed dotarciem do Multiinfo: stan scheduled, zadanie ponowione, anulowanie przed ponowieniem skuteczne', async () => {
+    createPackage.mockRejectedValue(new ProviderError(-71, 'Nie udało się połączyć: ECONNRESET', 'transient'));
+    await handlePackageCreate(scheduled(at(10 * MIN)), deps, NOW);
+    expect(deps.packages.get('pkg_1')!.status).toBe('scheduled');
+    const [again] = deps.jobs.claim(at(SEND_BACKOFF_MS[0]), 10);
+    expect(again).toMatchObject({ type: 'package.create', attempts: 1, payload: { packageId: 'pkg_1', scheduled: true } });
+    expect(deps.packages.cancelPending('pkg_1', at(SEND_BACKOFF_MS[0]), null)).toBe(true);
+    await handlePackageCreate(again!, deps, at(SEND_BACKOFF_MS[0]));
+    expect(createPackage).toHaveBeenCalledTimes(1);
+    expect(deps.jobs.depth()).toBe(0);
+  });
+
+  it('błąd sieci po przekazaniu żądania: wynik nieznany kończy rozsyłkę, stan nie wraca do scheduled', async () => {
+    createPackage.mockImplementation(async (_p: unknown, hooks: { onSent?: () => void }) => {
+      hooks.onSent?.();
+      throw new ProviderError(-71, 'Połączenie przerwane: ECONNRESET', 'transient');
+    });
+    await handlePackageCreate(scheduled(at(10 * MIN)), deps, NOW);
+    expect(deps.packages.get('pkg_1')!.status).not.toBe('scheduled');
+  });
+
+  it('znacznik sentAt po awarii procesu: stan nie wraca do scheduled, kod -72 jak dziś', async () => {
+    const created = scheduled(at(10 * MIN));
+    deps.packages.beginHandover('pkg_1');
+    await handlePackageCreate({ ...created, payload: { ...created.payload, sentAt: NOW.toISOString() } }, deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    expect(deps.packages.get('pkg_1')).toMatchObject({ status: 'failed', providerCode: -72 });
+  });
+
+  it('certyfikat odrzucony przy przekazaniu: stan scheduled, zadanie odłożone', async () => {
+    createPackage.mockRejectedValue(new ProviderError(-85, 'CN', 'certificate'));
+    await handlePackageCreate(scheduled(at(10 * MIN)), deps, NOW);
+    expect(deps.accounts.get(accountId)!.pausedReason).toMatch(/-85/);
+    expect(deps.packages.get('pkg_1')!.status).toBe('scheduled');
+    expect(deps.jobs.claim(at(61_000), 10)).toEqual([expect.objectContaining({ type: 'package.create', attempts: 0 })]);
+  });
+
+  it('anulowanie między odczytem rozsyłki a beginHandover: zero żądań package.aspx', async () => {
+    const created = scheduled(at(10 * MIN));
+    const original = deps.packages.beginHandover.bind(deps.packages);
+    vi.spyOn(deps.packages, 'beginHandover').mockImplementation((id: string) => {
+      deps.packages.cancelPending(id, NOW, null);
+      return original(id);
+    });
+    await handlePackageCreate(created, deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    expect(deps.packages.get('pkg_1')!.status).toBe('cancelled');
+    expect(deps.jobs.depth()).toBe(0);
+  });
+
+  it('rozsyłka anulowana albo po terminie przed uruchomieniem zadania: zadanie zakończone bez żądania', async () => {
+    const created = scheduled(at(10 * MIN));
+    deps.packages.cancelPending('pkg_1', NOW, null);
+    await handlePackageCreate(created, deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    expect(deps.jobs.depth()).toBe(0);
+  });
+
+  it('overdue, potem sendNow i nowe zadanie: dokładnie jedno żądanie package.aspx', async () => {
+    scheduled(new Date('2026-08-25T08:00:00Z'));
+    expect(overdueSweep(deps, NOW)).toBe(1);
+    expect(deps.jobs.depth()).toBe(0);
+    expect(deps.packages.sendNow('pkg_1')).toBe(true);
+    deps.jobs.enqueue('package.create', { packageId: 'pkg_1' }, NOW);
+    createPackage.mockResolvedValue('14');
+    for (const j of deps.jobs.claim(NOW, 10)) await handlePackageCreate(j, deps, NOW);
+    expect(createPackage).toHaveBeenCalledTimes(1);
+    expect(sentFields()).not.toHaveProperty('startAt');
+    expect(deps.packages.get('pkg_1')!.status).toBe('open');
+  });
+
+  it('rozsyłka sprzed 1.13 w stanie open z terminem: odpytywanie bez zmian', async () => {
+    seed({ startAt: at(86_400_000).toISOString() });
+    deps.packages.setCreated('pkg_1', '14');
+    packageInfo.mockResolvedValue({ miPackageId: '14', saved: 2, remaining: 2, status: 2 });
+    await handlePackagePoll(job('package.poll'), deps, NOW);
+    expect(packageInfo).toHaveBeenCalledWith('14');
+    expect(deps.packages.get('pkg_1')).toMatchObject({ status: 'sending', remainingCount: 2 });
   });
 });

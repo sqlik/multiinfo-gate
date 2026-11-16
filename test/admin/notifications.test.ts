@@ -46,6 +46,13 @@ describe('GET /powiadomienia', () => {
     expect(rules).toMatch(/name="enabled_agent_connected" value="1" checked/);
   });
 
+  it('reguła Rozsyłka po terminie na stronie powiadomień, domyślnie włączona', async () => {
+    const rules = (await page('reguly')).body;
+    expect(rules).toContain('Rozsyłka po terminie');
+    expect(rules).toContain('bramka nie przekazała zaplanowanej rozsyłki w ciągu 60 minut od terminu, decyzję podejmuje administrator');
+    expect(rules).toMatch(/name="enabled_package_overdue" value="1" checked/);
+  });
+
   it('ekran reguł pokazuje „Awaria skrzynki pocztowej” z parametrem minut', async () => {
     const rules = await page('reguly');
     expect(rules.body).toContain('Awaria skrzynki pocztowej');
