@@ -21,6 +21,7 @@ function statusTone(status) {
 export function cancelReason(e) {
   if (e.kind !== 'message') return 'Odbiorcy rozsyłki nie można anulować pojedynczo';
   if (e.cancellable) return 'Wiadomość czeka w kolejce bramki, dlatego można ją jeszcze anulować';
+  if (BEFORE_NETWORK.has(e.status) && e.agentSent === false) return 'Agent anuluje wyłącznie wiadomości wysłane przez tę integrację, a pozostałe anuluje administrator w panelu bramki';
   if (BEFORE_NETWORK.has(e.status)) return 'Anulowanie wymaga uprawnienia „Wysyłka SMS-ów”, które nadaje administrator bramki w integracji Agent AI';
   if (e.status === 'delivered') return 'Wiadomość została doręczona, dlatego anulowanie nie jest możliwe';
   if (e.status === 'sent') return 'Wiadomość została przekazana do sieci operatora, dlatego anulowanie nie jest możliwe';

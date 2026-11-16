@@ -137,7 +137,7 @@ export const packageReportTool: ToolDef = {
     if (p.reportStatus !== 'ready') {
       throw new AgentError('report_not_ready', `Raport rozsyłki ${p.id} nie jest jeszcze gotowy. Stan rozsyłki pokazuje narzędzie package_status.`);
     }
-    const link = createDownload(ctx.deps, ctx.base, conn.key.id, q.file === 'report' ? 'package_report' : 'package_failed', p.id, ctx.now);
+    const link = createDownload(ctx.deps, ctx.base, { apiKeyId: conn.key.id, connectionId: conn.connection.id }, q.file === 'report' ? 'package_report' : 'package_failed', p.id, ctx.now);
     const what = q.file === 'report' ? `raportu rozsyłki ${p.id}` : `listy odbiorców rozsyłki ${p.id} bez doręczenia`;
     return {
       text: `Link do pliku CSV ${what}, ważny do ${warsawShort(link.expiresAt)} czasu polskiego:\n${link.url}\n${DOWNLOAD_WARNING}`,

@@ -297,7 +297,7 @@ describe('migracja 014', () => {
     expect(cols(db, 'oauth_codes')).toEqual(['code_hash', 'connection_id', 'client_id', 'redirect_uri', 'code_challenge', 'resource', 'expires_at', 'used_at']);
     expect(cols(db, 'oauth_tokens')).toEqual(['token_hash', 'connection_id', 'kind', 'expires_at', 'created_at', 'rotated_at', 'grace_pair_enc']);
     expect(cols(db, 'agent_drafts')).toEqual(['id', 'connection_id', 'kind', 'payload', 'created_at', 'expires_at', 'sent_at', 'result', 'confirm_hash']);
-    expect(cols(db, 'download_links')).toEqual(['token_hash', 'api_key_id', 'kind', 'ref', 'created_at', 'expires_at']);
+    expect(cols(db, 'download_links')).toEqual(['token_hash', 'api_key_id', 'connection_id', 'kind', 'ref', 'created_at', 'expires_at']);
     expect(cols(db, 'messages')).toContain('agent_connection_id');
     expect(cols(db, 'packages')).toContain('agent_connection_id');
     expect(db.pragma('foreign_key_check')).toEqual([]);

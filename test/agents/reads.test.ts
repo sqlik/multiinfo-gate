@@ -197,7 +197,7 @@ describe('deliveryTrace', () => {
   });
 
   it('od godziny bez strefy liczy czas polski, wiadomość w kolejce można anulować', () => {
-    message('msg_in', { createdAt: '2026-11-14T13:05:00.000Z' });
+    message('msg_in', { createdAt: '2026-11-14T13:05:00.000Z', integrationId: seed.integrationId });
     message('msg_out', { createdAt: '2026-11-14T12:55:00.000Z' });
     const entries = deliveryTrace(deps, ctx(), { to: '601000011', from: '2026-11-14T14:00' }, NOW).entries;
     expect(entries.map((e) => e.id)).toEqual(['msg_in']);
@@ -206,9 +206,20 @@ describe('deliveryTrace', () => {
     expect(agentError(() => deliveryTrace(deps, ctx(), { to: '601000011', from: 'wczoraj' }, NOW)).code).toBe('invalid');
   });
 
+  it('anulować można wyłącznie wysyłki integracji agenta, także jej SMS-y do grup', () => {
+    message('msg_api', { createdAt: at(-60_000) });
+    const group = integration('SERWIS', 'sms_group');
+    message('msg_grupa', { createdAt: at(-60_000), integrationId: group, agentConnectionId: seed.connectionId });
+    message('msg_inna_grupa', { createdAt: at(-60_000), integrationId: group });
+    const entry = (id: string) => deliveryTrace(deps, ctx(), { id }, NOW).entries[0]!;
+    expect(entry('msg_api')).toMatchObject({ cancellable: false, agentSent: false, status: 'queued' });
+    expect(entry('msg_grupa')).toMatchObject({ cancellable: true, agentSent: true });
+    expect(entry('msg_inna_grupa')).toMatchObject({ cancellable: false, agentSent: false });
+  });
+
   it('anulowanie tylko przed przekazaniem do sieci: kolejka bramki, status 0 i limit, bez statusu 1 i 3', () => {
     const state = (id: string, status: 'queued' | 'sent' | 'throttled', miStatus: number | null): boolean => {
-      message(id, { createdAt: at(-60_000) });
+      message(id, { createdAt: at(-60_000), integrationId: seed.integrationId });
       if (miStatus !== null) {
         deps.messages.setSent(id, ['55' + id.length], new Date(at(-50_000)));
         deps.messages.setStatus(id, { status, miStatus, miSubstatus: 0 });

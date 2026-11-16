@@ -74,7 +74,7 @@ async function get(url: string) {
 describe('linki do pobrania', () => {
   it('link pobiera raport rozsyłki w formacie z API', async () => {
     pkg();
-    const link = createDownload(deps.agents, BASE, seed.keyId, 'package_report', 'pkg_1', NOW);
+    const link = createDownload(deps.agents, BASE, { apiKeyId: seed.keyId, connectionId: seed.connectionId }, 'package_report', 'pkg_1', NOW);
     expect(link.url).toMatch(/^https:\/\/bramka\.serwis\.example\/pobierz\/[A-Za-z0-9_-]{43}$/);
     expect(link.expiresAt).toBe(new Date(NOW.getTime() + DOWNLOAD_TTL_MS).toISOString());
     const res = await get(link.url);
@@ -88,7 +88,7 @@ describe('linki do pobrania', () => {
 
   it('link po godzinie i 1 s: 404', async () => {
     pkg();
-    const link = createDownload(deps.agents, BASE, seed.keyId, 'package_report', 'pkg_1', NOW);
+    const link = createDownload(deps.agents, BASE, { apiKeyId: seed.keyId, connectionId: seed.connectionId }, 'package_report', 'pkg_1', NOW);
     clock = new Date(NOW.getTime() + DOWNLOAD_TTL_MS + 1000);
     const res = await get(link.url);
     expect(res.statusCode).toBe(404);
@@ -103,7 +103,7 @@ describe('linki do pobrania', () => {
     pkg();
     const rows = deps.packages.recipients('pkg_1');
     expect(failedCsv(rows)).toBe(reportCsv(rows.filter((r) => r.status !== 'delivered')));
-    const res = await get(createDownload(deps.agents, BASE, seed.keyId, 'package_failed', 'pkg_1', NOW).url);
+    const res = await get(createDownload(deps.agents, BASE, { apiKeyId: seed.keyId, connectionId: seed.connectionId }, 'package_failed', 'pkg_1', NOW).url);
     expect(res.headers['content-disposition']).toBe('attachment; filename="niedoreczeni-pkg_1.csv"');
     expect(res.body.split('\r\n')).toEqual([
       'numer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas',
@@ -121,10 +121,10 @@ describe('linki do pobrania', () => {
       '48601000013;;0;https://firma.pl/przeglad',
       '',
     ]);
-    const unopened = await get(createDownload(deps.agents, BASE, seed.keyId, 'campaign_unopened', String(id), NOW).url);
+    const unopened = await get(createDownload(deps.agents, BASE, { apiKeyId: seed.keyId, connectionId: seed.connectionId }, 'campaign_unopened', String(id), NOW).url);
     expect(unopened.headers['content-disposition']).toBe('attachment; filename="kampania-przeglad-klimatyzacji-wiosna-bez-otwarcia.csv"');
     expect(unopened.body).toBe(unopenedCsv(deps, id));
-    const opened = await get(createDownload(deps.agents, BASE, seed.keyId, 'campaign_opened', String(id), NOW).url);
+    const opened = await get(createDownload(deps.agents, BASE, { apiKeyId: seed.keyId, connectionId: seed.connectionId }, 'campaign_opened', String(id), NOW).url);
     expect(opened.headers['content-disposition']).toBe('attachment; filename="kampania-przeglad-klimatyzacji-wiosna-z-otwarciem.csv"');
     expect(opened.body).toBe(openersCsv(deps, id));
   });
@@ -135,13 +135,13 @@ describe('linki do pobrania', () => {
       accountId: seed.accountId, name: 'inny', keyHash: 'h2', keyPrefix: 'p2', defaultServiceId: '24138', defaultOrig: null,
       maxParts: 9, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'],
     });
-    const res = await get(createDownload(deps.agents, BASE, other, 'package_report', 'pkg_1', NOW).url);
+    const res = await get(createDownload(deps.agents, BASE, { apiKeyId: other, connectionId: seed.connectionId }, 'package_report', 'pkg_1', NOW).url);
     expect(res.statusCode).toBe(404);
   });
 
   it('log zawiera tylko przedrostek tokenu', async () => {
     pkg();
-    const link = createDownload(deps.agents, BASE, seed.keyId, 'package_report', 'pkg_1', NOW);
+    const link = createDownload(deps.agents, BASE, { apiKeyId: seed.keyId, connectionId: seed.connectionId }, 'package_report', 'pkg_1', NOW);
     const token = link.url.split('/').pop()!;
     await get(link.url);
     expect(info).toHaveBeenCalledWith('pobranie', { token: `${token.slice(0, 12)}…`, kind: 'package_report', apiKeyId: seed.keyId });
@@ -151,7 +151,7 @@ describe('linki do pobrania', () => {
   it('bez adresu bramki createDownload rzuca błąd z komunikatem', () => {
     let error: unknown;
     try {
-      createDownload(deps.agents, null, seed.keyId, 'package_report', 'pkg_1', NOW);
+      createDownload(deps.agents, null, { apiKeyId: seed.keyId, connectionId: seed.connectionId }, 'package_report', 'pkg_1', NOW);
     } catch (e) {
       error = e;
     }

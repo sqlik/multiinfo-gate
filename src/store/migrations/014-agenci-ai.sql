@@ -88,6 +88,7 @@ CREATE INDEX idx_agent_drafts_expires ON agent_drafts(expires_at);
 CREATE TABLE download_links (
   token_hash  TEXT    PRIMARY KEY,
   api_key_id  INTEGER NOT NULL REFERENCES api_keys(id) ON DELETE CASCADE,
+  connection_id INTEGER NOT NULL REFERENCES agent_connections(id) ON DELETE CASCADE,
   kind        TEXT    NOT NULL CHECK (kind IN ('package_report', 'package_failed', 'campaign_opened', 'campaign_unopened')),
   ref         TEXT    NOT NULL,
   created_at  TEXT    NOT NULL,

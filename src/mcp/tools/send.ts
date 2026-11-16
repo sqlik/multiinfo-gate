@@ -1,3 +1,4 @@
+import { sentByAgent } from '../../agents/reads.ts';
 import { cancelMessage } from '../../api/cancel-message.ts';
 import { PLACEHOLDER_CODE } from '../../links/codes.ts';
 import { linkFieldsSchema, linkRequest } from '../../api/link-fields.ts';
@@ -160,8 +161,9 @@ export const prepareGroupSmsTool: ToolDef = {
     const { confirm, preview, recipients } = prepareGroup(ctx.deps, connOf(ctx), input, ctx.now, { apps: ctx.apps });
     return {
       text: groupText(ctx, preview), structured: asRecord(preview),
-      // Numery i nazwy trafiają do widoku przez _meta, którego agenci claude.ai i ChatGPT nie widzą (punkt kontrolny A).
-      meta: { recipients: recipients.map((r) => ({ phone: r.phone, name: r.name })), ...(confirm === null ? {} : { confirm }) },
+      // Numery i nazwy trafiają wyłącznie do widoku przez _meta, którego agenci claude.ai i ChatGPT nie widzą. Bez widoku
+      // nikt ich nie zobaczy, dlatego sesja bez widoków ich nie otrzymuje.
+      ...(ctx.apps ? { meta: { recipients: recipients.map((r) => ({ phone: r.phone, name: r.name })), ...(confirm === null ? {} : { confirm }) } } : {}),
     };
   },
 };
@@ -193,15 +195,22 @@ const cancelInput = z.object({ id: z.string().min(1).describe('Identyfikator wia
 export const cancelMessageTool: ToolDef = {
   name: 'cancel_message',
   title: 'Anuluj wiadomość',
-  description: 'Anuluje wiadomość, której Multiinfo nie przekazało jeszcze do sieci operatora, na przykład oczekującą w kolejce bramki albo wstrzymaną limitem. '
-    + 'Multiinfo przekazuje wiadomość do sieci zwykle kilka sekund po wysyłce. '
+  description: 'Anuluje wiadomość wysłaną przez tę integrację, której Multiinfo nie przekazało jeszcze do sieci operatora, na przykład oczekującą w kolejce bramki albo wstrzymaną limitem. '
+    + 'Multiinfo przekazuje wiadomość do sieci zwykle kilka sekund po wysyłce. Wiadomości z innych źródeł anuluje administrator w panelu bramki. '
     + 'Wiadomości przekazanej do sieci nie można anulować, a przebieg doręczenia informuje, czy anulowanie jest jeszcze możliwe.',
   scopes: ['send'],
   input: cancelInput,
   annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: true },
   async run(ctx, raw) {
     const { id } = raw as z.infer<typeof cancelInput>;
-    const result = await cancelMessage(ctx.deps, connOf(ctx).key.id, id, ctx.now);
+    const conn = connOf(ctx);
+    const message = ctx.deps.messages.get(id);
+    // Agent anuluje wyłącznie własne wysyłki: przemycone polecenie nie może zatrzymać alarmu z innej integracji klucza.
+    if (message && message.apiKeyId === conn.key.id && message.system !== 1 && !sentByAgent(ctx.deps, conn, message)) {
+      throw new AgentError('not_own',
+        `Agent anuluje wyłącznie wiadomości wysłane przez integrację ${conn.integration.name}. Pozostałe wiadomości anuluje administrator w panelu bramki.`);
+    }
+    const result = await cancelMessage(ctx.deps, conn.key.id, id, ctx.now, `agent ${conn.integration.name} · ${conn.connection.name}`);
     return { text: `Wiadomość ${result.id} została anulowana.`, structured: asRecord(result) };
   },
 };

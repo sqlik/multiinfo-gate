@@ -43,6 +43,8 @@ export interface TraceEntry {
   kind: 'message' | 'package_recipient'; id: string; to: string; status: string; statusLabel: string; source: string; created: Stamp;
   stages: Array<Stamp & { kind: string; label: string; detail: string | null }>; operator: { code: string; description: string } | null;
   cancellable: boolean; text: string | null; packageId: string | null;
+  /** Wiadomość wysłana przez integrację agenta, wprost albo do grupy; tylko taką agent może anulować. */
+  agentSent: boolean;
   /** Nadawca, usługa i kodowanie treści dla okna treści w widoku; `sender` null oznacza numer usługi, `parts` tylko przy wiadomości. */
   sender: string | null; serviceId: string; encoding: 'gsm' | 'ucs2'; parts: number | null;
 }
@@ -167,14 +169,21 @@ function messageStages(deps: ReadDeps, m: MessageRow): TraceEntry['stages'] {
   ];
 }
 
-function messageEntry(deps: ReadDeps, m: MessageRow, canCancel: boolean): TraceEntry {
+/** Wiadomość wysłana przez integrację agenta: wprost albo do grupy z połączenia tej integracji. */
+export function sentByAgent(deps: Pick<ReadDeps, 'connectionsRepo'>, ctx: ConnectionContext, m: MessageRow): boolean {
+  if (m.integrationId === ctx.integration.id) return true;
+  return m.agentConnectionId !== null && deps.connectionsRepo.get(m.agentConnectionId)?.integrationId === ctx.integration.id;
+}
+
+function messageEntry(deps: ReadDeps, ctx: ConnectionContext, m: MessageRow): TraceEntry {
+  const agentSent = sentByAgent(deps, ctx, m);
   return {
     kind: 'message', id: m.id, to: m.dest, status: m.status, statusLabel: statusLabel(m.status), source: sourceLabel(deps, m),
     created: stamp(m.createdAt), stages: messageStages(deps, m),
     operator: m.miStatus === null ? null : {
       code: `${m.miStatus}/${m.miSubstatus ?? 0}`, description: describeSubstatus(m.miStatus, m.miSubstatus ?? 0),
     },
-    cancellable: canCancel && BEFORE_NETWORK.has(m.status), text: m.body, packageId: null,
+    cancellable: ctx.scopes.has('send') && agentSent && BEFORE_NETWORK.has(m.status), agentSent, text: m.body, packageId: null,
     sender: m.orig, serviceId: m.serviceId, encoding: m.encoding, parts: m.parts,
   };
 }
@@ -198,7 +207,7 @@ function recipientEntry(deps: ReadDeps, p: PackageRow, r: RecipientRow & { packa
   }
   return {
     kind: 'package_recipient', id: `${p.id}#${r.seq}`, to: r.dest, ...recipientState(r, p.reportStatus === 'ready'),
-    source: sourceLabel(deps, p), created: stamp(p.createdAt), stages, operator: null, cancellable: false,
+    source: sourceLabel(deps, p), created: stamp(p.createdAt), stages, operator: null, cancellable: false, agentSent: false,
     text: r.text ?? p.defaultText, packageId: p.id, sender: p.orig, serviceId: p.serviceId, encoding: p.encoding, parts: null,
   };
 }
@@ -209,18 +218,17 @@ function recipientEntry(deps: ReadDeps, p: PackageRow, r: RecipientRow & { packa
  * i nieznana dają pustą listę - nie potwierdzamy istnienia.
  */
 export function deliveryTrace(deps: ReadDeps, ctx: ConnectionContext, q: { id?: string | undefined; to?: string | undefined; from?: string | undefined; until?: string | undefined }, now: Date): { entries: TraceEntry[] } {
-  const canCancel = ctx.scopes.has('send');
   if (q.id !== undefined) {
     const m = deps.messages.get(q.id);
     if (!m || m.apiKeyId !== ctx.key.id || m.system === 1) return { entries: [] };
-    return { entries: [messageEntry(deps, m, canCancel)] };
+    return { entries: [messageEntry(deps, ctx, m)] };
   }
   if (q.to === undefined) throw new AgentError('invalid', 'Podaj identyfikator wiadomości albo numer odbiorcy.');
   const dest = phone(ctx, q.to);
   const from = q.from === undefined ? new Date(now.getTime() - TRACE_WINDOW_MS).toISOString() : instant('from', q.from);
   const until = q.until === undefined ? now.toISOString() : instant('until', q.until, true);
 
-  const messages = deps.messages.list({ apiKeyId: ctx.key.id, dest, from, until, limit: TRACE_MAX, offset: 0 }).map((m) => messageEntry(deps, m, canCancel));
+  const messages = deps.messages.list({ apiKeyId: ctx.key.id, dest, from, until, limit: TRACE_MAX, offset: 0 }).map((m) => messageEntry(deps, ctx, m));
   const packages = new Map<string, PackageRow>();
   const recipients = deps.packages.recipientsTo(ctx.key.id, dest, from, until).slice(0, TRACE_MAX).map((r) => {
     let p = packages.get(r.packageId);

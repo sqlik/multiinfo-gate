@@ -10,7 +10,7 @@ export const FINAL_STATUSES: ReadonlySet<string> = new Set(['delivered', 'failed
  * z kodem i komunikatem dla człowieka.
  */
 export async function cancelMessage(
-  deps: Pick<ApiDeps, 'messages' | 'events' | 'clients' | 'shortLinks'>, apiKeyId: number, messageId: string, now: Date,
+  deps: Pick<ApiDeps, 'messages' | 'events' | 'clients' | 'shortLinks'>, apiKeyId: number, messageId: string, now: Date, by?: string,
 ): Promise<{ id: string; status: 'cancelled' }> {
   const message = deps.messages.get(messageId);
   // Brak wiadomości, cudza wiadomość i wiadomość systemowa (SMS powiadomienia administratora) dają tę samą
@@ -50,8 +50,8 @@ export async function cancelMessage(
   deps.messages.setStatus(message.id, { status: 'cancelled', finalAt: now, error: null });
   // Krótkie linki anulowanej wiadomości prowadzą od tej chwili do strony „Link wygasł”.
   deps.shortLinks.disableMessage(message.id, now);
-  deps.events.record(message.id, now, 'cancelled', message.miIds.length === 0
-    ? 'przed przekazaniem do Multiinfo'
-    : `cancelsms.aspx: ${message.miIds.join(', ')}`);
+  const how = message.miIds.length === 0 ? 'przed przekazaniem do Multiinfo' : `cancelsms.aspx: ${message.miIds.join(', ')}`;
+  // `by` wskazuje, kto anulował wiadomość poza API, na przykład agenta z nazwą integracji i połączenia.
+  deps.events.record(message.id, now, 'cancelled', by === undefined ? how : `${how}, ${by}`);
   return { id: message.id, status: 'cancelled' };
 }

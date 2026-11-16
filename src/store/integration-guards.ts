@@ -59,6 +59,14 @@ export class IntegrationGuardsRepo {
   }
 
   /**
+   * Zwrot wywołania przepuszczonego przez `throttle`, które nie doszło do skutku, na przykład wysyłki agenta
+   * odrzuconej przy przyjęciu. Liczniki nie schodzą poniżej zera.
+   */
+  refund(integrationId: number, recipients: number): void {
+    this.db.prepare('UPDATE integration_throttle SET count = MAX(count - 1, 0), recipients = MAX(recipients - ?, 0) WHERE integration_id = ?')
+      .run(recipients, integrationId);
+  }
+  /**
    * Okno stałe od pierwszego zdarzenia: `limit` przechodzi, reszta odpada do końca okna.
    * `notify` tylko przy pierwszym odrzuceniu w oknie - jeden mail na burzę, nie na każdy alert.
    * `recipients` (integracja z Power Automate) dokłada w tym samym oknie limit odbiorców: wywołanie,

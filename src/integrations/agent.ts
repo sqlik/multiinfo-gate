@@ -95,13 +95,24 @@ export interface SmsRecipient { phone: string; clientId: string | null }
 /** Szkic SMS-a: odbiorcy po normalizacji, treść przed skróceniem i wszystko, czego wymaga wysyłka. */
 interface SmsDraftPayload {
   route: 'messages' | 'package'; to: string[]; text: string; links: LinkRequest; serviceId: string; orig: string | null; encoding: EncodingRequest;
+  /** Identyfikatory klienta odbiorców kampanii, w kolejności `to`; bez kampanii pole nie występuje. */
+  clientIds?: Array<string | null>;
+  /** Treść z podglądu po skróceniu linków i limicie części; wysyłka z inną treścią odpada. */
+  shown?: string;
 }
-interface ReplyDraftPayload { inboundId: string; to: string; group: string; text: string; serviceId: string; orig: string | null }
-/** Szkic grupy: odbiorcy i treść po szablonie grupy w chwili przygotowania, tak jak widział je człowiek. */
-interface GroupDraftPayload { groupId: number; group: string; to: string[]; text: string }
+interface ReplyDraftPayload { inboundId: string; to: string; group: string; text: string; serviceId: string; orig: string | null; shown?: string }
+/**
+ * Szkic grupy: odbiorcy i treść po szablonie grupy w chwili przygotowania, tak jak widział je człowiek, wraz z nadawcą,
+ * usługą i treścią po limicie części z podglądu.
+ */
+interface GroupDraftPayload { groupId: number; group: string; to: string[]; text: string; orig?: string | null; serviceId?: string; shown?: string }
 type StoredOutcome = { kind: 'messages'; ids: string[] } | { kind: 'package'; id: string; recipients: number } | { kind: 'group'; ids: string[]; group: string };
 
 const recipientsWord = (n: number): string => `${n} ${n === 1 ? 'odbiorca' : 'odbiorców'}`;
+/** Liczba odbiorców w dopełniaczu: „do 1 odbiorcy”, „do 2 odbiorców”. */
+const recipientsOf = (n: number): string => `${n} ${n === 1 ? 'odbiorcy' : 'odbiorców'}`;
+/** Liczba odpowiedzi w bierniku: „jedną odpowiedź”, „2 odpowiedzi”. */
+const repliesWord = (n: number): string => (n === 1 ? 'jedną odpowiedź' : `${n} odpowiedzi`);
 const serviceLabel = (s: ServiceOption): string => (s.label === s.id ? s.id : `${s.label} (${s.id})`);
 
 /**
@@ -143,9 +154,21 @@ export function guardLeft(deps: AgentDeps, ctx: ConnectionContext, now: Date): G
 const secondsUntil = (iso: string, now: Date): number => Math.max(1, Math.ceil((Date.parse(iso) - now.getTime()) / 1000));
 
 /** Odmowa ochrony przed burzą dla `n` odbiorców: według limitu wywołań albo odbiorców, z czasem do końca okna. */
-function throttledError(ctx: ConnectionContext, by: 'calls' | 'recipients', n: number, resetsAt: string | null, now: Date): AgentError {
+function throttledError(
+  ctx: ConnectionContext, by: 'calls' | 'recipients', n: number, resetsAt: string | null, now: Date, calls: { asked: number; left: number } = { asked: 1, left: 0 },
+): AgentError {
   const { limit, windowMinutes, recipients } = ctx.integration.config.throttle;
   const name = ctx.integration.name;
+  const retry = resetsAt === null ? undefined : secondsUntil(resetsAt, now);
+  // Przygotowanie wielu odpowiedzi naraz: każda odpowiedź jest osobną wysyłką w oknie ochrony.
+  if (by === 'calls' && calls.asked > 1) {
+    if (calls.asked > limit) {
+      return new AgentError('throttled',
+        `Przygotowanie ${calls.asked} odpowiedzi przekracza limit integracji ${name}, który wynosi ${limit} wysyłek na ${windowMinutes} min. Przygotuj najwyżej ${repliesWord(limit)} naraz.`);
+    }
+    return new AgentError('throttled',
+      `Przygotowanie ${calls.asked} odpowiedzi przekroczyłoby limit integracji ${name}, który wynosi ${limit} wysyłek na ${windowMinutes} min. W bieżącym oknie można przygotować jeszcze ${repliesWord(calls.left)}.`, retry);
+  }
   if (by === 'calls') {
     return new AgentError('throttled', `Integracja ${name} wykorzystała limit ${limit} wysyłek na ${windowMinutes} min.`,
       resetsAt === null ? undefined : secondsUntil(resetsAt, now));
@@ -153,9 +176,9 @@ function throttledError(ctx: ConnectionContext, by: 'calls' | 'recipients', n: n
   // Wysyłka większa niż cały limit odbiorców nie zmieści się w żadnym oknie, dlatego bez czasu ponowienia.
   if (n > recipients) {
     return new AgentError('throttled',
-      `Wysyłka do ${recipientsWord(n)} przekracza limit integracji ${name}, który wynosi ${recipients} odbiorców na ${windowMinutes} min. Limit zmienia administrator bramki.`);
+      `Wysyłka do ${recipientsOf(n)} przekracza limit integracji ${name}, który wynosi ${recipients} odbiorców na ${windowMinutes} min. Limit zmienia administrator bramki.`);
   }
-  return new AgentError('throttled', `Wysyłka do ${recipientsWord(n)} przekroczyłaby limit integracji ${name}, który wynosi ${recipients} odbiorców na ${windowMinutes} min.`,
+  return new AgentError('throttled', `Wysyłka do ${recipientsOf(n)} przekroczyłaby limit integracji ${name}, który wynosi ${recipients} odbiorców na ${windowMinutes} min.`,
     resetsAt === null ? undefined : secondsUntil(resetsAt, now));
 }
 
@@ -176,9 +199,9 @@ function notifyThrottled(deps: AgentDeps, ctx: ConnectionContext, by: 'calls' | 
  * Szkic, który przekroczyłby okno ochrony, odpada już przy przygotowaniu. Odmowa zapisuje wpis w dzienniku
  * i zgłasza burzę jak odmowa przy wysyłce, ale nie zużywa limitu (spec 4.5).
  */
-function checkWindow(deps: AgentDeps, ctx: ConnectionContext, n: number, now: Date): GuardLeft {
+function checkWindow(deps: AgentDeps, ctx: ConnectionContext, n: number, now: Date, calls = 1): GuardLeft {
   const left = guardLeft(deps, ctx, now);
-  const by = left.calls < 1 ? 'calls' : left.recipients !== null && left.recipients < n ? 'recipients' : null;
+  const by = left.calls < calls ? 'calls' : left.recipients !== null && left.recipients < n ? 'recipients' : null;
   if (by === null) return left;
   const integration = ctx.integration;
   deps.integrationEvents.record({
@@ -186,7 +209,7 @@ function checkWindow(deps: AgentDeps, ctx: ConnectionContext, n: number, now: Da
     sourceIp: `MCP · ${ctx.connection.name}`, payload: null, logLimit: integration.config.eventLogLimit,
   });
   if (deps.guards.refuse(integration.id, integration.config.throttle.windowMinutes, now).notify) notifyThrottled(deps, ctx, by, now);
-  throw throttledError(ctx, by, n, left.resetsAt, now);
+  throw throttledError(ctx, by, n, left.resetsAt, now, { asked: calls, left: left.calls });
 }
 
 /**
@@ -380,7 +403,10 @@ export function prepareGroup(
 
   const confirm = newConfirm(opts.apps);
   const expiresAt = new Date(now.getTime() + DRAFT_TTL_MS);
-  const payload: GroupDraftPayload = { groupId: group.id, group: group.name, to: phones, text };
+  const sender = groupSender(deps, ctx, group);
+  const payload: GroupDraftPayload = {
+    groupId: group.id, group: group.name, to: phones, text, orig: sender.orig, serviceId: sender.service.id, shown: shaped.prepared.text,
+  };
   const draftId = deps.drafts.insert({ connectionId: ctx.connection.id, kind: 'group', payload, createdAt: now, expiresAt, confirmHash: confirm?.hash ?? null });
   return {
     confirm: confirm?.value ?? null,
@@ -388,7 +414,7 @@ export function prepareGroup(
     preview: {
       draftId, expiresAt: expiresAt.toISOString(), group: { id: group.id, name: group.name }, groups: names, recipients: members.length,
       text: shaped.prepared.text, parts: shaped.parts, characters: shaped.characters, encoding: shaped.encoding, truncated: shaped.truncated,
-      guard, groupGuard, ...groupSender(deps, ctx, group),
+      guard, groupGuard, ...sender,
     },
   };
 }
@@ -433,11 +459,15 @@ export function prepareSms(
   const info = shaped.template.info;
   const confirm = newConfirm(opts.apps);
   const expiresAt = new Date(now.getTime() + DRAFT_TTL_MS);
-  const payload: SmsDraftPayload = { route, to, text: input.text, links, serviceId, orig, encoding };
+  const clientIds = to.map((phone) => clients.get(phone) ?? null);
+  const payload: SmsDraftPayload = {
+    route, to, text: input.text, links, serviceId, orig, encoding, shown: shaped.prepared.text,
+    ...(clientIds.some((c) => c !== null) ? { clientIds } : {}),
+  };
   const draftId = deps.drafts.insert({ connectionId: ctx.connection.id, kind: 'sms', payload, createdAt: now, expiresAt, confirmHash: confirm?.hash ?? null });
   return {
     confirm: confirm?.value ?? null,
-    recipients: to.map((phone) => ({ phone, clientId: clients.get(phone) ?? null })),
+    recipients: to.map((phone, i) => ({ phone, clientId: clientIds[i]! })),
     preview: {
       draftId, expiresAt: expiresAt.toISOString(), recipients: to.length, duplicatesRemoved: raw.length - to.length, route,
       text: shaped.prepared.text, parts: shaped.parts, characters: shaped.characters, encoding: shaped.encoding, truncated: shaped.truncated,
@@ -459,7 +489,8 @@ export function prepareReplies(deps: AgentDeps, ctx: ConnectionContext, items: R
   if (items.length === 0 || items.length > REPLIES_MAX) {
     throw new AgentError('invalid', `Jedno wywołanie przygotowuje od 1 do ${REPLIES_MAX} odpowiedzi.`);
   }
-  checkWindow(deps, ctx, 1, now);
+  // Każda odpowiedź jest osobną wysyłką, dlatego okno musi pomieścić wszystkie przygotowane szkice (spec 4.5).
+  checkWindow(deps, ctx, items.length, now, items.length);
   const orig = senderOptions(deps, ctx).orig;
   const checked = items.map((item) => {
     const original = deps.inbound.get(item.inboundId);
@@ -479,7 +510,9 @@ export function prepareReplies(deps: AgentDeps, ctx: ConnectionContext, items: R
   return {
     confirm: confirm?.value ?? null,
     drafts: checked.map(({ item, original, shaped }) => {
-      const payload: ReplyDraftPayload = { inboundId: original.id, to: original.sender, group: item.group, text: item.text, serviceId: original.serviceId, orig };
+      const payload: ReplyDraftPayload = {
+        inboundId: original.id, to: original.sender, group: item.group, text: item.text, serviceId: original.serviceId, orig, shown: shaped.prepared.text,
+      };
       const draftId = deps.drafts.insert({ connectionId: ctx.connection.id, kind: 'reply', payload, createdAt: now, expiresAt, confirmHash: confirm?.hash ?? null });
       return {
         draftId, inboundId: original.id, to: original.sender, group: item.group, text: shaped.prepared.text, parts: shaped.parts, characters: shaped.characters,
@@ -524,6 +557,17 @@ function sendGroup(deps: AgentDeps, ctx: ConnectionContext, draftId: string, pay
     });
   };
 
+  // Wychodzi dokładnie to, co człowiek widział: inna lista, nadawca, usługa albo treść po limicie części grupy daje odmowę.
+  const members = groupMembers(group.config).map((m) => m.phone);
+  const sender = groupSender(deps, ctx, group);
+  let changed = members.length !== count || members.some((phone, i) => phone !== payload.to[i]);
+  if (payload.orig !== undefined && (payload.orig !== sender.orig || payload.serviceId !== sender.service.id)) changed = true;
+  if (!changed && payload.shown !== undefined) changed = shape(deps, ctx, payload.text, {}, 'auto', 'messages', groupLimit(ctx, group)).prepared.text !== payload.shown;
+  if (changed) {
+    note('error', { reason: `${label}: lista odbiorców albo ustawienia grupy zmieniły się od podglądu` });
+    throw new AgentError('draft_stale', `Lista odbiorców albo ustawienia grupy ${group.name} zmieniły się od chwili podglądu. Przygotuj SMS do grupy ponownie.`);
+  }
+
   const left = guardLeft(deps, ctx, now);
   if (left.calls < 1 || (left.recipients !== null && left.recipients < count)) throttleAgent(deps, ctx, count, note, now);
   const { limit, windowMinutes } = group.config.throttle;
@@ -538,16 +582,28 @@ function sendGroup(deps: AgentDeps, ctx: ConnectionContext, draftId: string, pay
   }
   throttleAgent(deps, ctx, count, note, now);
 
-  const outcome = deps.messages.transaction(() => {
-    const sent = dispatch(deps, group, ctx.key, payload.text, payload.to, groupLimit(ctx, group), groupNote, now, {
-      agentConnectionId: ctx.connection.id, requestedBy: ctx.connection.name, idempotencyKey: draftId,
+  // Wysyłka, która nie wyszła, zwraca miejsce w oknach agenta i grupy.
+  const refund = (): void => {
+    deps.guards.refund(ctx.integration.id, count);
+    deps.guards.refund(group.id, 0);
+  };
+  let outcome: StoredOutcome | { kind: 'error'; code: string; detail: string };
+  try {
+    outcome = deps.messages.transaction(() => {
+      const sent = dispatch(deps, group, ctx.key, payload.text, payload.to, groupLimit(ctx, group), groupNote, now, {
+        agentConnectionId: ctx.connection.id, requestedBy: ctx.connection.name, idempotencyKey: draftId,
+      });
+      if (sent.kind === 'error') return sent;
+      const result: StoredOutcome = { kind: 'group', ids: sent.messageIds, group: group.name };
+      deps.drafts.markSent(draftId, result, now);
+      return result;
     });
-    if (sent.kind === 'error') return sent;
-    const result: StoredOutcome = { kind: 'group', ids: sent.messageIds, group: group.name };
-    deps.drafts.markSent(draftId, result, now);
-    return result;
-  });
+  } catch (e) {
+    refund();
+    throw e;
+  }
   if (outcome.kind === 'error') {
+    refund();
     note('error', { reason: `${label}: ${outcome.detail}` });
     const summary = outcome.code === 'invalid_phone' ? 'nieprawidłowy numer odbiorcy' : outcome.detail;
     deps.notifier?.notify('integration_error', `integration:${ctx.integration.id}`, `${ctx.integration.name}: ${label}: ${summary}`, now);
@@ -609,25 +665,47 @@ export function sendDraft(deps: AgentDeps, ctx: ConnectionContext, draftId: stri
   const count = sms ? sms.to.length : 1;
   const label = sms ? 'Wyślij SMS' : `Odpowiedź na ${reply!.inboundId}`;
   const subject = `integration:${integration.id}`;
+  const fail: (e: unknown) => never = (e) => {
+    if (e instanceof ApiError || e instanceof AgentError) {
+      note('error', { reason: `${label}: ${e.message}` });
+      // Numer odbiorcy jest daną osobową, dlatego mail do administratora go nie zawiera. Zmiana ustawień od podglądu
+      // nie jest awarią, ponieważ wynika z działania administratora.
+      const summary = e.code === 'invalid_phone' ? 'nieprawidłowy numer odbiorcy' : e.message;
+      if (e.code !== 'draft_stale') deps.notifier?.notify('integration_error', subject, `${integration.name}: ${label}: ${summary}`, now);
+    }
+    throw e;
+  };
+
+  // Wychodzi dokładnie to, co człowiek widział: treść po skróceniu i limicie części oraz numer usługi bez nadpisu.
+  let shaped: Shaped;
+  try {
+    shaped = sms ? shape(deps, fresh, sms.text, sms.links, sms.encoding, sms.route) : shape(deps, fresh, reply!.text, {}, 'auto', 'messages');
+    const shown = sms ? sms.shown : reply!.shown;
+    const orig = sms ? sms.orig : reply!.orig;
+    if ((shown !== undefined && shaped.prepared.text !== shown) || (orig === null && senderOptions(deps, fresh).orig !== null)) {
+      throw new AgentError('draft_stale', `Ustawienia wysyłki zmieniły się od chwili podglądu. Przygotuj ${sms ? 'SMS' : 'odpowiedź'} ponownie.`);
+    }
+  } catch (e) {
+    fail(e);
+  }
   throttleAgent(deps, fresh, count, note, now);
 
   const via = {
     integrationId: integration.id, agentConnectionId: fresh.connection.id, requestedBy: fresh.connection.name,
     campaignFallback: integration.name, idempotencyKey: draft.id, maxParts: agentLimit(fresh).maxParts,
   };
-  let truncated = false;
+  const truncated = shaped.truncated;
   let outcome: StoredOutcome;
   try {
     // Wysyłka i oznaczenie szkicu w jednej transakcji: szkic bez wyniku nigdy nie zostaje po przyjętej wysyłce.
     outcome = deps.messages.transaction((): StoredOutcome => {
       let result: StoredOutcome;
       if (sms) {
-        const shaped = shape(deps, fresh, sms.text, sms.links, sms.encoding, sms.route);
-        truncated = shaped.truncated;
         const orig = sms.orig === null ? {} : { orig: sms.orig };
         if (sms.route === 'package') {
           const pkg = submitPackage(deps, fresh.auth, {
-            recipients: sms.to.map((to) => ({ to })), defaultText: sms.text, deliveryReport: true, encoding: sms.encoding, links: sms.links,
+            recipients: sms.to.map((to, i) => ({ to, ...(sms.clientIds?.[i] ? { clientId: sms.clientIds[i] } : {}) })),
+            defaultText: sms.text, deliveryReport: true, encoding: sms.encoding, links: sms.links,
             prepared: { defaultText: shaped.prepared, recipients: [] }, serviceId: sms.serviceId, ...orig, ...via,
           }, now);
           result = { kind: 'package', id: pkg.id, recipients: pkg.recipients };
@@ -639,8 +717,6 @@ export function sendDraft(deps: AgentDeps, ctx: ConnectionContext, draftId: stri
         }
       } else {
         const r = reply!;
-        const shaped = shape(deps, fresh, r.text, {}, 'auto', 'messages');
-        truncated = shaped.truncated;
         const sent = submitMessages(deps, fresh.auth, {
           to: [r.to], text: r.text, prepared: shaped.prepared, links: {}, serviceId: r.serviceId, inReplyTo: r.inboundId,
           ...(r.orig === null ? {} : { orig: r.orig }), ...via,
@@ -651,13 +727,9 @@ export function sendDraft(deps: AgentDeps, ctx: ConnectionContext, draftId: stri
       return result;
     });
   } catch (e) {
-    if (e instanceof ApiError || e instanceof AgentError) {
-      note('error', { reason: `${label}: ${e.message}` });
-      // Numer odbiorcy jest daną osobową, dlatego mail do administratora go nie zawiera.
-      const summary = e.code === 'invalid_phone' ? 'nieprawidłowy numer odbiorcy' : e.message;
-      deps.notifier?.notify('integration_error', subject, `${integration.name}: ${label}: ${summary}`, now);
-    }
-    throw e;
+    // Wysyłka, która nie wyszła, zwraca miejsce w oknie ochrony.
+    deps.guards.refund(integration.id, count);
+    fail(e);
   }
 
   // Wysyłka jest już w kolejce, dlatego błąd zapisu wpisu nie może zamienić wyniku w błąd.

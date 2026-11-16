@@ -10,28 +10,31 @@ import type { PackagesRepo, RecipientRow } from '../store/packages.ts';
 import type { ShortLinksRepo } from '../store/short-links.ts';
 import { csvCell } from '../text/csv.ts';
 import { generateSecret, hashSecret, logPrefix } from './codes.ts';
+import type { ConnectionService } from './connections.ts';
 import type { ReadDeps } from './reads.ts';
 
 /** Link do pobrania jest ważny godzinę (spec 8). */
 export const DOWNLOAD_TTL_MS = 3_600_000;
 
 export interface DownloadRouteDeps {
+  connections: Pick<ConnectionService, 'resolve'>;
   downloads: DownloadLinksRepo; packages: PackagesRepo; shortLinks: ShortLinksRepo; campaigns: CampaignsRepo; log?: Logger; now?: () => Date;
 }
 
 /**
- * Link do jednego pliku jednego klucza. Token ma 32 bajty losowe, bramka zapisuje wyłącznie jego skrót, a dane
- * czyta w chwili pobrania. `ref` to identyfikator rozsyłki albo kampanii.
+ * Link do jednego pliku jednego klucza, wydany połączeniu agenta. Token ma 32 bajty losowe, bramka zapisuje wyłącznie
+ * jego skrót, a dane czyta w chwili pobrania. `ref` to identyfikator rozsyłki albo kampanii.
  */
 export function createDownload(
-  deps: { downloads: Pick<DownloadLinksRepo, 'insert'> }, base: string | null, apiKeyId: number, kind: DownloadKind, ref: string, now: Date,
+  deps: { downloads: Pick<DownloadLinksRepo, 'insert'> }, base: string | null, owner: { apiKeyId: number; connectionId: number },
+  kind: DownloadKind, ref: string, now: Date,
 ): { url: string; expiresAt: string } {
   if (base === null) {
     throw new AgentError('no_gateway_address', 'Adres bramki nie jest ustawiony, dlatego bramka nie może utworzyć linku do pobrania.');
   }
   const { value, hash } = generateSecret('');
   const expiresAt = new Date(now.getTime() + DOWNLOAD_TTL_MS);
-  deps.downloads.insert(hash, { apiKeyId, kind, ref, createdAt: now, expiresAt });
+  deps.downloads.insert(hash, { ...owner, kind, ref, createdAt: now, expiresAt });
   return { url: `${base.replace(/\/+$/, '')}/pobierz/${value}`, expiresAt: expiresAt.toISOString() };
 }
 
@@ -75,6 +78,16 @@ function fileOf(deps: DownloadRouteDeps, link: { apiKeyId: number; kind: Downloa
     : { name: `kampania-${slug(c.name, c.id)}-bez-otwarcia.csv`, body: unopenedCsv(deps, c.id) };
 }
 
+/**
+ * Link działa, dopóki połączenie, które go otrzymało, ma dostęp do danych pliku: odwołanie połączenia albo klucza,
+ * wyłączenie integracji i odebranie zakresu zamykają także wydane linki.
+ */
+function stillAllowed(deps: DownloadRouteDeps, link: { apiKeyId: number; connectionId: number; kind: DownloadKind }, now: Date): boolean {
+  const resolved = deps.connections.resolve(link.connectionId, now);
+  if (!resolved.ok || resolved.ctx.key.id !== link.apiKeyId) return false;
+  return resolved.ctx.scopes.has(link.kind.startsWith('package_') ? 'read_sent' : 'campaigns');
+}
+
 /** Odpowiedź bez zapisu w pamięci przeglądarki i pośredników, bez adresu linku w nagłówku Referer. */
 const noStore = (reply: FastifyReply): FastifyReply => reply.header('cache-control', 'no-store').header('referrer-policy', 'no-referrer');
 
@@ -86,8 +99,9 @@ export function registerDownloadRoute(app: FastifyInstance, deps: DownloadRouteD
   const now = deps.now ?? (() => new Date());
   app.get<{ Params: { token: string } }>('/pobierz/:token', async (request, reply) => {
     const token = request.params.token;
-    const link = deps.downloads.get(hashSecret(token), now());
-    const file = link === undefined ? undefined : fileOf(deps, link);
+    const at = now();
+    const link = deps.downloads.get(hashSecret(token), at);
+    const file = link === undefined || !stillAllowed(deps, link, at) ? undefined : fileOf(deps, link);
     if (link === undefined || file === undefined) {
       deps.log?.info('pobranie.wygasle', { token: logPrefix(token) });
       return noStore(reply).code(404).type('text/html; charset=utf-8').send(downloadExpiredPage());

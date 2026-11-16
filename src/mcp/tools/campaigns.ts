@@ -73,7 +73,7 @@ export const campaignResultsTool: ToolDef = {
       throw new AgentError('campaign_purged', 'Szczegóły kampanii zostały usunięte po okresie przechowywania, dlatego listy odbiorców nie można odtworzyć.');
     }
     const id = ctx.deps.campaigns.byName(conn.key.id, q.name)!.id;
-    const download = createDownload(ctx.deps, ctx.base, conn.key.id, q.csv === 'opened' ? 'campaign_opened' : 'campaign_unopened', String(id), ctx.now);
+    const download = createDownload(ctx.deps, ctx.base, { apiKeyId: conn.key.id, connectionId: conn.connection.id }, q.csv === 'opened' ? 'campaign_opened' : 'campaign_unopened', String(id), ctx.now);
     const what = q.csv === 'opened' ? 'odbiorców z otwarciem' : 'odbiorców bez otwarcia';
     return {
       text: `${resultsText(data)}\nLink do pliku CSV ${what}, ważny do ${warsawShort(download.expiresAt)} czasu polskiego:\n${download.url}\n${DOWNLOAD_WARNING}`,
