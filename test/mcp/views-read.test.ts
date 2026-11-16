@@ -87,12 +87,12 @@ describe('widok wyników kampanii', () => {
 
   it('renderCampaign: odbiorcy bez otwarcia po przecinku z identyfikatorem klienta przed numerem i cztery równe przyciski', () => {
     const html = renderCampaign(CAMPAIGN);
-    expect(html).toContain('<p class="nums">K-1042 48601000051, 48601000052</p>');
+    expect(html).toContain('<p class="nums">K-1042\u00a048601000051, 48601000052</p>');
     expect(html).toContain('Widok pokazuje pierwszych 2 odbiorców. Pełną listę zawiera plik CSV.');
     expect(html).toContain(buttons(button('Przygotuj przypomnienie', { act: 'remind', kind: 'primary' }), button('Pokaż kolejnych odbiorców', { act: 'more' }),
       button('Pobierz CSV bez otwarcia', { act: 'csv', data: { file: 'unopened' } }), button('Pobierz CSV z otwarciem', { act: 'csv', data: { file: 'opened' } })));
     const one = renderCampaign({ ...CAMPAIGN, unopened: { total: 1, items: [{ to: '48601000053', clientId: '<b>K</b>' }], hasMore: false } });
-    expect(one).toContain('<p class="nums">&lt;b&gt;K&lt;/b&gt; 48601000053</p>');
+    expect(one).toContain('<p class="nums">&lt;b&gt;K&lt;/b&gt;\u00a048601000053</p>');
     expect(one).not.toContain('Widok pokazuje');
     expect(one).not.toContain('data-act="more"');
   });

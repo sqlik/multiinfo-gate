@@ -62,9 +62,9 @@ describe('elementy układu kart', () => {
     expect(buttons('', null)).toBe('');
   });
 
-  it('numbers: numery po przecinku z nazwą przed numerem, nazwy jako tekst, długa lista skrócona', () => {
+  it('numbers: numery po przecinku z nazwą przed numerem złączoną twardą spacją, nazwy jako tekst, długa lista skrócona', () => {
     expect(numbers([{ phone: '48601000071', label: 'Tomasz <dyżur>' }, { phone: '48601000072' }]))
-      .toBe('<p class="nums">Tomasz &lt;dyżur&gt; 48601000071, 48601000072</p>');
+      .toBe('<p class="nums">Tomasz &lt;dyżur&gt;\u00a048601000071, 48601000072</p>');
     const many = Array.from({ length: 501 }, (_, i) => ({ phone: String(48601000000 + i) }));
     expect(numbers(many)).toMatch(/48601000499, …<\/p>$/);
     expect(numbers([])).toBe('');

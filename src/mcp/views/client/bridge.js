@@ -90,7 +90,8 @@ export const NUMBERS_MAX = 500;
 /** Numery odbiorców po przecinku, z nazwą albo identyfikatorem klienta przed numerem; pozycje { phone, label }. */
 export function numbers(list) {
   if (!list || list.length === 0) return '';
-  const shown = list.slice(0, NUMBERS_MAX).map((r) => esc(r.label ? `${r.label} ${phoneLabel(r.phone)}` : phoneLabel(r.phone)));
+  // Twarda spacja wiąże nazwę z numerem, dlatego wiersz nie kończy się nazwą bez jej numeru.
+  const shown = list.slice(0, NUMBERS_MAX).map((r) => esc(r.label ? `${r.label}\u00a0${phoneLabel(r.phone)}` : phoneLabel(r.phone)));
   return `<p class="nums">${shown.join(', ')}${list.length > NUMBERS_MAX ? ', …' : ''}</p>`;
 }
 

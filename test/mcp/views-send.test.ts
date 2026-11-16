@@ -85,7 +85,7 @@ describe('widok wysyłki SMS', () => {
 
   it('renderSend: numery z _meta po przecinku, identyfikator klienta przed numerem, wartości jako tekst', () => {
     const html = renderSend(PREVIEW, { recipients: [{ phone: '48601000021', clientId: null }, { phone: '48601000022', clientId: '<b>K-1042</b>' }] });
-    expect(html).toContain('<p class="nums">48601000021, &lt;b&gt;K-1042&lt;/b&gt; 48601000022</p>');
+    expect(html).toContain('<p class="nums">48601000021, &lt;b&gt;K-1042&lt;/b&gt;\u00a048601000022</p>');
     expect(html).toContain('<p class="lead">Pojedyncze wiadomości z raportem doręczenia każdej</p>');
     expect(html).toContain('Bramka usunęła powtórzone numery: 1');
     expect(renderSend(PREVIEW, {})).not.toContain('class="nums"');
@@ -151,7 +151,7 @@ describe('widok SMS do grupy', () => {
     const html = renderGroup(GROUP, [{ phone: '48601000021', name: '<img src=x onerror=alert(1)>' }, { phone: '48601000022', name: 'Anna "Ania" Wiśniewska' }]);
     expect(sections(html)).toEqual(['Treść SMS-a', 'Ustawienia wysyłki', 'Odbiorcy: 2 osoby', 'Podsumowanie', 'Zatwierdzenie']);
     expect(html).not.toContain('<img');
-    expect(html).toContain('<p class="nums">&lt;img src=x onerror=alert(1)&gt; 48601000021, Anna &quot;Ania&quot; Wiśniewska 48601000022</p>');
+    expect(html).toContain('<p class="nums">&lt;img src=x onerror=alert(1)&gt;\u00a048601000021, Anna &quot;Ania&quot; Wiśniewska\u00a048601000022</p>');
     expect(html).toContain('<p class="lead">Lista grupy SERWIS</p>');
     expect(html).toContain(buttons(button('Wyślij do 2 osób', { act: 'send', kind: 'primary' }), button('Popraw treść w rozmowie', { act: 'fix' })));
   });
