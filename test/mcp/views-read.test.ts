@@ -79,7 +79,7 @@ describe('widok wyników kampanii', () => {
     expect(html).toContain('<title>2026-11-06, otwarcia: 0</title>');
     expect(html).toContain('<title>2026-11-11, otwarcia: 0</title>');
     expect(html).toContain('K-1042');
-    expect(html).toContain('+48 601 000 052');
+    expect(html).toContain('48601000052');
     expect(html).toContain('data-act="more"');
     expect(html).toContain('data-file="unopened"');
     expect(html).toContain('data-file="opened"');
@@ -90,10 +90,10 @@ describe('widok wyników kampanii', () => {
   it('renderCampaign: odbiorcy bez otwarcia z numerem przy lewej krawędzi, identyfikator klienta tylko wtedy, gdy istnieje', () => {
     const list = (html: string) => /<div class="recips">([\s\S]*?)<\/div><div class="row">/.exec(html)![1]!;
     const withIds = list(renderCampaign(CAMPAIGN));
-    expect(withIds).toContain('<div><span class="mono">+48 601 000 051</span><span class="muted">K-1042</span></div>');
-    expect(withIds).toContain('<div><span class="mono">+48 601 000 052</span></div>');
+    expect(withIds).toContain('<div><span class="mono">48601000051</span><span class="muted">K-1042</span></div>');
+    expect(withIds).toContain('<div><span class="mono">48601000052</span></div>');
     const bare = list(renderCampaign({ ...CAMPAIGN, unopened: { ...CAMPAIGN.unopened, items: [{ to: '48601000053', clientId: null }] } }));
-    expect(bare).toBe('<div><span class="mono">+48 601 000 053</span></div>');
+    expect(bare).toBe('<div><span class="mono">48601000053</span></div>');
   });
 
   it('renderCampaign: tryb godzin pokazuje kliknięcia od godziny pierwszej wysyłki w czasie polskim', () => {
@@ -271,9 +271,9 @@ describe('widok odpowiedzi klientów', () => {
     expect(all.match(/data-act="reply"/g)).toHaveLength(3);
     expect(all).toContain('>Dziękujemy, serwisant będzie w czwartek o 10:00.</textarea>');
     const filtered = renderReplies(ITEMS, DRAFTS, 'potwierdzenia');
-    expect(filtered).toContain('+48 601 234 567');
-    expect(filtered).not.toContain('+48 602 345 678');
-    expect(filtered).not.toContain('+48 603 000 000');
+    expect(filtered).toContain('48601234567');
+    expect(filtered).not.toContain('48602345678');
+    expect(filtered).not.toContain('48603000000');
   });
 });
 

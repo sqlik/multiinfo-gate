@@ -36,7 +36,7 @@ const VIEWS: Partial<Record<ViewId, ViewDef>> = {
     body: waiting('Oczekiwanie na dane połączenia z bramki'),
   },
   wysylka: { title: 'Wysyłka SMS', files: ['measure.js', 'doreczenia.js', 'send.js'], entry: 'startSend', tools: '', body: waiting('Oczekiwanie na podgląd SMS-a z bramki') },
-  grupa: { title: 'SMS do grupy', files: ['doreczenia.js', 'grupa.js'], entry: 'startGroup', tools: '', body: waiting('Oczekiwanie na podgląd SMS-a do grupy z bramki') },
+  grupa: { title: 'SMS do grupy', files: ['measure.js', 'doreczenia.js', 'grupa.js'], entry: 'startGroup', tools: '', body: waiting('Oczekiwanie na podgląd SMS-a do grupy z bramki') },
   przebieg: {
     title: 'Przebieg doręczenia', files: ['measure.js', 'doreczenia.js', 'send.js', 'przebieg.js'], entry: 'startTrace',
     tools: REFRESH, body: waiting('Oczekiwanie na przebieg doręczenia z bramki'),
@@ -70,6 +70,13 @@ export function viewByUri(uri: unknown): ViewId | null {
   return BUILT_VIEWS.find((id) => viewUri(id) === uri) ?? null;
 }
 
+/** Pliki dokumentu widoku w kolejności wklejenia: most i pliki widoku. */
+export function viewFiles(id: ViewId): string[] {
+  const def = VIEWS[id];
+  if (!def) throw new Error(`Widok ${id} nie ma dokumentu.`);
+  return ['bridge.js', ...def.files];
+}
+
 const CLIENT_DIR = join(dirname(fileURLToPath(import.meta.url)), 'client');
 const sources = new Map<string, string>();
 const documents = new Map<ViewId, string>();
@@ -95,7 +102,7 @@ export function viewHtml(id: ViewId): string {
   const def = VIEWS[id];
   if (!def) throw new Error(`Widok ${id} nie ma dokumentu.`);
   const env = { version: GATE_VERSION, scopes: SCOPE_LABELS };
-  const script = [client('bridge.js'), ...def.files.map(client), `${def.entry}(window, ${scriptJson(env)});`].join('\n');
+  const script = [...viewFiles(id).map(client), `${def.entry}(window, ${scriptJson(env)});`].join('\n');
   const html = '<!doctype html><html lang="pl"><head><meta charset="utf-8">'
     + '<meta name="viewport" content="width=device-width, initial-scale=1">'
     + `<title>${esc(def.title)} - Multiinfo Gate</title><style>${VIEW_STYLE}</style></head><body>`

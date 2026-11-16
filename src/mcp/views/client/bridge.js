@@ -43,11 +43,65 @@ export const badge = (tone, text) => `<span class="badge b-${tone}">${esc(text)}
 /** Notatka pod polem albo sekcją. */
 export const note = (text) => `<p class="note">${esc(text)}</p>`;
 
-/** Numer w zapisie czytelnym: 48601000021 jako +48 601 000 021, inne numery bez zmian. */
-export function phoneLabel(phone) {
-  const p = String(phone ?? '');
-  return /^48\d{9}$/.test(p) ? `+48 ${p.slice(2, 5)} ${p.slice(5, 8)} ${p.slice(8)}` : p;
+/** Numer w zapisie panelu: 48601000021, bez plusa i odstępów. */
+export const phoneLabel = (phone) => String(phone ?? '');
+
+/** Sekcja karty: pogrubiona nazwa, opcjonalny opis pod nazwą i treść. Nazwa i opis trafiają do widoku jako tekst. */
+export const section = (title, body, lead = '') => `<section class="sec"><h3>${esc(title)}</h3>`
+  + `${lead ? `<p class="lead">${esc(lead)}</p>` : ''}${body}</section>`;
+
+/** Pole albo informacja: etykieta nad wartością i opcjonalna podpowiedź pod nią. `control` jest gotowym HTML. */
+export const field = (label, control, hint = '') => `<div class="field"><span class="lbl">${esc(label)}</span>${control}${hint ? note(hint) : ''}</div>`;
+
+/** Pola i informacje w dwóch równych kolumnach; puste pozycje są pomijane. */
+export const fields = (...items) => `<div class="fields">${items.filter(Boolean).join('')}</div>`;
+
+/** Wartość tekstowa pola. */
+export const txt = (value) => `<div class="txt">${esc(value)}</div>`;
+
+/** Kafel podsumowania: etykieta, wartość i opis jako tekst; `tone` 'ok' wyróżnia stan pomyślny. */
+export const tile = (label, value, sub, tone = '') => `<div class="tile${tone ? ` ${tone}` : ''}"><div class="lbl">${esc(label)}</div>`
+  + `<div class="v">${esc(value)}</div><div class="s">${esc(sub)}</div></div>`;
+
+/** Cztery równe kafle w rzędzie, w wąskiej ramce dwa. */
+export const tiles = (...items) => `<div class="tiles">${items.join('')}</div>`;
+
+/**
+ * Przycisk: `kind` primary dla działania głównego, danger dla nieodwracalnego, bez rodzaju dla pomocniczego.
+ * `data` dopisuje atrybuty data-*, a `disabled` wyłącza przycisk.
+ */
+export function button(label, { act, kind, disabled = false, data = {} } = {}) {
+  const attrs = Object.entries({ act, ...data }).filter(([, v]) => v !== undefined && v !== null)
+    .map(([k, v]) => ` data-${k}="${esc(v)}"`).join('');
+  return `<button type="button" class="btn${kind ? ` btn-${kind}` : ''}"${attrs}${disabled ? ' disabled' : ''}>${esc(label)}</button>`;
 }
+
+/** Przyciski równej szerokości, które razem wypełniają szerokość karty; cztery przyciski stoją w dwóch kolumnach. */
+export function buttons(...list) {
+  const shown = list.filter(Boolean);
+  if (shown.length === 0) return '';
+  const columns = shown.length === 4 ? 2 : Math.min(shown.length, 3);
+  return `<div class="btns n${columns}">${shown.join('')}</div>`;
+}
+
+/** Najwięcej numerów na liście odbiorców w widoku; dłuższa lista kończy się wielokropkiem. */
+export const NUMBERS_MAX = 500;
+
+/** Numery odbiorców po przecinku, z nazwą albo identyfikatorem klienta przed numerem; pozycje { phone, label }. */
+export function numbers(list) {
+  if (!list || list.length === 0) return '';
+  const shown = list.slice(0, NUMBERS_MAX).map((r) => esc(r.label ? `${r.label} ${phoneLabel(r.phone)}` : phoneLabel(r.phone)));
+  return `<p class="nums">${shown.join(', ')}${list.length > NUMBERS_MAX ? ', …' : ''}</p>`;
+}
+
+/** Liczba znaków i części SMS-a z kodowaniem: <b>131</b> znaków · <b>2</b> części · UCS-2. */
+export const smsCounter = (m) => `<b>${m.characters}</b> ${pluralWord(m.characters, 'znak', 'znaki', 'znaków')} · `
+  + `<b>${m.parts}</b> ${pluralWord(m.parts, 'część', 'części', 'części')} · ${m.encoding === 'gsm' ? 'GSM' : 'UCS-2'}`;
+
+/** Okno treści SMS-a: nadawca na telefonie, licznik i treść. `body` jest gotowym HTML z treścią po ucieczce. */
+export const messageBox = ({ sender, counter, body }) => '<div class="msg"><div class="msg-head">'
+  + `<span>${sender ? `Nadawca na telefonie: <b>${esc(sender)}</b>` : ''}</span><span>${counter}</span></div>`
+  + `<div class="msg-text">${body}</div></div>`;
 
 /** Komunikat pod widokiem w elemencie #komunikat; pusty tekst ukrywa komunikat. */
 export function sayIn(doc) {

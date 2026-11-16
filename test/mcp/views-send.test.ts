@@ -44,10 +44,10 @@ describe('widok wysyłki SMS', () => {
   it('renderSend: lista odbiorców z _meta z identyfikatorem klienta, wartości jako tekst', () => {
     const html = renderSend(PREVIEW, { recipients: [{ phone: '48601000021', clientId: null }, { phone: '48601000022', clientId: '<b>K-1042</b>' }] });
     // Przy identyfikatorach klientów każdy wiersz ma dwie kolumny, dlatego numery stoją w jednej kolumnie.
-    expect(html).toContain('<div class="recips"><div><span></span><span class="mono">+48 601 000 021</span></div>');
-    expect(html).toContain('<div><span>&lt;b&gt;K-1042&lt;/b&gt;</span><span class="mono">+48 601 000 022</span></div>');
+    expect(html).toContain('<div class="recips"><div><span></span><span class="mono">48601000021</span></div>');
+    expect(html).toContain('<div><span>&lt;b&gt;K-1042&lt;/b&gt;</span><span class="mono">48601000022</span></div>');
     expect(renderSend(PREVIEW, { recipients: [{ phone: '48601000021', clientId: null }] }))
-      .toContain('<div class="recips"><div><span class="mono">+48 601 000 021</span></div></div>');
+      .toContain('<div class="recips"><div><span class="mono">48601000021</span></div></div>');
     expect(renderSend(PREVIEW, {})).not.toContain('class="recips"');
   });
 
