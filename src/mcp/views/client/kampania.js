@@ -1,7 +1,9 @@
 // Widok „Wyniki kampanii” według wyniku campaign_results: liczby jak w panelu, otwarcia dzień po dniu albo
 // kliknięcia w kolejnych godzinach, cele linków, odbiorcy bez otwarcia porcjami, pliki CSV i przypomnienie.
 // Po usunięciu szczegółów kampanii zostają liczby i kliknięcia w kolejnych godzinach.
-import { applyTheme, cancelledText, createBridge, esc, forwardedText, note, num, openDownload, phoneLabel, sayIn, stamp, textOf } from './bridge.js';
+import {
+  applyTheme, button, buttons, cancelledText, createBridge, esc, forwardedText, note, num, numbers, openDownload, sayIn, section, stamp, textOf, tile, tiles,
+} from './bridge.js';
 import { barChart } from './chart.js';
 
 /**
@@ -17,7 +19,6 @@ const CAMPAIGN_DAYS_MAX = 366;
 
 const percentOf = (part, whole) => `${((part / whole) * 100).toFixed(1).replace('.', ',')} %`;
 const dayMark = (day) => `${day.slice(8, 10)}.${day.slice(5, 7)}`;
-const off = (busy) => (busy ? ' disabled' : '');
 
 function nextDay(day) {
   const [y, m, d] = day.split('-').map(Number);
@@ -25,20 +26,18 @@ function nextDay(day) {
 }
 
 function campaignTiles(d) {
-  const tile = (label, value, sub) => `<div class="tile"><div class="lbl">${label}</div><div class="val">${num(value)}</div>`
-    + `<div class="sub">${esc(sub)}</div></div>`;
   const first = stamp(d.first.at).slice(0, 10);
   const last = stamp(d.last.at).slice(0, 10);
   // Okres w zapisie DD.MM, a przy wysyłkach w różnych latach pełne daty.
   const period = first === last ? first : first.slice(0, 4) === last.slice(0, 4) ? `${dayMark(first)} - ${dayMark(last)}` : `${first} - ${last}`;
   // Bez raportu doręczenia udział otwarć liczy się od wysłanych, jak w panelu.
   const base = d.delivered > 0 ? { whole: d.delivered, of: 'doręczonych' } : { whole: d.sent, of: 'wysłanych' };
-  return '<div class="tiles">'
-    + tile('Wysłane', d.sent, period)
-    + tile('Doręczone', d.delivered, d.delivered === 0 ? 'brak raportu doręczeń' : `${percentOf(d.delivered, d.sent)} wysłanych`)
-    + tile('Otwarcia', d.opens, base.whole === 0 ? '-' : `${percentOf(d.opens, base.whole)} ${base.of}`)
-    + tile('Kliknięcia', d.clicks, d.opens === 0 ? 'brak otwarć' : `${(d.clicks / d.opens).toFixed(2).replace('.', ',')} na otwarcie`)
-    + '</div>';
+  return tiles(
+    tile('Wysłane', num(d.sent), period),
+    tile('Doręczone', num(d.delivered), d.delivered === 0 ? 'brak raportu doręczeń' : `${percentOf(d.delivered, d.sent)} wysłanych`),
+    tile('Otwarcia', num(d.opens), base.whole === 0 ? '-' : `${percentOf(d.opens, base.whole)} ${base.of}`),
+    tile('Kliknięcia', num(d.clicks), d.opens === 0 ? 'brak otwarć' : `${(d.clicks / d.opens).toFixed(2).replace('.', ',')} na otwarcie`),
+  );
 }
 
 /** Otwarcia każdego dnia od dnia pierwszej wysyłki do dnia ostatniej wysyłki albo ostatniego otwarcia. */
@@ -73,43 +72,40 @@ function clicksChart(d) {
   return barChart(points, { label: 'Kliknięcia w pierwszych 48 godzinach od pierwszej wysyłki' });
 }
 
-function targetsTable(targets) {
+function targetsSection(targets) {
   if (targets.length === 0) return '';
-  return '<div class="chart-title"><span>Kliknięcia według celu linku</span></div>'
-    + '<table><tr><th>Cel linku</th><th class="num">Otwarcia</th><th class="num">Kliknięcia</th></tr>'
-    + targets.map((t) => `<tr><td class="mono">${esc(t.target)}${t.kind === 'individual' ? ' <span class="muted">linki indywidualne</span>' : ''}</td>`
+  return section('Kliknięcia według celu linku', '<table><tr><th>Cel linku</th><th class="num">Otwarcia</th><th class="num">Kliknięcia</th></tr>'
+    + targets.map((t) => `<tr><td>${esc(t.target)}${t.kind === 'individual' ? ' <span class="muted">linki indywidualne</span>' : ''}</td>`
       + `<td class="num">${num(t.opens)}</td><td class="num">${num(t.clicks)}</td></tr>`).join('')
-    + '</table>';
+    + '</table>');
 }
 
-function unopenedPanel(d, busy) {
+function unopenedSection(d, busy) {
   const u = d.unopened;
   if (u === null) return '';
-  // Numer przy lewej krawędzi, a identyfikator klienta obok, tylko gdy kampania go zapisała.
-  const list = u.items.length === 0 ? '' : `<div class="recips">${u.items.map((r) => `<div><span class="mono">${esc(phoneLabel(r.to))}</span>`
-    + `${r.clientId ? `<span class="muted">${esc(r.clientId)}</span>` : ''}</div>`).join('')}</div>`;
-  const more = u.hasMore ? `<button type="button" class="btn" data-act="more"${off(busy)}>Pokaż kolejnych odbiorców</button>` : '';
-  const remind = u.total > 0
-    ? `<button type="button" class="btn btn-primary" data-act="remind"${off(busy)}>Przygotuj przypomnienie dla odbiorców bez otwarcia</button>` : '';
-  return `<div class="chart-title"><span>Odbiorcy bez otwarcia: ${num(u.total)}</span></div>${list}`
-    + `<div class="row">${more}<button type="button" class="btn" data-act="csv" data-file="unopened"${off(busy)}>Pobierz CSV odbiorców bez otwarcia</button>`
-    + `<button type="button" class="btn" data-act="csv" data-file="opened"${off(busy)}>Pobierz CSV odbiorców z otwarciem</button>${remind}</div>`
-    + (remind ? note('Przycisk przekazuje agentowi prośbę o przypomnienie. Numery odbiorców ustala bramka, a agent otrzymuje wyłącznie ich liczbę.') : '');
+  const shown = u.items.length;
+  const more = u.hasMore ? note(`Widok pokazuje ${shown === 1 ? 'pierwszego odbiorcę' : `pierwszych ${shown} odbiorców`}. Pełną listę zawiera plik CSV.`) : '';
+  return section(`Odbiorcy bez otwarcia: ${num(u.total)}`, numbers(u.items.map((r) => ({ phone: r.to, label: r.clientId }))) + more
+    + buttons(
+      u.total > 0 ? button('Przygotuj przypomnienie', { act: 'remind', kind: 'primary', disabled: busy }) : '',
+      u.hasMore ? button('Pokaż kolejnych odbiorców', { act: 'more', disabled: busy }) : '',
+      button('Pobierz CSV bez otwarcia', { act: 'csv', disabled: busy, data: { file: 'unopened' } }),
+      button('Pobierz CSV z otwarciem', { act: 'csv', disabled: busy, data: { file: 'opened' } }),
+    )
+    + (u.total > 0 ? note('Przycisk przypomnienia przekazuje agentowi prośbę. Numery odbiorców ustala bramka, a agent otrzymuje wyłącznie ich liczbę.') : ''));
 }
 
 /** HTML widoku kampanii. `state`: `mode` 'days' albo 'hours', `busy` w trakcie wywołania. */
 export function renderCampaign(d, state = {}) {
   const purged = d.detailsPurged === true;
   const mode = purged ? 'hours' : state.mode ?? 'days';
-  const seg = (value, label) => `<button type="button" data-mode="${value}"${mode === value ? ' class="on"' : ''}>${label}</button>`;
+  const seg = (value, label) => `<button type="button"${mode === value ? ' class="on"' : ''} data-mode="${value}">${label}</button>`;
   const title = mode === 'days' ? 'Otwarcia dzień po dniu' : 'Kliknięcia w pierwszych 48 godzinach od pierwszej wysyłki';
-  return `<p class="who">Kampania <b>${esc(d.name)}</b></p>${campaignTiles(d)}`
-    + (d.bots > 0 ? note(`Bramka pominęła w liczbach kliknięcia automatów: ${d.bots}`) : '')
-    + `<div class="chart-title"><span>${title}</span>`
-    + (purged ? '' : `<span class="seg">${seg('days', 'otwarcia dziennie')}${seg('hours', 'kliknięcia co godzinę')}</span>`) + '</div>'
-    + (mode === 'days' ? opensChart(d) : clicksChart(d))
-    + (purged ? note('Szczegóły kampanii zostały usunięte po okresie przechowywania, dlatego widok pokazuje liczby i kliknięcia w kolejnych godzinach') : '')
-    + targetsTable(d.targets) + unopenedPanel(d, state.busy === true);
+  return section('Podsumowanie', campaignTiles(d) + (d.bots > 0 ? note(`Bramka pominęła w liczbach kliknięcia automatów: ${d.bots}`) : ''), `Kampania ${d.name}`)
+    + section(title, (purged ? '' : `<div class="seg2 narrow">${seg('days', 'otwarcia dziennie')}${seg('hours', 'kliknięcia co godzinę')}</div>`)
+      + (mode === 'days' ? opensChart(d) : clicksChart(d))
+      + (purged ? note('Szczegóły kampanii zostały usunięte po okresie przechowywania, dlatego widok pokazuje liczby i kliknięcia w kolejnych godzinach') : ''))
+    + targetsSection(d.targets) + unopenedSection(d, state.busy === true);
 }
 
 /** Uruchomienie widoku kampanii w dokumencie. */

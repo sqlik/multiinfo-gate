@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { forwardedText } from '../../src/mcp/views/client/bridge.js';
+import { button, buttons, forwardedText, num, tile, tiles } from '../../src/mcp/views/client/bridge.js';
 import { barChart } from '../../src/mcp/views/client/chart.js';
 import { REMIND_MESSAGE, renderCampaign } from '../../src/mcp/views/client/kampania.js';
 import { refreshQuery, renderReplies, startReplies } from '../../src/mcp/views/client/odpowiedzi.js';
@@ -66,38 +66,41 @@ describe('wykres słupkowy', () => {
   });
 });
 
+/** Nazwy sekcji karty w kolejności. */
+const sections = (html: string) => [...html.matchAll(/<h3>(.*?)<\/h3>/g)].map((m) => m[1]);
+
 describe('widok wyników kampanii', () => {
-  it('renderCampaign: liczby z udziałami jak w panelu, dni z otwarciami bez luk, odbiorcy bez otwarcia, CSV i przypomnienie', () => {
+  it('renderCampaign: sekcje podsumowania, aktywności w czasie, celów linków i odbiorców bez otwarcia', () => {
     const html = renderCampaign({ ...CAMPAIGN, name: '<script>alert(1)</script>' });
     expect(html).not.toContain('<script>');
+    expect(sections(html)).toEqual(['Podsumowanie', 'Otwarcia dzień po dniu', 'Kliknięcia według celu linku', 'Odbiorcy bez otwarcia: 786']);
+    expect(html).toContain('<p class="lead">Kampania &lt;script&gt;alert(1)&lt;/script&gt;</p>');
     // Liczby i udziały w zapisie panelu kampanii.
-    expect(html).toContain('96,6 % wysłanych');
-    expect(html).toContain('34,4 % doręczonych');
-    expect(html).toContain('1,31 na otwarcie');
+    expect(html).toContain(tiles(tile('Wysłane', num(1240), '05.11 - 11.11'), tile('Doręczone', num(1198), '96,6 % wysłanych'),
+      tile('Otwarcia', num(412), '34,4 % doręczonych'), tile('Kliknięcia', num(538), '1,31 na otwarcie')));
     expect(html).toContain('kliknięcia automatów: 3');
-    expect(html).toContain('<div class="sub">05.11 - 11.11</div>');
+    expect(html).toContain('<button type="button" class="on" data-mode="days">otwarcia dziennie</button>');
     expect(html).toContain('<title>2026-11-06, otwarcia: 0</title>');
     expect(html).toContain('<title>2026-11-11, otwarcia: 0</title>');
-    expect(html).toContain('K-1042');
-    expect(html).toContain('48601000052');
-    expect(html).toContain('data-act="more"');
-    expect(html).toContain('data-file="unopened"');
-    expect(html).toContain('data-file="opened"');
-    expect(html).toContain('data-act="remind"');
     expect(html).toContain('https://serwis.pl/przeglad');
   });
 
-  it('renderCampaign: odbiorcy bez otwarcia z numerem przy lewej krawędzi, identyfikator klienta tylko wtedy, gdy istnieje', () => {
-    const list = (html: string) => /<div class="recips">([\s\S]*?)<\/div><div class="row">/.exec(html)![1]!;
-    const withIds = list(renderCampaign(CAMPAIGN));
-    expect(withIds).toContain('<div><span class="mono">48601000051</span><span class="muted">K-1042</span></div>');
-    expect(withIds).toContain('<div><span class="mono">48601000052</span></div>');
-    const bare = list(renderCampaign({ ...CAMPAIGN, unopened: { ...CAMPAIGN.unopened, items: [{ to: '48601000053', clientId: null }] } }));
-    expect(bare).toBe('<div><span class="mono">48601000053</span></div>');
+  it('renderCampaign: odbiorcy bez otwarcia po przecinku z identyfikatorem klienta przed numerem i cztery równe przyciski', () => {
+    const html = renderCampaign(CAMPAIGN);
+    expect(html).toContain('<p class="nums">K-1042 48601000051, 48601000052</p>');
+    expect(html).toContain('Widok pokazuje pierwszych 2 odbiorców. Pełną listę zawiera plik CSV.');
+    expect(html).toContain(buttons(button('Przygotuj przypomnienie', { act: 'remind', kind: 'primary' }), button('Pokaż kolejnych odbiorców', { act: 'more' }),
+      button('Pobierz CSV bez otwarcia', { act: 'csv', data: { file: 'unopened' } }), button('Pobierz CSV z otwarciem', { act: 'csv', data: { file: 'opened' } })));
+    const one = renderCampaign({ ...CAMPAIGN, unopened: { total: 1, items: [{ to: '48601000053', clientId: '<b>K</b>' }], hasMore: false } });
+    expect(one).toContain('<p class="nums">&lt;b&gt;K&lt;/b&gt; 48601000053</p>');
+    expect(one).not.toContain('Widok pokazuje');
+    expect(one).not.toContain('data-act="more"');
   });
 
   it('renderCampaign: tryb godzin pokazuje kliknięcia od godziny pierwszej wysyłki w czasie polskim', () => {
     const html = renderCampaign(CAMPAIGN, { mode: 'hours' });
+    expect(sections(html)[1]).toBe('Kliknięcia w pierwszych 48 godzinach od pierwszej wysyłki');
+    expect(html).toContain('<button type="button" class="on" data-mode="hours">kliknięcia co godzinę</button>');
     expect(html).toContain('<title>2026-11-05 09:00, kliknięcia: 38</title>');
     expect(html).toContain('<title>2026-11-05 10:00, kliknięcia: 41</title>');
     expect(html).toContain('<title>2026-11-05 11:00, kliknięcia: 0</title>');
@@ -105,6 +108,7 @@ describe('widok wyników kampanii', () => {
 
   it('renderCampaign po usunięciu szczegółów: tylko kliknięcia i zdanie o okresie przechowywania', () => {
     const html = renderCampaign({ ...CAMPAIGN, detailsPurged: true, opensByDay: [], unopened: null });
+    expect(sections(html)).toEqual(['Podsumowanie', 'Kliknięcia w pierwszych 48 godzinach od pierwszej wysyłki', 'Kliknięcia według celu linku']);
     expect(html).toContain('okresie przechowywania');
     expect(html).toContain('kliknięcia: 41');
     expect(html).not.toContain('otwarcia: ');
