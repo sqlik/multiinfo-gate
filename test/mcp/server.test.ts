@@ -291,7 +291,10 @@ describe('narzędzia według zakresów i stanu integracji', () => {
     expect((await call(2)).json().result.isError).toBeUndefined();
     expect((await call(3)).json().result.isError).toBeUndefined();
     const limited = (await call(4)).json().result;
-    expect(limited).toEqual({ content: [{ type: 'text', text: 'Przekroczono limit 2 żądań na minutę klucza. Spróbuj ponownie za minutę.' }], isError: true });
+    expect(limited).toEqual({
+      content: [{ type: 'text', text: 'Przekroczono limit 2 żądań na minutę klucza. Spróbuj ponownie za minutę.' }],
+      structuredContent: { error: 'rate_limited', retryAfterSec: 60 }, isError: true,
+    });
   });
 
   it('nieznana metoda -32601, błędne argumenty: błąd narzędzia z opisem pola, nieznane narzędzie -32602', async () => {

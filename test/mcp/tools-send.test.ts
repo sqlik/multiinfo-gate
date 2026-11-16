@@ -85,7 +85,8 @@ describe('narzędzia wysyłki przez POST /mcp', () => {
     const tools = await (await mcpSession(app, seed.secret, { apps: true })).tools();
     const byName = new Map(tools.map((t) => [t.name, t]));
     expect([...byName.keys()]).toEqual([
-      'connection_status', 'prepare_sms', 'prepare_group_sms', 'send_prepared', 'cancel_message', 'cancel_package', 'list_messages', 'list_packages',
+      'connection_status', 'prepare_sms', 'prepare_group_sms', 'send_prepared', 'cancel_message', 'cancel_package', 'open_file_send', 'upload_file_rows',
+      'list_messages', 'list_packages',
       'delivery_trace', 'package_status', 'package_report', 'list_campaigns', 'campaign_results', 'list_inbound', 'prepare_replies', 'send_reply',
     ]);
     for (const name of ['prepare_sms', 'prepare_group_sms', 'prepare_replies', 'list_messages', 'delivery_trace', 'package_status', 'package_report', 'list_campaigns', 'campaign_results', 'list_inbound']) {

@@ -26,6 +26,7 @@ import { emitIntegrations, isOutboundEvent, type IntegrationEmitDeps } from './i
 import { emitWebhook, type HttpPost, type WebhookEvent } from './webhook.ts';
 import type { OAuthRepo } from '../store/oauth.ts';
 import type { AgentDraftsRepo } from '../store/agent-drafts.ts';
+import type { AgentFilesRepo } from '../store/agent-files.ts';
 import type { DownloadLinksRepo } from '../store/download-links.ts';
 
 export interface WorkerDeps {
@@ -70,6 +71,8 @@ export interface WorkerDeps {
   oauth?: Pick<OAuthRepo, 'prune'>;
   /** Szkice wysyłki agentów AI; tura utrzymaniowa usuwa szkice dobę po terminie. */
   drafts?: Pick<AgentDraftsRepo, 'pruneBefore'>;
+  /** Szkice plików agentów AI; tura utrzymaniowa usuwa szkice po terminie razem z wierszami. */
+  files?: Pick<AgentFilesRepo, 'pruneBefore'>;
   /** Linki do pobrania dla agentów AI; po terminie bez znaczenia, dlatego usuwane od razu. */
   downloads?: Pick<DownloadLinksRepo, 'pruneBefore'>;
   /** Strażnicy integracji - sprzątanie idempotencji w turze utrzymaniowej. */

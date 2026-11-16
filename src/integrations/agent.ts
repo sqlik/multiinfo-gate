@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { generateSecret, hashSecret } from '../agents/codes.ts';
 import type { ConnectionContext, ConnectionService } from '../agents/connections.ts';
+import { AgentError } from '../agents/errors.ts';
 import { instant } from '../agents/reads.ts';
 import { SCOPE_LABELS } from '../agents/scopes.ts';
 import { ApiError } from '../api/errors.ts';
@@ -25,16 +26,7 @@ import { buildAgentGroupContext, dispatch, renderGroupText, type Noter, type Pip
 import { payloadForLog } from './power-automate.ts';
 import { TemplateError } from './templates.ts';
 
-/**
- * Błąd potoku agenta z komunikatem dla człowieka. Narzędzie MCP zamienia go na błąd narzędzia, a przy limicie
- * dopisuje czas do ponowienia.
- */
-export class AgentError extends Error {
-  constructor(readonly code: string, message: string, readonly retryAfterSec?: number) {
-    super(message);
-    this.name = 'AgentError';
-  }
-}
+export { AgentError };
 
 /**
  * Zależności potoku: wspólna droga wysyłki, rozsyłki, dziennik i powiadomienia, szkice oraz rozstrzyganie

@@ -130,6 +130,13 @@ describe('Worker.tick - tura utrzymaniowa', () => {
     await worker.tick();
     expect(pruneBefore).toHaveBeenCalledWith(clock);
   });
+
+  it('krok pliki usuwa szkice plików agentów po terminie', async () => {
+    const pruneBefore = vi.fn(() => 0);
+    const worker = new Worker({ ...deps, files: { pruneBefore } }, { now: () => clock, maintenanceMs: 60_000 });
+    await worker.tick();
+    expect(pruneBefore).toHaveBeenCalledWith(clock);
+  });
 });
 
 describe('Worker.tick - retencja skracacza', () => {

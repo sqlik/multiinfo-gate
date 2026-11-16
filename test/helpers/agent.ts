@@ -15,6 +15,8 @@ import type { Logger } from '../../src/log.ts';
 import { McpSessions } from '../../src/mcp/sessions.ts';
 import type { AgentToolDeps, ToolDef } from '../../src/mcp/tools.ts';
 import { AgentDraftsRepo } from '../../src/store/agent-drafts.ts';
+import { AgentFilesRepo } from '../../src/store/agent-files.ts';
+import { FileSendsRepo } from '../../src/store/file-sends.ts';
 import { DownloadLinksRepo } from '../../src/store/download-links.ts';
 import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
@@ -69,9 +71,12 @@ export function oauthDeps(db: Database, masterKey: Buffer, over: Partial<OAuthDe
   };
 }
 
-/** Zależności agentów w serwerze API: OAuth, szkice, linki do pobrania i sesje MCP. */
+/** Zależności agentów w serwerze API: OAuth, szkice wysyłki i plików, wysyłki z pliku, linki do pobrania i sesje MCP. */
 export function agentServerDeps(db: Database, masterKey: Buffer, over: Partial<AgentServerDeps> & { apiUrl?: string | null } = {}): AgentServerDeps {
-  return { drafts: new AgentDraftsRepo(db), downloads: new DownloadLinksRepo(db), sessions: new McpSessions(), ...oauthDeps(db, masterKey, over) } as AgentServerDeps;
+  return {
+    drafts: new AgentDraftsRepo(db), files: new AgentFilesRepo(db), fileSends: new FileSendsRepo(db), downloads: new DownloadLinksRepo(db), sessions: new McpSessions(),
+    ...oauthDeps(db, masterKey, over),
+  } as AgentServerDeps;
 }
 
 /** Pełne zależności serwera API z agentami na wspólnej bazie i wspólnym zegarze. */

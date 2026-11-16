@@ -1,7 +1,7 @@
 import type { Database } from 'better-sqlite3';
 import { shortId } from '../ids.ts';
 
-export type DraftKind = 'sms' | 'group' | 'reply';
+export type DraftKind = 'sms' | 'group' | 'reply' | 'file';
 
 /** Szkic wysyłki przygotowany przez agenta: wychodzi dokładnie to, co człowiek widział w podglądzie. */
 export interface DraftRow {

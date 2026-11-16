@@ -128,7 +128,8 @@ export async function callTool(defs: readonly ToolDef[], ctx: ToolContext, name:
       return toolError(`Zakresy integracji nie obejmują uprawnienia ${labels}. Uprawnienia nadaje administrator bramki w integracji Agent AI.`);
     }
     if (!ctx.deps.rateLimiter.check(conn.key.id, conn.key.ratePerMin)) {
-      return toolError(`Przekroczono limit ${conn.key.ratePerMin} żądań na minutę klucza. Spróbuj ponownie za minutę.`);
+      // Kod i czas ponowienia w danych strukturalnych: widok pliku czeka i ponawia porcję wierszy (P7).
+      return toolError(`Przekroczono limit ${conn.key.ratePerMin} żądań na minutę klucza. Spróbuj ponownie za minutę.`, { error: 'rate_limited', retryAfterSec: 60 });
     }
   }
   const parsed = def.input.safeParse(args ?? {});

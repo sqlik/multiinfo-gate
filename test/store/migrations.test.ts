@@ -348,6 +348,46 @@ describe('migracja 015', () => {
     expect(db.pragma('user_version', { simple: true })).toBe(15);
   });
 
+  it('migracja 015: agent_drafts przyjmuje kind file, szkice sprzed migracji zachowane, file_line i file_send_id istnieją', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mig-015-'));
+    try {
+      const path = join(root, 'gate.sqlite');
+      const old = openDatabaseRaw(path);
+      applyMigrations(old, { migrations: [...TWELVE, '013-odbiorcy-grupy.sql', '014-agenci-ai.sql'] });
+      expect(old.pragma('user_version', { simple: true })).toBe(14);
+      const { integrationId } = seedAgentIntegration(old, randomBytes(32));
+      const connectionId = new AgentConnectionsRepo(old).insert({
+        integrationId, name: 'Ewa Nowak', method: 'oauth', expiresAt: null, createdBy: 'admin', createdAt: new Date('2026-11-15T08:00:00Z'),
+      });
+      old.prepare(`INSERT INTO agent_drafts (id, connection_id, kind, payload, created_at, expires_at, sent_at, result, confirm_hash)
+        VALUES ('drf_1', ?, 'group', '{"text":"Awaria w hali B"}', '2026-11-15T08:00:00Z', '2026-11-15T08:30:00Z', '2026-11-15T08:05:00Z', '{"kind":"group"}', 'skrot')`).run(connectionId);
+      old.close();
+
+      const db = openDatabase(path);
+      expect(db.pragma('user_version', { simple: true })).toBe(15);
+      expect(db.prepare('SELECT * FROM agent_drafts').all()).toEqual([{
+        id: 'drf_1', connection_id: connectionId, kind: 'group', payload: '{"text":"Awaria w hali B"}', created_at: '2026-11-15T08:00:00Z',
+        expires_at: '2026-11-15T08:30:00Z', sent_at: '2026-11-15T08:05:00Z', result: '{"kind":"group"}', confirm_hash: 'skrot',
+      }]);
+      const add = db.prepare(`INSERT INTO agent_drafts (id, connection_id, kind, payload, created_at, expires_at) VALUES (?, ?, ?, '{}', '2026-11-16', '2026-11-16')`);
+      expect(() => add.run('drf_2', connectionId, 'file')).not.toThrow();
+      expect(() => add.run('drf_3', connectionId, 'zapis')).toThrow(/CHECK/);
+      const plan = db.prepare('EXPLAIN QUERY PLAN DELETE FROM agent_drafts WHERE expires_at < ?').all('2026-11-16') as { detail: string }[];
+      expect(plan.map((p) => p.detail).join(' ')).toMatch(/idx_agent_drafts_expires/);
+      const cols = (t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((c) => c.name);
+      expect(cols('packages')).toContain('file_send_id');
+      expect(cols('package_recipients')).toContain('file_line');
+      expect(cols('agent_files')).toEqual(['id', 'connection_id', 'name', 'columns', 'phone_column', 'total_rows', 'received_rows', 'complete', 'created_at', 'expires_at']);
+      expect(cols('agent_file_rows')).toEqual(['file_id', 'seq', 'line', 'cells', 'problem']);
+      expect(cols('file_sends')).toEqual(['id', 'api_key_id', 'integration_id', 'connection_id', 'requested_by', 'name', 'recipients', 'start_at', 'created_at']);
+      expect(db.pragma('foreign_key_check')).toEqual([]);
+      expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+      db.close();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('indeks packages_pending obejmuje stan i termin rozsyłki', () => {
     const db = openDatabase(':memory:');
     const cols = (db.prepare("PRAGMA index_info('packages_pending')").all() as Array<{ name: string }>).map((c) => c.name);

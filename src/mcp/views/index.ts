@@ -7,8 +7,8 @@ import { GATE_VERSION } from '../../version.ts';
 import { APP_MIME } from '../apps.ts';
 import { VIEW_STYLE } from './style.ts';
 
-/** Widoki MCP Apps bramki. Zadanie 15 dopisuje dokumenty widoków kampanii, rozsyłki i odpowiedzi. */
-export type ViewId = 'wysylka' | 'grupa' | 'przebieg' | 'co-moge' | 'kampania' | 'rozsylka' | 'odpowiedzi';
+/** Widoki MCP Apps bramki. */
+export type ViewId = 'wysylka' | 'grupa' | 'przebieg' | 'co-moge' | 'kampania' | 'rozsylka' | 'odpowiedzi' | 'plik';
 
 export const viewUri = (id: ViewId): string => `ui://multiinfo-gate/${id}`;
 
@@ -51,6 +51,7 @@ const VIEWS: Partial<Record<ViewId, ViewDef>> = {
   odpowiedzi: {
     title: 'Odpowiedzi klientów', files: ['measure.js', 'odpowiedzi.js'], entry: 'startReplies', tools: REFRESH, body: waiting('Oczekiwanie na odebrane SMS-y z bramki'),
   },
+  plik: { title: 'Rozsyłka z pliku', files: ['plik.js'], entry: 'startFile', tools: '', body: waiting('Oczekiwanie na widok rozsyłki z pliku') },
 };
 
 /** Widoki, które mają dokument; tylko je wymienia `resources/list`. */
