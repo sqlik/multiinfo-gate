@@ -67,7 +67,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
       counts: deps.integrationEvents.countsSince(row.id, since),
       lastEvent: deps.integrationEvents.latest(row.id) ?? null,
       mailbox: row.kind === 'mail_in' ? deps.mailIn?.state(row.id) ?? null : null,
-      activeConnections: row.kind === 'agent' ? deps.agentConnections.countActive(row.id, now()) : null,
+      activeConnections: row.kind === 'agent' ? deps.agentConnections.countActive(row.id, key?.expiresAt ?? null, now()) : null,
       now: now(),
     };
   };

@@ -110,9 +110,12 @@ describe('AgentConnectionsRepo', () => {
     const expired = add('Piotr Wójcik', { method: 'token', expiresAt: later(30).toISOString() });
     repo.setToken(expired, 't3');
 
-    expect(repo.countActive(integrationId, later(10))).toBe(3);
-    expect(repo.countActive(integrationId, later(31))).toBe(2);
+    expect(repo.countActive(integrationId, null, later(10))).toBe(3);
+    expect(repo.countActive(integrationId, null, later(31))).toBe(2);
     repo.setCode(used, 'k3', later(90).toISOString());
-    expect(repo.countActive(integrationId, later(32))).toBe(2);
+    expect(repo.countActive(integrationId, null, later(32))).toBe(2);
+    // Po terminie klucza API wygasają wszystkie połączenia integracji.
+    expect(repo.countActive(integrationId, later(40).toISOString(), later(32))).toBe(2);
+    expect(repo.countActive(integrationId, later(32).toISOString(), later(32))).toBe(0);
   });
 });

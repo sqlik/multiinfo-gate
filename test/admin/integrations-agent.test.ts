@@ -260,6 +260,15 @@ describe('szczegóły, lista i kopia', () => {
     expect((await get('/integracje')).body).toContain('1 aktywne połączenie');
   });
 
+  it('lista: połączenia wygasłe razem z kluczem nie są aktywne, tak jak w szczegółach', async () => {
+    await create();
+    const [row] = agentRows();
+    activeConnection(row!.id, 'Ewa Nowak');
+    expect((await get('/integracje')).body).toContain('1 aktywne połączenie');
+    h.db.prepare('UPDATE api_keys SET expires_at = ? WHERE id = ?').run('2026-11-01T00:00:00.000Z', row!.apiKeyId);
+    expect((await get('/integracje')).body).toContain('0 aktywnych połączeń');
+  });
+
   it('kopia integracji agenta nie ma połączeń', async () => {
     await create({ scopes: ['send_group', 'read_sent'] });
     const row = agentRow();

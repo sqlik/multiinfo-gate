@@ -206,7 +206,7 @@ describe('ConnectionService: nowy kod, nowy token, usunięcie', () => {
     const fresh = service.newCode(connectionId, '1h', at(2 * MIN));
     expect(fresh).toEqual({ code: expect.stringMatching(/^[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$/), expiresAt: at(62 * MIN).toISOString() });
     expect(connectionState(repos().connections.get(connectionId)!, null, at(3 * MIN))).toBe('active');
-    expect(repos().connections.countActive(integrationId, at(3 * MIN))).toBe(1);
+    expect(repos().connections.countActive(integrationId, null, at(3 * MIN))).toBe(1);
     expect(service.authenticate(`Bearer ${access.value}`, at(3 * MIN))).toEqual({ ok: true, connectionId });
   });
 

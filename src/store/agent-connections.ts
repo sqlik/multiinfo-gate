@@ -102,9 +102,10 @@ export class AgentConnectionsRepo {
 
   /**
    * Połączenia w użyciu: z użytym kodem, z klientem OAuth z wcześniejszego użycia kodu albo z tokenem, bez odwołanych
-   * i wygasłych. Termin klucza sprawdza usługa połączeń.
+   * i wygasłych. Po terminie klucza API wszystkie połączenia integracji są wygasłe, tak jak w `connectionState`.
    */
-  countActive(integrationId: number, now: Date): number {
+  countActive(integrationId: number, keyExpiresAt: string | null, now: Date): number {
+    if (keyExpiresAt !== null && Date.parse(keyExpiresAt) <= now.getTime()) return 0;
     return (this.db.prepare(
       `SELECT COUNT(*) AS n FROM agent_connections
        WHERE integration_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)
