@@ -141,13 +141,17 @@ export function overdueSweep(deps: WorkerDeps, now: Date): number {
   return moved.length;
 }
 
-/** Powód anulowania zaplanowanej rozsyłki w chwili przekazania; `null`, gdy klucz i konto nadal ją obejmują. */
+/**
+ * Powód anulowania zaplanowanej rozsyłki w chwili przekazania; `null`, gdy klucz i konto nadal ją obejmują.
+ * Usługę klucz musi obejmować tak jak przy przyjęciu, ponieważ administrator mógł ją odebrać po zaplanowaniu.
+ */
 function cancelReason(deps: WorkerDeps, pkg: PackageRow, now: Date): string | null {
   if (!deps.accounts.get(pkg.accountId)) return 'Konto Multiinfo rozsyłki zostało usunięte przed jej przekazaniem';
   const key = deps.apiKeys.get(pkg.apiKeyId);
   if (!key) return 'Klucz API rozsyłki został usunięty przed przekazaniem do Multiinfo';
   if (key.revokedAt !== null) return 'Klucz API rozsyłki został odwołany przed przekazaniem do Multiinfo';
   if (key.expiresAt !== null && Date.parse(key.expiresAt) <= now.getTime()) return 'Klucz API rozsyłki utracił ważność przed przekazaniem do Multiinfo';
+  if (!key.allowedServiceIds.includes(pkg.serviceId)) return `Klucz API rozsyłki nie obejmuje już usługi ${pkg.serviceId}`;
   return null;
 }
 
@@ -209,13 +213,17 @@ export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date)
   const log = deps.log ?? silentLogger;
   const scheduled = job.payload.scheduled === true;
   if (scheduled) {
-    const pkg = deps.packages.get(String(job.payload.packageId));
+    let pkg = deps.packages.get(String(job.payload.packageId));
     // Rozsyłka po terminie, anulowana albo przekazana: zadanie nie ma już nic do zrobienia.
     if (!pkg || (pkg.status !== 'scheduled' && pkg.status !== 'queued')) {
       deps.jobs.complete(job.id);
       return;
     }
-    // Rozsyłka `queued` z tym znacznikiem przeszła w ten stan, a proces zatrzymał się przed odpowiedzią: droga jak dziś.
+    // Proces zatrzymał się po przejściu w `queued`, ale przed żądaniem: rozsyłka wraca do `scheduled` i przechodzi
+    // wszystkie sprawdzenia. Ze znacznikiem przekazania idzie drogą jak dziś, czyli kończy się kodem -72.
+    if (pkg.status === 'queued' && typeof job.payload.sentAt !== 'string' && deps.packages.returnToScheduled(pkg.id)) {
+      pkg = { ...pkg, status: 'scheduled' };
+    }
     if (pkg.status === 'scheduled') {
       const account = beginScheduledHandover(job, deps, pkg, now, log);
       if (account) await createAtMultiinfo(job, deps, { ...pkg, status: 'queued' }, account.storeContent, now, log, true);

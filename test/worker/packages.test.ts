@@ -715,6 +715,24 @@ describe('handlePackageCreate - rozsyłka zaplanowana', () => {
     expect(lastWebhook()).toMatchObject({ event: 'package.completed', status: 'cancelled' });
   });
 
+  it('klucz nie obejmuje już usługi rozsyłki: cancelled z powodem, bez żądania', async () => {
+    db.prepare('DELETE FROM api_key_services').run();
+    await handlePackageCreate(scheduled(at(10 * MIN)), deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    expect(deps.packages.get('pkg_1')).toMatchObject({
+      status: 'cancelled', error: 'Klucz API rozsyłki nie obejmuje już usługi 24138',
+    });
+  });
+
+  it('zadanie ze znacznikiem scheduled po zatrzymaniu procesu między przejściem w queued a żądaniem: sprawdzenia jak przy przekazaniu', async () => {
+    const created = scheduled(at(10 * MIN));
+    deps.packages.beginHandover('pkg_1');
+    db.prepare('UPDATE api_keys SET revoked_at = ?').run(NOW.toISOString());
+    await handlePackageCreate(created, deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    expect(deps.packages.get('pkg_1')).toMatchObject({ status: 'cancelled', error: 'Klucz API rozsyłki został odwołany przed przekazaniem do Multiinfo' });
+  });
+
   it('połączenie agenta odwołane: przekazanie bez zmian', async () => {
     const integrationId = integration(1);
     const connections = new AgentConnectionsRepo(db);
