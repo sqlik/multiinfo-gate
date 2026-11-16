@@ -291,7 +291,7 @@ function normalize(raw: string, countryCode: string): string {
 function checkService(ctx: ConnectionContext, serviceId: string): void {
   if (!ctx.auth.allowedServiceIds.includes(serviceId)) {
     throw new AgentError('service_not_allowed',
-      `Klucz integracji nie ma dostępu do usługi ${serviceId}. Dostępne usługi: ${ctx.auth.allowedServiceIds.join(', ')}.`);
+      `Klucz integracji nie obejmuje usługi ${serviceId}. Dostępne usługi: ${ctx.auth.allowedServiceIds.join(', ')}.`);
   }
 }
 
@@ -311,7 +311,7 @@ function pickOrig(deps: AgentDeps, ctx: ConnectionContext, input: string | null 
 const newConfirm = (apps: boolean | undefined) => (apps ? generateSecret(CONFIRM_PREFIX) : null);
 
 const scopeError = (scope: AgentScope): AgentError =>
-  new AgentError('scope', `Połączenie nie ma uprawnienia „${SCOPE_LABELS[scope]}”. Uprawnienia nadaje administrator bramki w integracji Agent AI.`);
+  new AgentError('scope', `Zakresy integracji nie obejmują uprawnienia „${SCOPE_LABELS[scope]}”. Uprawnienia nadaje administrator bramki w integracji Agent AI.`);
 
 /**
  * Numery odbiorców kampanii klucza według otwarcia linku (zakresy `campaigns` i `send`). Agent otrzymuje tylko
@@ -352,7 +352,7 @@ function findGroup(deps: AgentDeps, ctx: ConnectionContext, query: string): { gr
     throw new AgentError('group_ambiguous', `Nazwa „${query}” pasuje do kilku grup: ${found.map((g) => g.name).join(', ')}. Podaj pełną nazwę grupy.`);
   }
   throw new AgentError('group_unknown', groups.length === 0
-    ? 'Klucz integracji nie ma włączonych grup SMS. Grupy zakłada administrator bramki.'
+    ? 'Klucz integracji nie obejmuje żadnej włączonej grupy SMS. Grupy zakłada administrator bramki.'
     : `Grupa „${query}” nie istnieje albo jest wyłączona. Dostępne grupy: ${names.join(', ')}.`);
 }
 
@@ -383,7 +383,7 @@ export function prepareGroup(
   const { group, names } = findGroup(deps, ctx, input.group);
   const members = groupMembers(group.config);
   if (members.length === 0) {
-    throw new AgentError('group_empty', `Grupa ${group.name} nie ma odbiorców. Listę uzupełnia administrator w panelu bramki.`);
+    throw new AgentError('group_empty', `Grupa ${group.name} nie zawiera odbiorców. Listę uzupełnia administrator w panelu bramki.`);
   }
   const body = input.text.trim();
   if (body === '') throw new AgentError('empty_text', 'Treść SMS-a jest pusta.');

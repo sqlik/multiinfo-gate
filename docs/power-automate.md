@@ -471,8 +471,8 @@ Każdy odbiorca otrzymuje osobną wiadomość rozliczaną na koncie Multiinfo, d
 20 osób oznacza 20 wiadomości.
 
 Jeżeli lista odbiorców jest pusta, akcja kończy się błędem `Conflict`, a bramka nie wysyła żadnej
-wiadomości. Pasek nad przebiegiem wyświetla komunikat bramki, na przykład: „Integracja Biuro
-handlowe nie ma odbiorców grupy. Listę uzupełnia administrator w panelu bramki.”
+wiadomości. Pasek nad przebiegiem wyświetla komunikat bramki, na przykład: „Grupa w integracji Biuro
+handlowe nie zawiera odbiorców. Listę uzupełnia administrator w panelu bramki.”
 
 ## 10. Limit części i ochrona przed burzą
 

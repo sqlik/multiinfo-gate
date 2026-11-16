@@ -134,9 +134,9 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     // Odwołany i wygasły klucz nie wyśle SMS-a, więc integracja na nim nie zadziała.
     if (!key || !keyUsable(key, now()).ok) return { ok: false, error: 'Wskaż czynny klucz API.' };
     if (v.serviceId !== '' && !key.allowedServiceIds.includes(v.serviceId)) {
-      return { ok: false, error: `Klucz ${key.name} nie ma dostępu do ID usługi ${v.serviceId}.` };
+      return { ok: false, error: `Klucz ${key.name} nie obejmuje ID usługi ${v.serviceId}.` };
     }
-    if (v.orig !== '' && !key.allowedOrigs.includes(v.orig)) return { ok: false, error: `Klucz ${key.name} nie ma nadpisu ${v.orig}.` };
+    if (v.orig !== '' && !key.allowedOrigs.includes(v.orig)) return { ok: false, error: `Klucz ${key.name} nie obejmuje nadpisu ${v.orig}.` };
     return { ok: true, keyId: key.id, accountId: key.accountId };
   };
 

@@ -139,7 +139,7 @@ describe('narzędzia wysyłki przez POST /mcp', () => {
     setAgent({ scopes: ['send'] });
     const sent = await mcp.call('send_prepared', { draftId: prepared.structuredContent!.draftId });
     expect(sent.isError).toBe(true);
-    expect(textOf(sent)).toBe('Połączenie nie ma uprawnienia „Wysyłka do grup”. Uprawnienia nadaje administrator bramki w integracji Agent AI.');
+    expect(textOf(sent)).toBe('Zakresy integracji nie obejmują uprawnienia „Wysyłka do grup”. Uprawnienia nadaje administrator bramki w integracji Agent AI.');
     expect(deps.messages.list({ apiKeyId: seed.keyId, limit: 10, offset: 0 })).toEqual([]);
   });
 

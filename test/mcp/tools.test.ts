@@ -66,7 +66,7 @@ describe('wywołanie narzędzia', () => {
     const ctx = context();
     const denied = await callTool([prepareSms], { ...ctx, conn: { ...ctx.conn!, scopes: new Set(['read_sent']) } }, 'prepare_sms', { text: 'x' });
     expect(denied).toMatchObject({ isError: true });
-    expect((denied.content as Array<{ text: string }>)[0]!.text).toBe('Połączenie nie ma uprawnienia „Wysyłka SMS-ów”. Uprawnienia nadaje administrator bramki w integracji Agent AI.');
+    expect((denied.content as Array<{ text: string }>)[0]!.text).toBe('Zakresy integracji nie obejmują uprawnienia „Wysyłka SMS-ów”. Uprawnienia nadaje administrator bramki w integracji Agent AI.');
     const off = await callTool([prepareSms], { ...ctx, conn: null, unavailable: 'integracja jest wyłączona' }, 'prepare_sms', { text: 'x' });
     expect(off).toMatchObject({ isError: true });
     expect((off.content as Array<{ text: string }>)[0]!.text).toContain('integracja jest wyłączona');

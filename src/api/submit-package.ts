@@ -75,9 +75,9 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
   if (!account) throw new ApiError(500, 'account_missing', 'Konto przypisane do klucza nie istnieje.');
 
   const serviceId = String(input.serviceId ?? auth.defaultServiceId ?? '');
-  if (!serviceId) throw new ApiError(400, 'service_required', 'Klucz nie ma domyślnej usługi - podaj serviceId.');
+  if (!serviceId) throw new ApiError(400, 'service_required', 'Klucz nie określa domyślnej usługi - podaj serviceId.');
   if (!auth.allowedServiceIds.includes(serviceId)) {
-    throw new ApiError(403, 'service_not_allowed', `Klucz nie ma dostępu do usługi ${serviceId}.`);
+    throw new ApiError(403, 'service_not_allowed', `Klucz nie obejmuje usługi ${serviceId}.`);
   }
 
   const orig = resolveOrig(input.orig, auth, account, deps.accounts);

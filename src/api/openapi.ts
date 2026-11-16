@@ -122,7 +122,7 @@ const POLA_WIADOMOSCI: Record<string, JsonSchema> = {
   orig: {
     type: 'string',
     description: 'Nadpis nadawcy. Musi należeć do nadpisów dozwolonych dla klucza. Pominięty oznacza nadpis domyślny'
-      + ' klucza albo konta, a gdy żadnego nie ma, nadawcą jest numer przydzielony kontu w Multiinfo.',
+      + ' klucza albo konta, a gdy żaden nie jest ustawiony, nadawcą jest numer przydzielony kontu w Multiinfo.',
     example: 'Firma Info',
   },
   serviceId: {
@@ -337,7 +337,7 @@ const CIALO_ROZSYLKI: JsonSchema = {
     defaultText: {
       type: 'string',
       minLength: 1,
-      description: 'Treść dla odbiorców bez własnej treści. Jest wymagana, jeżeli którykolwiek odbiorca jej nie ma',
+      description: 'Treść dla odbiorców bez własnej treści. Jest wymagana, jeżeli dla któregokolwiek odbiorcy nie podano własnej treści',
     },
     orig: pole('orig'),
     serviceId: pole('serviceId'),
@@ -495,12 +495,12 @@ const BLEDY_INTEGRACJI: Record<string, OpenApiResponse> = {
     'Usługa albo nadpis integracji spoza uprawnień klucza: service_not_allowed, orig_not_allowed. Poprawia je'
       + ' administrator w ustawieniach integracji',
     'service_not_allowed',
-    'Klucz nie ma dostępu do usługi 24139.',
+    'Klucz nie obejmuje usługi 24139.',
   ),
   '404': blad(
     'Brak integracji, integracja innego klucza albo innego rodzaju; bramka nie rozróżnia tych sytuacji',
     'integration_not_found',
-    'Nie ma integracji z Power Automate o tym identyfikatorze.',
+    'Nie znaleziono integracji z Power Automate o tym identyfikatorze.',
   ),
   '429': blad(
     'Przekroczony limit żądań klucza na minutę albo limit wysyłek integracji (ochrona przed burzą):'
@@ -904,7 +904,7 @@ const UPRAWNIENIA_KLUCZA: JsonSchema = {
     origs: {
       type: 'array',
       description: 'Nadpisy nadawcy, których klucz może użyć w polu orig, w kolejności alfabetycznej. Lista obejmuje'
-        + ' nadpis domyślny klucza, a gdy klucz go nie ma, nadpis domyślny konta. Pusta lista oznacza wysyłkę bez'
+        + ' nadpis domyślny klucza, a gdy klucz go nie określa, nadpis domyślny konta. Pusta lista oznacza wysyłkę bez'
         + ' nadpisu, z numerem przydzielonym kontu w Multiinfo jako nadawcą.',
       items: {
         type: 'object',
@@ -1136,7 +1136,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             '404': blad(
               'Brak wiadomości albo wiadomość innego klucza; bramka nie rozróżnia tych dwóch sytuacji',
               'message_not_found',
-              'Nie ma wiadomości o tym identyfikatorze.',
+              'Nie znaleziono wiadomości o tym identyfikatorze.',
             ),
           },
         },
@@ -1171,7 +1171,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             '404': blad(
               'Brak wiadomości albo wiadomość innego klucza; bramka nie rozróżnia tych dwóch sytuacji',
               'message_not_found',
-              'Nie ma wiadomości o tym identyfikatorze.',
+              'Nie znaleziono wiadomości o tym identyfikatorze.',
             ),
             '409': blad(
               'Anulowanie nie jest już możliwe: already_final, gdy wiadomość ma stan ostateczny, albo already_passed,'
@@ -1237,7 +1237,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             '403': blad(
               'Usługa albo nadpis spoza uprawnień klucza: service_not_allowed, orig_not_allowed',
               'service_not_allowed',
-              'Klucz nie ma dostępu do usługi 24139.',
+              'Klucz nie obejmuje usługi 24139.',
             ),
             '409': blad(
               'Ten sam Idempotency-Key użyty z inną rozsyłką albo przez integrację',
@@ -1269,7 +1269,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             '404': blad(
               'Brak rozsyłki albo rozsyłka innego klucza; bramka nie rozróżnia tych dwóch sytuacji',
               'package_not_found',
-              'Nie ma rozsyłki o tym identyfikatorze.',
+              'Nie znaleziono rozsyłki o tym identyfikatorze.',
             ),
           },
         },
@@ -1304,10 +1304,10 @@ export function buildOpenApiDocument(): OpenApiDocument {
             '404': blad(
               'Brak rozsyłki albo rozsyłka innego klucza; bramka nie rozróżnia tych dwóch sytuacji',
               'package_not_found',
-              'Nie ma rozsyłki o tym identyfikatorze.',
+              'Nie znaleziono rozsyłki o tym identyfikatorze.',
             ),
             '409': blad(
-              'Rozsyłka jeszcze trwa, więc raportu nie ma czego zamówić',
+              'Rozsyłka jeszcze trwa, dlatego zamówienie raportu nie jest możliwe',
               'package_not_completed',
               'Raport jest dostępny po zakończeniu rozsyłki; stan: sending.',
             ),
@@ -1370,7 +1370,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             '404': blad(
               'Brak rozsyłki albo rozsyłka innego klucza; bramka nie rozróżnia tych dwóch sytuacji',
               'package_not_found',
-              'Nie ma rozsyłki o tym identyfikatorze.',
+              'Nie znaleziono rozsyłki o tym identyfikatorze.',
             ),
             '409': {
               description: 'Raport nie jest jeszcze gotowy. Poza opisem błędu odpowiedź niesie bieżący stan'
@@ -1428,7 +1428,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             '404': blad(
               'Brak kampanii albo kampania innego klucza; bramka nie rozróżnia tych dwóch sytuacji',
               'campaign_not_found',
-              'Nie ma kampanii o tej nazwie.',
+              'Nie znaleziono kampanii o tej nazwie.',
             ),
           },
         },
@@ -1495,7 +1495,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             '403': blad(
               'Usługa spoza uprawnień klucza',
               'service_not_allowed',
-              'Klucz nie ma dostępu do usługi 24139.',
+              'Klucz nie obejmuje usługi 24139.',
             ),
           },
         },
@@ -1518,7 +1518,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
               'Brak wiadomości, wiadomość innego konta albo z usługi spoza uprawnień klucza; bramka nie rozróżnia'
                 + ' tych sytuacji',
               'inbound_not_found',
-              'Nie ma wiadomości przychodzącej o tym identyfikatorze.',
+              'Nie znaleziono wiadomości przychodzącej o tym identyfikatorze.',
             ),
           },
         },
@@ -1688,7 +1688,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
               'Integracja wyłączona w panelu, pusta lista odbiorców albo ten sam Idempotency-Key z inną treścią:'
                 + ' integration_disabled, group_empty, idempotency_conflict',
               'group_empty',
-              'Integracja Ekipa serwisowa nie ma odbiorców grupy. Listę uzupełnia administrator w panelu bramki.',
+              'Grupa w integracji Ekipa serwisowa nie zawiera odbiorców. Listę uzupełnia administrator w panelu bramki.',
             ),
           },
         },

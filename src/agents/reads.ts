@@ -248,7 +248,7 @@ export function deliveryTrace(deps: ReadDeps, ctx: ConnectionContext, q: { id?: 
  */
 export function packageStatus(deps: ReadDeps, ctx: ConnectionContext, packageId: string, page: Page): PackageStatusData {
   const p = deps.packages.get(packageId);
-  if (!p || p.apiKeyId !== ctx.key.id) throw new AgentError('package_unknown', `Nie ma rozsyłki ${packageId}.`);
+  if (!p || p.apiKeyId !== ctx.key.id) throw new AgentError('package_unknown', `Nie znaleziono rozsyłki ${packageId}.`);
   const { offset, limit } = pageOf(page);
   const reported = p.reportStatus === 'ready';
   const breakdown = reported ? deps.packages.reportBreakdown(p.id) : null;
@@ -288,7 +288,7 @@ function clicksByHour(hours: Array<{ hour: string; clicks: number }>): Array<{ h
  */
 export function campaignResults(deps: ReadDeps, ctx: ConnectionContext, name: string, page: Page): CampaignResultsData {
   const c = deps.campaigns.byName(ctx.key.id, name);
-  if (!c) throw new AgentError('campaign_unknown', `Nie ma kampanii „${name}”.`);
+  if (!c) throw new AgentError('campaign_unknown', `Nie znaleziono kampanii „${name}”.`);
   const { offset, limit } = pageOf(page);
   const purged = c.detailsPurgedAt !== null;
   const opens = countBy(purged ? [] : deps.shortLinks.firstOpens(c.id).map(warsawDay));

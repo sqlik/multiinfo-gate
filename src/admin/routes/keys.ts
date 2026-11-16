@@ -111,7 +111,7 @@ function check(choice: AccountChoice, v: KeyFormValues, today: Date): Checked {
   if (v.name === '') return { ok: false, error: 'Podaj nazwę klucza.' };
   if (v.serviceIds.length === 0) return { ok: false, error: 'Zaznacz przynajmniej jedno ID usługi.' };
   const obce = v.serviceIds.filter((id) => !choice.serviceIds.includes(id));
-  if (obce.length > 0) return { ok: false, error: `Konto ${choice.row.name} nie ma dostępu do ID usługi: ${obce.join(', ')}.` };
+  if (obce.length > 0) return { ok: false, error: `Konto ${choice.row.name} nie obejmuje ID usługi: ${obce.join(', ')}.` };
   const defaultServiceId = v.defaultServiceId === '' ? v.serviceIds[0]! : v.defaultServiceId;
   if (!v.serviceIds.includes(defaultServiceId)) return { ok: false, error: 'Domyślne ID usługi musi być jednym z zaznaczonych.' };
   const spozaSlownika = v.origs.filter((o) => !choice.origs.includes(o));

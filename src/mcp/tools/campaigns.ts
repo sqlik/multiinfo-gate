@@ -25,7 +25,7 @@ export const listCampaignsTool: ToolDef = {
       name: c.name, sent: c.sent, opens: c.opens, clicks: c.clicks, firstSentAt: c.firstSentAt, lastSentAt: c.lastSentAt, detailsPurged: c.detailsPurgedAt !== null,
     }));
     const lines = [
-      items.length === 0 ? 'Klucz integracji nie ma kampanii.' : `Kampanie na tej stronie: ${items.length}.`,
+      items.length === 0 ? 'Klucz integracji nie obejmuje żadnej kampanii.' : `Kampanie na tej stronie: ${items.length}.`,
       ...items.map((c) => `${c.name}: wysłano ${c.sent}, otwarcia ${c.opens}, kliknięcia ${c.clicks}, ostatnia wysyłka ${warsawShort(c.lastSentAt)}.`),
       ...(hasMore ? ['Kolejne kampanie pokazuje następna strona z większą wartością offset.'] : []),
     ];

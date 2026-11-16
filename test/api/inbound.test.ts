@@ -120,6 +120,7 @@ describe('GET /v1/inbound', () => {
     const res = await get('/v1/inbound?serviceId=24902');
     expect(res.statusCode).toBe(403);
     expect(res.json().error.code).toBe('service_not_allowed');
+    expect(res.json().error.message).toMatch(/^Klucz nie obejmuje usługi \d+\.$/);
   });
 
   it('zła data w since albo until to 400', async () => {
@@ -151,6 +152,7 @@ describe('odpowiedź administratora na SMS powiadomienia bramki', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBe('in_reply_to_unknown');
+    expect(res.json().error.message).toBe('Nie znaleziono takiej wiadomości przychodzącej w tej usłudze.');
   });
 });
 
@@ -165,6 +167,7 @@ describe('GET /v1/inbound/{id}', () => {
     seed('in_1', { serviceId: '24902' });
     expect((await get('/v1/inbound/in_1')).statusCode).toBe(404);
     expect((await get('/v1/inbound/in_1')).json().error.code).toBe('inbound_not_found');
+    expect((await get('/v1/inbound/in_1')).json().error.message).toBe('Nie znaleziono wiadomości przychodzącej o tym identyfikatorze.');
     expect((await get('/v1/inbound/in_x')).statusCode).toBe(404);
   });
   it('wymaga klucza', async () => {

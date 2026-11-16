@@ -1030,7 +1030,7 @@ kolejnymi wywołaniami.
 | Pole | Wymagane | Opis |
 |---|---|---|
 | `recipients` | tak | od 1 do 5000 pozycji `{ "to", "text"?, "clientId"? }` |
-| `defaultText` | nie | treść dla odbiorców bez własnego `text`; wymagana, jeżeli którykolwiek odbiorca jej nie ma |
+| `defaultText` | nie | treść dla odbiorców bez własnego `text`; wymagana, jeżeli dla któregokolwiek odbiorcy nie podano własnego `text` |
 | `recipients[].clientId` | nie | 1-20 znaków z zakresu `A-Z a-z 0-9 . _ -`; zwracany w raporcie |
 | `orig`, `serviceId`, `encoding`, `deliveryReport`, `costCenter` | nie | znaczenie jak w rozdziale 3 |
 | `shortenLinks`, `campaign`, `linkDomain`, `linkValidityDays` | nie | skracanie linków jak w rozdziale 3; pominięta nazwa kampanii oznacza identyfikator rozsyłki, a ważność liczy się od `startAt` albo od przyjęcia rozsyłki |

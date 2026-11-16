@@ -246,7 +246,7 @@ describe('POST /v1/integrations/{id}/group', () => {
   it('pusta lista odbiorców: 409 group_empty, wpis „błąd”, zero wiadomości', async () => {
     const res = await post(`/v1/integrations/int_${biuro}/group`, { text: 'x' });
     expect(res.statusCode).toBe(409);
-    expect(res.json().error).toEqual({ code: 'group_empty', message: 'Integracja Biuro handlowe nie ma odbiorców grupy. Listę uzupełnia administrator w panelu bramki.' });
+    expect(res.json().error).toEqual({ code: 'group_empty', message: 'Grupa w integracji Biuro handlowe nie zawiera odbiorców. Listę uzupełnia administrator w panelu bramki.' });
     expect(allMessages()).toEqual([]);
     expect(log(biuro)[0]).toMatchObject({ result: 'error', reason: expect.stringMatching(/^Wyślij SMS do grupy: /) });
   });
@@ -438,7 +438,7 @@ describe('integracja nieznana, cudza, innego rodzaju albo wyłączona', () => {
   ])('%s: 404 integration_not_found', async (id) => {
     const res = await post(`/v1/integrations/${id}/messages`, { to: '48601000001', text: 'x' });
     expect(res.statusCode).toBe(404);
-    expect(res.json().error).toEqual({ code: 'integration_not_found', message: 'Nie ma integracji z Power Automate o tym identyfikatorze.' });
+    expect(res.json().error).toEqual({ code: 'integration_not_found', message: 'Nie znaleziono integracji z Power Automate o tym identyfikatorze.' });
   });
 
   it('integracja innego klucza i webhook pod int_<id>: 404, zero wiadomości i wpisów', async () => {

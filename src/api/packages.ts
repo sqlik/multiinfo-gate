@@ -100,7 +100,7 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
     const pkg = deps.packages.get(request.params.id);
     // Brak rozsyłki i cudza rozsyłka dają tę samą odpowiedź - nie potwierdzamy istnienia.
     if (!pkg || pkg.apiKeyId !== auth.apiKeyId) {
-      throw new ApiError(404, 'package_not_found', 'Nie ma rozsyłki o tym identyfikatorze.');
+      throw new ApiError(404, 'package_not_found', 'Nie znaleziono rozsyłki o tym identyfikatorze.');
     }
     const view = present(pkg, pkg.reportStatus === 'ready' ? deps.packages.recipientSummary(pkg.id) : null);
     const links = packageLinks(deps, pkg);
@@ -111,7 +111,7 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
     const auth = authenticate(authorization, deps.apiKeys);
     const pkg = deps.packages.get(id);
     if (!pkg || pkg.apiKeyId !== auth.apiKeyId) {
-      throw new ApiError(404, 'package_not_found', 'Nie ma rozsyłki o tym identyfikatorze.');
+      throw new ApiError(404, 'package_not_found', 'Nie znaleziono rozsyłki o tym identyfikatorze.');
     }
     return pkg;
   };

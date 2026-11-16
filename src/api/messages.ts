@@ -81,7 +81,7 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
     const message = deps.messages.get(request.params.id);
     // Brak wiadomości, cudza i systemowa dają tę samą odpowiedź - nie potwierdzamy istnienia.
     if (!message || message.apiKeyId !== auth.apiKeyId || message.system === 1) {
-      throw new ApiError(404, 'message_not_found', 'Nie ma wiadomości o tym identyfikatorze.');
+      throw new ApiError(404, 'message_not_found', 'Nie znaleziono wiadomości o tym identyfikatorze.');
     }
     const links = messageLinks(deps, message);
     return links === undefined ? presentMessage(message) : { ...presentMessage(message), links };

@@ -174,7 +174,7 @@ export function runPowerAutomate(
     // Pusta lista przed długością treści: skrócenie treści nie pomoże, gdy nie ma do kogo wysłać.
     if (to.length === 0) {
       throw new ApiError(409, 'group_empty',
-        `Integracja ${integration.name} nie ma odbiorców grupy. Listę uzupełnia administrator w panelu bramki.`);
+        `Grupa w integracji ${integration.name} nie zawiera odbiorców. Listę uzupełnia administrator w panelu bramki.`);
     }
     const prepared = fit(prepare(b.text));
     const results = submitMessages(deps, auth, {

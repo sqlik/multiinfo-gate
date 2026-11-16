@@ -133,7 +133,7 @@ export const packageReportTool: ToolDef = {
     const q = raw as z.infer<typeof reportInput>;
     const conn = connOf(ctx);
     const p = ctx.deps.packages.get(q.packageId);
-    if (!p || p.apiKeyId !== conn.key.id) throw new AgentError('package_unknown', `Nie ma rozsyłki ${q.packageId}.`);
+    if (!p || p.apiKeyId !== conn.key.id) throw new AgentError('package_unknown', `Nie znaleziono rozsyłki ${q.packageId}.`);
     if (p.reportStatus !== 'ready') {
       throw new AgentError('report_not_ready', `Raport rozsyłki ${p.id} nie jest jeszcze gotowy. Stan rozsyłki pokazuje narzędzie package_status.`);
     }

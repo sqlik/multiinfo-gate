@@ -100,7 +100,7 @@ export function registerPaIntegrationRoutes(app: FastifyInstance, deps: ApiDeps)
       const id = parsePaIntegrationApiId(request.params.id);
       const row = id === null ? undefined : deps.integrations.getOwned(id, auth.apiKeyId, 'power_automate');
       if (!row) {
-        throw new ApiError(404, 'integration_not_found', 'Nie ma integracji z Power Automate o tym identyfikatorze.');
+        throw new ApiError(404, 'integration_not_found', 'Nie znaleziono integracji z Power Automate o tym identyfikatorze.');
       }
       // Wyłączona bez wpisu w dzienniku: tak samo milczy wyłączony webhook.
       if (row.enabled !== 1) {

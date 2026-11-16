@@ -297,7 +297,7 @@ describe('widok postępu rozsyłki', () => {
     expect(slow.events).toEqual(['sending', 'koniec: timeout']);
     expect(slow.timers).toEqual([]);
 
-    const broken = run([{ isError: true, content: [{ type: 'text', text: 'Nie ma rozsyłki pkg_7x2.' }] }], [PACKAGE_REFRESH_MS]);
+    const broken = run([{ isError: true, content: [{ type: 'text', text: 'Nie znaleziono rozsyłki pkg_7x2.' }] }], [PACKAGE_REFRESH_MS]);
     await broken.step();
     expect(broken.events).toEqual(['koniec: error']);
     expect(broken.timers).toEqual([]);

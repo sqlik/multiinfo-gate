@@ -82,9 +82,9 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
   if (!account) throw new ApiError(500, 'account_missing', 'Konto przypisane do klucza nie istnieje.');
 
   const serviceId = String(input.serviceId ?? auth.defaultServiceId ?? '');
-  if (!serviceId) throw new ApiError(400, 'service_required', 'Klucz nie ma domyślnej usługi - podaj serviceId.');
+  if (!serviceId) throw new ApiError(400, 'service_required', 'Klucz nie określa domyślnej usługi - podaj serviceId.');
   if (!auth.allowedServiceIds.includes(serviceId)) {
-    throw new ApiError(403, 'service_not_allowed', `Klucz nie ma dostępu do usługi ${serviceId}.`);
+    throw new ApiError(403, 'service_not_allowed', `Klucz nie obejmuje usługi ${serviceId}.`);
   }
 
   let inReplyTo: string | null = null;
@@ -94,7 +94,7 @@ export function submitMessages(deps: SubmitDeps, auth: AuthContext, input: Submi
     const original = deps.inbound.get(input.inReplyTo);
     // Odpowiedź na SMS powiadomienia bramki istnieje tylko w panelu, więc API jej nie zna.
     if (!original || original.system === 1 || original.accountId !== auth.accountId || original.serviceId !== serviceId) {
-      throw new ApiError(400, 'in_reply_to_unknown', 'Nie ma takiej wiadomości przychodzącej w tej usłudze.');
+      throw new ApiError(400, 'in_reply_to_unknown', 'Nie znaleziono takiej wiadomości przychodzącej w tej usłudze.');
     }
     // Odpowiedź idzie do tego, kto pisał: Multiinfo dostaje smsInId, a panel łączy wątek po numerze.
     const raw = input.to[0]!;

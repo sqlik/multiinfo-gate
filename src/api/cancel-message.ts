@@ -16,7 +16,7 @@ export async function cancelMessage(
   // Brak wiadomości, cudza wiadomość i wiadomość systemowa (SMS powiadomienia administratora) dają tę samą
   // odpowiedź - nie potwierdzamy istnienia.
   if (!message || message.apiKeyId !== apiKeyId || message.system === 1) {
-    throw new ApiError(404, 'message_not_found', 'Nie ma wiadomości o tym identyfikatorze.');
+    throw new ApiError(404, 'message_not_found', 'Nie znaleziono wiadomości o tym identyfikatorze.');
   }
   if (FINAL_STATUSES.has(message.status)) {
     throw new ApiError(409, 'already_final', `Wiadomość ma już stan ostateczny: ${message.status}.`);

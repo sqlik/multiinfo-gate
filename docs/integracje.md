@@ -1302,7 +1302,7 @@ ani niewidocznych znaków formatowania, które mogłyby zmienić wygląd wpisu.
 | wysłano | nazwa akcji, a przy wielu odbiorcach także ich liczba: `Wyślij SMS`, `Wyślij rozsyłkę, 14 odbiorców`, `Wyślij SMS do grupy, 3 odbiorców`; skrócona treść otrzymuje dopisek `skrócono do 1 części` |
 | limit | przekroczenie limitu burzy, na przykład `ponad 30 w 10 min`, albo limitu odbiorców, na przykład `ponad 5000 odbiorców w 10 min` |
 | duplikat | powtórzone wywołanie z tym samym kluczem idempotencji, na przykład `Wyślij SMS, powtórzony klucz idempotencji`; bramka zwraca pierwotną odpowiedź i niczego nie wysyła |
-| błąd | nazwa akcji i komunikat bramki, na przykład `Wyślij SMS do grupy: Integracja Biuro handlowe nie ma odbiorców grupy. Listę uzupełnia administrator w panelu bramki.` |
+| błąd | nazwa akcji i komunikat bramki, na przykład `Wyślij SMS do grupy: Grupa w integracji Biuro handlowe nie zawiera odbiorców. Listę uzupełnia administrator w panelu bramki.` |
 
 Wpis „wysłano” prowadzi do pierwszej wiadomości albo do rozsyłki. Wywołanie wyłączonej
 integracji nie pozostawia wpisu.

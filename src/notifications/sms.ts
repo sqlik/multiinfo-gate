@@ -60,7 +60,7 @@ export function smsChannelProblem(deps: Pick<SmsSendDeps, 'notifications' | 'api
   if (account.pausedReason !== null) return `konto Multiinfo „${account.name}” jest wstrzymane`;
   const auth = authFromKey(key);
   if (auth.defaultServiceId === null) return `${name} nie wskazuje domyślnej usługi`;
-  if (!auth.allowedServiceIds.includes(auth.defaultServiceId)) return `${name} nie ma dostępu do usługi ${auth.defaultServiceId}`;
+  if (!auth.allowedServiceIds.includes(auth.defaultServiceId)) return `${name} nie obejmuje usługi ${auth.defaultServiceId}`;
   if (settings.orig !== null && !keyOrigs(auth, account, deps.accounts).allowed.includes(settings.orig)) {
     return `${name} nie może już użyć nadpisu „${settings.orig}”`;
   }

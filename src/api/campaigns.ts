@@ -31,7 +31,7 @@ export function registerCampaignRoutes(app: FastifyInstance, deps: ApiDeps): voi
     const auth = authenticate(request.headers.authorization, deps.apiKeys);
     const row = deps.campaigns.byName(auth.apiKeyId, request.params.name);
     // Kampania innego klucza i nieznana nazwa dają tę samą odpowiedź - nie potwierdzamy istnienia.
-    if (row === undefined) throw new ApiError(404, 'campaign_not_found', 'Nie ma kampanii o tej nazwie.');
+    if (row === undefined) throw new ApiError(404, 'campaign_not_found', 'Nie znaleziono kampanii o tej nazwie.');
     const { limit, offset } = page(request.query, 50);
     // Jeden odbiorca ponad stronę, żeby wiedzieć, czy jest następna.
     const d = campaignDetail(deps, row.id, limit + 1, offset, 'first')!;

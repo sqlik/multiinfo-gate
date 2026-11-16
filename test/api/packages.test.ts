@@ -162,6 +162,7 @@ describe('POST /v1/packages', () => {
     const res = await post({ ...body(), serviceId: '24902' });
     expect(res.statusCode).toBe(403);
     expect(res.json().error.code).toBe('service_not_allowed');
+    expect(res.json().error.message).toMatch(/^Klucz nie obejmuje usługi \d+\.$/);
   });
 
   it('odrzuca startAt w przeszłości', async () => {
@@ -300,6 +301,7 @@ describe('GET /v1/packages/:id', () => {
     const res = await get(`/v1/packages/${id}`, keyB);
     expect(res.statusCode).toBe(404);
     expect(res.json().error.code).toBe('package_not_found');
+    expect(res.json().error.message).toBe('Nie znaleziono rozsyłki o tym identyfikatorze.');
   });
 });
 

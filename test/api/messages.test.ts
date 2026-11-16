@@ -167,6 +167,7 @@ describe('POST /v1/messages', () => {
     const res = await post({ to: '48601135134', text: 'x', serviceId: '24902' });
     expect(res.statusCode).toBe(403);
     expect(res.json().error.code).toBe('service_not_allowed');
+    expect(res.json().error.message).toMatch(/^Klucz nie obejmuje usługi \d+\.$/);
   });
 
   it('odrzuca żądanie bez klucza', async () => {

@@ -125,7 +125,7 @@ export async function callTool(defs: readonly ToolDef[], ctx: ToolContext, name:
   } else {
     if (!allowedBy(def, conn.scopes)) {
       const labels = (def.scopes as readonly AgentScope[]).map((s) => `„${SCOPE_LABELS[s]}”`).join(' ani ');
-      return toolError(`Połączenie nie ma uprawnienia ${labels}. Uprawnienia nadaje administrator bramki w integracji Agent AI.`);
+      return toolError(`Zakresy integracji nie obejmują uprawnienia ${labels}. Uprawnienia nadaje administrator bramki w integracji Agent AI.`);
     }
     if (!ctx.deps.rateLimiter.check(conn.key.id, conn.key.ratePerMin)) {
       return toolError(`Przekroczono limit ${conn.key.ratePerMin} żądań na minutę klucza. Spróbuj ponownie za minutę.`);
