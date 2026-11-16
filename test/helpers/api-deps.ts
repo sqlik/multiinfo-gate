@@ -8,6 +8,8 @@ import { IntegrationsRepo } from '../../src/store/integrations.ts';
 import { CampaignsRepo } from '../../src/store/campaigns.ts';
 import { LinkDomainsRepo } from '../../src/store/link-domains.ts';
 import { ShortLinksRepo } from '../../src/store/short-links.ts';
+import { AuditRepo } from '../../src/store/audit.ts';
+import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
 
 /** Zależności integracji i skracacza do `buildApiServer` w testach, które ich nie dotyczą. */
 export function integrationDeps(db: Database, masterKey: Buffer, resolve: (hostname: string) => Promise<string[]> = async () => []) {
@@ -18,6 +20,8 @@ export function integrationDeps(db: Database, masterKey: Buffer, resolve: (hostn
     engine: new TemplateEngine(),
     sources: new SourceMatcher(resolve),
     hookLimiter: new RateLimiter(),
+    deliveries: new WebhookDeliveriesRepo(db, masterKey),
+    audit: new AuditRepo(db),
     ...linkDeps(db),
   };
 }

@@ -11,6 +11,9 @@ import { groupFormPage, type GroupFormOptions } from '../views/integration-group
 import { catalogFor, presetById, presetsFor, type Preset } from '../../integrations/presets/index.ts';
 import { buildPowerAutomateConnector, connectorAddress } from '../../api/power-automate.ts';
 import { keyUsable } from '../../api/submit.ts';
+import { cancelPackage } from '../../api/cancel-package.ts';
+import { ApiError } from '../../api/errors.ts';
+import { plural } from '../../text/plural.ts';
 import { paConfigToValues, paFormToConfig, paFormValues, type PaFormValues } from '../power-automate-form.ts';
 import { paFormPage, type PaFormOptions } from '../views/integration-power-automate.ts';
 import { agentConfigToValues, agentFormToConfig, agentFormValues, type AgentFormValues } from '../agent-form.ts';
@@ -750,6 +753,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
         view: viewOf(row, since), events, apiUrl: deps.settings.apiUrl(),
         simple: simpleLabels(presetOf(row), row.kind, valuesOf(row, null)),
         ...(row.kind === 'agent' ? { connections: connectionItems(deps, row, now()) } : {}),
+        pendingPackages: deps.packages.pendingOfIntegration(row.id).length,
       }),
     });
   });
@@ -968,14 +972,27 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     const row = rowOr404(request.params.id, reply);
     if (!row) return;
     const key = deps.apiKeys.get(row.apiKeyId);
+    const actor = actorOf(request.adminUserId);
+    // Rozsyłki czekające na przekazanie anulujemy przed usunięciem: po nim tracą odniesienie do integracji
+    // i bramka nie odróżniłaby ich od rozsyłek z API.
+    let cancelled = 0;
+    for (const pkg of deps.packages.pendingOfIntegration(row.id)) {
+      try {
+        cancelPackage(deps, pkg, now(), { actor, ip: request.ip });
+        cancelled += 1;
+      } catch (e) {
+        if (!(e instanceof ApiError)) throw e;
+      }
+    }
     // Dziennik i strażnicy znikają kaskadą; wiadomości i odebrane tracą tylko odniesienie.
     deps.integrations.remove(row.id);
     deps.receiver?.refresh(key ? { retryAccount: key.accountId } : {});
     deps.audit.record({
-      actor: actorOf(request.adminUserId), action: 'integracja.usuniecie', target: `integracja:${row.id}`,
+      actor, action: 'integracja.usuniecie', target: `integracja:${row.id}`,
       meta: { nazwa: row.name, rodzaj: row.kind, ustawienie: row.preset }, ip: request.ip,
     });
-    render.flash(request, 'ok', `Integracja ${row.name} usunięta.`);
+    render.flash(request, 'ok', cancelled === 0 ? `Integracja ${row.name} usunięta.`
+      : `Integracja ${row.name} usunięta. Bramka anulowała ${plural(cancelled, 'rozsyłkę, która czekała', 'rozsyłki, które czekały', 'rozsyłek, które czekały')} na przekazanie do Multiinfo.`);
     return reply.redirect('/integracje', 302);
   });
 }

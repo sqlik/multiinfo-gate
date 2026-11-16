@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig } from '../../src/integrations/config.ts';
+import { defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig, defaultPowerAutomateConfig } from '../../src/integrations/config.ts';
 import { presetById } from '../../src/integrations/presets/index.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
@@ -247,5 +247,66 @@ describe('GET /integracje/:id', () => {
 
   it('nieistniejąca integracja to 404', async () => {
     expect((await page('/integracje/999')).statusCode).toBe(404);
+  });
+});
+
+describe('POST /integracje/:id/usun - rozsyłki czekające na przekazanie', () => {
+  const HOUR = 3_600_000;
+  let integrationId: number;
+  let accountId: number;
+
+  function seedPackage(id: string, status: 'scheduled' | 'overdue' | 'open', integration: number | null = integrationId): void {
+    h.packages.insert({
+      id, apiKeyId, accountId, serviceId: '24138', defaultText: 'Awaria pompy P2.', orig: null, costCenter: null,
+      startAt: new Date(NOW.getTime() + HOUR).toISOString(), deliveryReport: 1, encoding: 'gsm', multipart: 0,
+      createdAt: NOW.toISOString(), status, integrationId: integration, requestedBy: 'Ewa Nowak',
+    }, [{ dest: '48601000001', text: null, clientId: null }]);
+  }
+
+  beforeEach(() => {
+    accountId = h.apiKeys.get(apiKeyId)!.accountId;
+    integrationId = h.integrations.insert({
+      name: 'Dyspozytornia', kind: 'power_automate', apiKeyId, serviceId: null, orig: null, preset: 'power-automate',
+      enabled: 1, config: defaultPowerAutomateConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+  });
+
+  it('okno potwierdzenia podaje liczbę rozsyłek, które czekają na przekazanie', async () => {
+    seedPackage('pkg_1', 'scheduled');
+    seedPackage('pkg_2', 'overdue');
+    seedPackage('pkg_3', 'open');
+    const res = await page(`/integracje/${integrationId}`);
+    expect(res.body).toContain('Bramka anuluje też 2 rozsyłki tej integracji, które czekają na przekazanie do Multiinfo.');
+  });
+
+  it('okno potwierdzenia bez rozsyłek czekających nie wspomina o anulowaniu', async () => {
+    seedPackage('pkg_3', 'open');
+    const res = await page(`/integracje/${integrationId}`);
+    expect(res.body).not.toContain('Bramka anuluje');
+  });
+
+  it('usunięcie integracji anuluje jej rozsyłki scheduled i overdue, komunikat podaje liczbę', async () => {
+    seedPackage('pkg_1', 'scheduled');
+    seedPackage('pkg_2', 'overdue');
+    seedPackage('pkg_3', 'open');
+    seedPackage('pkg_4', 'scheduled', null);
+    const res = await post(`/integracje/${integrationId}/usun`);
+    expect(res.statusCode).toBe(302);
+    expect(h.integrations.get(integrationId)).toBeUndefined();
+    expect(['pkg_1', 'pkg_2', 'pkg_3', 'pkg_4'].map((id) => h.packages.get(id)!.status)).toEqual(['cancelled', 'cancelled', 'open', 'scheduled']);
+    const cancelled = h.audit.list(10, 0).filter((e) => e.action === 'rozsylka.anulowanie');
+    expect(cancelled.map((e) => e.target).sort()).toEqual(['rozsylka:pkg_1', 'rozsylka:pkg_2']);
+    expect(cancelled[0]).toMatchObject({ actor: 'janek' });
+    expect((await page(res.headers.location as string)).body)
+      .toContain('Integracja Dyspozytornia usunięta. Bramka anulowała 2 rozsyłki, które czekały na przekazanie do Multiinfo.');
+  });
+
+  it('jedna rozsyłka: odmiana w oknie i w komunikacie', async () => {
+    seedPackage('pkg_1', 'scheduled');
+    expect((await page(`/integracje/${integrationId}`)).body)
+      .toContain('Bramka anuluje też 1 rozsyłkę tej integracji, która czeka na przekazanie do Multiinfo.');
+    const res = await post(`/integracje/${integrationId}/usun`);
+    expect((await page(res.headers.location as string)).body)
+      .toContain('Integracja Dyspozytornia usunięta. Bramka anulowała 1 rozsyłkę, która czekała na przekazanie do Multiinfo.');
   });
 });

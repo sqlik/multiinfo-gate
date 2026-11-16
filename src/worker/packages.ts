@@ -1,5 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { cancelPackage } from '../api/cancel-package.ts';
+import { ApiError } from '../api/errors.ts';
 import { authFromKey } from '../api/submit.ts';
 import { keyOrigs } from '../api/orig.ts';
 import { MI_START_MARGIN_MS, OVERDUE_AFTER_MS } from '../api/schedule.ts';
@@ -173,9 +175,13 @@ function waitReason(deps: WorkerDeps, pkg: PackageRow, account: AccountRow): str
   return null;
 }
 
+/**
+ * Anulowanie w chwili przekazania drogą wspólną z API i panelem: webhook, krótkie linki, treści i dziennik panelu.
+ * Rozsyłka anulowana albo przekazana w międzyczasie kończy tylko zadanie.
+ */
 function cancelBeforeHandover(deps: WorkerDeps, job: Job, pkg: PackageRow, reason: string, now: Date, log: Logger): void {
-  if (deps.packages.cancelPending(pkg.id, now, reason)) {
-    notifyCompleted(deps, pkg, { status: 'cancelled' }, now);
+  const cancelled = deps.packages.get(pkg.id)?.status !== 'cancelled' && cancelledHere(deps, pkg, reason, now);
+  if (cancelled) {
     const integration = pkg.integrationId === null ? undefined : deps.integrations?.get(pkg.integrationId);
     if (integration) {
       deps.integrationEvents?.record({
@@ -185,6 +191,17 @@ function cancelBeforeHandover(deps: WorkerDeps, job: Job, pkg: PackageRow, reaso
     log.warn('rozsylka.anulowana_przed_przekazaniem', { packageId: pkg.id, accountId: pkg.accountId, reason });
   }
   deps.jobs.complete(job.id);
+}
+
+/** Czy to wywołanie anulowało rozsyłkę; stan zmieniony w międzyczasie przez przekazanie nie jest błędem zadania. */
+function cancelledHere(deps: WorkerDeps, pkg: PackageRow, reason: string, now: Date): boolean {
+  try {
+    cancelPackage({ ...deps, ...(deps.links ? { shortLinks: deps.links.shortLinks } : {}) }, pkg, now, { actor: 'bramka', reason });
+    return true;
+  } catch (e) {
+    if (e instanceof ApiError) return false;
+    throw e;
+  }
 }
 
 /**

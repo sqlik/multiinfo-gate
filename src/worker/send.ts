@@ -3,6 +3,7 @@ import { silentLogger, type Logger } from '../log.ts';
 import type { Job, JobsRepo } from '../store/jobs.ts';
 import type { AccountsRepo } from '../store/accounts.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
+import type { AuditRepo } from '../store/audit.ts';
 import type { MessageEventsRepo } from '../store/message-events.ts';
 import type { MessageRow, MessagesRepo } from '../store/messages.ts';
 import type { PackagesRepo } from '../store/packages.ts';
@@ -80,8 +81,10 @@ export interface WorkerDeps {
   /** Skracacz: retencja kodów w turze utrzymaniowej; bez tego zestawu kody nie są usuwane. */
   links?: {
     campaigns: Pick<CampaignsRepo, 'setDetailsPurged' | 'collapseTargets'>;
-    shortLinks: Pick<ShortLinksRepo, 'purge' | 'remaining'>;
+    shortLinks: Pick<ShortLinksRepo, 'purge' | 'remaining' | 'disablePackage'>;
   };
+  /** Dziennik panelu: anulowanie zaplanowanej rozsyłki w chwili przekazania. */
+  audit?: Pick<AuditRepo, 'record'>;
   log?: Logger;
 }
 

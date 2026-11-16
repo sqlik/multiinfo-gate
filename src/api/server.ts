@@ -28,6 +28,8 @@ import { RPC, rpcError } from '../mcp/protocol.ts';
 import type { CampaignsRepo } from '../store/campaigns.ts';
 import type { LinkDomainsRepo } from '../store/link-domains.ts';
 import type { ShortLinksRepo } from '../store/short-links.ts';
+import type { AuditRepo } from '../store/audit.ts';
+import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 import type { ClientPool } from '../worker/clients.ts';
 import { AuthError } from './auth.ts';
 import { registerCampaignRoutes } from './campaigns.ts';
@@ -61,6 +63,10 @@ export interface ApiDeps {
   events: MessageEventsRepo;
   packages: PackagesRepo;
   jobs: JobsRepo;
+  /** Webhook `package.completed` po anulowaniu zaplanowanej rozsyłki. */
+  deliveries: WebhookDeliveriesRepo;
+  /** Dziennik panelu: anulowanie zaplanowanej rozsyłki z nazwą klucza. */
+  audit: Pick<AuditRepo, 'record'>;
   /** Anulowanie woła Multiinfo synchronicznie - to jedyna trasa API, która tego potrzebuje. */
   clients: ClientPool;
   inbound: InboundMessagesRepo;

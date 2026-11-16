@@ -26,7 +26,7 @@ export const CONNECTOR_ARTICLE = 'https://sqlik.github.io/multiinfo-gate/power-a
  */
 export const CONNECTOR_OPERATIONS = [
   'WyslijSms', 'WyslijRozsylke', 'WyslijSmsDoGrupy', 'StanWiadomosci', 'StanRozsylki', 'RaportRozsylki', 'ListaIntegracji',
-  'DomenySkracacza',
+  'DomenySkracacza', 'AnulujRozsylke',
 ] as const;
 
 /**
@@ -171,6 +171,8 @@ const LABELS_BY_PATH: Record<string, string> = {
   'PrzyjetaRozsylka.status': 'Stan rozsyłki',
   'Rozsylka.id': 'Identyfikator rozsyłki',
   'Rozsylka.status': 'Stan rozsyłki',
+  'AnulowanaRozsylka.id': 'Identyfikator rozsyłki',
+  'AnulowanaRozsylka.status': 'Stan rozsyłki',
   'Rozsylka.report.status': 'Stan raportu',
   'RaportRozsylki.id': 'Identyfikator rozsyłki',
   'RaportRozsylki.report.status': 'Stan raportu',
@@ -206,6 +208,7 @@ const LABELS_BY_NAME: Record<string, string> = {
   costCenter: 'Znacznik rozliczeń',
   defaultText: 'Treść wspólna',
   startAt: 'Początek wysyłki',
+  handoverAt: 'Przekazanie do Multiinfo',
   id: 'Identyfikator',
   status: 'Stan',
   parts: 'Liczba części',
@@ -272,8 +275,9 @@ const DESCRIPTIONS_BY_PATH: Record<string, string> = {
   validTo: 'Czas ważności w formacie ISO 8601, na przykład 2026-11-04T18:00:00Z, najwyżej 72 godziny od przyjęcia.'
     + ' Wiadomość niedoręczona do tego czasu otrzymuje stan expired. Puste pole oznacza, że bramka nie ustawia czasu'
     + ' ważności',
-  startAt: 'Termin rozpoczęcia rozsyłki w formacie ISO 8601, na przykład 2026-11-04T07:00:00Z. Termin musi przypadać'
-    + ' w przyszłości. Puste pole oznacza wysyłkę od razu',
+  startAt: 'Termin rozpoczęcia rozsyłki w formacie ISO 8601, na przykład 2026-11-04T07:00:00Z, najwyżej 30 dni naprzód.'
+    + ' Termin musi przypadać w przyszłości. Bramka przechowuje rozsyłkę do terminu i przekazuje ją do Multiinfo zwykle'
+    + ' 10 minut wcześniej. Do tej chwili rozsyłkę anuluje akcja „Anuluj rozsyłkę”. Puste pole oznacza wysyłkę od razu',
   requestedBy: 'Kto zlecił wysyłkę, na przykład adres e-mail osoby z formularza albo autora wpisu na liście SharePoint.'
     + ' Bramka zapisuje go w dzienniku integracji oraz przy wiadomości albo rozsyłce. Nie trafia do treści SMS-a',
   encoding: 'Automatyczne wybiera GSM-7, a przy polskich znakach Unicode. Przy GSM Multiinfo zastępuje polskie znaki'
@@ -422,6 +426,7 @@ function apiParts(api: OpenApiDocument) {
       Wiadomosc: schemas.Wiadomosc!,
       PrzyjetaRozsylka: jsonSchemaOf(op('/v1/integrations/{id}/packages', 'post').responses['202']?.content),
       Rozsylka: schemas.Rozsylka!,
+      AnulowanaRozsylka: jsonSchemaOf(op('/v1/packages/{id}/cancel', 'post').responses['200']?.content),
       RaportRozsylki: jsonSchemaOf(op('/v1/packages/{id}/report', 'get').responses['200']?.content),
       WierszRaportu: schemas.WierszRaportu!,
       WysylkaDoGrupy: schemas.WysylkaDoGrupy!,
@@ -593,6 +598,25 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
           responses: {
             '200': { description: 'Stan rozsyłki', schema: ref('Rozsylka') },
             '404': { description: 'Nie znaleziono rozsyłki o tym identyfikatorze: package_not_found', schema: ref('OdpowiedzBledu') },
+            default: ERROR,
+          },
+        },
+      },
+      '/v1/packages/{id}/cancel': {
+        post: {
+          operationId: 'AnulujRozsylke',
+          summary: 'Anuluj rozsyłkę',
+          description: 'Anuluje rozsyłkę z terminem, którą bramka przechowuje do chwili przekazania do Multiinfo, zwykle'
+            + ' 10 minut przed terminem. Po przekazaniu Multiinfo nie pozwala anulować rozsyłki, dlatego akcja kończy się'
+            + ' wtedy błędem 409 package_not_cancellable.',
+          parameters: [pathId('Identyfikator rozsyłki', 'Identyfikator z akcji „Wyślij rozsyłkę”')],
+          responses: {
+            '200': { description: 'Rozsyłka anulowana', schema: ref('AnulowanaRozsylka') },
+            '404': { description: 'Nie znaleziono rozsyłki o tym identyfikatorze: package_not_found', schema: ref('OdpowiedzBledu') },
+            '409': {
+              description: 'Rozsyłka przekazana do Multiinfo albo zakończona: package_not_cancellable. Komunikat opisuje stan rozsyłki',
+              schema: ref('OdpowiedzBledu'),
+            },
             default: ERROR,
           },
         },

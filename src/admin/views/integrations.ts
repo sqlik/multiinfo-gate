@@ -1,6 +1,7 @@
 import { OUTBOUND_EVENTS, defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type MailInConfig, type OutboundConfig, type GroupMember, type AgentConfig, type PowerAutomateConfig, type SmsGroupConfig } from '../../integrations/config.ts';
 import { RULE_OPS, ruleOpLabel, type RuleOp } from '../../integrations/conditions.ts';
 import { safeUrl } from '../../integrations/enrich.ts';
+import { plural } from '../../text/plural.ts';
 import type { Preset } from '../../integrations/presets/index.ts';
 import type { EventResult, IntegrationEventRow } from '../../store/integration-events.ts';
 import type { IntegrationRow } from '../../store/integrations.ts';
@@ -851,6 +852,8 @@ export interface IntegrationDetail {
   simple?: { when: string; text: string } | null;
   /** Połączenia integracji agenta ze stanem; brak dla pozostałych rodzajów. */
   connections?: ConnectionListItem[];
+  /** Rozsyłki integracji, które czekają na przekazanie do Multiinfo; usunięcie integracji je anuluje. */
+  pendingPackages?: number;
 }
 
 /** Warunek w słowach: „heartbeat.status równe 0; monitor.name zawiera prod” albo wyrażenie Liquid. */
@@ -1036,6 +1039,12 @@ function mailboxPanel(v: IntegrationView): string {
   </div>`;
 }
 
+/** Zdanie okna potwierdzenia usunięcia o rozsyłkach, które bramka anuluje; puste, gdy takich nie ma. */
+function pendingNotice(n: number): string {
+  if (n === 0) return '';
+  return ` Bramka anuluje też ${plural(n, 'rozsyłkę tej integracji, która czeka', 'rozsyłki tej integracji, które czekają', 'rozsyłek tej integracji, które czekają')} na przekazanie do Multiinfo.`;
+}
+
 export function integrationDetailPage(d: IntegrationDetail): string {
   const { row } = d.view;
   const toggle = row.enabled === 1
@@ -1044,7 +1053,7 @@ export function integrationDetailPage(d: IntegrationDetail): string {
   const remove = `<form method="post" action="/integracje/${esc(row.id)}/usun" style="display: inline;"
       data-confirm="Usunąć integrację „${esc(row.name)}”? ${row.kind === 'agent'
     ? 'Dziennik i wszystkie połączenia pracowników zostaną usunięte razem z nią, a aplikacje AI utracą dostęp do bramki.'
-    : 'Dziennik zostanie usunięty razem z nią, a adres wejściowy przestanie działać.'}" data-confirm-ok="Usuń">
+    : 'Dziennik zostanie usunięty razem z nią, a adres wejściowy przestanie działać.'}${pendingNotice(d.pendingPackages ?? 0)}" data-confirm-ok="Usuń">
       <button class="btn btn-s" type="submit">Usuń</button></form>`;
   const events = d.events.length === 0
     ? `<tr><td class="dim" colspan="6">${row.kind === 'agent' ? 'Dziennik jest pusty. Agent nie wykonał jeszcze żadnej wysyłki.'

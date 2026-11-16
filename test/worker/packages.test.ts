@@ -23,6 +23,9 @@ import { InboundMessagesRepo } from '../../src/store/inbound-messages.ts';
 import { JobsRepo } from '../../src/store/jobs.ts';
 import { PackagesRepo } from '../../src/store/packages.ts';
 import { WebhookDeliveriesRepo } from '../../src/store/webhook-deliveries.ts';
+import { AuditRepo } from '../../src/store/audit.ts';
+import { LinkDomainsRepo } from '../../src/store/link-domains.ts';
+import { ShortLinksRepo } from '../../src/store/short-links.ts';
 import { makeZip } from '../helpers/zip.ts';
 
 const masterKey = randomBytes(32);
@@ -704,6 +707,38 @@ describe('handlePackageCreate - rozsyłka zaplanowana', () => {
     expect(lastWebhook()).toMatchObject({ event: 'package.completed', id: 'pkg_1', recipients: 2, status: 'cancelled' });
     expect(deps.integrationEvents!.list(integrationId, 10)).toEqual([expect.objectContaining({ result: 'error', reason, packageId: 'pkg_1' })]);
     expect(deps.jobs.claim(at(86_400_000), 10).map((j) => j.type)).toEqual(['webhook']);
+  });
+
+  it('anulowanie w chwili przekazania: krótkie linki wyłączone, wpis w dzienniku panelu ze źródłem „bramka” i powodem', async () => {
+    const shortLinks = new ShortLinksRepo(db);
+    const audit = new AuditRepo(db);
+    const campaigns = new CampaignsRepo(db);
+    deps.links = { campaigns, shortLinks };
+    deps.audit = audit;
+    const campaignId = campaigns.open(apiKeyId, 'przeglad-klimatyzacji', NOW);
+    const created = scheduled(at(10 * MIN));
+    const domainId = new LinkDomainsRepo(db).create({ domain: 'l.firma.pl', displayName: 'Firma', homeUrl: null, bareLinks: false }, NOW);
+    shortLinks.insert({
+      code: 'aB3xK9q', domainId, apiKeyId, campaignId, target: 'https://firma.pl/przeglad', utm: 0, recipientKey: 'pkg_1#1',
+      messageId: null, packageId: 'pkg_1', seq: 1, dest: '48601135134', clientId: null, expiresAt: at(30 * 86_400_000).toISOString(),
+      purgeAfter: at(60 * 86_400_000).toISOString(), createdAt: NOW.toISOString(),
+    });
+    db.prepare('UPDATE api_keys SET revoked_at = ?').run(NOW.toISOString());
+    await handlePackageCreate(created, deps, NOW);
+    expect(shortLinks.get('aB3xK9q')!.disabledAt).toBe(NOW.toISOString());
+    expect(audit.list(10, 0)).toEqual([expect.objectContaining({
+      actor: 'bramka', action: 'rozsylka.anulowanie', target: 'rozsylka:pkg_1',
+      meta: expect.objectContaining({ powod: 'Klucz API rozsyłki został odwołany przed przekazaniem do Multiinfo' }),
+    })]);
+  });
+
+  it('anulowanie w chwili przekazania na koncie bez przechowywania treści: treści usunięte', async () => {
+    db.prepare('UPDATE accounts SET store_content = 0').run();
+    const created = scheduled(at(10 * MIN));
+    db.prepare('UPDATE api_keys SET revoked_at = ?').run(NOW.toISOString());
+    await handlePackageCreate(created, deps, NOW);
+    expect(deps.packages.get('pkg_1')!.defaultText).toBeNull();
+    expect(deps.packages.recipients('pkg_1').map((r) => r.text)).toEqual([null, null]);
   });
 
   it('klucz po terminie ważności: cancelled jak przy odwołaniu', async () => {

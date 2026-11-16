@@ -196,7 +196,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     reportsDir: join(config.dataDir, 'reports'), log, allowPrivateWebhooks: config.webhookAllowPrivate,
     integrationEmit, integrations, integrationEvents, guards, notifier, notifications, scanner, releases,
     mailIn: mailInPoller, mailInRepo: mailIn, m365: { tokens: m365Tokens, accounts: m365Accounts }, m365KeepAlive: m365Tokens,
-    links: { campaigns, shortLinks }, oauth, drafts, downloads,
+    links: { campaigns, shortLinks }, oauth, drafts, downloads, audit,
   });
 
   const receiver = new Receiver({
@@ -215,7 +215,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
     accounts, apiKeys, messages, events, packages, jobs, clients, inbound, rateLimiter: new RateLimiter(), log,
     inboundHealth: () => receiver.health(),
     integrations, integrationEvents, guards, engine, sources: new SourceMatcher(systemResolver),
-    hookLimiter: new RateLimiter(), trustedProxies: config.trustedProxies, notifier,
+    hookLimiter: new RateLimiter(), trustedProxies: config.trustedProxies, notifier, deliveries, audit,
     allowPrivateWebhooks: config.webhookAllowPrivate, ...links, agents,
   });
   // Tokeny sprawdzenia domeny wystawia panel, a odpowiada na nie serwer przekierowań.

@@ -102,8 +102,28 @@ describe('buildPowerAutomateConnector', () => {
     expect([...operations.keys()].sort()).toEqual([...CONNECTOR_OPERATIONS].sort());
     expect(CONNECTOR_OPERATIONS).toEqual([
       'WyslijSms', 'WyslijRozsylke', 'WyslijSmsDoGrupy', 'StanWiadomosci', 'StanRozsylki', 'RaportRozsylki', 'ListaIntegracji',
-      'DomenySkracacza',
+      'DomenySkracacza', 'AnulujRozsylke',
     ]);
+  });
+
+  it('plik konektora: operacja AnulujRozsylke, opis Rozsylka.status ze wszystkimi stanami, opis Początek wysyłki z granicą 30 dni', () => {
+    expect(op('AnulujRozsylke')).toMatchObject({ method: 'post', path: '/v1/packages/{id}/cancel', summary: 'Anuluj rozsyłkę' });
+    expect(op('AnulujRozsylke').description).toContain('do chwili przekazania do Multiinfo');
+    expect(op('AnulujRozsylke').parameters!.map((p) => p.name)).toEqual(['id']);
+    const anulowana = resolve(op('AnulujRozsylke').responses['200']!.schema!);
+    expect(op('AnulujRozsylke').responses['200']!.schema).toEqual({ $ref: '#/definitions/AnulowanaRozsylka' });
+    expect(Object.keys(anulowana.properties!)).toEqual(['id', 'status']);
+    expect(op('AnulujRozsylke').responses['404']!.description).toContain('package_not_found');
+    expect(op('AnulujRozsylke').responses['409']!.description).toContain('package_not_cancellable');
+
+    const status = doc.definitions.Rozsylka!.properties!.status!;
+    for (const stan of ['scheduled', 'overdue', 'queued', 'open', 'sending', 'completed', 'cancelled', 'failed']) {
+      expect(status.description, stan).toContain(`${stan} - `);
+    }
+    const startAt = bodyOf('WyslijRozsylke').properties!.startAt!;
+    expect(startAt['x-ms-summary']).toBe('Początek wysyłki');
+    expect(startAt.description).toContain('30 dni');
+    expect(startAt.description).toContain('Anuluj rozsyłkę');
   });
 
   it('każda operacja odpowiada trasie prawdziwego serwera', () => {

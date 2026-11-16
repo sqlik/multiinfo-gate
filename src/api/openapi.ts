@@ -351,8 +351,10 @@ const CIALO_ROZSYLKI: JsonSchema = {
     startAt: {
       type: 'string',
       format: 'date-time',
-      description: 'Termin rozpoczęcia rozsyłki w formacie ISO 8601. Termin musi przypadać w przyszłości, a Multiinfo'
-        + ' rozpoczyna wysyłkę o tej godzinie. Pominięty oznacza wysyłkę od razu.',
+      description: 'Termin rozpoczęcia rozsyłki w formacie ISO 8601, najwyżej 30 dni od chwili wysyłki. Termin musi'
+        + ' przypadać w przyszłości. Bramka przechowuje rozsyłkę w stanie scheduled i przekazuje ją do Multiinfo'
+        + ' zwykle 10 minut przed terminem, a Multiinfo rozpoczyna wysyłkę o tej godzinie. Do chwili przekazania'
+        + ' rozsyłkę można anulować. Pominięty oznacza wysyłkę od razu.',
       example: '2026-08-27T08:00:00.000Z',
     },
   },
@@ -369,12 +371,26 @@ const PRZYJETA_ROZSYLKA: JsonSchema = {
   required: ['id', 'status', 'recipients', 'encoding', 'multipart'],
   properties: {
     id: { type: 'string', description: 'Identyfikator rozsyłki' },
-    status: { type: 'string', description: 'Stan rozsyłki zaraz po przyjęciu', example: 'queued' },
+    status: {
+      type: 'string',
+      description: 'Stan rozsyłki zaraz po przyjęciu: queued dla rozsyłki bez terminu, scheduled dla rozsyłki z terminem',
+      example: 'queued',
+    },
     recipients: { type: 'integer', description: 'Liczba przyjętych odbiorców' },
     encoding: { type: 'string', enum: ['gsm', 'ucs2'], description: 'Kodowanie całej rozsyłki' },
     multipart: {
       type: 'boolean',
       description: 'Czy którakolwiek treść jest dzielona na części',
+    },
+    startAt: {
+      type: 'string',
+      format: 'date-time',
+      description: 'Zamówiony termin rozpoczęcia. Pole występuje tylko w rozsyłce z terminem',
+    },
+    handoverAt: {
+      type: 'string',
+      format: 'date-time',
+      description: 'Chwila przekazania rozsyłki do Multiinfo, do której można ją anulować. Pole występuje tylko w stanie scheduled',
     },
     links: BLOK_LINKOW,
   },
@@ -517,7 +533,15 @@ const BLEDY_INTEGRACJI: Record<string, OpenApiResponse> = {
 };
 
 const STATUSY_WIADOMOSCI = ['queued', 'sent', 'delivered', 'failed', 'expired', 'cancelled', 'blocked', 'throttled', 'unknown'];
-const STATUSY_ROZSYLKI = ['queued', 'open', 'sending', 'completed', 'cancelled', 'failed'];
+const STATUSY_ROZSYLKI = ['scheduled', 'overdue', 'queued', 'open', 'sending', 'completed', 'cancelled', 'failed'];
+
+/** Opis stanów rozsyłki wspólny dla opisu API i pliku konektora. */
+export const OPIS_STANOW_ROZSYLKI = 'Stan rozsyłki: scheduled - bramka przechowuje rozsyłkę z terminem do chwili przekazania'
+  + ' do Multiinfo, overdue - termin minął o ponad 60 minut, a rozsyłka czeka na decyzję administratora bramki,'
+  + ' queued - przyjęta, oczekuje na utworzenie w Multiinfo, open - utworzona w Multiinfo, oczekuje na rozpoczęcie,'
+  + ' sending - w trakcie wysyłki, completed - wysyłka zakończona, cancelled - anulowana w bramce albo w Multiinfo,'
+  + ' failed - odrzucona przez Multiinfo albo bez potwierdzenia utworzenia, przyczynę podaje opis błędu.'
+  + ' Stany completed, cancelled i failed są ostateczne';
 const STATUSY_RAPORTU = ['none', 'pending', 'ready', 'failed'];
 
 /** Stronicowanie obu list wygląda tak samo; wartości spoza zakresu wracają do domyślnych. */
@@ -709,10 +733,10 @@ const ROZSYLKA: JsonSchema = {
   type: 'object',
   description: 'Rozsyłka zlecona tym kluczem',
   required: ['id', 'status', 'recipients', 'remaining', 'encoding', 'multipart', 'serviceId', 'orig', 'startAt',
-    'createdAt', 'completedAt', 'providerCode', 'error', 'report', 'summary'],
+    'handoverAt', 'createdAt', 'completedAt', 'providerCode', 'error', 'report', 'summary'],
   properties: {
     id: { type: 'string', description: 'Identyfikator rozsyłki', example: 'pkg_7c1e9a2b3d4f5a6b7c8d' },
-    status: { type: 'string', enum: STATUSY_ROZSYLKI, description: 'Stan rozsyłki' },
+    status: { type: 'string', enum: STATUSY_ROZSYLKI, description: OPIS_STANOW_ROZSYLKI },
     recipients: { type: 'integer', description: 'Liczba przyjętych odbiorców' },
     remaining: { type: 'integer', nullable: true, description: 'Liczba odbiorców, do których wysyłka jeszcze nie doszła' },
     encoding: { type: 'string', enum: ['gsm', 'ucs2'], description: 'Kodowanie całej rozsyłki' },
@@ -720,6 +744,13 @@ const ROZSYLKA: JsonSchema = {
     serviceId: { type: 'string', description: 'Usługa Multiinfo, z której wysyłana jest rozsyłka', example: '24138' },
     orig: { type: 'string', nullable: true, description: 'Nadpis nadawcy użyty w rozsyłce' },
     startAt: { type: 'string', format: 'date-time', nullable: true, description: 'Zamówiony termin rozpoczęcia' },
+    handoverAt: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      description: 'Chwila przekazania rozsyłki do Multiinfo, do której można ją anulować. W stanie innym niż scheduled'
+        + ' pole przyjmuje wartość null',
+    },
     createdAt: { type: 'string', format: 'date-time', description: 'Chwila przyjęcia przez bramkę' },
     completedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Chwila zakończenia wysyłki' },
     providerCode: { type: 'integer', nullable: true, description: 'Kod odmowy albo błędu z Multiinfo' },
@@ -1229,7 +1260,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
             },
             '400': blad(
               'Błąd w body żądania: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts,'
-                + ' invalid_orig, service_required, start_at_in_past, link_domain_not_allowed',
+                + ' invalid_orig, service_required, start_at_in_past, start_at_too_far, link_domain_not_allowed',
               'text_required',
               'recipients.3: brak treści i brak treści domyślnej.',
             ),
@@ -1270,6 +1301,52 @@ export function buildOpenApiDocument(): OpenApiDocument {
               'Brak rozsyłki albo rozsyłka innego klucza; bramka nie rozróżnia tych dwóch sytuacji',
               'package_not_found',
               'Nie znaleziono rozsyłki o tym identyfikatorze.',
+            ),
+          },
+        },
+      },
+      '/v1/packages/{id}/cancel': {
+        post: {
+          operationId: 'anulujRozsylke',
+          summary: 'Anulowanie rozsyłki',
+          description: 'Anuluje rozsyłkę z terminem, którą bramka przechowuje w stanie scheduled albo overdue.'
+            + ' Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem.'
+            + ' Dla rozsyłki już anulowanej bramka zwraca ten sam wynik. Anulowanie wysyła webhook package.completed'
+            + ' ze stanem cancelled, a krótkie linki rozsyłki przestają działać.',
+          security: KLUCZ,
+          parameters: [PARAMETR_ID_ROZSYLKI],
+          responses: {
+            '200': {
+              description: 'Rozsyłka anulowana',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['id', 'status'],
+                    properties: {
+                      id: { type: 'string', description: 'Identyfikator rozsyłki' },
+                      status: { type: 'string', enum: ['cancelled'], description: 'Stan po anulowaniu' },
+                    },
+                  },
+                  example: { id: 'pkg_7c1e9a2b3d4f5a6b7c8d', status: 'cancelled' },
+                },
+              },
+            },
+            '401': BLAD_KLUCZA,
+            '404': blad(
+              'Brak rozsyłki albo rozsyłka innego klucza; bramka nie rozróżnia tych dwóch sytuacji',
+              'package_not_found',
+              'Nie znaleziono rozsyłki o tym identyfikatorze.',
+            ),
+            '409': blad(
+              'Rozsyłka przekazana do Multiinfo albo zakończona: package_not_cancellable. Komunikat opisuje stan rozsyłki',
+              'package_not_cancellable',
+              'Rozsyłka została już przekazana do Multiinfo, które nie pozwala jej anulować.',
+            ),
+            '429': blad(
+              'Przekroczony limit żądań klucza na minutę',
+              'rate_limited',
+              'Przekroczono limit 60 żądań na minutę.',
             ),
           },
         },
@@ -1628,7 +1705,8 @@ export function buildOpenApiDocument(): OpenApiDocument {
             },
             '400': blad(
               'Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone,'
-                + ' text_required, invalid_client_id, too_many_parts, start_at_in_past, link_domain_not_allowed',
+                + ' text_required, invalid_client_id, too_many_parts, start_at_in_past, start_at_too_far,'
+                + ' link_domain_not_allowed',
               'too_many_parts',
               'recipients.1: Treść wymaga 4 części, a limit integracji to 3.',
             ),

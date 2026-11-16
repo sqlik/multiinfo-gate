@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from '../zod.ts';
 import { packageLinks } from '../links/campaigns.ts';
 import type { PackageRow, RecipientRow } from '../store/packages.ts';
-import { authenticate, refuseIntegrationsOnly } from './auth.ts';
+import { authenticate, refuseIntegrationsOnly, type AuthContext } from './auth.ts';
+import { cancelPackage } from './cancel-package.ts';
 import { dropEmptyFields } from './empty-fields.ts';
 import { ApiError } from './errors.ts';
 import { linkFieldsSchema, linkRequest } from './link-fields.ts';
@@ -108,14 +109,28 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
     return links === undefined ? view : { ...view, links };
   });
 
-  const owned = (id: string, authorization: string | undefined): PackageRow => {
-    const auth = authenticate(authorization, deps.apiKeys);
+  const ownedBy = (auth: AuthContext, id: string): PackageRow => {
     const pkg = deps.packages.get(id);
     if (!pkg || pkg.apiKeyId !== auth.apiKeyId) {
       throw new ApiError(404, 'package_not_found', 'Nie znaleziono rozsyłki o tym identyfikatorze.');
     }
     return pkg;
   };
+  const owned = (id: string, authorization: string | undefined): PackageRow => ownedBy(authenticate(authorization, deps.apiKeys), id);
+
+  /**
+   * Anulowanie rozsyłki przechowywanej przez bramkę. Klucz wyłącznie dla integracji anuluje rozsyłki swoich
+   * integracji, tak jak odczytuje je trasą `GET`.
+   */
+  app.post<{ Params: { id: string } }>('/v1/packages/:id/cancel', async (request) => {
+    const auth = authenticate(request.headers.authorization, deps.apiKeys);
+    if (!deps.rateLimiter.check(auth.apiKeyId, auth.ratePerMin)) {
+      throw new ApiError(429, 'rate_limited', `Przekroczono limit ${auth.ratePerMin} żądań na minutę.`);
+    }
+    const pkg = ownedBy(auth, request.params.id);
+    const key = deps.apiKeys.get(auth.apiKeyId);
+    return cancelPackage(deps, pkg, now(), { actor: `klucz ${key?.name ?? auth.apiKeyId}`, ip: request.ip });
+  });
 
   /** Zamówienie raportu - także ponowne, gdy poprzedni wygasł albo się nie udał. */
   app.post<{ Params: { id: string } }>('/v1/packages/:id/report', async (request, reply) => {
