@@ -65,4 +65,25 @@ describe('dokumentacja jako zasoby MCP', () => {
     expect(readDoc('migate://docs/api.md', DOCS_DIR)!.text).toMatch(/^# /);
     expect(readDoc('ui://multiinfo-gate/co-moge', DOCS_DIR)).toBeNull();
   });
+
+  it('obrazki i filmy, których obraz Dockera nie zawiera, agent otrzymuje jako opis tekstowy', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mig-docs-'));
+    writeFileSync(join(dir, 'agenci-ai.md'), [
+      '# Agenci AI', '',
+      '![Strona po dodaniu połączenia „Ewa Nowak”: kod jednorazowy](obrazki/agent-kod.png)', '',
+      '<div class="film"><iframe src="https://iframe.mediadelivery.net/embed/802837/abc" title="Film „Integracja z aplikacją przez webhook”" loading="lazy" allowfullscreen></iframe></div>', '',
+      'Zwykły [odnośnik](integracje.md) zostaje.',
+    ].join('\n'));
+    expect(readDoc('migate://docs/agenci-ai.md', dir)!.text).toBe([
+      '# Agenci AI', '',
+      '[Zrzut ekranu: Strona po dodaniu połączenia „Ewa Nowak”: kod jednorazowy]', '',
+      '[Film „Integracja z aplikacją przez webhook” w dokumentacji online]', '',
+      'Zwykły [odnośnik](integracje.md) zostaje.',
+    ].join('\n'));
+    // Artykuły bramki po zamianie nie zawierają już odwołań do plików, których agent nie otworzy.
+    for (const file of DOC_FILES) {
+      const text = readDoc(`migate://docs/${file}`, DOCS_DIR)!.text;
+      expect(text, file).not.toMatch(/!\[|<iframe/);
+    }
+  });
 });

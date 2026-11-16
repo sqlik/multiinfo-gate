@@ -67,8 +67,16 @@ warunki:
 
 Warunki te spełnia każdy wariant udostępnienia API opisany w rozdziale 6
 [Uruchomienia](uruchomienie.md): Caddy, nginx i Traefik. Serwer MCP działa na porcie API pod adresem
-`/mcp`, dlatego żaden z wariantów nie wymaga zmian w konfiguracji. Panel bramki pozostaje niedostępny
-z zewnątrz.
+`/mcp`, dlatego Caddy i Traefik nie wymagają zmian w konfiguracji. W wariancie z nginx zainstalowanym
+przed wersją 1.12 zalecane jest dopisanie bloku `location /pobierz/` według rozdziału 6.6 Uruchomienia.
+Blok wyłącza zapis linków do pobrania w dzienniku dostępu nginx, ponieważ każdy taki link zawiera token,
+który przez godzinę otwiera plik z numerami odbiorców. Panel bramki pozostaje niedostępny z zewnątrz.
+
+Bramka liczy nieudane próby kodu, rejestracje aplikacji i wydania tokenów osobno dla każdego adresu.
+Za odwrotnym proxy bramka rozpoznaje adres pracownika wyłącznie wtedy, gdy adres proxy znajduje się
+w zmiennej `MIG_TRUSTED_PROXIES`. Wariant z Caddy ustawia tę zmienną samodzielnie, a wartość dla nginx
+i Traefika opisuje rozdział 6 Uruchomienia. W przeciwnym razie bramka traktuje wszystkich pracowników
+jak jeden adres, dlatego 10 błędnie wpisanych kodów wstrzymuje sprawdzanie kodów wszystkim na 15 minut.
 
 Aplikacje z kluczem w nagłówku łączą się z bramką z miejsca, w którym działają. Claude Code i VS Code
 działają na komputerze pracownika, dlatego wystarczy im adres bramki dostępny z sieci firmowej, także

@@ -23,9 +23,19 @@ export const DOC_MIME = 'text/markdown';
 
 const docUri = (file: DocFile): string => `migate://docs/${file}`;
 
+/**
+ * Obraz Dockera zawiera tylko pliki Markdown, a agent i tak nie otworzy obrazka ani filmu. Zrzut ekranu
+ * zamienia się na jego opis, a osadzony film na tytuł z informacją, że film znajduje się w dokumentacji online.
+ */
+function forAgent(text: string): string {
+  return text
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, (_, alt: string) => `[Zrzut ekranu: ${alt}]`)
+    .replace(/<div class="film"><iframe[^>]*\btitle="([^"]*)"[^>]*><\/iframe><\/div>/g, (_, title: string) => `[${title} w dokumentacji online]`);
+}
+
 function readText(dir: string, file: DocFile): string | null {
   try {
-    return readFileSync(join(dir, file), 'utf8');
+    return forAgent(readFileSync(join(dir, file), 'utf8'));
   } catch {
     return null;
   }
