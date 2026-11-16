@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { GROUP_LIMITS, INTEGRATION_KINDS, defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig, defaultPowerAutomateConfig, defaultSmsGroupConfig, parseConfig } from '../../src/integrations/config.ts';
-import { isMailIn, isSmsGroup } from '../../src/store/integrations.ts';
+import {
+  AGENT_SCOPES, GROUP_LIMITS, INTEGRATION_KINDS, PA_RECIPIENT_LIMIT_MAX, defaultAgentConfig, defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig,
+  defaultPowerAutomateConfig, defaultSmsGroupConfig, parseConfig,
+} from '../../src/integrations/config.ts';
+import { isAgent, isMailIn, isSmsGroup } from '../../src/store/integrations.ts';
 
 const outbound = () => ({ ...defaultOutboundConfig(), url: 'https://example.invalid/hook' });
 
@@ -156,5 +159,31 @@ describe('power_automate', () => {
     expect(defaultPowerAutomateConfig()).not.toHaveProperty('condition');
     expect(() => parseConfig('power_automate', { ...defaultPowerAutomateConfig(), maxParts: 10 })).toThrow();
     expect(() => parseConfig('power_automate', { ...defaultPowerAutomateConfig(), overflow: 'skip' })).toThrow();
+  });
+});
+
+describe('agent', () => {
+  it('defaultAgentConfig przechodzi parseConfig("agent", …)', () => {
+    expect(parseConfig('agent', defaultAgentConfig())).toEqual({
+      scopes: ['send', 'read_sent'], throttle: { limit: 30, windowMinutes: 60, recipients: 1000 }, eventLogLimit: 200, maxParts: 3, overflow: 'reject',
+    });
+    expect(INTEGRATION_KINDS).toContain('agent');
+    expect(AGENT_SCOPES).toEqual(['send', 'send_group', 'read_sent', 'campaigns', 'read_inbound', 'reply']);
+  });
+  it('agentConfigSchema odrzuca pustą listę zakresów, powtórzenie i limit odbiorców 50 001', () => {
+    const base = defaultAgentConfig();
+    expect(() => parseConfig('agent', { ...base, scopes: [] })).toThrow();
+    expect(() => parseConfig('agent', { ...base, scopes: ['send', 'send'] })).toThrow();
+    expect(() => parseConfig('agent', { ...base, scopes: ['send', 'wszystko'] })).toThrow();
+    expect(() => parseConfig('agent', { ...base, throttle: { ...base.throttle, recipients: PA_RECIPIENT_LIMIT_MAX + 1 } })).toThrow();
+    expect(parseConfig('agent', { ...base, throttle: { ...base.throttle, recipients: PA_RECIPIENT_LIMIT_MAX } }).throttle.recipients).toBe(50_000);
+  });
+  it('limit odbiorców pominięty w zapisie wczytuje się jako 1000', () => {
+    const { recipients: _, ...throttle } = defaultAgentConfig().throttle;
+    expect(parseConfig('agent', { ...defaultAgentConfig(), throttle }).throttle.recipients).toBe(1000);
+  });
+  it('isAgent rozpoznaje rodzaj po wierszu', () => {
+    expect(isAgent({ kind: 'agent' } as never)).toBe(true);
+    expect(isAgent({ kind: 'power_automate' } as never)).toBe(false);
   });
 });

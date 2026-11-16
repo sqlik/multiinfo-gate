@@ -40,6 +40,8 @@ export interface PackageSubmitInput {
   prepared?: { defaultText?: PreparedText; recipients: Array<PreparedText | undefined> } | undefined;
   /** Nazwa kampanii, gdy żądanie jej nie podaje: nazwa integracji; bez niej identyfikator rozsyłki. */
   campaignFallback?: string | undefined;
+  /** Połączenie agenta AI, które zleciło rozsyłkę; brak dla pozostałych źródeł. */
+  agentConnectionId?: number | undefined;
 }
 
 export interface PackageAccepted {
@@ -73,9 +75,9 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
   if (!account) throw new ApiError(500, 'account_missing', 'Konto przypisane do klucza nie istnieje.');
 
   const serviceId = String(input.serviceId ?? auth.defaultServiceId ?? '');
-  if (!serviceId) throw new ApiError(400, 'service_required', 'Klucz nie ma domyślnej usługi - podaj serviceId.');
+  if (!serviceId) throw new ApiError(400, 'service_required', 'Klucz nie określa domyślnej usługi - podaj serviceId.');
   if (!auth.allowedServiceIds.includes(serviceId)) {
-    throw new ApiError(403, 'service_not_allowed', `Klucz nie ma dostępu do usługi ${serviceId}.`);
+    throw new ApiError(403, 'service_not_allowed', `Klucz nie obejmuje usługi ${serviceId}.`);
   }
 
   const orig = resolveOrig(input.orig, auth, account, deps.accounts);
@@ -199,7 +201,7 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
       defaultText: sharedText, orig: orig ?? null, costCenter: input.costCenter ?? null,
       startAt: startAt?.toISOString() ?? null, deliveryReport: input.deliveryReport ? 1 : 0,
       encoding, multipart: multipart ? 1 : 0, createdAt: now.toISOString(),
-      integrationId, requestedBy: input.requestedBy ?? null,
+      integrationId, requestedBy: input.requestedBy ?? null, agentConnectionId: input.agentConnectionId ?? null,
       idempotencyKey: input.idempotencyKey ?? null, requestHash: input.idempotencyKey === undefined ? null : requestHash,
       campaignId,
     }, stored);

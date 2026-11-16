@@ -1,4 +1,4 @@
-import { OUTBOUND_EVENTS, defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type MailInConfig, type OutboundConfig, type GroupMember, type PowerAutomateConfig, type SmsGroupConfig } from '../../integrations/config.ts';
+import { OUTBOUND_EVENTS, defaultInboundConfig, defaultOutboundConfig, type InboundConfig, type IntegrationConfig, type IntegrationKind, type MailInConfig, type OutboundConfig, type GroupMember, type AgentConfig, type PowerAutomateConfig, type SmsGroupConfig } from '../../integrations/config.ts';
 import { RULE_OPS, ruleOpLabel, type RuleOp } from '../../integrations/conditions.ts';
 import { safeUrl } from '../../integrations/enrich.ts';
 import type { Preset } from '../../integrations/presets/index.ts';
@@ -7,6 +7,8 @@ import type { IntegrationRow } from '../../store/integrations.ts';
 import type { MailInState } from '../../store/mail-in.ts';
 import { warsawStamp } from '../../time/warsaw.ts';
 import { powerAutomatePanel } from './power-automate.ts';
+import { gatewayAddressPanel, gatewayAddressWarning, scopesWords } from './agent.ts';
+import { connectionsSection, type ConnectionListItem } from './agent-connections.ts';
 import { esc } from './layout.ts';
 import { apiAddressPanel, fullUrl } from './settings.ts';
 
@@ -19,6 +21,8 @@ export interface IntegrationView {
   lastEvent: IntegrationEventRow | null;
   /** Stan skrzynki pocztowej; null dla webhooków i skrzynki bez stanu. */
   mailbox: MailInState | null;
+  /** Aktywne połączenia integracji agenta; null dla pozostałych rodzajów. */
+  activeConnections: number | null;
   /** Chwila rysowania: do słów „2 min temu”. */
   now: Date;
 }
@@ -28,7 +32,7 @@ export interface IntegrationsFilter { kind: 'in' | 'out' | 'mail' | 'grupa' | nu
 /** Klucz do wyboru w formularzu: czynne klucze z usługami i nadpisami, po których wybiera się usługę i nadawcę. */
 export interface KeyOption { id: number; name: string; accountName: string; serviceIds: string[]; origs: string[] }
 
-const KIND_LABEL: Record<IntegrationKind, string> = { webhook_in: 'do SMS', webhook_out: 'z SMS-a', mail_in: 'z poczty', sms_group: 'do grupy', power_automate: 'do SMS' };
+const KIND_LABEL: Record<IntegrationKind, string> = { webhook_in: 'do SMS', webhook_out: 'z SMS-a', mail_in: 'z poczty', sms_group: 'do grupy', power_automate: 'do SMS', agent: 'do SMS' };
 export const kindLabel = (kind: IntegrationKind): string => KIND_LABEL[kind];
 
 const RESULT_LABELS: Record<EventResult, string> = {
@@ -133,6 +137,7 @@ export function integrationsPage(views: IntegrationView[], filter: IntegrationsF
       <td>
         <strong><a href="/integracje/${esc(v.row.id)}">${esc(v.row.name)}</a></strong>
         <div class="dim" style="font-size: 11.5px; margin-top: 2px;">${esc(v.presetName)}</div>
+        ${v.activeConnections === null ? '' : `<div style="margin-top: 4px;"><span class="tag" style="white-space: nowrap;">${esc(countForms(v.activeConnections, 'aktywne połączenie', 'aktywne połączenia', 'aktywnych połączeń'))}</span></div>`}
       </td>
       <td><span class="tag">${esc(kindLabel(v.row.kind))}</span></td>
       <td>${esc(v.keyName)} <span class="dim">· ${esc(v.accountName)}</span></td>
@@ -406,7 +411,8 @@ export function guideHtml(markdown: string): string {
 }
 
 export function sectionBasics(
-  ctx: FormContext, v: Pick<IntegrationFormValues, 'name' | 'apiKeyId' | 'serviceId' | 'orig' | 'enabled'>, opts: { nameHint?: string } = {},
+  ctx: FormContext, v: Pick<IntegrationFormValues, 'name' | 'apiKeyId' | 'serviceId' | 'orig' | 'enabled'>,
+  opts: { nameHint?: string; serviceHint?: string; origHint?: string } = {},
 ): string {
   const services = [...new Set(ctx.keys.flatMap((k) => k.serviceIds))];
   const origs = [...new Set(ctx.keys.flatMap((k) => k.origs))];
@@ -437,7 +443,7 @@ export function sectionBasics(
         <option value="">domyślne klucza</option>
         ${services.map((s) => `<option value="${esc(s)}"${v.serviceId === s ? ' selected' : ''}>${esc(s)}</option>`).join('')}
       </select>
-      <div class="hint">Musi być jedną z usług wybranego klucza</div>
+      <div class="hint">${esc(opts.serviceHint ?? 'Musi być jedną z usług wybranego klucza')}</div>
     </div>
     <div class="field">
       <label for="orig">Nadpis nadawcy</label>
@@ -445,6 +451,7 @@ export function sectionBasics(
         <option value="">domyślny klucza</option>
         ${origs.map((o) => `<option value="${esc(o)}"${v.orig === o ? ' selected' : ''}>${esc(o)}</option>`).join('')}
       </select>
+      ${opts.origHint ? `<div class="hint">${esc(opts.origHint)}</div>` : ''}
     </div>
     <div class="field">${checkbox('enabled', v.enabled, 'Włączona')}</div>
   </details>`;
@@ -707,7 +714,7 @@ export interface GuardWords { unit: string; throttleHint: string; payloadHint: s
 
 const GUARD_WORDS: GuardWords = {
   unit: 'zdarzeń',
-  throttleHint: 'Zdarzenia ponad limit w oknie otrzymują wpis „limit” bez SMS-a. Pierwsze przekroczenie w oknie jest zgłaszane mailem do administratora',
+  throttleHint: 'Zdarzenia ponad limit w oknie otrzymują wpis „limit” bez SMS-a. Pierwsze przekroczenie w oknie jest zgłaszane mailem do administratora.',
   payloadHint: 'Przydatne podczas uruchamiania: ładunek z dziennika można użyć jako próbki. Ładunki mogą zawierać dane wrażliwe, dlatego opcję zaleca się włączać tylko na czas konfiguracji.',
 };
 
@@ -842,6 +849,8 @@ export interface IntegrationDetail {
   view: IntegrationView; events: DetailEvent[]; apiUrl: string | null;
   /** Wybrane warianty trybu prostego w słowach; null, gdy konfiguracja jest spoza list. */
   simple?: { when: string; text: string } | null;
+  /** Połączenia integracji agenta ze stanem; brak dla pozostałych rodzajów. */
+  connections?: ConnectionListItem[];
 }
 
 /** Warunek w słowach: „heartbeat.status równe 0; monitor.name zawiera prod” albo wyrażenie Liquid. */
@@ -940,6 +949,12 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
       ? '<span class="dim">pusta lista: akcja „Wyślij SMS do grupy” kończy się błędem</span>'
       : `${countForms(cfg.recipients.length, 'numer', 'numery', 'numerów')}: ${memberWords(cfg.recipients)}`, true));
     rows.push(kvRow('Treść', `do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
+  } else if (row.kind === 'agent') {
+    const cfg = c as AgentConfig;
+    rows.push(kvRow('Usługa', row.serviceId === null ? '<span class="dim">domyślna klucza</span>' : esc(row.serviceId), row.serviceId !== null));
+    rows.push(kvRow('Nadpis nadawcy', row.orig === null ? '<span class="dim">domyślny klucza</span>' : esc(row.orig), row.orig !== null));
+    rows.push(kvRow('Zakresy', esc(scopesWords(cfg.scopes))));
+    rows.push(kvRow('Treść', `do ${esc(cfg.maxParts)} części, nadmiar: ${cfg.overflow === 'truncate' ? 'przycięcie' : 'odrzucenie'}`));
   } else if (row.kind === 'webhook_out') {
     const cfg = c as OutboundConfig;
     rows.push(kvRow('Adres docelowy', `${esc(cfg.method)} ${esc(cfg.url)}`, true));
@@ -953,9 +968,12 @@ function configRows(row: IntegrationRow, apiUrl: string | null, simple: Integrat
   // Integracja z Power Automate nie ma warunku: warunki buduje się w przepływie.
   if ('condition' in c) rows.push(kvRow(simple ? 'Warunek wysyłki' : 'Warunek', esc(simple ? simple.when : conditionWords(c.condition))));
   const perWindow = `na ${countForms(c.throttle.windowMinutes, 'minutę', 'minuty', 'minut')}`;
+  const recipients = (n: number) => countForms(n, 'odbiorca', 'odbiorców', 'odbiorców');
   rows.push(kvRow('Limit burzy', row.kind === 'power_automate'
-    ? `${countForms(c.throttle.limit, 'wywołanie', 'wywołania', 'wywołań')} i ${countForms((c as PowerAutomateConfig).throttle.recipients, 'odbiorca', 'odbiorców', 'odbiorców')} ${perWindow}`
-    : `${esc(c.throttle.limit)} zdarzeń ${perWindow}`));
+    ? `${countForms(c.throttle.limit, 'wywołanie', 'wywołania', 'wywołań')} i ${recipients((c as PowerAutomateConfig).throttle.recipients)} ${perWindow}`
+    : row.kind === 'agent'
+      ? `${countForms(c.throttle.limit, 'wysyłka', 'wysyłki', 'wysyłek')} i ${recipients((c as AgentConfig).throttle.recipients)} ${perWindow}`
+      : `${esc(c.throttle.limit)} zdarzeń ${perWindow}`));
   rows.push(kvRow('Ładunki', row.storePayloads === 1 ? 'przechowywane 7 dni, zaszyfrowane' : 'nieprzechowywane'));
   rows.push(kvRow('Dziennik', `do ${esc(c.eventLogLimit)} wpisów`));
   return rows.join('');
@@ -971,8 +989,8 @@ function relatedCell(e: IntegrationEventRow): string {
 
 function eventRow(row: IntegrationRow, d: DetailEvent): string {
   const e = d.row;
-  // Integracja z Power Automate nie ma próbki: treść buduje przepływ, a nie szablon bramki.
-  const sample = row.kind === 'power_automate' ? '' : `<a href="/integracje/${esc(row.id)}/edytuj?probka=${esc(e.id)}">Użyj jako próbki</a>`;
+  // Integracje z Power Automate i agenta nie korzystają z próbki: treść buduje przepływ albo agent, a nie szablon bramki.
+  const sample = row.kind === 'power_automate' || row.kind === 'agent' ? '' : `<a href="/integracje/${esc(row.id)}/edytuj?probka=${esc(e.id)}">Użyj jako próbki</a>`;
   const payload = e.payload === null ? '' : `<details style="margin-top: 4px;">
         <summary class="dim" style="cursor: pointer; font-size: 11.5px;">ładunek${e.response === null ? '' : ' i odpowiedź'}</summary>
         <pre class="m" style="white-space: pre-wrap; margin: 6px 0; font-size: 11.5px;">${esc(e.payload)}</pre>
@@ -1024,10 +1042,13 @@ export function integrationDetailPage(d: IntegrationDetail): string {
     ? `<form method="post" action="/integracje/${esc(row.id)}/wylacz" style="display: inline;"><button class="btn btn-s" type="submit">Wyłącz</button></form>`
     : `<form method="post" action="/integracje/${esc(row.id)}/wlacz" style="display: inline;"><button class="btn btn-s" type="submit">Włącz</button></form>`;
   const remove = `<form method="post" action="/integracje/${esc(row.id)}/usun" style="display: inline;"
-      data-confirm="Usunąć integrację „${esc(row.name)}”? Dziennik zostanie usunięty razem z nią, a adres wejściowy przestanie działać." data-confirm-ok="Usuń">
+      data-confirm="Usunąć integrację „${esc(row.name)}”? ${row.kind === 'agent'
+    ? 'Dziennik i wszystkie połączenia pracowników zostaną usunięte razem z nią, a aplikacje AI utracą dostęp do bramki.'
+    : 'Dziennik zostanie usunięty razem z nią, a adres wejściowy przestanie działać.'}" data-confirm-ok="Usuń">
       <button class="btn btn-s" type="submit">Usuń</button></form>`;
   const events = d.events.length === 0
-    ? `<tr><td class="dim" colspan="6">Dziennik jest pusty. Integracja nie otrzymała jeszcze żadnego ${row.kind === 'power_automate' ? 'wywołania' : 'zdarzenia'}.</td></tr>`
+    ? `<tr><td class="dim" colspan="6">${row.kind === 'agent' ? 'Dziennik jest pusty. Agent nie wykonał jeszcze żadnej wysyłki.'
+      : `Dziennik jest pusty. Integracja nie otrzymała jeszcze żadnego ${row.kind === 'power_automate' ? 'wywołania' : 'zdarzenia'}.`}</td></tr>`
     : d.events.map((e) => eventRow(row, e)).join('');
   const copy = `<form method="post" action="/integracje/${esc(row.id)}/kopiuj" style="display: inline;"><button class="btn btn-s" type="submit">Utwórz kopię</button></form>`;
   const mailbox = row.kind === 'mail_in' ? mailboxPanel(d.view) : '';
@@ -1045,26 +1066,29 @@ export function integrationDetailPage(d: IntegrationDetail): string {
     </div>
   </div>
   <div class="scroll">
+    ${row.kind === 'agent' ? gatewayAddressWarning(d.apiUrl, 'na dole strony') : ''}
     ${mailbox}
     <div class="panel">
       <div class="panel-h"><div class="lab">Konfiguracja</div><div class="m dim">24 h: ${esc(d.view.counts.sent)} wysłane · ${countForms(d.view.counts.errors, 'błąd', 'błędy', 'błędów')}</div></div>
       <div class="kv">${configRows(row, d.apiUrl, d.simple ?? null)}</div>
     </div>
     ${row.kind === 'power_automate' ? powerAutomatePanel(d.apiUrl, `/integracje/${row.id}`) : ''}
+    ${row.kind === 'agent' ? connectionsSection(d.connections ?? [], row, d.view.now) : ''}
     <div class="panel">
       <div class="panel-h"><div class="lab">Dziennik</div>
-        <div class="m dim">${row.storePayloads === 1 ? 'ładunki przechowywane 7 dni' : 'Ładunki nieprzechowywane. Przechowywanie można włączyć w edycji na czas konfiguracji'}</div></div>
+        <div class="m dim">${row.storePayloads === 1 ? 'ładunki przechowywane 7 dni' : 'Ładunki nieprzechowywane. Przechowywanie można włączyć w edycji na czas konfiguracji.'}</div></div>
       <table style="table-layout: fixed;">
         <tr>
           <th class="nw" style="width: 134px;">Czas</th>
           <th style="width: 120px;">Wynik</th>
           <th>Powód</th>
           <th style="width: 180px;">Powiązanie</th>
-          <th style="width: 130px;">${row.kind === 'mail_in' || row.kind === 'sms_group' || row.kind === 'power_automate' ? 'Nadawca' : 'Adres źródłowy'}</th>
+          <th style="width: 130px;">${row.kind === 'mail_in' || row.kind === 'sms_group' || row.kind === 'power_automate' || row.kind === 'agent' ? 'Nadawca' : 'Adres źródłowy'}</th>
           <th style="width: 76px;"></th>
         </tr>
         ${events}
       </table>
     </div>
+    ${row.kind === 'agent' ? gatewayAddressPanel(d.apiUrl, `/integracje/${row.id}`) : ''}
   </div>`;
 }

@@ -107,6 +107,7 @@ describe('POST /v1/messages/:id/cancel', () => {
     const res = await post('/v1/messages/msg_s/cancel');
     expect(res.statusCode).toBe(409);
     expect(res.json().error.code).toBe('already_passed');
+    expect(res.json().error.message).toBe('Wiadomość została już przekazana do sieci operatora i nie można jej anulować.');
     expect(res.json().error.providerCode).toBe(-41);
     expect(messages.get('msg_s')!.status).toBe('sent');
   });

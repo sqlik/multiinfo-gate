@@ -1,14 +1,14 @@
 import type { ProtocolTrace } from '../../multiinfo/client.ts';
 import { describeSubstatus, mapStatus } from '../../multiinfo/status.ts';
 import type { MessageEvent } from '../../store/message-events.ts';
-import { deliveriesTable, type DeliveryView } from './deliveries.ts';
+import { connectionRow, deliveriesTable, type DeliveryView } from './deliveries.ts';
 import type { MessageRow } from '../../store/messages.ts';
 import { measureText } from '../../text/measure.ts';
 import { segmentText } from '../../text/segment.ts';
 import { warsawStamp, warsawStampMs } from '../../time/warsaw.ts';
 import { esc, preview } from './layout.ts';
 import { segmentPanel } from './segments.ts';
-import { statusLabel, statusTone } from './status-labels.ts';
+import { stageLabel, statusLabel, statusTone } from './status-labels.ts';
 
 export interface MessageFilters {
   status: string | null;
@@ -23,6 +23,8 @@ export interface MessagesData {
   limit: number;
   keyNames: Map<number, string>;
   accountNames: Map<number, string>;
+  /** Źródło wiadomości słowami według identyfikatora: „API”, „integracja …”, „agent … · …”, „bramka”. */
+  sources: Map<string, string>;
 }
 
 const FILTRY: Array<{ key: string | null; label: string }> = [
@@ -52,6 +54,13 @@ function link(filters: MessageFilters, patch: Partial<MessageFilters & { offset:
   return query === '' ? '/wiadomosci' : `/wiadomosci?${query}`;
 }
 
+/**
+ * Źródło na liście jako drugi wiersz komórki treści: integracja albo agent z połączeniem. Wysyłka z API go nie zawiera,
+ * a powiadomienie bramki jest oznaczone plakietką.
+ */
+const sourceLine = (source: string) => (source === 'API' || source === 'bramka' ? ''
+  : `<div class="dim" style="font-size: 11.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis;">${esc(source)}</div>`);
+
 export function messagesPage(data: MessagesData): string {
   const tabs = FILTRY.map((f) => {
     const on = (f.key ?? '') === (data.filters.status ?? '');
@@ -64,7 +73,7 @@ export function messagesPage(data: MessagesData): string {
         <td class="m dim nw">${esc(warsawStamp(m.createdAt))}</td>
         <td class="m"><a href="/wiadomosci/${esc(m.id)}">${esc(m.id)}</a></td>
         <td class="m">${esc(m.dest)}</td>
-        <td class="txt">${m.system === 1 ? '<span class="tag">powiadomienie bramki</span> ' : ''}${preview(m.body)}</td>
+        <td class="txt">${m.system === 1 ? '<span class="tag">powiadomienie bramki</span> ' : ''}${preview(m.body)}${sourceLine(data.sources.get(m.id) ?? 'API')}</td>
         <td><span class="enc">${esc(m.encoding === 'gsm' ? 'GSM-7' : 'UCS-2')}</span></td>
         <td class="m">${esc(m.parts)}</td>
         <td>${state(m)}</td>
@@ -130,6 +139,10 @@ export interface MessageDetail {
   deliveries: DeliveryView[];
   /** Integracja, z której wiadomość przyszła (webhook przychodzący albo skrzynka); brak dla wysyłki przez API. */
   integration?: { id: number; name: string } | null;
+  /** Źródło słowami (`sourceWords`); brak w starszych wywołaniach. */
+  source?: string;
+  /** Połączenie agenta, które zleciło wysyłkę, z integracją agenta. */
+  connection?: { name: string; integration: { id: number; name: string } } | null;
   /** Krótkie linki wiadomości: kampania, kliknięcia ludzi i pierwsze otwarcie; null po okresie przechowywania szczegółów. */
   links?: { campaign: { id: number; name: string }; clicks: number | null; firstOpenedAt: string | null } | null;
 }
@@ -138,25 +151,26 @@ type Tone = 'ok' | 'wait' | 'fail' | 'dim';
 
 interface Step { at: string; tone: Tone; text: string }
 
-/** Kropka i opis zdarzenia z przebiegu. Rodzaje zapisuje API, worker i anulowanie. */
+/** Kropka i opis zdarzenia z przebiegu. Rodzaje zapisuje API, worker i anulowanie, nazwy etapów są wspólne z agentem. */
 function stepOf(e: MessageEvent): Step {
   const detail = e.detail === null ? '' : esc(e.detail);
+  const label = stageLabel(e.kind);
   switch (e.kind) {
-    case 'queued': return { at: e.at, tone: 'dim', text: 'Przyjęta przez bramkę, zapisana w kolejce' };
-    case 'sent': return { at: e.at, tone: 'dim', text: `Przekazana do Multiinfo - ${detail}` };
-    case 'retry': return { at: e.at, tone: 'dim', text: `Ponowienie: ${detail}` };
-    case 'paused': return { at: e.at, tone: 'dim', text: `Konto wstrzymane: ${detail}` };
+    case 'queued': return { at: e.at, tone: 'dim', text: label };
+    case 'sent': return { at: e.at, tone: 'dim', text: `${label} - ${detail}` };
+    case 'retry':
+    case 'paused': return { at: e.at, tone: 'dim', text: `${label}: ${detail}` };
     case 'status': {
       const codes = /status (\d+) \/ (\d+)/.exec(e.detail ?? '');
       const tone: Tone = codes ? statusTone(mapStatus(Number(codes[1]), Number(codes[2]))) : 'wait';
-      return { at: e.at, tone, text: `Multiinfo: ${detail}` };
+      return { at: e.at, tone, text: `${label}: ${detail}` };
     }
-    case 'failed': return { at: e.at, tone: 'fail', text: `Niepowodzenie: ${detail}` };
-    case 'expired': return { at: e.at, tone: 'fail', text: `Przedawniona: ${detail}` };
-    case 'cancelled': return { at: e.at, tone: 'fail', text: `Anulowana - ${detail}` };
-    case 'cancel_partial': return { at: e.at, tone: 'fail', text: `Anulowanie częściowe: ${detail}` };
-    case 'cancel_failed': return { at: e.at, tone: 'fail', text: `Anulowanie nieskuteczne: ${detail}` };
-    case 'abandoned': return { at: e.at, tone: 'fail', text: `Odpytywanie przerwane: ${detail}` };
+    case 'cancelled': return { at: e.at, tone: 'fail', text: `${label} - ${detail}` };
+    case 'failed':
+    case 'expired':
+    case 'cancel_partial':
+    case 'cancel_failed':
+    case 'abandoned': return { at: e.at, tone: 'fail', text: `${label}: ${detail}` };
     case 'webhook': return { at: e.at, tone: 'ok', text: `Webhook <span class="m">${detail}</span> zakolejkowany` };
     default: return { at: e.at, tone: 'dim', text: `${esc(e.kind)}${detail === '' ? '' : `: ${detail}`}` };
   }
@@ -165,7 +179,7 @@ function stepOf(e: MessageEvent): Step {
 /** Wiadomości sprzed migracji nie mają zdarzeń - pokazujemy trzy daty, jak dotąd. */
 function legacySteps(m: MessageRow, substatus: { opis: string } | null): Step[] {
   return [
-    { at: m.createdAt, tone: 'dim', text: 'Przyjęta przez bramkę, zapisana w kolejce' },
+    { at: m.createdAt, tone: 'dim', text: stageLabel('queued') },
     ...(m.sentAt === null ? [] : [{
       at: m.sentAt, tone: 'dim' as Tone,
       text: `Przekazana do Multiinfo - identyfikatory ${m.miIds.map((x) => `<span class="m">${esc(x)}</span>`).join(', ')}`,
@@ -281,10 +295,12 @@ export function messagePage(d: MessageDetail): string {
           <div>Nadpis</div><div class="m">${esc(m.orig ?? '-')}</div>
           <div>ID usługi</div><div class="m">${esc(m.serviceId)}</div>
           ${m.inReplyTo === null ? '' : `<div>Odpowiedź na</div><div class="m"><a href="/odebrane/${esc(m.inReplyTo)}">${esc(m.inReplyTo)}</a></div>`}
+          ${d.source === undefined ? '' : `<div>Źródło</div><div>${esc(d.source)}</div>`}
           ${!d.integration ? '' : `<div>Integracja</div><div><a href="/integracje/${esc(d.integration.id)}">${esc(d.integration.name)}</a></div>`}
+          ${connectionRow(d.connection)}
           ${linkRows(d.links)}
           ${m.mailFrom === null ? '' : `<div>E-mail nadawcy</div><div class="m">${esc(m.mailFrom)}</div>`}
-          ${m.requestedBy === null ? '' : `<div>Zlecający</div><div>${esc(m.requestedBy)}</div>`}
+          ${m.requestedBy === null || d.connection ? '' : `<div>Zlecający</div><div>${esc(m.requestedBy)}</div>`}
           <div>Części w Multiinfo</div><div>${parts}</div>
           <div>Status Multiinfo</div><div class="m">${substatus === null
             ? '<span class="dim">brak</span>'

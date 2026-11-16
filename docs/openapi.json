@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Multiinfo Gate",
-    "version": "1.11.6",
+    "version": "1.12.0",
     "description": "Bramka SMS między aplikacjami a platformą Multiinfo operatora Plus. Opis obejmuje każde wywołanie API bramki: wysyłkę, odczyt wysłanych wiadomości, anulowanie, rozsyłkę wraz z raportem, odczyt wiadomości przychodzących oraz stan bramki. Powiadomienia webhook idą w drugą stronę, więc opisuje je dokumentacja bramki. Przyjęcie wiadomości i rozsyłki jest asynchroniczne: bramka odpowiada kodem 202 po zapisaniu żądania w kolejce, a wysyłka do Multiinfo następuje później.",
     "license": {
       "name": "MIT",
@@ -173,7 +173,7 @@
                   },
                   "orig": {
                     "type": "string",
-                    "description": "Nadpis nadawcy. Musi należeć do nadpisów dozwolonych dla klucza. Pominięty oznacza nadpis domyślny klucza albo konta, a gdy żadnego nie ma, nadawcą jest numer przydzielony kontu w Multiinfo.",
+                    "description": "Nadpis nadawcy. Musi należeć do nadpisów dozwolonych dla klucza. Pominięty oznacza nadpis domyślny klucza albo konta, a gdy żaden nie jest ustawiony, nadawcą jest numer przydzielony kontu w Multiinfo.",
                     "example": "Firma Info"
                   },
                   "serviceId": {
@@ -803,7 +803,7 @@
                 "example": {
                   "error": {
                     "code": "message_not_found",
-                    "message": "Nie ma wiadomości o tym identyfikatorze."
+                    "message": "Nie znaleziono wiadomości o tym identyfikatorze."
                   }
                 }
               }
@@ -893,14 +893,14 @@
                 "example": {
                   "error": {
                     "code": "message_not_found",
-                    "message": "Nie ma wiadomości o tym identyfikatorze."
+                    "message": "Nie znaleziono wiadomości o tym identyfikatorze."
                   }
                 }
               }
             }
           },
           "409": {
-            "description": "Anulowanie nie jest już możliwe: already_final, gdy wiadomość ma stan ostateczny, albo already_passed, gdy Multiinfo przekazało ją do abonenta",
+            "description": "Anulowanie nie jest już możliwe: already_final, gdy wiadomość ma stan ostateczny, albo already_passed, gdy Multiinfo przekazało ją do sieci operatora",
             "content": {
               "application/json": {
                 "schema": {
@@ -1015,11 +1015,11 @@
                   "defaultText": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Treść dla odbiorców bez własnej treści. Jest wymagana, jeżeli którykolwiek odbiorca jej nie ma"
+                    "description": "Treść dla odbiorców bez własnej treści. Jest wymagana, jeżeli dla któregokolwiek odbiorcy nie podano własnej treści"
                   },
                   "orig": {
                     "type": "string",
-                    "description": "Nadpis nadawcy. Musi należeć do nadpisów dozwolonych dla klucza. Pominięty oznacza nadpis domyślny klucza albo konta, a gdy żadnego nie ma, nadawcą jest numer przydzielony kontu w Multiinfo.",
+                    "description": "Nadpis nadawcy. Musi należeć do nadpisów dozwolonych dla klucza. Pominięty oznacza nadpis domyślny klucza albo konta, a gdy żaden nie jest ustawiony, nadawcą jest numer przydzielony kontu w Multiinfo.",
                     "example": "Firma Info"
                   },
                   "serviceId": {
@@ -1268,7 +1268,7 @@
                 "example": {
                   "error": {
                     "code": "service_not_allowed",
-                    "message": "Klucz nie ma dostępu do usługi 24139."
+                    "message": "Klucz nie obejmuje usługi 24139."
                   }
                 }
               }
@@ -1369,7 +1369,7 @@
                 "example": {
                   "error": {
                     "code": "package_not_found",
-                    "message": "Nie ma rozsyłki o tym identyfikatorze."
+                    "message": "Nie znaleziono rozsyłki o tym identyfikatorze."
                   }
                 }
               }
@@ -1479,14 +1479,14 @@
                 "example": {
                   "error": {
                     "code": "package_not_found",
-                    "message": "Nie ma rozsyłki o tym identyfikatorze."
+                    "message": "Nie znaleziono rozsyłki o tym identyfikatorze."
                   }
                 }
               }
             }
           },
           "409": {
-            "description": "Rozsyłka jeszcze trwa, więc raportu nie ma czego zamówić",
+            "description": "Rozsyłka jeszcze trwa, dlatego zamówienie raportu nie jest możliwe",
             "content": {
               "application/json": {
                 "schema": {
@@ -1640,7 +1640,7 @@
                 "example": {
                   "error": {
                     "code": "package_not_found",
-                    "message": "Nie ma rozsyłki o tym identyfikatorze."
+                    "message": "Nie znaleziono rozsyłki o tym identyfikatorze."
                   }
                 }
               }
@@ -1837,7 +1837,7 @@
                 "example": {
                   "error": {
                     "code": "campaign_not_found",
-                    "message": "Nie ma kampanii o tej nazwie."
+                    "message": "Nie znaleziono kampanii o tej nazwie."
                   }
                 }
               }
@@ -1993,7 +1993,7 @@
                 "example": {
                   "error": {
                     "code": "service_not_allowed",
-                    "message": "Klucz nie ma dostępu do usługi 24139."
+                    "message": "Klucz nie obejmuje usługi 24139."
                   }
                 }
               }
@@ -2062,7 +2062,7 @@
                 "example": {
                   "error": {
                     "code": "inbound_not_found",
-                    "message": "Nie ma wiadomości przychodzącej o tym identyfikatorze."
+                    "message": "Nie znaleziono wiadomości przychodzącej o tym identyfikatorze."
                   }
                 }
               }
@@ -2433,7 +2433,7 @@
                 "example": {
                   "error": {
                     "code": "service_not_allowed",
-                    "message": "Klucz nie ma dostępu do usługi 24139."
+                    "message": "Klucz nie obejmuje usługi 24139."
                   }
                 }
               }
@@ -2449,7 +2449,7 @@
                 "example": {
                   "error": {
                     "code": "integration_not_found",
-                    "message": "Nie ma integracji z Power Automate o tym identyfikatorze."
+                    "message": "Nie znaleziono integracji z Power Automate o tym identyfikatorze."
                   }
                 }
               }
@@ -2582,7 +2582,7 @@
                   "defaultText": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Treść dla odbiorców bez własnej treści. Jest wymagana, jeżeli którykolwiek odbiorca jej nie ma"
+                    "description": "Treść dla odbiorców bez własnej treści. Jest wymagana, jeżeli dla któregokolwiek odbiorcy nie podano własnej treści"
                   },
                   "encoding": {
                     "type": "string",
@@ -2824,7 +2824,7 @@
                 "example": {
                   "error": {
                     "code": "service_not_allowed",
-                    "message": "Klucz nie ma dostępu do usługi 24139."
+                    "message": "Klucz nie obejmuje usługi 24139."
                   }
                 }
               }
@@ -2840,7 +2840,7 @@
                 "example": {
                   "error": {
                     "code": "integration_not_found",
-                    "message": "Nie ma integracji z Power Automate o tym identyfikatorze."
+                    "message": "Nie znaleziono integracji z Power Automate o tym identyfikatorze."
                   }
                 }
               }
@@ -3082,7 +3082,7 @@
                 "example": {
                   "error": {
                     "code": "service_not_allowed",
-                    "message": "Klucz nie ma dostępu do usługi 24139."
+                    "message": "Klucz nie obejmuje usługi 24139."
                   }
                 }
               }
@@ -3098,7 +3098,7 @@
                 "example": {
                   "error": {
                     "code": "integration_not_found",
-                    "message": "Nie ma integracji z Power Automate o tym identyfikatorze."
+                    "message": "Nie znaleziono integracji z Power Automate o tym identyfikatorze."
                   }
                 }
               }
@@ -3114,7 +3114,7 @@
                 "example": {
                   "error": {
                     "code": "group_empty",
-                    "message": "Integracja Ekipa serwisowa nie ma odbiorców grupy. Listę uzupełnia administrator w panelu bramki."
+                    "message": "Grupa w integracji Ekipa serwisowa nie zawiera odbiorców. Listę uzupełnia administrator w panelu bramki."
                   }
                 }
               }
@@ -3258,7 +3258,7 @@
           },
           "origs": {
             "type": "array",
-            "description": "Nadpisy nadawcy, których klucz może użyć w polu orig, w kolejności alfabetycznej. Lista obejmuje nadpis domyślny klucza, a gdy klucz go nie ma, nadpis domyślny konta. Pusta lista oznacza wysyłkę bez nadpisu, z numerem przydzielonym kontu w Multiinfo jako nadawcą.",
+            "description": "Nadpisy nadawcy, których klucz może użyć w polu orig, w kolejności alfabetycznej. Lista obejmuje nadpis domyślny klucza, a gdy klucz go nie określa, nadpis domyślny konta. Pusta lista oznacza wysyłkę bez nadpisu, z numerem przydzielonym kontu w Multiinfo jako nadawcą.",
             "items": {
               "type": "object",
               "required": [

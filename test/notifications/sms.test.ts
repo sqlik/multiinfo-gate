@@ -169,6 +169,6 @@ describe('smsChannelProblem', () => {
     const id = key();
     channel(id);
     patchKey(id, { serviceIds: ['25000'] });
-    expect(smsChannelProblem(deps, NOW)).toBe('klucz API „Dyżur IT” nie ma dostępu do usługi 24138');
+    expect(smsChannelProblem(deps, NOW)).toBe('klucz API „Dyżur IT” nie obejmuje usługi 24138');
   });
 });

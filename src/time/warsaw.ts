@@ -78,6 +78,12 @@ export function warsawStamp(iso: string): string {
   return `${p.y}-${two(p.m)}-${two(p.d)} ${two(p.h)}:${two(p.min)}:${two(p.s)}`;
 }
 
+/** Chwila z bazy jako data i godzina w Polsce w zapisie polskim: `DD.MM.RRRR GG:MM` - do tekstu dla agenta i widoków. */
+export function warsawShort(iso: string): string {
+  const p = warsawParts(new Date(iso));
+  return `${two(p.d)}.${two(p.m)}.${p.y} ${two(p.h)}:${two(p.min)}`;
+}
+
 /** Dzień w Polsce dla chwili z bazy. */
 export function warsawDay(iso: string): string {
   const p = warsawParts(new Date(iso));

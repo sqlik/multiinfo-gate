@@ -19,6 +19,8 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/package.json ./package.json
+# Serwer MCP udostępnia agentom AI artykuły dokumentacji jako zasoby. Obrazki zostają poza obrazem.
+COPY docs/*.md ./docs/
 RUN mkdir -p /data && chown -R node:node /data
 USER node
 VOLUME ["/data"]

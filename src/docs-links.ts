@@ -9,6 +9,9 @@ export const M365_DOCS_URL = 'https://sqlik.github.io/multiinfo-gate/uruchomieni
 /** Artykuł „Skracacz linków”; formularz domeny odsyła do niego przy rekordach DNS. */
 export const LINKS_DOCS_URL = 'https://sqlik.github.io/multiinfo-gate/skracacz/';
 
+/** Artykuł „Agenci AI”; formularz integracji Agent AI odsyła do niego z przewodnika. */
+export const AGENTS_DOCS_URL = 'https://sqlik.github.io/multiinfo-gate/agenci-ai/';
+
 /**
  * Stałe kotwice punktów artykułu (`{#…}` w docs/problemy.md); panel i dziennik odsyłają do nich wprost.
  * Zgodność z artykułem pilnuje test docs-links.
@@ -21,6 +24,7 @@ export const PROBLEM_ANCHORS = [
   'microsoft-365', 'm365-wymaga-logowania', 'm365-adres-przekierowania', 'm365-zgoda', 'm365-dostep-warunkowy',
   'm365-skrzynka', 'm365-smtp', 'm365-nadawca', 'm365-spam', 'skracacz-sprawdzenie-domeny', 'serwer-krotkich-linkow',
   'link-wygasl', 'linki-bez-otwarc', 'link-niezamieniony',
+  'agenci-ai', 'agent-kod', 'agent-narzedzia', 'agent-widoki', 'agent-adres-bramki', 'agent-limit',
 ] as const;
 
 export type ProblemAnchor = typeof PROBLEM_ANCHORS[number];

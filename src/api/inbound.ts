@@ -44,7 +44,7 @@ export function registerInboundRoutes(app: FastifyInstance, deps: ApiDeps): void
     let serviceIds = auth.allowedServiceIds;
     if (request.query.serviceId) {
       if (!serviceIds.includes(request.query.serviceId)) {
-        throw new ApiError(403, 'service_not_allowed', `Klucz nie ma dostępu do usługi ${request.query.serviceId}.`);
+        throw new ApiError(403, 'service_not_allowed', `Klucz nie obejmuje usługi ${request.query.serviceId}.`);
       }
       serviceIds = [request.query.serviceId];
     }
@@ -68,7 +68,7 @@ export function registerInboundRoutes(app: FastifyInstance, deps: ApiDeps): void
     const row = deps.inbound.get(request.params.id);
     // Brak i cudza wiadomość dają tę samą odpowiedź - nie potwierdzamy istnienia.
     if (!row || row.system === 1 || row.accountId !== auth.accountId || !auth.allowedServiceIds.includes(row.serviceId)) {
-      throw new ApiError(404, 'inbound_not_found', 'Nie ma wiadomości przychodzącej o tym identyfikatorze.');
+      throw new ApiError(404, 'inbound_not_found', 'Nie znaleziono wiadomości przychodzącej o tym identyfikatorze.');
     }
     return presentInbound(row);
   });

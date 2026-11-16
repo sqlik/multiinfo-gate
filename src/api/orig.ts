@@ -40,7 +40,7 @@ export function resolveOrig(
   const { allowed: list } = keyOrigs(auth, account, accounts);
   if (!list.includes(input)) {
     throw new ApiError(403, 'orig_not_allowed', list.length === 0
-      ? 'Ten klucz nie ma przypisanego żadnego nadpisu nadawcy. Pomiń pole orig albo poproś administratora bramki o przypisanie nadpisu uruchomionego przez Polkomtel.'
+      ? 'Do tego klucza nie przypisano żadnego nadpisu nadawcy. Pomiń pole orig albo poproś administratora bramki o przypisanie nadpisu uruchomionego przez Polkomtel.'
       : `Ten klucz może użyć nadpisu: ${list.join(', ')}.`);
   }
   return orig;

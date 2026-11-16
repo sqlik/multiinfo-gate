@@ -59,7 +59,7 @@ function sectionText(v: PaFormValues): string {
 
 const GUARD: GuardWords = {
   unit: 'wywołań',
-  throttleHint: 'Wywołania ponad limit w oknie kończą się błędem i wpisem „limit”, bez wysłania SMS-a. Ochrona zabezpiecza konto przed skutkami zapętlonego przepływu. Pierwsze przekroczenie w oknie jest zgłaszane mailem do administratora',
+  throttleHint: 'Wywołania ponad limit w oknie kończą się błędem i wpisem „limit”, bez wysłania SMS-a. Ochrona zabezpiecza konto przed skutkami zapętlonego przepływu. Pierwsze przekroczenie w oknie jest zgłaszane mailem do administratora.',
   payloadHint: 'Przydatne podczas uruchamiania: dziennik pokazuje, co przysłał przepływ. Ładunki zawierają numery i treści, dlatego opcję zaleca się włączać tylko na czas konfiguracji.',
 };
 
@@ -82,7 +82,7 @@ function guardSummary(v: PaFormValues): string {
   const d = defaultPowerAutomateConfig().throttle;
   if (v.throttleLimit === String(d.limit) && v.throttleWindow === String(d.windowMinutes) && v.throttleRecipients === String(d.recipients)) return '';
   const n = (raw: string) => Number.parseInt(raw, 10) || 0;
-  return hint(`Ochrona przed burzą: najwyżej ${countForms(n(v.throttleLimit), 'wywołanie', 'wywołania', 'wywołań')} i ${countForms(n(v.throttleRecipients), 'odbiorca', 'odbiorców', 'odbiorców')} w ciągu ${countForms(n(v.throttleWindow), 'minuty', 'minut', 'minut')}. Wartości zmienia tryb zaawansowany`);
+  return hint(`Ochrona przed burzą: najwyżej ${countForms(n(v.throttleLimit), 'wywołanie', 'wywołania', 'wywołań')} i ${countForms(n(v.throttleRecipients), 'odbiorca', 'odbiorców', 'odbiorców')} w ciągu ${countForms(n(v.throttleWindow), 'minuty', 'minut', 'minut')}. Wartości zmienia tryb zaawansowany.`);
 }
 
 export function paFormPage(ctx: FormContext, v: PaFormValues, opts: PaFormOptions): string {

@@ -195,6 +195,51 @@ export class ShortLinksRepo {
     for (const r of this.db.prepare(OPENERS).iterate(campaignId) as IterableIterator<RawOpener>) yield toOpener(r);
   }
 
+  /**
+   * Odbiorcy kampanii według otwarcia, do przypomnienia przygotowanego przez agenta. Odbiorca (`recipient_key`)
+   * otworzył, gdy którykolwiek z jego kodów ma `first_opened_at`. Numer występuje raz w kolejności pierwszej wysyłki,
+   * a numer otwarty w którejkolwiek wysyłce kampanii liczy się jako otwierający: przypomnienie nie trafia do osoby,
+   * która już skorzystała z linku.
+   */
+  recipients(campaignId: number, segment: 'opened' | 'unopened'): Array<{ dest: string; clientId: string | null }> {
+    const rows = this.db.prepare(
+      `SELECT dest, MAX(client_id) AS client_id, MAX(first_opened_at IS NOT NULL) AS opened, MIN(rowid) AS first
+       FROM short_links WHERE campaign_id = ? GROUP BY recipient_key ORDER BY first`,
+    ).all(campaignId) as Array<{ dest: string; client_id: string | null; opened: 0 | 1 }>;
+    const byDest = new Map<string, { clientId: string | null; opened: boolean }>();
+    for (const r of rows) {
+      const seen = byDest.get(r.dest);
+      if (seen) seen.opened ||= r.opened === 1;
+      else byDest.set(r.dest, { clientId: r.client_id, opened: r.opened === 1 });
+    }
+    return [...byDest].filter(([, v]) => v.opened === (segment === 'opened')).map(([dest, v]) => ({ dest, clientId: v.clientId }));
+  }
+
+  /** Strona odbiorców według otwarcia, w kolejności z `recipients`, z liczbą wszystkich odbiorców segmentu. */
+  recipientsPage(campaignId: number, segment: 'opened' | 'unopened', offset: number, limit: number): {
+    total: number; items: Array<{ dest: string; clientId: string | null }>;
+  } {
+    const all = this.recipients(campaignId, segment);
+    return { total: all.length, items: all.slice(offset, offset + limit) };
+  }
+
+  /** Adresy docelowe i kliknięcia ludzi według numeru, do pliku odbiorców bez otwarcia. */
+  linksByDest(campaignId: number): Map<string, { targets: string[]; clicks: number }> {
+    const rows = this.db
+      .prepare(`SELECT dest, json_group_array(DISTINCT target) AS targets, SUM(clicks) AS clicks FROM short_links
+                WHERE campaign_id = ? GROUP BY dest`)
+      .all(campaignId) as Array<{ dest: string; targets: string; clicks: number }>;
+    return new Map(rows.map((r) => [r.dest, { targets: (JSON.parse(r.targets) as string[]).sort(), clicks: r.clicks }]));
+  }
+
+  /** Chwila pierwszego otwarcia każdego odbiorcy (`recipient_key`) kampanii; wejścia automatów nie są otwarciem. */
+  firstOpens(campaignId: number): string[] {
+    return (this.db
+      .prepare(`SELECT MIN(first_opened_at) AS at FROM short_links WHERE campaign_id = ? AND first_opened_at IS NOT NULL
+                GROUP BY recipient_key ORDER BY at`)
+      .all(campaignId) as Array<{ at: string }>).map((r) => r.at);
+  }
+
   remaining(campaignId: number): number {
     return (this.db.prepare('SELECT COUNT(*) AS n FROM short_links WHERE campaign_id = ?').get(campaignId) as { n: number }).n;
   }

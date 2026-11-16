@@ -1,4 +1,4 @@
-export const NOTIFICATION_EVENTS = ['integration_error', 'integration_throttled', 'webhook_undelivered', 'certificate_expiring', 'account_rejecting', 'inbound_failure', 'mailbox_failure', 'daily_summary', 'release_available', 'm365_disconnected', 'mail_undeliverable'] as const;
+export const NOTIFICATION_EVENTS = ['integration_error', 'integration_throttled', 'webhook_undelivered', 'certificate_expiring', 'account_rejecting', 'inbound_failure', 'mailbox_failure', 'daily_summary', 'release_available', 'm365_disconnected', 'mail_undeliverable', 'agent_connected'] as const;
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
 
 export interface RuleDefaults { enabled: boolean; maxPerHour: number; groupHours: number; params: Record<string, unknown> }
@@ -16,6 +16,7 @@ export const RULE_DEFAULTS: Record<NotificationEvent, RuleDefaults> = {
   release_available: { enabled: true, maxPerHour: 1, groupHours: 0, params: {} },
   m365_disconnected: { enabled: true, maxPerHour: 5, groupHours: 0, params: {} },
   mail_undeliverable: { enabled: true, maxPerHour: 1, groupHours: 0, params: {} },
+  agent_connected: { enabled: true, maxPerHour: 10, groupHours: 0, params: {} },
 };
 
 /** Zdarzenia zgłaszane wyłącznie SMS-em: powiadomienie mailem o niewysłanym mailu nie może dotrzeć. */
@@ -36,6 +37,7 @@ const LABELS: Record<NotificationEvent, [string, string]> = {
   release_available: ['Nowe wydanie bramki', 'w serwisie GitHub dostępne jest nowsze wydanie niż zainstalowane, jeden mail na wydanie'],
   m365_disconnected: ['Konto Microsoft 365 wymaga logowania', 'Microsoft odrzucił token konta, na przykład po zmianie hasła albo odwołaniu sesji'],
   mail_undeliverable: ['Mail z powiadomieniem niewysłany', 'mail do administratora nie został wysłany mimo wszystkich ponowień'],
+  agent_connected: ['Połączenie agenta AI', 'pracownik połączył aplikację AI z bramką kodem jednorazowym albo bramka wstrzymała sprawdzanie kodów po serii nieudanych prób'],
 };
 export const eventLabel = (e: NotificationEvent): string => LABELS[e][0];
 export const eventDescription = (e: NotificationEvent): string => LABELS[e][1];

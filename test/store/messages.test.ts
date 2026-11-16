@@ -241,3 +241,38 @@ describe('MessagesRepo - wątek z wiadomością przychodzącą', () => {
     expect(repo.get('msg_n')!.mailFrom).toBeNull();
   });
 });
+
+describe('MessagesRepo: odczyty agenta', () => {
+  it('forDraft zwraca wiadomości szkicu po kluczu idempotencji, bez szkicu o dłuższym identyfikatorze', () => {
+    const { messages, accountId, apiKeyId } = setup();
+    messages.insert(messageInput({ accountId, apiKeyId, id: 'msg_a', idempotencyKey: 'drf_x1' }));
+    messages.insert(messageInput({ accountId, apiKeyId, id: 'msg_b', idempotencyKey: 'drf_x2#0' }));
+    messages.insert(messageInput({ accountId, apiKeyId, id: 'msg_c', idempotencyKey: 'drf_x2#1' }));
+    messages.insert(messageInput({ accountId, apiKeyId, id: 'msg_d', idempotencyKey: 'drf_x22#0' }));
+    expect(messages.forDraft(apiKeyId, 'drf_x1').map((m) => m.id)).toEqual(['msg_a']);
+    expect(messages.forDraft(apiKeyId, 'drf_x2').map((m) => m.id).sort()).toEqual(['msg_b', 'msg_c']);
+    expect(messages.forDraft(apiKeyId + 1, 'drf_x2')).toEqual([]);
+  });
+
+  it('lastToBefore: najpóźniejsza wcześniejsza wiadomość klucza na numer w oknie, bez systemowych', () => {
+    const { messages, accountId, apiKeyId } = setup();
+    messages.insert(messageInput({ accountId, apiKeyId, id: 'msg_1', createdAt: '2026-11-01T10:00:00.000Z' }));
+    messages.insert(messageInput({ accountId, apiKeyId, id: 'msg_2', createdAt: '2026-11-02T10:00:00.000Z' }));
+    messages.insert(messageInput({ accountId, apiKeyId, id: 'msg_3', createdAt: '2026-11-02T11:00:00.000Z', system: 1 }));
+    messages.insert(messageInput({ accountId, apiKeyId, id: 'msg_4', createdAt: '2026-11-03T10:00:00.000Z' }));
+    const before = new Date('2026-11-02T12:00:00Z');
+    expect(messages.lastToBefore(apiKeyId, '48601135134', before, new Date('2026-10-26T12:00:00Z'))?.id).toBe('msg_2');
+    expect(messages.lastToBefore(apiKeyId, '48601135134', before, new Date('2026-11-02T10:30:00Z'))).toBeUndefined();
+    expect(messages.lastToBefore(apiKeyId, '48601000000', before, new Date('2026-10-26T12:00:00Z'))).toBeUndefined();
+  });
+
+  it('statusCounts liczy wiadomości w stanach według filtra, bez systemowych', () => {
+    const { messages, accountId, apiKeyId } = setup();
+    messages.insert(messageInput({ accountId, apiKeyId, id: 'msg_1' }));
+    messages.insert(messageInput({ accountId, apiKeyId, id: 'msg_2' }));
+    messages.insert(messageInput({ accountId, apiKeyId, id: 'msg_3', system: 1 }));
+    messages.setStatus('msg_2', { status: 'delivered', finalAt: new Date() });
+    expect(messages.statusCounts({ apiKeyId })).toEqual({ queued: 1, delivered: 1 });
+    expect(messages.statusCounts({ apiKeyId, dest: '48601000000' })).toEqual({});
+  });
+});

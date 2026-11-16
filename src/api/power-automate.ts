@@ -487,7 +487,7 @@ const INTEGRATION_FOR_GROUP = 'Integracja z Power Automate skonfigurowana w pane
  */
 const SENDING_ERRORS: Record<string, SwaggerResponse> = {
   '404': {
-    description: 'Nie ma takiej integracji z Power Automate dla tego klucza: integration_not_found',
+    description: 'Nie znaleziono takiej integracji z Power Automate dla tego klucza: integration_not_found',
     schema: ref('OdpowiedzBledu'),
   },
   '429': {
@@ -555,7 +555,7 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
           parameters: [pathId('Identyfikator wiadomości', 'Identyfikator z akcji „Wyślij SMS” albo „Wyślij SMS do grupy”')],
           responses: {
             '200': { description: 'Stan wiadomości', schema: ref('Wiadomosc') },
-            '404': { description: 'Nie ma wiadomości o tym identyfikatorze: message_not_found', schema: ref('OdpowiedzBledu') },
+            '404': { description: 'Nie znaleziono wiadomości o tym identyfikatorze: message_not_found', schema: ref('OdpowiedzBledu') },
             default: ERROR,
           },
         },
@@ -592,7 +592,7 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
           parameters: [pathId('Identyfikator rozsyłki', 'Identyfikator z akcji „Wyślij rozsyłkę”')],
           responses: {
             '200': { description: 'Stan rozsyłki', schema: ref('Rozsylka') },
-            '404': { description: 'Nie ma rozsyłki o tym identyfikatorze: package_not_found', schema: ref('OdpowiedzBledu') },
+            '404': { description: 'Nie znaleziono rozsyłki o tym identyfikatorze: package_not_found', schema: ref('OdpowiedzBledu') },
             default: ERROR,
           },
         },
@@ -607,7 +607,7 @@ export function buildPowerAutomateConnector(address: string): SwaggerDocument {
           parameters: [pathId('Identyfikator rozsyłki', 'Identyfikator z akcji „Wyślij rozsyłkę”')],
           responses: {
             '200': { description: 'Raport rozsyłki', schema: ref('RaportRozsylki') },
-            '404': { description: 'Nie ma rozsyłki o tym identyfikatorze: package_not_found', schema: ref('OdpowiedzBledu') },
+            '404': { description: 'Nie znaleziono rozsyłki o tym identyfikatorze: package_not_found', schema: ref('OdpowiedzBledu') },
             '409': {
               description: 'Raport nie jest jeszcze gotowy: report_not_ready. Odpowiedź podaje bieżący stan raportu',
               schema: ref('BladRaportu'),

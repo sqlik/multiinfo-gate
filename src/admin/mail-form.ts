@@ -5,6 +5,7 @@ import type { TemplateEngine } from '../integrations/templates.ts';
 import { commonFromValues } from './integration-form.ts';
 import type { RuleValues } from './views/integrations.ts';
 import { validationMessage } from '../zod.ts';
+import { rangeError } from '../text/numbers.ts';
 
 type Body = Record<string, string | string[] | undefined>;
 
@@ -135,7 +136,7 @@ export type MailFormToConfig = { ok: true; config: MailInConfig; password: strin
 
 function int(raw: string, min: number, max: number, what: string): number | string {
   const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n) || n < min || n > max || String(n) !== raw.trim()) return `${what}: podaj liczbę od ${min} do ${max}.`;
+  if (!Number.isFinite(n) || n < min || n > max || String(n) !== raw.trim()) return rangeError(what, min, max);
   return n;
 }
 

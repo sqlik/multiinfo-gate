@@ -565,6 +565,9 @@ domeną (rozdział 6) jest to `https://<TWOJA-DOMENA>`. Przy kontenerze na Proxm
 firmowej jest to `http://<ADRES-KONTENERA>:8080`. Adres podaje się bez ścieżki na końcu. Z tym
 adresem panel pokazuje przy nowym kluczu gotowe polecenie `curl` do wklejenia w terminalu. Przy
 integracjach (punkt 4.7) pokazuje pełne adresy wejściowe zamiast samych ścieżek.
+Na podstawie tego adresu bramka buduje także adres serwera MCP i adresy logowania dla agentów AI.
+Aplikacje z logowaniem, na przykład claude.ai i ChatGPT, wymagają adresu zaczynającego się od
+`https://`. Opis znajdziesz w artykule [Agenci AI](agenci-ai.md#22-adres-bramki).
 
 Po zapisaniu panel wyświetla jeden raz dwie wartości: **klucz** (`mig_live_...`) oraz **sekret
 webhooka**, jeżeli podano adres webhooka. W bazie bramki pozostaje tylko skrót klucza. Panel nie
@@ -615,6 +618,12 @@ z przepływów Microsoft Power Automate. Wymaga bramki dostępnej z internetu po
 zgodnie z rozdziałem 6. Konektor, jego import i budowę przepływów przedstawia artykuł
 [Power Automate](power-automate.md).
 
+Integracja „Agent AI” w tym samym kierunku pozwala pracownikom wysyłać SMS-y w rozmowie z aplikacją
+AI, na przykład claude.ai albo ChatGPT. Aplikacje z logowaniem łączą się z bramką ze swoich serwerów,
+dlatego wymagają bramki dostępnej z internetu pod domeną z HTTPS, zgodnie z rozdziałem 6, oraz adresu
+bramki z rozdziału 4.5 zaczynającego się od `https://`. Integrację, połączenia pracowników i konfigurację
+w poszczególnych aplikacjach przedstawia artykuł [Agenci AI](agenci-ai.md).
+
 ![Lista integracji z kierunkiem, ustawieniem, kluczem, stanem i licznikami z ostatniej doby](obrazki/integracje.png)
 
 Dodanie integracji to wybór kierunku, wybór gotowego ustawienia (kafelek z nazwą aplikacji)
@@ -639,8 +648,8 @@ w imieniu wskazanego klucza API. Kanał działa niezależnie od poczty, dlatego 
 o zerwanym koncie Microsoft 365 i o mailu, którego nie udało się wysłać. Zakładka **Reguły**
 określa zgłaszane zdarzenia: błędy integracji, przekroczony limit burzy, niedostarczone webhooki,
 certyfikat konta na progach dni, konto odrzucające wysyłkę, awarię odbioru, awarię skrzynki,
-konto Microsoft 365 wymagające logowania, niewysłany mail z powiadomieniem, nowe wydanie bramki
-i podsumowanie dzienne. Każda reguła może dodatkowo wysyłać SMS. Reguły
+konto Microsoft 365 wymagające logowania, niewysłany mail z powiadomieniem, połączenie agenta AI,
+nowe wydanie bramki i podsumowanie dzienne. Każda reguła może dodatkowo wysyłać SMS. Reguły
 wymagają skonfigurowanego serwera SMTP albo włączonego kanału SMS. Szczegóły tych ekranów,
 gotowe ustawienia aplikacja po aplikacji i język szablonów opisuje rozdział
 [Integracje z aplikacjami](integracje.md).
@@ -1009,6 +1018,11 @@ API i łączy się z bramką przez internet. Panel pozostaje dostępny wyłączn
 zewnątrz wystawia się tylko API. Bramka korzystająca ze skracacza linków wystawia dodatkowo port
 krótkich linków pod domenami skracacza. Opis znajdziesz przy każdym wariancie poniżej.
 
+Ten sam rozdział dotyczy agentów AI. Aplikacje claude.ai i ChatGPT łączą się z serwerem MCP bramki
+pod adresem `https://<TWOJA-DOMENA>/mcp` i logują się przez OAuth, który wymaga HTTPS. Serwer MCP
+i adresy logowania działają na porcie API, dlatego żaden z wariantów nie wymaga dodatkowej konfiguracji.
+Wymagania opisuje rozdział 2 artykułu [Agenci AI](agenci-ai.md#2-wymagania).
+
 ### 6.1. Pojęcia
 
 **Odwrotne proxy** to serwer WWW ustawiony przed bramką. Przyjmuje połączenia z internetu na
@@ -1154,6 +1168,12 @@ na przykład `172.18.0.1`, a nie `127.0.0.1`. W `docker/.env` dopisz więc
 `MIG_TRUSTED_PROXIES=172.16.0.0/12` i wykonaj `docker compose up -d`. Bramka uruchomiona bez
 Dockera, na przykład w kontenerze LXC z rozdziału 9, widzi adres serwera z nginx. Przy nginx na
 tym samym serwerze jest nim `127.0.0.1`.
+
+Od wersji 1.12 plik konfiguracji zawiera blok `location /pobierz/`, który wyłącza zapis linków do
+pobrania w dzienniku dostępu nginx. Link przygotowuje agent AI z artykułu [Agenci AI](agenci-ai.md)
+i zawiera token, który przez godzinę otwiera plik z numerami odbiorców. W instalacji z plikiem
+skopiowanym przed wersją 1.12 przepisz ten blok z pliku `docker/nginx/multiinfo-gate.conf` przed
+blok `location /`, a następnie wykonaj `sudo nginx -t && sudo systemctl reload nginx`.
 
 Domeny skracacza linków z artykułu [Skracacz linków i kampanie](skracacz.md) obsługuje osobny
 plik konfiguracji nginx. Port krótkich linków bramki, domyślnie 8082, jest dostępny na serwerze
@@ -1501,7 +1521,7 @@ Zmienne ustawia się w `docker/.env` (klucz główny, domena) albo w sekcji `env
 | `MIG_LINKS_ALLOW_PRIVATE` | `0` | `1` pozwala sprawdzić domenę skracacza, dla której serwer DNS bramki podaje adres w sieci wewnętrznej (pętla zwrotna, `10/8`, `172.16/12`, `192.168/16`, sieć kontenerów). Potrzebna, gdy serwer bramki korzysta z wewnętrznego serwera DNS. Zmienna nie wpływa na przekierowania krótkich linków |
 | `MIG_INBOUND_TIMEOUT_MS` | `10000` | Ile milisekund Multiinfo może wstrzymywać odpowiedź na zapytanie o wiadomości przychodzące (1-60000). Przy wartości domyślnej odbiór trwa zwykle poniżej sekundy, najwyżej ok. 10 s, kosztem sześciu pytań na minutę na usługę. Maksimum `60000` (long polling z dokumentacji Multiinfo) zmniejsza liczbę pytań, ale wiadomość, która nadejdzie między dwoma pytaniami, czeka do końca następnego - opóźnienie odbioru sięga wtedy minuty. Mała wartość razem z `MIG_INBOUND_IDLE_MS` daje odpytywanie okresowe |
 | `MIG_INBOUND_IDLE_MS` | `0` | Przerwa po pustej odpowiedzi, zanim bramka wyśle kolejne zapytanie, `0` oznacza zapytanie natychmiastowe |
-| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku), od których API ufa nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Wartość `172.16.0.0/12` ustawiają pliki `docker-compose.caddy.yml` i `docker-compose.nginx.yml`. W `docker/.env` ustawiana dla Traefika (`172.16.0.0/12` albo zakres jego sieci) i dla nginx na serwerze bez pliku `docker-compose.nginx.yml`, a w pliku środowiska kontenera LXC adres serwera z nginx (rozdział 6). Ta sama lista obowiązuje dla serwera krótkich linków, który liczy limit wejść dla adresu odbiorcy ([Skracacz linków i kampanie](skracacz.md), rozdział 4). Potrzebna, gdy integracje korzystają z listy dozwolonych źródeł albo dziennik powinien pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)). Proxy z tej listy przekazujące żądanie HTTPS otrzymuje też szczegóły `/healthz` panelu (punkt 7.4) |
+| `MIG_TRUSTED_PROXIES` | - | Adresy odwrotnych proxy (IP albo zakresy CIDR po przecinku), od których API ufa nagłówkowi `X-Forwarded-For`; bez listy adresem źródłowym żądania jest adres gniazda, czyli za proxy adres proxy. Wartość `172.16.0.0/12` ustawiają pliki `docker-compose.caddy.yml` i `docker-compose.nginx.yml`. W `docker/.env` ustawiana dla Traefika (`172.16.0.0/12` albo zakres jego sieci) i dla nginx na serwerze bez pliku `docker-compose.nginx.yml`, a w pliku środowiska kontenera LXC adres serwera z nginx (rozdział 6). Ta sama lista obowiązuje dla serwera krótkich linków, który liczy limit wejść dla adresu odbiorcy ([Skracacz linków i kampanie](skracacz.md), rozdział 4). Potrzebna, gdy integracje korzystają z listy dozwolonych źródeł albo dziennik powinien pokazywać adres klienta (rozdział 3.2 w [Integracje z aplikacjami](integracje.md)). Proxy z tej listy przekazujące żądanie HTTPS otrzymuje też szczegóły `/healthz` panelu (punkt 7.4). Bez tej listy za proxy limity połączeń agentów AI liczone dla adresu obejmują łącznie wszystkich pracowników, co opisuje rozdział 2.1 artykułu [Agenci AI](agenci-ai.md) |
 | `MIG_UPDATE_CHECK` | `1` | Raz na dobę sprawdzać w serwisie GitHub, czy jest nowsze wydanie, i pokazywać je na przeglądzie (rozdział 7.4); `0` wyłącza, np. w sieci bez dostępu do internetu |
 | `MIG_WERSJA` | `1` | Tag obrazu do pobrania: `1`, `1.1` albo `1.1.0` (rozdział 7.4) |
 | `MIG_DOMENA` | - | Domena bramki dla wariantu Caddy i Traefik |

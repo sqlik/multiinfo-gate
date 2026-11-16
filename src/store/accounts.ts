@@ -100,6 +100,13 @@ export class AccountsRepo {
     };
   }
 
+  /** Usługi konta z etykietami nadanymi w panelu, w kolejności identyfikatorów. */
+  services(id: number): Array<{ id: string; label: string | null }> {
+    return this.db
+      .prepare('SELECT service_id AS id, label FROM account_services WHERE account_id = ? ORDER BY service_id')
+      .all(id) as Array<{ id: string; label: string | null }>;
+  }
+
   serviceIds(id: number): string[] {
     const rows = this.db
       .prepare('SELECT service_id FROM account_services WHERE account_id = ? ORDER BY service_id')

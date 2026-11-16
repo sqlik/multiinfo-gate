@@ -151,6 +151,7 @@ describe('GET /v1/messages/:id', () => {
     const res = await get('/v1/messages/msg_nieistnieje');
     expect(res.statusCode).toBe(404);
     expect(res.json().error.code).toBe('message_not_found');
+    expect(res.json().error.message).toBe('Nie znaleziono wiadomości o tym identyfikatorze.');
   });
 
   it('zwraca 404 dla wiadomości należącej do innego klucza', async () => {

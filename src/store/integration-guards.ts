@@ -25,6 +25,48 @@ export class IntegrationGuardsRepo {
   }
 
   /**
+   * Stan okna ochrony przed burzą bez zapisu, na potrzeby podglądu przed wysyłką. Okno, które minęło,
+   * daje zera, tak jak potraktowałby je `throttle`.
+   */
+  peek(integrationId: number, windowMinutes: number, now: Date): { count: number; recipients: number; windowStart: string | null } {
+    const row = this.db.prepare('SELECT window_start, count, recipients FROM integration_throttle WHERE integration_id = ?')
+      .get(integrationId) as { window_start: string; count: number; recipients: number } | undefined;
+    if (!row || now.getTime() - Date.parse(row.window_start) >= windowMinutes * 60_000) return { count: 0, recipients: 0, windowStart: null };
+    return { count: row.count, recipients: row.recipients, windowStart: row.window_start };
+  }
+
+  /**
+   * Odmowa bez zużycia limitu, na przykład szkic agenta odrzucony już przy podglądzie. Zapisuje w oknie
+   * zgłoszenie burzy, dzięki czemu `notify` jest prawdą tylko przy pierwszej odmowie w oknie, łącznie
+   * z odmowami `throttle`. Okno, które minęło, otwiera się od nowa, tak jak przy odrzuceniu w `throttle`.
+   */
+  refuse(integrationId: number, windowMinutes: number, now: Date): { notify: boolean } {
+    return this.db.transaction(() => {
+      const row = this.db.prepare('SELECT window_start, notified FROM integration_throttle WHERE integration_id = ?')
+        .get(integrationId) as { window_start: string; notified: 0 | 1 } | undefined;
+      const fresh = !row || now.getTime() - Date.parse(row.window_start) >= windowMinutes * 60_000;
+      if (fresh) {
+        this.db.prepare(
+          `INSERT INTO integration_throttle (integration_id, window_start, count, recipients, notified) VALUES (?, ?, 0, 0, 1)
+           ON CONFLICT(integration_id) DO UPDATE SET window_start = excluded.window_start, count = 0, recipients = 0, notified = 1`,
+        ).run(integrationId, now.toISOString());
+        return { notify: true };
+      }
+      if (row!.notified === 1) return { notify: false };
+      this.db.prepare('UPDATE integration_throttle SET notified = 1 WHERE integration_id = ?').run(integrationId);
+      return { notify: true };
+    })();
+  }
+
+  /**
+   * Zwrot wywołania przepuszczonego przez `throttle`, które nie doszło do skutku, na przykład wysyłki agenta
+   * odrzuconej przy przyjęciu. Liczniki nie schodzą poniżej zera.
+   */
+  refund(integrationId: number, recipients: number): void {
+    this.db.prepare('UPDATE integration_throttle SET count = MAX(count - 1, 0), recipients = MAX(recipients - ?, 0) WHERE integration_id = ?')
+      .run(recipients, integrationId);
+  }
+  /**
    * Okno stałe od pierwszego zdarzenia: `limit` przechodzi, reszta odpada do końca okna.
    * `notify` tylko przy pierwszym odrzuceniu w oknie - jeden mail na burzę, nie na każdy alert.
    * `recipients` (integracja z Power Automate) dokłada w tym samym oknie limit odbiorców: wywołanie,

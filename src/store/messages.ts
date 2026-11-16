@@ -20,8 +20,10 @@ export interface MessageRow {
   integrationId: number | null;
   /** Adres e-mail nadawcy wiadomości z Mail2SMS; `null` dla pozostałych źródeł. */
   mailFrom: string | null;
-  /** Zlecający wysyłkę z przepływu Power Automate; `null` dla pozostałych źródeł. */
+  /** Zlecający wysyłkę z przepływu Power Automate albo nazwa połączenia agenta AI; `null` dla pozostałych źródeł. */
   requestedBy: string | null;
+  /** Połączenie agenta AI, które zleciło wysyłkę; `null` dla pozostałych źródeł i po usunięciu połączenia. */
+  agentConnectionId: number | null;
   /** SMS kanału powiadomień administratora: niewidoczny w API, webhooku klucza i integracjach wychodzących. */
   system: 0 | 1;
   /** Kampania skracacza; tylko wiadomości z co najmniej jednym krótkim linkiem. */
@@ -40,6 +42,7 @@ export interface MessageInput {
   integrationId?: number | null;
   mailFrom?: string | null;
   requestedBy?: string | null;
+  agentConnectionId?: number | null;
   system?: 0 | 1;
   campaignId?: number | null;
   /** 0: wysyłka bez raportu doręczenia, wiadomość nie przejdzie w stan „doręczona”. */
@@ -72,7 +75,7 @@ interface RawMessage {
   idempotency_key: string | null;
   created_at: string; sent_at: string | null; final_at: string | null;
   trace: string | null; in_reply_to: string | null; integration_id: number | null; mail_from: string | null;
-  requested_by: string | null; system: 0 | 1; campaign_id: number | null;
+  requested_by: string | null; system: 0 | 1; campaign_id: number | null; agent_connection_id: number | null;
 }
 
 /** Statusy, po których wiadomość nie zmieni już stanu i trafia na listę nieudanych. */
@@ -111,9 +114,43 @@ function toRow(r: RawMessage): MessageRow {
     integrationId: r.integration_id,
     mailFrom: r.mail_from,
     requestedBy: r.requested_by,
+    agentConnectionId: r.agent_connection_id,
     system: r.system,
     campaignId: r.campaign_id,
   };
+}
+
+/** Warunek listy i liczb w stanach; brak pola nie zawęża wyniku. */
+function whereOf(filter: Omit<MessageFilter, 'limit' | 'offset'>): { clause: string; params: Array<string | number> } {
+  const where: string[] = [];
+  const params: Array<string | number> = [];
+
+  if (filter.includeSystem !== true) where.push('system = 0');
+  if (filter.apiKeyId !== undefined) {
+    where.push('api_key_id = ?');
+    params.push(filter.apiKeyId);
+  }
+  if (filter.status === 'transit') {
+    // Zakładka „W drodze” panelu: jeden filtr, trzy statusy.
+    where.push(`status IN (${TRANSIT_STATUSES.map(() => '?').join(', ')})`);
+    params.push(...TRANSIT_STATUSES);
+  } else if (filter.status !== undefined) {
+    where.push('status = ?');
+    params.push(filter.status);
+  }
+  if (filter.dest !== undefined) {
+    where.push('dest = ?');
+    params.push(filter.dest);
+  }
+  if (filter.from !== undefined) {
+    where.push('created_at >= ?');
+    params.push(filter.from);
+  }
+  if (filter.until !== undefined) {
+    where.push('created_at <= ?');
+    params.push(filter.until);
+  }
+  return { clause: where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '', params };
 }
 
 export class MessagesRepo {
@@ -133,8 +170,8 @@ export class MessagesRepo {
         `INSERT INTO messages (
            id, api_key_id, account_id, service_id, dest, body, body_hash,
            encoding, parts, slots, orig, cost_center, valid_to, idempotency_key, in_reply_to, integration_id, mail_from, requested_by, system,
-           campaign_id, delivery_report, created_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           campaign_id, delivery_report, agent_connection_id, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                    COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))`,
       )
       .run(
@@ -159,6 +196,7 @@ export class MessagesRepo {
         input.system ?? 0,
         input.campaignId ?? null,
         input.deliveryReport ?? 1,
+        input.agentConnectionId ?? null,
         input.createdAt ?? null,
       );
   }
@@ -191,40 +229,42 @@ export class MessagesRepo {
 
   /** Buduje warunek wyłącznie z pól obecnych w filtrze - brak pola nie zawęża wyniku. */
   list(filter: MessageFilter): MessageRow[] {
-    const where: string[] = [];
-    const params: Array<string | number> = [];
-
-    if (filter.includeSystem !== true) where.push('system = 0');
-    if (filter.apiKeyId !== undefined) {
-      where.push('api_key_id = ?');
-      params.push(filter.apiKeyId);
-    }
-    if (filter.status === 'transit') {
-      // Zakładka „W drodze” panelu: jeden filtr, trzy statusy.
-      where.push(`status IN (${TRANSIT_STATUSES.map(() => '?').join(', ')})`);
-      params.push(...TRANSIT_STATUSES);
-    } else if (filter.status !== undefined) {
-      where.push('status = ?');
-      params.push(filter.status);
-    }
-    if (filter.dest !== undefined) {
-      where.push('dest = ?');
-      params.push(filter.dest);
-    }
-    if (filter.from !== undefined) {
-      where.push('created_at >= ?');
-      params.push(filter.from);
-    }
-    if (filter.until !== undefined) {
-      where.push('created_at <= ?');
-      params.push(filter.until);
-    }
-
-    const clause = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
+    const { clause, params } = whereOf(filter);
     const rows = this.db
       .prepare(`SELECT * FROM messages${clause} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`)
       .all(...params, filter.limit, filter.offset) as RawMessage[];
     return rows.map(toRow);
+  }
+
+  /** Liczba wiadomości w każdym stanie dla tego samego warunku, co lista; stany bez wiadomości nie występują. */
+  statusCounts(filter: Omit<MessageFilter, 'limit' | 'offset'>): Record<string, number> {
+    const { clause, params } = whereOf(filter);
+    const rows = this.db
+      .prepare(`SELECT status, COUNT(*) AS n FROM messages${clause} GROUP BY status ORDER BY status`)
+      .all(...params) as Array<{ status: string; n: number }>;
+    return Object.fromEntries(rows.map((r) => [r.status, r.n]));
+  }
+
+  /**
+   * Wiadomości szkicu agenta: klucz idempotencji równy identyfikatorowi szkicu albo z przyrostkiem `#n`
+   * kolejnego odbiorcy. Porównanie przedrostka z `#` nie łapie szkicu o dłuższym identyfikatorze.
+   */
+  forDraft(apiKeyId: number, draftId: string): MessageRow[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM messages WHERE api_key_id = @apiKeyId AND system = 0
+                  AND (idempotency_key = @draftId OR substr(idempotency_key, 1, length(@draftId) + 1) = @draftId || '#')
+                ORDER BY created_at DESC, id DESC`)
+      .all({ apiKeyId, draftId }) as RawMessage[];
+    return rows.map(toRow);
+  }
+
+  /** Najpóźniejsza wiadomość klucza na ten numer utworzona przed `before`, nie wcześniej niż `since`; bez systemowych. */
+  lastToBefore(apiKeyId: number, dest: string, before: Date, since: Date): MessageRow | undefined {
+    const row = this.db
+      .prepare(`SELECT * FROM messages WHERE api_key_id = ? AND dest = ? AND system = 0 AND created_at < ? AND created_at >= ?
+                ORDER BY created_at DESC, id DESC LIMIT 1`)
+      .get(apiKeyId, dest, before.toISOString(), since.toISOString()) as RawMessage | undefined;
+    return row ? toRow(row) : undefined;
   }
 
   /**

@@ -10,12 +10,15 @@ import type { ApiDeps } from './server.ts';
 import { submitMessages } from './submit.ts';
 import { parseOffset } from '../paging.ts';
 
+/** Najwięcej odbiorców jednego `POST /v1/messages`; agent AI wysyła ponad tę liczbę jako rozsyłkę. */
+export const MESSAGE_RECIPIENTS_MAX = 500;
+
 /**
  * Schemat body wysyłki. Poza trasą używa go opis API w formacie OpenAPI
  * (`src/api/openapi.ts`), żeby nowe pole nie mogło umknąć opisowi.
  */
 export const messageBodySchema = z.object({
-  to: z.union([z.string(), z.array(z.string()).min(1).max(500)], {
+  to: z.union([z.string(), z.array(z.string()).min(1).max(MESSAGE_RECIPIENTS_MAX)], {
     error: (issue) => (issue.input === undefined ? 'Numer odbiorcy jest pusty.' : 'Pole to musi być numerem w postaci tekstu albo listą numerów.'),
   }),
   text: z.string({ error: (issue) => (issue.input === undefined ? 'Treść jest pusta.' : undefined) }).min(1, 'Treść jest pusta.'),
@@ -78,10 +81,10 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
     const message = deps.messages.get(request.params.id);
     // Brak wiadomości, cudza i systemowa dają tę samą odpowiedź - nie potwierdzamy istnienia.
     if (!message || message.apiKeyId !== auth.apiKeyId || message.system === 1) {
-      throw new ApiError(404, 'message_not_found', 'Nie ma wiadomości o tym identyfikatorze.');
+      throw new ApiError(404, 'message_not_found', 'Nie znaleziono wiadomości o tym identyfikatorze.');
     }
     const links = messageLinks(deps, message);
-    return links === undefined ? present(message) : { ...present(message), links };
+    return links === undefined ? presentMessage(message) : { ...presentMessage(message), links };
   });
 
   app.get<{ Querystring: Record<string, string> }>('/v1/messages', async (request) => {
@@ -101,12 +104,12 @@ export function registerMessageRoutes(app: FastifyInstance, deps: ApiDeps): void
       offset,
     });
 
-    return { data: rows.slice(0, limit).map(present), hasMore: rows.length > limit };
+    return { data: rows.slice(0, limit).map(presentMessage), hasMore: rows.length > limit };
   });
 }
 
-/** Kształt wiadomości widziany z zewnątrz. Treść pokazujemy tylko, jeśli jest przechowywana. */
-function present(m: MessageRow) {
+/** Kształt wiadomości widziany z zewnątrz, w API i w odczytach agenta. Treść pokazujemy tylko, jeśli jest przechowywana. */
+export function presentMessage(m: MessageRow) {
   return {
     id: m.id,
     status: m.status,

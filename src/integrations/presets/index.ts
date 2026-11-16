@@ -1,4 +1,5 @@
 import type { IntegrationKind } from '../config.ts';
+import { agentAi } from './agent-ai.ts';
 import { bitrix24 } from './bitrix24.ts';
 import { custom } from './custom.ts';
 import { fakturownia } from './fakturownia.ts';
@@ -33,7 +34,7 @@ export type { Preset, PresetField, PresetSecret } from './types.ts';
  * Poczta: Microsoft 365 na początku, logowanie kontem z ekranu „Konta Microsoft 365” (OAuth2). Bez Outlook.com,
  * bo Microsoft od 2024-09-16 nie przyjmuje hasła ani hasła aplikacji do IMAP kont prywatnych.
  */
-export const PRESETS: Preset[] = [prostyJson, n8n, powerAutomate, uptimeKuma, grafana, zabbix, woocommerce, woocommerceKlient, fakturownia, fakturowniaKlient, homeAssistant, freescoutZgloszenie, freescout, freshdeskZgloszenie, freshdesk, slack, ntfy, bitrix24, pocztaM365, pocztaGmail, pocztaHome, pocztaOvh, pocztaWlasny, smsGrupa, custom];
+export const PRESETS: Preset[] = [prostyJson, n8n, powerAutomate, agentAi, uptimeKuma, grafana, zabbix, woocommerce, woocommerceKlient, fakturownia, fakturowniaKlient, homeAssistant, freescoutZgloszenie, freescout, freshdeskZgloszenie, freshdesk, slack, ntfy, bitrix24, pocztaM365, pocztaGmail, pocztaHome, pocztaOvh, pocztaWlasny, smsGrupa, custom];
 
 export const presetById = (id: string): Preset | undefined => PRESETS.find((p) => p.id === id);
 

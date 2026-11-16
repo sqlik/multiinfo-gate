@@ -800,9 +800,11 @@ się je, zwiększając `offset` o wartość `limit`.
 
 ### 4.3. Anulowanie: `POST /v1/messages/{id}/cancel`
 
-**Przeznaczenie.** Zatrzymanie wiadomości, która nie dotarła jeszcze do odbiorcy. Wiadomość
-w kolejce bramki jest anulowana natychmiast. Wiadomość przekazana już do Multiinfo jest
-anulowana po stronie operatora, o ile nie została jeszcze doręczona.
+**Przeznaczenie.** Zatrzymanie wiadomości, której Multiinfo nie przekazało jeszcze do sieci
+operatora. Wiadomość w kolejce bramki jest anulowana natychmiast. Wiadomość przekazaną już do
+Multiinfo bramka anuluje po stronie operatora, o ile Multiinfo nie przekazało jej jeszcze do
+sieci. Multiinfo przekazuje wiadomość do sieci zwykle kilka sekund po przyjęciu, dlatego
+w praktyce można anulować wiadomość w stanie `queued` albo `throttled`.
 
 === "curl"
 
@@ -890,7 +892,7 @@ Krótkie linki anulowanej wiadomości prowadzą od tej chwili do strony „Link 
 |---|---|---|---|
 | 404 | `message_not_found` | brak wiadomości albo wiadomość innego klucza | sprawdzić identyfikator |
 | 409 | `already_final` | wiadomość ma już stan ostateczny (`delivered`, `failed` itd.) | anulowanie nie jest możliwe |
-| 409 | `already_passed` | Multiinfo odmówiło (`providerCode: -41`): wiadomość została już przekazana do sieci | anulowanie nie jest możliwe |
+| 409 | `already_passed` | Multiinfo odmówiło (`providerCode: -41`): wiadomość została już przekazana do sieci operatora | anulowanie nie jest możliwe |
 | 502 | `provider_error` | inny błąd Multiinfo; `providerCode` w body odpowiedzi | ponowić po chwili; przy powtarzaniu przekazać `providerCode` administratorowi |
 | 503 | `account_certificate` | Multiinfo odrzuciło certyfikat bramki | przekazać administratorowi; wymaga interwencji po stronie certyfikatu |
 
@@ -1028,7 +1030,7 @@ kolejnymi wywołaniami.
 | Pole | Wymagane | Opis |
 |---|---|---|
 | `recipients` | tak | od 1 do 5000 pozycji `{ "to", "text"?, "clientId"? }` |
-| `defaultText` | nie | treść dla odbiorców bez własnego `text`; wymagana, jeżeli którykolwiek odbiorca jej nie ma |
+| `defaultText` | nie | treść dla odbiorców bez własnego `text`; wymagana, jeżeli dla któregokolwiek odbiorcy nie podano własnego `text` |
 | `recipients[].clientId` | nie | 1-20 znaków z zakresu `A-Z a-z 0-9 . _ -`; zwracany w raporcie |
 | `orig`, `serviceId`, `encoding`, `deliveryReport`, `costCenter` | nie | znaczenie jak w rozdziale 3 |
 | `shortenLinks`, `campaign`, `linkDomain`, `linkValidityDays` | nie | skracanie linków jak w rozdziale 3; pominięta nazwa kampanii oznacza identyfikator rozsyłki, a ważność liczy się od `startAt` albo od przyjęcia rozsyłki |

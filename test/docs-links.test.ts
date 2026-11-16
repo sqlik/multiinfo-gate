@@ -11,7 +11,7 @@ describe('kotwice artykułu Rozwiązywanie problemów', () => {
   });
 
   it('odnośniki do punktów artykułu w dokumentacji prowadzą do istniejących kotwic', () => {
-    for (const file of ['docs/uruchomienie.md', 'docs/api.md', 'docs/index.md', 'docs/problemy.md']) {
+    for (const file of ['docs/uruchomienie.md', 'docs/api.md', 'docs/index.md', 'docs/problemy.md', 'docs/integracje.md', 'docs/agenci-ai.md']) {
       const text = readFileSync(file, 'utf8');
       const targets = [...text.matchAll(/problemy\.md#([a-z0-9-]+)/g), ...(file.endsWith('problemy.md') ? text.matchAll(/\]\(#([a-z0-9-]+)\)/g) : [])].map((m) => m[1]);
       for (const t of targets) expect(anchors, `${file} → #${t}`).toContain(t);
@@ -34,5 +34,20 @@ describe('artykuł Skracacz linków', () => {
     const own = [...readFileSync('docs/skracacz.md', 'utf8').matchAll(/\{#([a-z0-9-]+)\}/g)].map((m) => m[1]);
     expect(fromPanel).toContain('obowiazkowa-lista-domen-docelowych');
     for (const t of [...fromPanel, ...fromDocs]) expect(own, `skracacz.md#${t}`).toContain(t);
+  });
+});
+
+describe('artykuł Agenci AI', () => {
+  it('jest w nawigacji dokumentacji pod tytułem, który podają zasoby MCP', () => {
+    expect(readFileSync('mkdocs.yml', 'utf8')).toMatch(/^\s+- Agenci AI: agenci-ai\.md$/m);
+  });
+
+  it('odsyła do punktów artykułu Rozwiązywanie problemów o agentach', () => {
+    const text = readFileSync('docs/agenci-ai.md', 'utf8');
+    const targets = [...text.matchAll(/problemy\.md#([a-z0-9-]+)/g)].map((m) => m[1]);
+    for (const anchor of ['agent-kod', 'agent-narzedzia', 'agent-widoki', 'agent-adres-bramki', 'agent-limit']) {
+      expect(PROBLEM_ANCHORS).toContain(anchor);
+      expect(targets).toContain(anchor);
+    }
   });
 });

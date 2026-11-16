@@ -153,3 +153,34 @@ describe('PackagesRepo.countSince', () => {
     expect(repo.countSince(NOW)).toEqual({ packages: 0, recipients: 0 });
   });
 });
+
+describe('PackagesRepo: odczyty agenta', () => {
+  it('recipientsTo i lastRecipientBefore szukają odbiorców rozsyłek klucza po numerze i czasie', () => {
+    const { repo, apiKeyId } = setup();
+    expect(repo.recipientsTo(apiKeyId, '48501052442', '2026-08-25T00:00:00.000Z', '2026-08-26T00:00:00.000Z'))
+      .toMatchObject([{ packageId: 'pkg_1', seq: 2, clientId: 'faktura-114' }]);
+    expect(repo.recipientsTo(apiKeyId, '48501052442', '2026-08-25T10:00:00.001Z', '2026-08-26T00:00:00.000Z')).toEqual([]);
+    expect(repo.recipientsTo(apiKeyId + 1, '48501052442', '2026-08-25T00:00:00.000Z', '2026-08-26T00:00:00.000Z')).toEqual([]);
+    expect(repo.lastRecipientBefore(apiKeyId, '48601135134', new Date('2026-08-25T11:00:00Z'), new Date('2026-08-18T11:00:00Z')))
+      .toEqual({ packageId: 'pkg_1', createdAt: NOW.toISOString() });
+    expect(repo.lastRecipientBefore(apiKeyId, '48601135134', NOW, new Date('2026-08-18T11:00:00Z'))).toBeUndefined();
+  });
+
+  it('recipients z przesunięciem podaje kolejną porcję odbiorców', () => {
+    const { repo } = setup();
+    expect(repo.recipients('pkg_1', 1, 1).map((r) => r.seq)).toEqual([2]);
+  });
+
+  it('reportBreakdown: stany, przyczyny i doręczenia w godzinach według daty stanu', () => {
+    const { repo } = setup();
+    repo.applyReport('pkg_1', [
+      { miId: '1', dest: '48601135134', miStatus: 21, status: 'delivered', rawStatus: 'Doręczono', changedAt: '2026-08-25 12:05:00', clientId: null },
+      { miId: '2', dest: '48501052442', miStatus: 20, status: 'blocked', rawStatus: '20', changedAt: '2026-08-25 12:06:00', clientId: 'faktura-114' },
+    ]);
+    expect(repo.reportBreakdown('pkg_1')).toEqual({
+      byStatus: { delivered: 1, blocked: 1 },
+      reasons: [{ miStatus: 20, description: 'Numer odbiorcy znajduje się na czarnej liście', count: 1 }],
+      deliveredByHour: [{ hour: '2026-08-25 12:00', count: 1 }],
+    });
+  });
+});

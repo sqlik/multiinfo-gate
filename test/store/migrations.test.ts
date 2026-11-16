@@ -5,9 +5,13 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { defaultMailInConfig, defaultSmsGroupConfig } from '../../src/integrations/config.ts';
 import { AccountsRepo } from '../../src/store/accounts.ts';
+import { AgentConnectionsRepo } from '../../src/store/agent-connections.ts';
 import { applyMigrations, NewerDatabaseError, openDatabase, openDatabaseRaw } from '../../src/store/db.ts';
+import { IntegrationsRepo } from '../../src/store/integrations.ts';
+import { MessagesRepo } from '../../src/store/messages.ts';
 import { NotificationsRepo } from '../../src/store/notifications.ts';
-import { accountInput } from './helpers.ts';
+import { PackagesRepo } from '../../src/store/packages.ts';
+import { accountInput, messageInput, seedAgentIntegration } from './helpers.ts';
 
 describe('migracja 006', () => {
   it('tworzy tabele integracji i powiadomień oraz kolumny na istniejących tabelach', () => {
@@ -20,7 +24,7 @@ describe('migracja 006', () => {
     expect(cols('messages')).toContain('integration_id');
     expect(cols('inbound_messages')).toEqual(expect.arrayContaining(['external_ref', 'external_integration_id']));
     expect(cols('webhook_deliveries')).toEqual(expect.arrayContaining(['integration_id', 'method', 'headers_enc', 'response_ref']));
-    expect(db.pragma('user_version', { simple: true })).toBe(13);
+    expect(db.pragma('user_version', { simple: true })).toBe(14);
   });
 });
 
@@ -88,7 +92,7 @@ describe('migracja 010 na bazie 1.8.7 z danymi', () => {
     old.close();
 
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(13);
+    expect(db.pragma('user_version', { simple: true })).toBe(14);
     expect(db.prepare('SELECT id, integration_id, mail_from, requested_by FROM messages').all())
       .toEqual([{ id: 'msg_1', integration_id: integrationId, mail_from: 'dyspozytor@firma.pl', requested_by: null }]);
     expect(db.prepare('SELECT id, integration_id, requested_by, idempotency_key FROM packages').all())
@@ -113,7 +117,7 @@ describe('migracja 011', () => {
   const cols = (db: ReturnType<typeof openDatabase>, t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((c) => c.name);
   it('zakłada konta Microsoft 365 i ustawienia kanału SMS, dokłada kolumny sposobu logowania SMTP, SMS w regułach i kolejce, wiadomości systemowe', () => {
     const db = openDatabase(':memory:');
-    expect(db.pragma('user_version', { simple: true })).toBe(13);
+    expect(db.pragma('user_version', { simple: true })).toBe(14);
     expect(cols(db, 'm365_accounts')).toEqual(expect.arrayContaining([
       'id', 'name', 'tenant', 'client_id', 'redirect_uri', 'address', 'refresh_enc', 'state', 'error_code', 'error_message',
       'error_since', 'notified_at', 'connected_at', 'connected_by', 'last_refresh_at', 'created_at', 'updated_at',
@@ -157,7 +161,7 @@ describe('migracja 011 na bazie 1.9.0 z danymi', () => {
     old.close();
 
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(13);
+    expect(db.pragma('user_version', { simple: true })).toBe(14);
     const notifications = new NotificationsRepo(db, randomBytes(32));
     expect(notifications.smtp()).toMatchObject({ host: 'smtp.firma.pl', authMode: 'password', m365AccountId: null });
     expect(db.prepare('SELECT config FROM integrations').get()).toEqual({ config });
@@ -200,7 +204,7 @@ describe('migracja 012 na bazie 1.10.0 z danymi', () => {
     old.close();
 
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(13);
+    expect(db.pragma('user_version', { simple: true })).toBe(14);
     const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>).map((r) => r.name);
     expect(tables).toEqual(expect.arrayContaining([
       'link_domains', 'api_key_link_domains', 'api_key_link_targets', 'campaigns', 'campaign_hours', 'campaign_targets', 'short_links',
@@ -260,7 +264,7 @@ describe('migracja 013 na bazie 1.11.3 z grupami', () => {
     old.close();
 
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(13);
+    expect(db.pragma('user_version', { simple: true })).toBe(14);
     const rows = db.prepare('SELECT name, config, updated_at FROM integrations ORDER BY id').all() as Array<{ name: string; config: string; updated_at: string }>;
     expect(JSON.parse(rows[0]!.config)).toEqual({ ...lists, recipients: [
       { phone: '48601000013', name: '' }, { phone: '48601000011', name: '' }, { phone: '48601000012', name: '' },
@@ -274,5 +278,66 @@ describe('migracja 013 na bazie 1.11.3 z grupami', () => {
     const before = readFileSync(path);
     expect(() => openDatabase(path, { migrations: TWELVE })).toThrow(NewerDatabaseError);
     expect(readFileSync(path).equals(before)).toBe(true);
+  });
+});
+
+describe('migracja 014', () => {
+  const cols = (db: ReturnType<typeof openDatabase>, t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((c) => c.name);
+
+  it('migracja 014 ustawia user_version 14 i tworzy sześć tabel', () => {
+    const db = openDatabase(':memory:');
+    expect(db.pragma('user_version', { simple: true })).toBe(14);
+    const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>).map((r) => r.name);
+    expect(tables).toEqual(expect.arrayContaining(['oauth_clients', 'agent_connections', 'oauth_codes', 'oauth_tokens', 'agent_drafts', 'download_links']));
+    expect(cols(db, 'oauth_clients')).toEqual(['client_id', 'kind', 'name', 'redirect_uris', 'source_ip', 'created_at', 'fetched_at', 'connected_at']);
+    expect(cols(db, 'agent_connections')).toEqual([
+      'id', 'integration_id', 'name', 'method', 'code_hash', 'code_expires_at', 'code_used_at', 'token_hash', 'client_id', 'client_name',
+      'expires_at', 'created_at', 'created_by', 'last_used_at', 'revoked_at', 'revoked_reason',
+    ]);
+    expect(cols(db, 'oauth_codes')).toEqual(['code_hash', 'connection_id', 'client_id', 'redirect_uri', 'code_challenge', 'resource', 'expires_at', 'used_at']);
+    expect(cols(db, 'oauth_tokens')).toEqual(['token_hash', 'connection_id', 'kind', 'expires_at', 'created_at', 'rotated_at', 'grace_pair_enc']);
+    expect(cols(db, 'agent_drafts')).toEqual(['id', 'connection_id', 'kind', 'payload', 'created_at', 'expires_at', 'sent_at', 'result', 'confirm_hash']);
+    expect(cols(db, 'download_links')).toEqual(['token_hash', 'api_key_id', 'connection_id', 'kind', 'ref', 'created_at', 'expires_at']);
+    expect(cols(db, 'messages')).toContain('agent_connection_id');
+    expect(cols(db, 'packages')).toContain('agent_connection_id');
+    expect(db.pragma('foreign_key_check')).toEqual([]);
+  });
+
+  it('kody i tokeny połączeń są unikalne, a nazwę pilnuje panel, bo odwołana nazwa wraca do użytku', () => {
+    const db = openDatabase(':memory:');
+    const { integrationId } = seedAgentIntegration(db, randomBytes(32));
+    const add = db.prepare(`INSERT INTO agent_connections (integration_id, name, method, code_hash, token_hash, created_at, created_by) VALUES (?, ?, 'oauth', ?, ?, '2026-11-15', 'admin')`);
+    add.run(integrationId, 'Ewa Nowak', 'kod-1', null);
+    add.run(integrationId, 'Marek Kowalski', null, null);
+    add.run(integrationId, 'Anna Wiśniewska', null, null);
+    expect(() => add.run(integrationId, 'Jan Zieliński', 'kod-1', null)).toThrow(/UNIQUE/);
+    expect(() => add.run(integrationId, 'Ewa Nowak', null, null)).not.toThrow();
+    expect(() => db.prepare("UPDATE agent_connections SET method = 'haslo'").run()).toThrow(/CHECK/);
+    // Bez UNIQUE kaskada z integrations i lista połączeń integracji korzystają z osobnego indeksu.
+    const plan = db.prepare('EXPLAIN QUERY PLAN SELECT id FROM agent_connections WHERE integration_id = ?').all(integrationId) as { detail: string }[];
+    expect(plan.map((p) => p.detail).join(' ')).toMatch(/USING (COVERING )?INDEX idx_agent_connections_integration/);
+  });
+
+  it('usunięcie integracji usuwa połączenia, a wiadomość traci agent_connection_id i zachowuje requested_by', () => {
+    const db = openDatabase(':memory:');
+    const key = randomBytes(32);
+    const { accountId, apiKeyId, integrationId } = seedAgentIntegration(db, key);
+    const connections = new AgentConnectionsRepo(db);
+    const connectionId = connections.insert({ integrationId, name: 'Ewa Nowak', method: 'oauth', expiresAt: null, createdBy: 'admin', createdAt: new Date('2026-11-15T08:00:00Z') });
+    new MessagesRepo(db).insert(messageInput({ apiKeyId, accountId, integrationId, agentConnectionId: connectionId, requestedBy: 'Ewa Nowak' }));
+    new PackagesRepo(db).insert({
+      id: 'pkg_1', apiKeyId, accountId, serviceId: '24138', defaultText: 'Przegląd klimatyzacji', orig: null, costCenter: null, startAt: null,
+      deliveryReport: 1, encoding: 'gsm', multipart: 0, createdAt: '2026-11-15T08:00:00Z', integrationId, agentConnectionId: connectionId, requestedBy: 'Ewa Nowak',
+    }, [{ dest: '48601000011', text: null, clientId: null }]);
+    expect(new MessagesRepo(db).get('msg_1')!.agentConnectionId).toBe(connectionId);
+    expect(new PackagesRepo(db).get('pkg_1')!.agentConnectionId).toBe(connectionId);
+
+    new IntegrationsRepo(db, key).remove(integrationId);
+
+    expect(connections.get(connectionId)).toBeUndefined();
+    const message = new MessagesRepo(db).get('msg_1')!;
+    expect([message.agentConnectionId, message.integrationId, message.requestedBy]).toEqual([null, null, 'Ewa Nowak']);
+    const pkg = new PackagesRepo(db).get('pkg_1')!;
+    expect([pkg.agentConnectionId, pkg.requestedBy]).toEqual([null, 'Ewa Nowak']);
   });
 });

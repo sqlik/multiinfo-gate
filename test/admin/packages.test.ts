@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { defaultPowerAutomateConfig } from '../../src/integrations/config.ts';
+import { defaultAgentConfig, defaultPowerAutomateConfig } from '../../src/integrations/config.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
 const NOW = new Date('2026-08-25T10:00:00Z');
@@ -67,6 +67,27 @@ describe('GET /rozsylki', () => {
     expect((await page('/rozsylki')).body).toContain('href="/rozsylki"');
     const anon = await h.app.inject({ method: 'GET', url: '/rozsylki' });
     expect(anon.statusCode).toBe(302);
+  });
+});
+
+describe('rozsyłka przez agenta AI', () => {
+  it('lista i szczegół pokazują źródło z połączeniem, szczegół wiersz „Połączenie”', async () => {
+    const agentId = h.integrations.insert({
+      name: 'Agent AI - marketing', kind: 'agent', apiKeyId, serviceId: null, orig: null, preset: 'agent-ai', enabled: 1,
+      config: defaultAgentConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const connectionId = h.agentConnections.insert({ integrationId: agentId, name: 'Ewa Nowak', method: 'token', expiresAt: null, createdBy: 'janek', createdAt: NOW });
+    h.packages.insert({
+      id: 'pkg_agent', apiKeyId, accountId, serviceId: '24138', defaultText: 'Przegląd klimatyzacji', orig: null,
+      costCenter: null, startAt: null, deliveryReport: 1, encoding: 'gsm', multipart: 0, createdAt: NOW.toISOString(),
+      integrationId: agentId, requestedBy: 'Ewa Nowak', agentConnectionId: connectionId,
+    }, [{ dest: '48601000011', text: null, clientId: null }]);
+    const list = (await page('/rozsylki')).body;
+    expect(list).toContain(`<a href="/integracje/${agentId}">agent Agent AI - marketing · Ewa Nowak</a>`);
+    const detail = (await page('/rozsylki/pkg_agent')).body;
+    expect(detail).toContain('<div>Źródło</div><div>agent Agent AI - marketing · Ewa Nowak</div>');
+    expect(detail).toContain(`<div>Połączenie</div><div>Ewa Nowak · <a href="/integracje/${agentId}">Agent AI - marketing</a></div>`);
+    expect(detail).not.toContain('>Zlecający<');
   });
 });
 

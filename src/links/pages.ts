@@ -26,6 +26,13 @@ export function expiredPage(displayName: string | null): string {
     + '<p>Aby otrzymać aktualny link, skontaktuj się z nadawcą wiadomości.</p>');
 }
 
+/** Strona linku do pobrania pliku po terminie albo nieznanego; bez danych pliku. */
+export function downloadExpiredPage(): string {
+  return page('Link wygasł', '<h1>Link wygasł</h1>'
+    + '<p>Link do pobrania pliku jest ważny godzinę od utworzenia.</p>'
+    + '<p>Aby pobrać plik, poproś agenta AI o nowy link.</p>');
+}
+
 /** Strona samego adresu domeny, gdy domena nie ma adresu strony głównej. */
 export function homePage(displayName: string): string {
   return page(displayName, `<h1>${esc(displayName)}</h1>`

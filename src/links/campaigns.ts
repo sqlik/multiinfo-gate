@@ -97,7 +97,10 @@ export function campaignDetail(
   };
 }
 
-const CSV_HEADER = 'numer;identyfikator_klienta;pierwsze_otwarcie;ostatnie_klikniecie;klikniecia;linki';
+/** Kolumny pliku CSV odbiorców kampanii; plik odbiorców bez otwarcia pomija kolumny czasów otwarcia. */
+export const RECIPIENT_CSV_COLUMNS = ['numer', 'identyfikator_klienta', 'pierwsze_otwarcie', 'ostatnie_klikniecie', 'klikniecia', 'linki'] as const;
+export const OPENING_TIME_COLUMNS: ReadonlySet<string> = new Set(['pierwsze_otwarcie', 'ostatnie_klikniecie']);
+const CSV_HEADER = RECIPIENT_CSV_COLUMNS.join(';');
 
 /** Odbiorcy z otwarciem w CSV: pola jak w tabeli panelu, czas polski, adresy docelowe rozdzielone spacją. */
 export function openersCsv(deps: Pick<CampaignReadDeps, 'shortLinks'>, id: number): string {

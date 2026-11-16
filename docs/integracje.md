@@ -12,7 +12,9 @@ jest także grupa numerów: uprawniony numer wysyła SMS na numer bramki, a bram
 do stałej listy (SMS do grupy, rozdział 5a). Od wersji 1.9 integracją jest również Power Automate.
 Przepływy Microsoft Power Automate wysyłają za jej pośrednictwem SMS-y, korzystając z konektora
 bramki (rozdział 5b). Od wersji 1.10 Mail2SMS odczytuje także skrzynki Microsoft 365, a bramka
-powiadamia administratora również SMS-em. Opis tych funkcji zawierają rozdziały 5.1 i 9.5.
+powiadamia administratora również SMS-em. Opis tych funkcji zawierają rozdziały 5.1 i 9.5. Od
+wersji 1.12 integracją jest także agent AI. Pracownik wysyła za jej pośrednictwem SMS-y w rozmowie
+z aplikacją AI, na przykład claude.ai albo ChatGPT, a opis tej integracji zawiera rozdział 5c.
 
 Ten rozdział opisuje cztery kierunki, język szablonów, gotowe ustawienia dla popularnych aplikacji,
 dziennik integracji oraz powiadomienia dla administratora wysyłane mailem i SMS-em. Wysyłkę przez pełne
@@ -33,6 +35,10 @@ Integracja działa w jednym z czterech kierunków:
 Integracja z Power Automate również należy do kierunku „do SMS”. Tworzy się ją za pomocą kafelka
 w katalogu „Aplikacja wysyła SMS”, jednak zamiast adresu wejściowego `/hooks/` przyjmuje ona
 wywołania konektora Power Automate (rozdział 5b).
+
+Do kierunku „do SMS” należy również integracja „Agent AI”. Przyjmuje ona polecenia aplikacji AI
+przez serwer MCP bramki. W aplikacji z widokami, na przykład w claude.ai i ChatGPT, wysyłkę zatwierdza
+pracownik w podglądzie (rozdział 5c).
 
 Każda integracja działa w imieniu jednego klucza API. Obowiązują więc konto Multiinfo tego
 klucza, jego dozwolone usługi, nadpisy i limity, dokładnie tak jak przy wysyłce przez API.
@@ -1124,6 +1130,12 @@ numeru idzie do grupy w całości.
 | Nadawca i treść | nazwa nadawcy z listy, dwukropek i reszta; bez nazwy numer nadawcy | `Anna Nowak: awaria pompy w hali B` |
 | Szablon Liquid | wynik szablonu na zmiennych z rozdziału 6.2, tylko tryb zaawansowany | `{{ sender }} do {{ recipients.size }}: {{ body }}` |
 
+SMS do grupy może zlecić także agent AI według rozdziału 5c. Taka wysyłka nie pochodzi z telefonu,
+dlatego nie zawiera numeru nadawcy. Wariant „Nadawca i treść” podpisuje wtedy SMS nazwą połączenia
+agenta, na przykład „Ewa Nowak: awaria pompy w hali B”. Szablon Liquid otrzymuje nazwę połączenia
+w zmiennej `sender`, puste zmienne `from` i `to` oraz chwilę przygotowania podglądu w zmiennej
+`receivedAt`.
+
 Limit części i przepełnienie działają jak w rozdziale 3.5 i są dostępne w obu trybach
 formularza. Domyślnie jedna część i przycięcie. Każdy odbiorca dostaje tyle części, ile ma
 wiadomość. Przy ustawieniu „nie wysyłaj” SMS ponad
@@ -1290,7 +1302,7 @@ ani niewidocznych znaków formatowania, które mogłyby zmienić wygląd wpisu.
 | wysłano | nazwa akcji, a przy wielu odbiorcach także ich liczba: `Wyślij SMS`, `Wyślij rozsyłkę, 14 odbiorców`, `Wyślij SMS do grupy, 3 odbiorców`; skrócona treść otrzymuje dopisek `skrócono do 1 części` |
 | limit | przekroczenie limitu burzy, na przykład `ponad 30 w 10 min`, albo limitu odbiorców, na przykład `ponad 5000 odbiorców w 10 min` |
 | duplikat | powtórzone wywołanie z tym samym kluczem idempotencji, na przykład `Wyślij SMS, powtórzony klucz idempotencji`; bramka zwraca pierwotną odpowiedź i niczego nie wysyła |
-| błąd | nazwa akcji i komunikat bramki, na przykład `Wyślij SMS do grupy: Integracja Biuro handlowe nie ma odbiorców grupy. Listę uzupełnia administrator w panelu bramki.` |
+| błąd | nazwa akcji i komunikat bramki, na przykład `Wyślij SMS do grupy: Grupa w integracji Biuro handlowe nie zawiera odbiorców. Listę uzupełnia administrator w panelu bramki.` |
 
 Wpis „wysłano” prowadzi do pierwszej wiadomości albo do rozsyłki. Wywołanie wyłączonej
 integracji nie pozostawia wpisu.
@@ -1318,6 +1330,107 @@ nazwę integracji pod nazwą klucza.
   a przepływ otrzymuje błąd z czytelnym kodem
 - Panel bramki nie musi być dostępny z internetu, ponieważ Power Automate korzysta wyłącznie
   z portu API
+
+## 5c. Agent AI
+
+Od wersji 1.12 bramka udostępnia serwer MCP, z którego korzystają aplikacje AI, na przykład claude.ai,
+ChatGPT i Claude Code. Pracownik wysyła SMS-y, sprawdza przebieg doręczenia i wyniki kampanii
+w rozmowie z agentem, a aplikacja wyświetla w rozmowie widoki bramki. Każde polecenie agenta przechodzi
+przez integrację „Agent AI”, która określa zakresy, nadawcę, usługę, limit części i ochronę przed
+burzą. Podobnie jak pozostałe integracje prowadzi ona dziennik i powiadamia administratora.
+
+Wymagania, połączenia pracowników, konfigurację w poszczególnych aplikacjach i widoki w rozmowie
+przedstawia artykuł [Agenci AI](agenci-ai.md). Rozdział 5c opisuje integrację w układzie pozostałych
+integracji.
+
+Integracja „Agent AI” nie obejmuje warunku, szablonu Liquid ani próbki. Treść i odbiorców ustala
+pracownik w rozmowie z agentem, a wysyłkę zatwierdza w podglądzie.
+
+### 5c.1. Utworzenie integracji
+
+Przycisk **Dodaj integrację**, kierunek **Aplikacja wysyła SMS** i kafelek **Agent AI** otwierają
+formularz w trybie prostym. Nad formularzem znajduje się rozwijany opis „Jak działa Agent AI”.
+Formularz składa się z trzech sekcji:
+
+1. **Podstawy.** Nazwa, klucz API, ID usługi, nadpis nadawcy oraz pole „Włączona”. Pod nadaną nazwą
+   integracja wyświetla się na stronie połączenia aplikacji i w źródle wiadomości. ID usługi i nadpis
+   są wartościami domyślnymi w podglądzie wysyłki, a agent może wybrać inną usługę albo inny nadpis
+   tego klucza.
+2. **Zakresy.** Sześć zakresów określa czynności dostępne dla agenta: wysyłkę SMS-ów, wysyłkę do grup,
+   odczyt wysłanych, wyniki kampanii, odczyt odebranych i odpowiedź nadawcy. Zakresy obowiązują
+   wszystkie połączenia integracji. Opis zakresów i powody ich rozdzielenia przedstawia rozdział 3
+   [Agentów AI](agenci-ai.md#3-zakresy).
+3. **Treść.** Limit części z wyborem „skróć i wyślij” albo „nie wysyłaj, poproś agenta o krótszą
+   treść”. Limit obowiązuje SMS-y, rozsyłki i odpowiedzi agenta, a SMS do grupy podlega limitowi
+   części grupy.
+
+Zaznaczenie wysyłki SMS-ów razem z odczytem odebranych wyświetla ostrzeżenie o przemycanych
+poleceniach, a dziennik zdarzeń panelu odnotowuje zapis takiej integracji. Zaznaczenie odpowiedzi nadawcy
+powoduje, że zapis zaznacza także odczyt odebranych. Gdy adres bramki z rozdziału 2.1 jest pusty albo
+nie zaczyna się od `https://`, formularz wyświetla ostrzeżenie, ponieważ aplikacje z logowaniem nie
+połączą się z bramką.
+
+![Formularz integracji Agent AI w trybie prostym: podstawy, zakresy z opisem każdego zakresu, ostrzeżenie przy wysyłce SMS-ów razem z odczytem odebranych i limit części](obrazki/agent-formularz.png)
+
+Tryb zaawansowany odsłania dodatkowo sekcję **Ochrona i dziennik**:
+
+| Pole | Znaczenie |
+|---|---|
+| Limit burzy | liczba wysyłek zatwierdzonych w oknie czasowym, domyślnie 30 wysyłek w ciągu 60 minut; liczą się także odpowiedzi i SMS-y do grup |
+| Limit odbiorców | liczba numerów ze wszystkich wysyłek w tym samym oknie, od 1 do 50 000, domyślnie 1000 |
+| Wpisów w dzienniku | pojemność dziennika integracji, od 20 do 2000 wpisów |
+| Przechowuj ładunki w dzienniku | zachowuje treść i odbiorców każdej wysyłki przez 7 dni w postaci zaszyfrowanej |
+
+Szkic, który przekroczyłby limit, zostaje odrzucony już przy przygotowaniu. Agent otrzymuje wtedy
+informację o czasie, po którym może ponowić próbę, a dziennik zapisuje wpis „limit”. Odczyty, na
+przykład lista wiadomości i wyniki kampanii, nie wliczają się do ochrony przed burzą.
+
+### 5c.2. Połączenia
+
+Każdy pracownik albo system otrzymuje własne połączenie z integracją. Sekcja **Połączenia**
+w szczegółach integracji przedstawia nazwę połączenia, aplikację, stan, ostatnie użycie i termin
+ważności. Przycisk **Dodaj połączenie** tworzy połączenie na jeden z dwóch sposobów:
+
+| Sposób | Aplikacje | Dane dla pracownika |
+|---|---|---|
+| Aplikacja z logowaniem | claude.ai, ChatGPT, aplikacje Claude, Gemini Enterprise | adres serwera MCP i kod jednorazowy ważny od 15 minut do 7 dni |
+| Aplikacja z kluczem w nagłówku | Copilot Studio, Claude Code, VS Code, n8n | adres serwera MCP i token połączenia w nagłówku `Authorization` |
+
+Panel wyświetla kod albo token jeden raz, razem z gotowym tekstem do przekazania pracownikowi.
+Połączenie jest ważne przez 30 dni, 90 dni, rok albo bez terminu, ale nigdy dłużej niż klucz API
+integracji. Wyłączenie integracji odcina wszystkie jej połączenia, a ponowne włączenie przywraca te,
+które nie wygasły. Procedurę dodania połączenia i stany połączeń opisuje rozdział 5
+[Agentów AI](agenci-ai.md#5-poaczenie-agenta-w-panelu). Na liście integracji plakietka pod nazwą
+podaje liczbę aktywnych połączeń. Przycisk **Utwórz kopię** w szczegółach kopiuje konfigurację
+integracji bez połączeń.
+
+![Szczegóły integracji Agent AI: konfiguracja opisana słowami i sekcja Połączenia z połączeniami w stanach aktywne, czeka na kod i odwołane](obrazki/agent-polaczenia.png)
+
+### 5c.3. Dziennik i źródło wiadomości
+
+Dziennik działa tak, jak opisuje rozdział 8. Każda wysyłka zatwierdzona przez pracownika pozostawia
+jeden wpis, a odczyty nie tworzą wpisów. Kolumna „Nadawca” pokazuje `MCP · <nazwa połączenia>`.
+
+Wiadomości i rozsyłki wysłane przez agenta są oznaczone na ekranach „Wiadomości” i „Rozsyłki”
+źródłem `agent <nazwa integracji> · <nazwa połączenia>`. SMS do grupy wysłany przez agenta jest
+oznaczony źródłem `grupa <nazwa grupy> · agent <nazwa integracji> · <nazwa połączenia>` i trafia także
+do dziennika grupy. Szczegóły wiadomości zawierają wiersz „Połączenie” z nazwą pracownika i odnośnikiem
+do integracji.
+
+### 5c.4. Koszt i bezpieczeństwo
+
+- Agent działa w granicach klucza API integracji: jego konta Multiinfo, usług, nadpisów, limitu żądań
+  na minutę i ustawień skracania linków. Agent widzi wiadomości, rozsyłki i kampanie całego klucza
+- Opcja klucza **Tylko integracje** nie ogranicza agenta, ponieważ każda jego wysyłka przechodzi przez
+  limit części, ochronę przed burzą i dziennik integracji
+- Limit odbiorców ogranicza liczbę SMS-ów zleconych przez agentów w jednym oknie, także przez
+  rozsyłki i SMS-y do grup. Domyślnie wynosi 1000 odbiorców w ciągu 60 minut
+- W aplikacji z widokami wysyłkę zatwierdza pracownik w podglądzie, a odpowiedź nadawcy trafia
+  wyłącznie do autora odebranego SMS-a. Treść odebranych SMS-ów jest oznaczona dla agenta jako tekst od zewnętrznego nadawcy
+- Bramka przechowuje wyłącznie skróty kodów i tokenów połączeń. Serwer MCP nie przyjmuje klucza API,
+  a API dla aplikacji nie przyjmuje tokenów połączeń
+- Panel bramki nie musi być dostępny z internetu, ponieważ aplikacje AI korzystają wyłącznie z portu
+  API
 
 ## 6. Szablony Liquid
 
@@ -2110,7 +2223,8 @@ listę jego integracji.
 ## 9. Powiadomienia administratora
 
 Bramka wysyła mailem powiadomienia o błędach integracji, niedostarczonych webhookach,
-certyfikatach, kontach, odbiorze, awariach skrzynek pocztowych i nowych wydaniach bramki. Od
+certyfikatach, kontach, odbiorze, awariach skrzynek pocztowych, połączeniach agentów AI i nowych
+wydaniach bramki. Od
 wersji 1.10 może je wysyłać również SMS-em. Ekran **Powiadomienia** w grupie „Konfiguracja”
 zawiera trzy zakładki: **Konfiguracja** z formularzem SMTP, **Reguły** z tabelą zdarzeń oraz
 **SMS** z ustawieniami kanału SMS.
@@ -2188,6 +2302,7 @@ z serwerem, a ponowienia przebiegają tak samo.
 | Nowe wydanie bramki (w serwisie GitHub dostępne jest nowsze wydanie niż zainstalowane) | włączone | wyłączony | 1 | brak | - |
 | Konto Microsoft 365 wymaga logowania (Microsoft odrzucił token konta, na przykład po zmianie hasła albo odwołaniu sesji) | włączone | włączony | 5 | brak | - |
 | Mail z powiadomieniem niewysłany (mail do administratora nie został wysłany mimo wszystkich ponowień) | włączone | włączony | 1 | nie dotyczy | powiadomienie wyłącznie SMS-em |
+| Połączenie agenta AI (pracownik połączył aplikację AI z bramką kodem jednorazowym albo bramka wstrzymała sprawdzanie kodów po serii nieudanych prób) | włączone | wyłączony | 10 | brak | - |
 
 Każdą regułę można wyłączyć, zmienić jej limit na godzinę i grupowanie. Pole **SMS** włącza
 wysyłkę powiadomienia także SMS-em, zgodnie z rozdziałem 9.5. Limit burzy zgłasza się
@@ -2292,4 +2407,7 @@ się w reszcie puli, nie zostaje wysłane na żaden numer i trafia wyłącznie d
 - Dziennik audytu panelu zapisuje utworzenie, zmianę (z listą zmienionych pól), włączenie,
   wyłączenie i usunięcie integracji, wygenerowanie nowego adresu, zmiany SMTP i reguł oraz
   odłożenie wydania, bez sekretów
+- Dziennik audytu panelu zapisuje także dodanie, usunięcie i odwołanie połączeń agentów AI, nowe
+  kody i tokeny, połączenie aplikacji kodem jednorazowym oraz zapis integracji z wysyłką SMS-ów
+  i odczytem odebranych
 - Kopia zapasowa bazy obejmuje integracje, dziennik, ustawienia SMTP i kolejkę powiadomień

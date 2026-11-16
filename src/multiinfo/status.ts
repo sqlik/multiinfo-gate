@@ -10,8 +10,9 @@ export function isFinal(status: number): boolean {
 export function mapStatus(status: number, substatus: number): GatewayStatus {
   switch (status) {
     case 0:
-    case 1:
       return 'queued';
+    case 1:
+      // „Oczekiwanie na raport doręczenia”: Multiinfo przekazało wiadomość do sieci operatora.
     case 3:
       return 'sent';
     case 7:
@@ -65,6 +66,28 @@ const SUBSTATUS: Record<string, string> = {
 
 export function describeSubstatus(status: number, substatus: number): string {
   return SUBSTATUS[`${status}/${substatus}`] ?? `Nieznany status ${status} / ${substatus}`;
+}
+
+/**
+ * Opis stanu z raportu rozsyłki. Raport nie niesie substatusu (§2.9), dlatego opis odpowiada słowu z pliku:
+ * 11 to „Niedoręczono”, a 21 to „Doręczono”, tak jak przy rozpoznawaniu opisu słownego.
+ */
+const REPORT_STATUS: Record<number, string> = {
+  0: SUBSTATUS['0/0']!,
+  1: SUBSTATUS['1/0']!,
+  3: SUBSTATUS['3/0']!,
+  7: SUBSTATUS['7/0']!,
+  11: SUBSTATUS['11/2']!,
+  12: SUBSTATUS['11/1']!,
+  13: SUBSTATUS['13/0']!,
+  14: SUBSTATUS['14/0']!,
+  20: SUBSTATUS['20/0']!,
+  21: SUBSTATUS['21/1']!,
+  22: SUBSTATUS['22/0']!,
+};
+
+export function describeReportStatus(status: number): string {
+  return REPORT_STATUS[status] ?? `Nieznany status ${status}`;
 }
 
 /** Statusy przesądzające o całości wiadomości, w kolejności ważności. */

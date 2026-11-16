@@ -178,6 +178,7 @@ describe('GET /v1/campaigns/{name}', () => {
     expect(other.statusCode).toBe(404);
     expect(other.json().error.code).toBe('campaign_not_found');
     expect((await get('/v1/campaigns/nieznana')).json().error.code).toBe('campaign_not_found');
+    expect((await get('/v1/campaigns/nieznana')).json().error.message).toBe('Nie znaleziono kampanii o tej nazwie.');
   });
 });
 
