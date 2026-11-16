@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { hashCode, normalizeCode } from '../agents/codes.ts';
 import { SCOPE_LABELS } from '../agents/scopes.ts';
-import { redirectMatches, resolveClient } from './clients.ts';
+import { redirectMatches, resolveClient, validRedirectUri } from './clients.ts';
 import { WindowLimiter, sourceKey } from './limits.ts';
 import { authorizePage, connectedPage, oauthErrorPage } from './page.ts';
 import type { OAuthDeps } from './routes.ts';
@@ -87,10 +87,12 @@ export function authorizeFlow(deps: OAuthDeps) {
     starts.hit(source);
     const clientId = text(query, 'client_id');
     if (clientId === undefined) return errorPage(400, NO_CLIENT);
+    // Adres powrotu sprawdzony przed pobraniem dokumentu metadanych: niepełne żądanie niczego nie pobiera.
+    const redirectUri = text(query, 'redirect_uri');
+    if (redirectUri === undefined || !validRedirectUri(redirectUri)) return errorPage(400, BAD_REDIRECT);
     const client = await resolveClient(deps, clientId, ip, now);
     if ('error' in client) return errorPage(client.status ?? 400, client.error);
-    const redirectUri = text(query, 'redirect_uri');
-    if (redirectUri === undefined || !redirectMatches(client.redirectUris, redirectUri)) return errorPage(400, BAD_REDIRECT);
+    if (!redirectMatches(client.redirectUris, redirectUri)) return errorPage(400, BAD_REDIRECT);
 
     const state = text(query, 'state');
     if (text(query, 'response_type') !== 'code') return errorPage(400, 'Bramka obsługuje wyłącznie response_type=code. Usuń łącznik w aplikacji i dodaj go ponownie.');

@@ -94,15 +94,35 @@ async function connect(code: string, clientId = 'cli_claude', redirect = REDIREC
 const docUrl = (n: number) => `https://napastnik.example/doc/${n}`;
 
 describe('dokumenty metadanych klienta', () => {
-  it('pobranie nowych dokumentów jest ograniczone: 10 na źródło i 100 łącznie na godzinę', async () => {
+  it('pobranie nowych dokumentów jest ograniczone: 10 na źródło i 1000 łącznie na godzinę', async () => {
     for (let n = 0; n < 30; n += 1) await start(pkce().challenge, { client_id: docUrl(n), redirect_uri: 'https://napastnik.example/0/x' }, '203.0.113.66');
     expect(fetches).toHaveLength(10);
-    for (let n = 30; n < 250; n += 1) {
-      await start(pkce().challenge, { client_id: docUrl(n), redirect_uri: 'https://napastnik.example/0/x' }, `192.0.2.${n % 200}`);
+    for (let n = 30; n < 1300; n += 1) {
+      await start(pkce().challenge, { client_id: docUrl(n), redirect_uri: 'https://napastnik.example/0/x' }, `10.${Math.floor(n / 250)}.${n % 250}.1`);
     }
-    expect(fetches.length).toBeLessThanOrEqual(100);
-    const blocked = await start(pkce().challenge, { client_id: docUrl(999), redirect_uri: 'https://napastnik.example/0/x' }, '198.51.100.99');
+    expect(fetches.length).toBeLessThanOrEqual(1000);
+    const blocked = await start(pkce().challenge, { client_id: docUrl(5000), redirect_uri: 'https://napastnik.example/0/x' }, '198.51.100.99');
     expect(blocked.res.statusCode).toBe(429);
+  });
+
+  it('znany klient odświeża dokument także po wyczerpaniu limitu łącznego przez obcych', async () => {
+    await start(pkce().challenge, { client_id: docUrl(0), redirect_uri: 'https://napastnik.example/0/x' }, '198.51.100.7');
+    expect(fetches).toHaveLength(1);
+    clock = new Date(clock.getTime() + 25 * 3_600_000);
+    for (let n = 1; n <= 1100; n += 1) {
+      await start(pkce().challenge, { client_id: docUrl(n), redirect_uri: 'https://napastnik.example/0/x' }, `10.${Math.floor(n / 250)}.${n % 250}.9`);
+    }
+    expect(fetches.length).toBeLessThanOrEqual(1001);
+    const before = fetches.length;
+    const known = await start(pkce().challenge, { client_id: docUrl(0), redirect_uri: 'https://napastnik.example/0/x' }, '198.51.100.7');
+    expect(known.res.statusCode).not.toBe(429);
+    expect(fetches).toHaveLength(before + 1);
+  });
+
+  it('żądanie bez poprawnego adresu powrotu nie pobiera dokumentu', async () => {
+    await start(pkce().challenge, { client_id: docUrl(1), redirect_uri: undefined }, '203.0.113.66');
+    await start(pkce().challenge, { client_id: docUrl(2), redirect_uri: 'javascript:alert(1)' }, '203.0.113.66');
+    expect(fetches).toHaveLength(0);
   });
 
   it('nieudane pobranie zostaje zapamiętane, więc ponowienie nie pobiera dokumentu drugi raz', async () => {
