@@ -2301,7 +2301,7 @@ z serwerem, a ponowienia przebiegają tak samo.
 | Nowe wydanie bramki (w serwisie GitHub dostępne jest nowsze wydanie niż zainstalowane) | włączone | wyłączony | 1 | brak | - |
 | Konto Microsoft 365 wymaga logowania (Microsoft odrzucił token konta, na przykład po zmianie hasła albo odwołaniu sesji) | włączone | włączony | 5 | brak | - |
 | Mail z powiadomieniem niewysłany (mail do administratora nie został wysłany mimo wszystkich ponowień) | włączone | włączony | 1 | nie dotyczy | powiadomienie wyłącznie SMS-em |
-| Połączenie agenta AI (pracownik połączył aplikację AI z bramką kodem jednorazowym) | włączone | wyłączony | 10 | brak | - |
+| Połączenie agenta AI (pracownik połączył aplikację AI z bramką kodem jednorazowym albo bramka wstrzymała sprawdzanie kodów po serii nieudanych prób) | włączone | wyłączony | 10 | brak | - |
 
 Każdą regułę można wyłączyć, zmienić jej limit na godzinę i grupowanie. Pole **SMS** włącza
 wysyłkę powiadomienia także SMS-em, zgodnie z rozdziałem 9.5. Limit burzy zgłasza się

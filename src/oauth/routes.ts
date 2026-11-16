@@ -84,7 +84,7 @@ export function registerOAuthRoutes(app: FastifyInstance, deps: OAuthDeps): void
 
   app.get('/oauth/authorize', async (request, reply) => {
     const b = base();
-    return page(reply, b === null ? noAddress() : await flow.start(object(request.query), b, now()));
+    return page(reply, b === null ? noAddress() : await flow.start(object(request.query), b, request.ip, now()));
   });
   app.post('/oauth/authorize', async (request, reply) => {
     const b = base();

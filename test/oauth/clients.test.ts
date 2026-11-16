@@ -125,7 +125,7 @@ describe('dokument metadanych klienta', () => {
   it('dokument z publicznego adresu zapisuje klienta metadata', async () => {
     const fetchMetadata = counting(doc());
     const deps = oauthDeps(db, key, { fetchMetadata });
-    const client = await resolveClient(deps, DOC_URL, NOW);
+    const client = await resolveClient(deps, DOC_URL, '198.51.100.7', NOW);
     expect(client).toMatchObject({ clientId: DOC_URL, kind: 'metadata', name: 'ChatGPT', redirectUris: ['https://chatgpt.example/connector/oauth/callback'], fetchedAt: NOW.toISOString() });
     expect(fetchMetadata.calls).toEqual([DOC_URL]);
   });
@@ -133,15 +133,15 @@ describe('dokument metadanych klienta', () => {
   it('dokument metadanych z adresem wewnętrznym odrzucony także przy allowPrivateWebhooks', async () => {
     const fetchMetadata = counting(doc());
     const deps = { ...oauthDeps(db, key, { fetchMetadata, resolve: async () => ['10.0.0.5'] }), allowPrivateWebhooks: true } as OAuthDeps;
-    const result = await resolveClient(deps, DOC_URL, NOW);
+    const result = await resolveClient(deps, DOC_URL, '198.51.100.7', NOW);
     expect(result).toEqual({ error: expect.stringContaining('sieć wewnętrzną') });
     expect(fetchMetadata.calls).toEqual([]);
-    expect(await resolveClient(deps, 'https://127.0.0.1/client.json', NOW)).toHaveProperty('error');
+    expect(await resolveClient(deps, 'https://127.0.0.1/client.json', '198.51.100.7', NOW)).toHaveProperty('error');
   });
 
   it('dokument metadanych z innym client_id odrzucony', async () => {
     const deps = oauthDeps(db, key, { fetchMetadata: counting(doc({ client_id: 'https://inny.example/client.json' })) });
-    expect(await resolveClient(deps, DOC_URL, NOW)).toEqual({ error: expect.stringContaining('client_id') });
+    expect(await resolveClient(deps, DOC_URL, '198.51.100.7', NOW)).toEqual({ error: expect.stringContaining('client_id') });
     expect(deps.oauth.getClient(DOC_URL)).toBeUndefined();
   });
 
@@ -149,24 +149,24 @@ describe('dokument metadanych klienta', () => {
     for (const fetchMetadata of [
       counting(doc({ client_name: undefined })), counting(doc({ redirect_uris: ['http://evil.example/cb'] })), counting(doc(), 404), counting('{nie json'),
     ]) {
-      expect(await resolveClient(oauthDeps(db, key, { fetchMetadata }), DOC_URL, NOW)).toHaveProperty('error');
+      expect(await resolveClient(oauthDeps(db, key, { fetchMetadata }), DOC_URL, '198.51.100.7', NOW)).toHaveProperty('error');
     }
   });
 
   it('dokument metadanych w pamięci: drugie użycie w ciągu doby bez pobierania', async () => {
     const fetchMetadata = counting(doc());
     const deps = oauthDeps(db, key, { fetchMetadata });
-    await resolveClient(deps, DOC_URL, NOW);
-    await resolveClient(deps, DOC_URL, new Date(NOW.getTime() + 23 * HOUR));
+    await resolveClient(deps, DOC_URL, '198.51.100.7', NOW);
+    await resolveClient(deps, DOC_URL, '198.51.100.7', new Date(NOW.getTime() + 23 * HOUR));
     expect(fetchMetadata.calls).toHaveLength(1);
-    await resolveClient(deps, DOC_URL, new Date(NOW.getTime() + 25 * HOUR));
+    await resolveClient(deps, DOC_URL, '198.51.100.7', new Date(NOW.getTime() + 25 * HOUR));
     expect(fetchMetadata.calls).toHaveLength(2);
   });
 
   it('identyfikator rejestracji dynamicznej wskazuje zapisanego klienta, nieznany daje błąd', async () => {
     const deps = oauthDeps(db, key);
     const reg = await registerClient(deps, { redirect_uris: ['https://claude.ai/cb'], client_name: 'Claude' }, '203.0.113.10', NOW);
-    expect(await resolveClient(deps, reg.body.client_id as string, NOW)).toMatchObject({ kind: 'dynamic', name: 'Claude' });
-    expect(await resolveClient(deps, 'cli_nieznany', NOW)).toHaveProperty('error');
+    expect(await resolveClient(deps, reg.body.client_id as string, '198.51.100.7', NOW)).toMatchObject({ kind: 'dynamic', name: 'Claude' });
+    expect(await resolveClient(deps, 'cli_nieznany', '198.51.100.7', NOW)).toHaveProperty('error');
   });
 });

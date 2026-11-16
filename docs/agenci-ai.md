@@ -297,8 +297,14 @@ z rozdziału 9.2 [Integracji z aplikacjami](integracje.md#92-reguy). Powiadomien
 połączenia, integrację, aplikację, adres, z którego nastąpiło połączenie, oraz zakresy. Dzięki temu
 administrator zauważy połączenie, którego nie oczekiwał.
 
-Dziennik zdarzeń panelu odnotowuje dodanie połączenia, wygenerowanie nowego kodu albo tokenu,
-połączenie aplikacji kodem i odwołanie połączenia.
+Ta sama reguła zgłasza wstrzymanie sprawdzania kodów. Po 5000 nieudanych próbach w ciągu 15 minut
+bramka przez kolejne 15 minut nie sprawdza kodów z żadnego adresu. Tak duża liczba prób wskazuje na
+próbę zablokowania połączeń przez osobę z zewnątrz, ponieważ odgadnięcie kodu nie jest możliwe.
+
+Dziennik zdarzeń panelu odnotowuje dodanie i usunięcie połączenia, wygenerowanie nowego kodu albo
+tokenu, połączenie aplikacji kodem oraz odwołanie połączenia, także samoczynne po ponownym użyciu
+zużytego tokenu odświeżania. Odnotowuje również usunięcie tokenów aplikacji po ponownym użyciu kodu
+autoryzacji i zapis integracji, która łączy wysyłkę SMS-ów z odczytem odebranych.
 
 ## 6. Łączenie w aplikacjach
 

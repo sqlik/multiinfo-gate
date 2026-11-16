@@ -27,7 +27,9 @@ const GRACE_MS = 60_000;
 /** Zużyty token odświeżania zostaje tyle czasu, żeby jego ponowne użycie zostało rozpoznane i odwołało połączenie. */
 const ROTATED_KEEP_MS = 30 * 86_400_000;
 /** Klient dynamiczny, który nie dokończył połączenia. */
-const ABANDONED_CLIENT_MS = 86_400_000;
+const ABANDONED_CLIENT_MS = 86_400_000 + 15 * 60_000;
+/** Klient z dokumentu metadanych bez połączenia: po dobie od pobrania bramka i tak pobrałaby dokument ponownie. */
+const METADATA_KEEP_MS = 86_400_000;
 
 interface RawClient {
   client_id: string; kind: 'dynamic' | 'metadata'; name: string; redirect_uris: string; source_ip: string | null;
@@ -67,15 +69,20 @@ export class OAuthRepo {
     ).run(hash, c.connectionId, c.clientId, c.redirectUri, c.codeChallenge, c.resource, c.expiresAt);
   }
 
-  /** Zwraca kod i oznacza użycie; drugie wywołanie i kod po terminie dają undefined. */
-  takeCode(hash: string, at: Date): AuthCodeRow | undefined {
+  /**
+   * Zwraca kod i oznacza użycie. Kod już użyty daje `{ reused }` z połączeniem, żeby wymiana mogła odwołać tokeny
+   * wydane na jego podstawie (RFC 6749 4.1.2). Kod nieznany i po terminie dają undefined.
+   */
+  takeCode(hash: string, at: Date): AuthCodeRow | { reused: number } | undefined {
     return this.db.transaction(() => {
       const row = this.db.prepare(
-        `SELECT connection_id, client_id, redirect_uri, code_challenge, resource, expires_at FROM oauth_codes
-         WHERE code_hash = ? AND used_at IS NULL AND expires_at > ?`,
+        `SELECT connection_id, client_id, redirect_uri, code_challenge, resource, expires_at, used_at FROM oauth_codes
+         WHERE code_hash = ? AND expires_at > ?`,
       ).get(hash, at.toISOString()) as
-        { connection_id: number; client_id: string; redirect_uri: string; code_challenge: string; resource: string; expires_at: string } | undefined;
+        { connection_id: number; client_id: string; redirect_uri: string; code_challenge: string; resource: string; expires_at: string; used_at: string | null }
+        | undefined;
       if (!row) return undefined;
+      if (row.used_at !== null) return { reused: row.connection_id };
       this.db.prepare('UPDATE oauth_codes SET used_at = ? WHERE code_hash = ?').run(at.toISOString(), hash);
       return {
         connectionId: row.connection_id, clientId: row.client_id, redirectUri: row.redirect_uri, codeChallenge: row.code_challenge,
@@ -109,6 +116,11 @@ export class OAuthRepo {
     this.db.prepare('DELETE FROM oauth_tokens WHERE token_hash = ?').run(hash);
   }
 
+  /** Kilka zapisów jako jedna całość, na przykład użycie kodu jednorazowego razem z wydaniem kodu autoryzacji. */
+  transaction<T>(fn: () => T): T {
+    return this.db.transaction(fn)();
+  }
+
   deleteForConnection(connectionId: number): void {
     this.db.transaction(() => {
       this.db.prepare('DELETE FROM oauth_tokens WHERE connection_id = ?').run(connectionId);
@@ -116,7 +128,11 @@ export class OAuthRepo {
     })();
   }
 
-  /** Sprzątanie: kody po terminie, tokeny dostępu po terminie, tolerancja starsza niż 60 s, tokeny odświeżania 30 dni po rotacji, klienci dynamiczni bez połączenia starsi niż doba. */
+  /**
+   * Sprzątanie: kody po terminie, tokeny dostępu po terminie, tolerancja starsza niż 60 s, tokeny odświeżania 30 dni
+   * po rotacji, klienci dynamiczni bez połączenia starsi niż doba i kwadrans, czyli dłużej niż żądanie połączenia,
+   * oraz klienci z dokumentu metadanych bez połączenia pobrani ponad dobę temu.
+   */
   prune(now: Date): { codes: number; tokens: number; clients: number } {
     const iso = now.toISOString();
     const before = (ms: number) => new Date(now.getTime() - ms).toISOString();
@@ -130,7 +146,11 @@ export class OAuthRepo {
         `DELETE FROM oauth_clients WHERE kind = 'dynamic' AND connected_at IS NULL AND created_at <= ?
            AND NOT EXISTS (SELECT 1 FROM agent_connections c WHERE c.client_id = oauth_clients.client_id)`,
       ).run(before(ABANDONED_CLIENT_MS)).changes;
-      return { codes, tokens: access + refresh, clients };
+      const documents = this.db.prepare(
+        `DELETE FROM oauth_clients WHERE kind = 'metadata' AND fetched_at <= ?
+           AND NOT EXISTS (SELECT 1 FROM agent_connections c WHERE c.client_id = oauth_clients.client_id)`,
+      ).run(before(METADATA_KEEP_MS)).changes;
+      return { codes, tokens: access + refresh, clients: clients + documents };
     })();
   }
 }

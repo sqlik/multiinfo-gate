@@ -58,7 +58,7 @@ function liveConnection(deps: OAuthDeps, connectionId: number, now: Date) {
   return details;
 }
 
-function exchangeCode(deps: OAuthDeps, body: Record<string, unknown>, resource: string, now: Date): TokenResult {
+function exchangeCode(deps: OAuthDeps, body: Record<string, unknown>, resource: string, ip: string, now: Date): TokenResult {
   const code = field(body, 'code');
   const verifier = field(body, 'code_verifier');
   const clientId = field(body, 'client_id');
@@ -68,6 +68,18 @@ function exchangeCode(deps: OAuthDeps, body: Record<string, unknown>, resource: 
   // Kod jest jednorazowy: zostaje zużyty także wtedy, gdy dalsze sprawdzenie się nie powiedzie.
   const row = deps.oauth.takeCode(hashSecret(code), now);
   if (!row) return INVALID_GRANT;
+  if ('reused' in row) {
+    // Ponowne użycie kodu oznacza, że kod mógł wyciec: tokeny wydane na jego podstawie przestają działać (RFC 6749 4.1.2).
+    const details = deps.connections.details(row.reused);
+    deps.oauth.deleteForConnection(row.reused);
+    if (details) {
+      deps.audit.record({
+        actor: 'aplikacja', action: 'agent.odwolanie', target: `${details.integrationName ?? 'integracja usunięta'} / ${details.connection.name}`,
+        meta: { powod: 'ponowne użycie kodu autoryzacji, tokeny aplikacji usunięte', aplikacja: details.connection.clientName ?? '-' }, ip,
+      });
+    }
+    return INVALID_GRANT;
+  }
   const redirectUri = field(body, 'redirect_uri');
   if (row.clientId !== clientId || (redirectUri !== undefined && redirectUri !== row.redirectUri) || !pkceMatches(verifier, row.codeChallenge)) {
     return INVALID_GRANT;
@@ -120,7 +132,7 @@ export function exchangeToken(deps: OAuthDeps, body: unknown, base: string, ip: 
   const form = typeof body === 'object' && body !== null ? body as Record<string, unknown> : {};
   const grant = field(form, 'grant_type');
   const resource = `${base}/mcp`;
-  if (grant === 'authorization_code') return exchangeCode(deps, form, resource, now);
+  if (grant === 'authorization_code') return exchangeCode(deps, form, resource, ip, now);
   if (grant === 'refresh_token') return refreshPair(deps, form, resource, ip, now);
   if (grant === undefined) return fail('invalid_request', 'Żądanie nie zawiera pola grant_type.');
   return fail('unsupported_grant_type', 'Bramka obsługuje wyłącznie authorization_code i refresh_token.');

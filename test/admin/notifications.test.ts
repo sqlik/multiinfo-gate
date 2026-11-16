@@ -42,7 +42,7 @@ describe('GET /powiadomienia', () => {
   it('reguła Połączenie agenta AI na stronie powiadomień, domyślnie włączona', async () => {
     const rules = (await page('reguly')).body;
     expect(rules).toContain('Połączenie agenta AI');
-    expect(rules).toContain('pracownik połączył aplikację AI z bramką kodem jednorazowym');
+    expect(rules).toContain('pracownik połączył aplikację AI z bramką kodem jednorazowym albo bramka wstrzymała sprawdzanie kodów po serii nieudanych prób');
     expect(rules).toMatch(/name="enabled_agent_connected" value="1" checked/);
   });
 

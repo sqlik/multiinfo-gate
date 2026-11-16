@@ -11,6 +11,11 @@ const FETCH_TIMEOUT_MS = 5000;
 const FETCH_LIMIT = 64 * 1024;
 const METADATA_CACHE_MS = 86_400_000;
 const HOUR = 3_600_000;
+/** Najdłuższy adres powrotu; dłuższe adresy nie występują w prawdziwych aplikacjach, a rozdmuchałyby bazę. */
+const REDIRECT_URI_MAX = 2048;
+/** Nieudane pobranie dokumentu metadanych bramka pamięta 10 minut, najwyżej dla 1000 adresów. */
+const FAILED_FETCH_MS = 10 * 60_000;
+const FAILED_FETCH_MAX = 1000;
 const DEFAULT_CLIENT_NAME = 'Aplikacja bez nazwy';
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 const GRANT_TYPES = ['authorization_code', 'refresh_token'];
@@ -81,6 +86,8 @@ function redirectUris(value: unknown): string[] | string {
   if (!Array.isArray(value) || value.length < 1 || value.length > 10 || !value.every((u) => typeof u === 'string')) {
     return 'Podaj od 1 do 10 adresów powrotu w polu redirect_uris.';
   }
+  const long = value.find((u) => u.length > REDIRECT_URI_MAX);
+  if (long !== undefined) return `Adres powrotu może mieć najwyżej ${REDIRECT_URI_MAX} znaków.`;
   const bad = value.find((u) => !validRedirectUri(u));
   if (bad !== undefined) {
     return `Adres powrotu ${bad} nie jest dozwolony. Bramka przyjmuje adresy https:// oraz http://127.0.0.1, http://localhost i http://[::1].`;
@@ -89,7 +96,8 @@ function redirectUris(value: unknown): string[] | string {
 }
 
 const clientName = (value: unknown): string => {
-  const name = typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 100) : '';
+  // Bez znaków sterujących i formatujących Unicode: znak zmiany kierunku tekstu pokazałby „claude.ai” zamiast „ia.edualc”.
+  const name = typeof value === 'string' ? value.replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, 100) : '';
   return name === '' ? DEFAULT_CLIENT_NAME : name;
 };
 
@@ -137,10 +145,48 @@ export async function registerClient(deps: OAuthDeps, body: unknown, sourceIp: s
   };
 }
 
-/** Dokument metadanych klienta pod adresem `client_id`: pobrany raz na dobę, nigdy z sieci wewnętrznej. */
-async function metadataClient(deps: OAuthDeps, clientId: string, now: Date): Promise<OAuthClientRow | { error: string }> {
+export type ClientError = { error: string; status?: 429 };
+
+interface FetchGuard { source: WindowLimiter; all: WindowLimiter; failed: Map<string, { at: number; error: string }> }
+const fetchGuards = new WeakMap<object, FetchGuard>();
+
+function fetchGuardFor(deps: OAuthDeps): FetchGuard {
+  let guard = fetchGuards.get(deps.oauth);
+  if (!guard) {
+    const clock = () => (deps.now ? deps.now() : new Date()).getTime();
+    guard = { source: new WindowLimiter(10, HOUR, clock), all: new WindowLimiter(100, HOUR, clock), failed: new Map() };
+    fetchGuards.set(deps.oauth, guard);
+  }
+  return guard;
+}
+
+/**
+ * Dokument metadanych klienta pod adresem `client_id`: pobrany raz na dobę, nigdy z sieci wewnętrznej. Nowe pobrania
+ * mają limit 10 na źródło i 100 łącznie na godzinę, a nieudane pobranie bramka pamięta 10 minut. Dzięki temu obcy nie
+ * zamieni bramki w narzędzie do żądań wychodzących ani nie zapełni bazy dokumentami spod kolejnych adresów.
+ */
+async function metadataClient(deps: OAuthDeps, clientId: string, sourceIp: string, now: Date): Promise<OAuthClientRow | ClientError> {
   const cached = deps.oauth.getClient(clientId);
   if (cached?.kind === 'metadata' && cached.fetchedAt !== null && now.getTime() - Date.parse(cached.fetchedAt) < METADATA_CACHE_MS) return cached;
+  const guard = fetchGuardFor(deps);
+  const failed = guard.failed.get(clientId);
+  if (failed && now.getTime() - failed.at < FAILED_FETCH_MS) return { error: failed.error };
+  const source = sourceKey(sourceIp);
+  if (guard.source.blocked(source) || guard.all.blocked('*')) {
+    return { error: 'Bramka pobrała w ostatniej godzinie zbyt wiele dokumentów metadanych aplikacji. Spróbuj ponownie za godzinę.', status: 429 };
+  }
+  guard.source.hit(source);
+  guard.all.hit('*');
+  const result = await fetchClient(deps, clientId, now);
+  if ('error' in result) {
+    guard.failed.delete(clientId);
+    if (guard.failed.size >= FAILED_FETCH_MAX) guard.failed.delete(guard.failed.keys().next().value!);
+    guard.failed.set(clientId, { at: now.getTime(), error: result.error });
+  }
+  return result;
+}
+
+async function fetchClient(deps: OAuthDeps, clientId: string, now: Date): Promise<OAuthClientRow | ClientError> {
   let url: URL;
   try {
     url = new URL(clientId);
@@ -180,8 +226,8 @@ async function metadataClient(deps: OAuthDeps, clientId: string, now: Date): Pro
 }
 
 /** Klient z rejestracji dynamicznej albo z dokumentu metadanych (`client_id` w postaci adresu `https://`). */
-export async function resolveClient(deps: OAuthDeps, clientId: string, now: Date): Promise<OAuthClientRow | { error: string }> {
-  if (clientId.startsWith('https://')) return metadataClient(deps, clientId, now);
+export async function resolveClient(deps: OAuthDeps, clientId: string, sourceIp: string, now: Date): Promise<OAuthClientRow | ClientError> {
+  if (clientId.startsWith('https://')) return metadataClient(deps, clientId, sourceIp, now);
   const row = deps.oauth.getClient(clientId);
   if (row?.kind === 'dynamic') return row;
   return { error: 'Aplikacja nie jest zarejestrowana w bramce. Usuń łącznik w aplikacji i dodaj go ponownie.' };

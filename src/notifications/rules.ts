@@ -37,7 +37,7 @@ const LABELS: Record<NotificationEvent, [string, string]> = {
   release_available: ['Nowe wydanie bramki', 'w serwisie GitHub dostępne jest nowsze wydanie niż zainstalowane, jeden mail na wydanie'],
   m365_disconnected: ['Konto Microsoft 365 wymaga logowania', 'Microsoft odrzucił token konta, na przykład po zmianie hasła albo odwołaniu sesji'],
   mail_undeliverable: ['Mail z powiadomieniem niewysłany', 'mail do administratora nie został wysłany mimo wszystkich ponowień'],
-  agent_connected: ['Połączenie agenta AI', 'pracownik połączył aplikację AI z bramką kodem jednorazowym'],
+  agent_connected: ['Połączenie agenta AI', 'pracownik połączył aplikację AI z bramką kodem jednorazowym albo bramka wstrzymała sprawdzanie kodów po serii nieudanych prób'],
 };
 export const eventLabel = (e: NotificationEvent): string => LABELS[e][0];
 export const eventDescription = (e: NotificationEvent): string => LABELS[e][1];

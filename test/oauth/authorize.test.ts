@@ -124,21 +124,18 @@ describe('strona połączenia', () => {
     expect(unknown.res.body).toContain('Aplikacja nie jest zarejestrowana w bramce');
   });
 
-  it('pozostałe błędy żądania: przekierowanie z error, state i iss', async () => {
+  it('pozostałe błędy żądania: strona błędu bez przekierowania na adres powrotu', async () => {
     const cases: Array<[Record<string, string | undefined>, string]> = [
-      [{ response_type: 'token' }, 'unsupported_response_type'],
-      [{ code_challenge: undefined }, 'invalid_request'],
-      [{ code_challenge_method: 'plain' }, 'invalid_request'],
-      [{ resource: 'https://inny.example/mcp' }, 'invalid_target'],
+      [{ response_type: 'token' }, 'response_type=code'],
+      [{ code_challenge: undefined }, 'PKCE z metodą S256'],
+      [{ code_challenge_method: 'plain' }, 'PKCE z metodą S256'],
+      [{ resource: 'https://inny.example/mcp' }, 'zasobu /mcp'],
     ];
-    for (const [over, error] of cases) {
+    for (const [over, message] of cases) {
       const { res } = await start(pkce().challenge, over);
-      expect(res.statusCode).toBe(302);
-      const location = new URL(res.headers.location as string);
-      expect(`${location.origin}${location.pathname}`).toBe(REDIRECT);
-      expect(location.searchParams.get('error')).toBe(error);
-      expect(location.searchParams.get('state')).toBe('st-1');
-      expect(location.searchParams.get('iss')).toBe(BASE);
+      expect(res.statusCode).toBe(400);
+      expect(res.headers.location).toBeUndefined();
+      expect(res.body).toContain(message);
     }
     const withoutResource = await start(pkce().challenge, { resource: undefined });
     expect(withoutResource.res.statusCode).toBe(200);
@@ -235,7 +232,7 @@ describe('kod jednorazowy', () => {
     expect(deps.connectionsRepo.get(seed.connectionId)!.codeUsedAt).toBeNull();
   });
 
-  it('jedenasta nieudana próba z adresu: 429, setna globalnie: 429 dla innego adresu', async () => {
+  it('jedenasta nieudana próba z adresu: 429, pięciotysięczna globalnie: 429 dla innego adresu', async () => {
     const { requestId } = await start(pkce().challenge);
     for (let n = 0; n < 10; n += 1) expect((await submit(requestId, 'AAAA-BBBB-CCCC', '203.0.113.10')).statusCode).toBe(400);
     const blocked = await submit(requestId, seed.secret, '203.0.113.10');
@@ -246,8 +243,8 @@ describe('kod jednorazowy', () => {
     for (let n = 0; n < 10; n += 1) await submit(requestId, 'AAAA-BBBB-CCCC', `2001:db8:1:2::${n + 1}`);
     expect((await submit(requestId, 'AAAA-BBBB-CCCC', '2001:db8:1:2::ff')).statusCode).toBe(429);
 
-    for (let ip = 1; ip <= 8; ip += 1) {
-      for (let n = 0; n < 10; n += 1) expect((await submit(requestId, 'AAAA-BBBB-CCCC', `198.51.100.${ip}`)).statusCode).toBe(400);
+    for (let ip = 0; ip < 498; ip += 1) {
+      for (let n = 0; n < 10; n += 1) await submit(requestId, 'AAAA-BBBB-CCCC', `10.${Math.floor(ip / 250)}.${ip % 250}.1`);
     }
     const global = await submit(requestId, seed.secret, '192.0.2.200');
     expect(global.statusCode).toBe(429);

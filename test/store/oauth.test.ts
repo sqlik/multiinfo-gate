@@ -68,11 +68,11 @@ describe('OAuthRepo: kody autoryzacji', () => {
     });
   });
 
-  it('takeCode drugi raz zwraca undefined, kod po terminie też', () => {
+  it('takeCode drugi raz wskazuje połączenie ponownie użytego kodu, kod po terminie daje undefined', () => {
     code('kod-1');
     code('kod-2');
     expect(repo.takeCode('kod-1', at(10_000))).toBeDefined();
-    expect(repo.takeCode('kod-1', at(20_000))).toBeUndefined();
+    expect(repo.takeCode('kod-1', at(20_000))).toEqual({ reused: connectionId });
     expect(repo.takeCode('kod-2', at(MIN))).toBeUndefined();
     expect(repo.takeCode('nieznany', at(0))).toBeUndefined();
   });
@@ -98,7 +98,7 @@ describe('OAuthRepo: tokeny', () => {
 });
 
 describe('OAuthRepo.prune', () => {
-  it('prune usuwa klienta dynamicznego bez połączenia po dobie i zostawia klienta z dokumentu metadanych', () => {
+  it('prune usuwa klienta dynamicznego bez połączenia po dobie i kwadransie oraz klienta z dokumentu bez połączenia po dobie', () => {
     dynamic('cli_porzucony', NOW);
     dynamic('cli_swiezy', at(DAY - MIN));
     dynamic('cli_polaczony', NOW);
@@ -108,12 +108,20 @@ describe('OAuthRepo.prune', () => {
       sourceIp: null, createdAt: NOW.toISOString(), fetchedAt: NOW.toISOString(),
     });
 
+    repo.upsertClient({
+      clientId: 'https://claude.ai/oauth/mcp-oauth-client-metadata', kind: 'metadata', name: 'Claude', redirectUris: ['https://claude.ai/api/mcp/auth_callback'],
+      sourceIp: null, createdAt: NOW.toISOString(), fetchedAt: NOW.toISOString(),
+    });
+    connections.useCode(connectionId, { clientId: 'https://claude.ai/oauth/mcp-oauth-client-metadata', clientName: 'Claude' }, at(MIN));
     expect(repo.prune(at(DAY + MIN)).clients).toBe(1);
+    expect(repo.getClient('cli_porzucony')).toBeDefined();
+    expect(repo.prune(at(DAY + 16 * MIN)).clients).toBe(1);
 
     expect(repo.getClient('cli_porzucony')).toBeUndefined();
     expect(repo.getClient('cli_swiezy')).toBeDefined();
     expect(repo.getClient('cli_polaczony')).toBeDefined();
-    expect(repo.getClient('https://chatgpt.com/oauth/client.json')).toBeDefined();
+    expect(repo.getClient('https://chatgpt.com/oauth/client.json')).toBeUndefined();
+    expect(repo.getClient('https://claude.ai/oauth/mcp-oauth-client-metadata')).toBeDefined();
   });
 
   it('prune usuwa kody i tokeny dostępu po terminie, tolerancję starszą niż 60 s i tokeny odświeżania 30 dni po rotacji', () => {
