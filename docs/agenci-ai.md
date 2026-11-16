@@ -142,8 +142,10 @@ jego wysyłka przechodzi przez jej limit części, ochronę przed burzą i dzien
 Odebrany SMS pochodzi od osoby spoza firmy i może zawierać polecenie skierowane do agenta, na przykład
 prośbę o wysłanie wiadomości na inny numer. Takie polecenie nazywa się przemyconym poleceniem. Bramka
 oznacza każdą odebraną treść jako tekst od zewnętrznego nadawcy, a instrukcje dla agenta zabraniają
-traktowania jej jako polecenia. Wysyłkę zawsze zatwierdza pracownik, dlatego przemycone polecenie może
-co najwyżej podsunąć szkic, który pracownik widzi przed wysłaniem.
+traktowania jej jako polecenia. W aplikacji z widokami wysyłkę zawsze zatwierdza pracownik, dlatego
+przemycone polecenie może co najwyżej podsunąć szkic, który pracownik widzi przed wysłaniem. W aplikacji
+bez widoków przed przemyconym poleceniem chronią wyłącznie instrukcje agenta, dlatego tym ważniejszy
+jest dobór zakresów.
 
 Zakresy pozwalają ograniczyć to ryzyko już w konfiguracji:
 

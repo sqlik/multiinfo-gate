@@ -81,6 +81,8 @@ describe('katalog i formularz', () => {
   it('ostrzeżenie przy wysyłce z odczytem odebranych i informacje przy odpowiedzi czekają w formularzu na zaznaczenie', async () => {
     const form = (await get(NEW_FORM)).body;
     expect(form).toMatch(new RegExp(`data-scopes="send,read_inbound"[^>]*>${WARNING}`));
+    // Bez widoków zatwierdzenia pilnują instrukcje agenta, dlatego ostrzeżenie nie obiecuje kliknięcia przy każdej wysyłce.
+    expect(form).toContain('Bramka oznacza taką treść jako tekst od zewnętrznego nadawcy, a w aplikacji z widokami każdą wysyłkę zatwierdza pracownik przyciskiem w podglądzie.');
     expect(form).toContain('data-scopes="reply,!read_inbound"');
     expect(form).toContain('data-scopes="reply,read_inbound"');
     const script = (await h.app.inject({ method: 'GET', url: '/panel.js' })).body;

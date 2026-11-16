@@ -37,7 +37,8 @@ w katalogu „Aplikacja wysyła SMS”, jednak zamiast adresu wejściowego `/hoo
 wywołania konektora Power Automate (rozdział 5b).
 
 Do kierunku „do SMS” należy również integracja „Agent AI”. Przyjmuje ona polecenia aplikacji AI
-przez serwer MCP bramki, a każdą wysyłkę zatwierdza pracownik w podglądzie (rozdział 5c).
+przez serwer MCP bramki. W aplikacji z widokami, na przykład w claude.ai i ChatGPT, wysyłkę zatwierdza
+pracownik w podglądzie (rozdział 5c).
 
 Każda integracja działa w imieniu jednego klucza API. Obowiązują więc konto Multiinfo tego
 klucza, jego dozwolone usługi, nadpisy i limity, dokładnie tak jak przy wysyłce przez API.
@@ -1424,8 +1425,8 @@ do integracji.
   limit części, ochronę przed burzą i dziennik integracji
 - Limit odbiorców ogranicza liczbę SMS-ów zleconych przez agentów w jednym oknie, także przez
   rozsyłki i SMS-y do grup. Domyślnie wynosi 1000 odbiorców w ciągu 60 minut
-- Wysyłkę zatwierdza pracownik w podglądzie, a odpowiedź nadawcy trafia wyłącznie do autora
-  odebranego SMS-a. Treść odebranych SMS-ów jest oznaczona dla agenta jako tekst od zewnętrznego nadawcy
+- W aplikacji z widokami wysyłkę zatwierdza pracownik w podglądzie, a odpowiedź nadawcy trafia
+  wyłącznie do autora odebranego SMS-a. Treść odebranych SMS-ów jest oznaczona dla agenta jako tekst od zewnętrznego nadawcy
 - Bramka przechowuje wyłącznie skróty kodów i tokenów połączeń. Serwer MCP nie przyjmuje klucza API,
   a API dla aplikacji nie przyjmuje tokenów połączeń
 - Panel bramki nie musi być dostępny z internetu, ponieważ aplikacje AI korzystają wyłącznie z portu

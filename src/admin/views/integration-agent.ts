@@ -25,7 +25,7 @@ const SCOPE_HINTS: Record<AgentScope, string> = {
   reply: 'Agent przygotowuje odpowiedź wyłącznie do autora odebranego SMS-a. Zakres wymaga odczytu odebranych, dlatego zapis zaznacza go samodzielnie.',
 };
 
-const SCOPE_WARNING = 'Wysyłka SMS-ów razem z odczytem odebranych wymaga rozwagi. Odebrany SMS może zawierać polecenie dla agenta, na przykład prośbę o wysłanie wiadomości na inny numer. Bramka oznacza taką treść jako tekst od zewnętrznego nadawcy, a każdą wysyłkę zatwierdza pracownik. Do obsługi klientów zalecany jest zakres „Odpowiedź nadawcy” zamiast „Wysyłka SMS-ów”. Zapis takiej integracji odnotowuje dziennik zdarzeń.';
+const SCOPE_WARNING = 'Wysyłka SMS-ów razem z odczytem odebranych wymaga rozwagi. Odebrany SMS może zawierać polecenie dla agenta, na przykład prośbę o wysłanie wiadomości na inny numer. Bramka oznacza taką treść jako tekst od zewnętrznego nadawcy, a w aplikacji z widokami każdą wysyłkę zatwierdza pracownik przyciskiem w podglądzie. Do obsługi klientów zalecany jest zakres „Odpowiedź nadawcy” zamiast „Wysyłka SMS-ów”. Zapis takiej integracji odnotowuje dziennik zdarzeń.';
 
 /**
  * Element widoczny przy zaznaczeniu zakresów według `data-scopes` („a,b,!c”): `panel.js` przełącza go po każdej
