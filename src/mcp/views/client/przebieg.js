@@ -47,7 +47,9 @@ function traceEntry(e, i, refused) {
     field('Źródło', txt(e.source)), field('Przyjęta', txt(stamp(e.created.at))),
   );
   const stages = e.stages.map((s) => `<li>${esc(s.label)}<span class="t">${esc(stamp(s.at))}</span>${s.detail ? `<div class="note">${esc(s.detail)}</div>` : ''}</li>`);
-  if (WAITING.has(e.status)) stages.push('<li class="pending">Oczekiwanie na raport doręczenia</li>');
+  if (WAITING.has(e.status)) {
+    stages.push(`<li class="pending">${e.status === 'queued' ? 'Oczekiwanie na przekazanie do Multiinfo' : 'Oczekiwanie na raport doręczenia'}</li>`);
+  }
   const timeline = `<span class="sub-lbl">Przebieg</span><ul class="timeline">${stages.join('')}</ul>`
     + (e.operator ? note(`Kod operatora ${e.operator.code}: ${e.operator.description}`) : '');
   const refusal = refused?.get(e.id) ?? null;

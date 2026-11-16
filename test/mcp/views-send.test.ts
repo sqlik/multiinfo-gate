@@ -227,6 +227,12 @@ describe('widok przebiegu doręczenia', () => {
     expect(bare).not.toContain('Wyślij ponownie');
   });
 
+  it('renderTrace: oczekujący etap według stanu, w kolejce bramki przekazanie do Multiinfo', () => {
+    expect(renderTrace([{ ...ENTRY, status: 'queued' }])).toContain('<li class="pending">Oczekiwanie na przekazanie do Multiinfo</li>');
+    expect(renderTrace([{ ...ENTRY, status: 'sent' }])).toContain('<li class="pending">Oczekiwanie na raport doręczenia</li>');
+    expect(renderTrace([{ ...ENTRY, status: 'delivered' }])).not.toContain('class="pending"');
+  });
+
   it('renderTrace: po odmowie anulowania przycisk wyszarzony, a komunikat odmowy zostaje przy pozycji', () => {
     const html = renderTrace([{ ...ENTRY, status: 'throttled', statusLabel: 'wstrzymana limitem', cancellable: true }], { refused: new Map([['msg_1', REFUSAL]]) });
     expect(html).toContain(cancelButton(true));
