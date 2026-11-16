@@ -548,8 +548,9 @@ treści i licznikiem części.
 ![Widok odpowiedzi klientów: listy Grupa szkicu i Stan odpowiedzi, odebrane SMS-y oznaczone jako treść od zewnętrznego nadawcy i rozwinięty szkic z przyciskiem Wyślij odpowiedź](obrazki/widok-odpowiedzi.png)
 
 Przycisk **Wyślij odpowiedź** wysyła jeden szkic, a przycisk **Wyślij N szkiców odpowiedzi** wysyła po
-kolei wszystkie niewysłane szkice wybranej grupy. Zmiana treści w polu tworzy nowy szkic. Odpowiedź
-zawsze trafia do autora odebranego SMS-a.
+kolei niewysłane szkice wybranej grupy rozwinięte na liście. Przycisk **Rozwiń szkice na liście**
+rozwija wszystkie szkice grupy, dzięki czemu przed wysłaniem naraz można przejrzeć każdą treść. Zmiana
+treści w polu tworzy nowy szkic. Odpowiedź zawsze trafia do autora odebranego SMS-a.
 
 ## 8. Linki do pobrania
 

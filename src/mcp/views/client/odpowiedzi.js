@@ -77,12 +77,15 @@ function draftsSection(drafts, filter, state) {
   if (drafts.length === 0) return '';
   const groups = [...new Set(drafts.map((d) => d.group))];
   const pending = pendingDrafts(drafts, filter, state.sent);
-  const label = pending.length === 0 ? 'Wszystkie szkice wysłane' : `Wyślij ${plural(pending.length, 'szkic', 'szkice', 'szkiców')} odpowiedzi`;
+  // Zbiorczo wychodzą wyłącznie szkice rozwinięte na liście: człowiek zatwierdza tylko treść, którą widział.
+  const visible = pending.filter((d) => state.open.has(d.inboundId));
+  const label = pending.length === 0 ? 'Wszystkie szkice wysłane'
+    : visible.length === 0 ? 'Wyślij szkice odpowiedzi' : `Wyślij ${plural(visible.length, 'szkic', 'szkice', 'szkiców')} odpowiedzi`;
   return section(`Szkice odpowiedzi: ${drafts.length}`, `<p class="say">Agent przygotował odpowiedzi w ${esc(groupsPhrase(groups))}. `
     + 'Każdą możesz przejrzeć i zmienić na liście, zanim ją wyślesz.</p>'
-    + buttons(button(label, { act: 'send-drafts', kind: 'primary', disabled: state.busy || pending.length === 0 }),
+    + buttons(button(label, { act: 'send-drafts', kind: 'primary', disabled: state.busy || visible.length === 0 }),
       button('Rozwiń szkice na liście', { act: 'expand' }))
-    + note('Odpowiedź trafia wyłącznie do nadawcy odebranego SMS-a, a wysyłkę zatwierdza człowiek w tym widoku'));
+    + note('Przycisk wysyła wyłącznie szkice rozwinięte na liście, a każda odpowiedź trafia tylko do nadawcy odebranego SMS-a'));
 }
 
 /**
@@ -182,9 +185,9 @@ export function startReplies(win, env) {
     return null;
   }
 
-  /** Szkice z wybranej grupy po kolei; błąd przerywa wysyłanie, a komunikat podaje, ile odpowiedzi wysłano. */
+  /** Rozwinięte szkice z wybranej grupy po kolei; błąd przerywa wysyłanie, a komunikat podaje, ile odpowiedzi wysłano. */
   async function replyAll() {
-    const pending = pendingDrafts(s.drafts, s.filter, s.sent);
+    const pending = pendingDrafts(s.drafts, s.filter, s.sent).filter((d) => s.open.has(d.inboundId));
     for (const [done, d] of pending.entries()) {
       const error = await reply(d.inboundId);
       if (error !== null) return say('fail', done > 0 ? `Wysłano ${done} z ${pending.length} odpowiedzi. ${error}` : error);

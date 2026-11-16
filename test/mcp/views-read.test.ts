@@ -309,8 +309,12 @@ describe('widok odpowiedzi klientów', () => {
     expect(sections(html)).toEqual(['Szkice odpowiedzi: 2', 'Odebrane SMS-y: 3']);
     expect(html).toContain('<p class="say">Agent przygotował odpowiedzi w grupach potwierdzenia i &lt;script&gt;x&lt;/script&gt;. '
       + 'Każdą możesz przejrzeć i zmienić na liście, zanim ją wyślesz.</p>');
-    expect(html).toContain(buttons(button('Wyślij 2 szkice odpowiedzi', { act: 'send-drafts', kind: 'primary' }), button('Rozwiń szkice na liście', { act: 'expand' })));
-    expect(html).toContain('Odpowiedź trafia wyłącznie do nadawcy odebranego SMS-a, a wysyłkę zatwierdza człowiek w tym widoku');
+    expect(html).toContain(buttons(button('Wyślij 1 szkic odpowiedzi', { act: 'send-drafts', kind: 'primary' }), button('Rozwiń szkice na liście', { act: 'expand' })));
+    expect(html).toContain('Przycisk wysyła wyłącznie szkice rozwinięte na liście, a każda odpowiedź trafia tylko do nadawcy odebranego SMS-a');
+    const expanded = renderReplies(ITEMS, DRAFTS, null, { open: new Set(['in_1', 'in_2']) });
+    expect(expanded).toContain(button('Wyślij 2 szkice odpowiedzi', { act: 'send-drafts', kind: 'primary' }));
+    const collapsed = renderReplies(ITEMS, DRAFTS, null, { open: new Set() });
+    expect(collapsed).toContain(button('Wyślij szkice odpowiedzi', { act: 'send-drafts', kind: 'primary', disabled: true }));
     const bare = renderReplies(ITEMS, [], null);
     expect(sections(bare)).toEqual(['Odebrane SMS-y: 3']);
     expect(bare).not.toContain('name="group"');
@@ -374,11 +378,27 @@ describe('widok odpowiedzi klientów', () => {
     expect(input.until).toBe('2026-11-15 09:55');
   });
 
-  it('startReplies: „Wyślij 2 szkice odpowiedzi” wysyła szkice po kolei z kluczem potwierdzenia', async () => {
+  it('startReplies: bez rozwinięcia „Wyślij” obejmuje tylko szkic widoczny na liście', async () => {
     const w = viewWindow();
     startReplies(w.win, { version: '1.12.0' });
     await w.ready();
     w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { items: ITEMS.slice(0, 2), drafts: DRAFTS }, _meta: { confirm: 'k' } } });
+    w.click({ act: 'send-drafts' });
+    await tick();
+    expect(w.lastCall().params).toEqual({ name: 'send_reply', arguments: { draftId: 'drf_in_1', confirm: 'k' } });
+    const calls = w.sent.filter((m) => m.method === 'tools/call').length;
+    w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, result: { content: [], structuredContent: { kind: 'messages', ids: ['msg_8'] } } });
+    await tick();
+    expect(w.sent.filter((m) => m.method === 'tools/call')).toHaveLength(calls);
+    expect(w.nodes.tresc.innerHTML).toContain('Wyślij szkice odpowiedzi');
+  });
+
+  it('startReplies: po „Rozwiń szkice na liście” „Wyślij 2 szkice odpowiedzi” wysyła szkice po kolei z kluczem potwierdzenia', async () => {
+    const w = viewWindow();
+    startReplies(w.win, { version: '1.12.0' });
+    await w.ready();
+    w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { items: ITEMS.slice(0, 2), drafts: DRAFTS }, _meta: { confirm: 'k' } } });
+    w.click({ act: 'expand' });
     w.click({ act: 'send-drafts' });
     await tick();
     expect(w.lastCall().params).toEqual({ name: 'send_reply', arguments: { draftId: 'drf_in_1', confirm: 'k' } });
@@ -397,6 +417,7 @@ describe('widok odpowiedzi klientów', () => {
     startReplies(w.win, { version: '1.12.0' });
     await w.ready();
     w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { items: ITEMS.slice(0, 2), drafts: DRAFTS }, _meta: { confirm: 'k' } } });
+    w.click({ act: 'expand' });
     w.click({ act: 'send-drafts' });
     await tick();
     w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, result: { content: [], structuredContent: { kind: 'messages', ids: ['msg_8'] } } });

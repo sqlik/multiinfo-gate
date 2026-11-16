@@ -3,7 +3,7 @@ import { prepareReplies, REPLIES_MAX, sendDraft } from '../../integrations/agent
 import { plural } from '../../text/plural.ts';
 import { warsawShort } from '../../time/warsaw.ts';
 import { z } from '../../zod.ts';
-import { connOf, pageFields, UNTRUSTED_NOTICE, type ToolDef } from '../tools.ts';
+import { connOf, oneLine, pageFields, UNTRUSTED_NOTICE, type ToolDef } from '../tools.ts';
 import { checkDraftKind } from './send.ts';
 
 /** Pozycja dla agenta: oznaczenie treści od obcych także w danych strukturalnych, bo agent ChatGPT je widzi. */
@@ -17,7 +17,7 @@ const answerText = (item: InboundItem): string => {
 /** Nagłówek pozycji, a w osobnym wierszu treść poprzedzona znacznikiem. */
 const itemLines = (item: InboundItem): string[] => [
   `SMS ${item.id} od ${item.from}, odebrany ${item.received.local}${answerText(item)}:`,
-  item.text === null ? 'SMS bez treści tekstowej.' : `${UNTRUSTED_NOTICE} ${item.text}`,
+  item.text === null ? 'SMS bez treści tekstowej.' : `${UNTRUSTED_NOTICE} ${oneLine(item.text)}`,
 ];
 
 /** Koniec przedziału najwyżej 15 minut przed odczytem traktujemy jako „do teraz”. */

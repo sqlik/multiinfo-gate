@@ -5,7 +5,7 @@ import { AgentError } from '../../integrations/agent.ts';
 import { plural } from '../../text/plural.ts';
 import { warsawShort } from '../../time/warsaw.ts';
 import { z } from '../../zod.ts';
-import { asRecord, connOf, pageFields, type ToolDef } from '../tools.ts';
+import { asRecord, connOf, markSentText, pageFields, type ToolDef } from '../tools.ts';
 
 const STATUSES = ['queued', 'sent', 'delivered', 'failed', 'expired', 'cancelled', 'blocked', 'throttled', 'unknown', 'transit'] as const;
 const READ = { readOnlyHint: true, idempotentHint: true, openWorldHint: false } as const;
@@ -45,7 +45,7 @@ export const listMessagesTool: ToolDef = {
       ...data.items.map((m) => `${m.id} do ${m.to}, ${label(m.status)}, utworzona ${warsawShort(m.createdAt)}, źródło: ${m.source}.`),
       ...(data.hasMore ? ['Kolejne wiadomości pokazuje następna strona z większą wartością offset.'] : []),
     ];
-    return { text: lines.join('\n'), structured: asRecord(data) };
+    return { text: lines.join('\n'), structured: asRecord({ ...data, items: data.items.map(markSentText) }) };
   },
 };
 
@@ -79,7 +79,7 @@ export const deliveryTraceTool: ToolDef = {
     const q = raw as z.infer<typeof traceInput>;
     const data = deliveryTrace(ctx.deps, connOf(ctx), q, ctx.now);
     const text = data.entries.length === 0 ? 'Bramka nie znalazła wiadomości spełniających warunki.' : data.entries.flatMap(traceLines).join('\n');
-    return { text, structured: asRecord(data) };
+    return { text, structured: asRecord({ ...data, entries: data.entries.map(markSentText) }) };
   },
 };
 

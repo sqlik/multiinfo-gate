@@ -134,17 +134,19 @@ export function registerMcpRoutes(app: FastifyInstance, deps: AgentToolDeps, too
     return { contents: [{ uri: (params as { uri: string }).uri, mimeType: APP_MIME, text: viewHtml(id), _meta: viewMeta() }] };
   }
 
+  /** Wartość z żądania w komunikacie: obiekt z kluczem `toString` rozsadziłby `String()`. */
+  const shown = (value: unknown): string => (typeof value === 'string' ? value : JSON.stringify(value) ?? '');
   const noResource = (params: unknown) =>
-    new RpcError(RESOURCE_NOT_FOUND, `Zasób ${isObject(params) ? String(params.uri) : ''} nie istnieje.`);
+    new RpcError(RESOURCE_NOT_FOUND, `Zasób ${isObject(params) ? shown(params.uri) : ''} nie istnieje.`);
   const noPrompt = (params: unknown) =>
-    new RpcError(RPC.invalidParams, `Scenariusz ${isObject(params) ? String(params.name) : ''} nie istnieje.`);
+    new RpcError(RPC.invalidParams, `Scenariusz ${isObject(params) ? shown(params.name) : ''} nie istnieje.`);
   const noMethod = (method: string) => new RpcError(RPC.methodNotFound, `Metoda ${method} nie jest obsługiwana.`);
 
   async function modern(request: FastifyRequest, connectionId: number, method: string, params: unknown, at: Date): Promise<Record<string, unknown>> {
     const meta = requestMeta(params);
     const version = meta[META_PROTOCOL_VERSION];
     if (typeof version !== 'string' || !MODERN_PROTOCOL_VERSIONS.includes(version)) {
-      throw new RpcError(UNSUPPORTED_VERSION, `Bramka nie obsługuje wersji protokołu ${String(version)}.`,
+      throw new RpcError(UNSUPPORTED_VERSION, `Bramka nie obsługuje wersji protokołu ${shown(version)}.`,
         { supported: [...SUPPORTED_PROTOCOL_VERSIONS], requested: version ?? null }, 400);
     }
     const mismatch: string[] = [];
