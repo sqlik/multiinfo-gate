@@ -6,6 +6,7 @@ import { describeSubstatus } from '../../multiinfo/status.ts';
 import { warsawDay, warsawStamp } from '../../time/warsaw.ts';
 import { daysUntil } from './accounts.ts';
 import { esc } from './layout.ts';
+import { plural } from '../../text/plural.ts';
 import type { ReleaseInfo } from '../../store/settings.ts';
 import { UPDATE_DOCS_DOCKER, UPDATE_DOCS_LXC } from '../../releases/check.ts';
 import { GATE_VERSION } from '../../version.ts';
@@ -35,6 +36,14 @@ export interface OverviewData {
   smsProblem?: string | null;
   /** Nieudany nasłuch serwera krótkich linków; `null` bez paska. */
   linksServer?: LinksServerProblem | null;
+  /** Rozsyłki w stanie „termin minął”, które czekają na decyzję administratora; zero bez paska. */
+  overduePackages?: number;
+}
+
+/** „1 rozsyłka czeka … jej …”, „2 rozsyłki czekają … ich …”, „5 rozsyłek czeka … ich …”. */
+export function overduePackagesText(n: number): string {
+  return `${plural(n, 'rozsyłka czeka', 'rozsyłki czekają', 'rozsyłek czeka')} na decyzję administratora, ponieważ bramka nie przekazała `
+    + `${n === 1 ? 'jej' : 'ich'} do Multiinfo w ciągu 60 minut od terminu.`;
 }
 
 /** „1 integracja zgłosiła błąd”, „3 integracje zgłosiły błąd”, „5 integracji zgłosiło błąd”. */
@@ -118,6 +127,16 @@ function alerts(data: OverviewData, now: Date): string {
         <div>Powiadomienia SMS nie działają: ${esc(data.smsProblem)}.
           <a href="/powiadomienia?zakladka=sms">Ustawienia kanału SMS</a></div>
       </div>
+    </div>`);
+  }
+
+  if ((data.overduePackages ?? 0) > 0) {
+    items.push(`<div class="alert stop">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="sq"></div>
+        <div>${esc(overduePackagesText(data.overduePackages!))}</div>
+      </div>
+      <a href="/rozsylki?stan=overdue">Zobacz rozsyłki</a>
     </div>`);
   }
 

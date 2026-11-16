@@ -1,6 +1,7 @@
-import type { PackageRow, RecipientRow } from '../../store/packages.ts';
+import { CANCEL_WINDOW_TEXT, handoverAt } from '../../api/schedule.ts';
+import type { PackageRow, PackageStatus, RecipientRow } from '../../store/packages.ts';
 import { problemUrl } from '../../docs-links.ts';
-import { warsawStamp } from '../../time/warsaw.ts';
+import { warsawShort, warsawStamp } from '../../time/warsaw.ts';
 import { connectionRow } from './deliveries.ts';
 import { esc } from './layout.ts';
 import {
@@ -13,8 +14,17 @@ function uncertainHelp(providerCode: number | null): string {
   return `<br><a href="${esc(problemUrl('rozsylka-bez-potwierdzenia'))}" target="_blank" rel="noopener noreferrer">Jak ustalić, czy SMS-y zostały wysłane</a>`;
 }
 
+/** Stany, według których panel filtruje listę rozsyłek: rozsyłki przechowywane przez bramkę. */
+export const PACKAGE_FILTERS: Array<{ key: PackageStatus | null; label: string }> = [
+  { key: null, label: 'Wszystkie' },
+  { key: 'scheduled', label: 'Zaplanowane' },
+  { key: 'overdue', label: 'Termin minął' },
+];
+
 export interface PackagesData {
   rows: PackageRow[];
+  /** Filtr stanu z `?stan=`; `null` oznacza wszystkie rozsyłki. */
+  status: PackageStatus | null;
   hasMore: boolean;
   offset: number;
   limit: number;
@@ -61,11 +71,23 @@ function sourceLine(p: PackageRow, source: string): string {
   return `<div style="font-size: 11.5px; margin-top: 2px;">${text}</div>`;
 }
 
+/** Adres listy z filtrem stanu i przesunięciem strony. */
+function listLink(status: PackageStatus | null, offset: number): string {
+  const params = new URLSearchParams();
+  if (status !== null) params.set('stan', status);
+  if (offset > 0) params.set('offset', String(offset));
+  const query = params.toString();
+  return query === '' ? '/rozsylki' : `/rozsylki?${query}`;
+}
+
 export function packagesPage(data: PackagesData): string {
+  const tabs = PACKAGE_FILTERS.map((f) =>
+    `<a href="${esc(listLink(f.key, 0))}"${f.key === data.status ? ' class="on"' : ''}>${esc(f.label)}</a>`).join('');
   const rows = data.rows.length === 0
-    ? '<tr><td class="dim" colspan="8">Brak rozsyłek.</td></tr>'
+    ? `<tr><td class="dim" colspan="9">${data.status === null ? 'Brak rozsyłek.' : 'Brak rozsyłek w tym stanie.'}</td></tr>`
     : data.rows.map((p) => `<tr>
         <td class="m dim">${esc(stamp(p.createdAt))}</td>
+        <td class="m">${p.startAt === null ? '<span class="dim">-</span>' : esc(stamp(p.startAt))}</td>
         <td class="m"><a href="/rozsylki/${esc(p.id)}">${esc(p.id)}</a></td>
         <td>${esc(data.accountNames.get(p.accountId) ?? `konto ${p.accountId}`)}</td>
         <td class="dim">${esc(data.keyNames.get(p.apiKeyId) ?? `klucz ${p.apiKeyId}`)}${sourceLine(p, data.sources.get(p.id) ?? 'API')}</td>
@@ -77,7 +99,7 @@ export function packagesPage(data: PackagesData): string {
 
   const from = data.rows.length === 0 ? 0 : data.offset + 1;
   const to = data.offset + data.rows.length;
-  const pageLink = (offset: number) => (offset > 0 ? `/rozsylki?offset=${offset}` : '/rozsylki');
+  const pageLink = (offset: number) => esc(listLink(data.status, offset));
 
   return `<div class="head">
     <div>
@@ -86,10 +108,14 @@ export function packagesPage(data: PackagesData): string {
     </div>
   </div>
   <div class="scroll">
+    <div class="bar">
+      <div class="seg">${tabs}</div>
+    </div>
     <div class="panel">
       <table>
         <tr>
           <th style="width: 150px;">Utworzono</th>
+          <th style="width: 150px;">Termin</th>
           <th style="width: 200px;">Identyfikator</th>
           <th style="width: 140px;">Konto</th>
           <th style="width: 150px;">Klucz</th>
@@ -146,6 +172,38 @@ function summaryPending(p: PackageRow): string {
     : `${lead}. Bramka zamówi raport po zakończeniu rozsyłki.`;
 }
 
+/** Formularz działania na rozsyłce z oknem potwierdzenia; „Wróć” zamiast „Anuluj”, bo „Anuluj rozsyłkę” jest działaniem. */
+function decisionForm(p: PackageRow, action: string, label: string, confirm: string, tone: 'btn-p' | 'btn-s'): string {
+  return `<form method="post" action="/rozsylki/${esc(p.id)}/${action}" style="margin: 0;" data-confirm="${esc(confirm)}" data-confirm-ok="${esc(label)}" data-confirm-cancel="Wróć"><button class="btn ${tone}" type="submit">${esc(label)}</button></form>`;
+}
+
+/** „do 2 odbiorców z terminem 25.08.2026 16:00” w oknach potwierdzenia. */
+function packageWords(p: PackageRow): string {
+  const who = `${p.recipientsCount} ${p.recipientsCount === 1 ? 'odbiorcy' : 'odbiorców'}`;
+  return p.startAt === null ? `do ${who}` : `do ${who} z terminem ${warsawShort(p.startAt)}`;
+}
+
+/** Pasek decyzji dla rozsyłki przechowywanej przez bramkę: anulowanie, a po terminie także „Wyślij teraz”. */
+function decisionBar(p: PackageRow): string {
+  if (p.status !== 'scheduled' && p.status !== 'overdue') return '';
+  const cancel = decisionForm(p, 'anuluj', 'Anuluj rozsyłkę',
+    `Anulować rozsyłkę ${p.id} ${packageWords(p)}? Bramka nie przekaże jej do Multiinfo, a anulowania nie można cofnąć.`, 'btn-s');
+  const text = p.status === 'scheduled'
+    ? `${p.startAt === null ? '' : `Rozsyłka czeka w bramce na termin ${esc(warsawShort(p.startAt))}. `}${esc(CANCEL_WINDOW_TEXT)}.`
+    : 'Bramka nie przekazała rozsyłki do Multiinfo w ciągu 60 minut od terminu. Rozsyłka czeka na decyzję administratora.';
+  const sendNow = p.status === 'overdue'
+    ? decisionForm(p, 'wyslij-teraz', 'Wyślij teraz',
+      `Wysłać teraz rozsyłkę ${p.id} ${packageWords(p)}? Multiinfo rozpocznie wysyłkę natychmiast po przekazaniu.`, 'btn-p')
+    : '';
+  return `<div class="alert${p.status === 'overdue' ? ' stop' : ''}">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="sq"></div>
+        <div>${text}</div>
+      </div>
+      <div style="display: flex; gap: 8px;">${sendNow}${cancel}</div>
+    </div>`;
+}
+
 export function packagePage(d: PackageDetail): string {
   const p = d.row;
   const clicks = d.clicks ?? null;
@@ -184,6 +242,7 @@ export function packagePage(d: PackageDetail): string {
     </div>
   </div>
   <div class="scroll">
+    ${decisionBar(p)}
     <div class="cols">
       <div class="panel">
         <div class="panel-h"><div class="lab">Parametry</div></div>
@@ -197,14 +256,18 @@ export function packagePage(d: PackageDetail): string {
           <div>Nadpis</div><div class="m">${esc(p.orig ?? '-')}</div>
           <div>Kodowanie</div><div class="m">${esc(p.encoding === 'gsm' ? 'GSM-7' : 'UCS-2')}${p.multipart === 1 ? ' · wieloczęściowa' : ''}</div>
           <div>Raport doręczenia</div><div class="m">${esc(yes(p.deliveryReport))}</div>
-          <div>Start</div><div class="m">${p.startAt === null ? 'natychmiast' : esc(stamp(p.startAt))}</div>
+          <div>Termin</div><div class="m">${p.startAt === null ? 'bez terminu' : esc(stamp(p.startAt))}</div>
+          ${p.status === 'scheduled' && p.startAt !== null
+            ? `<div>Przekazanie do Multiinfo</div><div class="m">${esc(stamp(handoverAt(p.startAt, p.createdAt)))}</div>` : ''}
           <div>Centrum kosztów</div><div class="m">${esc(p.costCenter ?? '-')}</div>
           <div>Identyfikator w Multiinfo</div><div class="m">${p.miPackageId === null ? '<span class="dim">nieutworzony</span>' : esc(p.miPackageId)}</div>
           <div>Status Multiinfo</div><div class="m">${p.miStatus === null ? '<span class="dim">brak</span>' : esc(p.miStatus)}</div>
           <div>Zakończono</div><div class="m">${esc(stamp(p.completedAt))}</div>
           <div${p.error === null ? ' style="border-bottom: none;"' : ''}>Raport</div>
           <div${p.error === null ? ' style="border-bottom: none;"' : ''}>${reportState}</div>
-          ${p.error === null ? '' : `<div style="border-bottom: none;">Błąd</div>
+          ${p.error === null ? '' : p.status === 'cancelled'
+            ? `<div style="border-bottom: none;">Powód anulowania</div><div style="border-bottom: none;">${esc(p.error)}</div>`
+            : `<div style="border-bottom: none;">Błąd</div>
             <div class="m fail" style="border-bottom: none;">${p.providerCode === null ? '' : `${esc(p.providerCode)} - `}${esc(p.error)}${uncertainHelp(p.providerCode)}</div>`}
         </div>
       </div>

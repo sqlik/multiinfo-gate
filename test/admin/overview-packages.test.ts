@@ -74,3 +74,29 @@ describe('GET /przeglad - rozsyłki', () => {
     expect(inbound).toBeGreaterThan(packages);
   });
 });
+
+describe('GET /przeglad - rozsyłki po terminie', () => {
+  function addOverdue(id: string): void {
+    h.packages.insert({
+      id, apiKeyId, accountId, serviceId: '24138', defaultText: 'Przegląd serwisowy jutro o 9:00', orig: null,
+      costCenter: null, startAt: new Date(NOW.getTime() - 2 * 3600_000).toISOString(), deliveryReport: 0, encoding: 'gsm',
+      multipart: 0, createdAt: new Date(NOW.getTime() - 3 * 3600_000).toISOString(), status: 'overdue',
+    }, [{ dest: '48601000001', text: null, clientId: null }]);
+  }
+
+  it('strona główna: pasek z liczbą rozsyłek po terminie tylko przy liczbie większej od zera', async () => {
+    expect((await page('/przeglad')).body).not.toContain('/rozsylki?stan=overdue');
+
+    addOverdue('pkg_1');
+    const one = (await page('/przeglad')).body;
+    expect(one).toContain('1 rozsyłka czeka na decyzję administratora, ponieważ bramka nie przekazała jej do Multiinfo w ciągu 60 minut od terminu.');
+    expect(one).toContain('<a href="/rozsylki?stan=overdue">Zobacz rozsyłki</a>');
+
+    addOverdue('pkg_2');
+    expect((await page('/przeglad')).body)
+      .toContain('2 rozsyłki czekają na decyzję administratora, ponieważ bramka nie przekazała ich do Multiinfo w ciągu 60 minut od terminu.');
+    for (const id of ['pkg_3', 'pkg_4', 'pkg_5']) addOverdue(id);
+    expect((await page('/przeglad')).body)
+      .toContain('5 rozsyłek czeka na decyzję administratora, ponieważ bramka nie przekazała ich do Multiinfo w ciągu 60 minut od terminu.');
+  });
+});

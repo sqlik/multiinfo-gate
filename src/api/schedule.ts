@@ -12,6 +12,11 @@ export const START_AT_MAX_MS = 30 * 86_400_000;
 /** Bliższy termin względem chwili przekazania oznacza wysyłkę natychmiastową, bez terminu po stronie Multiinfo. */
 export const MI_START_MARGIN_MS = 60_000;
 
+/** Zdanie o oknie anulowania dla panelu, API, konektora i widoków; bez wyprzedzenia anulowanie trwa do terminu. */
+export const CANCEL_WINDOW_TEXT = HANDOVER_LEAD_MS > 0
+  ? `Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle ${HANDOVER_LEAD_MS / 60_000} minut przed terminem`
+  : 'Anulowanie jest możliwe do terminu rozpoczęcia rozsyłki';
+
 /** Chwila przekazania: termin minus wyprzedzenie, nie wcześniej niż przyjęcie. */
 export function handoverAt(startAt: string, createdAt: string): string {
   return new Date(Math.max(Date.parse(startAt) - HANDOVER_LEAD_MS, Date.parse(createdAt))).toISOString();

@@ -292,3 +292,170 @@ describe('GET /rozsylki/:id/raport.csv', () => {
     expect((await page('/rozsylki/pkg_nie_ma/raport.csv')).statusCode).toBe(404);
   });
 });
+
+describe('rozsyłka z terminem przechowywana przez bramkę', () => {
+  const HOUR = 3600_000;
+  const post = (url: string) => h.app.inject({
+    method: 'POST', url, headers: { cookie: h.cookie, 'content-type': 'application/x-www-form-urlencoded' }, payload: '',
+  });
+  const jobs = () => (h.db.prepare("SELECT payload FROM jobs WHERE type = 'package.create' ORDER BY id").all() as Array<{ payload: string }>)
+    .map((j) => JSON.parse(j.payload) as Record<string, unknown>);
+
+  /** `scheduled` z terminem 16:00 w Polsce, `overdue` z terminem 10:00 w Polsce, obie po dwóch odbiorców. */
+  function seedPending(id: string, status: 'scheduled' | 'overdue', integrationId: number | null = null) {
+    const startAt = new Date(NOW.getTime() + (status === 'scheduled' ? 4 : -2) * HOUR).toISOString();
+    h.packages.insert({
+      id, apiKeyId, accountId, serviceId: '24138', defaultText: 'Przegląd klimatyzacji w czwartek o 9:00', orig: null,
+      costCenter: null, startAt, deliveryReport: 1, encoding: 'gsm', multipart: 0,
+      createdAt: new Date(NOW.getTime() - 3 * HOUR).toISOString(), status, integrationId,
+    }, [{ dest: '48601000011', text: null, clientId: null }, { dest: '48601000012', text: null, clientId: null }]);
+    return id;
+  }
+  /** Cały wiersz listy z odnośnikiem do rozsyłki. */
+  const rowOf = (body: string, id: string) => body.slice(body.lastIndexOf('<tr>', body.indexOf(`href="/rozsylki/${id}"`))).split('</tr>')[0]!;
+
+  it('lista: etykiety zaplanowana i termin minął, kolumna terminu w czasie polskim', async () => {
+    seedPending('pkg_s', 'scheduled');
+    seedPending('pkg_o', 'overdue');
+    seed('pkg_n');
+    const body = (await page('/rozsylki')).body;
+    expect(body).toMatch(/<th[^>]*>Termin<\/th>/);
+    expect(rowOf(body, 'pkg_s')).toContain('zaplanowana');
+    expect(rowOf(body, 'pkg_s')).toContain('2026-08-25 16:00:00');
+    expect(rowOf(body, 'pkg_o')).toContain('termin minął');
+    expect(rowOf(body, 'pkg_o')).toContain('2026-08-25 10:00:00');
+    expect(body).toMatch(/2026-08-25 12:00:00<\/td>\s*<td class="m"><span class="dim">-<\/span><\/td>\s*<td class="m"><a href="\/rozsylki\/pkg_n">/);
+  });
+
+  it('filtr stan=overdue pokazuje wyłącznie rozsyłki po terminie', async () => {
+    seedPending('pkg_s', 'scheduled');
+    seedPending('pkg_o', 'overdue');
+    seed('pkg_n');
+    const body = (await page('/rozsylki?stan=overdue')).body;
+    expect(body).toContain('href="/rozsylki/pkg_o"');
+    expect(body).not.toContain('href="/rozsylki/pkg_s"');
+    expect(body).not.toContain('href="/rozsylki/pkg_n"');
+    expect(body).toContain('<a href="/rozsylki?stan=overdue" class="on">Termin minął</a>');
+    expect(body).toContain('<a href="/rozsylki?stan=scheduled">Zaplanowane</a>');
+    expect(body).toContain('<a href="/rozsylki">Wszystkie</a>');
+
+    const scheduled = (await page('/rozsylki?stan=scheduled')).body;
+    expect(scheduled).toContain('href="/rozsylki/pkg_s"');
+    expect(scheduled).not.toContain('href="/rozsylki/pkg_o"');
+
+    // Nieznany stan nie filtruje listy.
+    const all = (await page('/rozsylki?stan=queued%27')).body;
+    expect(all).toContain('href="/rozsylki/pkg_n"');
+    expect(all).toContain('<a href="/rozsylki" class="on">Wszystkie</a>');
+  });
+
+  it('stronicowanie zachowuje filtr stanu', async () => {
+    for (let i = 0; i < 26; i++) seedPending(`pkg_o${String(i).padStart(2, '0')}`, 'overdue');
+    const body = (await page('/rozsylki?stan=overdue')).body;
+    expect(body).toContain('href="/rozsylki?stan=overdue&amp;offset=25">Następne</a>');
+  });
+
+  it('szczegóły scheduled: termin, chwila przekazania, Anuluj rozsyłkę z potwierdzeniem, bez Wyślij teraz', async () => {
+    seedPending('pkg_s', 'scheduled');
+    const body = (await page('/rozsylki/pkg_s')).body;
+    expect(body).toContain('<div>Termin</div><div class="m">2026-08-25 16:00:00</div>');
+    expect(body).toContain('<div>Przekazanie do Multiinfo</div><div class="m">2026-08-25 15:50:00</div>');
+    expect(body).toContain('action="/rozsylki/pkg_s/anuluj"');
+    expect(body).toContain('data-confirm="Anulować rozsyłkę pkg_s do 2 odbiorców z terminem 25.08.2026 16:00? Bramka nie przekaże jej do Multiinfo, a anulowania nie można cofnąć."');
+    expect(body).toContain('data-confirm-ok="Anuluj rozsyłkę" data-confirm-cancel="Wróć"');
+    expect(body).toContain('Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem');
+    expect(body).not.toContain('wyslij-teraz');
+  });
+
+  it('szczegóły overdue: Anuluj rozsyłkę i Wyślij teraz z potwierdzeniami', async () => {
+    seedPending('pkg_o', 'overdue');
+    const body = (await page('/rozsylki/pkg_o')).body;
+    expect(body).toContain('<div>Termin</div><div class="m">2026-08-25 10:00:00</div>');
+    expect(body).not.toContain('Przekazanie do Multiinfo</div>');
+    expect(body).toContain('data-confirm="Anulować rozsyłkę pkg_o do 2 odbiorców z terminem 25.08.2026 10:00? Bramka nie przekaże jej do Multiinfo, a anulowania nie można cofnąć."');
+    expect(body).toContain('action="/rozsylki/pkg_o/wyslij-teraz"');
+    expect(body).toContain('data-confirm="Wysłać teraz rozsyłkę pkg_o do 2 odbiorców z terminem 25.08.2026 10:00? Multiinfo rozpocznie wysyłkę natychmiast po przekazaniu."');
+    expect(body).toContain('data-confirm-ok="Wyślij teraz"');
+    expect(body).toContain('Bramka nie przekazała rozsyłki do Multiinfo w ciągu 60 minut od terminu. Rozsyłka czeka na decyzję administratora.');
+  });
+
+  it('rozsyłka bez terminu: wiersz Termin bez terminu i bez przycisków', async () => {
+    seed('pkg_n');
+    const body = (await page('/rozsylki/pkg_n')).body;
+    expect(body).toContain('<div>Termin</div><div class="m">bez terminu</div>');
+    expect(body).not.toContain('/anuluj"');
+    expect(body).not.toContain('wyslij-teraz');
+  });
+
+  it('anulowana przez bramkę: wiersz Powód anulowania zamiast Błąd', async () => {
+    seedPending('pkg_s', 'scheduled');
+    h.packages.cancelPending('pkg_s', NOW, 'Klucz API został odwołany przed przekazaniem rozsyłki.');
+    const body = (await page('/rozsylki/pkg_s')).body;
+    expect(body).toContain('Powód anulowania</div>');
+    expect(body).toContain('Klucz API został odwołany przed przekazaniem rozsyłki.');
+    expect(body).not.toContain('>Błąd</div>');
+    expect(body).not.toContain('Przekazanie do Multiinfo</div>');
+  });
+
+  it('POST anuluj: stan cancelled, wpis w dzienniku panelu z nazwą administratora, komunikat', async () => {
+    seedPending('pkg_s', 'scheduled');
+    h.jobs.enqueue('package.create', { packageId: 'pkg_s', scheduled: true }, new Date(NOW.getTime() + 3 * HOUR));
+    const res = await post('/rozsylki/pkg_s/anuluj');
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe('/rozsylki/pkg_s');
+    expect(h.packages.get('pkg_s')!.status).toBe('cancelled');
+    expect(h.packages.get('pkg_s')!.error).toBeNull();
+    expect(jobs()).toEqual([]);
+    const entry = h.audit.list(10, 0).find((e) => e.action === 'rozsylka.anulowanie');
+    expect(entry).toMatchObject({ actor: 'janek', target: 'rozsylka:pkg_s', meta: { stan: 'scheduled', odbiorcy: 2 } });
+    expect((await page('/rozsylki/pkg_s')).body).toContain('Rozsyłka pkg_s została anulowana.');
+  });
+
+  it('POST anuluj dla rozsyłki przekazanej: ostrzeżenie, stan bez zmian', async () => {
+    seed('pkg_n');
+    h.packages.setCreated('pkg_n', '14');
+    const res = await post('/rozsylki/pkg_n/anuluj');
+    expect(res.statusCode).toBe(302);
+    expect(h.packages.get('pkg_n')!.status).toBe('open');
+    expect(h.audit.list(10, 0).filter((e) => e.action === 'rozsylka.anulowanie')).toEqual([]);
+    expect((await page('/rozsylki/pkg_n')).body).toContain('Rozsyłka została już przekazana do Multiinfo, które nie pozwala jej anulować.');
+  });
+
+  it('POST wyslij-teraz: stan queued, jedno zadanie package.create bez znacznika scheduled, wpis w dzienniku, liczniki burzy bez zmian', async () => {
+    const integrationId = h.integrations.insert({
+      name: 'Dyspozytornia', kind: 'power_automate', apiKeyId, serviceId: null, orig: null, preset: 'power-automate',
+      enabled: 1, config: defaultPowerAutomateConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    seedPending('pkg_o', 'overdue', integrationId);
+    const guardsBefore = h.guards.peek(integrationId, 60, NOW);
+    const res = await post('/rozsylki/pkg_o/wyslij-teraz');
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe('/rozsylki/pkg_o');
+    expect(h.packages.get('pkg_o')!.status).toBe('queued');
+    expect(jobs()).toEqual([{ packageId: 'pkg_o' }]);
+    expect(h.guards.peek(integrationId, 60, NOW)).toEqual(guardsBefore);
+    const entry = h.audit.list(10, 0).find((e) => e.action === 'rozsylka.wyslanie_teraz');
+    expect(entry).toMatchObject({ actor: 'janek', target: 'rozsylka:pkg_o', meta: { odbiorcy: 2 } });
+    expect((await page('/rozsylki/pkg_o')).body).toContain('Bramka przekaże rozsyłkę pkg_o do Multiinfo, które rozpocznie wysyłkę natychmiast.');
+  });
+
+  it('POST wyslij-teraz dla scheduled: ostrzeżenie, stan bez zmian', async () => {
+    seedPending('pkg_s', 'scheduled');
+    const res = await post('/rozsylki/pkg_s/wyslij-teraz');
+    expect(res.statusCode).toBe(302);
+    expect(h.packages.get('pkg_s')!.status).toBe('scheduled');
+    expect(jobs()).toEqual([]);
+    expect(h.audit.list(10, 0).filter((e) => e.action === 'rozsylka.wyslanie_teraz')).toEqual([]);
+    expect((await page('/rozsylki/pkg_s')).body).toContain('Przycisk „Wyślij teraz” dotyczy wyłącznie rozsyłki, której termin minął o więcej niż 60 minut.');
+  });
+
+  it('POST dla nieznanej rozsyłki: 404', async () => {
+    expect((await post('/rozsylki/pkg_nie_ma/anuluj')).statusCode).toBe(404);
+    expect((await post('/rozsylki/pkg_nie_ma/wyslij-teraz')).statusCode).toBe(404);
+  });
+
+  it('okno potwierdzenia przyjmuje własny napis przycisku rezygnacji', async () => {
+    const res = await h.app.inject({ method: 'GET', url: '/panel.js' });
+    expect(res.body).toContain("form.getAttribute('data-confirm-cancel') || 'Anuluj'");
+  });
+});

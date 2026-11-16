@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify';
+import { cancelPackage } from '../../api/cancel-package.ts';
+import { ApiError } from '../../api/errors.ts';
 import { reportCsv } from '../../api/packages.ts';
 import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
 import { connectionLink, integrationLink, sourceWords } from '../views/deliveries.ts';
-import { packagePage, packagesPage } from '../views/packages.ts';
+import { PACKAGE_FILTERS, packagePage, packagesPage } from '../views/packages.ts';
 import { parseOffset } from '../../paging.ts';
 import { CSV_BOM } from '../../text/csv.ts';
 
@@ -20,17 +22,26 @@ export function campaignLink(deps: Pick<AdminDeps, 'campaigns'>, campaignId: num
 const RECIPIENTS_SHOWN = 200;
 
 export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps, render: Renderer): void {
-  app.get<{ Querystring: { offset?: string } }>('/rozsylki', async (request, reply) => {
+  const now = deps.now ?? (() => new Date());
+  const actorOf = (userId: number | null): string => {
+    if (userId === null) return '(nieznany)';
+    return deps.users.findById(userId)?.login ?? String(userId);
+  };
+
+  app.get<{ Querystring: { offset?: string; stan?: string } }>('/rozsylki', async (request, reply) => {
     reply.type('text/html; charset=utf-8');
     const offset = parseOffset(request.query.offset);
+    // Nieznany stan nie filtruje listy.
+    const status = PACKAGE_FILTERS.find((f) => f.key !== null && f.key === request.query.stan)?.key ?? null;
     // Jeden wiersz ponad stronę, żeby wiedzieć, czy jest następna.
-    const rows = deps.packages.list({ limit: PAGE_SIZE + 1, offset });
+    const rows = deps.packages.list({ limit: PAGE_SIZE + 1, offset, ...(status === null ? {} : { statuses: [status] }) });
 
     return render.page(request, {
       title: 'Rozsyłki',
       active: 'rozsylki',
       body: packagesPage({
         rows: rows.slice(0, PAGE_SIZE),
+        status,
         hasMore: rows.length > PAGE_SIZE,
         offset,
         limit: PAGE_SIZE,
@@ -63,6 +74,52 @@ export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps,
         clicks: row.campaignId === null ? null : deps.shortLinks.clicksByPackage(row.id),
       }),
     });
+  });
+
+  /** Anulowanie rozsyłki przechowywanej przez bramkę; stan, który na to nie pozwala, kończy się ostrzeżeniem. */
+  app.post<{ Params: { id: string } }>('/rozsylki/:id/anuluj', async (request, reply) => {
+    const row = deps.packages.get(request.params.id);
+    if (!row) return reply.callNotFound();
+    if (row.status === 'cancelled') {
+      render.flash(request, 'warn', `Rozsyłka ${row.id} jest już anulowana.`);
+    } else {
+      try {
+        cancelPackage(deps, row, now(), { actor: actorOf(request.adminUserId), ip: request.ip });
+        render.flash(request, 'ok', `Rozsyłka ${row.id} została anulowana.`);
+      } catch (e) {
+        if (!(e instanceof ApiError)) throw e;
+        render.flash(request, 'warn', e.message);
+      }
+    }
+    return reply.redirect(`/rozsylki/${encodeURIComponent(row.id)}`, 302);
+  });
+
+  /**
+   * Decyzja administratora po terminie: rozsyłka `overdue` wraca do kolejki bez terminu, a nowe zadanie przekazania
+   * powstaje w tej samej transakcji. Ochrona przed burzą policzyła rozsyłkę przy przyjęciu, dlatego nie liczy jej ponownie.
+   */
+  app.post<{ Params: { id: string } }>('/rozsylki/:id/wyslij-teraz', async (request, reply) => {
+    const row = deps.packages.get(request.params.id);
+    if (!row) return reply.callNotFound();
+    const back = `/rozsylki/${encodeURIComponent(row.id)}`;
+    const at = now();
+    const done = row.status === 'overdue' && deps.packages.transaction(() => {
+      if (!deps.packages.sendNow(row.id)) return false;
+      // Rozsyłka po terminie nie ma zadania przekazania, a gdyby zostało, nie mogą istnieć dwa.
+      deps.jobs.removeFor('package.create', row.id);
+      deps.jobs.enqueue('package.create', { packageId: row.id }, at);
+      return true;
+    });
+    if (!done) {
+      render.flash(request, 'warn', 'Przycisk „Wyślij teraz” dotyczy wyłącznie rozsyłki, której termin minął o więcej niż 60 minut.');
+      return reply.redirect(back, 302);
+    }
+    deps.audit.record({
+      actor: actorOf(request.adminUserId), action: 'rozsylka.wyslanie_teraz', target: `rozsylka:${row.id}`,
+      meta: { odbiorcy: row.recipientsCount, termin: row.startAt }, ip: request.ip,
+    });
+    render.flash(request, 'ok', `Bramka przekaże rozsyłkę ${row.id} do Multiinfo, które rozpocznie wysyłkę natychmiast.`);
+    return reply.redirect(back, 302);
   });
 
   app.get<{ Params: { id: string } }>('/rozsylki/:id/raport.csv', async (request, reply) => {
