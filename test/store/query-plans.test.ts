@@ -60,3 +60,13 @@ describe('plany zapytań odczytów agenta', () => {
     expect(byKey).not.toMatch(/idx_messages_dest_key/);
   });
 });
+
+describe('plany zapytań rozsyłek z terminem', () => {
+  it('plan zapytania markOverdue i countByStatus korzysta z indeksu packages_pending', () => {
+    const db = openDatabase(':memory:');
+    const overdue = planOf(db, () => new PackagesRepo(db).markOverdue(BEFORE), [BEFORE.toISOString()]);
+    expect(overdue).toMatch(/SEARCH packages USING (COVERING )?INDEX packages_pending \(status=\? AND start_at<\?\)/);
+    const count = planOf(db, () => new PackagesRepo(db).countByStatus('overdue'), ['overdue']);
+    expect(count).toMatch(/SEARCH packages USING COVERING INDEX packages_pending \(status=\?\)/);
+  });
+});

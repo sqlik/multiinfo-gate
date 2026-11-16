@@ -49,6 +49,8 @@ export function stageLabel(kind: string): string {
 }
 
 const PACKAGE_LABELS: Record<PackageStatus, string> = {
+  scheduled: 'zaplanowana',
+  overdue: 'termin minął',
   queued: 'w kolejce',
   open: 'otwarta',
   sending: 'w wysyłce',
@@ -74,7 +76,7 @@ export function reportStatusLabel(status: ReportStatus): string {
 
 export function packageStatusTone(status: PackageStatus): 'ok' | 'wait' | 'fail' {
   if (status === 'completed') return 'ok';
-  if (status === 'queued' || status === 'open' || status === 'sending') return 'wait';
+  if (status === 'scheduled' || status === 'queued' || status === 'open' || status === 'sending') return 'wait';
   return 'fail';
 }
 

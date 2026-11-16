@@ -106,4 +106,16 @@ describe('JobsRepo', () => {
     repo.fail(job!.id, 'konto wstrzymane');
     expect(repo.depth()).toBe(1);
   });
+
+  it('removeFor usuwa zadanie package.create tej rozsyłki i nie rusza zadań innych rozsyłek ani package.poll', () => {
+    const repo = new JobsRepo(openDatabase(':memory:'));
+    repo.enqueue('package.create', { packageId: 'pkg_1', scheduled: true }, at(0));
+    repo.enqueue('package.create', { packageId: 'pkg_2', scheduled: true }, at(0));
+    repo.enqueue('package.poll', { packageId: 'pkg_1' }, at(0));
+    expect(repo.removeFor('package.create', 'pkg_1')).toBe(1);
+    expect(repo.removeFor('package.create', 'pkg_1')).toBe(0);
+    const left = repo.claim(at(1000), 10).map((j) => [j.type, j.payload.packageId]);
+    expect(left).toEqual(expect.arrayContaining([['package.create', 'pkg_2'], ['package.poll', 'pkg_1']]));
+    expect(left).toHaveLength(2);
+  });
 });

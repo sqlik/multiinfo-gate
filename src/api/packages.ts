@@ -6,6 +6,7 @@ import { authenticate, refuseIntegrationsOnly } from './auth.ts';
 import { dropEmptyFields } from './empty-fields.ts';
 import { ApiError } from './errors.ts';
 import { linkFieldsSchema, linkRequest } from './link-fields.ts';
+import { handoverAt } from './schedule.ts';
 import type { ApiDeps } from './server.ts';
 import { submitPackage } from './submit-package.ts';
 import { csvCell } from '../text/csv.ts';
@@ -161,6 +162,8 @@ function present(p: PackageRow, summary: { delivered: number; failed: number; ot
     serviceId: p.serviceId,
     orig: p.orig,
     startAt: p.startAt,
+    // Chwila przekazania do Multiinfo ma znaczenie tylko przed przekazaniem.
+    handoverAt: p.status === 'scheduled' && p.startAt !== null ? handoverAt(p.startAt, p.createdAt) : null,
     createdAt: p.createdAt,
     completedAt: p.completedAt,
     providerCode: p.providerCode,

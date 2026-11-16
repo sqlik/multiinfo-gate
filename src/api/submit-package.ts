@@ -12,6 +12,7 @@ import { TooManyPartsError, segmentText } from '../text/segment.ts';
 import type { AuthContext } from './auth.ts';
 import { ApiError } from './errors.ts';
 import { resolveOrig } from './orig.ts';
+import { checkStartAt, handoverAt } from './schedule.ts';
 import type { ApiDeps } from './server.ts';
 
 export type SubmitPackageDeps = Pick<ApiDeps, 'accounts' | 'packages' | 'jobs' | 'linkDomains' | 'campaigns' | 'shortLinks'>
@@ -46,7 +47,17 @@ export interface PackageSubmitInput {
 
 export interface PackageAccepted {
   id: string; status: PackageStatus; recipients: number; encoding: 'gsm' | 'ucs2'; multipart: boolean;
+  /** Termin rozpoczęcia; tylko rozsyłka z terminem. */
+  startAt?: string;
+  /** Chwila przekazania do Multiinfo; tylko rozsyłka w stanie `scheduled`. */
+  handoverAt?: string;
   links?: LinksResponse;
+}
+
+/** Termin i chwila przekazania w odpowiedzi: termin zawsze, gdy istnieje, chwila przekazania tylko przed przekazaniem. */
+function scheduleFields(status: PackageStatus, startAt: string | null, createdAt: string): Pick<PackageAccepted, 'startAt' | 'handoverAt'> {
+  if (startAt === null) return {};
+  return status === 'scheduled' ? { startAt, handoverAt: handoverAt(startAt, createdAt) } : { startAt };
 }
 
 /**
@@ -85,9 +96,7 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
   let startAt: Date | undefined;
   if (input.startAt !== undefined) {
     startAt = new Date(input.startAt);
-    if (startAt.getTime() <= now.getTime()) {
-      throw new ApiError(400, 'start_at_in_past', 'Termin rozpoczęcia rozsyłki już minął.');
-    }
+    checkStartAt(startAt, now);
   }
 
   const maxParts = Math.min(input.maxParts ?? auth.maxParts, auth.maxParts);
@@ -150,7 +159,8 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
     });
     return {
       id: existing.id, status: existing.status, recipients: existing.recipientsCount, encoding: existing.encoding,
-      multipart: existing.multipart === 1, ...(links === undefined ? {} : { links }),
+      multipart: existing.multipart === 1, ...scheduleFields(existing.status, existing.startAt, existing.createdAt),
+      ...(links === undefined ? {} : { links }),
     };
   }
 
@@ -171,6 +181,9 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
   const encoding = forced === 'unicode' ? 'ucs2' : 'gsm';
 
   const id = shortId('pkg');
+  // Rozsyłkę z terminem bramka przechowuje do chwili przekazania, także gdy ta chwila już nadeszła.
+  const status: PackageStatus = startAt === undefined ? 'queued' : 'scheduled';
+  const timing = { startAt: startAt?.toISOString() ?? null, createdAt: now.toISOString() };
   // Kampania powstaje wyłącznie wtedy, gdy co najmniej jeden odbiorca otrzyma krótki link.
   const info = templates.find((t) => t.slots.length > 0)?.info ?? null;
   const campaignName = info === null ? null : info.campaign ?? input.campaignFallback ?? id;
@@ -199,16 +212,20 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
     deps.packages.insert({
       id, apiKeyId: auth.apiKeyId, accountId: auth.accountId, serviceId,
       defaultText: sharedText, orig: orig ?? null, costCenter: input.costCenter ?? null,
-      startAt: startAt?.toISOString() ?? null, deliveryReport: input.deliveryReport ? 1 : 0,
-      encoding, multipart: multipart ? 1 : 0, createdAt: now.toISOString(),
+      startAt: timing.startAt, deliveryReport: input.deliveryReport ? 1 : 0,
+      encoding, multipart: multipart ? 1 : 0, createdAt: timing.createdAt, status,
       integrationId, requestedBy: input.requestedBy ?? null, agentConnectionId: input.agentConnectionId ?? null,
       idempotencyKey: input.idempotencyKey ?? null, requestHash: input.idempotencyKey === undefined ? null : requestHash,
       campaignId,
     }, stored);
     if (campaignId !== null) deps.campaigns.addSent(campaignId, stored.filter((r) => (r.links ?? 0) > 0).length);
-    deps.jobs.enqueue('package.create', { packageId: id }, now);
+    if (timing.startAt === null) deps.jobs.enqueue('package.create', { packageId: id }, now);
+    else deps.jobs.enqueue('package.create', { packageId: id, scheduled: true }, new Date(handoverAt(timing.startAt, timing.createdAt)));
   });
 
   const links = packageLinksBlock(templates, codesCount, campaignName, expiresAt, linksDisabled);
-  return { id, status: 'queued', recipients: recipients.length, encoding, multipart, ...(links === undefined ? {} : { links }) };
+  return {
+    id, status, recipients: recipients.length, encoding, multipart, ...scheduleFields(status, timing.startAt, timing.createdAt),
+    ...(links === undefined ? {} : { links }),
+  };
 }

@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ApiError } from '../../src/api/errors.ts';
+import { HANDOVER_LEAD_MS, START_AT_MAX_MS } from '../../src/api/schedule.ts';
 import { submitPackage } from '../../src/api/submit-package.ts';
 import { authFromKey } from '../../src/api/submit.ts';
 import { defaultPowerAutomateConfig } from '../../src/integrations/config.ts';
@@ -122,5 +123,68 @@ describe('submitPackage', () => {
   it('termin rozpoczęcia w przeszłości to start_at_in_past', () => {
     expect(() => submitPackage(deps, auth, { ...base, recipients: [{ to: '48601000001' }], defaultText: 'x', startAt: '2026-11-03T09:00:00Z' }, NOW))
       .toThrow(expect.objectContaining({ code: 'start_at_in_past' }));
+  });
+});
+
+describe('submitPackage: rozsyłka z terminem', () => {
+  const at = (ms: number) => new Date(NOW.getTime() + ms);
+  const input = (startAt?: string) => ({ ...base, recipients: [{ to: '48601000011' }], defaultText: 'Przegląd floty jutro o 8:00', ...(startAt === undefined ? {} : { startAt }) });
+
+  it('rozsyłka z terminem: stan scheduled, zadanie package.create ze znacznikiem scheduled i run_at = termin - HANDOVER_LEAD_MS', () => {
+    expect(HANDOVER_LEAD_MS).toBe(10 * 60_000);
+    const startAt = at(3 * 3600_000);
+    const out = submitPackage(deps, auth, input(startAt.toISOString()), NOW);
+    const handover = new Date(startAt.getTime() - HANDOVER_LEAD_MS).toISOString();
+    expect(out).toMatchObject({ status: 'scheduled', startAt: startAt.toISOString(), handoverAt: handover });
+    expect(deps.packages.get(out.id)!.status).toBe('scheduled');
+    expect(deps.jobs.claim(new Date(Date.parse(handover) - 1), 10)).toEqual([]);
+    const [job] = deps.jobs.claim(new Date(handover), 10);
+    expect(job).toMatchObject({ type: 'package.create', payload: { packageId: out.id, scheduled: true } });
+  });
+
+  it('termin za 5 min: zadanie z run_at równym przyjęciu, handoverAt równe createdAt', () => {
+    const out = submitPackage(deps, auth, input(at(5 * 60_000).toISOString()), NOW);
+    expect(out).toMatchObject({ status: 'scheduled', handoverAt: NOW.toISOString() });
+    expect(deps.jobs.claim(NOW, 10)).toEqual([expect.objectContaining({ payload: { packageId: out.id, scheduled: true } })]);
+  });
+
+  it('termin dokładnie 30 dni naprzód przyjęty; 30 dni i 1 s: ApiError 400 start_at_too_far z tekstem ze spec 4.6', () => {
+    expect(START_AT_MAX_MS).toBe(30 * 86_400_000);
+    expect(submitPackage(deps, auth, input(at(START_AT_MAX_MS).toISOString()), NOW).status).toBe('scheduled');
+    let error: unknown;
+    try {
+      submitPackage(deps, auth, input(at(START_AT_MAX_MS + 1000).toISOString()), NOW);
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ httpStatus: 400, code: 'start_at_too_far', message: 'Termin rozpoczęcia rozsyłki może przypadać najwyżej 30 dni od chwili wysyłki.' });
+    expect(deps.packages.list({ limit: 10, offset: 0 })).toHaveLength(1);
+  });
+
+  it('termin równy chwili przyjęcia to start_at_in_past', () => {
+    expect(() => submitPackage(deps, auth, input(NOW.toISOString()), NOW)).toThrow(expect.objectContaining({ code: 'start_at_in_past' }));
+  });
+
+  it('rozsyłka bez terminu: stan queued i zadanie bez znacznika, jak dziś', () => {
+    const out = submitPackage(deps, auth, input(), NOW);
+    expect(out).toEqual({ id: out.id, status: 'queued', recipients: 1, encoding: 'ucs2', multipart: false });
+    expect(deps.packages.get(out.id)!.status).toBe('queued');
+    expect(deps.jobs.claim(NOW, 10)).toEqual([expect.objectContaining({ type: 'package.create', payload: { packageId: out.id } })]);
+  });
+
+  it('powtórzenie z kluczem idempotencji zwraca bieżący stan scheduled', () => {
+    const startAt = at(3600_000).toISOString();
+    const req = { ...input(startAt), idempotencyKey: 'przeglad-floty-2026-11-04' };
+    const first = submitPackage(deps, auth, req, NOW);
+    const again = submitPackage(deps, auth, req, at(60_000));
+    expect(again).toEqual(first);
+    expect(again).toMatchObject({ status: 'scheduled', startAt, handoverAt: at(50 * 60_000).toISOString() });
+    deps.packages.beginHandover(first.id);
+    const later = submitPackage(deps, auth, req, at(120_000));
+    expect(later.status).toBe('queued');
+    expect(later).toMatchObject({ startAt });
+    expect(later).not.toHaveProperty('handoverAt');
+    expect(deps.packages.list({ limit: 10, offset: 0 })).toHaveLength(1);
   });
 });

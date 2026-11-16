@@ -296,6 +296,25 @@ describe('GET /v1/packages/:id', () => {
     expect((await get(`/v1/packages/${id}`)).json().summary).toEqual({ delivered: 1, failed: 0, other: 1 });
   });
 
+  it('POST /v1/packages z terminem: 202, status scheduled, startAt i handoverAt', async () => {
+    const startAt = new Date(NOW.getTime() + 2 * 3600_000).toISOString();
+    const res = await post({ ...body(), startAt });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toMatchObject({ status: 'scheduled', startAt, handoverAt: new Date(NOW.getTime() + 110 * 60_000).toISOString() });
+  });
+
+  it('GET /v1/packages/{id}: handoverAt dla scheduled, null po przekazaniu', async () => {
+    const startAt = new Date(NOW.getTime() + 2 * 3600_000).toISOString();
+    const id = (await post({ ...body(), startAt })).json().id;
+    expect((await get(`/v1/packages/${id}`)).json()).toMatchObject({
+      status: 'scheduled', startAt, handoverAt: new Date(NOW.getTime() + 110 * 60_000).toISOString(),
+    });
+    packages.beginHandover(id);
+    expect((await get(`/v1/packages/${id}`)).json()).toMatchObject({ status: 'queued', startAt, handoverAt: null });
+    const plain = (await post(body())).json().id;
+    expect((await get(`/v1/packages/${plain}`)).json()).toMatchObject({ status: 'queued', startAt: null, handoverAt: null });
+  });
+
   it('nie ujawnia cudzej rozsyłki', async () => {
     const id = (await post(body())).json().id;
     const res = await get(`/v1/packages/${id}`, keyB);
