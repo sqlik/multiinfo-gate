@@ -103,3 +103,8 @@ ALTER TABLE messages ADD COLUMN agent_connection_id INTEGER REFERENCES agent_con
 ALTER TABLE packages ADD COLUMN agent_connection_id INTEGER REFERENCES agent_connections(id) ON DELETE SET NULL;
 CREATE INDEX messages_agent_connection ON messages(agent_connection_id) WHERE agent_connection_id IS NOT NULL;
 CREATE INDEX packages_agent_connection ON packages(agent_connection_id) WHERE agent_connection_id IS NOT NULL;
+
+-- Odczyty agenta szukają ostatniej wiadomości i rozsyłki klucza na numer nadawcy odebranego SMS-a.
+-- Indeks zaczyna się od numeru, dlatego lista wiadomości bez numeru zachowuje dotychczasowy plan.
+CREATE INDEX idx_messages_dest_key ON messages(dest, api_key_id, created_at);
+CREATE INDEX idx_package_recipients_dest ON package_recipients(dest, package_id);
