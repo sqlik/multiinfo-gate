@@ -1,6 +1,10 @@
 // Widok „Postęp rozsyłki” według wyniku package_status: w trakcie wysyłania postęp, po raporcie liczby w stanach,
-// przyczyny niedoręczeń, doręczenia w kolejnych godzinach i pliki CSV. Widok sam odświeża stan co 30 s.
-import { applyTheme, cancelledText, createBridge, esc, note, num, openDownload, phoneLabel, sayIn, stamp, textOf } from './bridge.js';
+// przyczyny niedoręczeń, doręczenia w kolejnych godzinach i pliki CSV. Widok sam odświeża stan co 30 s,
+// a odbiorców doładowuje porcjami.
+import {
+  applyTheme, badge, button, buttons, cancelledText, createBridge, esc, field, fields, note, num, openDownload, phoneLabel, sayIn, section, stamp,
+  textOf, tile, tiles, txt,
+} from './bridge.js';
 import { barChart, stackBar } from './chart.js';
 import { STATE_LABELS } from './doreczenia.js';
 
@@ -8,12 +12,15 @@ export const PACKAGE_REFRESH_MS = 30_000;
 export const PACKAGE_REFRESH_MAX_MS = 1_800_000;
 /** Kolejność odcinków paska po raporcie i ich kolory. */
 const REPORT_ORDER = ['delivered', 'failed', 'expired', 'blocked', 'cancelled', 'unknown'];
-const REPORT_TONE = { delivered: 'ok', failed: 'fail', expired: 'fail', blocked: 'fail' };
+const REPORT_TONE = { delivered: 'ok', failed: 'fail', blocked: 'fail' };
+/** Stany z własnym kaflem po raporcie; pozostałe wymienia zdanie pod kaflami. */
+const REPORT_TILES = new Set(['delivered', 'failed', 'expired']);
+/** Najwięcej odbiorców w jednym odczycie package_status. */
+const PAGE_MAX = 200;
+const PACKAGE_TONE = { completed: 'ok', failed: 'fail', cancelled: 'plain' };
 /** Wykres doręczeń uzupełnia godziny bez doręczeń najwyżej w tylu kolejnych godzinach. */
 const DELIVERY_HOURS_MAX = 168;
 const LIVE_TEXT = { watching: '● na żywo, co 30 s', timeout: 'odświeżanie zatrzymane po 30 minutach' };
-
-const disabledIf = (busy) => (busy ? ' disabled' : '');
 
 /** Rozsyłka nie zmieni już stanu: raport jest gotowy albo rozsyłka zakończyła się bez wysyłki. */
 export function packageSettled(d) {
@@ -22,14 +29,15 @@ export function packageSettled(d) {
 
 /**
  * Odświeżanie stanu rozsyłki przez package_status z `args` co 30 s, do raportu albo stanu ostatecznego, najwyżej
- * 30 minut. `handlers.onData` otrzymuje każdy stan, a `handlers.onEnd` powód końca: settled, timeout albo error z tekstem.
+ * 30 minut. `args` może być funkcją, która podaje argumenty przy każdym odczycie. `handlers.onData` otrzymuje każdy
+ * stan, a `handlers.onEnd` powód końca: settled, timeout albo error z tekstem.
  */
 export function watchPackage(bridge, win, args, handlers, now = () => Date.now()) {
   const started = now();
   async function tick() {
     let result;
     try {
-      result = await bridge.callTool('package_status', args);
+      result = await bridge.callTool('package_status', typeof args === 'function' ? args() : args);
     } catch (error) {
       result = { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
     }
@@ -45,13 +53,20 @@ export function watchPackage(bridge, win, args, handlers, now = () => Date.now()
   win.setTimeout(tick, PACKAGE_REFRESH_MS);
 }
 
-const legendItem = (tone, label, n) => `<span><i class="sw t-${tone}"></i>${esc(label)} <b>${num(n)}</b></span>`;
+const percent = (part, whole) => (whole === 0 ? '-' : `${((part / whole) * 100).toFixed(1).replace('.', ',')} %`);
 
-function progressPanel(d) {
-  if (d.remaining === null) return `<p class="stack-note">Odbiorcy: <b>${num(d.recipients)}</b>, stan: ${esc(d.statusLabel)}</p>`;
-  const passed = Math.max(0, d.recipients - d.remaining);
-  return stackBar([{ tone: 'wait', value: passed }, { tone: 'rest', value: d.remaining }])
-    + `<p class="stack-note">Przekazano do Multiinfo <b>${num(passed)}</b> z ${num(d.recipients)}, do wysłania pozostało ${num(d.remaining)}</p>`;
+function progressSection(d) {
+  const passed = d.remaining === null ? null : Math.max(0, d.recipients - d.remaining);
+  const waiting = d.report === null && !packageSettled(d);
+  return section('Postęp', (passed === null ? '' : stackBar([{ tone: 'wait', value: passed }, { tone: 'rest', value: d.remaining }]))
+    + tiles(
+      tile('Odbiorcy', num(d.recipients), 'w rozsyłce'),
+      passed === null ? tile('Przekazane', '-', 'czeka na Multiinfo') : tile('Przekazane', num(passed), 'do Multiinfo'),
+      passed === null ? tile('Do wysłania', '-', 'czeka na Multiinfo') : tile('Do wysłania', num(d.remaining), 'w kolejce Multiinfo'),
+      tile('Raport', 'po wysyłce', waiting ? 'widok sprawdza co 30 s' : 'raport niedostępny'),
+    )
+    + (waiting ? note(d.final ? 'Rozsyłka została zakończona. Raport doręczeń jeszcze nie jest gotowy, a widok sam sprawdza jego stan.'
+      : 'Liczby w stanach, przyczyny niedoręczeń i pliki CSV pojawią się po raporcie doręczeń') : ''));
 }
 
 /** Godziny raportu `RRRR-MM-DD GG:00` w czasie polskim, z godzinami bez doręczeń między pierwszą a ostatnią. */
@@ -68,47 +83,52 @@ function deliveryHours(list) {
   });
 }
 
-function reportPanel(d, busy) {
+function reportSections(d, busy) {
   const r = d.report;
+  const count = (k) => r.byStatus[k] ?? 0;
   const keys = [...REPORT_ORDER.filter((k) => k in r.byStatus), ...Object.keys(r.byStatus).filter((k) => !REPORT_ORDER.includes(k))];
-  const tone = (k) => REPORT_TONE[k] ?? 'plain';
+  const others = keys.filter((k) => !REPORT_TILES.has(k) && count(k) > 0).map((k) => `${STATE_LABELS[k] ?? k} ${num(count(k))}`);
   const hours = deliveryHours(r.deliveredByHour);
-  const every = Math.max(1, Math.ceil(hours.length / 8));
+  const every = Math.max(1, Math.ceil(hours.length / 12));
   const chart = hours.length === 0 ? '<p class="muted">Raport nie zawiera czasu doręczeń</p>'
     : barChart(hours.map((h, i) => ({ label: i % every === 0 ? h.hour.slice(11) : '', value: h.count, title: `${h.hour}, doręczenia: ${h.count}` })),
-      { label: 'Doręczenia w kolejnych godzinach', width: 320, height: 140, tone: 'ok' });
+      { label: 'Doręczenia w kolejnych godzinach', height: 140, tone: 'ok' });
   const reasons = r.reasons.length === 0 ? '<p class="muted">Raport nie zawiera niedoręczonych wiadomości</p>'
     : '<table><tr><th>Przyczyna</th><th class="num">Liczba</th></tr>'
       + r.reasons.map((x) => `<tr><td>${esc(x.description)}</td><td class="num">${num(x.count)}</td></tr>`).join('') + '</table>';
-  const failed = Object.entries(r.byStatus).filter(([k]) => k !== 'delivered').reduce((sum, [, n]) => sum + n, 0);
-  return stackBar(keys.map((k) => ({ tone: tone(k), value: r.byStatus[k] })))
-    + `<div class="stack-legend">${keys.map((k) => legendItem(tone(k), STATE_LABELS[k] ?? k, r.byStatus[k])).join('')}`
-    + `<span>razem <b>${num(d.recipients)}</b></span></div>`
-    + `<div class="grid2"><div><div class="chart-title"><span>Doręczenia w kolejnych godzinach</span></div>${chart}</div>`
-    + `<div><div class="chart-title"><span>Niedoręczone według przyczyny</span></div>${reasons}</div></div>`
-    + `<div class="row"><button type="button" class="btn" data-act="csv" data-file="report"${disabledIf(busy)}>Pobierz raport CSV</button>`
-    + (failed > 0 ? `<button type="button" class="btn" data-act="csv" data-file="failed"${disabledIf(busy)}>Pobierz CSV niedoręczonych</button>` : '')
-    + '</div>';
+  const failed = keys.filter((k) => k !== 'delivered').reduce((sum, k) => sum + count(k), 0);
+  return section('Wynik', stackBar(keys.map((k) => ({ tone: REPORT_TONE[k] ?? 'plain', value: count(k) })))
+    + tiles(
+      tile('Doręczone', num(count('delivered')), percent(count('delivered'), d.recipients), 'ok'),
+      tile('Niedoręczone', num(count('failed')), percent(count('failed'), d.recipients)),
+      tile('Przedawnione', num(count('expired')), percent(count('expired'), d.recipients)),
+      tile('Razem', num(d.recipients), 'odbiorców'),
+    )
+    + (others.length > 0 ? note(`Pozostałe stany: ${others.join(', ')}`) : ''))
+    + section('Doręczenia w kolejnych godzinach', chart)
+    + section('Niedoręczone według przyczyny', reasons + buttons(
+      button('Pobierz raport CSV', { act: 'csv', kind: 'primary', disabled: busy, data: { file: 'report' } }),
+      failed > 0 ? button('Pobierz CSV niedoręczonych', { act: 'csv', disabled: busy, data: { file: 'failed' } }) : '',
+    ));
 }
 
-function recipientsTable(d) {
+function recipientsSection(d, busy) {
   if (d.items.length === 0) return '';
-  const rows = d.items.map((i) => `<tr><td class="mono nw">${esc(phoneLabel(i.to))}</td><td>${esc(i.clientId ?? '')}</td>`
+  const rows = d.items.map((i) => `<tr><td class="nw">${esc(phoneLabel(i.to))}</td><td>${esc(i.clientId ?? '')}</td>`
     + `<td>${esc(i.statusLabel)}</td><td class="nw">${i.changed ? stamp(i.changed.at) : ''}</td></tr>`).join('');
-  return '<div class="chart-title"><span>Odbiorcy</span></div>'
-    + `<table><tr><th>Numer</th><th>Identyfikator klienta</th><th>Stan</th><th>Zmiana stanu</th></tr>${rows}</table>`
-    + (d.hasMore ? note(`Tabela pokazuje ${d.items.length === 1 ? 'pierwszego odbiorcę' : `pierwszych ${d.items.length} odbiorców`}, a pełną listę zawiera raport CSV`) : '');
+  return section('Odbiorcy', `<table><tr><th>Numer</th><th>Klient</th><th>Stan</th><th>Zmiana</th></tr>${rows}</table>`
+    + (d.hasMore ? buttons(button('Pokaż kolejnych odbiorców', { act: 'more', disabled: busy })) : ''));
 }
 
 /** HTML widoku rozsyłki; `state.busy` w trakcie wywołania. */
 export function renderPackage(d, state = {}) {
   const busy = state.busy === true;
-  const waiting = d.report === null && !packageSettled(d);
-  return `<p class="who">Rozsyłka <b class="mono">${esc(d.id)}</b> · ${esc(d.statusLabel)} · przyjęta ${stamp(d.created.at)} · ${esc(d.source)}</p>`
-    + (d.report === null ? progressPanel(d) : reportPanel(d, busy))
-    + (waiting ? note(d.final ? 'Rozsyłka została zakończona. Raport doręczeń jeszcze nie jest gotowy, a widok sam sprawdza jego stan.'
-      : 'Liczby w stanach, przyczyny niedoręczeń i pliki CSV pojawią się po raporcie doręczeń') : '')
-    + recipientsTable(d);
+  return section(`Rozsyłka ${d.id}`, fields(
+    field('Stan', `<div class="txt">${badge(PACKAGE_TONE[d.status] ?? 'wait', d.statusLabel)}</div>`), field('Przyjęta', txt(stamp(d.created.at))),
+    field('Źródło', txt(d.source)), field('Odbiorcy', txt(num(d.recipients))),
+  ))
+    + (d.report === null ? progressSection(d) : reportSections(d, busy))
+    + recipientsSection(d, busy);
 }
 
 /** Uruchomienie widoku rozsyłki w dokumencie. */
@@ -121,7 +141,11 @@ export function startPackage(win, env) {
   const draw = () => {
     if (s.data) root.innerHTML = renderPackage(s.data, s);
   };
-  const args = () => ({ packageId: s.data.id, ...(s.input?.limit ? { limit: s.input.limit } : {}) });
+  // Odświeżenie obejmuje wszystkich doładowanych odbiorców, najwyżej 200 w jednym odczycie.
+  const args = () => {
+    const limit = Math.min(PAGE_MAX, Math.max(s.input?.limit ?? 25, s.data.items.length));
+    return { packageId: s.data.id, ...(limit === 25 ? {} : { limit }) };
+  };
   const end = (why, text) => {
     s.watching = false;
     live.textContent = LIVE_TEXT[why] ?? '';
@@ -131,7 +155,7 @@ export function startPackage(win, env) {
     if (s.watching || packageSettled(s.data)) return;
     s.watching = true;
     live.textContent = LIVE_TEXT.watching;
-    watchPackage(bridge, win, args(), { onData: (data) => { s.data = data; draw(); }, onEnd: end });
+    watchPackage(bridge, win, args, { onData: (data) => { s.data = data; draw(); }, onEnd: end });
   };
   const show = (result) => {
     if (result.isError) return say('fail', textOf(result));
@@ -172,12 +196,22 @@ export function startPackage(win, env) {
     show(await bridge.callTool('package_status', args()));
   }));
   root.addEventListener('click', (event) => {
-    const button = event.target.closest?.('button[data-act="csv"]');
+    const button = event.target.closest?.('button[data-act]');
     if (!button || button.disabled) return;
-    run(async () => {
-      const result = await bridge.callTool('package_report', { packageId: s.data.id, file: button.dataset.file });
-      if (result.isError) return say('fail', textOf(result));
-      return openDownload(bridge, say, result.structuredContent);
-    });
+    if (button.dataset.act === 'more') {
+      run(async () => {
+        const result = await bridge.callTool('package_status', { packageId: s.data.id, offset: s.data.items.length, limit: s.input?.limit ?? 25 });
+        if (result.isError) return say('fail', textOf(result));
+        const next = result.structuredContent;
+        s.data = { ...next, items: [...s.data.items, ...next.items] };
+        return say('plain', '');
+      });
+    } else if (button.dataset.act === 'csv') {
+      run(async () => {
+        const result = await bridge.callTool('package_report', { packageId: s.data.id, file: button.dataset.file });
+        if (result.isError) return say('fail', textOf(result));
+        return openDownload(bridge, say, result.structuredContent);
+      });
+    }
   });
 }

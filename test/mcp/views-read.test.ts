@@ -1,10 +1,10 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { button, buttons, forwardedText, num, tile, tiles } from '../../src/mcp/views/client/bridge.js';
+import { button, buttons, field, forwardedText, num, tile, tiles, txt } from '../../src/mcp/views/client/bridge.js';
 import { barChart } from '../../src/mcp/views/client/chart.js';
 import { REMIND_MESSAGE, renderCampaign } from '../../src/mcp/views/client/kampania.js';
 import { refreshQuery, renderReplies, startReplies } from '../../src/mcp/views/client/odpowiedzi.js';
-import { PACKAGE_REFRESH_MAX_MS, PACKAGE_REFRESH_MS, packageSettled, renderPackage, watchPackage } from '../../src/mcp/views/client/rozsylka.js';
+import { PACKAGE_REFRESH_MAX_MS, PACKAGE_REFRESH_MS, packageSettled, renderPackage, startPackage, watchPackage } from '../../src/mcp/views/client/rozsylka.js';
 import { TOOLS } from '../../src/mcp/tools/index.ts';
 import { BUILT_VIEWS, viewHtml } from '../../src/mcp/views/index.ts';
 
@@ -131,38 +131,46 @@ describe('wiadomości widoków do rozmowy', () => {
   });
 });
 
-/** Atrapa dokumentu widoku odpowiedzi: elementy z identyfikatorami, kliknięcie odgrywane na korzeniu. */
-function repliesWindow() {
+/** Atrapa dokumentu widoku: elementy z identyfikatorami, zegar i kliknięcie odgrywane na korzeniu treści. */
+function viewWindow() {
   const listeners: Array<(event: { data: unknown; source: unknown }) => void> = [];
   const sent: Array<{ id?: number; method?: string; params?: Record<string, unknown> }> = [];
   const element = () => {
     const handlers = new Map<string, (event: unknown) => void>();
-    return { innerHTML: '', textContent: '', hidden: false, className: '', handlers, addEventListener: (type: string, fn: (event: unknown) => void) => handlers.set(type, fn) };
+    return {
+      innerHTML: '', textContent: '', hidden: false, className: '', handlers, querySelector: () => null,
+      addEventListener: (type: string, fn: (event: unknown) => void) => handlers.set(type, fn),
+    };
   };
-  const nodes = { tresc: element(), odswiez: element(), komunikat: element() };
+  const nodes = { tresc: element(), odswiez: element(), komunikat: element(), 'na-zywo': element() };
   const parent = { postMessage: (msg: (typeof sent)[number]) => sent.push(msg) };
   const win = {
     parent, document: { getElementById: (id: keyof typeof nodes) => nodes[id], documentElement: { dataset: {}, style: { setProperty: () => undefined } } },
     addEventListener: (type: string, fn: (event: { data: unknown; source: unknown }) => void) => { if (type === 'message') listeners.push(fn); },
+    setTimeout: () => undefined,
   };
   const deliver = (data: unknown) => { for (const fn of listeners) fn({ data, source: parent }); };
-  const click = (act: string, id: string) => {
-    const button = { dataset: { act, id }, disabled: false };
-    nodes.tresc.handlers.get('click')!({ target: { closest: (sel: string) => (sel.includes('data-act') ? button : null) } });
+  const click = (dataset: Record<string, string>) => {
+    const button = { dataset, disabled: false };
+    nodes.tresc.handlers.get('click')!({ target: { closest: (sel: string) => (sel.includes('data-act') ? button : null) }, preventDefault: () => undefined });
   };
-  return { win, nodes, sent, deliver, click };
+  const ready = async () => {
+    deliver({ jsonrpc: '2.0', id: sent[0]!.id, result: { protocolVersion: '2026-01-26', hostInfo: { name: 'a', version: '1' }, hostCapabilities: { serverTools: {} }, hostContext: {} } });
+    await tick();
+  };
+  const lastCall = () => sent.filter((m) => m.method === 'tools/call').at(-1)!;
+  return { win, nodes, sent, deliver, click, ready, lastCall };
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('wysłanie odpowiedzi w widoku', () => {
   it('potwierdzenie wysłania odpowiedzi pojawia się raz, przy pozycji, a komunikat pod tabelą zostaje pusty', async () => {
-    const w = repliesWindow();
+    const w = viewWindow();
     startReplies(w.win, { version: '1.12.0' });
-    w.deliver({ jsonrpc: '2.0', id: w.sent[0]!.id, result: { protocolVersion: '2026-01-26', hostInfo: { name: 'a', version: '1' }, hostCapabilities: { serverTools: {} }, hostContext: {} } });
-    await tick();
+    await w.ready();
     w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { items: [ITEMS[0]], drafts: [DRAFTS[0]] }, _meta: { confirm: 'k' } } });
-    w.click('send', 'in_1');
+    w.click({ act: 'send', id: 'in_1' });
     await tick();
     const call = w.sent.find((m) => m.method === 'tools/call')!;
     expect(call.params).toEqual({ name: 'send_reply', arguments: { draftId: 'drf_in_1', confirm: 'k' } });
@@ -187,22 +195,65 @@ describe('potwierdzenie wiadomości do rozmowy', () => {
 });
 
 describe('widok postępu rozsyłki', () => {
-  it('renderPackage w trakcie: postęp z remaining, po raporcie: przyczyny z liczbami', () => {
+  it('renderPackage w trakcie: sekcje rozsyłki, postępu i odbiorców, kafle postępu i przycisk kolejnych odbiorców', () => {
     const live = renderPackage(PACKAGE);
-    // Liczby z odstępem tysięcy jak w panelu kampanii.
-    expect(live).toContain('Przekazano do Multiinfo <b>840</b> z 1\u00a0240, do wysłania pozostało 400');
+    expect(sections(live)).toEqual(['Rozsyłka pkg_7x2', 'Postęp', 'Odbiorcy']);
+    expect(live).toContain(field('Stan', '<div class="txt"><span class="badge b-wait">w trakcie wysyłania</span></div>'));
+    expect(live).toContain(field('Odbiorcy', txt(num(1240))));
+    expect(live).toContain(tiles(tile('Odbiorcy', num(1240), 'w rozsyłce'), tile('Przekazane', num(840), 'do Multiinfo'),
+      tile('Do wysłania', num(400), 'w kolejce Multiinfo'), tile('Raport', 'po wysyłce', 'widok sprawdza co 30 s')));
+    expect(live).toContain('Liczby w stanach, przyczyny niedoręczeń i pliki CSV pojawią się po raporcie doręczeń');
     expect(live).not.toContain('data-act="csv"');
-    expect(live).toContain('K-7');
-    expect(live).toContain('<p class="stack-note">Przekazano');
-    expect(live).toContain('Tabela pokazuje pierwszego odbiorcę, a pełną listę zawiera raport CSV');
-    expect(renderPackage({ ...PACKAGE, items: [PACKAGE.items[0], PACKAGE.items[0]] })).toContain('Tabela pokazuje pierwszych 2 odbiorców');
+    expect(live).toContain('<tr><td class="nw">48601000061</td><td>K-7</td><td>czeka na raport</td><td class="nw"></td></tr>');
+    expect(live).toContain(buttons(button('Pokaż kolejnych odbiorców', { act: 'more' })));
+    expect(renderPackage({ ...PACKAGE, hasMore: false })).not.toContain('data-act="more"');
+    expect(renderPackage({ ...PACKAGE, remaining: null })).toContain(tile('Przekazane', '-', 'czeka na Multiinfo'));
+  });
+
+  it('renderPackage po raporcie: kafle wyniku, wykres doręczeń i przyczyny z przyciskami plików', () => {
     const done = renderPackage(REPORTED);
-    expect(done).toContain('doręczone <b>1\u00a0198</b>');
-    expect(done).toContain('przedawnione <b>12</b>');
+    expect(sections(done)).toEqual(['Rozsyłka pkg_7x2', 'Wynik', 'Doręczenia w kolejnych godzinach', 'Niedoręczone według przyczyny', 'Odbiorcy']);
+    expect(done).toContain(field('Stan', '<div class="txt"><span class="badge b-ok">zakończona</span></div>'));
+    expect(done).toContain(tiles(tile('Doręczone', num(1198), '96,6 %', 'ok'), tile('Niedoręczone', num(30), '2,4 %'),
+      tile('Przedawnione', num(12), '1,0 %'), tile('Razem', num(1240), 'odbiorców')));
     expect(done).toContain('<td>Numer nie istnieje &lt;b&gt;albo&lt;/b&gt; jest nieaktywny</td><td class="num">30</td>');
-    expect(done).toContain('data-file="failed"');
-    expect(done).toContain('data-file="report"');
+    expect(done).toContain(buttons(button('Pobierz raport CSV', { act: 'csv', kind: 'primary', data: { file: 'report' } }),
+      button('Pobierz CSV niedoręczonych', { act: 'csv', data: { file: 'failed' } })));
     expect(done).toContain('<title>2026-11-15 10:00, doręczenia: 598</title>');
+    const others = renderPackage({ ...REPORTED, report: { ...REPORTED.report, byStatus: { delivered: 10, cancelled: 2, blocked: 1 } } });
+    expect(others).toContain('Pozostałe stany: zablokowane 1, anulowane 2');
+    expect(renderPackage({ ...REPORTED, report: { ...REPORTED.report, byStatus: { delivered: 1240 } } })).not.toContain('data-file="failed"');
+  });
+
+  it('watchPackage: argumenty wywołania obliczane przy każdym odczycie, gdy przekazano funkcję', async () => {
+    let limit = 25;
+    const calls: unknown[] = [];
+    const timers: Array<() => void> = [];
+    const bridge = { callTool: async (_name: string, args: unknown) => { calls.push(args); return { structuredContent: PACKAGE }; } };
+    const win = { setTimeout: (fn: () => void) => { timers.push(fn); } };
+    watchPackage(bridge, win, () => ({ packageId: 'pkg_7x2', limit }), { onData: () => undefined, onEnd: () => undefined });
+    timers.shift()!();
+    await tick();
+    limit = 50;
+    timers.shift()!();
+    await tick();
+    expect(calls).toEqual([{ packageId: 'pkg_7x2', limit: 25 }, { packageId: 'pkg_7x2', limit: 50 }]);
+  });
+
+  it('startPackage: „Pokaż kolejnych odbiorców” pobiera porcję od liczby pokazanych i dopisuje ją do tabeli', async () => {
+    const w = viewWindow();
+    startPackage(w.win, { version: '1.12.0' });
+    await w.ready();
+    w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [], structuredContent: PACKAGE } });
+    w.click({ act: 'more' });
+    await tick();
+    expect(w.lastCall().params).toEqual({ name: 'package_status', arguments: { packageId: 'pkg_7x2', offset: 1, limit: 25 } });
+    const next = { ...PACKAGE, items: [{ ...PACKAGE.items[0], to: '48601000062', clientId: 'K-8' }], hasMore: false };
+    w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, result: { content: [], structuredContent: next } });
+    await tick();
+    expect(w.nodes.tresc.innerHTML).toContain('<td class="nw">48601000061</td><td>K-7</td>');
+    expect(w.nodes.tresc.innerHTML).toContain('<td class="nw">48601000062</td><td>K-8</td>');
+    expect(w.nodes.tresc.innerHTML).not.toContain('data-act="more"');
   });
 
   it('packageSettled: koniec odświeżania po raporcie albo po stanie ostatecznym bez raportu', () => {
