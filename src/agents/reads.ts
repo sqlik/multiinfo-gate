@@ -1,5 +1,6 @@
 import { packageStatusLabel, stageLabel, statusLabel } from '../admin/views/status-labels.ts';
 import { presentMessage } from '../api/messages.ts';
+import { handoverAt } from '../api/schedule.ts';
 import type { ApiDeps } from '../api/server.ts';
 import { AgentError } from '../integrations/agent.ts';
 import { sourceLabel } from '../integrations/source-label.ts';
@@ -27,6 +28,14 @@ export interface PackageStatusData {
   id: string; status: PackageStatus; statusLabel: string; final: boolean; recipients: number; remaining: number | null; created: Stamp; source: string;
   report: { byStatus: Record<string, number>; reasons: Array<{ description: string; count: number }>; deliveredByHour: Array<{ hour: string; count: number }> } | null;
   items: Array<{ to: string; clientId: string | null; status: string; statusLabel: string; changed: Stamp | null }>; hasMore: boolean;
+  /** Termin rozsyłki; chwila przekazania wyłącznie w stanie `scheduled`. */
+  schedule: { startAt: Stamp; handoverAt: Stamp | null } | null;
+  /** Agent może anulować rozsyłkę: własna, czekająca na przekazanie, przy zakresie wysyłki. */
+  cancellable: boolean;
+}
+
+export interface PackageListItem {
+  id: string; status: PackageStatus; statusLabel: string; recipients: number; created: Stamp; startAt: Stamp | null; source: string;
 }
 
 export interface CampaignResultsData {
@@ -82,7 +91,7 @@ const ZONED_TIME = /(?:Z|[+-]\d{2}:?\d{2})$/i;
  * Chwila z pola zapytania. Data i godzina bez strefy oznaczają czas polski, ponieważ agent przepisuje „od wczoraj
  * 14:00” z rozmowy. Sam dzień oznacza jego początek, a jako koniec przedziału koniec tego dnia w Polsce.
  */
-function instant(name: string, value: string, end = false): string {
+export function instant(name: string, value: string, end = false): string {
   const v = value.trim();
   const local = LOCAL_TIME.exec(v);
   try {
@@ -175,6 +184,12 @@ export function sentByAgent(deps: Pick<ReadDeps, 'connectionsRepo'>, ctx: Connec
   return m.agentConnectionId !== null && deps.connectionsRepo.get(m.agentConnectionId)?.integrationId === ctx.integration.id;
 }
 
+/** Rozsyłka wysłana przez integrację agenta albo przez połączenie tej integracji, także do grupy; tylko taką agent anuluje. */
+export function ownPackage(deps: Pick<ReadDeps, 'connectionsRepo'>, ctx: ConnectionContext, p: PackageRow): boolean {
+  if (p.integrationId === ctx.integration.id) return true;
+  return p.agentConnectionId !== null && deps.connectionsRepo.get(p.agentConnectionId)?.integrationId === ctx.integration.id;
+}
+
 function messageEntry(deps: ReadDeps, ctx: ConnectionContext, m: MessageRow): TraceEntry {
   const agentSent = sentByAgent(deps, ctx, m);
   return {
@@ -263,6 +278,23 @@ export function packageStatus(deps: ReadDeps, ctx: ConnectionContext, packageId:
     },
     items: rows.slice(0, limit).map((r) => ({
       to: r.dest, clientId: r.clientId, ...recipientState(r, reported), changed: r.status === null ? null : reportStamp(r.statusChangedAt),
+    })),
+    hasMore: rows.length > limit,
+    schedule: p.startAt === null ? null : {
+      startAt: stamp(p.startAt), handoverAt: p.status === 'scheduled' ? stamp(handoverAt(p.startAt, p.createdAt)) : null,
+    },
+    cancellable: (p.status === 'scheduled' || p.status === 'overdue') && (ctx.scopes.has('send') || ctx.scopes.has('send_group')) && ownPackage(deps, ctx, p),
+  };
+}
+
+/** Rozsyłki klucza od najnowszej, z filtrem stanu i porcjami, na przykład zaplanowane na pytanie „Co mamy zaplanowane?”. */
+export function listPackages(deps: ReadDeps, ctx: ConnectionContext, q: { status?: PackageStatus | undefined } & Page): { items: PackageListItem[]; hasMore: boolean } {
+  const { offset, limit } = pageOf(q);
+  const rows = deps.packages.list({ apiKeyId: ctx.key.id, ...(q.status === undefined ? {} : { statuses: [q.status] }), limit: limit + 1, offset });
+  return {
+    items: rows.slice(0, limit).map((p) => ({
+      id: p.id, status: p.status, statusLabel: packageStatusLabel(p.status), recipients: p.recipientsCount, created: stamp(p.createdAt),
+      startAt: p.startAt === null ? null : stamp(p.startAt), source: sourceLabel(deps, p),
     })),
     hasMore: rows.length > limit,
   };

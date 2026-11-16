@@ -1,5 +1,6 @@
 import { effectiveExpiry } from '../../agents/connections.ts';
 import { SCOPE_LABELS } from '../../agents/scopes.ts';
+import { CANCEL_WINDOW_TEXT, START_AT_MAX_MS } from '../../api/schedule.ts';
 import { senderOptions } from '../../integrations/agent.ts';
 import { warsawStamp } from '../../time/warsaw.ts';
 import { z } from '../../zod.ts';
@@ -47,6 +48,7 @@ export const connectionStatusTool: ToolDef = {
     const window = deps.guards.peek(conn.integration.id, windowMinutes, now);
     const resetsAt = window.windowStart === null ? null : new Date(Date.parse(window.windowStart) + windowMinutes * MIN).toISOString();
     const groups = deps.integrations.listForKey(conn.key.id).filter((i) => i.kind === 'sms_group' && i.enabled === 1).length;
+    const schedule = conn.scopes.has('send') || conn.scopes.has('send_group') ? { maxDays: START_AT_MAX_MS / 86_400_000 } : null;
 
     const lines = [
       `Połączenie: ${conn.connection.name}, integracja ${conn.integration.name}.`,
@@ -59,13 +61,15 @@ export const connectionStatusTool: ToolDef = {
       `Ochrona przed burzą: wykorzystano ${window.count} z ${limit} wysyłek i ${window.recipients} z ${recipientLimit} odbiorców w oknie ${windowMinutes} minut.`
         + (resetsAt === null ? '' : ` Okno kończy się ${warsawStamp(resetsAt)} czasu polskiego.`),
       `Grupy SMS klucza: ${groups}.`,
+      ...(schedule === null ? [] : [`Wysyłka z terminem przyjmuje termin najwyżej ${schedule.maxDays} dni naprzód. ${CANCEL_WINDOW_TEXT}. Rozsyłkę anuluje narzędzie cancel_package.`
+        + (conn.scopes.has('read_sent') ? ' Zaplanowane rozsyłki pokazuje narzędzie list_packages.' : '')]),
     ];
     return {
       text: lines.join('\n'),
       structured: {
         available: true, connection: conn.connection.name, integration: conn.integration.name, scopes, expiresAt, services, senders: options.senders, orig: options.orig,
         maxParts: config.maxParts, overflow: config.overflow, ratePerMin: conn.key.ratePerMin,
-        guard: { calls: window.count, callLimit: limit, recipients: window.recipients, recipientLimit, windowMinutes, resetsAt }, groups,
+        guard: { calls: window.count, callLimit: limit, recipients: window.recipients, recipientLimit, windowMinutes, resetsAt }, groups, schedule,
       },
     };
   },

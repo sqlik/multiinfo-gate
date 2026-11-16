@@ -3,7 +3,8 @@ import { button, buttons, field, tile, tiles, txt } from '../../src/mcp/views/cl
 import { renderStatus } from '../../src/mcp/views/client/co-moge.js';
 import { renderGroup } from '../../src/mcp/views/client/grupa.js';
 import { renderTrace, sayAt, startTrace } from '../../src/mcp/views/client/przebieg.js';
-import { linkMarkup, renderSend } from '../../src/mcp/views/client/send.js';
+import { linkMarkup, renderSend, startSend } from '../../src/mcp/views/client/send.js';
+import { SERVER_INSTRUCTIONS } from '../../src/mcp/instructions.ts';
 import { TOOLS } from '../../src/mcp/tools/index.ts';
 import { BUILT_VIEWS, viewHtml } from '../../src/mcp/views/index.ts';
 
@@ -318,5 +319,78 @@ describe('dokumenty widoków wysyłki, grupy i przebiegu', () => {
       expect(viewHtml(view)).toContain('<script type="module">');
     }
     expect(viewHtml('przebieg')).toContain('function renderSend');
+  });
+});
+
+describe('wysyłka z terminem w widokach', () => {
+  const SCHEDULE = { startAt: '2026-11-20T07:00:00.000Z', handoverAt: '2026-11-20T06:50:00.000Z' };
+  const CANCEL_HINT = 'Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem';
+  const SCHEDULED = { ...PREVIEW, recipients: 1, route: 'package', schedule: SCHEDULE };
+  const PACKAGE_SENT = { kind: 'package', id: 'pkg_9', recipients: 1, repeated: false, schedule: SCHEDULE };
+
+  it('widok wysyłki z terminem: wiersz Termin, przycisk Zaplanuj, po wysyłce kafel Zaplanowana na i Anuluj rozsyłkę', () => {
+    const html = renderSend(SCHEDULED, {});
+    expect(html).toContain(field('Termin', txt('2026-11-20 08:00'), CANCEL_HINT));
+    expect(html).toContain(button('Zaplanuj rozsyłkę do 1 odbiorcy', { act: 'send', kind: 'primary' }));
+    expect(html).toContain('<p class="lead">Rozsyłka z terminem, raport doręczeń po zakończeniu rozsyłki</p>');
+    expect(renderSend(PREVIEW, {})).not.toContain('<span class="lbl">Termin</span>');
+
+    const after = renderSend(SCHEDULED, { sent: PACKAGE_SENT });
+    expect(after).toContain(tile('Zaplanowana na', '2026-11-20 08:00', 'anulowanie do 07:50'));
+    expect(after).toContain('<div class="sent">Zaplanowano rozsyłkę <span class="mono">pkg_9</span> do 1 odbiorcy na 2026-11-20 08:00</div>');
+    expect(after).toContain(button('Anuluj rozsyłkę', { act: 'cancel-package', kind: 'danger' }));
+    expect(after).not.toContain('Sprawdź postęp rozsyłki');
+    const cancelled = renderSend(SCHEDULED, { sent: PACKAGE_SENT, cancelled: true });
+    expect(cancelled).toContain('<div class="sent">Rozsyłka <span class="mono">pkg_9</span> została anulowana</div>');
+    expect(cancelled).toContain(tile('Rozsyłka', 'anulowana', 'przed przekazaniem do Multiinfo'));
+    expect(cancelled).not.toContain('data-act="cancel-package"');
+  });
+
+  it('widok grupy z terminem: wiersz Termin, przycisk Zaplanuj, po wysyłce kafel Zaplanowana na i Anuluj rozsyłkę', () => {
+    const scheduled = { ...GROUP, schedule: SCHEDULE };
+    const html = renderGroup(scheduled, []);
+    expect(html).toContain(field('Termin', txt('2026-11-20 08:00'), CANCEL_HINT));
+    expect(html).toContain(button('Zaplanuj wysyłkę do 2 osób', { act: 'send', kind: 'primary' }));
+    expect(html).toContain('Odbiorcy rozsyłki z terminem pochodzą z listy grupy w chwili zatwierdzenia');
+    const after = renderGroup(scheduled, [], { sent: { ...PACKAGE_SENT, recipients: 2 } });
+    expect(after).toContain(tile('Zaplanowana na', '2026-11-20 08:00', 'anulowanie do 07:50'));
+    expect(after).toContain('<div class="sent">Zaplanowano rozsyłkę <span class="mono">pkg_9</span> do 2 odbiorców na 2026-11-20 08:00</div>');
+    expect(after).toContain(button('Anuluj rozsyłkę', { act: 'cancel-package', kind: 'danger' }));
+  });
+
+  it('startSend: „Anuluj rozsyłkę” po zaplanowaniu woła cancel_package i pokazuje anulowanie', async () => {
+    const w = viewWindow();
+    startSend(w.win, { version: '1.13.0' });
+    w.deliver({ jsonrpc: '2.0', id: w.sent[0]!.id, result: { protocolVersion: '2026-01-26', hostInfo: { name: 'a', version: '1' }, hostCapabilities: { serverTools: {} }, hostContext: {} } });
+    await tick();
+    w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [], structuredContent: SCHEDULED, _meta: { confirm: 'mig_cf_x' } } });
+    w.click({ act: 'send' });
+    await tick();
+    const send = w.sent.filter((m) => m.method === 'tools/call').at(-1)!;
+    w.deliver({ jsonrpc: '2.0', id: send.id, result: { content: [], structuredContent: PACKAGE_SENT } });
+    await tick();
+    w.click({ act: 'cancel-package' });
+    await tick();
+    const cancel = w.sent.filter((m) => m.method === 'tools/call').at(-1)!;
+    expect(cancel.params).toEqual({ name: 'cancel_package', arguments: { id: 'pkg_9' } });
+    w.deliver({ jsonrpc: '2.0', id: cancel.id, result: { content: [{ type: 'text', text: 'Rozsyłka pkg_9 została anulowana.' }], structuredContent: { id: 'pkg_9', status: 'cancelled' } } });
+    await tick();
+    expect(w.nodes.tresc.innerHTML).toContain('została anulowana</div>');
+    expect(w.nodes.tresc.innerHTML).not.toContain('data-act="cancel-package"');
+  });
+
+  it('instrukcje serwera i Co mogę?: termin, anulowanie, granica 30 dni, list_packages', () => {
+    expect(SERVER_INSTRUCTIONS).toContain('startAt');
+    expect(SERVER_INSTRUCTIONS).toContain('najwyżej 30 dni naprzód');
+    expect(SERVER_INSTRUCTIONS).toContain('cancel_package');
+    expect(SERVER_INSTRUCTIONS).toContain('list_packages');
+    const status = renderStatus({
+      available: true, connection: 'Ewa Nowak', integration: 'Agent AI - biuro handlowe', scopes: [{ id: 'send', label: 'Wysyłka SMS' }], expiresAt: null,
+      services: [{ id: '12345', label: 'Serwis' }], maxParts: 3, overflow: 'reject', ratePerMin: 60, groups: 0,
+      guard: { calls: 0, callLimit: 30, recipients: 0, recipientLimit: 1000, windowMinutes: 60, resetsAt: null },
+      schedule: { maxDays: 30 },
+    });
+    expect(status).toContain('<h3>Wysyłka z terminem</h3>');
+    expect(status).toContain(`Termin może przypadać najwyżej 30 dni naprzód. ${CANCEL_HINT}.`);
   });
 });

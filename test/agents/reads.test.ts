@@ -3,7 +3,7 @@ import type { Database } from 'better-sqlite3';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { cancelMessage, FINAL_STATUSES } from '../../src/api/cancel-message.ts';
 import { ApiError } from '../../src/api/errors.ts';
-import { answersTo, campaignResults, deliveryTrace, listInbound, listSent, packageStatus } from '../../src/agents/reads.ts';
+import { answersTo, campaignResults, deliveryTrace, listInbound, listPackages, listSent, ownPackage, packageStatus } from '../../src/agents/reads.ts';
 import type { ConnectionContext } from '../../src/agents/connections.ts';
 import { AgentError } from '../../src/integrations/agent.ts';
 import type { AgentToolDeps } from '../../src/mcp/tools.ts';
@@ -379,5 +379,59 @@ describe('answersTo i listInbound', () => {
     const first = listInbound(deps, ctx(), { answersToPackage: 'pkg_1', offset: 0, limit: 1 });
     expect(first).toMatchObject({ hasMore: false });
     expect(first.items.map((i) => i.id)).toEqual(['in_1']);
+  });
+});
+
+describe('rozsyłki z terminem', () => {
+  /** Rozsyłka klucza agenta: z integracji agenta, z połączenia albo z API. */
+  function scheduled(id: string, status: 'scheduled' | 'overdue' | 'open', over: { integrationId?: number | null; agentConnectionId?: number | null; createdAt?: string } = {}): string {
+    deps.packages.insert({
+      id, apiKeyId: seed.keyId, accountId: seed.accountId, serviceId: '24138', defaultText: 'Przegląd klimatyzacji w czwartek.', orig: null,
+      costCenter: null, startAt: '2026-11-20T07:00:00.000Z', deliveryReport: 1, encoding: 'gsm', multipart: 0,
+      createdAt: over.createdAt ?? at(-3_600_000), status, integrationId: over.integrationId === undefined ? seed.integrationId : over.integrationId,
+      agentConnectionId: over.agentConnectionId ?? null,
+    }, [{ dest: '48601000011', text: null, clientId: null }]);
+    return id;
+  }
+
+  it('ownPackage: rozsyłka integracji agenta albo jej połączenia, nie z API ani z innej integracji', () => {
+    const group = integration('SERWIS', 'sms_group');
+    scheduled('pkg_a', 'scheduled');
+    scheduled('pkg_g', 'scheduled', { integrationId: group, agentConnectionId: seed.connectionId });
+    scheduled('pkg_api', 'scheduled', { integrationId: null });
+    scheduled('pkg_inna', 'scheduled', { integrationId: group });
+    const own = (id: string) => ownPackage(deps, ctx(), deps.packages.get(id)!);
+    expect(['pkg_a', 'pkg_g', 'pkg_api', 'pkg_inna'].map(own)).toEqual([true, true, false, false]);
+  });
+
+  it('package_status: scheduled z terminem, chwilą przekazania i cancellable; overdue bez chwili przekazania', () => {
+    scheduled('pkg_s', 'scheduled');
+    scheduled('pkg_o', 'overdue');
+    scheduled('pkg_api', 'scheduled', { integrationId: null });
+    const s = packageStatus(deps, ctx(), 'pkg_s', { offset: 0, limit: 25 });
+    expect(s).toMatchObject({
+      status: 'scheduled', statusLabel: 'zaplanowana', final: false, cancellable: true,
+      schedule: { startAt: { at: '2026-11-20T07:00:00.000Z', local: '20.11.2026 08:00' }, handoverAt: { at: '2026-11-20T06:50:00.000Z', local: '20.11.2026 07:50' } },
+    });
+    expect(packageStatus(deps, ctx(), 'pkg_o', { offset: 0, limit: 25 })).toMatchObject({
+      status: 'overdue', cancellable: true, schedule: { startAt: { local: '20.11.2026 08:00' }, handoverAt: null },
+    });
+    expect(packageStatus(deps, ctx(), 'pkg_api', { offset: 0, limit: 25 }).cancellable).toBe(false);
+    pkg('pkg_n', ['48601000011']);
+    expect(packageStatus(deps, ctx(), 'pkg_n', { offset: 0, limit: 25 })).toMatchObject({ schedule: null, cancellable: false });
+  });
+
+  it('listPackages: rozsyłki klucza od najnowszej, filtr stanu, strony, termin i źródło', () => {
+    scheduled('pkg_1', 'scheduled', { createdAt: at(-3 * 3_600_000) });
+    scheduled('pkg_2', 'open', { createdAt: at(-2 * 3_600_000) });
+    scheduled('pkg_3', 'scheduled', { createdAt: at(-3_600_000), integrationId: null });
+    const all = listPackages(deps, ctx(), { offset: 0, limit: 25 });
+    expect(all.items.map((i) => i.id)).toEqual(['pkg_3', 'pkg_2', 'pkg_1']);
+    const only = listPackages(deps, ctx(), { status: 'scheduled', offset: 0, limit: 1 });
+    expect(only).toMatchObject({ hasMore: true, items: [{
+      id: 'pkg_3', status: 'scheduled', statusLabel: 'zaplanowana', recipients: 1, source: 'API',
+      created: { at: at(-3_600_000) }, startAt: { at: '2026-11-20T07:00:00.000Z', local: '20.11.2026 08:00' },
+    }] });
+    expect(listPackages(deps, ctx(), { status: 'scheduled', offset: 1, limit: 1 }).items[0]).toMatchObject({ id: 'pkg_1', source: 'agent Agent AI - dyspozytornia' });
   });
 });

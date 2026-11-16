@@ -76,7 +76,8 @@ describe('narzędzia wysyłki przez POST /mcp', () => {
   it('tools/list z zakresami send_group i read_inbound nie zawiera prepare_sms ani send_reply', async () => {
     setup(['send_group', 'read_inbound']);
     const names = (await (await mcpSession(app, seed.secret)).tools()).map((t) => t.name);
-    expect(names).toEqual(['connection_status', 'prepare_group_sms', 'send_prepared', 'list_inbound']);
+    // Bez zakresu read_sent lista nie zawiera list_packages, a cancel_package obejmuje także zakres send_group.
+    expect(names).toEqual(['connection_status', 'prepare_group_sms', 'send_prepared', 'cancel_package', 'list_inbound']);
   });
 
   it('adnotacje: przygotowania i odczyty readOnlyHint, wysyłka i anulowanie destructiveHint, wysyłka tylko dla widoku', async () => {
@@ -84,13 +85,14 @@ describe('narzędzia wysyłki przez POST /mcp', () => {
     const tools = await (await mcpSession(app, seed.secret, { apps: true })).tools();
     const byName = new Map(tools.map((t) => [t.name, t]));
     expect([...byName.keys()]).toEqual([
-      'connection_status', 'prepare_sms', 'prepare_group_sms', 'send_prepared', 'cancel_message', 'list_messages', 'delivery_trace', 'package_status',
-      'package_report', 'list_campaigns', 'campaign_results', 'list_inbound', 'prepare_replies', 'send_reply',
+      'connection_status', 'prepare_sms', 'prepare_group_sms', 'send_prepared', 'cancel_message', 'cancel_package', 'list_messages', 'list_packages',
+      'delivery_trace', 'package_status', 'package_report', 'list_campaigns', 'campaign_results', 'list_inbound', 'prepare_replies', 'send_reply',
     ]);
     for (const name of ['prepare_sms', 'prepare_group_sms', 'prepare_replies', 'list_messages', 'delivery_trace', 'package_status', 'package_report', 'list_campaigns', 'campaign_results', 'list_inbound']) {
       expect(byName.get(name)!.annotations.readOnlyHint, name).toBe(true);
     }
-    for (const name of ['send_prepared', 'send_reply', 'cancel_message']) expect(byName.get(name)!.annotations.destructiveHint, name).toBe(true);
+    for (const name of ['send_prepared', 'send_reply', 'cancel_message', 'cancel_package']) expect(byName.get(name)!.annotations.destructiveHint, name).toBe(true);
+    expect(byName.get('list_packages')!.annotations.readOnlyHint).toBe(true);
     expect(byName.get('send_prepared')!._meta).toEqual({ ui: { visibility: ['app'] } });
     expect(byName.get('send_reply')!._meta).toEqual({ ui: { visibility: ['app'] } });
     expect(byName.get('cancel_message')!._meta).toBeUndefined();
@@ -236,5 +238,58 @@ describe('narzędzia wysyłki przez POST /mcp', () => {
     expect(res.statusCode).toBe(401);
     expect(res.json().error).toBe('invalid_token');
     expect(res.headers['www-authenticate']).toContain('error="invalid_token"');
+  });
+});
+
+describe('wysyłka z terminem i anulowanie rozsyłki przez POST /mcp', () => {
+  function pending(id: string, status: 'scheduled' | 'open', integrationId: number | null): void {
+    deps.packages.insert({
+      id, apiKeyId: seed.keyId, accountId: seed.accountId, serviceId: '24138', defaultText: 'Przegląd klimatyzacji w czwartek.', orig: null,
+      costCenter: null, startAt: '2026-11-20T07:00:00.000Z', deliveryReport: 1, encoding: 'gsm', multipart: 0,
+      createdAt: AGENT_SEED_AT.toISOString(), status, integrationId,
+    }, [{ dest: '48601000011', text: null, clientId: null }]);
+  }
+
+  it('prepare_sms i send_prepared z terminem: tekst z terminem, chwilą przekazania i oknem anulowania, wynik „Zaplanowano rozsyłkę”', async () => {
+    setup(['send', 'read_sent']);
+    const mcp = await mcpSession(app, seed.secret);
+    const prepared = await mcp.call('prepare_sms', { to: ['48601000011'], text: TEXT, startAt: '2026-11-20 08:00' });
+    const text = textOf(prepared);
+    expect(text).toContain('Termin rozpoczęcia rozsyłki: 20.11.2026 08:00 czasu polskiego. Bramka przekaże rozsyłkę do Multiinfo 20.11.2026 07:50.');
+    expect(text).toContain('Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem.');
+    expect(text).toContain('Bramka zaplanuje rozsyłkę ze wspólną treścią.');
+    const sent = await mcp.call('send_prepared', { draftId: prepared.structuredContent!.draftId });
+    expect(textOf(sent)).toMatch(/^Zaplanowano rozsyłkę pkg_\S+ do 1 odbiorcy na 20\.11\.2026 08:00 czasu polskiego\. Bramka przekaże ją do Multiinfo 20\.11\.2026 07:50, a do tej chwili rozsyłkę anuluje narzędzie cancel_package\.$/);
+    expect(sent.structuredContent).toMatchObject({ kind: 'package', schedule: { startAt: '2026-11-20T07:00:00.000Z' } });
+  });
+
+  it('cancel_package: własna rozsyłka scheduled anulowana, dziennik panelu z aktorem agent integracja · połączenie', async () => {
+    setup(['send']);
+    pending('pkg_s', 'scheduled', seed.integrationId);
+    const result = await (await mcpSession(app, seed.secret)).call('cancel_package', { id: 'pkg_s' });
+    expect(result.isError).toBeUndefined();
+    expect(textOf(result)).toBe('Rozsyłka pkg_s została anulowana.');
+    expect(result.structuredContent).toEqual({ id: 'pkg_s', status: 'cancelled' });
+    expect(deps.packages.get('pkg_s')!.status).toBe('cancelled');
+    expect(deps.audit.list(10, 0).find((e) => e.action === 'rozsylka.anulowanie')).toMatchObject({
+      actor: 'agent Agent AI - dyspozytornia · Ewa Nowak', target: 'rozsylka:pkg_s',
+    });
+  });
+
+  it('cancel_package: rozsyłka z API tego klucza daje not_own; rozsyłka open daje package_not_cancellable', async () => {
+    setup(['send']);
+    pending('pkg_api', 'scheduled', null);
+    pending('pkg_open', 'open', seed.integrationId);
+    const mcp = await mcpSession(app, seed.secret);
+    const api = await mcp.call('cancel_package', { id: 'pkg_api' });
+    expect(api.isError).toBe(true);
+    expect(textOf(api)).toBe('Agent anuluje wyłącznie rozsyłki wysłane przez integrację Agent AI - dyspozytornia. Pozostałe rozsyłki anuluje administrator w panelu bramki.');
+    expect(api.structuredContent).toEqual({ error: 'not_own' });
+    const open = await mcp.call('cancel_package', { id: 'pkg_open' });
+    expect(open.structuredContent).toEqual({ error: 'package_not_cancellable' });
+    expect(textOf(open)).toBe('Rozsyłka została już przekazana do Multiinfo, które nie pozwala jej anulować.');
+    const unknown = await mcp.call('cancel_package', { id: 'pkg_brak' });
+    expect(unknown.structuredContent).toEqual({ error: 'package_unknown' });
+    expect(deps.packages.get('pkg_api')!.status).toBe('scheduled');
   });
 });

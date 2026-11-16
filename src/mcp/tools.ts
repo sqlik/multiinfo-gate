@@ -10,8 +10,8 @@ import { z } from '../zod.ts';
 import { RPC, RpcError } from './protocol.ts';
 import { viewUri, type ViewId } from './views/index.ts';
 
-/** Zależności narzędzi: agenci, potok integracji i to z API, czego potrzebuje wysyłka. */
-export type AgentToolDeps = AgentServerDeps & PipelineDeps & Pick<ApiDeps, 'packages' | 'clients' | 'rateLimiter' | 'linksServer' | 'notifier'>;
+/** Zależności narzędzi: agenci, potok integracji i to z API, czego potrzebują wysyłka i anulowanie rozsyłki (`cancelPackage`). */
+export type AgentToolDeps = AgentServerDeps & PipelineDeps & Pick<ApiDeps, 'packages' | 'clients' | 'rateLimiter' | 'linksServer' | 'notifier' | 'deliveries'>;
 
 export interface ToolResult { text: string; structured?: Record<string, unknown>; meta?: Record<string, unknown>; isError?: boolean }
 

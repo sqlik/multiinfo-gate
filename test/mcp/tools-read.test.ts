@@ -173,3 +173,42 @@ describe('narzędzia odczytu przez POST /mcp', () => {
     expect(await mcp.call('campaign_results', { name: 'nieznana' })).toMatchObject({ isError: true, structuredContent: { error: 'campaign_unknown' } });
   });
 });
+
+describe('list_packages i package_status z terminem przez POST /mcp', () => {
+  function scheduled(id: string, status: 'scheduled' | 'overdue' | 'open', createdAt: string): void {
+    deps.packages.insert({
+      id, apiKeyId: seed.keyId, accountId: seed.accountId, serviceId: '24138', defaultText: 'Przegląd klimatyzacji w czwartek.', orig: null,
+      costCenter: null, startAt: '2026-11-20T07:00:00.000Z', deliveryReport: 1, encoding: 'gsm', multipart: 0, createdAt, status,
+      integrationId: seed.integrationId,
+    }, [{ dest: '48601000011', text: null, clientId: null }, { dest: '48601000012', text: null, clientId: null }]);
+  }
+
+  it('list_packages z filtrem scheduled: rozsyłki klucza od najnowszej z terminem (widoczność bez read_sent w tools-send)', async () => {
+    scheduled('pkg_1', 'scheduled', AGENT_SEED_AT.toISOString());
+    scheduled('pkg_2', 'open', new Date(AGENT_SEED_AT.getTime() + 60_000).toISOString());
+    scheduled('pkg_3', 'scheduled', new Date(AGENT_SEED_AT.getTime() + 120_000).toISOString());
+    const result = await (await mcpSession(app, seed.secret)).call('list_packages', { status: 'scheduled' });
+    expect(result.structuredContent!.items.map((i: { id: string }) => i.id)).toEqual(['pkg_3', 'pkg_1']);
+    expect(textOf(result)).toBe([
+      'Rozsyłki na tej stronie: 2.',
+      'pkg_3: zaplanowana, 2 odbiorców, przyjęta 15.11.2026 09:02, termin 20.11.2026 08:00, źródło: agent Agent AI - dyspozytornia.',
+      'pkg_1: zaplanowana, 2 odbiorców, przyjęta 15.11.2026 09:00, termin 20.11.2026 08:00, źródło: agent Agent AI - dyspozytornia.',
+    ].join('\n'));
+    const empty = await (await mcpSession(app, seed.secret)).call('list_packages', { status: 'overdue' });
+    expect(textOf(empty)).toBe('Bramka nie znalazła rozsyłek spełniających warunki.');
+
+  });
+
+  it('package_status: scheduled z terminem, chwilą przekazania i anulowaniem; overdue ze zdaniem o decyzji administratora', async () => {
+    scheduled('pkg_s', 'scheduled', AGENT_SEED_AT.toISOString());
+    scheduled('pkg_o', 'overdue', AGENT_SEED_AT.toISOString());
+    const mcp = await mcpSession(app, seed.secret);
+    const s = textOf(await mcp.call('package_status', { packageId: 'pkg_s' }));
+    expect(s).toContain('Termin rozpoczęcia: 20.11.2026 08:00 czasu polskiego.');
+    expect(s).toContain('Bramka przekaże rozsyłkę do Multiinfo 20.11.2026 07:50. Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem.');
+    expect(s).toContain('Rozsyłkę anuluje narzędzie cancel_package.');
+    const o = textOf(await mcp.call('package_status', { packageId: 'pkg_o' }));
+    expect(o).toContain('Bramka nie przekazała rozsyłki do Multiinfo w ciągu 60 minut od terminu. Decyzję o wysłaniu albo anulowaniu podejmuje administrator bramki.');
+    expect(o).not.toContain('Bramka przekaże');
+  });
+});

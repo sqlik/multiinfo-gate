@@ -2,8 +2,8 @@
 // przyczyny niedoręczeń, doręczenia w kolejnych godzinach i pliki CSV. Widok sam odświeża stan co 30 s,
 // a odbiorców doładowuje porcjami.
 import {
-  applyTheme, badge, button, buttons, cancelledText, createBridge, esc, field, fields, note, num, openDownload, phoneLabel, sayIn, section, stamp,
-  textOf, tile, tiles, txt,
+  applyTheme, badge, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, field, fields, note, num, openDownload, phoneLabel, sayIn, section,
+  stamp, textOf, tile, tiles, txt,
 } from './bridge.js';
 import { barChart, stackBar } from './chart.js';
 import { STATE_LABELS } from './doreczenia.js';
@@ -25,6 +25,21 @@ const LIVE_TEXT = { watching: '● na żywo, co 30 s', timeout: 'odświeżanie z
 /** Rozsyłka nie zmieni już stanu: raport jest gotowy albo rozsyłka zakończyła się bez wysyłki. */
 export function packageSettled(d) {
   return d.report !== null || (d.final === true && d.status !== 'completed');
+}
+
+/** Rozsyłka czeka w bramce na termin albo na decyzję administratora; do przekazania nie zmienia stanu sama z siebie. */
+export const packagePending = (d) => d.status === 'scheduled' || d.status === 'overdue';
+
+const OVERDUE_TEXT = 'Bramka nie przekazała rozsyłki do Multiinfo w ciągu 60 minut od terminu. Decyzję o wysłaniu albo anulowaniu podejmuje administrator bramki.';
+
+/** Rozsyłka przed przekazaniem: termin, chwila przekazania i anulowanie, gdy agent może ją anulować. */
+function pendingSection(d, busy) {
+  const scheduled = d.status === 'scheduled';
+  return section(scheduled ? 'Zaplanowana rozsyłka' : 'Termin minął', fields(
+    d.schedule ? field('Termin', txt(stamp(d.schedule.startAt.at))) : '',
+    scheduled && d.schedule?.handoverAt ? field('Przekazanie do Multiinfo', txt(stamp(d.schedule.handoverAt.at))) : '',
+  ) + note(scheduled ? CANCEL_WINDOW : OVERDUE_TEXT)
+    + (d.cancellable ? buttons(button('Anuluj rozsyłkę', { act: 'cancel-package', kind: 'danger', disabled: busy })) : ''));
 }
 
 /**
@@ -126,8 +141,9 @@ export function renderPackage(d, state = {}) {
   return section(`Rozsyłka ${d.id}`, fields(
     field('Stan', `<div class="txt">${badge(PACKAGE_TONE[d.status] ?? 'wait', d.statusLabel)}</div>`), field('Przyjęta', txt(stamp(d.created.at))),
     field('Źródło', txt(d.source)), field('Odbiorcy', txt(num(d.recipients))),
+    d.schedule && !packagePending(d) ? field('Termin', txt(stamp(d.schedule.startAt.at))) : '',
   ))
-    + (d.report === null ? progressSection(d) : reportSections(d, busy))
+    + (packagePending(d) ? pendingSection(d, busy) : d.report === null ? progressSection(d) : reportSections(d, busy))
     + recipientsSection(d, busy);
 }
 
@@ -152,7 +168,8 @@ export function startPackage(win, env) {
     if (why === 'error') say('fail', text);
   };
   const watch = () => {
-    if (s.watching || packageSettled(s.data)) return;
+    // Rozsyłka przed przekazaniem nie zmienia stanu przez wiele godzin, dlatego widok nie odświeża jej na żywo.
+    if (s.watching || packageSettled(s.data) || packagePending(s.data)) return;
     s.watching = true;
     live.textContent = LIVE_TEXT.watching;
     watchPackage(bridge, win, args, { onData: (data) => { s.data = data; draw(); }, onEnd: end });
@@ -167,7 +184,7 @@ export function startPackage(win, env) {
     say('plain', '');
     draw();
     // Ręczne odświeżenie mogło przynieść raport przed kolejnym odczytem odświeżania.
-    if (packageSettled(s.data)) live.textContent = '';
+    if (packageSettled(s.data) || packagePending(s.data)) live.textContent = '';
     return watch();
   };
   const run = async (task) => {
@@ -205,6 +222,13 @@ export function startPackage(win, env) {
         const next = result.structuredContent;
         s.data = { ...next, items: [...s.data.items, ...next.items] };
         return say('plain', '');
+      });
+    } else if (button.dataset.act === 'cancel-package') {
+      run(async () => {
+        const result = await bridge.callTool('cancel_package', { id: s.data.id });
+        if (result.isError) return say('fail', textOf(result));
+        show(await bridge.callTool('package_status', args()));
+        return say('ok', textOf(result));
       });
     } else if (button.dataset.act === 'csv') {
       run(async () => {

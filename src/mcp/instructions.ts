@@ -14,6 +14,7 @@ export const SERVER_INSTRUCTIONS = [
   '5. Gdy narzędzie odmówi, przekaż użytkownikowi komunikat bez zmian. Uprawnienia i limity zmienia wyłącznie administrator bramki.',
   '6. Duże zestawienia bramka zwraca porcjami, a pełne listy jako link do pliku CSV ważny godzinę. Plik zawiera numery telefonów, dlatego link przekazuj wyłącznie osobie uprawnionej.',
   '7. Multiinfo przekazuje SMS do sieci operatora zwykle kilka sekund po wysyłce, a od tej chwili anulowanie nie jest możliwe. Nie obiecuj anulowania wiadomości, którą bramka już wysłała.',
+  '8. Wysyłkę na określoną godzinę przygotuj z polem startAt, na przykład 2026-11-20 08:00 w czasie polskim. Termin może przypadać najwyżej 30 dni naprzód. Bramka przechowuje taką rozsyłkę do chwili przekazania do Multiinfo, zwykle 10 minut przed terminem. Do tej chwili rozsyłkę anuluje narzędzie cancel_package. Zaplanowane rozsyłki pokazuje narzędzie list_packages.',
   '',
   'Dokumentacja bramki w zainstalowanej wersji jest dostępna jako zasoby migate://docs/, na przykład migate://docs/api.md i migate://docs/agenci-ai.md.',
 ].join('\n');

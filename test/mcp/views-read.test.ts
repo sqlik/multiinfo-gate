@@ -4,7 +4,7 @@ import { button, buttons, field, forwardedText, num, tile, tiles, txt } from '..
 import { barChart } from '../../src/mcp/views/client/chart.js';
 import { REMIND_MESSAGE, remindFallback, renderCampaign } from '../../src/mcp/views/client/kampania.js';
 import { refreshQuery, renderReplies, startReplies } from '../../src/mcp/views/client/odpowiedzi.js';
-import { PACKAGE_REFRESH_MAX_MS, PACKAGE_REFRESH_MS, packageSettled, renderPackage, startPackage, watchPackage } from '../../src/mcp/views/client/rozsylka.js';
+import { PACKAGE_REFRESH_MAX_MS, PACKAGE_REFRESH_MS, packagePending, packageSettled, renderPackage, startPackage, watchPackage } from '../../src/mcp/views/client/rozsylka.js';
 import { TOOLS } from '../../src/mcp/tools/index.ts';
 import { BUILT_VIEWS, viewHtml } from '../../src/mcp/views/index.ts';
 
@@ -454,5 +454,38 @@ describe('dokumenty widoków odczytu', () => {
       expect(viewHtml(view)).toContain('<script type="module">');
     }
     expect(viewHtml('odpowiedzi')).toContain('function measure');
+  });
+});
+
+describe('widok rozsyłki z terminem', () => {
+  const SCHEDULED = {
+    ...PACKAGE, status: 'scheduled', statusLabel: 'zaplanowana', remaining: null, cancellable: true,
+    schedule: { startAt: stamp('2026-11-20T07:00:00.000Z'), handoverAt: stamp('2026-11-20T06:50:00.000Z') },
+  };
+
+  it('widok rozsyłki scheduled: bez odświeżania na żywo, Anuluj rozsyłkę tylko przy cancellable', async () => {
+    const html = renderPackage(SCHEDULED);
+    expect(html).toContain('<h3>Zaplanowana rozsyłka</h3>');
+    expect(html).toContain(field('Termin', txt('2026-11-20 08:00')));
+    expect(html).toContain(field('Przekazanie do Multiinfo', txt('2026-11-20 07:50')));
+    expect(html).toContain('Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem');
+    expect(html).toContain(button('Anuluj rozsyłkę', { act: 'cancel-package', kind: 'danger' }));
+    expect(html).not.toContain('<h3>Postęp</h3>');
+    expect(renderPackage({ ...SCHEDULED, cancellable: false })).not.toContain('data-act="cancel-package"');
+    const overdue = renderPackage({ ...SCHEDULED, status: 'overdue', statusLabel: 'termin minął', schedule: { ...SCHEDULED.schedule, handoverAt: null } });
+    expect(overdue).toContain('<h3>Termin minął</h3>');
+    expect(overdue).toContain('Bramka nie przekazała rozsyłki do Multiinfo w ciągu 60 minut od terminu. Decyzję o wysłaniu albo anulowaniu podejmuje administrator bramki.');
+    expect(overdue).not.toContain('Przekazanie do Multiinfo');
+    expect(renderPackage({ ...PACKAGE, schedule: SCHEDULED.schedule, cancellable: false })).toContain(field('Termin', txt('2026-11-20 08:00')));
+    expect([packagePending(SCHEDULED), packagePending(PACKAGE)]).toEqual([true, false]);
+
+    const w = viewWindow();
+    startPackage(w.win, { version: '1.13.0' });
+    await w.ready();
+    w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [], structuredContent: SCHEDULED } });
+    expect(w.nodes['na-zywo'].textContent).toBe('');
+    w.click({ act: 'cancel-package' });
+    await tick();
+    expect(w.lastCall().params).toEqual({ name: 'cancel_package', arguments: { id: 'pkg_7x2' } });
   });
 });

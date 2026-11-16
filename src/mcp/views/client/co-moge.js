@@ -1,6 +1,6 @@
 // Widok „Co mogę?”: uprawnienia, usługi, limity i ważność połączenia według wyniku connection_status.
 // Odświeżenie woła to samo narzędzie przez aplikację AI, bez kolejnego pytania do agenta.
-import { applyTheme, badge, createBridge, field, fields, note, plural, pluralWord, section, stamp, textOf, tile, tiles, txt } from './bridge.js';
+import { applyTheme, badge, CANCEL_WINDOW, createBridge, field, fields, note, plural, pluralWord, section, stamp, textOf, tile, tiles, txt } from './bridge.js';
 
 const connectionFields = (data) => [field('Nazwa połączenia', txt(data.connection)), field('Integracja', txt(data.integration))];
 
@@ -39,7 +39,9 @@ export function renderStatus(data, env = {}) {
     ends ? tile('Okno kończy się', ends.slice(11), ends.slice(0, 10)) : tile('Okno ochrony', 'nie otwarte', 'otworzy się przy wysyłce'),
   ) + note(`Ochrona przed burzą liczy wysyłki i odbiorców w oknie ${guard.windowMinutes} minut`));
 
-  return connection + scopes + services + limits;
+  const schedule = data.schedule
+    ? section('Wysyłka z terminem', note(`Termin może przypadać najwyżej ${data.schedule.maxDays} dni naprzód. ${CANCEL_WINDOW}.`)) : '';
+  return connection + scopes + services + schedule + limits;
 }
 
 /** Uruchomienie widoku w dokumencie: most, rysowanie wyniku i przycisk „Odśwież”. */

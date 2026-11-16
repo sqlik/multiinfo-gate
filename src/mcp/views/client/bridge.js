@@ -21,6 +21,9 @@ export function stamp(iso) {
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
+/** Okno anulowania rozsyłki z terminem, jak w panelu, API i konektorze. */
+export const CANCEL_WINDOW = 'Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem';
+
 /** Liczba z odstępem tysięcy, jak w panelu kampanii: 1 240. */
 export const num = (n) => Number(n).toLocaleString('pl-PL', { useGrouping: 'always' });
 

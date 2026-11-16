@@ -261,3 +261,52 @@ describe('prepareReplies', () => {
     expect(agentError(() => prepareReplies(deps, ctx(), [{ inboundId: system, group: 'Termin', text: 'x' }], NOW)).code).toBe('inbound_unknown');
   });
 });
+
+describe('wysyłka z terminem', () => {
+  // NOW to 2026-11-15 10:00 w Polsce, a 2026-11-20 08:00 w Polsce to 07:00 UTC.
+  const SCHEDULE = { startAt: '2026-11-20T07:00:00.000Z', handoverAt: '2026-11-20T06:50:00.000Z' };
+
+  it('prepare_sms z startAt 2026-11-20 08:00 do jednego odbiorcy: route package, schedule w czasie polskim, zdanie o anulowaniu z chwilą przekazania', () => {
+    const { preview } = sms({ startAt: '2026-11-20 08:00' });
+    expect(preview).toMatchObject({ route: 'package', recipients: 1, schedule: SCHEDULE });
+    expect(sms({ startAt: '2026-11-20T07:00:00Z' }).preview.schedule).toEqual(SCHEDULE);
+    expect(sms().preview).toMatchObject({ route: 'messages', schedule: null });
+  });
+
+  it('startAt 2026-11-20 bez godziny, 2027-03-28 02:30, w przeszłości i dalej niż 30 dni: błąd narzędzia z wyjaśnieniem', () => {
+    expect(agentError(() => sms({ startAt: '2026-11-20' }))).toMatchObject({
+      code: 'invalid', message: 'Termin rozsyłki musi zawierać datę i godzinę, na przykład 2026-11-20 08:00 w czasie polskim.',
+    });
+    expect(agentError(() => sms({ startAt: '2027-03-28 02:30' }))).toMatchObject({
+      code: 'invalid', message: 'Godzina 02:30 w dniu 28.03.2027 nie istnieje w czasie polskim z powodu zmiany czasu. Podaj inną godzinę.',
+    });
+    expect(agentError(() => sms({ startAt: '2026-11-15 09:59' }))).toMatchObject({ code: 'start_at_in_past' });
+    expect(agentError(() => sms({ startAt: '2026-12-15 10:01' }))).toMatchObject({
+      code: 'start_at_too_far', message: 'Termin rozpoczęcia rozsyłki może przypadać najwyżej 30 dni od chwili wysyłki.',
+    });
+    expect(sms({ startAt: '2026-12-15 10:00' }).preview.schedule).toEqual({ startAt: '2026-12-15T09:00:00.000Z', handoverAt: '2026-12-15T08:50:00.000Z' });
+    expect(count('agent_drafts')).toBe(1);
+  });
+
+  it('send_prepared szkicu z terminem: rozsyłka scheduled z terminem i agent_connection_id, wynik z schedule', () => {
+    const { preview } = sms({ startAt: '2026-11-20 08:00' });
+    const out = sendDraft(deps, ctx(), preview.draftId, NOW);
+    expect(out).toMatchObject({ kind: 'package', recipients: 1, repeated: false, schedule: SCHEDULE });
+    const id = (out as { id: string }).id;
+    expect(deps.packages.get(id)).toMatchObject({
+      status: 'scheduled', startAt: SCHEDULE.startAt, integrationId: seed.integrationId, agentConnectionId: seed.connectionId, requestedBy: 'Ewa Nowak',
+    });
+    expect(count('messages')).toBe(0);
+    expect(sendDraft(deps, ctx(), preview.draftId, NOW)).toMatchObject({ kind: 'package', id, repeated: true, schedule: SCHEDULE });
+  });
+
+  it('termin minął między podglądem a wysyłką: szkic nieaktualny, bez rozsyłki i bez powiadomienia', () => {
+    const { preview } = sms({ startAt: '2026-11-15 10:05' });
+    const later = new Date(NOW.getTime() + 6 * 60_000);
+    expect(agentError(() => sendDraft(deps, ctx(later), preview.draftId, later))).toMatchObject({
+      code: 'draft_stale', message: 'Termin rozsyłki minął od chwili podglądu. Przygotuj SMS ponownie z nowym terminem.',
+    });
+    expect(count('packages')).toBe(0);
+    expect(notify).not.toHaveBeenCalled();
+  });
+});

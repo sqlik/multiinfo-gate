@@ -1,6 +1,7 @@
 import { statusLabel } from '../../admin/views/status-labels.ts';
 import { createDownload } from '../../agents/downloads.ts';
-import { deliveryTrace, listSent, packageStatus, type PackageStatusData, type TraceEntry } from '../../agents/reads.ts';
+import { deliveryTrace, listPackages, listSent, packageStatus, type PackageStatusData, type TraceEntry } from '../../agents/reads.ts';
+import { CANCEL_WINDOW_TEXT } from '../../api/schedule.ts';
 import { AgentError } from '../../integrations/agent.ts';
 import { plural } from '../../text/plural.ts';
 import { warsawShort } from '../../time/warsaw.ts';
@@ -85,6 +86,12 @@ export const deliveryTraceTool: ToolDef = {
 
 function packageText(p: PackageStatusData): string {
   const lines = [`Rozsyłka ${p.id}: ${p.statusLabel}, ${plural(p.recipients, 'odbiorca', 'odbiorców', 'odbiorców')}, przyjęta ${p.created.local}, źródło: ${p.source}.`];
+  if (p.schedule !== null) lines.push(`Termin rozpoczęcia: ${p.schedule.startAt.local} czasu polskiego.`);
+  if (p.schedule?.handoverAt) lines.push(`Bramka przekaże rozsyłkę do Multiinfo ${p.schedule.handoverAt.local}. ${CANCEL_WINDOW_TEXT}.`);
+  if (p.status === 'overdue') {
+    lines.push('Bramka nie przekazała rozsyłki do Multiinfo w ciągu 60 minut od terminu. Decyzję o wysłaniu albo anulowaniu podejmuje administrator bramki.');
+  }
+  if (p.cancellable) lines.push('Rozsyłkę anuluje narzędzie cancel_package.');
   if (!p.final && p.remaining !== null) lines.push(`Do wysłania pozostało ${p.remaining} z ${p.recipients}.`);
   if (p.report === null) {
     lines.push(p.final ? 'Raport doręczeń nie jest jeszcze gotowy.' : 'Raport doręczeń będzie dostępny po zakończeniu wysyłania.');
@@ -111,6 +118,35 @@ export const packageStatusTool: ToolDef = {
     const q = raw as z.infer<typeof packageInput>;
     const data = packageStatus(ctx.deps, connOf(ctx), q.packageId, { offset: q.offset ?? 0, limit: q.limit ?? 25 });
     return { text: packageText(data), structured: asRecord(data) };
+  },
+};
+
+const PACKAGE_STATUSES = ['scheduled', 'overdue', 'queued', 'open', 'sending', 'completed', 'cancelled', 'failed'] as const;
+
+const listPackagesInput = z.object({
+  status: z.enum(PACKAGE_STATUSES).optional()
+    .describe('Stan rozsyłki, na przykład scheduled dla zaplanowanych, overdue dla rozsyłek po terminie albo completed dla zakończonych'),
+  ...pageFields,
+});
+
+export const listPackagesTool: ToolDef = {
+  name: 'list_packages',
+  title: 'Rozsyłki',
+  description: 'Pokazuje rozsyłki klucza integracji, także z innych integracji, od najnowszej: stan, liczbę odbiorców, termin i źródło. '
+    + 'Filtr scheduled odpowiada na pytanie, jakie rozsyłki są zaplanowane.',
+  scopes: ['read_sent'],
+  input: listPackagesInput,
+  annotations: READ,
+  run(ctx, raw) {
+    const q = raw as z.infer<typeof listPackagesInput>;
+    const data = listPackages(ctx.deps, connOf(ctx), { ...(q.status === undefined ? {} : { status: q.status }), offset: q.offset ?? 0, limit: q.limit ?? 25 });
+    const lines = data.items.length === 0 ? ['Bramka nie znalazła rozsyłek spełniających warunki.'] : [
+      `Rozsyłki na tej stronie: ${data.items.length}.`,
+      ...data.items.map((p) => `${p.id}: ${p.statusLabel}, ${plural(p.recipients, 'odbiorca', 'odbiorców', 'odbiorców')}, przyjęta ${p.created.local}`
+        + `${p.startAt === null ? '' : `, termin ${p.startAt.local}`}, źródło: ${p.source}.`),
+      ...(data.hasMore ? ['Kolejne rozsyłki pokazuje następna strona z większą wartością offset.'] : []),
+    ];
+    return { text: lines.join('\n'), structured: asRecord(data) };
   },
 };
 
