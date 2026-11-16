@@ -74,10 +74,10 @@ domeny skracacza na listę ostrzeżeń CERT Polska.
 Wersja 1.12 wprowadza agentów AI. Pracownik wysyła SMS-y, sprawdza przebieg doręczenia, wyniki
 kampanii i odpowiedzi klientów w rozmowie z aplikacją AI, na przykład claude.ai, ChatGPT albo
 Claude Code. Aplikacja łączy się z bramką przez protokół MCP, a claude.ai i ChatGPT wyświetlają
-w rozmowie widoki bramki z podglądem wysyłki, przebiegiem doręczenia i wykresami. Każdą wysyłkę
-zatwierdza pracownik przyciskiem w podglądzie. Agent działa w granicach integracji „Agent AI”,
-która określa zakresy, limit części i ochronę przed burzą, a pracownik łączy aplikację z bramką
-kodem jednorazowym z panelu, bez hasła.
+w rozmowie widoki bramki z podglądem wysyłki, przebiegiem doręczenia i wykresami. W tych aplikacjach
+każdą wysyłkę zatwierdza pracownik przyciskiem w podglądzie. Agent działa w granicach integracji
+„Agent AI”, która określa zakresy, limit części i ochronę przed burzą. Pracownik łączy aplikację
+z bramką kodem jednorazowym z panelu, bez hasła.
 
 ## Co trzeba mieć
 

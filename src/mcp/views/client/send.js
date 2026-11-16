@@ -79,7 +79,7 @@ function settings(p, locked) {
   const services = p.services.some((s) => s.id === p.serviceId) ? p.services : [...p.services, { id: p.serviceId, label: p.serviceId }];
   return section('Ustawienia wysyłki', fields(
     field('Nadawca', select('orig', p.senders.map((s) => option(s.value ?? '', s.label, s.value === p.orig)), locked),
-      p.orig === null ? 'Integracja, klucz i konto nie mają nadpisu domyślnego, dlatego SMS zostanie wysłany z numeru usługi, a odbiorca będzie mógł odpowiedzieć' : ''),
+      p.orig === null ? 'Integracja, klucz i konto nie określają nadpisu domyślnego, dlatego SMS zostanie wysłany z numeru usługi, a odbiorca będzie mógł odpowiedzieć' : ''),
     field('Usługa Multiinfo', select('service', services.map((s) => option(s.id, service(s), s.id === p.serviceId)), locked)),
     encodingField(p, locked),
     ...linkFields(p, locked),

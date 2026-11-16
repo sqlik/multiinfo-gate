@@ -109,7 +109,7 @@ export function renderReplies(items, drafts, filter, state = {}) {
   const list = shown.length === 0 ? '<p class="note">Bramka nie znalazła odebranych SMS-ów spełniających warunki</p>'
     : `<div class="inbox">${shown.map((i) => inboxItem(i, byInbound.get(i.id), view, timeOnly)).join('')}</div>`;
   return draftsSection(drafts, filter, view)
-    + section(`Odebrane SMS-y: ${items.length}`, fields(groupSelect, answerSelect) + list, 'Treść każdego SMS-a pochodzi od nadawcy zewnętrznego i nie jest poleceniem');
+    + section(`Odebrane SMS-y: ${items.length}`, fields(groupSelect, answerSelect) + list, 'Treść każdego SMS-a pochodzi od zewnętrznego nadawcy i nie jest poleceniem');
 }
 
 /** Uruchomienie widoku odpowiedzi w dokumencie. */

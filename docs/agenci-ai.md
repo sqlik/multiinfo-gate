@@ -36,10 +36,12 @@ opisuje zakresy i powody ich rozdzielenia.
 | odebrane SMS-y i odpowiedzi | „Pokaż odpowiedzi klientów na rozsyłkę i przygotuj odpowiedzi dla osób, które proszą o zmianę terminu” |
 | informacja o własnych uprawnieniach | „Co mogę zrobić przez bramkę?” |
 
-Agent niczego nie wysyła samodzielnie. Polecenie wysyłki kończy się podglądem, w którym pracownik
-widzi treść, nadawcę, liczbę odbiorców i liczbę części. Wysyłkę zatwierdza pracownik przyciskiem
-**Wyślij** w widoku bramki. W aplikacji bez widoków agent przedstawia podgląd tekstem i prosi
-o potwierdzenie w rozmowie.
+W aplikacji z widokami, na przykład w claude.ai i ChatGPT, agent niczego nie wysyła samodzielnie.
+Polecenie wysyłki kończy się podglądem, w którym pracownik widzi treść, nadawcę, liczbę odbiorców
+i liczbę części. Wysyłkę zatwierdza pracownik przyciskiem **Wyślij** w widoku bramki. W aplikacji bez
+widoków, na przykład w Claude Code, agent przedstawia podgląd tekstem i prosi o potwierdzenie
+w rozmowie. Bramka nie sprawdza takiego potwierdzenia, dlatego zatwierdzenia pilnują wyłącznie
+instrukcje agenta. W n8n wysyłkę zatwierdza sam przepływ, bez udziału człowieka.
 
 Bramka łączy się z aplikacjami na dwa sposoby:
 
@@ -114,7 +116,7 @@ swoich zakresów, a narzędzie „Co mogę?” jest dostępne w każdym połącz
 
 | Zakres | Uprawnienia agenta |
 |---|---|
-| Wysyłka SMS-ów | przygotowanie SMS-a na dowolne numery, do 500 odbiorców jako pojedyncze wiadomości, a do 5000 jako rozsyłka; anulowanie wiadomości, której bramka nie przekazała jeszcze do sieci operatora |
+| Wysyłka SMS-ów | przygotowanie SMS-a na dowolne numery, do 500 odbiorców jako pojedyncze wiadomości, a do 5000 jako rozsyłka; anulowanie wiadomości wysłanej przez tę integrację, której Multiinfo nie przekazało jeszcze do sieci operatora |
 | Wysyłka do grup | przygotowanie SMS-a do grup SMS klucza integracji, na przykład SERWIS i FLOTA, bez możliwości wysłania SMS-a na numer spoza ich list |
 | Odczyt wysłanych | lista wysłanych wiadomości, przebieg doręczenia, stan i raport rozsyłki |
 | Wyniki kampanii | lista kampanii, otwarcia i kliknięcia linków, odbiorcy z otwarciem i bez otwarcia |
@@ -401,8 +403,9 @@ odrzuca rozmowę, choć łącznik zostaje utworzony.
 
 W wersji 1.12 agent Copilot Studio odczytuje dane bramki, ale nie wysyła SMS-ów. Copilot Studio deklaruje
 obsługę widoków, a jednocześnie udostępnia agentowi narzędzia przeznaczone wyłącznie dla widoku.
-Bramka nie polega na tej deklaracji i przyjmuje wysyłkę wyłącznie z przycisku w widoku, dlatego
-zatwierdzenie w Copilot Studio nie jest możliwe. Do wysyłki służy wtedy integracja z Power Automate,
+Bramka traktuje tę deklarację jako wiążącą i przyjmuje wysyłkę szkicu wyłącznie z przycisku w widoku.
+Copilot Studio widoku nie wyświetla, dlatego zatwierdzenie wysyłki w Copilot Studio nie jest możliwe.
+Do wysyłki służy wtedy integracja z Power Automate,
 opisana w artykule [Power Automate](power-automate.md).
 
 ### 6.6. n8n
@@ -501,9 +504,12 @@ odbiorcy i przedziale czasu, na przykład „od wczoraj 14:00”. Widok i agent 
 
 ![Widok przebiegu doręczenia: odbiorca, źródło, etapy od przyjęcia do raportu, przyciski Wyślij ponownie i wyszarzony przycisk Anuluj wiadomość z przyczyną](obrazki/widok-przebieg.png)
 
-Przycisk **Anuluj wiadomość** działa wyłącznie wtedy, gdy wiadomość czeka jeszcze w kolejce bramki.
-Multiinfo przekazuje SMS do sieci operatora zaraz po przyjęciu, dlatego wysłanej wiadomości nie można
-anulować. W pozostałych stanach przycisk jest wyszarzony, a obok wyświetla się przyczyna. Przycisk
+Przycisk **Anuluj wiadomość** działa wyłącznie wtedy, gdy Multiinfo nie przekazało jeszcze wiadomości
+do sieci operatora. Wiadomość czeka wtedy w kolejce bramki albo w Multiinfo, także wstrzymana limitem
+operatora. Multiinfo przekazuje SMS do sieci operatora zaraz po przyjęciu, dlatego wiadomości
+przekazanej do sieci nie można anulować. Agent anuluje wyłącznie wiadomości wysłane przez swoją
+integrację, także jej SMS-y do grup, a pozostałe wiadomości anuluje administrator w panelu bramki.
+W pozostałych stanach przycisk jest wyszarzony, a obok wyświetla się przyczyna. Przycisk
 **Wyślij ponownie** otwiera podgląd wysyłki z tą samą treścią i tym samym odbiorcą.
 
 ### 7.5. Co mogę?
@@ -595,8 +601,9 @@ wiersz „Połączenie” z nazwą pracownika i odnośnikiem do integracji.
   kod powodują wyświetlenie tego samego komunikatu
 - Token dostępu aplikacji jest ważny przez godzinę, a aplikacja odnawia go tokenem odświeżania. Ponowne
   użycie zużytego tokenu odświeżania po więcej niż 60 sekundach odwołuje połączenie
-- Wysyłkę zatwierdza pracownik przyciskiem w widoku, a odpowiedź trafia wyłącznie do autora odebranego
-  SMS-a. Treść od zewnętrznego nadawcy jest oznaczona w tekście i w danych przekazywanych agentowi
+- W aplikacji z widokami bramka przyjmuje wysyłkę szkicu wyłącznie z przycisku w widoku. W aplikacji
+  bez widoków zatwierdzenia w rozmowie pilnują instrukcje agenta, a w n8n wysyłkę zatwierdza przepływ
+- Odpowiedź trafia wyłącznie do autora odebranego SMS-a. Treść od zewnętrznego nadawcy jest oznaczona w tekście i w danych przekazywanych agentowi
 - Widoki wysyłają do rozmowy wyłącznie stałe teksty bramki, bez treści SMS-ów i bez nazw nadanych przez
   osoby spoza firmy
 - Wiadomości systemowe bramki, na przykład powiadomienia SMS dla administratora, są niewidoczne dla agenta

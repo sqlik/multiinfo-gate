@@ -1,5 +1,5 @@
 // Widok „Przebieg doręczenia” według wyniku delivery_trace: pola pozycji, treść w oknie z nadawcą, oś czasu etapów
-// i kod operatora. „Anuluj wiadomość” jest zawsze widoczny: czerwony, gdy wiadomość czeka w kolejce bramki, a w pozostałych
+// i kod operatora. „Anuluj wiadomość” jest zawsze widoczny: czerwony przed przekazaniem do sieci operatora, a w pozostałych
 // stanach i po odmowie bramki wyszarzony z przyczyną. „Wyślij ponownie” przygotowuje SMS z tą samą treścią.
 import {
   applyTheme, badge, button, buttons, cancelledText, createBridge, esc, field, fields, messageBox, note, phoneLabel, sayIn, section, smsCounter,
@@ -20,14 +20,14 @@ function statusTone(status) {
 /** Zdanie przy przycisku anulowania: dlaczego można albo dlaczego nie można anulować pozycji. */
 export function cancelReason(e) {
   if (e.kind !== 'message') return 'Odbiorcy rozsyłki nie można anulować pojedynczo';
-  if (e.cancellable) return 'Wiadomość czeka w kolejce bramki, dlatego można ją jeszcze anulować';
+  if (e.cancellable) return 'Multiinfo nie przekazało jeszcze wiadomości do sieci operatora, dlatego można ją anulować';
   if (BEFORE_NETWORK.has(e.status) && e.agentSent === false) return 'Agent anuluje wyłącznie wiadomości wysłane przez tę integrację, a pozostałe anuluje administrator w panelu bramki';
   if (BEFORE_NETWORK.has(e.status)) return 'Anulowanie wymaga uprawnienia „Wysyłka SMS-ów”, które nadaje administrator bramki w integracji Agent AI';
   if (e.status === 'delivered') return 'Wiadomość została doręczona, dlatego anulowanie nie jest możliwe';
   if (e.status === 'sent') return 'Wiadomość została przekazana do sieci operatora, dlatego anulowanie nie jest możliwe';
   if (e.status === 'cancelled') return 'Wiadomość została anulowana';
   if (e.status === 'unknown') return 'Stan wiadomości jest nieznany, dlatego anulowanie nie jest możliwe';
-  return 'Wiadomość ma stan ostateczny, dlatego anulowanie nie jest możliwe';
+  return 'Wiadomość osiągnęła stan ostateczny, dlatego anulowanie nie jest możliwe';
 }
 
 /** Okno treści pozycji: nadawca albo numer usługi, licznik według kodowania wysyłki i treść, przy GSM z łacińskimi literami. */
@@ -41,6 +41,13 @@ function contentBox(e) {
   });
 }
 
+/** Oczekujący etap: przekazanie do Multiinfo, przekazanie do sieci operatora, limit operatora albo raport doręczenia. */
+function pendingStage(e) {
+  if (e.status === 'throttled') return 'Wysyłka wstrzymana limitem operatora';
+  if (e.status !== 'queued') return 'Oczekiwanie na raport doręczenia';
+  return e.stages.some((s) => s.kind === 'sent') ? 'Oczekiwanie na przekazanie do sieci operatora' : 'Oczekiwanie na przekazanie do Multiinfo';
+}
+
 function traceEntry(e, i, refused) {
   const title = e.kind === 'message' ? `Wiadomość ${e.id}` : `Odbiorca rozsyłki ${e.packageId}`;
   const details = fields(
@@ -49,7 +56,7 @@ function traceEntry(e, i, refused) {
   );
   const stages = e.stages.map((s) => `<li>${esc(s.label)}<span class="t">${esc(stamp(s.at))}</span>${s.detail ? `<div class="note">${esc(s.detail)}</div>` : ''}</li>`);
   if (WAITING.has(e.status)) {
-    stages.push(`<li class="pending">${e.status === 'queued' ? 'Oczekiwanie na przekazanie do Multiinfo' : 'Oczekiwanie na raport doręczenia'}</li>`);
+    stages.push(`<li class="pending">${pendingStage(e)}</li>`);
   }
   const timeline = `<span class="sub-lbl">Przebieg</span><ul class="timeline">${stages.join('')}</ul>`
     + (e.operator ? note(`Kod operatora ${e.operator.code}: ${e.operator.description}`) : '');

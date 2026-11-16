@@ -96,7 +96,7 @@ describe('katalog i formularz', () => {
 
   it('podpowiedź wysyłki obiecuje anulowanie tylko przed przekazaniem do sieci operatora', async () => {
     const form = (await get(NEW_FORM)).body;
-    expect(form).toContain('Może też anulować wiadomość, której bramka nie przekazała jeszcze do sieci operatora.');
+    expect(form).toContain('Może też anulować wiadomość wysłaną przez tę integrację, której Multiinfo nie przekazało jeszcze do sieci operatora.');
     expect(form).not.toContain('abonentowi');
   });
 });
@@ -156,7 +156,7 @@ describe('zapis', () => {
   it('limit odbiorców 50 001: błąd z zakresem 1-50000', async () => {
     const res = await create({ throttleRecipients: '50001', tryb: 'zaawansowany' });
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('Limit odbiorców: podaj liczbę od 1 do 50000.');
+    expect(res.body).toContain('Limit odbiorców: podaj liczbę od 1 do 50\u00a0000.');
     expect(res.body).toContain('Ochrona i dziennik');
     expect((await create({ throttleRecipients: '50000', tryb: 'zaawansowany' })).statusCode).toBe(302);
   });
@@ -234,6 +234,13 @@ describe('szczegóły, lista i kopia', () => {
     expect(body).toContain('>Nadawca</th>');
     expect(body).toContain('MCP · Ewa Nowak');
     expect(body).not.toContain('Użyj jako próbki');
+  });
+
+  it('potwierdzenie usunięcia integracji agenta mówi o połączeniach pracowników', async () => {
+    await create();
+    const body = (await get(`/integracje/${agentRow().id}`)).body;
+    expect(body).toContain('data-confirm="Usunąć integrację „Agent AI - dyspozytornia”? Dziennik i wszystkie połączenia pracowników zostaną usunięte razem z nią, a aplikacje AI utracą dostęp do bramki."');
+    expect(body).not.toContain('adres wejściowy przestanie działać');
   });
 
   it('pusty dziennik mówi o wysyłkach agenta', async () => {

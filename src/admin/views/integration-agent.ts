@@ -17,7 +17,7 @@ const hint = (text: string) => `<div class="hint">${esc(text)}</div>`;
 
 /** Co zakres pozwala agentowi zrobić, słowami administratora. */
 const SCOPE_HINTS: Record<AgentScope, string> = {
-  send: 'Agent przygotowuje SMS-y na dowolne numery oraz rozsyłki do 5000 odbiorców. Może też anulować wiadomość, której bramka nie przekazała jeszcze do sieci operatora.',
+  send: 'Agent przygotowuje SMS-y na dowolne numery oraz rozsyłki do 5000 odbiorców. Może też anulować wiadomość wysłaną przez tę integrację, której Multiinfo nie przekazało jeszcze do sieci operatora.',
   send_group: 'Agent przygotowuje SMS do grup SMS klucza tej integracji, na przykład SERWIS i FLOTA. Nie wyśle SMS-a na numer spoza list grup.',
   read_sent: 'Agent odczytuje wysłane wiadomości, przebieg doręczenia oraz stan i raport rozsyłek. Widzi także wysyłki innych integracji i aplikacji tego klucza.',
   campaigns: 'Agent odczytuje listę kampanii, otwarcia i kliknięcia linków oraz listę odbiorców z otwarciem albo bez otwarcia',

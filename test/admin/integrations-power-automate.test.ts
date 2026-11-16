@@ -187,7 +187,7 @@ describe('edycja', () => {
   it('limit odbiorców spoza 1-50000 daje 400', async () => {
     const res = await create({ throttleRecipients: '50001', tryb: 'zaawansowany' });
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('Limit odbiorców: podaj liczbę od 1 do 50000.');
+    expect(res.body).toContain('Limit odbiorców: podaj liczbę od 1 do 50\u00a0000.');
   });
 });
 

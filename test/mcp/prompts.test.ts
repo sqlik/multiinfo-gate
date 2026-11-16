@@ -78,19 +78,24 @@ function texts(): Array<{ where: string; text: string }> {
   for (const p of PROMPTS) {
     out.push({ where: `${p.name}.title`, text: p.title }, { where: `${p.name}.description`, text: p.description });
     for (const a of p.arguments) out.push({ where: `${p.name}.${a.name}`, text: a.description });
+    const sample = Object.fromEntries(p.arguments.map((a) => [a.name, 'przyklad']));
+    // Po pustym wierszu scenariusz przytacza dane od pracownika, na przykład treść SMS-a.
+    out.push({ where: `${p.name}.message`, text: p.message(sample).split('\n\n')[0]! });
   }
   for (const line of SERVER_INSTRUCTIONS.split('\n').filter((l) => l.trim() !== '')) out.push({ where: 'instrukcje', text: line.replace(/^\d+\.\s+/, '') });
   return out;
 }
 
 describe('teksty narzędzi, scenariuszy i instrukcji', () => {
-  it('tytuły i opisy narzędzi, scenariusze i instrukcje: bez przecinka przed „i”, bez „np.”, wielozdaniowe z kropką', () => {
+  it('tytuły i opisy narzędzi, scenariusze i instrukcje: bez przecinka przed „i”, „np.”, średnika i „X to Y”, wielozdaniowe z kropką', () => {
     const all = texts();
     expect(all.length).toBeGreaterThan(60);
     const problems = all.flatMap(({ where, text }) => [
       ...(/,\s+i\s/.test(text) ? [`${where}: przecinek przed „i”: ${text}`] : []),
       ...(/\bnp\./.test(text) ? [`${where}: „np.”: ${text}`] : []),
       ...(/[\u2013\u2014]/.test(text) ? [`${where}: pauza albo półpauza: ${text}`] : []),
+      ...(/;/.test(text) ? [`${where}: średnik: ${text}`] : []),
+      ...(/\b[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+ to [a-ząćęłńóśźż]/.test(text) ? [`${where}: „X to Y”: ${text}`] : []),
       ...(SENTENCE_BREAK.test(text) && !/[.:]$/.test(text.trim()) ? [`${where}: wielozdaniowy tekst bez kropki: ${text}`] : []),
     ]);
     expect(problems).toEqual([]);

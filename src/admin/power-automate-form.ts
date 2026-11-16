@@ -2,6 +2,7 @@ import { GROUP_LIMITS, PA_RECIPIENT_LIMIT_MAX, parseConfig, type PowerAutomateCo
 import { memberLines, parseMemberLines } from '../integrations/group/members.ts';
 import { integrationNameError } from './integration-form.ts';
 import { validationMessage } from '../zod.ts';
+import { rangeError } from '../text/numbers.ts';
 
 type Body = Record<string, string | string[] | undefined>;
 
@@ -43,7 +44,7 @@ export function paConfigToValues(config: PowerAutomateConfig, base: PaFormBase):
 /** Liczba całkowita z pola formularza albo błąd jako zdanie po polsku. Wspólna z formularzem agenta. */
 export function int(raw: string, min: number, max: number, what: string): number | string {
   const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n) || n < min || n > max || String(n) !== raw.trim()) return `${what}: podaj liczbę od ${min} do ${max}.`;
+  if (!Number.isFinite(n) || n < min || n > max || String(n) !== raw.trim()) return rangeError(what, min, max);
   return n;
 }
 

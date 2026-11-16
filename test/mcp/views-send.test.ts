@@ -72,6 +72,7 @@ describe('widok wysyłki SMS', () => {
     expect(sections(html)).toEqual(['Treść SMS-a', 'Ustawienia wysyłki', 'Odbiorcy: 12 numerów', 'Podsumowanie', 'Zatwierdzenie']);
     expect(html).toContain('<p class="say">Wysyłkę zatwierdza człowiek w tym widoku. Agent sam jej nie wykona.</p>');
     expect(html).toContain(buttons(button('Wyślij 12 SMS-ów', { act: 'send', kind: 'primary' }), button('Popraw treść w rozmowie', { act: 'fix' })));
+    expect(html).toContain('Integracja, klucz i konto nie określają nadpisu domyślnego, dlatego SMS zostanie wysłany z numeru usługi');
   });
 
   it('renderSend: nazwa kampanii z <script> jako tekst, krótki link z kodem zastępczym w oknie treści', () => {
@@ -212,12 +213,12 @@ describe('widok przebiegu doręczenia', () => {
   it('renderTrace: „Anuluj wiadomość” zawsze widoczny, czerwony przy cancellable, wyszarzony z przyczyną w pozostałych stanach', () => {
     const queued = renderTrace([{ ...ENTRY, status: 'queued', statusLabel: 'w kolejce', cancellable: true }]);
     expect(queued).toContain(buttons(cancelButton(false), button('Wyślij ponownie', { act: 'resend', kind: 'primary', data: { index: 0 } })));
-    expect(queued).toContain('Wiadomość czeka w kolejce bramki, dlatego można ją jeszcze anulować');
+    expect(queued).toContain('Multiinfo nie przekazało jeszcze wiadomości do sieci operatora, dlatego można ją anulować');
     const reason = (over: object) => renderTrace([{ ...ENTRY, ...over }]);
     expect(reason({ status: 'delivered' })).toContain(cancelButton(true));
     expect(reason({ status: 'delivered' })).toContain('Wiadomość została doręczona, dlatego anulowanie nie jest możliwe');
     expect(reason({ status: 'sent' })).toContain('Wiadomość została przekazana do sieci operatora, dlatego anulowanie nie jest możliwe');
-    expect(reason({ status: 'expired' })).toContain('Wiadomość ma stan ostateczny, dlatego anulowanie nie jest możliwe');
+    expect(reason({ status: 'expired' })).toContain('Wiadomość osiągnęła stan ostateczny, dlatego anulowanie nie jest możliwe');
     expect(reason({ status: 'cancelled' })).toContain('Wiadomość została anulowana');
     expect(reason({ status: 'unknown' })).toContain('Stan wiadomości jest nieznany, dlatego anulowanie nie jest możliwe');
     expect(reason({ status: 'queued' })).toContain('Anulowanie wymaga uprawnienia „Wysyłka SMS-ów”, które nadaje administrator bramki w integracji Agent AI');
@@ -227,8 +228,11 @@ describe('widok przebiegu doręczenia', () => {
     expect(bare).not.toContain('Wyślij ponownie');
   });
 
-  it('renderTrace: oczekujący etap według stanu, w kolejce bramki przekazanie do Multiinfo', () => {
+  it('renderTrace: oczekujący etap według stanu i etapu przekazania do Multiinfo', () => {
     expect(renderTrace([{ ...ENTRY, status: 'queued' }])).toContain('<li class="pending">Oczekiwanie na przekazanie do Multiinfo</li>');
+    const inMultiinfo = [...ENTRY.stages, { ...stage('15.11.2026 08:03', 'Przekazana do Multiinfo'), kind: 'sent' }];
+    expect(renderTrace([{ ...ENTRY, status: 'queued', stages: inMultiinfo }])).toContain('<li class="pending">Oczekiwanie na przekazanie do sieci operatora</li>');
+    expect(renderTrace([{ ...ENTRY, status: 'throttled', stages: inMultiinfo }])).toContain('<li class="pending">Wysyłka wstrzymana limitem operatora</li>');
     expect(renderTrace([{ ...ENTRY, status: 'sent' }])).toContain('<li class="pending">Oczekiwanie na raport doręczenia</li>');
     expect(renderTrace([{ ...ENTRY, status: 'delivered' }])).not.toContain('class="pending"');
   });

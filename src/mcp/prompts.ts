@@ -38,7 +38,7 @@ export const PROMPTS: readonly PromptDef[] = [
     scopes: ['read_sent'],
     arguments: [arg('numer_albo_id', 'Numer odbiorcy albo identyfikator wiadomości')],
     message: (a) => `Sprawdź narzędziem delivery_trace przebieg doręczenia dla: ${a.numer_albo_id}. `
-      + 'Jeżeli to numer telefonu, uwzględnij wiadomości z ostatnich 7 dni i opisz stan najnowszej.',
+      + 'Jeżeli jest to numer telefonu, uwzględnij wiadomości z ostatnich 7 dni i opisz stan najnowszej.',
   },
   {
     name: 'odpowiedzi_na_rozsylke',

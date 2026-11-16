@@ -20,7 +20,7 @@ const timeField = (what: string) => z.string().optional()
   .describe(`${what}, na przykład 2026-11-14 14:00 albo 2026-11-14. Czas bez strefy oznacza czas polski.`);
 
 const listInput = z.object({
-  status: z.enum(STATUSES).optional().describe('Stan wiadomości; transit oznacza wiadomości jeszcze w drodze'),
+  status: z.enum(STATUSES).optional().describe('Stan wiadomości, przy czym transit oznacza wiadomości jeszcze w drodze'),
   to: z.string().optional().describe('Numer odbiorcy'),
   from: timeField('Początek przedziału czasu utworzenia'),
   until: timeField('Koniec przedziału czasu utworzenia'),

@@ -1042,7 +1042,9 @@ export function integrationDetailPage(d: IntegrationDetail): string {
     ? `<form method="post" action="/integracje/${esc(row.id)}/wylacz" style="display: inline;"><button class="btn btn-s" type="submit">Wyłącz</button></form>`
     : `<form method="post" action="/integracje/${esc(row.id)}/wlacz" style="display: inline;"><button class="btn btn-s" type="submit">Włącz</button></form>`;
   const remove = `<form method="post" action="/integracje/${esc(row.id)}/usun" style="display: inline;"
-      data-confirm="Usunąć integrację „${esc(row.name)}”? Dziennik zostanie usunięty razem z nią, a adres wejściowy przestanie działać." data-confirm-ok="Usuń">
+      data-confirm="Usunąć integrację „${esc(row.name)}”? ${row.kind === 'agent'
+    ? 'Dziennik i wszystkie połączenia pracowników zostaną usunięte razem z nią, a aplikacje AI utracą dostęp do bramki.'
+    : 'Dziennik zostanie usunięty razem z nią, a adres wejściowy przestanie działać.'}" data-confirm-ok="Usuń">
       <button class="btn btn-s" type="submit">Usuń</button></form>`;
   const events = d.events.length === 0
     ? `<tr><td class="dim" colspan="6">${row.kind === 'agent' ? 'Dziennik jest pusty. Agent nie wykonał jeszcze żadnej wysyłki.'

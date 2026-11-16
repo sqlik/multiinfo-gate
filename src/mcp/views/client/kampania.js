@@ -11,6 +11,12 @@ import { barChart } from './chart.js';
  * wiadomość z widoku jako wiadomość użytkownika. Agent zna kampanię z własnego wywołania campaign_results.
  */
 export const REMIND_MESSAGE = 'Przygotuj przypomnienie dla odbiorców bez otwarcia kampanii pokazanej w widoku wyników';
+
+/** Prośba do człowieka, gdy aplikacja AI nie przyjęła wiadomości z widoku. Nazwa kampanii zostaje w widoku. */
+export function remindFallback(name) {
+  return `Poproś w rozmowie o przypomnienie dla odbiorców kampanii ${name}, którzy nie otworzyli linku`;
+}
+
 /** Wykres godzinowy obejmuje 48 godzin od pierwszej wysyłki, jak wykres kliknięć w panelu. */
 const CAMPAIGN_HOURS = 48;
 const HOUR_MS = 3_600_000;
@@ -183,7 +189,7 @@ export function startCampaign(win, env) {
       run(async () => {
         const sent = await bridge.sendMessage(REMIND_MESSAGE);
         say(sent ? 'ok' : 'plain', sent ? forwardedText('Prośba o przypomnienie')
-          : `Napisz w rozmowie, że chcesz przypomnienia dla odbiorców bez otwarcia kampanii ${s.data.name}`);
+          : remindFallback(s.data.name));
       });
     }
   });

@@ -8,6 +8,7 @@ import { parseSourceEntry } from '../integrations/sources.ts';
 import type { TemplateEngine } from '../integrations/templates.ts';
 import { INBOUND_BASIC_REF, INBOUND_ENRICH_REF, INBOUND_PAYLOAD_REF, INBOUND_TOKEN_REF, type IntegrationFormValues } from './views/integrations.ts';
 import { validationMessage } from '../zod.ts';
+import { rangeError } from '../text/numbers.ts';
 
 type Body = Record<string, string | string[] | undefined>;
 
@@ -69,7 +70,7 @@ const HEADER_NAME = /^[A-Za-z0-9-]{1,64}$/;
 
 function int(raw: string, min: number, max: number, what: string): number | string {
   const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n) || n < min || n > max) return `${what}: podaj liczbę od ${min} do ${max}.`;
+  if (!Number.isFinite(n) || n < min || n > max) return rangeError(what, min, max);
   return n;
 }
 

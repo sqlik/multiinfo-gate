@@ -1364,7 +1364,7 @@ Formularz składa się z trzech sekcji:
    części grupy.
 
 Zaznaczenie wysyłki SMS-ów razem z odczytem odebranych wyświetla ostrzeżenie o przemycanych
-poleceniach, a dziennik audytu odnotowuje zapis takiej integracji. Zaznaczenie odpowiedzi nadawcy
+poleceniach, a dziennik zdarzeń panelu odnotowuje zapis takiej integracji. Zaznaczenie odpowiedzi nadawcy
 powoduje, że zapis zaznacza także odczyt odebranych. Gdy adres bramki z rozdziału 2.1 jest pusty albo
 nie zaczyna się od `https://`, formularz wyświetla ostrzeżenie, ponieważ aplikacje z logowaniem nie
 połączą się z bramką.
