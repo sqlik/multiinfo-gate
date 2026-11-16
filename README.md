@@ -71,6 +71,14 @@ parametry UTM, dlatego ruch z kampanii jest widoczny w Google Analytics, Matomo 
 Skracanie włącza się przy kluczu API, a lista dozwolonych domen docelowych zmniejsza ryzyko wpisu
 domeny skracacza na listę ostrzeżeń CERT Polska.
 
+Wersja 1.12 wprowadza agentów AI. Pracownik wysyła SMS-y, sprawdza przebieg doręczenia, wyniki
+kampanii i odpowiedzi klientów w rozmowie z aplikacją AI, na przykład claude.ai, ChatGPT albo
+Claude Code. Aplikacja łączy się z bramką przez protokół MCP, a claude.ai i ChatGPT wyświetlają
+w rozmowie widoki bramki z podglądem wysyłki, przebiegiem doręczenia i wykresami. Każdą wysyłkę
+zatwierdza pracownik przyciskiem w podglądzie. Agent działa w granicach integracji „Agent AI”,
+która określa zakresy, limit części i ochronę przed burzą, a pracownik łączy aplikację z bramką
+kodem jednorazowym z panelu, bez hasła.
+
 ## Co trzeba mieć
 
 - Konto Multiinfo z użytkownikiem API i certyfikatem (`.pfx` z hasłem)
@@ -98,7 +106,8 @@ Strona dokumentacji: [sqlik.github.io/multiinfo-gate](https://sqlik.github.io/mu
 - [Integracje z aplikacjami](https://sqlik.github.io/multiinfo-gate/integracje/) - adres wejściowy dla aplikacji z własnym formatem, Mail2SMS, szablony Liquid, gotowe ustawienia, powiadomienia administratora mailem i SMS-em
 - [Power Automate](https://sqlik.github.io/multiinfo-gate/power-automate/) - konektor do Microsoft Power Automate: integracja w panelu, import pliku, pierwszy przepływ, rozsyłka z Excela, rozwiązywanie problemów
 - [Skracacz linków i kampanie](https://sqlik.github.io/multiinfo-gate/skracacz/) - krótkie linki własnej domeny, obowiązkowa lista domen docelowych, wyniki kampanii, parametry UTM, ważność linków i przechowywanie danych
-- [Rozwiązywanie problemów](https://sqlik.github.io/multiinfo-gate/problemy/) - objaw, sprawdzenie i naprawa: panel, logowanie, tryb awaryjny, aktualizacja, Microsoft 365, skracacz linków, zgłaszanie problemów
+- [Agenci AI](https://sqlik.github.io/multiinfo-gate/agenci-ai/) - wysyłka SMS-ów i odczyt doręczeń w rozmowie z aplikacją AI: zakresy, połączenia pracowników, claude.ai, ChatGPT, Claude Code, Copilot Studio, widoki w rozmowie
+- [Rozwiązywanie problemów](https://sqlik.github.io/multiinfo-gate/problemy/) - objaw, sprawdzenie i naprawa: panel, logowanie, tryb awaryjny, aktualizacja, Microsoft 365, skracacz linków, agenci AI, zgłaszanie problemów
 - [Przykład w PHP](examples/php/) - strona testowa i kod do skopiowania
 
 Źródłem strony są pliki w katalogu [`docs/`](docs/). Przykłady z zakładkami czytają się w nich

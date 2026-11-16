@@ -93,6 +93,12 @@ describe('katalog i formularz', () => {
     expect(form).toContain('Agent może wybrać inny nadpis tego klucza, a podgląd wysyłki go pokazuje.');
     expect(form).toContain('Pod tą nazwą integracja pojawia się na stronie połączenia aplikacji');
   });
+
+  it('podpowiedź wysyłki obiecuje anulowanie tylko przed przekazaniem do sieci operatora', async () => {
+    const form = (await get(NEW_FORM)).body;
+    expect(form).toContain('Może też anulować wiadomość, której bramka nie przekazała jeszcze do sieci operatora.');
+    expect(form).not.toContain('abonentowi');
+  });
 });
 
 describe('zapis', () => {

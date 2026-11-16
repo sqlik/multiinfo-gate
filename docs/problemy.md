@@ -680,6 +680,121 @@ wskazują przyczynę. Opis bloku znajdziesz w rozdziale 3 [API dla aplikacji](ap
 
 SMS-y powiadomień bramki dla administratorów nie są skracane nigdy, niezależnie od ustawień klucza.
 
+## Agenci AI {#agenci-ai}
+
+Punkty poniżej dotyczą aplikacji AI połączonych z bramką przez serwer MCP. Integrację „Agent AI”,
+połączenia pracowników i konfigurację w poszczególnych aplikacjach opisuje artykuł
+[Agenci AI](agenci-ai.md).
+
+### Kod połączenia nie działa {#agent-kod}
+
+Objaw: strona połączenia bramki wyświetla komunikat „Kod jest nieprawidłowy albo nieaktualny.
+Poproś administratora bramki o nowy kod.”
+
+Bramka podaje ten sam komunikat przy każdej przyczynie, ponieważ osobne komunikaty ułatwiałyby
+odgadywanie kodów. Przyczynę wskazuje stan połączenia w sekcji **Połączenia** szczegółów integracji:
+
+| Stan połączenia | Przyczyna | Rozwiązanie |
+|---|---|---|
+| czeka na kod | kod został wpisany z błędem albo pochodzi z innego połączenia | wpisać kod ponownie z tekstu do przekazania |
+| aktywne | kod został już użyty, na przykład w innej aplikacji albo przy wcześniejszej próbie | wygenerować nowy kod przyciskiem **Nowy kod** |
+| kod wygasł | kod nie został użyty przed terminem ważności | wygenerować nowy kod przyciskiem **Nowy kod** |
+| wygasłe albo odwołane | połączenie przestało działać i nie przyjmuje kodów | dodać nowe połączenie |
+
+Wielkość liter, spacje i myślniki w kodzie nie mają znaczenia. Bramka traktuje także literę O jak cyfrę 0
+oraz litery I i L jak cyfrę 1, dlatego pomyłka między tymi znakami nie powoduje odrzucenia kodu.
+
+Strona połączenia może wyświetlić także inne komunikaty:
+
+- **„Bramka wstrzymała sprawdzanie kodów po zbyt wielu nieudanych próbach”.** Z jednego adresu wpisano
+  10 błędnych kodów w ciągu 15 minut albo ze wszystkich adresów łącznie 100 błędnych kodów. Bramka
+  wznawia sprawdzanie po 15 minutach
+- **„Żądanie połączenia wygasło”.** Od otwarcia strony połączenia minęło ponad 15 minut. Wróć do
+  aplikacji i rozpocznij łączenie ponownie
+- **„Adres powrotu nie zgadza się z adresem zarejestrowanym przez aplikację”.** Aplikacja zarejestrowała
+  się w bramce ponownie z innym adresem. Usuń łącznik w aplikacji i dodaj go ponownie
+
+### Aplikacja nie widzi narzędzi bramki {#agent-narzedzia}
+
+Objaw: łącznik jest połączony, ale agent odpowiada, że nie posiada narzędzia do wysyłki albo odczytu.
+Agent może też korzystać wyłącznie z narzędzia „Co mogę?”.
+
+Zapytaj agenta „Co mogę zrobić przez bramkę?”. Widok „Co mogę?” wymienia uprawnienia połączenia.
+
+| Przyczyna | Sprawdzenie | Rozwiązanie |
+|---|---|---|
+| integracja nie obejmuje zakresu potrzebnego do czynności | sekcja **Uprawnienia** w widoku „Co mogę?” albo sekcja **Zakresy** w formularzu integracji | dodać zakres w integracji albo połączyć pracownika z inną integracją |
+| ChatGPT pamięta listę narzędzi z chwili dodania wtyczki | narzędzia brakuje po aktualizacji bramki, zmianie zakresów albo połączeniu z inną integracją | kliknąć **Odśwież narzędzia** w ustawieniach wtyczki według rozdziału 6.2 [Agentów AI](agenci-ai.md#62-chatgpt) |
+| narzędzie jest wyłączone w ustawieniach łącznika aplikacji | lista narzędzi łącznika w ustawieniach aplikacji | włączyć narzędzie w ustawieniach łącznika |
+
+Agent w claude.ai i ChatGPT nie widzi narzędzi wysyłki. Bramka celowo ukrywa je przed agentem, ponieważ
+korzysta z nich wyłącznie przycisk **Wyślij** w widoku. Agent przygotowuje podgląd, a SMS wysyła pracownik
+po kliknięciu przycisku. Opis znajdziesz w rozdziale 7.1 [Agentów AI](agenci-ai.md#71-zatwierdzenie-wysyki).
+
+### Rozmowa nie wyświetla widoków bramki {#agent-widoki}
+
+Objaw: agent przedstawia podgląd wysyłki, przebieg doręczenia albo wyniki kampanii wyłącznie tekstem,
+bez widoku z tabelami i przyciskami.
+
+| Przyczyna | Sprawdzenie | Rozwiązanie |
+|---|---|---|
+| aplikacja nie obsługuje widoków MCP Apps | widoki wyświetlają claude.ai, aplikacje Claude i ChatGPT; Claude Code i n8n korzystają z wersji tekstowej | korzystać z wersji tekstowej i potwierdzać wysyłkę w rozmowie |
+| ChatGPT pamięta widoki z chwili dodania wtyczki | widoku brakuje po aktualizacji bramki | kliknąć **Odśwież narzędzia** w ustawieniach wtyczki |
+| aplikacja przerwała wywołanie narzędzia | widok wyświetla komunikat „Aplikacja AI przerwała wywołanie narzędzia” | poprosić agenta o ponowienie polecenia |
+
+Widok jest zawsze uzupełniony zwięzłym tekstem, dlatego agent przekazuje te same informacje także
+w aplikacji bez widoków.
+
+### Adres bramki nie jest ustawiony {#agent-adres-bramki}
+
+Objaw: aplikacja z logowaniem, na przykład claude.ai albo ChatGPT, zgłasza błąd przy dodawaniu
+łącznika i nie otwiera strony połączenia bramki. Odpowiedź bramki zawiera komunikat „Adres bramki nie
+jest ustawiony”. Ten sam komunikat agent przekazuje przy próbie utworzenia linku do pliku CSV.
+
+Aplikacja odczytuje z bramki adresy logowania i wymiany tokenów. Bramka buduje je na podstawie
+ustawienia **Adres bramki dla aplikacji**, dlatego logowanie wymaga tego ustawienia.
+
+1. W panelu otwórz ekran **Klucze API**.
+2. W panelu **Adres bramki dla aplikacji** wpisz adres bramki dostępny z internetu, na przykład
+   `https://sms.firma.pl`, bez ścieżki na końcu.
+3. Zapisz adres.
+
+Oczekiwany wynik: formularz integracji „Agent AI” nie wyświetla ostrzeżenia o adresie, a adres
+`https://<TWOJA-DOMENA>/.well-known/oauth-protected-resource/mcp` zwraca dokument JSON z polem
+`resource`. Sprawdzenie opisuje rozdział 2.3 [Agentów AI](agenci-ai.md#23-sprawdzenie-dostepnosci).
+
+Jeżeli wynik jest inny:
+
+- **Adres zaczyna się od `http://`.** Aplikacje z logowaniem wymagają HTTPS z certyfikatem publicznego
+  urzędu certyfikacji. Udostępnienie bramki pod domeną opisuje rozdział 6
+  [Uruchomienia](uruchomienie.md)
+- **Adres wskazuje sieć firmową.** Aplikacje AI łączą się z bramką ze swoich serwerów, dlatego adres
+  musi być dostępny z internetu
+- **Aplikacja połączyła się wcześniej pod innym adresem.** Usuń łącznik w aplikacji i dodaj go ponownie
+  z nowym kodem
+
+### Agent zgłasza przekroczony limit {#agent-limit}
+
+Objaw: agent przekazuje komunikat „Przekroczono limit N żądań na minutę klucza. Spróbuj ponownie za
+minutę.” Widok może zgłosić ten sam komunikat przy odświeżeniu.
+
+Każde wywołanie narzędzia i każde odświeżenie widoku liczy się do limitu żądań na minutę klucza API
+integracji, tak jak żądanie API. Limit jest wspólny dla wszystkich aplikacji korzystających z klucza.
+Najczęstsze przyczyny przekroczenia:
+
+- ChatGPT wywołuje narzędzie „Co mogę?” przed wieloma zadaniami, dlatego jedna rozmowa wykonuje kilka
+  dodatkowych wywołań
+- widok postępu rozsyłki odświeża się co 30 sekund, a kilka otwartych widoków odświeża się niezależnie
+- ten sam klucz obsługuje także inne aplikacje albo integracje o dużym ruchu
+
+Zalecane jest utworzenie osobnego klucza dla integracji agentów, na przykład „Agenci AI”. Limit
+podniesiesz w polu **Limit żądań na minutę** formularza klucza, opisanego w rozdziale 4.5
+[Uruchomienia](uruchomienie.md#45-klucz-api).
+
+Komunikat „Integracja <nazwa> wykorzystała limit N wysyłek” oznacza inną przyczynę. Szkic przekroczył
+ochronę przed burzą integracji, która liczy wyłącznie wysyłki. Komunikat podaje czas, po którym agent
+może ponowić próbę. Ustawienia ochrony opisuje rozdział 4.3 [Agentów AI](agenci-ai.md#43-ochrona-przed-burza-i-dziennik).
+
 ## Jak zgłosić problem {#zgloszenie}
 
 Problemy zgłaszasz w serwisie GitHub, w zakładce

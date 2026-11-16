@@ -24,6 +24,7 @@ export const PROBLEM_ANCHORS = [
   'microsoft-365', 'm365-wymaga-logowania', 'm365-adres-przekierowania', 'm365-zgoda', 'm365-dostep-warunkowy',
   'm365-skrzynka', 'm365-smtp', 'm365-nadawca', 'm365-spam', 'skracacz-sprawdzenie-domeny', 'serwer-krotkich-linkow',
   'link-wygasl', 'linki-bez-otwarc', 'link-niezamieniony',
+  'agenci-ai', 'agent-kod', 'agent-narzedzia', 'agent-widoki', 'agent-adres-bramki', 'agent-limit',
 ] as const;
 
 export type ProblemAnchor = typeof PROBLEM_ANCHORS[number];

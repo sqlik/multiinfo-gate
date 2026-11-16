@@ -565,6 +565,9 @@ domeną (rozdział 6) jest to `https://<TWOJA-DOMENA>`. Przy kontenerze na Proxm
 firmowej jest to `http://<ADRES-KONTENERA>:8080`. Adres podaje się bez ścieżki na końcu. Z tym
 adresem panel pokazuje przy nowym kluczu gotowe polecenie `curl` do wklejenia w terminalu. Przy
 integracjach (punkt 4.7) pokazuje pełne adresy wejściowe zamiast samych ścieżek.
+Na podstawie tego adresu bramka buduje także adres serwera MCP i adresy logowania dla agentów AI.
+Aplikacje z logowaniem, na przykład claude.ai i ChatGPT, wymagają adresu zaczynającego się od
+`https://`. Opis znajdziesz w artykule [Agenci AI](agenci-ai.md#22-adres-bramki).
 
 Po zapisaniu panel wyświetla jeden raz dwie wartości: **klucz** (`mig_live_...`) oraz **sekret
 webhooka**, jeżeli podano adres webhooka. W bazie bramki pozostaje tylko skrót klucza. Panel nie
@@ -615,6 +618,12 @@ z przepływów Microsoft Power Automate. Wymaga bramki dostępnej z internetu po
 zgodnie z rozdziałem 6. Konektor, jego import i budowę przepływów przedstawia artykuł
 [Power Automate](power-automate.md).
 
+Integracja „Agent AI” w tym samym kierunku pozwala pracownikom wysyłać SMS-y w rozmowie z aplikacją
+AI, na przykład claude.ai albo ChatGPT. Aplikacje z logowaniem łączą się z bramką ze swoich serwerów,
+dlatego wymagają bramki dostępnej z internetu pod domeną z HTTPS, zgodnie z rozdziałem 6, oraz adresu
+bramki z rozdziału 4.5 zaczynającego się od `https://`. Integrację, połączenia pracowników i konfigurację
+w poszczególnych aplikacjach przedstawia artykuł [Agenci AI](agenci-ai.md).
+
 ![Lista integracji z kierunkiem, ustawieniem, kluczem, stanem i licznikami z ostatniej doby](obrazki/integracje.png)
 
 Dodanie integracji to wybór kierunku, wybór gotowego ustawienia (kafelek z nazwą aplikacji)
@@ -639,8 +648,8 @@ w imieniu wskazanego klucza API. Kanał działa niezależnie od poczty, dlatego 
 o zerwanym koncie Microsoft 365 i o mailu, którego nie udało się wysłać. Zakładka **Reguły**
 określa zgłaszane zdarzenia: błędy integracji, przekroczony limit burzy, niedostarczone webhooki,
 certyfikat konta na progach dni, konto odrzucające wysyłkę, awarię odbioru, awarię skrzynki,
-konto Microsoft 365 wymagające logowania, niewysłany mail z powiadomieniem, nowe wydanie bramki
-i podsumowanie dzienne. Każda reguła może dodatkowo wysyłać SMS. Reguły
+konto Microsoft 365 wymagające logowania, niewysłany mail z powiadomieniem, połączenie agenta AI,
+nowe wydanie bramki i podsumowanie dzienne. Każda reguła może dodatkowo wysyłać SMS. Reguły
 wymagają skonfigurowanego serwera SMTP albo włączonego kanału SMS. Szczegóły tych ekranów,
 gotowe ustawienia aplikacja po aplikacji i język szablonów opisuje rozdział
 [Integracje z aplikacjami](integracje.md).
@@ -1008,6 +1017,11 @@ być agencja obsługująca wysyłki albo system hostowany u innego dostawcy. Apl
 API i łączy się z bramką przez internet. Panel pozostaje dostępny wyłącznie przez tunel SSH. Na
 zewnątrz wystawia się tylko API. Bramka korzystająca ze skracacza linków wystawia dodatkowo port
 krótkich linków pod domenami skracacza. Opis znajdziesz przy każdym wariancie poniżej.
+
+Ten sam rozdział dotyczy agentów AI. Aplikacje claude.ai i ChatGPT łączą się z serwerem MCP bramki
+pod adresem `https://<TWOJA-DOMENA>/mcp` i logują się przez OAuth, który wymaga HTTPS. Serwer MCP
+i adresy logowania działają na porcie API, dlatego żaden z wariantów nie wymaga dodatkowej konfiguracji.
+Wymagania opisuje rozdział 2 artykułu [Agenci AI](agenci-ai.md#2-wymagania).
 
 ### 6.1. Pojęcia
 

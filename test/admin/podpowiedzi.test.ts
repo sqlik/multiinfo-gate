@@ -40,6 +40,9 @@ function plain(text: string): string {
 // Zdanie może kończyć się wstawką albo wyrażeniem Liquid i zaczynać wstawką: „Opcjonalny. «wstawka» Pusta…”.
 const SENTENCE_BREAK = /(?<=[a-ząćęłńóśźż0-9”»)\]}`’])(?<!\bnp)(?<!\btzn)\.\s+[A-ZĄĆĘŁŃÓŚŹŻ„«]/;
 const ELEMENT = /<(div|p|span|small|li)\b[^>]*class="[^"]*\b(hint|dim|note|notes|help-body|sub)\b[^"]*"[^>]*>([\s\S]*?)<\/\1>/g;
+// Kontener podpowiedzi z akapitami w `<div>` bez klasy: każdy akapit jest osobną podpowiedzią.
+const HINT_CHILDREN = /<div\b[^>]*class="[^"]*\bhint\b[^"]*"[^>]*>\s*((?:<div>[\s\S]*?<\/div>\s*)+)/g;
+const CHILD = /<div>([\s\S]*?)<\/div>/g;
 const LITERALS = String.raw`(?:'(?:[^'\\]|\\.)*'|\`(?:[^\`\\]|\\.)*\`)(?:\s*\+\s*(?:'(?:[^'\\]|\\.)*'|\`(?:[^\`\\]|\\.)*\`))*`;
 // Argument z wywołaniami w środku wstawek, na przykład `countForms(n(v.limit), …)`, do trzech poziomów nawiasów.
 const HINT_CALL = new RegExp(String.raw`\bhint\(\s*((?:[^()]|\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*?)\)`, 'g');
@@ -56,6 +59,9 @@ function texts(): Array<{ where: string; text: string }> {
     const src = readFileSync(file, 'utf8');
     const at = (index: number) => `${relative(ROOT, file)}:${src.slice(0, index).split('\n').length}`;
     for (const m of src.matchAll(ELEMENT)) out.push({ where: at(m.index), text: plain(m[3]!) });
+    for (const m of src.matchAll(HINT_CHILDREN)) {
+      for (const c of m[1]!.matchAll(CHILD)) out.push({ where: at(m.index), text: plain(c[1]!) });
+    }
     for (const m of src.matchAll(HINT_CALL)) {
       for (const g of m[1]!.matchAll(GROUP)) out.push({ where: at(m.index), text: plain(joined(g[0])) });
     }
