@@ -211,7 +211,7 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
     const sharedText = defaultTemplate === undefined || defaultTemplate.slots.length > 0 ? null : defaultTemplate.text;
     deps.packages.insert({
       id, apiKeyId: auth.apiKeyId, accountId: auth.accountId, serviceId,
-      defaultText: sharedText, orig: orig ?? null, costCenter: input.costCenter ?? null,
+      defaultText: sharedText, orig: orig ?? null, origExplicit: input.orig === undefined ? 0 : 1, costCenter: input.costCenter ?? null,
       startAt: timing.startAt, deliveryReport: input.deliveryReport ? 1 : 0,
       encoding, multipart: multipart ? 1 : 0, createdAt: timing.createdAt, status,
       integrationId, requestedBy: input.requestedBy ?? null, agentConnectionId: input.agentConnectionId ?? null,

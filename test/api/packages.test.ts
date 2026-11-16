@@ -120,6 +120,15 @@ describe('POST /v1/packages', () => {
     expect(pkg.deliveryReport).toBe(0);
   });
 
+  it('zapisuje, czy nadpis podano jawnie: jawny 1, domyślny i pusty 0', async () => {
+    const explicit = await post({ ...body(), orig: 'Firma Alert' });
+    expect(packages.get(explicit.json().id)!.origExplicit).toBe(1);
+    const fallback = await post(body());
+    expect(packages.get(fallback.json().id)!).toMatchObject({ orig: 'Firma Info', origExplicit: 0 });
+    const empty = await post({ ...body(), orig: '' });
+    expect(packages.get(empty.json().id)!.origExplicit).toBe(0);
+  });
+
   it('puste pola odbiorcy traktuje jak pominięte: treść wspólna, bez identyfikatora', async () => {
     const res = await post({ defaultText: 'Tresc domyslna', orig: '', startAt: null, recipients: [{ to: '48601135134', text: '', clientId: '' }] });
     expect(res.statusCode).toBe(202);

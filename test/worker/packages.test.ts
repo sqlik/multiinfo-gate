@@ -71,7 +71,7 @@ afterEach(() => rmSync(join(reportsDir, '..'), { recursive: true, force: true })
 
 function seed(patch: Partial<{
   startAt: string | null; orig: string | null; encoding: 'gsm' | 'ucs2'; multipart: 0 | 1; campaignId: number | null; deliveryReport: 0 | 1;
-  status: 'scheduled' | 'queued'; integrationId: number | null; agentConnectionId: number | null;
+  status: 'scheduled' | 'queued'; integrationId: number | null; agentConnectionId: number | null; origExplicit: 0 | 1;
 }> = {}) {
   const id = 'pkg_1';
   deps.packages.insert({
@@ -79,6 +79,7 @@ function seed(patch: Partial<{
     costCenter: null, startAt: patch.startAt ?? null, deliveryReport: patch.deliveryReport ?? 1, encoding: patch.encoding ?? 'gsm',
     multipart: patch.multipart ?? 0, createdAt: NOW.toISOString(), campaignId: patch.campaignId ?? null,
     status: patch.status ?? 'queued', integrationId: patch.integrationId ?? null, agentConnectionId: patch.agentConnectionId ?? null,
+    origExplicit: patch.origExplicit ?? 0,
   }, [
     { dest: '48601135134', text: null, clientId: null },
     { dest: '48501052442', text: 'Indywidualna', clientId: 'faktura-114' },
@@ -597,7 +598,7 @@ describe('handlePackageCreate - rozsyłka zaplanowana', () => {
     deps.integrationEvents = new IntegrationEventsRepo(db, masterKey);
   });
 
-  function scheduled(startAt: Date, extra: { integrationId?: number; agentConnectionId?: number } = {}) {
+  function scheduled(startAt: Date, extra: { integrationId?: number; agentConnectionId?: number; orig?: string; origExplicit?: 0 | 1 } = {}) {
     seed({ startAt: startAt.toISOString(), status: 'scheduled', ...extra });
     return job('package.create', 0, { scheduled: true });
   }
@@ -721,6 +722,43 @@ describe('handlePackageCreate - rozsyłka zaplanowana', () => {
     expect(createPackage).not.toHaveBeenCalled();
     expect(deps.packages.get('pkg_1')).toMatchObject({
       status: 'cancelled', error: 'Klucz API rozsyłki nie obejmuje już usługi 24138',
+    });
+  });
+
+  describe('nadpis nadawcy w chwili przekazania', () => {
+    beforeEach(() => {
+      db.prepare("INSERT INTO account_origs (account_id, orig) VALUES (?, 'SERWIS')").run(accountId);
+      db.prepare("INSERT INTO api_key_origs (api_key_id, account_id, orig) VALUES (?, ?, 'SERWIS')").run(apiKeyId, accountId);
+    });
+
+    it('jawny nadpis odebrany kluczowi po zaplanowaniu: cancelled z powodem, bez żądania', async () => {
+      db.prepare('DELETE FROM api_key_origs').run();
+      await handlePackageCreate(scheduled(at(10 * MIN), { orig: 'SERWIS', origExplicit: 1 }), deps, NOW);
+      expect(createPackage).not.toHaveBeenCalled();
+      expect(deps.packages.get('pkg_1')).toMatchObject({
+        status: 'cancelled', error: 'Klucz API rozsyłki nie obejmuje już nadpisu SERWIS',
+      });
+    });
+
+    it('jawny nadpis usunięty ze słownika konta: cancelled z powodem', async () => {
+      db.prepare("DELETE FROM account_origs WHERE orig = 'SERWIS'").run();
+      await handlePackageCreate(scheduled(at(10 * MIN), { orig: 'SERWIS', origExplicit: 1 }), deps, NOW);
+      expect(createPackage).not.toHaveBeenCalled();
+      expect(deps.packages.get('pkg_1')!.status).toBe('cancelled');
+    });
+
+    it('jawny nadpis nadal w kluczu: przekazanie', async () => {
+      createPackage.mockResolvedValue('14');
+      await handlePackageCreate(scheduled(at(10 * MIN), { orig: 'SERWIS', origExplicit: 1 }), deps, NOW);
+      expect(createPackage).toHaveBeenCalledTimes(1);
+      expect(deps.packages.get('pkg_1')!.status).toBe('open');
+    });
+
+    it('nadpis domyślny spoza listy klucza: przekazanie bez sprawdzania, jak przy przyjęciu', async () => {
+      createPackage.mockResolvedValue('14');
+      await handlePackageCreate(scheduled(at(10 * MIN), { orig: 'Dawny Nadpis', origExplicit: 0 }), deps, NOW);
+      expect(createPackage).toHaveBeenCalledTimes(1);
+      expect(deps.packages.get('pkg_1')!.status).toBe('open');
     });
   });
 

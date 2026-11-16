@@ -1,5 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { authFromKey } from '../api/submit.ts';
+import { keyOrigs } from '../api/orig.ts';
 import { MI_START_MARGIN_MS, OVERDUE_AFTER_MS } from '../api/schedule.ts';
 import { silentLogger, type Logger } from '../log.ts';
 import { parseReport } from '../multiinfo/report.ts';
@@ -143,15 +145,20 @@ export function overdueSweep(deps: WorkerDeps, now: Date): number {
 
 /**
  * Powód anulowania zaplanowanej rozsyłki w chwili przekazania; `null`, gdy klucz i konto nadal ją obejmują.
- * Usługę klucz musi obejmować tak jak przy przyjęciu, ponieważ administrator mógł ją odebrać po zaplanowaniu.
+ * Usługę i nadpis podany jawnie klucz musi obejmować tak jak przy przyjęciu, ponieważ administrator mógł je
+ * odebrać po zaplanowaniu. Nadpis domyślny bramka pomija, jak `resolveOrig`.
  */
 function cancelReason(deps: WorkerDeps, pkg: PackageRow, now: Date): string | null {
-  if (!deps.accounts.get(pkg.accountId)) return 'Konto Multiinfo rozsyłki zostało usunięte przed jej przekazaniem';
+  const account = deps.accounts.get(pkg.accountId);
+  if (!account) return 'Konto Multiinfo rozsyłki zostało usunięte przed jej przekazaniem';
   const key = deps.apiKeys.get(pkg.apiKeyId);
   if (!key) return 'Klucz API rozsyłki został usunięty przed przekazaniem do Multiinfo';
   if (key.revokedAt !== null) return 'Klucz API rozsyłki został odwołany przed przekazaniem do Multiinfo';
   if (key.expiresAt !== null && Date.parse(key.expiresAt) <= now.getTime()) return 'Klucz API rozsyłki utracił ważność przed przekazaniem do Multiinfo';
   if (!key.allowedServiceIds.includes(pkg.serviceId)) return `Klucz API rozsyłki nie obejmuje już usługi ${pkg.serviceId}`;
+  if (pkg.origExplicit === 1 && pkg.orig !== null && !keyOrigs(authFromKey(key), account, deps.accounts).allowed.includes(pkg.orig)) {
+    return `Klucz API rozsyłki nie obejmuje już nadpisu ${pkg.orig}`;
+  }
   return null;
 }
 

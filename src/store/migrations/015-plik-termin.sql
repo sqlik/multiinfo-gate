@@ -7,3 +7,7 @@ PRAGMA foreign_keys = ON;
 -- Przegląd spóźnionych rozsyłek co minutę i liczniki stanów w panelu. Indeks obejmuje wszystkie stany,
 -- ponieważ SQLite nie użyje indeksu częściowego WHERE status IN (...) dla warunku status = 'scheduled'.
 CREATE INDEX packages_pending ON packages(status, start_at);
+
+-- Nadpis nadawcy podany jawnie przez klienta (1) albo domyślny klucza lub konta (0). Bramka sprawdza
+-- w chwili przekazania wyłącznie nadpis jawny, tak jak przy przyjęciu rozsyłki.
+ALTER TABLE packages ADD COLUMN orig_explicit INTEGER NOT NULL DEFAULT 0;

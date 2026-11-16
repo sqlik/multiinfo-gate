@@ -26,6 +26,8 @@ export interface PackageRow {
   requestHash: string | null;
   /** Kampania skracacza; tylko rozsyłki z co najmniej jednym krótkim linkiem. */
   campaignId: number | null;
+  /** 1 dla nadpisu podanego jawnie, 0 dla nadpisu domyślnego klucza albo konta. */
+  origExplicit: 0 | 1;
 }
 
 export interface PackageInput {
@@ -33,7 +35,7 @@ export interface PackageInput {
   defaultText: string | null; orig: string | null; costCenter: string | null; startAt: string | null;
   deliveryReport: 0 | 1; encoding: 'gsm' | 'ucs2'; multipart: 0 | 1; createdAt: string;
   integrationId?: number | null; requestedBy?: string | null; idempotencyKey?: string | null; requestHash?: string | null;
-  campaignId?: number | null; agentConnectionId?: number | null;
+  campaignId?: number | null; agentConnectionId?: number | null; origExplicit?: 0 | 1;
   /** Stan początkowy: `scheduled` dla rozsyłki z terminem, domyślnie `queued`. */
   status?: PackageStatus;
 }
@@ -65,6 +67,7 @@ interface Raw {
   report_status: ReportStatus; report_id: string | null; report_expires_at: string | null; report_path: string | null;
   created_at: string; completed_at: string | null; integration_id: number | null; requested_by: string | null;
   idempotency_key: string | null; request_hash: string | null; campaign_id: number | null; agent_connection_id: number | null;
+  orig_explicit: 0 | 1;
 }
 
 interface RawRecipient {
@@ -82,7 +85,7 @@ function toRow(r: Raw): PackageRow {
     reportStatus: r.report_status, reportId: r.report_id, reportExpiresAt: r.report_expires_at,
     reportPath: r.report_path, createdAt: r.created_at, completedAt: r.completed_at,
     integrationId: r.integration_id, requestedBy: r.requested_by, agentConnectionId: r.agent_connection_id,
-    idempotencyKey: r.idempotency_key, requestHash: r.request_hash, campaignId: r.campaign_id,
+    idempotencyKey: r.idempotency_key, requestHash: r.request_hash, campaignId: r.campaign_id, origExplicit: r.orig_explicit,
   };
 }
 
@@ -126,13 +129,13 @@ export class PackagesRepo {
       this.db.prepare(
         `INSERT INTO packages (id, api_key_id, account_id, service_id, default_text, orig, cost_center, start_at,
            delivery_report, encoding, multipart, recipients_count, created_at, integration_id, requested_by,
-           idempotency_key, request_hash, campaign_id, agent_connection_id, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           idempotency_key, request_hash, campaign_id, agent_connection_id, status, orig_explicit)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(input.id, input.apiKeyId, input.accountId, input.serviceId, input.defaultText, input.orig,
         input.costCenter, input.startAt, input.deliveryReport, input.encoding, input.multipart,
         recipients.length, input.createdAt, input.integrationId ?? null, input.requestedBy ?? null,
         input.idempotencyKey ?? null, input.requestHash ?? null, input.campaignId ?? null, input.agentConnectionId ?? null,
-        input.status ?? 'queued');
+        input.status ?? 'queued', input.origExplicit ?? 0);
       const add = this.db.prepare(
         'INSERT INTO package_recipients (package_id, seq, dest, text, client_id, links) VALUES (?, ?, ?, ?, ?, ?)');
       recipients.forEach((r, i) => add.run(input.id, i + 1, r.dest, r.text, r.clientId, r.links ?? 0));
