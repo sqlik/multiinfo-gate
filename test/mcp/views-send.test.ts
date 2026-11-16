@@ -27,7 +27,7 @@ const GROUP = {
 const stage = (local: string, label: string, detail: string | null = null) => ({ at: '2026-11-15T07:02:11.000Z', local, kind: 'queued', label, detail });
 
 const ENTRY = {
-  kind: 'message', id: 'msg_1', to: '48602345678', status: 'expired', statusLabel: 'wygasła', source: 'integracja Fakturownia - przypomnienia',
+  kind: 'message', id: 'msg_1', to: '48601000082', status: 'expired', statusLabel: 'wygasła', source: 'integracja Fakturownia - przypomnienia',
   created: { at: '2026-11-15T07:02:11.000Z', local: '15.11.2026 08:02' },
   stages: [stage('15.11.2026 08:02', 'Przyjęta przez bramkę, zapisana w kolejce'), stage('15.11.2026 20:02', 'Multiinfo', 'status 12 / 3 - <b>poza zasięgiem</b>')],
   operator: { code: '12/3', description: 'Telefon poza zasięgiem' }, cancellable: false,
@@ -198,7 +198,7 @@ describe('widok przebiegu doręczenia', () => {
   it('renderTrace: sekcja pozycji z polami, oknem treści i osią czasu', () => {
     const html = renderTrace([ENTRY]);
     expect(sections(html)).toEqual(['Wiadomość msg_1']);
-    expect(html).toContain(field('Odbiorca', txt('48602345678')));
+    expect(html).toContain(field('Odbiorca', txt('48601000082')));
     expect(html).toContain(field('Stan', '<div class="txt"><span class="badge b-fail">wygasła</span></div>'));
     expect(html).toContain(field('Przyjęta', txt('2026-11-15 08:02')));
     expect(html).toContain('Nadawca na telefonie: <b>numer usługi 12345</b></span><span><b>48</b> znaków · <b>1</b> część · UCS-2</span>');

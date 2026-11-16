@@ -39,16 +39,16 @@ const inbound = (id: string, from: string, text: string | null) => ({
   id, from, received: stamp('2026-11-14T15:12:00.000Z'), text, source: 'external_sender', answersTo: { messageId: 'msg_1' }, untrusted: true, notice: NOTICE,
 });
 const ITEMS = [
-  inbound('in_1', '48601234567', 'TAK, potwierdzam czwartek 10:00'),
-  inbound('in_2', '48602345678', '<img src=x onerror=alert(1)>'),
-  inbound('in_3', '48603000000', null),
+  inbound('in_1', '48601000081', 'TAK, potwierdzam czwartek 10:00'),
+  inbound('in_2', '48601000082', '<img src=x onerror=alert(1)>'),
+  inbound('in_3', '48601000083', null),
 ];
 const draft = (inboundId: string, to: string, group: string, text: string) => ({
   draftId: `drf_${inboundId}`, inboundId, to, group, text, parts: 1, characters: text.length, expiresAt: '2026-11-15T09:30:00.000Z',
 });
 const DRAFTS = [
-  draft('in_1', '48601234567', 'potwierdzenia', 'Dziękujemy, serwisant będzie w czwartek o 10:00.'),
-  draft('in_2', '48602345678', '<script>x</script>', 'Dzień dobry, prosimy o kontakt z dyspozytornią.'),
+  draft('in_1', '48601000081', 'potwierdzenia', 'Dziękujemy, serwisant będzie w czwartek o 10:00.'),
+  draft('in_2', '48601000082', '<script>x</script>', 'Dzień dobry, prosimy o kontakt z dyspozytornią.'),
 ];
 
 describe('wykres słupkowy', () => {
@@ -340,7 +340,7 @@ describe('widok odpowiedzi klientów', () => {
   it('renderReplies: zwarta lista, rozwinięty pierwszy szkic z polem odpowiedzi, stan odpowiedzi w plakietce', () => {
     const html = renderReplies(ITEMS, DRAFTS, null);
     expect(items(html)).toEqual(['<details class="it" open>', '<details class="it">', '<details class="it">']);
-    expect(html).toContain('<summary data-id="in_1"><div class="it-top"><b>48601234567</b><span class="muted">16:12</span>'
+    expect(html).toContain('<summary data-id="in_1"><div class="it-top"><b>48601000081</b><span class="muted">16:12</span>'
       + '<span class="it-tag"><span class="badge b-wait">szkic: potwierdzenia</span></span></div>');
     expect(html).toContain('<span class="badge b-plain">bez odpowiedzi</span>');
     expect(html).toContain('<p class="it-meta">Odpowiedź na wiadomość msg_1, odebrana 2026-11-14 16:12</p>');
@@ -358,11 +358,11 @@ describe('widok odpowiedzi klientów', () => {
     expect(all).toContain('<option value="draft">ze szkicem agenta</option><option value="none">bez odpowiedzi</option><option value="sent">odpowiedź wysłana</option>');
     const group = renderReplies(ITEMS, DRAFTS, 'potwierdzenia');
     expect(items(group)).toHaveLength(1);
-    expect(group).toContain('<b>48601234567</b>');
+    expect(group).toContain('<b>48601000081</b>');
     expect(group).toContain('Wyślij 1 szkic odpowiedzi');
     const none = renderReplies(ITEMS, DRAFTS, null, { answer: 'none' });
     expect(items(none)).toHaveLength(1);
-    expect(none).toContain('<b>48603000000</b>');
+    expect(none).toContain('<b>48601000083</b>');
     const sent = renderReplies(ITEMS, DRAFTS, null, { answer: 'sent', sent: new Map([['in_2', 'msg_9']]) });
     expect(items(sent)).toHaveLength(1);
     expect(sent).toContain('<span class="badge b-ok">odpowiedź wysłana</span>');
@@ -372,8 +372,8 @@ describe('widok odpowiedzi klientów', () => {
   });
 
   it('refreshQuery pomija until, gdy bramka zgłosiła koniec przedziału bliski chwili odczytu', () => {
-    const input = { since: '2026-11-15 08:00', until: '2026-11-15 09:55', sender: '601234567' };
-    expect(refreshQuery(input, true)).toEqual({ since: '2026-11-15 08:00', sender: '601234567' });
+    const input = { since: '2026-11-15 08:00', until: '2026-11-15 09:55', sender: '601000081' };
+    expect(refreshQuery(input, true)).toEqual({ since: '2026-11-15 08:00', sender: '601000081' });
     expect(refreshQuery(input, false)).toBe(input);
     expect(input.until).toBe('2026-11-15 09:55');
   });
