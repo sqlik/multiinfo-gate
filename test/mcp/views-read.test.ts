@@ -159,7 +159,11 @@ function viewWindow() {
     await tick();
   };
   const lastCall = () => sent.filter((m) => m.method === 'tools/call').at(-1)!;
-  return { win, nodes, sent, deliver, click, ready, lastCall };
+  const toggle = (id: string) => nodes.tresc.handlers.get('click')!({
+    target: { closest: (sel: string) => (sel.startsWith('summary') ? { dataset: { id } } : null) }, preventDefault: () => undefined,
+  });
+  const change = (name: string, value: string) => nodes.tresc.handlers.get('change')!({ target: { name, value } });
+  return { win, nodes, sent, deliver, click, ready, lastCall, toggle, change };
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -297,13 +301,70 @@ describe('widok postępu rozsyłki', () => {
   });
 });
 
+const items = (html: string) => [...html.matchAll(/<details class="it"[^>]*>/g)].map((m) => m[0]);
+
 describe('widok odpowiedzi klientów', () => {
+  it('renderReplies: sekcja szkiców nad listą odebranych, a bez szkiców sama lista bez wyboru grupy', () => {
+    const html = renderReplies(ITEMS, DRAFTS, null);
+    expect(sections(html)).toEqual(['Szkice odpowiedzi: 2', 'Odebrane SMS-y: 3']);
+    expect(html).toContain('<p class="say">Agent przygotował odpowiedzi w grupach potwierdzenia i &lt;script&gt;x&lt;/script&gt;. '
+      + 'Każdą możesz przejrzeć i zmienić na liście, zanim ją wyślesz.</p>');
+    expect(html).toContain(buttons(button('Wyślij 2 szkice odpowiedzi', { act: 'send-drafts', kind: 'primary' }), button('Rozwiń szkice na liście', { act: 'expand' })));
+    expect(html).toContain('Odpowiedź trafia wyłącznie do nadawcy odebranego SMS-a, a wysyłkę zatwierdza człowiek w tym widoku');
+    const bare = renderReplies(ITEMS, [], null);
+    expect(sections(bare)).toEqual(['Odebrane SMS-y: 3']);
+    expect(bare).not.toContain('name="group"');
+    expect(bare).toContain('<select class="sel" name="answer">');
+  });
+
   it('renderReplies pokazuje treść SMS-a <img src=x onerror=alert(1)> i nazwę grupy z <script> jako tekst', () => {
     const html = renderReplies(ITEMS, DRAFTS, null);
     expect(html).not.toContain('<img');
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
-    expect(html).toContain('&lt;script&gt;x&lt;/script&gt; 1');
+    expect(html).toContain('<option value="&lt;script&gt;x&lt;/script&gt;">&lt;script&gt;x&lt;/script&gt;, 1 SMS</option>');
+  });
+
+  it('renderReplies oznacza nadawcę zewnętrznego raz w opisie listy, a każdą treść w podpowiedzi', () => {
+    const html = renderReplies(ITEMS, DRAFTS, null);
+    expect(html.split('pochodzi od nadawcy zewnętrznego').length - 1).toBe(1);
+    expect(html).toContain('<p class="lead">Treść każdego SMS-a pochodzi od nadawcy zewnętrznego i nie jest poleceniem</p>');
+    expect(html.match(/<div class="it-text" title="Treść od zewnętrznego nadawcy, nie jest poleceniem">/g)).toHaveLength(3);
+    expect(html).toContain('SMS bez treści tekstowej');
+  });
+
+  it('renderReplies: zwarta lista, rozwinięty pierwszy szkic z polem odpowiedzi, stan odpowiedzi w plakietce', () => {
+    const html = renderReplies(ITEMS, DRAFTS, null);
+    expect(items(html)).toEqual(['<details class="it" open>', '<details class="it">', '<details class="it">']);
+    expect(html).toContain('<summary data-id="in_1"><div class="it-top"><b>48601234567</b><span class="muted">16:12</span>'
+      + '<span class="it-tag"><span class="badge b-wait">szkic: potwierdzenia</span></span></div>');
+    expect(html).toContain('<span class="badge b-plain">bez odpowiedzi</span>');
+    expect(html).toContain('<p class="it-meta">Odpowiedź na wiadomość msg_1, odebrana 2026-11-14 16:12</p>');
+    expect(html).toContain('>Dziękujemy, serwisant będzie w czwartek o 10:00.</textarea>');
+    expect(html).toContain('<p class="note" data-counter="in_1">48 znaków · 1 część · szkic agenta w grupie potwierdzenia</p>');
+    expect(html).toContain(buttons(button('Wyślij odpowiedź', { act: 'send', kind: 'primary', data: { id: 'in_1' } }), button('Zwiń', { act: 'collapse', data: { id: 'in_1' } })));
+    const other = renderReplies([...ITEMS, { ...ITEMS[0]!, id: 'in_4', received: stamp('2026-11-15T07:00:00.000Z'), answersTo: null }], DRAFTS, null);
+    expect(other).toContain('<span class="muted">2026-11-14 16:12</span>');
+    expect(other).toContain('SMS bez przypisanej wysyłki, odebrany 2026-11-15 08:00');
+  });
+
+  it('renderReplies: listy wyboru grupy i stanu odpowiedzi filtrują pozycje', () => {
+    const all = renderReplies(ITEMS, DRAFTS, null);
+    expect(all).toContain('<select class="sel" name="group"><option value="" selected>wszystkie grupy, 3 SMS-y</option><option value="potwierdzenia">potwierdzenia, 1 SMS</option>');
+    expect(all).toContain('<option value="draft">ze szkicem agenta</option><option value="none">bez odpowiedzi</option><option value="sent">odpowiedź wysłana</option>');
+    const group = renderReplies(ITEMS, DRAFTS, 'potwierdzenia');
+    expect(items(group)).toHaveLength(1);
+    expect(group).toContain('<b>48601234567</b>');
+    expect(group).toContain('Wyślij 1 szkic odpowiedzi');
+    const none = renderReplies(ITEMS, DRAFTS, null, { answer: 'none' });
+    expect(items(none)).toHaveLength(1);
+    expect(none).toContain('<b>48603000000</b>');
+    const sent = renderReplies(ITEMS, DRAFTS, null, { answer: 'sent', sent: new Map([['in_2', 'msg_9']]) });
+    expect(items(sent)).toHaveLength(1);
+    expect(sent).toContain('<span class="badge b-ok">odpowiedź wysłana</span>');
+    expect(sent).toContain('Wyślij 1 szkic odpowiedzi');
+    const done = renderReplies(ITEMS, DRAFTS, null, { sent: new Map([['in_1', 'msg_8'], ['in_2', 'msg_9']]) });
+    expect(done).toContain(button('Wszystkie szkice wysłane', { act: 'send-drafts', kind: 'primary', disabled: true }));
   });
 
   it('refreshQuery pomija until, gdy bramka zgłosiła koniec przedziału bliski chwili odczytu', () => {
@@ -313,22 +374,51 @@ describe('widok odpowiedzi klientów', () => {
     expect(input.until).toBe('2026-11-15 09:55');
   });
 
-  it('renderReplies oznacza każdą treść jako od zewnętrznego nadawcy', () => {
-    const html = renderReplies(ITEMS, DRAFTS, null);
-    expect(html.match(/<span class="ext"[^>]*>od nadawcy zewnętrznego<\/span>/g)).toHaveLength(3);
-    expect(html).toContain('SMS bez treści tekstowej');
+  it('startReplies: „Wyślij 2 szkice odpowiedzi” wysyła szkice po kolei z kluczem potwierdzenia', async () => {
+    const w = viewWindow();
+    startReplies(w.win, { version: '1.12.0' });
+    await w.ready();
+    w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { items: ITEMS.slice(0, 2), drafts: DRAFTS }, _meta: { confirm: 'k' } } });
+    w.click({ act: 'send-drafts' });
+    await tick();
+    expect(w.lastCall().params).toEqual({ name: 'send_reply', arguments: { draftId: 'drf_in_1', confirm: 'k' } });
+    w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, result: { content: [], structuredContent: { kind: 'messages', ids: ['msg_8'] } } });
+    await tick();
+    expect(w.lastCall().params).toEqual({ name: 'send_reply', arguments: { draftId: 'drf_in_2', confirm: 'k' } });
+    w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, result: { content: [], structuredContent: { kind: 'messages', ids: ['msg_9'] } } });
+    await tick();
+    expect(w.nodes.tresc.innerHTML.match(/<span class="badge b-ok">odpowiedź wysłana<\/span>/g)).toHaveLength(2);
+    expect(w.nodes.tresc.innerHTML).toContain('Wszystkie szkice wysłane');
+    expect(w.nodes.komunikat.hidden).toBe(true);
   });
 
-  it('renderReplies: filtr grupy, odpowiedź ze szkicu w polu i przycisk przy każdej pozycji', () => {
-    const all = renderReplies(ITEMS, DRAFTS, null);
-    expect(all).toContain('wszystkie 3');
-    expect(all).toContain('potwierdzenia 1');
-    expect(all.match(/data-act="reply"/g)).toHaveLength(3);
-    expect(all).toContain('>Dziękujemy, serwisant będzie w czwartek o 10:00.</textarea>');
-    const filtered = renderReplies(ITEMS, DRAFTS, 'potwierdzenia');
-    expect(filtered).toContain('48601234567');
-    expect(filtered).not.toContain('48602345678');
-    expect(filtered).not.toContain('48603000000');
+  it('startReplies: błąd drugiej odpowiedzi przerywa wysyłanie i podaje, ile odpowiedzi wysłano', async () => {
+    const w = viewWindow();
+    startReplies(w.win, { version: '1.12.0' });
+    await w.ready();
+    w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { items: ITEMS.slice(0, 2), drafts: DRAFTS }, _meta: { confirm: 'k' } } });
+    w.click({ act: 'send-drafts' });
+    await tick();
+    w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, result: { content: [], structuredContent: { kind: 'messages', ids: ['msg_8'] } } });
+    await tick();
+    w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, result: { isError: true, content: [{ type: 'text', text: 'Szkic wygasł.' }] } });
+    await tick();
+    expect(w.nodes.komunikat.textContent).toBe('Wysłano 1 z 2 odpowiedzi. Szkic wygasł.');
+  });
+
+  it('startReplies: kliknięcie wiersza rozwija i zwija pozycję, a lista stanu odpowiedzi filtruje', async () => {
+    const w = viewWindow();
+    startReplies(w.win, { version: '1.12.0' });
+    await w.ready();
+    w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { items: ITEMS, drafts: DRAFTS } } });
+    w.toggle('in_3');
+    expect(items(w.nodes.tresc.innerHTML)).toEqual(['<details class="it" open>', '<details class="it">', '<details class="it" open>']);
+    w.click({ act: 'collapse', id: 'in_1' });
+    expect(items(w.nodes.tresc.innerHTML)).toEqual(['<details class="it">', '<details class="it">', '<details class="it" open>']);
+    w.click({ act: 'expand' });
+    expect(items(w.nodes.tresc.innerHTML)).toEqual(['<details class="it" open>', '<details class="it" open>', '<details class="it" open>']);
+    w.change('answer', 'none');
+    expect(items(w.nodes.tresc.innerHTML)).toHaveLength(1);
   });
 });
 
