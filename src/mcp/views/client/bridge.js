@@ -132,6 +132,23 @@ export const HOST_TOOL_ERROR = 'Aplikacja AI zgłosiła błąd połączenia z br
 /** Komunikat po błędzie aplikacji AI przy innym żądaniu widoku niż wywołanie narzędzia. */
 export const HOST_ERROR = 'Aplikacja AI zgłosiła błąd i nie wykonała prośby widoku';
 
+/**
+ * Błąd aplikacji AI z odpowiedzi JSON-RPC: polski komunikat i tekst aplikacji w `detail`. Błąd przy wywołaniu
+ * narzędzia jest błędem połączenia z bramką, dlatego odświeżanie na żywo ponawia odczyt (`retryable`).
+ */
+export function hostError(method, raw) {
+  const error = new Error(method === 'tools/call' ? HOST_TOOL_ERROR : HOST_ERROR);
+  error.detail = typeof raw === 'string' ? raw : '';
+  error.retryable = method === 'tools/call';
+  return error;
+}
+
+/** Błąd połączenia, po którym odświeżanie na żywo ponawia odczyt, na przykład 502 przy restarcie bramki. */
+export const retryable = (error) => error instanceof Error && error.retryable === true;
+
+/** Komunikat odświeżania po błędzie połączenia, z odstępem do kolejnego odczytu. */
+export const retryText = (ms) => `Aplikacja AI zgłosiła błąd połączenia z bramką. Widok ponowi odczyt za ${ms / 1000} s.`;
+
 /** Tekst i szczegóły błędu do komunikatu: `say('fail', ...failure(error))`. */
 export const failure = (error) => (error instanceof Error ? [error.message, typeof error.detail === 'string' ? error.detail : ''] : [String(error), '']);
 
@@ -234,9 +251,7 @@ export function createBridge(win, handlers = {}) {
     if (isObject(msg.error)) {
       // Tekst błędu pochodzi od aplikacji, na przykład surowa odpowiedź 502 serwera pośredniczącego, dlatego widok
       // pokazuje polski komunikat, a tekst aplikacji tylko w szczegółach.
-      const error = new Error(entry.method === 'tools/call' ? HOST_TOOL_ERROR : HOST_ERROR);
-      error.detail = typeof msg.error.message === 'string' ? msg.error.message : '';
-      entry.reject(error);
+      entry.reject(hostError(entry.method, msg.error.message));
     } else entry.resolve(isObject(msg.result) ? msg.result : {});
   });
 

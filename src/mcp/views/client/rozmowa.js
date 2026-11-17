@@ -2,7 +2,8 @@
 // w dwóch kolumnach według kierunku, odświeżanie co 15 s przez 15 minut, prośba o odpowiedź po nowym SMS-ie klienta
 // i szkic odpowiedzi na dole, który wysyła send_reply z kluczem potwierdzenia z podglądu.
 import {
-  applyTheme, badge, button, buttons, cancelledText, createBridge, esc, failure, forwardedText, note, phoneLabel, pluralWord, sayIn, section, stamp, textOf,
+  applyTheme, badge, button, buttons, cancelledText, createBridge, esc, failure, forwardedText, note, phoneLabel, pluralWord, retryable, retryText,
+  sayIn, section, stamp, textOf,
 } from './bridge.js';
 
 export const CONVERSATION_REFRESH_MS = 15_000;
@@ -20,7 +21,8 @@ const STATE_TONE = { delivered: 'ok', failed: 'fail', blocked: 'fail', expired: 
 /**
  * Odświeżanie rozmowy przez conversation z `args` co 15 s, najwyżej 15 minut. `args` może być funkcją, która podaje
  * argumenty przy każdym odczycie. `handlers.onData` otrzymuje każdy odczyt, a `handlers.onEnd` powód końca: timeout
- * albo error z tekstem i szczegółami błędu aplikacji AI. Wynikiem jest funkcja, która zatrzymuje odświeżanie bez wywołania `onEnd`.
+ * albo error z tekstem i szczegółami błędu aplikacji AI. Po błędzie połączenia `handlers.onRetry` otrzymuje szczegóły
+ * błędu, a odświeżanie ponawia odczyt. Wynikiem jest funkcja, która zatrzymuje odświeżanie bez wywołania `onEnd`.
  */
 export function watchConversation(bridge, win, args, handlers, now = () => Date.now()) {
   const started = now();
@@ -31,7 +33,12 @@ export function watchConversation(bridge, win, args, handlers, now = () => Date.
     try {
       result = await bridge.callTool('conversation', typeof args === 'function' ? args() : args);
     } catch (error) {
-      if (!stopped) handlers.onEnd('error', ...failure(error));
+      if (stopped) return;
+      // Błąd połączenia, na przykład przy restarcie bramki, nie przerywa odświeżania przed upływem 15 minut.
+      if (retryable(error) && now() - started < CONVERSATION_REFRESH_MAX_MS) {
+        handlers.onRetry?.(failure(error)[1]);
+        win.setTimeout(tick, CONVERSATION_REFRESH_MS);
+      } else handlers.onEnd('error', ...failure(error));
       return;
     }
     if (stopped) return;
@@ -118,7 +125,9 @@ export function startConversation(win, env) {
   const live = doc.getElementById('na-zywo');
   const refreshButton = doc.getElementById('odswiez');
   const say = sayIn(doc);
-  const s = { data: null, seen: new Set(), fresh: new Set(), asked: false, confirm: null, replySent: null, busy: false, stop: null };
+  const s = {
+    data: null, seen: new Set(), fresh: new Set(), asked: false, confirm: null, replySent: null, busy: false, stop: null, retrying: false,
+  };
   refreshButton.hidden = true;
   const draw = () => {
     if (s.data) root.innerHTML = renderConversation(s.data, s);
@@ -140,11 +149,20 @@ export function startConversation(win, env) {
     return [...byId.values()].sort(byTime);
   };
   const update = (data) => {
+    if (s.retrying) {
+      s.retrying = false;
+      say('plain', '');
+    }
     s.data = { ...s.data, items: merge(data.items, true), lastInboundId: data.lastInboundId ?? s.data.lastInboundId, sent: data.sent, canReply: data.canReply };
     draw();
   };
+  const retry = (detail) => {
+    s.retrying = true;
+    say('wait', retryText(CONVERSATION_REFRESH_MS), detail);
+  };
   const end = (why, text, detail) => {
     s.stop = null;
+    s.retrying = false;
     live.textContent = LIVE_TEXT[why] ?? '';
     refreshButton.hidden = false;
     if (why === 'error') say('fail', text, detail);
@@ -153,7 +171,7 @@ export function startConversation(win, env) {
     s.stop?.();
     refreshButton.hidden = true;
     live.textContent = LIVE_TEXT.watching;
-    s.stop = watchConversation(bridge, win, () => ({ phone: s.data.phone }), { onData: update, onEnd: end });
+    s.stop = watchConversation(bridge, win, () => ({ phone: s.data.phone }), { onData: update, onEnd: end, onRetry: retry });
   };
   const show = (result) => {
     if (result.isError) return say('fail', textOf(result));
@@ -172,6 +190,8 @@ export function startConversation(win, env) {
   };
   const run = async (task) => {
     if (s.busy || !s.data) return;
+    // Komunikat działania pracownika zastępuje komunikat o ponowieniu odczytu i zostaje po udanym odczycie.
+    s.retrying = false;
     s.busy = true;
     draw();
     try {

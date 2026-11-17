@@ -3,7 +3,7 @@
 // a odbiorców doładowuje porcjami.
 import {
   applyTheme, badge, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, failure, field, fields, note, num, openDownload, phoneLabel,
-  sayIn, section, share, stamp, textOf, tile, tiles, txt,
+  retryable, retryText, sayIn, section, share, stamp, textOf, tile, tiles, txt,
 } from './bridge.js';
 import { barChart, stackBar } from './chart.js';
 import { STATE_LABELS } from './doreczenia.js';
@@ -45,7 +45,8 @@ function pendingSection(d, busy) {
 /**
  * Odświeżanie stanu rozsyłki przez package_status z `args` co 30 s, do raportu albo stanu ostatecznego, najwyżej
  * 30 minut. `args` może być funkcją, która podaje argumenty przy każdym odczycie. `handlers.onData` otrzymuje każdy
- * stan, a `handlers.onEnd` powód końca: settled, timeout albo error z tekstem.
+ * stan, a `handlers.onEnd` powód końca: settled, timeout albo error z tekstem. Po błędzie połączenia `handlers.onRetry`
+ * otrzymuje szczegóły błędu, a odświeżanie ponawia odczyt.
  */
 export function watchPackage(bridge, win, args, handlers, now = () => Date.now()) {
   const started = now();
@@ -54,7 +55,11 @@ export function watchPackage(bridge, win, args, handlers, now = () => Date.now()
     try {
       result = await bridge.callTool('package_status', typeof args === 'function' ? args() : args);
     } catch (error) {
-      handlers.onEnd('error', ...failure(error));
+      // Błąd połączenia, na przykład przy restarcie bramki, nie przerywa odświeżania przed upływem 30 minut.
+      if (retryable(error) && now() - started < PACKAGE_REFRESH_MAX_MS) {
+        handlers.onRetry?.(failure(error)[1]);
+        win.setTimeout(tick, PACKAGE_REFRESH_MS);
+      } else handlers.onEnd('error', ...failure(error));
       return;
     }
     if (result.isError || !result.structuredContent) {
@@ -153,7 +158,7 @@ export function startPackage(win, env) {
   const root = doc.getElementById('tresc');
   const live = doc.getElementById('na-zywo');
   const say = sayIn(doc);
-  const s = { input: null, data: null, busy: false, watching: false };
+  const s = { input: null, data: null, busy: false, watching: false, retrying: false };
   const draw = () => {
     if (s.data) root.innerHTML = renderPackage(s.data, s);
   };
@@ -162,8 +167,13 @@ export function startPackage(win, env) {
     const limit = Math.min(PAGE_MAX, Math.max(s.input?.limit ?? 25, s.data.items.length));
     return { packageId: s.data.id, ...(limit === 25 ? {} : { limit }) };
   };
+  const retry = (detail) => {
+    s.retrying = true;
+    say('wait', retryText(PACKAGE_REFRESH_MS), detail);
+  };
   const end = (why, text, detail) => {
     s.watching = false;
+    s.retrying = false;
     live.textContent = LIVE_TEXT[why] ?? '';
     if (why === 'error') say('fail', text, detail);
   };
@@ -172,7 +182,18 @@ export function startPackage(win, env) {
     if (s.watching || packageSettled(s.data) || packagePending(s.data)) return;
     s.watching = true;
     live.textContent = LIVE_TEXT.watching;
-    watchPackage(bridge, win, args, { onData: (data) => { s.data = data; draw(); }, onEnd: end });
+    watchPackage(bridge, win, args, {
+      onData: (data) => {
+        if (s.retrying) {
+          s.retrying = false;
+          say('plain', '');
+        }
+        s.data = data;
+        draw();
+      },
+      onEnd: end,
+      onRetry: retry,
+    });
   };
   const show = (result) => {
     if (result.isError) return say('fail', textOf(result));
@@ -189,6 +210,8 @@ export function startPackage(win, env) {
   };
   const run = async (task) => {
     if (s.busy || !s.data) return;
+    // Komunikat działania pracownika zastępuje komunikat o ponowieniu odczytu i zostaje po udanym odczycie.
+    s.retrying = false;
     s.busy = true;
     draw();
     try {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { num } from '../../src/mcp/views/client/bridge.js';
+import { hostError, num } from '../../src/mcp/views/client/bridge.js';
 import { renderStatus } from '../../src/mcp/views/client/co-moge.js';
 import {
   FILE_LOADED, FILE_REFRESH_MAX_MS, FILE_REFRESH_MS, filePending, fileSettled, renderFilePreview, renderFileProgress, renderLoaded, startFile, transferFile, watchFileSend,
@@ -443,6 +443,22 @@ describe('podgląd, wysyłka i postęp rozsyłki z pliku', () => {
     lateTimers.shift()!();
     await until(() => late.length === 1);
     expect(late).toEqual(['timeout']);
+
+    // Błąd połączenia: kolejny odczyt za 30 s, a po 30 minutach koniec z błędem.
+    clock = 0;
+    const replies: unknown[] = [hostError('tools/call', '502'), hostError('tools/call', '502')];
+    const flaky: string[] = [];
+    const flakyTimers: Array<{ fn: () => void; ms: number }> = [];
+    watchFileSend({ callTool: async () => { throw replies.shift(); } }, { setTimeout: (fn: () => void, ms: number) => { flakyTimers.push({ fn, ms }); } },
+      'fsd_7k2', { onData: () => undefined, onEnd: (why: string) => flaky.push(why), onRetry: (detail: string) => flaky.push(`ponowienie: ${detail}`) }, () => clock);
+    flakyTimers.shift()!.fn();
+    await until(() => flaky.length === 1);
+    expect(flakyTimers.map((t) => t.ms)).toEqual([FILE_REFRESH_MS]);
+    clock = FILE_REFRESH_MAX_MS;
+    flakyTimers.shift()!.fn();
+    await until(() => flaky.length === 2);
+    expect(flaky).toEqual(['ponowienie: 502', 'error']);
+    expect(flakyTimers).toEqual([]);
   });
 
   it('widok postępu: Anuluj wysyłkę woła cancel_package z identyfikatorem wysyłki z pliku i odświeża stan', async () => {

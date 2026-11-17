@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { hostError } from '../../src/mcp/views/client/bridge.js';
 import { DELIVERY_REFRESH_MAX_MS, DELIVERY_REFRESH_MS, deliveryLine, watchDeliveries } from '../../src/mcp/views/client/doreczenia.js';
 
 type Result = { isError?: boolean; structuredContent?: { counts: Record<string, number> } };
@@ -52,6 +53,29 @@ describe('odświeżanie doręczeń', () => {
     await broken.step(DELIVERY_REFRESH_MS);
     expect(broken.updates.at(-1)).toEqual({ counts: { queued: 2 }, done: true });
     expect(broken.timers).toEqual([]);
+  });
+
+  it('watchDeliveries: błąd połączenia ponawia odczyt za 15 s i nie oznacza braku uprawnienia, także na końcu okna', async () => {
+    const f = fake([hostError('tools/call', '502'), counts({ sent: 2 }), hostError('tools/call', '502'), counts({ delivered: 2 })]);
+    await f.step();
+    expect(f.updates).toEqual([]);
+    expect(f.timers.map((t) => t.ms)).toEqual([DELIVERY_REFRESH_MS]);
+    await f.step(DELIVERY_REFRESH_MS);
+    await f.step(DELIVERY_REFRESH_MS);
+    expect(f.updates).toEqual([{ counts: { sent: 2 }, done: false }]);
+    await f.step(DELIVERY_REFRESH_MS);
+    expect(f.updates.at(-1)).toEqual({ counts: { delivered: 2 }, done: true });
+
+    // Po 15 minutach błąd połączenia kończy odświeżanie z ostatnimi liczbami, a bez odczytu bez zmiany widoku.
+    const late = fake([counts({ sent: 2 }), hostError('tools/call', '502')]);
+    await late.step();
+    await late.step(DELIVERY_REFRESH_MAX_MS);
+    expect(late.updates.at(-1)).toEqual({ counts: { sent: 2 }, done: true });
+    expect(late.timers).toEqual([]);
+    const none = fake([hostError('tools/call', '502')]);
+    await none.step(DELIVERY_REFRESH_MAX_MS);
+    expect(none.updates).toEqual([]);
+    expect(none.timers).toEqual([]);
   });
 
   it('watchDeliveries: po 15 minutach odświeżanie kończy się także przy stanach w drodze', async () => {

@@ -1,6 +1,6 @@
 // Doręczenia po wysyłce, wspólne dla widoków wysyłki, grupy i przebiegu: odczyt list_messages z identyfikatorem
 // szkicu co 15 s, do stanów ostatecznych albo 15 minut, oraz zdanie z liczbami w stanach.
-import { esc, tile } from './bridge.js';
+import { esc, retryable, tile } from './bridge.js';
 
 export const DELIVERY_REFRESH_MS = 15_000;
 export const DELIVERY_REFRESH_MAX_MS = 900_000;
@@ -40,7 +40,13 @@ export function watchDeliveries(bridge, win, draftId, onUpdate, now = () => Date
     let result;
     try {
       result = await bridge.callTool('list_messages', { draftId, limit: 1 });
-    } catch {
+    } catch (error) {
+      // Błąd połączenia nie oznacza braku uprawnienia: odczyt wraca za 15 s, a po 15 minutach liczby zostają ostatnie.
+      if (retryable(error)) {
+        if (now() - started < DELIVERY_REFRESH_MAX_MS) win.setTimeout(tick, DELIVERY_REFRESH_MS);
+        else if (last) onUpdate({ ...last, done: true });
+        return;
+      }
       result = { isError: true };
     }
     if (result.isError) {

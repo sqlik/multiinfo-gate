@@ -5,8 +5,8 @@
 // pokazuje jako podgląd z gotowymi wiadomościami, a po wysyłce i z wyniku file_send_status jako postęp wysyłki.
 
 import {
-  applyTheme, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, failure, field, fields, forwardedText, messageBox, note, num,
-  numbers, openDownload, pluralWord, sayIn, section, share, smsCounter, stamp, textOf, tile, tiles, txt, wideField,
+  applyTheme, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, failure, field, fields, forwardedText, messageBox, note, num, numbers,
+  openDownload, pluralWord, retryable, retryText, sayIn, section, share, smsCounter, stamp, textOf, tile, tiles, txt, wideField,
 } from './bridge.js';
 import { stackBar } from './chart.js';
 import { latinText, measure } from './measure.js';
@@ -280,6 +280,7 @@ const OVERDUE_TEXT = 'Bramka nie przekazała rozsyłek do Multiinfo w ciągu 60 
 /**
  * Odświeżanie stanu wysyłki z pliku przez file_send_status co 30 s, do gotowego raportu, najwyżej 30 minut.
  * `handlers.onData` otrzymuje stan i `_meta`, a `handlers.onEnd` powód końca: settled, timeout albo error z tekstem.
+ * Po błędzie połączenia `handlers.onRetry` otrzymuje szczegóły błędu, a odświeżanie ponawia odczyt.
  */
 export function watchFileSend(bridge, win, id, handlers, now = () => Date.now()) {
   const started = now();
@@ -288,7 +289,11 @@ export function watchFileSend(bridge, win, id, handlers, now = () => Date.now())
     try {
       result = await bridge.callTool('file_send_status', { id });
     } catch (error) {
-      handlers.onEnd('error', ...failure(error));
+      // Błąd połączenia, na przykład przy restarcie bramki, nie przerywa odświeżania przed upływem 30 minut.
+      if (retryable(error) && now() - started < FILE_REFRESH_MAX_MS) {
+        handlers.onRetry?.(failure(error)[1]);
+        win.setTimeout(tick, FILE_REFRESH_MS);
+      } else handlers.onEnd('error', ...failure(error));
       return;
     }
     if (result.isError || !result.structuredContent) {
@@ -348,7 +353,7 @@ export function renderFileProgress(d, state = {}) {
 export function mountFileSend(root, { bridge, say, win, live }) {
   const f = {
     input: null, preview: null, meta: {}, confirm: null, sample: 0, busy: false, sending: false, sent: null, cancelled: null,
-    status: null, name: null, watching: false,
+    status: null, name: null, watching: false, retrying: false,
   };
   const draw = () => {
     if (f.status) root.innerHTML = renderFileProgress(f.status, { name: f.name, busy: f.busy });
@@ -356,6 +361,8 @@ export function mountFileSend(root, { bridge, say, win, live }) {
   };
   const run = async (task) => {
     if (f.busy) return;
+    // Komunikat działania pracownika zastępuje komunikat o ponowieniu odczytu i zostaje po udanym odczycie.
+    f.retrying = false;
     f.busy = true;
     draw();
     try {
@@ -368,8 +375,13 @@ export function mountFileSend(root, { bridge, say, win, live }) {
       draw();
     }
   };
+  const retry = (detail) => {
+    f.retrying = true;
+    say('wait', retryText(FILE_REFRESH_MS), detail);
+  };
   const end = (why, text, detail) => {
     f.watching = false;
+    f.retrying = false;
     live.textContent = LIVE_TEXT[why] ?? '';
     if (why === 'error') say('fail', text, detail);
   };
@@ -383,11 +395,16 @@ export function mountFileSend(root, { bridge, say, win, live }) {
     live.textContent = LIVE_TEXT.watching;
     watchFileSend(bridge, win, f.status.id, {
       onData: (data, meta) => {
+        if (f.retrying) {
+          f.retrying = false;
+          say('plain', '');
+        }
         f.status = data;
         if (meta?.name) f.name = meta.name;
         draw();
       },
       onEnd: end,
+      onRetry: retry,
     });
   };
 

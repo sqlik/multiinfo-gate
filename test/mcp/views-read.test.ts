@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { badge, button, buttons, esc, field, forwardedText, HOST_TOOL_ERROR, num, tile, tiles, txt } from '../../src/mcp/views/client/bridge.js';
+import {
+  badge, button, buttons, esc, field, forwardedText, hostError, HOST_TOOL_ERROR, num, retryText, tile, tiles, txt,
+} from '../../src/mcp/views/client/bridge.js';
 import { barChart } from '../../src/mcp/views/client/chart.js';
 import { renderStatus } from '../../src/mcp/views/client/co-moge.js';
 import { REMIND_MESSAGE, remindFallback, renderCampaign } from '../../src/mcp/views/client/kampania.js';
@@ -283,10 +285,18 @@ describe('widok postępu rozsyłki', () => {
       const timers: Array<{ fn: () => Promise<void>; ms: number }> = [];
       const events: unknown[] = [];
       let clock = 0;
-      const bridge = { callTool: async (name: string, args: unknown) => { calls.push({ name, args }); return results.shift(); } };
+      const bridge = {
+        callTool: async (name: string, args: unknown) => {
+          calls.push({ name, args });
+          const next = results.shift();
+          if (next instanceof Error) throw next;
+          return next;
+        },
+      };
       const win = { setTimeout: (fn: () => Promise<void>, ms: number) => { timers.push({ fn, ms }); } };
       watchPackage(bridge, win, { packageId: 'pkg_7x2', limit: 25 }, {
         onData: (d: { status: string }) => events.push(d.status), onEnd: (why: string) => events.push(`koniec: ${why}`),
+        onRetry: (detail: string) => events.push(`ponowienie: ${detail}`),
       }, () => clock);
       return { calls, timers, events, step: async () => { clock += advance.shift() ?? 0; await timers.shift()!.fn(); } };
     };
@@ -307,6 +317,17 @@ describe('widok postępu rozsyłki', () => {
     await broken.step();
     expect(broken.events).toEqual(['koniec: error']);
     expect(broken.timers).toEqual([]);
+
+    // Błąd połączenia przed upływem 30 minut: kolejny odczyt za 30 s, po 30 minutach koniec z błędem.
+    const host = run([hostError('tools/call', '502'), { structuredContent: REPORTED }], [PACKAGE_REFRESH_MS, PACKAGE_REFRESH_MS]);
+    await host.step();
+    expect(host.timers.map((t) => t.ms)).toEqual([PACKAGE_REFRESH_MS]);
+    await host.step();
+    expect(host.events).toEqual(['ponowienie: 502', 'completed', 'koniec: settled']);
+    const down = run([hostError('tools/call', '502')], [PACKAGE_REFRESH_MAX_MS]);
+    await down.step();
+    expect(down.events).toEqual(['koniec: error']);
+    expect(down.timers).toEqual([]);
   });
 });
 
@@ -611,6 +632,7 @@ describe('widok rozmowy z numerem', () => {
       const stop = watchConversation(bridge, win, { phone: '48601000081' }, {
         onData: (d: { lastInboundId: string }) => events.push(d.lastInboundId),
         onEnd: (why: string, ...why2: string[]) => events.push(why2.length > 0 ? [`koniec: ${why}`, ...why2] : `koniec: ${why}`),
+        onRetry: (detail: string) => events.push(`ponowienie: ${detail}`),
       }, () => clock);
       return { calls, timers, events, stop, step: async () => { clock += advance.shift() ?? 0; await timers.shift()!.fn(); } };
     };
@@ -628,10 +650,25 @@ describe('widok rozmowy z numerem', () => {
     await broken.step();
     expect(broken.events).toEqual([['koniec: error', 'Połączenie jest chwilowo niedostępne.', '']]);
 
-    // Błąd aplikacji AI, na przykład 502 przy niedostępnej bramce: polski komunikat, a tekst aplikacji w szczegółach.
-    const host = run([Object.assign(new Error(HOST_TOOL_ERROR), { detail: 'Error POSTing to endpoint: 502' })], [CONVERSATION_REFRESH_MS]);
+    // Błąd połączenia, na przykład 502 przy restarcie bramki: kolejny odczyt za 15 s, a odświeżanie trwa dalej.
+    const host = run([hostError('tools/call', '502'), { structuredContent: { ...CONVERSATION, lastInboundId: 'in_3' } }],
+      [CONVERSATION_REFRESH_MS, CONVERSATION_REFRESH_MS]);
     await host.step();
-    expect(host.events).toEqual([['koniec: error', HOST_TOOL_ERROR, 'Error POSTing to endpoint: 502']]);
+    expect(host.events).toEqual(['ponowienie: 502']);
+    expect(host.timers.map((t) => t.ms)).toEqual([CONVERSATION_REFRESH_MS]);
+    await host.step();
+    expect(host.events).toEqual(['ponowienie: 502', 'in_3']);
+
+    // Błąd połączenia po 15 minutach kończy odświeżanie polskim komunikatem z tekstem aplikacji w szczegółach.
+    const down = run([hostError('tools/call', '502')], [CONVERSATION_REFRESH_MAX_MS]);
+    await down.step();
+    expect(down.events).toEqual([['koniec: error', HOST_TOOL_ERROR, '502']]);
+    expect(down.timers).toEqual([]);
+
+    // Błąd bez połączenia z aplikacją, na przykład brak wywołań narzędzi, kończy odświeżanie od razu.
+    const refused = run([new Error('Aplikacja AI nie pozwala widokowi wywoływać narzędzi bramki.')], [CONVERSATION_REFRESH_MS]);
+    await refused.step();
+    expect(refused.events).toEqual([['koniec: error', 'Aplikacja AI nie pozwala widokowi wywoływać narzędzi bramki.', '']]);
 
     // Zatrzymane odświeżanie nie wywołuje już narzędzia, na przykład po ręcznym „Odśwież”.
     const stopped = run([{ structuredContent: CONVERSATION }], [CONVERSATION_REFRESH_MS]);
@@ -690,7 +727,9 @@ describe('widok rozmowy z numerem', () => {
     expect(w.timers.length).toBe(before + 1);
   });
 
-  it('widok: błąd aplikacji AI przy odświeżaniu, na przykład 502 przy niedostępnej bramce, daje polski komunikat i szczegóły', async () => {
+  it('widok: błąd połączenia przy odświeżaniu ponawia odczyt z komunikatem, a po 15 minutach kończy polskim komunikatem i szczegółami', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-15T07:30:00.000Z'));
     const w = viewWindow();
     startConversation(w.win, { version: '1.13.0' });
     await w.ready();
@@ -698,6 +737,37 @@ describe('widok rozmowy z numerem', () => {
     void w.timers.at(-1)!.fn();
     await tick();
     const raw = 'Error POSTing to endpoint: {"title":"Error 502: Bad gateway","detail":"<origin>"}';
+    w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, error: { code: 502, message: raw } });
+    await tick();
+    // Pierwszy błąd połączenia: odświeżanie trwa, a komunikat zapowiada kolejny odczyt.
+    expect(w.nodes['na-zywo'].textContent).toBe('● na żywo, co 15 s');
+    expect(w.nodes.odswiez.hidden).toBe(true);
+    expect(w.nodes.komunikat.className).toBe('notice n-wait');
+    expect(w.nodes.komunikat.innerHTML).toBe(`${esc(retryText(CONVERSATION_REFRESH_MS))}<details class="why"><summary>Szczegóły błędu</summary>`
+      + `<div class="mono">${esc(raw)}</div></details>`);
+    // Udany odczyt usuwa komunikat o ponowieniu.
+    void w.timers.at(-1)!.fn();
+    await tick();
+    w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, result: { content: [], structuredContent: CONVERSATION } });
+    await tick();
+    expect(w.nodes.komunikat.hidden).toBe(true);
+    // Komunikat działania pracownika w trakcie ponawiania zostaje po udanym odczycie.
+    void w.timers.at(-1)!.fn();
+    await tick();
+    w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, error: { code: 502, message: raw } });
+    await tick();
+    w.click({ act: 'fix' });
+    await tick();
+    expect(w.nodes.komunikat.textContent).toBe('Napisz w rozmowie, co zmienić w treści odpowiedzi');
+    void w.timers.at(-1)!.fn();
+    await tick();
+    w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, result: { content: [], structuredContent: CONVERSATION } });
+    await tick();
+    expect(w.nodes.komunikat.textContent).toBe('Napisz w rozmowie, co zmienić w treści odpowiedzi');
+    // Błąd połączenia po 15 minutach kończy odświeżanie.
+    vi.setSystemTime(new Date('2026-11-15T07:46:00.000Z'));
+    void w.timers.at(-1)!.fn();
+    await tick();
     w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, error: { code: 502, message: raw } });
     await tick();
     expect(w.nodes['na-zywo'].textContent).toBe('odświeżanie zatrzymane');
