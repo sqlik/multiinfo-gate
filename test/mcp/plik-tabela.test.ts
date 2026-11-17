@@ -67,6 +67,28 @@ describe('rozpoznanie tabeli z pliku', () => {
     expect(analyze([row(1, '', '')])).toEqual({ header: false, columns: [], data: [], phoneCandidates: [] });
   });
 
+  it('numer z kropkami jak w bramce: plik bez nagłówka z takimi numerami otrzymuje nazwy Kolumna A, B, C', () => {
+    expect(looksLikePhone('601.000.011')).toBe(true);
+    expect(looksLikePhone('+48.601.000.011')).toBe(true);
+    const table = analyze([row(1, '601.000.011', 'Hurtownia Łódź', '1 234,50 zł'), row(2, '601.000.012', 'Serwis Kraków', '99,00 zł'), row(3, '601.000.013', 'Flota Gdańsk', '15,00 zł')]);
+    expect(table.header).toBe(false);
+    expect(table.columns).toEqual(['Kolumna A', 'Kolumna B', 'Kolumna C']);
+    expect(table.phoneCandidates).toEqual([0]);
+  });
+
+  it('plik bez nagłówka, w którym pierwszy klient nie ma numeru: wartości pierwszego wiersza nie stają się nazwami kolumn', () => {
+    const data = Array.from({ length: 10 }, (_, i) => row(i + 2, `4860100001${i}`, `Serwis ${i}`, '99,00 zł'));
+    const table = analyze([row(1, '', 'Hurtownia Łódź', '1 234,50 zł'), ...data]);
+    expect(table.header).toBe(false);
+    expect(table.columns).toEqual(['Kolumna A', 'Kolumna B', 'Kolumna C']);
+    expect(table.data[0]).toEqual(row(1, '', 'Hurtownia Łódź', '1 234,50 zł'));
+    expect(table.phoneCandidates).toEqual([0]);
+    // Nagłówek z nazwą kolumny numeru z listy pozostaje nagłówkiem także przy pustej nazwie innej kolumny.
+    expect(analyze([row(1, 'Telefon', '', 'Kwota'), ...data]).header).toBe(true);
+    // Nagłówek z nazwą nad kolumną numeru rozpoznaną po zawartości pozostaje nagłówkiem.
+    expect(analyze([row(1, 'Komórka służbowa', 'Kontrahent', 'Kwota'), ...data]).header).toBe(true);
+  });
+
   it('pusta i powtórzona nazwa kolumny w nagłówku', () => {
     const t = analyze([row(1, 'Numer', '', ' Kwota ', 'kwota', 'Kwota'), row(2, '48601000011', 'Hurtownia', '1 234,50 zł', '99,00 zł', '10,00 zł', 'uwaga')]);
     expect(t.columns).toEqual(['Numer', 'Kolumna B', 'Kwota', 'kwota (D)', 'Kwota (E)', 'Kolumna F']);

@@ -712,7 +712,7 @@ Jeżeli wynik jest inny:
 | Separator | średnik, przecinek albo tabulator, rozpoznawany na podstawie pierwszych wierszy; pole w cudzysłowie może zawierać separator i podział wiersza |
 | Kodowanie | UTF-8 ze znacznikiem BOM i bez niego, Windows-1250 z Excela dla Windows oraz MacCentralEurope z Excela dla macOS |
 | Arkusze | pierwszy arkusz skoroszytu, a pozostałe do wyboru z listy **Arkusz** |
-| Wiersz nagłówka | pierwszy niepusty wiersz, chyba że zawiera numer telefonu; kolumny pliku bez nagłówka otrzymują nazwy „Kolumna A”, „Kolumna B” i kolejne |
+| Wiersz nagłówka | pierwszy niepusty wiersz, chyba że zawiera numer telefonu albo pustą komórkę nad kolumną z numerami; kolumny pliku bez nagłówka otrzymują nazwy „Kolumna A”, „Kolumna B” i kolejne |
 | Puste wiersze | pomijane |
 | Limity | 50 000 wierszy danych i 20 MB |
 

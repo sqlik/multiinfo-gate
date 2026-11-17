@@ -24,9 +24,9 @@ const EMPTY = 'Plik nie zawiera wierszy danych';
 const XLS = 'Widok nie odczytuje plików .xls z programu Excel 97-2003. Zapisz plik w Excelu jako „Skoroszyt programu Excel (.xlsx)” albo „CSV UTF-8” i wybierz go ponownie.';
 const LOCKED = 'Skoroszyt jest zabezpieczony hasłem, dlatego widok go nie odczyta. Usuń hasło w Excelu albo zapisz plik jako „CSV UTF-8” i wybierz go ponownie.';
 
-/** Numer telefonu: 9-15 cyfr po usunięciu spacji, myślników, nawiasów i wiodącego plusa. */
+/** Numer telefonu: 9-15 cyfr po usunięciu spacji, łączników, nawiasów, kropek i wiodącego plusa, jak w bramce. */
 export function looksLikePhone(value) {
-  return /^\d{9,15}$/.test(String(value ?? '').replace(/[\s()-]/g, '').replace(/^\+/, ''));
+  return /^\d{9,15}$/.test(String(value ?? '').replace(/[\s().-]/g, '').replace(/^\+/, ''));
 }
 
 /** Litera kolumny jak w Excelu: 0 → A, 25 → Z, 26 → AA. */
@@ -63,15 +63,33 @@ function tableWidth(rows) {
 }
 
 /**
+ * Czy pierwszy niepusty wiersz jest nagłówkiem. Nie jest nim wiersz z numerem telefonu ani wiersz bez nazwy
+ * z listy PHONE_HEADERS, w którym pusta komórka stoi nad kolumną numeru rozpoznaną po zawartości dalszych
+ * wierszy. W drugim przypadku pierwszy klient nie ma numeru, a jego dane nie mogą stać się nazwami kolumn.
+ */
+function guessHeader(filled, width) {
+  const first = filled[0].cells;
+  if (first.some(looksLikePhone)) return false;
+  if (first.some((c) => PHONE_HEADERS.includes(fold(String(c ?? ''))))) return true;
+  const rest = filled.slice(1);
+  if (rest.length === 0) return true;
+  for (let i = 0; i < width; i += 1) {
+    if (String(first[i] ?? '').trim() !== '') continue;
+    if (rest.filter((r) => looksLikePhone(r.cells[i])).length >= PHONE_SHARE * rest.length) return false;
+  }
+  return true;
+}
+
+/**
  * Nagłówek, nazwy kolumn, wiersze danych i kandydatki na kolumnę numeru. Wiersz nagłówka jest pierwszym
- * niepustym wierszem, chyba że zawiera numer telefonu albo `header` jest równe false. Kolumna bez nazwy
+ * niepustym wierszem według guessHeader, chyba że `header` określa go wprost. Kolumna bez nazwy
  * otrzymuje nazwę „Kolumna” z literą, a nazwa powtórzona literę w nawiasie. Puste wiersze są pomijane.
  */
 export function analyze(rows, { header } = {}) {
   const filled = rows.filter((r) => !isEmptyRow(r.cells));
   if (filled.length === 0) return { header: false, columns: [], data: [], phoneCandidates: [] };
-  const useHeader = header ?? !filled[0].cells.some(looksLikePhone);
   const width = tableWidth(filled);
+  const useHeader = header ?? guessHeader(filled, width);
   const seen = new Set();
   const columns = Array.from({ length: width }, (_, i) => {
     const raw = useHeader ? String(filled[0].cells[i] ?? '').trim() : '';
