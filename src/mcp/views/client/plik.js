@@ -1,120 +1,131 @@
-// Widok „Rozsyłka z pliku”: pracownik wybiera plik z odbiorcami, a widok czyta go na komputerze pracownika
-// i przekazuje wiersze do bramki porcjami narzędziem upload_file_rows, widocznym wyłącznie dla widoku.
-// Wartości z pliku nie trafiają do agenta. Elementy oznaczone „próba A” służą punktowi kontrolnemu A
-// i zastępuje je czytnik docelowy.
+// Widok „Rozsyłka z pliku”: pracownik wybiera plik z odbiorcami, a widok czyta go na komputerze pracownika,
+// rozpoznaje nagłówek i kolumnę numeru, pokazuje pierwsze wiersze i po zatwierdzeniu przekazuje wiersze
+// do bramki porcjami narzędziem upload_file_rows, widocznym wyłącznie dla widoku. Agent otrzymuje tylko
+// stałą wiadomość o wczytaniu pliku, a wartości z pliku do niego nie trafiają.
 
 import {
-  applyTheme, button, buttons, cancelledText, createBridge, esc, field, fields, forwardedText, note, num, plural, sayIn, section, textOf, txt,
+  applyTheme, button, buttons, cancelledText, createBridge, esc, field, fields, forwardedText, note, num, pluralWord, sayIn, section, textOf, txt,
 } from './bridge.js';
+import { stackBar } from './chart.js';
+import {
+  analyze, FILE_BYTES_MAX, FILE_TOO_BIG, nextChunk, readFileBytes, ROWS_MAX, UPLOAD_BYTES, UPLOAD_CHUNK,
+} from './plik-tabela.js';
+import { readSheet } from './plik-xlsx.js';
 
 /** Wiadomość do rozmowy po przekazaniu pliku: stały tekst bramki, jak FILE_LOADED_MESSAGE w narzędziach. */
 export const FILE_LOADED = 'Plik z odbiorcami jest wczytany w widoku bramki. Przygotuj treść SMS-a z polami pliku.';
 
-// próba A: rozmiary porcji do porównania czasu przesyłania w aplikacjach AI.
-export const CHUNK_SIZES = [500, 1000, 2500, 5000];
-export const CHUNK_DEFAULT = 1000;
-
-/** Największy plik, który czyta widok. */
-const FILE_BYTES_MAX = 20 * 1024 * 1024;
-/** Liczba wierszy pokazywanych pracownikowi przed przekazaniem pliku. */
+/** Liczba wierszy danych pokazywanych pracownikowi przed przekazaniem pliku. */
 const PREVIEW_ROWS = 5;
-const PHONE_HEADER = /numer|telefon|tel|phone|msisdn/i;
 
-// próba A: uproszczony podział CSV UTF-8 według wierszy i separatora, bez cudzysłowów.
-export function splitCsv(text) {
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/).map((raw, i) => ({ line: i + 1, raw })).filter((l) => l.raw.trim() !== '');
-  if (lines.length === 0) return null;
-  const separator = lines[0].raw.includes(';') ? ';' : ',';
-  const cells = (raw) => raw.split(separator).map((c) => c.trim());
-  const columns = cells(lines[0].raw);
-  return {
-    columns,
-    phoneColumn: Math.max(0, columns.findIndex((c) => PHONE_HEADER.test(c))),
-    rows: lines.slice(1).map((l) => ({ line: l.line, cells: cells(l.raw) })),
-  };
-}
+const ENCODINGS = {
+  'utf-8': 'UTF-8', 'utf-16le': 'UTF-16', 'utf-16be': 'UTF-16', 'windows-1250': 'Windows-1250', 'x-mac-ce': 'MacCentralEurope z Excela dla macOS',
+};
+const SEPARATORS = { ';': 'średnik', ',': 'przecinek', '\t': 'tabulator' };
 
-// próba A: środowisko ramki widoku dla czytnika docelowego (XLSX i CSV w Windows-1250).
-export function environment(win) {
-  let cp1250 = false;
-  try {
-    cp1250 = new win.TextDecoder('windows-1250').encoding === 'windows-1250';
-  } catch {
-    cp1250 = false;
-  }
-  const yes = (v) => (v ? 'tak' : 'nie');
-  return `Środowisko: DecompressionStream ${yes(typeof win.DecompressionStream === 'function')}, Windows-1250 ${yes(cp1250)}`;
-}
+/** Pole wyboru pliku: ukryte pole systemowe, przycisk i nazwa pliku wyśrodkowane w pionie w jednej ramce. */
+const PICKER = '<label class="pick"><input type="file" id="plik" accept=".csv,.txt,.xlsx">'
+  + '<span class="btn pick-btn">Wybierz plik</span><span class="pick-name" id="plik-nazwa">Nie wybrano pliku</span></label>';
 
 /**
- * Przesłanie wierszy porcjami w kolejności offsetów. Nagłówek pliku przechodzi wyłącznie w pierwszej porcji.
- * Odmowa limitu żądań klucza wstrzymuje przesyłanie na `retryAfterSec` i ponawia tę samą porcję. Po komplecie
- * widok wysyła do rozmowy stałą wiadomość. Wynik: { error, forwarded }.
+ * Przesłanie wierszy porcjami w kolejności offsetów: najwyżej `size` wierszy i `bytes` bajtów w porcji. Nagłówek
+ * pliku przechodzi wyłącznie w pierwszej porcji. Odmowa limitu żądań klucza wstrzymuje przesyłanie
+ * na `retryAfterSec` i ponawia tę samą porcję. Po komplecie widok wysyła do rozmowy stałą wiadomość.
+ * Wynik: { error, forwarded }.
  */
-export async function transferFile(bridge, file, { size, wait, clock, onChunk = () => undefined }) {
+export async function transferFile(bridge, file, { size = UPLOAD_CHUNK, bytes = UPLOAD_BYTES, wait, onChunk = () => undefined }) {
   const total = file.rows.length;
   let fileId = null;
   let offset = 0;
   for (;;) {
-    const rows = file.rows.slice(offset, offset + size);
-    const last = offset + rows.length >= total;
+    const end = nextChunk(file.rows, offset, { size, bytes });
+    const rows = file.rows.slice(offset, end);
+    const last = end >= total;
     const head = fileId === null ? { name: file.name, columns: file.columns, phoneColumn: file.phoneColumn, totalRows: total } : { fileId };
-    const started = clock();
     const result = await bridge.callTool('upload_file_rows', { ...head, offset, rows, ...(last ? { done: true } : {}) });
     const out = result.structuredContent ?? {};
     if (result.isError) {
       if (out.error !== 'rate_limited') return { error: textOf(result), forwarded: false };
-      onChunk({ offset, rows: rows.length, ms: clock() - started, retried: true });
+      onChunk({ offset, rows: rows.length, retried: true });
       await wait((out.retryAfterSec ?? 60) * 1000);
       continue;
     }
-    onChunk({ offset, rows: rows.length, ms: clock() - started, retried: false });
+    onChunk({ offset, rows: rows.length, retried: false });
     fileId = out.fileId;
     if (out.complete) break;
-    if (!(out.received > offset)) return { error: 'Bramka nie przyjęła porcji wierszy. Wybierz plik ponownie.', forwarded: false };
+    if (last || !(out.received > offset)) return { error: 'Bramka nie przyjęła wszystkich wierszy pliku. Wybierz plik ponownie.', forwarded: false };
     offset = out.received;
   }
   return { error: null, forwarded: await bridge.sendMessage(FILE_LOADED) };
 }
 
-/** Rozpoznanie pliku i pierwsze wiersze: wartości widzi wyłącznie pracownik, agent tylko nazwy kolumn. */
-function renderFile(file, s) {
-  const head = `<tr>${file.columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>`;
-  const body = file.rows.slice(0, PREVIEW_ROWS).map((r) => `<tr>${r.cells.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('');
-  return section('Rozpoznanie pliku', fields(
-    field('Plik', txt(file.name)),
-    field('Wiersze danych', txt(num(file.rows.length))),
-    field('Kolumna numeru', txt(file.columns[file.phoneColumn] ?? '-')),
-  ) + note(`Agent zobaczy wyłącznie nazwy kolumn: ${file.columns.join(', ')}`)
-    + `<table>${head}${body}</table>`
-    + buttons(button('Przekaż plik do bramki', { act: 'upload', kind: 'primary', disabled: s.busy || s.done })));
+const selectOf = (id, options) => `<select class="sel" id="${id}">${options.join('')}</select>`;
+const option = (value, label, selected) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(label)}</option>`;
+
+/** Komunikat w sekcji, gdy pliku nie można przekazać; null, gdy można. */
+function blocker(t) {
+  if (t.data.length === 0) return 'Plik nie zawiera wierszy danych';
+  if (t.data.length > ROWS_MAX) {
+    return `Plik zawiera ${num(t.data.length)} wierszy danych, a bramka przyjmuje najwyżej ${num(ROWS_MAX)} wierszy. Podziel plik na mniejsze części.`;
+  }
+  return null;
 }
 
-// próba A: czas każdej porcji i czas całego przesłania.
-function renderChunks(chunks, s) {
-  if (chunks.length === 0) return '';
-  const rows = chunks.map((c) => `<tr><td>${num(c.offset + 1)}</td><td class="num">${num(c.rows)}</td>`
-    + `<td class="num">${num(Math.round(c.ms))} ms</td><td>${c.retried ? 'limit żądań, ponowienie' : 'przyjęta'}</td></tr>`).join('');
-  const sum = chunks.reduce((a, c) => a + c.ms, 0);
-  return section('Przesyłanie porcjami', '<table><tr><th>Od wiersza</th><th class="num">Wiersze</th><th class="num">Czas</th><th>Wynik</th></tr>'
-    + `${rows}</table>${note(`Łącznie ${plural(chunks.length, 'wywołanie', 'wywołania', 'wywołań')}, ${num(Math.round(sum))} ms, rozmiar porcji ${num(s.size)}`)}`);
+/** Postęp przekazywania i wynik: pasek przekazanych wierszy i liczba wierszy przyjętych przez bramkę. */
+function renderProgress(s) {
+  if (!s.progress) return '';
+  const { sent, total } = s.progress;
+  const text = s.done ? `Bramka przyjęła ${num(total)} ${pluralWord(total, 'wiersz', 'wiersze', 'wierszy')} z pliku`
+    : `Przekazano ${num(sent)} z ${num(total)} ${pluralWord(total, 'wiersza', 'wierszy', 'wierszy')}`;
+  return section('Przekazanie do bramki', stackBar([{ tone: s.done ? 'ok' : 'wait', value: sent }, { tone: 'rest', value: total - sent }]) + note(text));
 }
 
-/** Uruchomienie widoku: pole wyboru pliku, odczyt, rozpoznanie, przekazanie porcjami i wiadomość do rozmowy. */
+/**
+ * Rozpoznanie pliku i pierwsze wiersze danych. Wartości z pliku widzi wyłącznie pracownik w widoku, a zdanie
+ * pod tabelą mówi, że agent zobaczy tylko nazwy kolumn. Wszystkie wartości trafiają do widoku jako tekst.
+ */
+export function renderLoaded(s) {
+  const t = s.table;
+  const xlsx = s.source.kind === 'xlsx';
+  const picked = s.phoneColumn !== null && s.phoneColumn !== undefined;
+  const phoneHint = picked ? '' : t.phoneCandidates.length > 1
+    ? 'Numery telefonów występują w kilku kolumnach, dlatego wybierz właściwą z listy'
+    : 'Widok nie rozpoznał kolumny z numerami telefonów, dlatego wybierz ją z listy';
+  const phoneSelect = selectOf('numer', [...(picked ? [] : [option('', 'Wybierz kolumnę z numerami', true)]),
+    ...t.columns.map((c, i) => option(i, c, i === s.phoneColumn))]);
+  const stop = blocker(t);
+  const recognition = fields(
+    field('Kolumna numeru', phoneSelect, phoneHint),
+    field('Wiersze danych', txt(num(t.data.length))),
+    xlsx ? field('Arkusz', selectOf('arkusz', s.source.book.sheets.map((sheet, i) => option(i, sheet.name, i === s.source.sheet))))
+      : field('Kodowanie znaków', txt(ENCODINGS[s.source.encoding] ?? s.source.encoding)),
+    xlsx ? field('Format pliku', txt('Skoroszyt programu Excel (.xlsx)')) : field('Separator kolumn', txt(SEPARATORS[s.source.separator] ?? s.source.separator)),
+  ) + `<label class="check"><input type="checkbox" id="naglowek"${t.header ? ' checked' : ''}> Pierwszy wiersz zawiera nazwy kolumn</label>`
+    + (stop ? `<p class="notice n-fail">${esc(stop)}</p>` : '');
+  const head = `<tr>${t.columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>`;
+  const body = t.data.slice(0, PREVIEW_ROWS).map((r) => `<tr>${r.cells.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('');
+  const disabled = s.busy || s.done || !picked || stop !== null;
+  return section('Rozpoznanie pliku', recognition)
+    + section('Pierwsze wiersze danych', `<div class="scroll"><table>${head}${body}</table></div>`
+      + note(`Agent zobaczy wyłącznie nazwy kolumn: ${t.columns.join(', ')}`)
+      + buttons(button('Przekaż plik do bramki', { act: 'upload', kind: 'primary', disabled })))
+    + renderProgress(s);
+}
+
+/** Uruchomienie widoku: wybór pliku, odczyt, rozpoznanie, przekazanie porcjami i wiadomość do rozmowy. */
 export function startFile(win, env) {
   const doc = win.document;
   const root = doc.getElementById('tresc');
   const say = sayIn(doc);
-  const s = { file: null, size: CHUNK_DEFAULT, chunks: [], busy: false, done: false };
+  const s = { name: '', source: null, rows: [], table: null, phoneColumn: null, busy: false, done: false, progress: null };
 
-  root.innerHTML = section('Plik z odbiorcami', fields(
-    field('Plik CSV w kodowaniu UTF-8', '<input type="file" id="plik" class="sel" accept=".csv,.txt">'),
-    // próba A: wybór rozmiaru porcji.
-    field('Rozmiar porcji', `<select class="sel" id="porcja">${CHUNK_SIZES.map((n) => `<option value="${n}"${n === CHUNK_DEFAULT ? ' selected' : ''}>${num(n)} wierszy</option>`).join('')}</select>`),
-  ) + note(environment(win))) + '<div id="stan"></div>';
+  root.innerHTML = '<div class="accent">' + section('Plik z odbiorcami', fields(
+    field('Plik CSV, TXT albo XLSX', PICKER),
+    field('Limity pliku', txt(`${num(ROWS_MAX)} wierszy danych i ${FILE_BYTES_MAX / 1024 / 1024} MB`)),
+  )) + '<div id="stan"></div></div>';
   const state = doc.getElementById('stan');
   const draw = () => {
-    state.innerHTML = (s.file ? renderFile(s.file, s) : '') + renderChunks(s.chunks, s);
+    state.innerHTML = s.table ? renderLoaded(s) : '';
   };
 
   const bridge = createBridge(win, {
@@ -123,26 +134,51 @@ export function startFile(win, env) {
     onToolCancelled: (reason) => say('wait', cancelledText(reason)),
   });
 
-  async function read(picked) {
-    s.file = null;
-    s.chunks = [];
+  /** Nowe rozpoznanie tabeli; wybrana wcześniej kolumna numeru zostaje, gdy `keep` i kolumna istnieje. */
+  function apply(table, keep = false) {
+    const previous = s.phoneColumn;
+    s.table = table;
+    s.phoneColumn = table.phoneCandidates.length === 1 ? table.phoneCandidates[0] : null;
+    if (keep && previous !== null && previous < table.columns.length) s.phoneColumn = previous;
     s.done = false;
-    if (picked.size > FILE_BYTES_MAX) return say('fail', 'Plik przekracza 20 MB, dlatego widok go nie odczyta');
-    const parsed = splitCsv(new win.TextDecoder('utf-8').decode(await picked.arrayBuffer()));
-    if (parsed === null || parsed.rows.length === 0) return say('fail', 'Plik nie zawiera wierszy danych');
-    s.file = { name: picked.name, ...parsed };
+    s.progress = null;
+    draw();
+  }
+
+  async function read(picked) {
+    Object.assign(s, { name: picked.name, source: null, rows: [], table: null, phoneColumn: null, done: false, progress: null });
+    const name = doc.getElementById('plik-nazwa');
+    name.textContent = picked.name;
+    name.className = 'pick-name set';
+    draw();
+    if (picked.size > FILE_BYTES_MAX) return say('fail', FILE_TOO_BIG);
+    say('wait', 'Widok odczytuje plik');
+    const result = await readFileBytes(picked.name, new Uint8Array(await picked.arrayBuffer()));
+    if (result.error) return say('fail', result.error);
+    s.source = result;
+    s.rows = result.rows;
+    apply(analyze(s.rows));
     return say('plain', '');
   }
 
   async function upload() {
+    const t = s.table;
     s.busy = true;
-    s.chunks = [];
+    s.done = false;
+    s.progress = { sent: 0, total: t.data.length };
     say('wait', 'Widok przekazuje plik do bramki');
     draw();
     try {
-      const clock = () => (win.performance ? win.performance.now() : Date.now());
       const wait = (ms) => new Promise((resolve) => win.setTimeout(resolve, ms));
-      const result = await transferFile(bridge, s.file, { size: s.size, wait, clock, onChunk: (c) => { s.chunks.push(c); draw(); } });
+      const result = await transferFile(bridge, { name: s.name, columns: t.columns, phoneColumn: s.phoneColumn, rows: t.data }, {
+        wait,
+        onChunk: (c) => {
+          if (c.retried) return say('wait', 'Bramka wstrzymała przekazywanie z powodu limitu żądań klucza. Widok wznowi je automatycznie.');
+          s.progress = { sent: c.offset + c.rows, total: t.data.length };
+          say('wait', 'Widok przekazuje plik do bramki');
+          return draw();
+        },
+      });
       if (result.error !== null) return say('fail', result.error);
       s.done = true;
       return say(result.forwarded ? 'ok' : 'plain', result.forwarded
@@ -155,18 +191,35 @@ export function startFile(win, env) {
     }
   }
 
+  const fail = (error) => say('fail', error instanceof Error ? error.message : String(error));
+
   root.addEventListener('change', (event) => {
     const t = event.target;
-    if (t.id === 'porcja') {
-      s.size = Number(t.value);
-      return;
+    // Podczas przekazywania widok nie zmienia pliku ani rozpoznania.
+    if (s.busy) return draw();
+    if (t.id === 'plik') {
+      if (t.files && t.files.length > 0) void read(t.files[0]).catch(fail);
+    } else if (t.id === 'arkusz' && s.source?.kind === 'xlsx') {
+      try {
+        s.source = { ...s.source, sheet: Number(t.value) };
+        s.rows = readSheet(s.source.book, s.source.sheet);
+        apply(analyze(s.rows));
+      } catch (error) {
+        fail(error);
+      }
+    } else if (t.id === 'naglowek' && s.table) apply(analyze(s.rows, { header: t.checked }), true);
+    else if (t.id === 'numer' && s.table) {
+      s.phoneColumn = t.value === '' ? null : Number(t.value);
+      s.done = false;
+      s.progress = null;
+      draw();
     }
-    if (t.id !== 'plik' || !t.files || t.files.length === 0) return;
-    void read(t.files[0]).then(draw, (error) => say('fail', error instanceof Error ? error.message : String(error)));
+    return undefined;
   });
   root.addEventListener('click', (event) => {
-    const target = event.target.closest?.('button[data-act="upload"]');
-    if (!target || target.disabled || s.file === null) return;
+    const target = event.target.closest?.('button[data-act]');
+    if (!target || target.disabled || target.dataset.act !== 'upload') return;
+    if (s.table === null || s.busy || s.done || s.phoneColumn === null || blocker(s.table) !== null) return;
     void upload();
   });
 }

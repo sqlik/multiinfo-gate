@@ -51,7 +51,10 @@ const VIEWS: Partial<Record<ViewId, ViewDef>> = {
   odpowiedzi: {
     title: 'Odpowiedzi klientów', files: ['measure.js', 'odpowiedzi.js'], entry: 'startReplies', tools: REFRESH, body: waiting('Oczekiwanie na odebrane SMS-y z bramki'),
   },
-  plik: { title: 'Rozsyłka z pliku', files: ['plik.js'], entry: 'startFile', tools: '', body: waiting('Oczekiwanie na widok rozsyłki z pliku') },
+  plik: {
+    title: 'Rozsyłka z pliku', files: ['measure.js', 'chart.js', 'plik-csv.js', 'plik-xlsx.js', 'plik-tabela.js', 'plik.js'], entry: 'startFile',
+    tools: '', body: waiting('Oczekiwanie na widok rozsyłki z pliku'),
+  },
 };
 
 /** Widoki, które mają dokument; tylko je wymienia `resources/list`. */
