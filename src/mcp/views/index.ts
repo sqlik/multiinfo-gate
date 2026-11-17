@@ -52,8 +52,8 @@ const VIEWS: Partial<Record<ViewId, ViewDef>> = {
     title: 'Odpowiedzi klientów', files: ['measure.js', 'odpowiedzi.js'], entry: 'startReplies', tools: REFRESH, body: waiting('Oczekiwanie na odebrane SMS-y z bramki'),
   },
   plik: {
-    title: 'Rozsyłka z pliku', files: ['measure.js', 'chart.js', 'plik-csv.js', 'plik-xlsx.js', 'plik-tabela.js', 'plik.js'], entry: 'startFile',
-    tools: '', body: waiting('Oczekiwanie na widok rozsyłki z pliku'),
+    title: 'Rozsyłka z pliku', files: ['measure.js', 'chart.js', 'doreczenia.js', 'send.js', 'plik-csv.js', 'plik-xlsx.js', 'plik-tabela.js', 'plik.js'],
+    entry: 'startFile', tools: '<span id="na-zywo" class="live" role="status"></span>', body: waiting('Oczekiwanie na widok rozsyłki z pliku'),
   },
 };
 

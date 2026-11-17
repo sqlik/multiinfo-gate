@@ -68,14 +68,14 @@ const PAGE_MAX = 200;
 const PAGE_DEFAULT = 25;
 /** Porcja odebranych przeglądanych przy zestawieniu odpowiedzi na jedną wysyłkę. */
 const SCAN_BATCH = 500;
-const FINAL_PACKAGE: ReadonlySet<PackageStatus> = new Set(['completed', 'cancelled', 'failed']);
+export const FINAL_PACKAGE: ReadonlySet<PackageStatus> = new Set(['completed', 'cancelled', 'failed']);
 /**
  * Stany przed przekazaniem do sieci operatora: kolejka bramki, status 0 Multiinfo i wstrzymanie limitem. Wiadomość
  * przekazaną do sieci Multiinfo odrzuca przy anulowaniu kodem -41, dlatego przebieg nie proponuje wtedy „Anuluj”.
  */
 const BEFORE_NETWORK: ReadonlySet<string> = new Set(['queued', 'throttled']);
 
-const stamp = (iso: string): Stamp => ({ at: new Date(iso).toISOString(), local: warsawShort(iso) });
+export const stamp = (iso: string): Stamp => ({ at: new Date(iso).toISOString(), local: warsawShort(iso) });
 
 /** Strona odczytu w granicach: `limit` od 1 do 200, domyślnie 25, `offset` nieujemny. */
 function pageOf(p: Page): Page {

@@ -1,6 +1,8 @@
 // Widok „Co mogę?”: uprawnienia, usługi, limity i ważność połączenia według wyniku connection_status.
 // Odświeżenie woła to samo narzędzie przez aplikację AI, bez kolejnego pytania do agenta.
-import { applyTheme, badge, CANCEL_WINDOW, createBridge, field, fields, note, plural, pluralWord, section, stamp, textOf, tile, tiles, txt } from './bridge.js';
+import {
+  applyTheme, badge, CANCEL_WINDOW, createBridge, field, fields, note, num, plural, pluralWord, section, stamp, textOf, tile, tiles, txt,
+} from './bridge.js';
 
 const connectionFields = (data) => [field('Nazwa połączenia', txt(data.connection)), field('Integracja', txt(data.integration))];
 
@@ -41,7 +43,10 @@ export function renderStatus(data, env = {}) {
 
   const schedule = data.schedule
     ? section('Wysyłka z terminem', note(`Termin może przypadać najwyżej ${data.schedule.maxDays} dni naprzód. ${CANCEL_WINDOW}.`)) : '';
-  return connection + scopes + services + schedule + limits;
+  const file = data.file
+    ? section('Rozsyłka z pliku', note(`Plik CSV, TXT albo XLSX do ${num(data.file.rows)} wierszy danych i ${data.file.megabytes} MB wybiera pracownik w widoku bramki. `
+      + 'Wartości z pliku widzi wyłącznie pracownik, a agent otrzymuje nazwy kolumn i liczby.')) : '';
+  return connection + scopes + services + schedule + file + limits;
 }
 
 /** Uruchomienie widoku w dokumencie: most, rysowanie wyniku i przycisk „Odśwież”. */

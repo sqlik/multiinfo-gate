@@ -209,10 +209,11 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   });
 
   const agentConnectionsRepo = new AgentConnectionsRepo(db);
+  const fileSends = new FileSendsRepo(db);
   const agentConnections = new ConnectionService({ connections: agentConnectionsRepo, oauth, integrations, apiKeys, accounts });
   const agents: AgentServerDeps = {
     settings, oauth, connectionsRepo: agentConnectionsRepo, connections: agentConnections, audit, notifier, masterKey: config.masterKey,
-    resolve: systemResolver, log, drafts, files, fileSends: new FileSendsRepo(db), downloads, sessions: new McpSessions(),
+    resolve: systemResolver, log, drafts, files, fileSends, downloads, sessions: new McpSessions(),
   };
   const api = buildApiServer({
     accounts, apiKeys, messages, events, packages, jobs, clients, inbound, rateLimiter: new RateLimiter(), log,
@@ -226,7 +227,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
-    integrationEvents, guards, agentConnections: agentConnectionsRepo, connectionService: agentConnections, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
+    integrationEvents, guards, agentConnections: agentConnectionsRepo, fileSends, connectionService: agentConnections, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
     trustedProxies: config.trustedProxies,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate, allowPrivateMail: config.mailAllowPrivate,
     allowPrivateLinks: config.linksAllowPrivate, log, install, nodeVersion, m365, m365Accounts, m365Tokens, ...links, domainChecks,

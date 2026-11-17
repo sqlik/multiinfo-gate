@@ -48,4 +48,10 @@ describe('sourceLabel', () => {
     expect(label(seed.integrationId, null, 'Ewa Nowak')).toBe('agent Agent AI - dyspozytornia · Ewa Nowak');
     expect(label(null, null, 'Ewa Nowak')).toBe('usunięta integracja · Ewa Nowak');
   });
+
+  it('sourceLabel: rozsyłka wysyłki z pliku z dopiskiem plik', () => {
+    const row = { integrationId: seed.integrationId, agentConnectionId: seed.connectionId, requestedBy: 'Ewa Nowak' };
+    expect(sourceLabel(deps, { ...row, fileSendId: 'fsd_1' })).toBe('agent Agent AI - dyspozytornia · Ewa Nowak · plik');
+    expect(sourceLabel(deps, { ...row, fileSendId: null })).toBe('agent Agent AI - dyspozytornia · Ewa Nowak');
+  });
 });

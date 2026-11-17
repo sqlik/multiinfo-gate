@@ -17,7 +17,7 @@ export const APPROVAL_TEXT = 'Wysyłkę zatwierdza człowiek w tym widoku. Agent
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const disabled = (off) => (off ? ' disabled' : '');
-const option = (value, label, selected) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(label)}</option>`;
+export const option = (value, label, selected) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(label)}</option>`;
 const sms = (n) => plural(n, 'SMS', 'SMS-y', 'SMS-ów');
 const parts = (n) => plural(n, 'część', 'części', 'części');
 /** Godzina w czasie polskim: GG:MM. */
@@ -66,7 +66,7 @@ export async function cancelScheduled(bridge, say, s) {
 export const recipientsLeftTile = (guard, sub) => tile('Zostało odbiorców', guard.recipients === null ? 'bez limitu' : guard.recipients, sub);
 
 /** Lista wyboru: zawsze lista, także z jedną pozycją; po wysyłce wyłączona. */
-const select = (name, options, locked) => `<select class="sel" name="${name}"${disabled(locked)}>${options.join('')}</select>`;
+export const select = (name, options, locked) => `<select class="sel" name="${name}"${disabled(locked)}>${options.join('')}</select>`;
 
 /** Przełącznik z równymi polami; `items` to [etykieta, atrybuty data-*, włączony]. */
 const segment = (items, locked) => `<div class="seg2">${items.map(([label, attrs, on]) => `<button type="button"${on ? ' class="on"' : ''} ${attrs}`

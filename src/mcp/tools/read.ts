@@ -3,6 +3,7 @@ import { createDownload } from '../../agents/downloads.ts';
 import { deliveryTrace, listPackages, listSent, packageStatus, type PackageStatusData, type TraceEntry } from '../../agents/reads.ts';
 import { CANCEL_WINDOW_TEXT } from '../../api/schedule.ts';
 import { AgentError } from '../../integrations/agent.ts';
+import { FILE_SEND_PREFIX, fileReportReady, fileSendOf } from '../../integrations/agent-file.ts';
 import { plural } from '../../text/plural.ts';
 import { warsawShort } from '../../time/warsaw.ts';
 import { z } from '../../zod.ts';
@@ -154,26 +155,42 @@ export const listPackagesTool: ToolDef = {
 export const DOWNLOAD_WARNING = 'Plik zawiera numery telefonów odbiorców. Przekaż link wyłącznie osobie uprawnionej do tych danych.';
 
 const reportInput = z.object({
-  packageId: z.string().min(1).describe('Identyfikator rozsyłki'),
+  packageId: z.string().min(1).describe('Identyfikator rozsyłki albo wysyłki z pliku, który zaczyna się od fsd_'),
   file: z.enum(['report', 'failed']).describe('Plik: report z pełnym raportem albo failed z odbiorcami bez doręczenia'),
 });
 
 export const packageReportTool: ToolDef = {
   name: 'package_report',
   title: 'Raport rozsyłki do pobrania',
-  description: 'Tworzy link do pliku CSV z raportem rozsyłki albo z listą odbiorców bez doręczenia. Link jest ważny godzinę.',
+  description: 'Tworzy link do pliku CSV z raportem rozsyłki albo z listą odbiorców bez doręczenia. Link jest ważny godzinę. '
+    + 'Dla identyfikatora wysyłki z pliku narzędzie tworzy jeden plik wszystkich jej rozsyłek z numerem wiersza w pliku.',
   scopes: ['read_sent'],
   input: reportInput,
   annotations: { readOnlyHint: true, openWorldHint: false },
   run(ctx, raw) {
     const q = raw as z.infer<typeof reportInput>;
     const conn = connOf(ctx);
+    const kind = q.file === 'report' ? 'package_report' : 'package_failed';
+    if (q.packageId.startsWith(FILE_SEND_PREFIX)) {
+      // Wysyłka z pliku: jeden plik CSV wszystkich jej rozsyłek z numerem wiersza w pliku (spec 5.8).
+      const f = fileSendOf(ctx.deps, conn, q.packageId);
+      if (!fileReportReady(ctx.deps.packages.listByFileSend(f.id))) {
+        throw new AgentError('report_not_ready', `Raport wysyłki z pliku ${f.id} nie jest jeszcze gotowy. Bramka tworzy go po zakończeniu wszystkich rozsyłek `
+          + 'i odbiorze ich raportów doręczeń, a stan wysyłki pokazuje narzędzie file_send_status.');
+      }
+      const link = createDownload(ctx.deps, ctx.base, { apiKeyId: conn.key.id, connectionId: conn.connection.id }, kind, f.id, ctx.now);
+      const what = q.file === 'report' ? `raportu wysyłki z pliku ${f.id}` : `listy odbiorców wysyłki z pliku ${f.id} bez doręczenia`;
+      return {
+        text: `Link do pliku CSV ${what}, ważny do ${warsawShort(link.expiresAt)} czasu polskiego:\n${link.url}\n${DOWNLOAD_WARNING}`,
+        structured: { packageId: f.id, file: q.file, ...link },
+      };
+    }
     const p = ctx.deps.packages.get(q.packageId);
     if (!p || p.apiKeyId !== conn.key.id) throw new AgentError('package_unknown', `Nie znaleziono rozsyłki ${q.packageId}.`);
     if (p.reportStatus !== 'ready') {
       throw new AgentError('report_not_ready', `Raport rozsyłki ${p.id} nie jest jeszcze gotowy. Stan rozsyłki pokazuje narzędzie package_status.`);
     }
-    const link = createDownload(ctx.deps, ctx.base, { apiKeyId: conn.key.id, connectionId: conn.connection.id }, q.file === 'report' ? 'package_report' : 'package_failed', p.id, ctx.now);
+    const link = createDownload(ctx.deps, ctx.base, { apiKeyId: conn.key.id, connectionId: conn.connection.id }, kind, p.id, ctx.now);
     const what = q.file === 'report' ? `raportu rozsyłki ${p.id}` : `listy odbiorców rozsyłki ${p.id} bez doręczenia`;
     return {
       text: `Link do pliku CSV ${what}, ważny do ${warsawShort(link.expiresAt)} czasu polskiego:\n${link.url}\n${DOWNLOAD_WARNING}`,

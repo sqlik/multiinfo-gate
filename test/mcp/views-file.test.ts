@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { num } from '../../src/mcp/views/client/bridge.js';
-import { FILE_LOADED, renderLoaded, startFile, transferFile } from '../../src/mcp/views/client/plik.js';
+import { renderStatus } from '../../src/mcp/views/client/co-moge.js';
+import {
+  FILE_LOADED, FILE_REFRESH_MAX_MS, FILE_REFRESH_MS, filePending, fileSettled, renderFilePreview, renderFileProgress, renderLoaded, startFile, transferFile, watchFileSend,
+} from '../../src/mcp/views/client/plik.js';
+import { FIX_MESSAGE } from '../../src/mcp/views/client/send.js';
 import { analyze, ROWS_MAX, UPLOAD_CHUNK } from '../../src/mcp/views/client/plik-tabela.js';
 import { FILE_LOADED_MESSAGE } from '../../src/mcp/tools/file.ts';
 import { BUILT_VIEWS, viewFiles, viewHtml } from '../../src/mcp/views/index.ts';
@@ -51,7 +55,7 @@ const FILE = {
 type Element = { innerHTML: string; textContent: string; hidden: boolean; className: string; handlers: Map<string, (event: unknown) => void>; addEventListener: (type: string, fn: (event: unknown) => void) => void };
 
 /** Atrapa ramki widoku: elementy tworzone według identyfikatora, aplikacja odpowiada na żądania widoku od razu. */
-function viewWindow(gate: ReturnType<typeof gateway>) {
+function viewWindow(gate: { answer: (args: Args, name: string) => unknown }) {
   const listeners: Array<(event: { data: unknown; source: unknown }) => void> = [];
   const sent: Array<{ id?: number; method?: string; params?: Record<string, unknown> }> = [];
   const nodes = new Map<string, Element>();
@@ -71,7 +75,10 @@ function viewWindow(gate: ReturnType<typeof gateway>) {
       if (msg.id === undefined) return;
       const reply = (result: unknown) => queueMicrotask(() => deliver({ jsonrpc: '2.0', id: msg.id, result }));
       if (msg.method === 'ui/initialize') reply({ protocolVersion: '2026-01-26', hostInfo: { name: 'a', version: '1' }, hostCapabilities: { serverTools: {}, message: {} }, hostContext: {} });
-      else if (msg.method === 'tools/call') reply(gate.answer((msg.params as { arguments: Args }).arguments));
+      else if (msg.method === 'tools/call') {
+        const params = msg.params as { name: string; arguments: Args };
+        reply(gate.answer(params.arguments, params.name));
+      }
       else reply({});
     },
   };
@@ -83,11 +90,14 @@ function viewWindow(gate: ReturnType<typeof gateway>) {
   const pick = (name: string, content: Uint8Array) => node('tresc').handlers.get('change')!({
     target: { id: 'plik', files: [{ name, size: content.length, arrayBuffer: async () => content.buffer.slice(content.byteOffset, content.byteOffset + content.length) }] },
   });
-  const click = (act: string) => {
-    const button = { dataset: { act }, disabled: false };
+  const click = (act: string, data: Record<string, string> = {}) => {
+    const button = { dataset: { act, ...data }, disabled: false, classList: { contains: () => false } };
     node('tresc').handlers.get('click')!({ target: { closest: (sel: string) => (sel.includes('data-act') ? button : null) } });
   };
-  return { win, node, sent, pick, click };
+  const change = (target: Record<string, unknown>) => node('tresc').handlers.get('change')!({ target });
+  /** Powiadomienie aplikacji dla widoku, na przykład dane wejściowe i wynik narzędzia. */
+  const notify = (method: string, params: unknown) => deliver({ jsonrpc: '2.0', method, params });
+  return { win, node, sent, pick, click, change, notify };
 }
 
 async function until(check: () => boolean): Promise<void> {
@@ -206,7 +216,7 @@ describe('widok rozsyłki z pliku', () => {
 
   it('dokument widoku plik: moduły czytnika, pole wyboru pliku z XLSX, bez elementów punktu kontrolnego A', () => {
     expect(BUILT_VIEWS).toContain('plik');
-    expect(viewFiles('plik')).toEqual(['bridge.js', 'measure.js', 'chart.js', 'plik-csv.js', 'plik-xlsx.js', 'plik-tabela.js', 'plik.js']);
+    expect(viewFiles('plik')).toEqual(['bridge.js', 'measure.js', 'chart.js', 'doreczenia.js', 'send.js', 'plik-csv.js', 'plik-xlsx.js', 'plik-tabela.js', 'plik.js']);
     const html = viewHtml('plik');
     expect(html).toContain('Rozsyłka z pliku - Multiinfo Gate');
     expect(html).toContain('startFile(window,');
@@ -224,5 +234,243 @@ describe('widok rozsyłki z pliku', () => {
     expect(VIEW_STYLE).toMatch(/\.seg2\{[^}]*border:1px solid var\(--signal\)/);
     expect(VIEW_STYLE).not.toContain('.accent');
     expect(VIEW_STYLE).toMatch(/th\.ph\{[^}]*color:var\(--signal-dark\)/);
+  });
+});
+
+const TEMPLATE = 'Przypominamy o płatności faktury dla {Kontrahent} na kwotę {Kwota} do {Termin}.';
+const sample = (line: number, to: string, company: string) => ({
+  line, to, text: `Przypominamy o płatności faktury dla ${company} na kwotę 1 234,50 zł do 30.11.2026.`, parts: 2,
+});
+const PREVIEW = {
+  draftId: 'drf_plik', expiresAt: '2026-11-17T10:30:00.000Z', fields: ['Kontrahent', 'Kwota', 'Termin'], recipients: 1200, parts: 2400, partsHistogram: { 2: 1200 },
+  excluded: { columns: 1, invalid_phone: 2, invalid_client_id: 0, empty_field: 1, too_many_parts: 0 }, duplicates: 3, sameNumberDifferentText: 2, truncated: 0,
+  encodings: { gsm: 0, ucs2: 1200 }, packages: 1, schedule: null as null | { startAt: string; handoverAt: string },
+  serviceId: '20841', services: [{ id: '20841', label: 'Biuro handlowe' }, { id: '20842', label: '20842' }],
+  orig: 'FIRMA', senders: [{ value: 'FIRMA', label: 'FIRMA' }, { value: null, label: 'numer usługi' }],
+  guard: { calls: 29, recipients: 4800, resetsAt: '2026-11-17T11:00:00.000Z' }, blocked: null as string | null,
+};
+const META = {
+  name: 'przypomnienia-listopad.xlsx', columns: ['Numer', 'Kontrahent', 'Kwota', 'Termin', 'Klient'],
+  samples: [sample(2, '48601000011', 'Hurtownia Kowalski'), sample(600, '48601000600', 'Serwis Nowak'), sample(1205, '48601001205', 'Biuro Zielińska')],
+  excludedRows: [{ line: 7, reason: 'invalid_phone' }, { line: 9, reason: 'columns' }, { line: 15, reason: 'invalid_phone' }, { line: 40, reason: 'empty_field' }],
+  excludedMore: 0, repeatedNumbers: ['48601000015', '48601000016'],
+};
+const INPUT = { text: TEMPLATE, clientIdColumn: 'klient' };
+
+const STATUS = {
+  id: 'fsd_7k2', created: { at: '2026-11-17T09:00:00.000Z', local: '17.11.2026 10:00' }, recipients: 1200, packages: 2,
+  byStatus: { sending: 1, completed: 1 } as Record<string, number>, statusLabels: { sending: 'w wysyłce', completed: 'zakończona' } as Record<string, string>,
+  delivered: 900, failed: 40, other: 10, notSent: 0, schedule: null as null | Record<string, unknown>, cancellable: 0, reportReady: false, final: false,
+};
+const SCHEDULED = {
+  ...STATUS, byStatus: { scheduled: 2 }, statusLabels: { scheduled: 'zaplanowana' }, delivered: 0, failed: 0, other: 0, cancellable: 2,
+  schedule: { startAt: { at: '2026-11-20T07:00:00.000Z', local: '20.11.2026 08:00' }, handoverAt: { at: '2026-11-20T06:50:00.000Z', local: '20.11.2026 07:50' } },
+};
+
+describe('podgląd, wysyłka i postęp rozsyłki z pliku', () => {
+  it('widok podglądu: treść z polami, 3 wiadomości z przełączaniem, liczby, wyłączenia z numerem wiersza, ostrzeżenie o numerach, usługa, nadawca, termin', () => {
+    const html = renderFilePreview(PREVIEW, META, { input: INPUT, sample: 0 });
+    // Treść z polami z danych wejściowych narzędzia, pola wyróżnione.
+    expect(html).toContain('Przypominamy o płatności faktury dla <span class="slot">{Kontrahent}</span> na kwotę <span class="slot">{Kwota}</span>');
+    // Pierwsza gotowa wiadomość i przełącznik trzech wiadomości z numerami wierszy.
+    expect(html).toContain('dla Hurtownia Kowalski na kwotę');
+    expect(html).not.toContain('Serwis Nowak');
+    expect(html).toContain('<button type="button" class="on" data-act="sample" data-i="0">wiersz 2</button>');
+    expect(html).toContain('<button type="button" data-act="sample" data-i="2">wiersz 1205</button>');
+    expect(html).toContain('<b>2</b> części');
+    expect(html).toContain('48601000011');
+    const second = renderFilePreview(PREVIEW, META, { input: INPUT, sample: 1 });
+    expect(second).toContain('dla Serwis Nowak na kwotę');
+    expect(second).toContain('<button type="button" class="on" data-act="sample" data-i="1">wiersz 600</button>');
+    // Liczby odbiorców, SMS-ów, części, rozsyłek i kodowanie.
+    expect(html).toContain(`<div class="v">${num(1200)}</div>`);
+    expect(html).toContain(`<div class="v">${num(2400)}</div>`);
+    expect(html).toContain(`<div class="lbl">Zostało odbiorców</div><div class="v">${num(4800)}</div>`);
+    expect(html).toContain('Unicode, z polskimi znakami');
+    // Wiersze wyłączone w liście rozwijanej z numerem wiersza i powodem.
+    expect(html).toContain('<details class="it">');
+    expect(html).toContain('<tr><td class="num">7</td><td>błędny numer telefonu</td></tr>');
+    expect(html).toContain('<tr><td class="num">9</td><td>wiersz niezgodny z nagłówkiem</td></tr>');
+    expect(html).toContain('Wiersze wyłączone z wysyłki: 4');
+    expect(html).toContain('błędny numer telefonu 2, puste pole użyte w treści 1, wiersz niezgodny z nagłówkiem 1');
+    expect(html).toContain('Wiersze z tym samym numerem i tą samą treścią: 3. Bramka wyśle każdą taką wiadomość raz.');
+    // Ostrzeżenie o numerach z różnymi treściami z listą numerów.
+    expect(html).toContain('<p class="notice n-wait">Numery z różnymi treściami: 2. Każdy z tych numerów otrzyma wszystkie przeznaczone dla niego SMS-y.</p>');
+    expect(html).toContain('<p class="nums">48601000015, 48601000016</p>');
+    // Usługa, nadawca i plik; kolumna identyfikatora klienta ustawiona według clientIdColumn bez względu na wielkość liter.
+    expect(html).toContain('<select class="sel" name="orig"><option value="FIRMA" selected>FIRMA</option><option value="">numer usługi</option></select>');
+    expect(html).toContain('<option value="20841" selected>Biuro handlowe (20841)</option>');
+    expect(html).toContain('<div class="txt">przypomnienia-listopad.xlsx</div>');
+    expect(html).toContain('<select class="sel" name="clientIdColumn"><option value="">bez identyfikatora</option><option value="Numer">Numer</option>');
+    expect(html).toContain('<option value="Klient" selected>Klient</option>');
+    expect(renderFilePreview(PREVIEW, META, { input: { text: TEMPLATE }, sample: 0 })).toContain('<option value="" selected>bez identyfikatora</option>');
+    expect(html).not.toContain('Termin rozpoczęcia');
+    const scheduled = renderFilePreview({ ...PREVIEW, schedule: { startAt: '2026-11-20T07:00:00.000Z', handoverAt: '2026-11-20T06:50:00.000Z' } }, META, { input: INPUT, sample: 0 });
+    expect(scheduled).toContain('<div class="txt">2026-11-20 08:00</div>');
+    expect(scheduled).toContain('Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem');
+  });
+
+  it('widok: blocked daje nieaktywny przycisk i wyjaśnienie; termin daje Zaplanuj; Popraw treść w rozmowie wysyła stałą wiadomość', async () => {
+    const reason = 'Integracja Agent AI - biuro handlowe pozwala wysłać 1000 odbiorców w ciągu 60 minut. Plik zawiera 1200 odbiorców. '
+      + 'Poproś administratora bramki o zmianę ochrony przed burzą w integracji.';
+    const blocked = renderFilePreview({ ...PREVIEW, blocked: reason }, META, { input: INPUT, sample: 0 });
+    expect(blocked).toContain(`<p class="notice n-fail">${reason}</p>`);
+    expect(blocked).toContain(`data-act="send" disabled>Wyślij do ${num(1200)} odbiorców</button>`);
+    const ready = renderFilePreview(PREVIEW, META, { input: INPUT, sample: 0 });
+    expect(ready).toContain(`data-act="send">Wyślij do ${num(1200)} odbiorców</button>`);
+    expect(ready).not.toContain('n-fail');
+    const scheduled = renderFilePreview({ ...PREVIEW, schedule: { startAt: '2026-11-20T07:00:00.000Z', handoverAt: '2026-11-20T06:50:00.000Z' } }, META, { input: INPUT, sample: 0 });
+    expect(scheduled).toContain(`data-act="send">Zaplanuj wysyłkę do ${num(1200)} odbiorców</button>`);
+    expect(ready).toContain('<button type="button" class="btn" data-act="fix">Popraw treść w rozmowie</button>');
+
+    const calls: Array<[string, Args]> = [];
+    const w = viewWindow({ answer: (args, name) => { calls.push([name, args]); return { content: [], structuredContent: {} }; } });
+    startFile(w.win, { version: '1.13.0' });
+    w.notify('ui/notifications/tool-input', { arguments: INPUT });
+    w.notify('ui/notifications/tool-result', { content: [], structuredContent: PREVIEW, _meta: { ...META, confirm: 'mig_cf_1' } });
+    await until(() => w.node('tresc').innerHTML.includes('dla Hurtownia Kowalski'));
+    w.click('fix');
+    await until(() => w.sent.some((m) => m.method === 'ui/message'));
+    expect(w.sent.find((m) => m.method === 'ui/message')!.params).toEqual({ role: 'user', content: [{ type: 'text', text: FIX_MESSAGE }] });
+    expect(calls).toEqual([]);
+  });
+
+  it('widok: zmiana kolumny identyfikatora i przełączenie wiadomości; Wyślij woła send_file_sms z kluczem i przechodzi w postęp', async () => {
+    const calls: Array<[string, Args]> = [];
+    const w = viewWindow({
+      answer: (args, name) => {
+        calls.push([name, args]);
+        if (name === 'prepare_file_sms') return { content: [], structuredContent: { ...PREVIEW, draftId: 'drf_nowy' }, _meta: { ...META, confirm: 'mig_cf_2' } };
+        if (name === 'send_file_sms') return { content: [], structuredContent: { draftId: 'drf_nowy', kind: 'file', id: 'fsd_7k2', packages: ['pkg_1', 'pkg_2'], recipients: 1200, schedule: null, repeated: false } };
+        return { content: [], structuredContent: STATUS, _meta: { name: 'przypomnienia-listopad.xlsx' } };
+      },
+    });
+    startFile(w.win, { version: '1.13.0' });
+    w.notify('ui/notifications/tool-input', { arguments: INPUT });
+    w.notify('ui/notifications/tool-result', { content: [], structuredContent: PREVIEW, _meta: { ...META, confirm: 'mig_cf_1' } });
+    await until(() => w.node('tresc').innerHTML.includes('dla Hurtownia Kowalski'));
+    w.click('sample', { i: '2' });
+    expect(w.node('tresc').innerHTML).toContain('dla Biuro Zielińska');
+    w.change({ name: 'clientIdColumn', value: 'Numer' });
+    await until(() => calls.length === 1);
+    expect(calls[0]).toEqual(['prepare_file_sms', { text: TEMPLATE, clientIdColumn: 'Numer' }]);
+    w.change({ name: 'clientIdColumn', value: '' });
+    await until(() => calls.length === 2);
+    expect(calls[1]).toEqual(['prepare_file_sms', { text: TEMPLATE }]);
+    w.click('send');
+    await until(() => calls.length === 4);
+    expect(calls[2]).toEqual(['send_file_sms', { draftId: 'drf_nowy', confirm: 'mig_cf_2' }]);
+    expect(calls[3]).toEqual(['file_send_status', { id: 'fsd_7k2' }]);
+    await until(() => w.node('tresc').innerHTML.includes('Wysyłka z pliku fsd_7k2'));
+    expect(w.node('tresc').innerHTML).toContain('<div class="txt">przypomnienia-listopad.xlsx</div>');
+    expect(w.node('na-zywo').textContent).toBe('● na żywo, co 30 s');
+  });
+
+  it('widok: wartości z pliku z <img onerror> i nazwa pliku jako tekst', () => {
+    const evil = '<img src=x onerror=alert(1)>';
+    const html = renderFilePreview(PREVIEW, {
+      ...META, name: `${evil}.xlsx`, columns: ['Numer', evil], samples: [{ line: 2, to: '48601000011', text: `Dla ${evil}`, parts: 1 }], repeatedNumbers: [evil],
+    }, { input: { text: `Dla {${evil}}`, clientIdColumn: evil }, sample: 0 });
+    expect(html).not.toContain('<img');
+    expect(html).toContain('Dla &lt;img src=x onerror=alert(1)&gt;');
+    expect(html).toContain('<div class="txt">&lt;img src=x onerror=alert(1)&gt;.xlsx</div>');
+    const progress = renderFileProgress(STATUS, { name: `${evil}.xlsx` });
+    expect(progress).not.toContain('<img');
+    expect(progress).toContain('&lt;img src=x onerror=alert(1)&gt;.xlsx');
+  });
+
+  it('widok postępu: suma rozsyłek, odświeżanie co 30 s do stanów ostatecznych, Zaplanowana na i Anuluj wysyłkę', async () => {
+    const html = renderFileProgress(STATUS, { name: 'przypomnienia-listopad.xlsx' });
+    expect(html).toContain('<h3>Wysyłka z pliku fsd_7k2</h3>');
+    expect(html).toContain('<div class="lbl">W trakcie</div><div class="v">250</div>');
+    expect(html).toContain('<div class="lbl">Doręczone</div><div class="v">900</div>');
+    expect(html).toContain('<div class="lbl">Niedoręczone</div><div class="v">40</div>');
+    expect(html).toContain('<div class="lbl">Pozostałe</div><div class="v">10</div>');
+    expect(html).toContain('Rozsyłki według stanu: w wysyłce 1, zakończona 1');
+    expect(html).not.toContain('data-act="csv"');
+    expect(html).not.toContain('Anuluj wysyłkę');
+    const done = renderFileProgress({ ...STATUS, byStatus: { completed: 2 }, statusLabels: { completed: 'zakończona' }, reportReady: true, final: true }, { name: 'a.csv' });
+    expect(done).toContain('data-act="csv" data-file="report">Pobierz raport CSV</button>');
+    expect(done).toContain('data-file="failed">Pobierz CSV niedoręczonych</button>');
+
+    const scheduled = renderFileProgress(SCHEDULED, { name: 'a.csv' });
+    expect(scheduled).toContain('<h3>Zaplanowana wysyłka</h3>');
+    expect(scheduled).toContain('<span class="lbl">Zaplanowana na</span><div class="txt">2026-11-20 08:00</div>');
+    expect(scheduled).toContain('<span class="lbl">Przekazanie do Multiinfo</span><div class="txt">2026-11-20 07:50</div>');
+    expect(scheduled).toContain('<button type="button" class="btn btn-danger" data-act="cancel-file">Anuluj wysyłkę</button>');
+    expect(renderFileProgress({ ...SCHEDULED, cancellable: 0 }, { name: 'a.csv' })).not.toContain('Anuluj wysyłkę');
+    expect(filePending(SCHEDULED)).toBe(true);
+    expect(filePending(STATUS)).toBe(false);
+    expect(fileSettled(STATUS)).toBe(false);
+    expect(fileSettled({ ...STATUS, reportReady: true })).toBe(true);
+
+    // Odświeżanie co 30 s do raportu wszystkich rozsyłek.
+    let n = 0;
+    const calls: unknown[] = [];
+    const timers: Array<{ fn: () => void; ms: number }> = [];
+    const bridge = { callTool: async (name: string, args: unknown) => { calls.push([name, args]); n += 1; return { structuredContent: n < 2 ? STATUS : { ...STATUS, reportReady: true, final: true } }; } };
+    const win = { setTimeout: (fn: () => void, ms: number) => { timers.push({ fn, ms }); } };
+    const ends: string[] = [];
+    const data: unknown[] = [];
+    watchFileSend(bridge, win, 'fsd_7k2', { onData: (d: unknown) => data.push(d), onEnd: (why: string) => ends.push(why) });
+    expect(timers.map((t) => t.ms)).toEqual([FILE_REFRESH_MS]);
+    expect(FILE_REFRESH_MS).toBe(30_000);
+    timers.shift()!.fn();
+    await until(() => data.length === 1);
+    expect(timers.length).toBe(1);
+    timers.shift()!.fn();
+    await until(() => ends.length === 1);
+    expect(ends).toEqual(['settled']);
+    expect(calls).toEqual([['file_send_status', { id: 'fsd_7k2' }], ['file_send_status', { id: 'fsd_7k2' }]]);
+    // Po 30 minutach odświeżanie kończy się bez stanu ostatecznego.
+    let clock = 0;
+    const late: string[] = [];
+    const lateTimers: Array<() => void> = [];
+    watchFileSend({ callTool: async () => ({ structuredContent: STATUS }) }, { setTimeout: (fn: () => void) => { lateTimers.push(fn); } }, 'fsd_7k2',
+      { onData: () => undefined, onEnd: (why: string) => late.push(why) }, () => clock);
+    clock = FILE_REFRESH_MAX_MS;
+    expect(FILE_REFRESH_MAX_MS).toBe(1_800_000);
+    lateTimers.shift()!();
+    await until(() => late.length === 1);
+    expect(late).toEqual(['timeout']);
+  });
+
+  it('widok postępu: Anuluj wysyłkę woła cancel_package z identyfikatorem wysyłki z pliku i odświeża stan', async () => {
+    const calls: Array<[string, Args]> = [];
+    let cancelled = false;
+    const w = viewWindow({
+      answer: (args, name) => {
+        calls.push([name, args]);
+        if (name === 'cancel_package') {
+          cancelled = true;
+          return { content: [{ type: 'text', text: 'Anulowano 2 z 2 rozsyłek wysyłki z pliku fsd_7k2.' }], structuredContent: { id: 'fsd_7k2', cancelled: 2, handedOver: 0 } };
+        }
+        return { content: [], structuredContent: cancelled ? { ...SCHEDULED, byStatus: { cancelled: 2 }, statusLabels: { cancelled: 'anulowana' }, cancellable: 0, notSent: 1200, final: true, reportReady: true } : SCHEDULED, _meta: { name: 'a.csv' } };
+      },
+    });
+    startFile(w.win, { version: '1.13.0' });
+    w.notify('ui/notifications/tool-input', { arguments: { id: 'fsd_7k2' } });
+    w.notify('ui/notifications/tool-result', { content: [], structuredContent: SCHEDULED, _meta: { name: 'a.csv' } });
+    await until(() => w.node('tresc').innerHTML.includes('Zaplanowana wysyłka'));
+    // Wysyłka czeka na termin, dlatego widok nie odświeża jej na żywo.
+    expect(w.node('na-zywo').textContent).toBe('');
+    w.click('cancel-file');
+    await until(() => calls.length === 2);
+    expect(calls).toEqual([['cancel_package', { id: 'fsd_7k2' }], ['file_send_status', { id: 'fsd_7k2' }]]);
+    await until(() => w.node('komunikat').textContent === 'Anulowano 2 z 2 rozsyłek wysyłki z pliku fsd_7k2.');
+    expect(w.node('tresc').innerHTML).not.toContain('Anuluj wysyłkę');
+  });
+
+  it('Co mogę?: rozsyłka z pliku przy zakresie send', () => {
+    const base = {
+      available: true, connection: 'Ewa Nowak', integration: 'Agent AI - biuro handlowe', scopes: [{ id: 'send', label: 'Wysyłka SMS-ów' }], expiresAt: null,
+      services: [{ id: '20841', label: 'Biuro handlowe' }], maxParts: 3, overflow: 'reject', ratePerMin: 60,
+      guard: { calls: 0, callLimit: 30, recipients: 0, recipientLimit: 1000, windowMinutes: 60, resetsAt: null }, groups: 0, schedule: null,
+    };
+    const html = renderStatus({ ...base, file: { rows: 50_000, megabytes: 20 } }, {});
+    expect(html).toContain('<h3>Rozsyłka z pliku</h3>');
+    expect(html).toContain(`Plik CSV, TXT albo XLSX do ${num(50_000)} wierszy danych i 20 MB wybiera pracownik w widoku bramki. `
+      + 'Wartości z pliku widzi wyłącznie pracownik, a agent otrzymuje nazwy kolumn i liczby.');
+    expect(renderStatus({ ...base, file: null }, {})).not.toContain('Rozsyłka z pliku');
   });
 });

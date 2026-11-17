@@ -1,8 +1,12 @@
 import { AgentError } from '../../agents/errors.ts';
 import { linkRequest } from '../../api/link-fields.ts';
+import { packageStatusLabel } from '../../admin/views/status-labels.ts';
+import { CANCEL_WINDOW_TEXT } from '../../api/schedule.ts';
 import {
-  FILE_COLUMNS_NOTICE, columnList, fileSummary, prepareFileSms, sendFileDraft, type ExcludedReason, type FilePreview, type FileSendOutcome,
+  FILE_COLUMNS_NOTICE, columnList, fileSendOf, fileSendStatus, fileSummary, prepareFileSms, sendFileDraft, type ExcludedReason, type FilePreview,
+  type FileSendOutcome, type FileSendStatusData,
 } from '../../integrations/agent-file.ts';
+import type { PackageStatus } from '../../store/packages.ts';
 import { FILE_MEGABYTES_MAX, FILE_ROWS_MAX } from '../../store/agent-files.ts';
 import { formatCount } from '../../text/numbers.ts';
 import { plural } from '../../text/plural.ts';
@@ -232,5 +236,49 @@ export const sendFileSmsTool: ToolDef = {
     const input = raw as z.infer<typeof sendInput>;
     const outcome = sendFileDraft(ctx.deps, connOf(ctx), input.draftId, ctx.now, input.confirm);
     return { text: fileOutcomeText(outcome), structured: { draftId: input.draftId, ...outcome } };
+  },
+};
+
+/** Stan wysyłki z pliku dla agenta: liczby rozsyłek i odbiorców, termin i dalsze kroki, bez nazwy pliku. */
+function fileStatusText(d: FileSendStatusData): string {
+  const states = (Object.entries(d.byStatus) as Array<[PackageStatus, number]>).map(([status, n]) => `${packageStatusLabel(status)} ${n}`).join(', ');
+  const lines = [
+    `Wysyłka z pliku ${d.id} do ${recipientsOf(d.recipients)} w ${packagesIn(d.packages)}, przyjęta ${d.created.local} czasu polskiego.`,
+    `Rozsyłki według stanu: ${states}.`,
+  ];
+  if (d.schedule !== null) lines.push(`Termin rozpoczęcia: ${d.schedule.startAt.local} czasu polskiego.`);
+  if (d.schedule?.handoverAt) lines.push(`Bramka przekaże rozsyłki do Multiinfo ${d.schedule.handoverAt.local}. ${CANCEL_WINDOW_TEXT}.`);
+  if ((d.byStatus.overdue ?? 0) > 0) {
+    lines.push('Bramka nie przekazała części rozsyłek do Multiinfo w ciągu 60 minut od terminu. Decyzję o wysłaniu albo anulowaniu podejmuje administrator bramki.');
+  }
+  if (d.cancellable > 0) lines.push('Rozsyłki przed przekazaniem anuluje narzędzie cancel_package z identyfikatorem wysyłki z pliku.');
+  if (d.delivered + d.failed + d.other > 0) {
+    lines.push(`Odbiorcy według raportów doręczeń: doręczone ${formatCount(d.delivered)}, niedoręczone ${formatCount(d.failed)}, pozostałe ${formatCount(d.other)}.`);
+  }
+  if (d.notSent > 0) lines.push(`Odbiorcy rozsyłek anulowanych albo zakończonych błędem: ${formatCount(d.notSent)}.`);
+  lines.push(d.reportReady
+    ? 'Raport CSV wszystkich rozsyłek tworzy narzędzie package_report z identyfikatorem wysyłki z pliku.'
+    : 'Raport CSV będzie dostępny po zakończeniu wszystkich rozsyłek wysyłki i odbiorze ich raportów doręczeń.');
+  return lines.join('\n');
+}
+
+const fileStatusInput = z.object({ id: z.string().min(1).describe('Identyfikator wysyłki z pliku, na przykład z wyniku send_file_sms') });
+
+export const fileSendStatusTool: ToolDef = {
+  name: 'file_send_status',
+  title: 'Stan wysyłki z pliku',
+  description: 'Pokazuje stan wysyłki z pliku: rozsyłki według stanów, odbiorców doręczonych i niedoręczonych według raportów, termin i gotowość raportu CSV. '
+    + 'Narzędzie nie zwraca nazwy pliku ani wartości z pliku.',
+  scopes: ['read_sent'],
+  input: fileStatusInput,
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  view: 'plik',
+  run(ctx, raw) {
+    const { id } = raw as z.infer<typeof fileStatusInput>;
+    const conn = connOf(ctx);
+    const data = fileSendStatus(ctx.deps, conn, id);
+    const statusLabels = Object.fromEntries(Object.keys(data.byStatus).map((s) => [s, packageStatusLabel(s as PackageStatus)]));
+    // Nazwa pliku pochodzi od pracownika, dlatego trafia wyłącznie do widoku przez _meta.
+    return { text: fileStatusText(data), structured: { ...asRecord(data), statusLabels }, meta: { name: fileSendOf(ctx.deps, conn, id).name } };
   },
 };

@@ -5,9 +5,14 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApiServer } from '../../src/api/server.ts';
 import type { AgentConfig } from '../../src/integrations/config.ts';
 import { FILE_COLUMNS_NOTICE } from '../../src/integrations/agent-file.ts';
+import { SERVER_INSTRUCTIONS } from '../../src/mcp/instructions.ts';
 import { FILE_LOADED_MESSAGE } from '../../src/mcp/tools/file.ts';
 import { AgentFilesRepo } from '../../src/store/agent-files.ts';
+import { ApiKeysRepo } from '../../src/store/api-keys.ts';
 import { openDatabase } from '../../src/store/db.ts';
+import { FileSendsRepo } from '../../src/store/file-sends.ts';
+import { PackagesRepo } from '../../src/store/packages.ts';
+import { formatCount } from '../../src/text/numbers.ts';
 import { AGENT_SEED_AT, agentApiDeps, seedAgent } from '../helpers/agent.ts';
 import { mcpSession, textOf } from '../helpers/mcp.ts';
 
@@ -15,6 +20,7 @@ const NOW = new Date(AGENT_SEED_AT.getTime() + 3_600_000);
 const COLUMNS = ['Numer', 'Kontrahent', 'Kwota', 'Termin'];
 const VALUES = ['48601000011', 'Hurtownia Kowalski', '1 234,50 zł', '30.11.2026'];
 const NAME = 'przypomnienia-listopad.xlsx';
+const BASE = 'https://bramka.serwis.example';
 
 let db: Database;
 let key: Buffer;
@@ -23,7 +29,7 @@ let app: FastifyInstance;
 
 function setup(scopes: AgentConfig['scopes'] = ['send']): void {
   seed = seedAgent(db, key, { scopes });
-  app = buildApiServer(agentApiDeps(db, key, { now: () => NOW }));
+  app = buildApiServer(agentApiDeps(db, key, { now: () => NOW, apiUrl: BASE }));
 }
 
 beforeEach(() => {
@@ -218,5 +224,154 @@ describe('file_summary, prepare_file_sms i send_file_sms', () => {
     expect(byName.get('prepare_file_sms')!._meta).toEqual({ ui: { resourceUri: 'ui://multiinfo-gate/plik' } });
     expect(byName.get('send_file_sms')!._meta).toEqual({ ui: { visibility: ['app'] } });
     expect(byName.get('send_file_sms')!.annotations).toMatchObject({ destructiveHint: true, openWorldHint: true });
+  });
+});
+
+/** Dwa wiersze: pierwszy w GSM, drugi z „Ł” w nazwie kontrahenta, dlatego wysyłka powstaje w dwóch rozsyłkach. */
+const MIXED = [
+  { line: 2, cells: ['48601000011', 'Hurtownia Kowalski', '1 234,50 zł', '30.11.2026'] },
+  { line: 3, cells: ['48601000012', 'Serwis Łódź', '99,00 zł', '01.12.2026'] },
+];
+const GSM_TEXT = 'Przypominamy o fakturze dla {Kontrahent} z terminem {Termin}.';
+const START = '2026-11-20 08:00';
+
+/** Wysyłka z pliku z dwóch rozsyłek przez MCP; z `startAt` zaplanowana. */
+async function fileSend(mcp: Session, startAt?: string): Promise<{ id: string; packages: string[] }> {
+  await mcp.call('upload_file_rows', { ...header, totalRows: 2, offset: 0, rows: MIXED, done: true });
+  const prepared = await mcp.call('prepare_file_sms', { text: GSM_TEXT, ...(startAt === undefined ? {} : { startAt }) });
+  const sent = await mcp.call('send_file_sms', { draftId: prepared.structuredContent!.draftId, confirm: prepared._meta!.confirm });
+  expect(sent.isError).toBeUndefined();
+  return { id: sent.structuredContent!.id as string, packages: sent.structuredContent!.packages as string[] };
+}
+
+/** Rozsyłka zakończona z gotowym raportem: odbiorca 48601000011 doręczony, pozostali niedoręczeni. */
+function reported(packageId: string, at: string): void {
+  const repo = new PackagesRepo(db);
+  repo.setCreated(packageId, `mi-${packageId}`);
+  repo.setCompleted(packageId, NOW);
+  repo.applyReport(packageId, repo.recipients(packageId).map((r, i) => ({
+    miId: `${9001 + i}${r.dest.slice(-1)}`, dest: r.dest, miStatus: r.dest === '48601000011' ? 21 : 11,
+    status: r.dest === '48601000011' ? 'delivered' as const : 'failed' as const, rawStatus: '', changedAt: at, clientId: null,
+  })));
+  repo.setReport(packageId, { status: 'ready' });
+}
+
+describe('postęp, anulowanie i raport wysyłki z pliku', () => {
+  it('file_send_status: liczby według stanów, nazwa pliku tylko w _meta, wysyłka innego klucza nieznana', async () => {
+    setup(['send', 'read_sent']);
+    const mcp = await mcpSession(app, seed.secret, { apps: true });
+    const { id } = await fileSend(mcp, START);
+    const result = await mcp.call('file_send_status', { id });
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      id, created: { at: NOW.toISOString() }, recipients: 2, packages: 2, byStatus: { scheduled: 2 },
+      delivered: 0, failed: 0, other: 0, notSent: 0, cancellable: 2, reportReady: false, final: false,
+      schedule: { startAt: { at: '2026-11-20T07:00:00.000Z' }, handoverAt: { at: '2026-11-20T06:50:00.000Z' } },
+      statusLabels: { scheduled: 'zaplanowana' },
+    });
+    expect(result._meta).toEqual({ name: NAME });
+    const forAgent = JSON.stringify({ content: result.content, structuredContent: result.structuredContent });
+    for (const value of [NAME, 'Hurtownia', 'Łódź', '1 234,50']) expect(forAgent).not.toContain(value);
+    const text = textOf(result);
+    expect(text).toContain(`Wysyłka z pliku ${id} do 2 odbiorców w 2 rozsyłkach, przyjęta`);
+    expect(text).toContain('Rozsyłki według stanu: zaplanowana 2.');
+    expect(text).toContain('cancel_package');
+
+    // Wysyłka innego klucza jest dla agenta nieznana, tak jak cudza rozsyłka.
+    const other = new ApiKeysRepo(db, key).insert({
+      accountId: seed.accountId, name: 'inny', keyHash: 'h2', keyPrefix: 'p2', defaultServiceId: '24138', defaultOrig: null,
+      maxParts: 9, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'],
+    });
+    const foreign = new FileSendsRepo(db).insert({
+      apiKeyId: other, integrationId: null, connectionId: null, requestedBy: null, name: 'obcy.csv', recipients: 1, startAt: null, createdAt: NOW.toISOString(),
+    });
+    for (const unknown of [foreign, 'fsd_nieznana']) {
+      const refused = await mcp.call('file_send_status', { id: unknown });
+      expect(refused).toMatchObject({ isError: true, structuredContent: { error: 'file_send_unknown' } });
+      expect(JSON.stringify(refused)).not.toContain('obcy.csv');
+    }
+  });
+
+  it('file_send_status: widok plik, zakres read_sent', async () => {
+    setup(['send', 'read_sent']);
+    const tools = await (await mcpSession(app, seed.secret, { apps: true })).tools();
+    expect(tools.find((t) => t.name === 'file_send_status')!._meta).toEqual({ ui: { resourceUri: 'ui://multiinfo-gate/plik' } });
+    db = openDatabase(':memory:');
+    setup(['send']);
+    const names = (await (await mcpSession(app, seed.secret, { apps: true })).tools()).map((t) => t.name);
+    expect(names).not.toContain('file_send_status');
+  });
+
+  it('cancel_package z identyfikatorem wysyłki z pliku: wynik z liczbą anulowanych i przekazanych', async () => {
+    setup(['send', 'read_sent']);
+    const mcp = await mcpSession(app, seed.secret, { apps: true });
+    const { id, packages } = await fileSend(mcp, START);
+    // Pierwsza rozsyłka jest właśnie przekazywana do Multiinfo.
+    expect(new PackagesRepo(db).beginHandover(packages[0]!)).toBe(true);
+    const result = await mcp.call('cancel_package', { id });
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({ id, cancelled: 1, handedOver: 1 });
+    expect(textOf(result)).toBe(`Anulowano 1 z 2 rozsyłek wysyłki z pliku ${id}. `
+      + 'Rozsyłki przekazane wcześniej do Multiinfo: 1. Multiinfo nie pozwala ich anulować.');
+    expect(new PackagesRepo(db).get(packages[1]!)!.status).toBe('cancelled');
+    // Ponowne anulowanie podaje ten sam wynik bez zmian.
+    expect((await mcp.call('cancel_package', { id })).structuredContent).toEqual({ id, cancelled: 1, handedOver: 1 });
+    const status = await mcp.call('file_send_status', { id });
+    expect(status.structuredContent).toMatchObject({ byStatus: { queued: 1, cancelled: 1 }, cancellable: 0, notSent: 1 });
+
+    // Wysyłkę z pliku spoza integracji agenta anuluje wyłącznie administrator.
+    const foreign = new FileSendsRepo(db).insert({
+      apiKeyId: seed.keyId, integrationId: null, connectionId: null, requestedBy: null, name: 'api.csv', recipients: 1, startAt: null, createdAt: NOW.toISOString(),
+    });
+    expect(await mcp.call('cancel_package', { id: foreign })).toMatchObject({ isError: true, structuredContent: { error: 'not_own' } });
+  });
+
+  it('package_report z identyfikatorem wysyłki z pliku: jeden CSV z kolumną wiersz_pliku; przed zakończeniem report_not_ready', async () => {
+    setup(['send', 'read_sent']);
+    const mcp = await mcpSession(app, seed.secret, { apps: true });
+    const { id, packages } = await fileSend(mcp);
+    const early = await mcp.call('package_report', { packageId: id, file: 'report' });
+    expect(early).toMatchObject({ isError: true, structuredContent: { error: 'report_not_ready' } });
+    expect(textOf(early)).toContain('file_send_status');
+    // Raport jednej z dwóch rozsyłek nie wystarcza (P10).
+    reported(packages[0]!, '2026-11-15 10:30:00');
+    expect(await mcp.call('package_report', { packageId: id, file: 'report' })).toMatchObject({ isError: true, structuredContent: { error: 'report_not_ready' } });
+    reported(packages[1]!, '2026-11-15 10:31:00');
+    expect((await mcp.call('file_send_status', { id })).structuredContent).toMatchObject({ delivered: 1, failed: 1, reportReady: true, final: true });
+
+    const link = await mcp.call('package_report', { packageId: id, file: 'report' });
+    expect(link.isError).toBeUndefined();
+    const url = link.structuredContent!.url as string;
+    expect(link.structuredContent).toMatchObject({ packageId: id, file: 'report' });
+    expect(textOf(link)).toContain(`raportu wysyłki z pliku ${id}`);
+    const file = await app.inject({ method: 'GET', url: url.slice(BASE.length) });
+    expect(file.statusCode).toBe(200);
+    expect(file.headers['content-disposition']).toBe(`attachment; filename="raport-${id}.csv"`);
+    expect(file.body.split('\r\n')).toEqual([
+      'wiersz_pliku;numer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas',
+      '2;48601000011;;90011;delivered;21;2026-11-15 10:30:00',
+      '3;48601000012;;90012;failed;11;2026-11-15 10:31:00',
+      '',
+    ]);
+    const failed = await mcp.call('package_report', { packageId: id, file: 'failed' });
+    const body = (await app.inject({ method: 'GET', url: (failed.structuredContent!.url as string).slice(BASE.length) })).body;
+    expect(body.split('\r\n').slice(1)).toEqual(['3;48601000012;;90012;failed;11;2026-11-15 10:31:00', '']);
+  });
+
+  it('Co mogę?: rozsyłka z pliku przy zakresie send', async () => {
+    setup(['send', 'read_sent']);
+    const status = await (await mcpSession(app, seed.secret, { apps: true })).call('connection_status');
+    expect(status.structuredContent).toMatchObject({ file: { rows: 50_000, megabytes: 20 } });
+    expect(textOf(status)).toContain(`Rozsyłkę z pliku CSV, TXT albo XLSX do ${formatCount(50_000)} wierszy danych i 20 MB otwiera narzędzie open_file_send.`);
+    db = openDatabase(':memory:');
+    setup(['send_group', 'read_sent']);
+    const group = await (await mcpSession(app, seed.secret, { apps: true })).call('connection_status');
+    expect(group.structuredContent).toMatchObject({ file: null });
+    expect(textOf(group)).not.toContain('open_file_send');
+  });
+
+  it('instrukcje serwera: postęp, raport i anulowanie wysyłki z pliku z jej identyfikatorem', () => {
+    expect(SERVER_INSTRUCTIONS).toContain('Postęp wysyłki z pliku pokazuje narzędzie file_send_status, raport CSV wszystkich jej rozsyłek narzędzie package_report, '
+      + 'a zaplanowaną wysyłkę anuluje narzędzie cancel_package. Każde z nich przyjmuje identyfikator wysyłki z pliku, który zaczyna się od fsd_.');
   });
 });

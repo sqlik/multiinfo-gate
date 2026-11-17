@@ -44,6 +44,8 @@ export interface PackageDetail {
   source?: string;
   /** Połączenie agenta, które zleciło rozsyłkę, z integracją agenta. */
   connection?: { name: string; integration: { id: number; name: string } } | null;
+  /** Wysyłka z pliku, której częścią jest rozsyłka: nazwa pliku i liczba rozsyłek wysyłki. */
+  file?: { name: string; packages: number } | null;
   recipients: RecipientRow[];
   /** Ilu odbiorców pokazujemy; reszta jest w CSV. */
   shown: number;
@@ -250,6 +252,7 @@ export function packagePage(d: PackageDetail): string {
           ${d.source === undefined ? '' : `<div>Źródło</div><div>${esc(d.source)}</div>`}
           ${d.integration === null ? '' : `<div>Integracja</div><div><a href="/integracje/${esc(d.integration.id)}">${esc(d.integration.name)}</a></div>`}
           ${connectionRow(d.connection)}
+          ${!d.file ? '' : `<div>Plik</div><div>${esc(d.file.name)} · wysyłka z pliku w ${esc(d.file.packages)} ${d.file.packages === 1 ? 'rozsyłce' : 'rozsyłkach'}</div>`}
           ${p.requestedBy === null || d.connection ? '' : `<div>Zlecający</div><div>${esc(p.requestedBy)}</div>`}
           ${!d.campaign ? '' : `<div>Kampania</div><div><a href="/kampanie/${esc(d.campaign.id)}">${esc(d.campaign.name)}</a></div>`}
           <div>ID usługi</div><div class="m">${esc(p.serviceId)}</div>

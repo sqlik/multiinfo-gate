@@ -187,6 +187,7 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
     registerMcpRoutes(app, { ...deps, ...deps.agents }, deps.agents.tools ?? AGENT_TOOLS);
     registerDownloadRoute(app, {
       connections: deps.agents.connections, downloads: deps.agents.downloads, packages: deps.packages, shortLinks: deps.shortLinks, campaigns: deps.campaigns,
+      fileSends: deps.agents.fileSends,
       ...(deps.log ? { log: deps.log } : {}), ...(deps.now ? { now: deps.now } : {}),
     });
   }

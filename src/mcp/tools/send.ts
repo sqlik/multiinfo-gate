@@ -1,6 +1,7 @@
 import { ownPackage, sentByAgent } from '../../agents/reads.ts';
 import { cancelMessage } from '../../api/cancel-message.ts';
 import { cancelPackage } from '../../api/cancel-package.ts';
+import { cancelFileSend, FILE_SEND_PREFIX } from '../../integrations/agent-file.ts';
 import { PLACEHOLDER_CODE } from '../../links/codes.ts';
 import { linkFieldsSchema, linkRequest } from '../../api/link-fields.ts';
 import { PACKAGE_RECIPIENTS_MAX } from '../../api/packages.ts';
@@ -243,12 +244,13 @@ export const cancelMessageTool: ToolDef = {
   },
 };
 
-const cancelPackageInput = z.object({ id: z.string().min(1).describe('Identyfikator rozsyłki') });
+const cancelPackageInput = z.object({ id: z.string().min(1).describe('Identyfikator rozsyłki albo wysyłki z pliku, który zaczyna się od fsd_') });
 
 export const cancelPackageTool: ToolDef = {
   name: 'cancel_package',
   title: 'Anuluj rozsyłkę',
   description: 'Anuluje rozsyłkę z terminem wysłaną przez tę integrację, którą bramka przechowuje do chwili przekazania do Multiinfo, zwykle 10 minut przed terminem. '
+    + 'Identyfikator wysyłki z pliku anuluje wszystkie jej rozsyłki przed przekazaniem. '
     + 'Rozsyłki z innych źródeł anuluje administrator w panelu bramki. Rozsyłki przekazanej do Multiinfo nie można anulować.',
   scopes: ['send', 'send_group'],
   input: cancelPackageInput,
@@ -256,6 +258,13 @@ export const cancelPackageTool: ToolDef = {
   run(ctx, raw) {
     const { id } = raw as z.infer<typeof cancelPackageInput>;
     const conn = connOf(ctx);
+    if (id.startsWith(FILE_SEND_PREFIX)) {
+      const result = cancelFileSend(ctx.deps, conn, id, ctx.now);
+      const total = result.cancelled + result.handedOver;
+      const passed = result.handedOver === 0 ? ''
+        : ` Rozsyłki przekazane wcześniej do Multiinfo: ${result.handedOver}. Multiinfo nie pozwala ich anulować.`;
+      return { text: `Anulowano ${result.cancelled} z ${total} ${total === 1 ? 'rozsyłki' : 'rozsyłek'} wysyłki z pliku ${result.id}.${passed}`, structured: result };
+    }
     const pkg = ctx.deps.packages.get(id);
     if (!pkg || pkg.apiKeyId !== conn.key.id) throw new AgentError('package_unknown', `Nie znaleziono rozsyłki ${id}.`);
     // Agent anuluje wyłącznie własne rozsyłki: przemycone polecenie nie może zatrzymać rozsyłki z innej integracji klucza.

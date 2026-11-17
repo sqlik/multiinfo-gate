@@ -60,6 +60,18 @@ export function reportCsv(rows: RecipientRow[]): string {
   return `${[CSV_HEADER, ...lines].join('\r\n')}\r\n`;
 }
 
+const FILE_CSV_HEADER = `wiersz_pliku;${CSV_HEADER}`;
+
+/**
+ * Raport wysyłki z pliku w postaci CSV: odbiorcy wszystkich jej rozsyłek w podanej kolejności, z numerem wiersza
+ * w pliku na początku, dzięki czemu pracownik łączy wynik z wierszem swojego arkusza.
+ */
+export function fileReportCsv(rows: Array<RecipientRow & { fileLine: number | null }>): string {
+  const lines = rows.map((r) =>
+    [r.fileLine, r.dest, r.clientId, r.miId, r.status, r.miStatus, r.statusChangedAt].map(csvCell).join(';'));
+  return `${[FILE_CSV_HEADER, ...lines].join('\r\n')}\r\n`;
+}
+
 const reportRow = (r: RecipientRow) => ({
   to: r.dest, clientId: r.clientId, miId: r.miId, status: r.status, miStatus: r.miStatus, changedAt: r.statusChangedAt,
 });

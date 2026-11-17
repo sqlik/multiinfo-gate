@@ -19,6 +19,13 @@ export function campaignLink(deps: Pick<AdminDeps, 'campaigns'>, campaignId: num
   return campaign === undefined ? null : { id: campaign.id, name: campaign.name };
 }
 
+/** Plik wysyłki z pliku, z której pochodzi rozsyłka, z liczbą jej rozsyłek; brak dla pozostałych rozsyłek. */
+function fileOf(deps: Pick<AdminDeps, 'fileSends' | 'packages'>, fileSendId: string | null): { name: string; packages: number } | null {
+  if (fileSendId === null) return null;
+  const file = deps.fileSends.get(fileSendId);
+  return file === undefined ? null : { name: file.name, packages: deps.packages.listByFileSend(fileSendId).length };
+}
+
 /** Tylu odbiorców pokazujemy w szczególe; pełna lista jest w CSV. */
 const RECIPIENTS_SHOWN = 200;
 
@@ -68,6 +75,7 @@ export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps,
         integration: row.integrationId === null ? null : integrationLink(deps, row.integrationId),
         source: sourceWords(deps, row),
         connection: connectionLink(deps, row.agentConnectionId),
+        file: fileOf(deps, row.fileSendId),
         recipients: deps.packages.recipients(row.id, RECIPIENTS_SHOWN),
         shown: RECIPIENTS_SHOWN,
         summary: row.reportStatus === 'ready' ? deps.packages.recipientSummary(row.id) : null,

@@ -1,11 +1,15 @@
 import type { ConnectionContext } from '../agents/connections.ts';
 import { AgentError } from '../agents/errors.ts';
+import { FINAL_PACKAGE, stamp, type ReadDeps, type Stamp } from '../agents/reads.ts';
+import { cancelPackage, type CancelPackageDeps } from '../api/cancel-package.ts';
 import { ApiError } from '../api/errors.ts';
 import { PACKAGE_RECIPIENTS_MAX } from '../api/packages.ts';
+import { handoverAt } from '../api/schedule.ts';
 import { CLIENT_ID, submitPackage, type PackageAccepted } from '../api/submit-package.ts';
 import { fitPrepared, onceSettings, prepareLinks, type LinkRequest, type PreparedText } from '../links/shortener.ts';
 import type { AgentFileRow, AgentFilesRepo } from '../store/agent-files.ts';
-import type { FileSendsRepo } from '../store/file-sends.ts';
+import type { FileSendRow, FileSendsRepo } from '../store/file-sends.ts';
+import { PENDING_STATUSES, type PackageStatus } from '../store/packages.ts';
 import { sha256Hex } from '../text/hash.ts';
 import { measureText, type EncodingRequest } from '../text/measure.ts';
 import { formatCount } from '../text/numbers.ts';
@@ -57,8 +61,10 @@ export interface FilePreview {
   blocked: string | null;
 }
 
-/** Dane podglądu wyłącznie dla widoku: wartości z pliku nie trafiają do agenta. */
+/** Dane podglądu wyłącznie dla widoku: nazwa pliku i wartości z pliku nie trafiają do agenta. */
 export interface FilePreviewMeta {
+  /** Nazwa pliku i kolumny w kolejności z pliku, dla listy „Kolumna identyfikatora klienta”. */
+  name: string; columns: string[];
   samples: Array<{ line: number; to: string; text: string; parts: number }>;
   excludedRows: Array<{ line: number; reason: ExcludedReason }>; excludedMore: number; repeatedNumbers: string[];
 }
@@ -336,6 +342,7 @@ export function prepareFileSms(
       serviceId, services: options.services, orig, senders: options.senders, guard, blocked: blockedText(ctx, list.length, guard),
     },
     meta: {
+      name: file.name, columns: file.columns,
       samples: sampleIndices(list.length).map((i) => ({ line: list[i]!.line, to: list[i]!.dest, text: list[i]!.prepared.text, parts: list[i]!.parts })),
       excludedRows: built.excludedRows.slice(0, EXCLUDED_ROWS_MAX), excludedMore: Math.max(0, built.excludedRows.length - EXCLUDED_ROWS_MAX),
       repeatedNumbers: built.repeated.slice(0, REPEATED_NUMBERS_MAX),
@@ -449,4 +456,104 @@ export function sendFileDraft(deps: AgentFileDeps, ctx: ConnectionContext, draft
     deps.log?.error('integracja.dziennik_blad', { integrationId: integration.id, error });
   }
   return { ...outcome, repeated: false };
+}
+
+/** Postęp wysyłki z pliku: suma jej rozsyłek. Bez nazwy pliku, która trafia wyłącznie do widoku. */
+export interface FileSendStatusData {
+  id: string; created: Stamp; recipients: number; packages: number; byStatus: Partial<Record<PackageStatus, number>>;
+  /** Odbiorcy według raportów doręczeń rozsyłek z gotowym raportem. */
+  delivered: number; failed: number; other: number;
+  /** Odbiorcy rozsyłek anulowanych albo zakończonych błędem bez raportu, którym bramka nie wysłała SMS-a. */
+  notSent: number;
+  schedule: { startAt: Stamp; handoverAt: Stamp | null } | null;
+  /** Rozsyłki przed przekazaniem do Multiinfo, które to połączenie może anulować. */
+  cancellable: number;
+  /** Raport CSV jest dostępny, gdy wszystkie rozsyłki mają stan ostateczny, a zakończone mają gotowy raport (P10). */
+  reportReady: boolean; final: boolean;
+}
+
+/** Przedrostek identyfikatora wysyłki z pliku; narzędzia rozsyłek przyjmują go w miejscu identyfikatora rozsyłki. */
+export const FILE_SEND_PREFIX = 'fsd_';
+
+type FileSendDeps = Pick<ReadDeps, 'packages' | 'connectionsRepo'> & { fileSends: Pick<FileSendsRepo, 'get'> };
+
+/** Wysyłka z pliku klucza połączenia; wysyłka innego klucza jest dla agenta nieznana, tak jak cudza rozsyłka. */
+export function fileSendOf(deps: { fileSends: Pick<FileSendsRepo, 'get'> }, ctx: ConnectionContext, id: string): FileSendRow {
+  const f = deps.fileSends.get(id);
+  if (!f || f.apiKeyId !== ctx.key.id) throw new AgentError('file_send_unknown', `Nie znaleziono wysyłki z pliku ${id}.`);
+  return f;
+}
+
+/** Wysyłka z pliku integracji tego agenta: wyłącznie taką agent anuluje, tak jak własne rozsyłki. */
+function ownFileSend(deps: Pick<ReadDeps, 'connectionsRepo'>, ctx: ConnectionContext, f: FileSendRow): boolean {
+  if (f.integrationId === ctx.integration.id) return true;
+  return f.connectionId !== null && deps.connectionsRepo.get(f.connectionId)?.integrationId === ctx.integration.id;
+}
+
+/** Raport CSV wysyłki z pliku jest gotowy (P10). */
+export function fileReportReady(packages: Array<{ status: PackageStatus; reportStatus: string }>): boolean {
+  return packages.length > 0 && packages.every((p) => FINAL_PACKAGE.has(p.status))
+    && packages.every((p) => p.status !== 'completed' || p.reportStatus === 'ready');
+}
+
+/** Stan wysyłki z pliku wzorem package_status: rozsyłki według stanów, odbiorcy według raportów, termin i anulowanie. */
+export function fileSendStatus(deps: FileSendDeps, ctx: ConnectionContext, id: string): FileSendStatusData {
+  const f = fileSendOf(deps, ctx, id);
+  const packages = deps.packages.listByFileSend(f.id);
+  const byStatus: Partial<Record<PackageStatus, number>> = {};
+  let delivered = 0;
+  let failed = 0;
+  let other = 0;
+  let notSent = 0;
+  for (const p of packages) {
+    byStatus[p.status] = (byStatus[p.status] ?? 0) + 1;
+    if (p.reportStatus === 'ready') {
+      const summary = deps.packages.recipientSummary(p.id);
+      delivered += summary.delivered;
+      failed += summary.failed;
+      other += summary.other;
+    } else if (p.status === 'cancelled' || p.status === 'failed') {
+      notSent += p.recipientsCount;
+    }
+  }
+  const canCancel = (ctx.scopes.has('send') || ctx.scopes.has('send_group')) && ownFileSend(deps, ctx, f);
+  return {
+    id: f.id, created: stamp(f.createdAt), recipients: f.recipients, packages: packages.length, byStatus, delivered, failed, other, notSent,
+    schedule: f.startAt === null ? null : {
+      startAt: stamp(f.startAt), handoverAt: packages.some((p) => p.status === 'scheduled') ? stamp(handoverAt(f.startAt, f.createdAt)) : null,
+    },
+    cancellable: canCancel ? packages.filter((p) => PENDING_STATUSES.has(p.status)).length : 0,
+    reportReady: fileReportReady(packages), final: packages.length > 0 && packages.every((p) => FINAL_PACKAGE.has(p.status)),
+  };
+}
+
+/**
+ * Anulowanie wysyłki z pliku: każda jej rozsyłka przed przekazaniem do Multiinfo przechodzi w stan anulowany. Wynik
+ * podaje rozsyłki anulowane, także wcześniej, i rozsyłki przekazane do Multiinfo, których anulować nie można.
+ */
+export function cancelFileSend(
+  deps: FileSendDeps & CancelPackageDeps, ctx: ConnectionContext, id: string, now: Date,
+): { id: string; cancelled: number; handedOver: number } {
+  const f = fileSendOf(deps, ctx, id);
+  // Agent anuluje wyłącznie własne wysyłki: przemycone polecenie nie może zatrzymać rozsyłek innej integracji klucza.
+  if (!ownFileSend(deps, ctx, f)) {
+    throw new AgentError('not_own',
+      `Agent anuluje wyłącznie wysyłki z pliku przygotowane przez integrację ${ctx.integration.name}. Pozostałe rozsyłki anuluje administrator w panelu bramki.`);
+  }
+  const actor = `agent ${ctx.integration.name} · ${ctx.connection.name}`;
+  let cancelled = 0;
+  let handedOver = 0;
+  for (const p of deps.packages.listByFileSend(f.id)) {
+    if (PENDING_STATUSES.has(p.status)) {
+      try {
+        cancelPackage(deps, p, now, { actor });
+      } catch (e) {
+        // Bramka przekazała rozsyłkę do Multiinfo w tej samej chwili: rozsyłka liczy się jako przekazana.
+        if (!(e instanceof ApiError && e.code === 'package_not_cancellable')) throw e;
+      }
+    }
+    if (deps.packages.get(p.id)?.status === 'cancelled') cancelled++;
+    else handedOver++;
+  }
+  return { id: f.id, cancelled, handedOver };
 }

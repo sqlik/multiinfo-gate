@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { defaultAgentConfig, defaultPowerAutomateConfig } from '../../src/integrations/config.ts';
+import { FileSendsRepo } from '../../src/store/file-sends.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
 const NOW = new Date('2026-08-25T10:00:00Z');
@@ -88,6 +89,33 @@ describe('rozsyłka przez agenta AI', () => {
     expect(detail).toContain('<div>Źródło</div><div>agent Agent AI - marketing · Ewa Nowak</div>');
     expect(detail).toContain(`<div>Połączenie</div><div>Ewa Nowak · <a href="/integracje/${agentId}">Agent AI - marketing</a></div>`);
     expect(detail).not.toContain('>Zlecający<');
+  });
+
+  it('panel: źródło z dopiskiem plik, wiersz Plik z nazwą w szczegółach rozsyłki', async () => {
+    const agentId = h.integrations.insert({
+      name: 'Agent AI - biuro handlowe', kind: 'agent', apiKeyId, serviceId: null, orig: null, preset: 'agent-ai', enabled: 1,
+      config: defaultAgentConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const connectionId = h.agentConnections.insert({ integrationId: agentId, name: 'Ewa Nowak', method: 'token', expiresAt: null, createdBy: 'janek', createdAt: NOW });
+    const fileSendId = new FileSendsRepo(h.db).insert({
+      apiKeyId, integrationId: agentId, connectionId, requestedBy: 'Ewa Nowak', name: 'przypomnienia-<b>listopad</b>.xlsx', recipients: 3,
+      startAt: null, createdAt: NOW.toISOString(),
+    });
+    for (const [id, dest] of [['pkg_plik_1', '48601000011'], ['pkg_plik_2', '48601000012']] as const) {
+      h.packages.insert({
+        id, apiKeyId, accountId, serviceId: '24138', defaultText: null, orig: null, costCenter: null, startAt: null, deliveryReport: 1,
+        encoding: 'gsm', multipart: 0, createdAt: NOW.toISOString(), integrationId: agentId, requestedBy: 'Ewa Nowak', agentConnectionId: connectionId, fileSendId,
+      }, [{ dest, text: 'Przypominamy o fakturze.', clientId: null, fileLine: 2 }]);
+    }
+    const list = (await page('/rozsylki')).body;
+    expect(list).toContain(`<a href="/integracje/${agentId}">agent Agent AI - biuro handlowe · Ewa Nowak · plik</a>`);
+    const detail = (await page('/rozsylki/pkg_plik_1')).body;
+    expect(detail).toContain('<div>Źródło</div><div>agent Agent AI - biuro handlowe · Ewa Nowak · plik</div>');
+    expect(detail).toContain('<div>Plik</div><div>przypomnienia-&lt;b&gt;listopad&lt;/b&gt;.xlsx · wysyłka z pliku w 2 rozsyłkach</div>');
+    expect(detail).not.toContain('<b>listopad</b>');
+    // Rozsyłka spoza wysyłki z pliku nie zawiera wiersza „Plik”.
+    seed('pkg_api');
+    expect((await page('/rozsylki/pkg_api')).body).not.toContain('<div>Plik</div>');
   });
 });
 
