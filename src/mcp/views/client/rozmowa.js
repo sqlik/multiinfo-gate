@@ -8,8 +8,13 @@ import {
 
 export const CONVERSATION_REFRESH_MS = 15_000;
 export const CONVERSATION_REFRESH_MAX_MS = 900_000;
-/** Wiadomość do rozmowy po nowym SMS-ie klienta, jak CONVERSATION_MESSAGE w narzędziach: bez treści SMS-a i bez numeru. */
-export const ASK_REPLY = 'Klient odpisał w rozmowie w widoku bramki. Przygotuj odpowiedź na jego ostatni SMS.';
+/**
+ * Wiadomość do rozmowy po nowym SMS-ie klienta, jak conversationMessage w narzędziach: identyfikator SMS-a bez jego
+ * treści i bez numeru, dzięki czemu starszy z kilku widoków rozmowy w czacie wskazuje agentowi właściwą rozmowę.
+ */
+export const askReply = (inboundId) => (/^in_[0-9A-Za-z_]{1,40}$/.test(String(inboundId))
+  ? `Klient odpisał w rozmowie w widoku bramki. Przygotuj odpowiedź na jego SMS ${inboundId}.`
+  : 'Klient odpisał w rozmowie w widoku bramki. Przygotuj odpowiedź na jego ostatni SMS.');
 /** Wiadomość do rozmowy po „Popraw treść w rozmowie”. */
 export const REPLY_FIX_MESSAGE = 'Chcę poprawić treść tej odpowiedzi';
 
@@ -240,7 +245,8 @@ export function startConversation(win, env) {
       });
     } else if (act === 'ask') {
       run(async () => {
-        const sent = await bridge.sendMessage(ASK_REPLY);
+        const newest = s.data.items.filter((i) => s.fresh.has(i.id)).at(-1);
+        const sent = await bridge.sendMessage(askReply(newest?.id ?? s.data.lastInboundId));
         if (sent) s.asked = true;
         say(sent ? 'ok' : 'plain', sent ? forwardedText('Prośba o odpowiedź') : 'Napisz w rozmowie, jaką odpowiedź przygotować na ostatni SMS klienta');
       });

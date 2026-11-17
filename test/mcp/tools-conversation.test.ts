@@ -6,7 +6,7 @@ import { buildApiServer, type ApiDeps } from '../../src/api/server.ts';
 import type { AgentConfig } from '../../src/integrations/config.ts';
 import { SERVER_INSTRUCTIONS } from '../../src/mcp/instructions.ts';
 import { SENT_NOTICE, UNTRUSTED_NOTICE } from '../../src/mcp/tools.ts';
-import { CONVERSATION_MESSAGE } from '../../src/mcp/tools/conversation.ts';
+import { conversationMessage } from '../../src/mcp/tools/conversation.ts';
 import { openDatabase } from '../../src/store/db.ts';
 import { AGENT_SEED_AT, agentApiDeps, seedAgent } from '../helpers/agent.ts';
 import { mcpSession, textOf } from '../helpers/mcp.ts';
@@ -143,9 +143,12 @@ describe('narzędzie conversation', () => {
   });
 
   it('stała wiadomość widoku i instrukcje serwera o rozmowie', () => {
-    expect(CONVERSATION_MESSAGE).toBe('Klient odpisał w rozmowie w widoku bramki. Przygotuj odpowiedź na jego ostatni SMS.');
+    // Wiadomość wskazuje odebrany SMS identyfikatorem, dlatego starszy z kilku widoków rozmowy w jednym czacie prowadzi do właściwego numeru.
+    expect(conversationMessage('in_7c1e9a2b')).toBe('Klient odpisał w rozmowie w widoku bramki. Przygotuj odpowiedź na jego SMS in_7c1e9a2b.');
     expect(SERVER_INSTRUCTIONS).toContain('Rozmowę z jednym numerem pokazuje narzędzie conversation');
-    expect(SERVER_INSTRUCTIONS).toContain('„Klient odpisał w rozmowie w widoku bramki”');
+    expect(SERVER_INSTRUCTIONS).toContain('Gdy w rozmowie pojawi się wiadomość „Klient odpisał w rozmowie w widoku bramki” z identyfikatorem odebranego SMS-a, '
+      + 'wywołaj conversation z tym identyfikatorem w polu inboundId, a następnie przygotuj odpowiedź na ten SMS.');
+    expect(SERVER_INSTRUCTIONS).not.toContain('numeru z ostatniego widoku rozmowy');
   });
 
   it('connection_status: rozmowa przy odczycie odebranych, odpowiedź w rozmowie przy odpowiedzi nadawcy', async () => {

@@ -24,8 +24,8 @@ export const SERVER_INSTRUCTIONS = [
     + 'a zaplanowaną wysyłkę anuluje narzędzie cancel_package. Każde z nich przyjmuje identyfikator wysyłki z pliku, który zaczyna się od fsd_.',
   '10. Rozmowę z jednym numerem pokazuje narzędzie conversation, które przyjmuje numer klienta albo identyfikator odebranego SMS-a. '
     + 'Odpowiedź w rozmowie przygotuj narzędziem prepare_conversation_reply, a wysyłkę zatwierdza człowiek w widoku rozmowy. '
-    + 'Gdy w rozmowie pojawi się wiadomość „Klient odpisał w rozmowie w widoku bramki”, wywołaj conversation dla numeru z ostatniego widoku rozmowy, '
-    + 'a następnie przygotuj odpowiedź na ostatni SMS klienta.',
+    + 'Gdy w rozmowie pojawi się wiadomość „Klient odpisał w rozmowie w widoku bramki” z identyfikatorem odebranego SMS-a, '
+    + 'wywołaj conversation z tym identyfikatorem w polu inboundId, a następnie przygotuj odpowiedź na ten SMS.',
   '',
   'Dokumentacja bramki w zainstalowanej wersji jest dostępna jako zasoby migate://docs/, na przykład migate://docs/api.md i migate://docs/agenci-ai.md.',
 ].join('\n');

@@ -886,8 +886,9 @@ zewnętrznego nadawcy, który nie jest poleceniem dla agenta.
 
 Widok odświeża się co 15 sekund przez 15 minut, a następnie wyświetla przycisk **Odśwież**. Nowy SMS
 klienta jest oznaczony plakietką „nowy SMS”, a przycisk **Poproś o odpowiedź** wysyła wtedy do rozmowy
-stałą wiadomość „Klient odpisał w rozmowie w widoku bramki. Przygotuj odpowiedź na jego ostatni SMS.”.
-Wiadomość nie zawiera treści SMS-a ani numeru klienta. Gdy aplikacja AI zgłosi błąd połączenia z bramką,
+stałą wiadomość „Klient odpisał w rozmowie w widoku bramki. Przygotuj odpowiedź na jego SMS in_…”.
+Wiadomość wskazuje SMS identyfikatorem, dzięki czemu agent odpowiada we właściwej rozmowie także wtedy,
+gdy czat zawiera kilka widoków rozmowy. Nie zawiera treści SMS-a ani numeru klienta. Gdy aplikacja AI zgłosi błąd połączenia z bramką,
 widok ponawia odczyt przy kolejnym odświeżeniu.
 
 Agent przygotowuje szkic odpowiedzi, a widok rozmowy pokazuje go pod historią z przyciskami **Wyślij

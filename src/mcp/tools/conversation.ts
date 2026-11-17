@@ -7,8 +7,11 @@ import { warsawShort } from '../../time/warsaw.ts';
 import { z } from '../../zod.ts';
 import { connOf, markSentText, oneLine, SENT_NOTICE, UNTRUSTED_NOTICE, type ToolContext, type ToolDef } from '../tools.ts';
 
-/** Wiadomość widoku rozmowy do rozmowy z agentem: stały tekst bramki, bez treści SMS-a i bez numeru (spec 6.2). */
-export const CONVERSATION_MESSAGE = 'Klient odpisał w rozmowie w widoku bramki. Przygotuj odpowiedź na jego ostatni SMS.';
+/**
+ * Wiadomość widoku rozmowy do rozmowy z agentem: stały tekst bramki z identyfikatorem odebranego SMS-a, bez treści
+ * SMS-a i bez numeru (spec 6.2). Identyfikator wskazuje rozmowę także wtedy, gdy czat zawiera kilka widoków rozmowy.
+ */
+export const conversationMessage = (inboundId: string): string => `Klient odpisał w rozmowie w widoku bramki. Przygotuj odpowiedź na jego SMS ${inboundId}.`;
 
 /** Grupa szkicu odpowiedzi przygotowanej w rozmowie; widok odpowiedzi pokazuje ją przy szkicu. */
 const REPLY_GROUP = 'rozmowa';
