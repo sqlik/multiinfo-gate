@@ -3,7 +3,7 @@ import type { Database } from 'better-sqlite3';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConnectionContext } from '../../src/agents/connections.ts';
 import {
-  AgentError, DRAFT_TTL_MS, guardLeft, prepareReplies, prepareSms, sendDraft, senderOptions, type AgentDeps, type PrepareSmsInput,
+  AgentError, DRAFT_TTL_MS, guardLeft, prepareReplies, prepareSms, scheduleOf, sendDraft, senderOptions, type AgentDeps, type PrepareSmsInput,
 } from '../../src/integrations/agent.ts';
 import type { AgentScope } from '../../src/integrations/config.ts';
 import { openDatabase } from '../../src/store/db.ts';
@@ -259,5 +259,70 @@ describe('prepareReplies', () => {
 
     const system = inbound({ system: 1 });
     expect(agentError(() => prepareReplies(deps, ctx(), [{ inboundId: system, group: 'Termin', text: 'x' }], NOW)).code).toBe('inbound_unknown');
+  });
+});
+
+describe('wysyłka z terminem', () => {
+  // NOW to 2026-11-15 10:00 w Polsce, a 2026-11-20 08:00 w Polsce to 07:00 UTC.
+  const SCHEDULE = { startAt: '2026-11-20T07:00:00.000Z', handoverAt: '2026-11-20T06:50:00.000Z' };
+
+  it('prepare_sms z startAt 2026-11-20 08:00 do jednego odbiorcy: route package, schedule w czasie polskim, zdanie o anulowaniu z chwilą przekazania', () => {
+    const { preview } = sms({ startAt: '2026-11-20 08:00' });
+    expect(preview).toMatchObject({ route: 'package', recipients: 1, schedule: SCHEDULE });
+    expect(sms({ startAt: '2026-11-20T07:00:00Z' }).preview.schedule).toEqual(SCHEDULE);
+    expect(sms().preview).toMatchObject({ route: 'messages', schedule: null });
+  });
+
+  it('startAt 2026-11-20 bez godziny, 2027-03-28 02:30, w przeszłości i dalej niż 30 dni: błąd narzędzia z wyjaśnieniem', () => {
+    expect(agentError(() => sms({ startAt: '2026-11-20' }))).toMatchObject({
+      code: 'invalid', message: 'Termin rozsyłki musi zawierać datę i godzinę, na przykład 2026-11-20 08:00 w czasie polskim.',
+    });
+    expect(agentError(() => sms({ startAt: '2027-03-28 02:30' }))).toMatchObject({
+      code: 'invalid', message: 'Godzina 02:30 w dniu 28.03.2027 nie istnieje w czasie polskim z powodu zmiany czasu. Podaj inną godzinę.',
+    });
+    expect(agentError(() => sms({ startAt: '2026-11-15 09:59' }))).toMatchObject({ code: 'start_at_in_past' });
+    expect(agentError(() => sms({ startAt: '2026-12-15 10:01' }))).toMatchObject({
+      code: 'start_at_too_far', message: 'Termin rozpoczęcia rozsyłki może przypadać najwyżej 30 dni od chwili wysyłki.',
+    });
+    expect(sms({ startAt: '2026-12-15 10:00' }).preview.schedule).toEqual({ startAt: '2026-12-15T09:00:00.000Z', handoverAt: '2026-12-15T08:50:00.000Z' });
+    expect(count('agent_drafts')).toBe(1);
+  });
+
+  it('nieczytelny startAt: błąd z przykładem daty z godziną, który bramka przyjmuje', () => {
+    expect(agentError(() => sms({ startAt: '20.11.2026 8:00' }))).toMatchObject({
+      code: 'invalid', message: 'Pole startAt musi być datą z godziną, na przykład 2026-11-20 08:00 w czasie polskim.',
+    });
+    expect(sms({ startAt: '2026-11-20 08:00' }).preview.schedule).not.toBeNull();
+  });
+
+  it('termin dokładnie 30 dni naprzód w czasie polskim przyjęty także przez zmianę czasu, minutę później odrzucony', () => {
+    const autumn = new Date('2026-10-20T08:00:00Z'); // 10:00 czasu letniego, 25.10 zmiana na zimowy
+    expect(scheduleOf('2026-11-19 10:00', autumn)).toMatchObject({ startAt: '2026-11-19T09:00:00.000Z' });
+    expect(agentError(() => scheduleOf('2026-11-19 10:01', autumn))).toMatchObject({ code: 'start_at_too_far' });
+    const spring = new Date('2027-03-10T09:00:00Z'); // 10:00 czasu zimowego, 28.03 zmiana na letni
+    expect(scheduleOf('2027-04-09 10:00', spring)).toMatchObject({ startAt: '2027-04-09T08:00:00.000Z' });
+    expect(scheduleOf('2027-04-09T09:00:00Z', spring)).toMatchObject({ startAt: '2027-04-09T09:00:00.000Z' });
+  });
+
+  it('send_prepared szkicu z terminem: rozsyłka scheduled z terminem i agent_connection_id, wynik z schedule', () => {
+    const { preview } = sms({ startAt: '2026-11-20 08:00' });
+    const out = sendDraft(deps, ctx(), preview.draftId, NOW);
+    expect(out).toMatchObject({ kind: 'package', recipients: 1, repeated: false, schedule: SCHEDULE });
+    const id = (out as { id: string }).id;
+    expect(deps.packages.get(id)).toMatchObject({
+      status: 'scheduled', startAt: SCHEDULE.startAt, integrationId: seed.integrationId, agentConnectionId: seed.connectionId, requestedBy: 'Ewa Nowak',
+    });
+    expect(count('messages')).toBe(0);
+    expect(sendDraft(deps, ctx(), preview.draftId, NOW)).toMatchObject({ kind: 'package', id, repeated: true, schedule: SCHEDULE });
+  });
+
+  it('termin minął między podglądem a wysyłką: szkic nieaktualny, bez rozsyłki i bez powiadomienia', () => {
+    const { preview } = sms({ startAt: '2026-11-15 10:05' });
+    const later = new Date(NOW.getTime() + 6 * 60_000);
+    expect(agentError(() => sendDraft(deps, ctx(later), preview.draftId, later))).toMatchObject({
+      code: 'draft_stale', message: 'Termin rozsyłki minął od chwili podglądu. Przygotuj SMS ponownie z nowym terminem.',
+    });
+    expect(count('packages')).toBe(0);
+    expect(notify).not.toHaveBeenCalled();
   });
 });

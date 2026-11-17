@@ -47,6 +47,17 @@ export function endOfWarsawDay(day: string): string {
   return exact.toISOString();
 }
 
+/**
+ * Ta sama godzina czasu polskiego po `days` dniach kalendarzowych. Przez zmianę czasu odstęp wynosi wtedy
+ * o godzinę więcej albo mniej niż `days` dób. Dwa przebiegi, jak w `endOfWarsawDay`.
+ */
+export function addWarsawDays(at: Date, days: number): Date {
+  const p = warsawParts(at);
+  const wall = Date.UTC(p.y, p.m - 1, p.d + days, p.h, p.min, p.s) + at.getUTCMilliseconds();
+  const guess = new Date(wall - offsetMs(new Date(wall)));
+  return new Date(wall - offsetMs(guess));
+}
+
 const COMPACT = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/;
 const COMPACT_PLUS = /^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/;
 

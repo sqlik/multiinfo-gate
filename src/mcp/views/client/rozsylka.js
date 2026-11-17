@@ -2,11 +2,16 @@
 // przyczyny niedoręczeń, doręczenia w kolejnych godzinach i pliki CSV. Widok sam odświeża stan co 30 s,
 // a odbiorców doładowuje porcjami.
 import {
-  applyTheme, badge, button, buttons, cancelledText, createBridge, esc, field, fields, note, num, openDownload, phoneLabel, sayIn, section, stamp,
-  textOf, tile, tiles, txt,
+  applyTheme, badge, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, failure, field, fields, note, num, openDownload, phoneLabel,
+  rateLimitText, rateLimitWait, retryable, retryText, sayIn, section, share, stamp, textOf, tile, tiles, txt,
 } from './bridge.js';
 import { barChart, stackBar } from './chart.js';
 import { STATE_LABELS } from './doreczenia.js';
+
+/** Dane rozsyłki dla widoku: odbiorców rozsyłki z pliku bramka przekazuje wyłącznie w `_meta`, poza wiedzą agenta. */
+const packageData = (result) => (result.structuredContent?.hiddenItems === true
+  ? { ...result.structuredContent, items: result._meta?.items ?? [] }
+  : result.structuredContent);
 
 export const PACKAGE_REFRESH_MS = 30_000;
 export const PACKAGE_REFRESH_MAX_MS = 1_800_000;
@@ -27,10 +32,26 @@ export function packageSettled(d) {
   return d.report !== null || (d.final === true && d.status !== 'completed');
 }
 
+/** Rozsyłka czeka w bramce na termin albo na decyzję administratora; do przekazania nie zmienia stanu sama z siebie. */
+export const packagePending = (d) => d.status === 'scheduled' || d.status === 'overdue';
+
+const OVERDUE_TEXT = 'Bramka nie przekazała rozsyłki do Multiinfo w ciągu 60 minut od terminu. Decyzję o wysłaniu albo anulowaniu podejmuje administrator bramki.';
+
+/** Rozsyłka przed przekazaniem: termin, chwila przekazania i anulowanie, gdy agent może ją anulować. */
+function pendingSection(d, busy) {
+  const scheduled = d.status === 'scheduled';
+  return section(scheduled ? 'Zaplanowana rozsyłka' : 'Termin minął', fields(
+    d.schedule ? field('Termin', txt(stamp(d.schedule.startAt.at))) : '',
+    scheduled && d.schedule?.handoverAt ? field('Przekazanie do Multiinfo', txt(stamp(d.schedule.handoverAt.at))) : '',
+  ) + note(scheduled ? CANCEL_WINDOW : OVERDUE_TEXT)
+    + (d.cancellable ? buttons(button('Anuluj rozsyłkę', { act: 'cancel-package', kind: 'danger', disabled: busy })) : ''));
+}
+
 /**
  * Odświeżanie stanu rozsyłki przez package_status z `args` co 30 s, do raportu albo stanu ostatecznego, najwyżej
  * 30 minut. `args` może być funkcją, która podaje argumenty przy każdym odczycie. `handlers.onData` otrzymuje każdy
- * stan, a `handlers.onEnd` powód końca: settled, timeout albo error z tekstem.
+ * stan, a `handlers.onEnd` powód końca: settled, timeout albo error z tekstem. Po błędzie połączenia `handlers.onRetry`
+ * otrzymuje szczegóły błędu, a odświeżanie ponawia odczyt.
  */
 export function watchPackage(bridge, win, args, handlers, now = () => Date.now()) {
   const started = now();
@@ -39,13 +60,25 @@ export function watchPackage(bridge, win, args, handlers, now = () => Date.now()
     try {
       result = await bridge.callTool('package_status', typeof args === 'function' ? args() : args);
     } catch (error) {
-      result = { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
-    }
-    if (result.isError || !result.structuredContent) {
-      handlers.onEnd('error', textOf(result));
+      // Błąd połączenia, na przykład przy restarcie bramki, nie przerywa odświeżania przed upływem 30 minut.
+      if (retryable(error) && now() - started < PACKAGE_REFRESH_MAX_MS) {
+        handlers.onRetry?.(failure(error)[1]);
+        win.setTimeout(tick, PACKAGE_REFRESH_MS);
+      } else handlers.onEnd('error', ...failure(error));
       return;
     }
-    handlers.onData(result.structuredContent);
+    // Odmowa limitu żądań klucza wstrzymuje odświeżanie na retryAfterSec, a widok informuje o tym pracownika.
+    const limited = rateLimitWait(result);
+    if (limited !== null && now() - started < PACKAGE_REFRESH_MAX_MS) {
+      handlers.onRetry?.('', rateLimitText(limited));
+      win.setTimeout(tick, limited);
+      return;
+    }
+    if (result.isError || !result.structuredContent) {
+      handlers.onEnd('error', textOf(result), '');
+      return;
+    }
+    handlers.onData(packageData(result));
     if (packageSettled(result.structuredContent)) handlers.onEnd('settled');
     else if (now() - started >= PACKAGE_REFRESH_MAX_MS) handlers.onEnd('timeout');
     else win.setTimeout(tick, PACKAGE_REFRESH_MS);
@@ -53,7 +86,6 @@ export function watchPackage(bridge, win, args, handlers, now = () => Date.now()
   win.setTimeout(tick, PACKAGE_REFRESH_MS);
 }
 
-const percent = (part, whole) => (whole === 0 ? '-' : `${((part / whole) * 100).toFixed(1).replace('.', ',')} %`);
 
 function progressSection(d) {
   const passed = d.remaining === null ? null : Math.max(0, d.recipients - d.remaining);
@@ -99,9 +131,9 @@ function reportSections(d, busy) {
   const failed = keys.filter((k) => k !== 'delivered').reduce((sum, k) => sum + count(k), 0);
   return section('Wynik', stackBar(keys.map((k) => ({ tone: REPORT_TONE[k] ?? 'plain', value: count(k) })))
     + tiles(
-      tile('Doręczone', num(count('delivered')), percent(count('delivered'), d.recipients), 'ok'),
-      tile('Niedoręczone', num(count('failed')), percent(count('failed'), d.recipients)),
-      tile('Przedawnione', num(count('expired')), percent(count('expired'), d.recipients)),
+      tile('Doręczone', num(count('delivered')), share(count('delivered'), d.recipients), 'ok'),
+      tile('Niedoręczone', num(count('failed')), share(count('failed'), d.recipients)),
+      tile('Przedawnione', num(count('expired')), share(count('expired'), d.recipients)),
       tile('Razem', num(d.recipients), 'odbiorców'),
     )
     + (others.length > 0 ? note(`Pozostałe stany: ${others.join(', ')}`) : ''))
@@ -126,8 +158,9 @@ export function renderPackage(d, state = {}) {
   return section(`Rozsyłka ${d.id}`, fields(
     field('Stan', `<div class="txt">${badge(PACKAGE_TONE[d.status] ?? 'wait', d.statusLabel)}</div>`), field('Przyjęta', txt(stamp(d.created.at))),
     field('Źródło', txt(d.source)), field('Odbiorcy', txt(num(d.recipients))),
+    d.schedule && !packagePending(d) ? field('Termin', txt(stamp(d.schedule.startAt.at))) : '',
   ))
-    + (d.report === null ? progressSection(d) : reportSections(d, busy))
+    + (packagePending(d) ? pendingSection(d, busy) : d.report === null ? progressSection(d) : reportSections(d, busy))
     + recipientsSection(d, busy);
 }
 
@@ -137,7 +170,7 @@ export function startPackage(win, env) {
   const root = doc.getElementById('tresc');
   const live = doc.getElementById('na-zywo');
   const say = sayIn(doc);
-  const s = { input: null, data: null, busy: false, watching: false };
+  const s = { input: null, data: null, busy: false, watching: false, retrying: false };
   const draw = () => {
     if (s.data) root.innerHTML = renderPackage(s.data, s);
   };
@@ -146,16 +179,34 @@ export function startPackage(win, env) {
     const limit = Math.min(PAGE_MAX, Math.max(s.input?.limit ?? 25, s.data.items.length));
     return { packageId: s.data.id, ...(limit === 25 ? {} : { limit }) };
   };
-  const end = (why, text) => {
+  /** Ponowienie odczytu po błędzie połączenia albo po odmowie limitu żądań klucza z własnym komunikatem. */
+  const retry = (detail, text = retryText(PACKAGE_REFRESH_MS)) => {
+    s.retrying = true;
+    say('wait', text, detail);
+  };
+  const end = (why, text, detail) => {
     s.watching = false;
+    s.retrying = false;
     live.textContent = LIVE_TEXT[why] ?? '';
-    if (why === 'error') say('fail', text);
+    if (why === 'error') say('fail', text, detail);
   };
   const watch = () => {
-    if (s.watching || packageSettled(s.data)) return;
+    // Rozsyłka przed przekazaniem nie zmienia stanu przez wiele godzin, dlatego widok nie odświeża jej na żywo.
+    if (s.watching || packageSettled(s.data) || packagePending(s.data)) return;
     s.watching = true;
     live.textContent = LIVE_TEXT.watching;
-    watchPackage(bridge, win, args, { onData: (data) => { s.data = data; draw(); }, onEnd: end });
+    watchPackage(bridge, win, args, {
+      onData: (data) => {
+        if (s.retrying) {
+          s.retrying = false;
+          say('plain', '');
+        }
+        s.data = data;
+        draw();
+      },
+      onEnd: end,
+      onRetry: retry,
+    });
   };
   const show = (result) => {
     if (result.isError) return say('fail', textOf(result));
@@ -163,21 +214,23 @@ export function startPackage(win, env) {
       root.textContent = textOf(result);
       return undefined;
     }
-    s.data = result.structuredContent;
+    s.data = packageData(result);
     say('plain', '');
     draw();
     // Ręczne odświeżenie mogło przynieść raport przed kolejnym odczytem odświeżania.
-    if (packageSettled(s.data)) live.textContent = '';
+    if (packageSettled(s.data) || packagePending(s.data)) live.textContent = '';
     return watch();
   };
   const run = async (task) => {
     if (s.busy || !s.data) return;
+    // Komunikat działania pracownika zastępuje komunikat o ponowieniu odczytu i zostaje po udanym odczycie.
+    s.retrying = false;
     s.busy = true;
     draw();
     try {
       await task();
     } catch (error) {
-      say('fail', error instanceof Error ? error.message : String(error));
+      say('fail', ...failure(error));
     } finally {
       s.busy = false;
       draw();
@@ -202,9 +255,16 @@ export function startPackage(win, env) {
       run(async () => {
         const result = await bridge.callTool('package_status', { packageId: s.data.id, offset: s.data.items.length, limit: s.input?.limit ?? 25 });
         if (result.isError) return say('fail', textOf(result));
-        const next = result.structuredContent;
+        const next = packageData(result);
         s.data = { ...next, items: [...s.data.items, ...next.items] };
         return say('plain', '');
+      });
+    } else if (button.dataset.act === 'cancel-package') {
+      run(async () => {
+        const result = await bridge.callTool('cancel_package', { id: s.data.id });
+        if (result.isError) return say('fail', textOf(result));
+        show(await bridge.callTool('package_status', args()));
+        return say('ok', textOf(result));
       });
     } else if (button.dataset.act === 'csv') {
       run(async () => {

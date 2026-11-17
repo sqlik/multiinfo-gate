@@ -174,6 +174,33 @@ describe('opis API', () => {
     expect(tekst).toContain('Chwila usunięcia szczegółów odbiorców po okresie przechowywania, czyli 30 dni po wygaśnięciu linków');
   });
 
+  it('rozsyłka z terminem: stany scheduled i overdue z opisami, handoverAt, trasa cancel z 404 i 409, kod start_at_too_far', () => {
+    const rozsylka = doc.components.schemas.Rozsylka!;
+    const status = rozsylka.properties!.status!;
+    expect(status.enum).toEqual(['scheduled', 'overdue', 'queued', 'open', 'sending', 'completed', 'cancelled', 'failed']);
+    for (const stan of status.enum!) expect(status.description, stan).toContain(`${stan} - `);
+    expect(rozsylka.properties!.handoverAt).toMatchObject({ type: 'string', format: 'date-time', nullable: true });
+    expect(rozsylka.properties!.handoverAt!.description).toBeTruthy();
+    expect(rozsylka.required).toContain('handoverAt');
+
+    for (const sciezka of ['/v1/packages', '/v1/integrations/{id}/packages']) {
+      const operacja = doc.paths[sciezka]!.post!;
+      const przyjeta = operacja.responses['202']!.content!['application/json']!.schema;
+      expect(Object.keys(przyjeta.properties!), sciezka).toEqual(expect.arrayContaining(['startAt', 'handoverAt']));
+      expect(przyjeta.required, sciezka).not.toContain('handoverAt');
+      expect(operacja.responses['400']!.description, sciezka).toContain('start_at_too_far');
+    }
+
+    const anuluj = doc.paths['/v1/packages/{id}/cancel']!.post!;
+    expect(anuluj.operationId).toBe('anulujRozsylke');
+    expect(anuluj.security).toEqual([{ bearerAuth: [] }]);
+    expect(Object.keys(anuluj.responses).sort()).toEqual(['200', '401', '404', '409', '429']);
+    expect(anuluj.responses['200']!.content!['application/json']!.schema.properties!.status!.enum).toEqual(['cancelled']);
+    expect(JSON.stringify(anuluj.responses['409'])).toContain('package_not_cancellable');
+    expect(JSON.stringify(anuluj.responses['409'])).toContain('Rozsyłka została już przekazana do Multiinfo, które nie pozwala jej anulować.');
+    expect(JSON.stringify(anuluj.responses['404'])).toContain('package_not_found');
+  });
+
   it('zapisany plik zgadza się z modułem', () => {
     const zapisany = JSON.parse(readFileSync('docs/openapi.json', 'utf8'));
     expect(zapisany).toEqual(JSON.parse(JSON.stringify(doc)));

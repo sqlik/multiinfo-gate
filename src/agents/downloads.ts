@@ -1,11 +1,13 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { reportCsv } from '../api/packages.ts';
+import { fileReportCsv, reportCsv } from '../api/packages.ts';
 import { AgentError } from '../integrations/agent.ts';
+import { FILE_SEND_PREFIX, fileReportReady } from '../integrations/agent-file.ts';
 import { OPENING_TIME_COLUMNS, openersCsv, RECIPIENT_CSV_COLUMNS } from '../links/campaigns.ts';
 import { downloadExpiredPage } from '../links/pages.ts';
 import type { Logger } from '../log.ts';
 import type { CampaignsRepo } from '../store/campaigns.ts';
 import type { DownloadKind, DownloadLinksRepo } from '../store/download-links.ts';
+import type { FileSendsRepo } from '../store/file-sends.ts';
 import type { PackagesRepo, RecipientRow } from '../store/packages.ts';
 import type { ShortLinksRepo } from '../store/short-links.ts';
 import { csvCell } from '../text/csv.ts';
@@ -18,7 +20,8 @@ export const DOWNLOAD_TTL_MS = 3_600_000;
 
 export interface DownloadRouteDeps {
   connections: Pick<ConnectionService, 'resolve'>;
-  downloads: DownloadLinksRepo; packages: PackagesRepo; shortLinks: ShortLinksRepo; campaigns: CampaignsRepo; log?: Logger; now?: () => Date;
+  downloads: DownloadLinksRepo; packages: PackagesRepo; shortLinks: ShortLinksRepo; campaigns: CampaignsRepo; fileSends: Pick<FileSendsRepo, 'get'>;
+  log?: Logger; now?: () => Date;
 }
 
 /**
@@ -61,8 +64,26 @@ function slug(name: string, id: number): string {
   return ascii === '' ? String(id) : ascii;
 }
 
-/** Plik linku: rozsyłka albo kampania klucza, który utworzył link; brak albo cudzy zasób daje `undefined`. */
+/**
+ * Raport wysyłki z pliku: odbiorcy wszystkich jej rozsyłek według wiersza w pliku, gdy raport jest gotowy (P10).
+ * Odbiorca rozsyłki anulowanej albo zakończonej błędem bez raportu otrzymuje stan tej rozsyłki.
+ */
+function fileSendCsv(deps: DownloadRouteDeps, link: { apiKeyId: number; kind: DownloadKind; ref: string }): { name: string; body: string } | undefined {
+  const f = deps.fileSends.get(link.ref);
+  if (!f || f.apiKeyId !== link.apiKeyId) return undefined;
+  const packages = deps.packages.listByFileSend(f.id);
+  if (!fileReportReady(packages)) return undefined;
+  const rows = packages.flatMap((p) => deps.packages.recipients(p.id).map((r) => ({
+    ...r, status: r.status ?? (p.status === 'cancelled' || p.status === 'failed' ? p.status : null),
+  }))).sort((a, b) => (a.fileLine ?? Infinity) - (b.fileLine ?? Infinity));
+  return link.kind === 'package_report'
+    ? { name: `raport-${f.id}.csv`, body: fileReportCsv(rows) }
+    : { name: `niedoreczeni-${f.id}.csv`, body: fileReportCsv(rows.filter((r) => r.status !== 'delivered')) };
+}
+
+/** Plik linku: rozsyłka, wysyłka z pliku albo kampania klucza, który utworzył link; brak albo cudzy zasób daje `undefined`. */
 function fileOf(deps: DownloadRouteDeps, link: { apiKeyId: number; kind: DownloadKind; ref: string }): { name: string; body: string } | undefined {
+  if ((link.kind === 'package_report' || link.kind === 'package_failed') && link.ref.startsWith(FILE_SEND_PREFIX)) return fileSendCsv(deps, link);
   if (link.kind === 'package_report' || link.kind === 'package_failed') {
     const p = deps.packages.get(link.ref);
     if (!p || p.apiKeyId !== link.apiKeyId) return undefined;

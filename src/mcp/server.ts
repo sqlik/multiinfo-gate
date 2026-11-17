@@ -25,6 +25,11 @@ const CAPABILITIES = { tools: {}, resources: {}, prompts: {} };
 /** Pole treści, które nowa era powtarza w nagłówku Mcp-Name. */
 const NAMED: Record<string, 'name' | 'uri'> = { 'tools/call': 'name', 'prompts/get': 'name', 'resources/read': 'uri' };
 const RESOURCE_TTL_MS = 3_600_000;
+/**
+ * Limit treści POST /mcp: porcja do 5000 wierszy pliku z odbiorcami przekracza ogólny limit API. Bramka sprawdza
+ * token w haku onRequest, zanim odczyta treść, dlatego wyższy limit dotyczy wyłącznie połączeń z panelu.
+ */
+export const MCP_BODY_LIMIT = 4 * 1024 * 1024;
 
 export const API_KEY_REFUSED = 'Adres /mcp nie przyjmuje klucza API. Użyj tokenu połączenia z panelu bramki.';
 const MISSING_TOKEN = 'Adres /mcp wymaga tokenu połączenia z panelu bramki albo połączenia aplikacji kodem jednorazowym.';
@@ -221,7 +226,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: AgentToolDeps, too
     return undefined;
   };
 
-  app.post('/mcp', { onRequest: gate }, async (request, reply) => {
+  app.post('/mcp', { onRequest: gate, bodyLimit: MCP_BODY_LIMIT }, async (request, reply) => {
     const connectionId = admitted.get(request)!;
     const body = request.body;
     if (Array.isArray(body)) {

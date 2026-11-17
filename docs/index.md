@@ -22,7 +22,9 @@ powiadamia administratora również SMS-em. Od wersji 1.11 bramka zamienia linki
 linki własnej domeny firmy, liczy ich otwarcia i przedstawia wyniki kampanii w panelu, w API
 i w zdarzeniu „link otwarty”. Od wersji 1.12 pracownik wysyła SMS-y i sprawdza ich doręczenie
 w rozmowie z aplikacją AI, na przykład claude.ai albo ChatGPT, a aplikacja wyświetla w rozmowie
-widoki bramki z podglądem wysyłki.
+widoki bramki z podglądem wysyłki. Od wersji 1.13 bramka przechowuje rozsyłkę z terminem do chwili
+przekazania do Multiinfo, dzięki czemu można ją anulować. Pracownik wysyła przez agenta rozsyłkę
+z pliku CSV albo Excel i prowadzi z klientem rozmowę SMS w jednym widoku.
 
 ![Przegląd: liczniki pojedynczych wiadomości, rozsyłek i SMS-ów odebranych z ostatniej doby, stan połączeń z Multiinfo i ostatnie niepowodzenia](obrazki/przeglad.png)
 
@@ -46,7 +48,8 @@ zamiast certyfikatów, oraz panel do zarządzania kontami, kluczami i podglądu 
 - [Skracacz linków i kampanie](skracacz.md) - krótkie linki własnej domeny, obowiązkowa lista
   domen docelowych, wyniki kampanii, parametry UTM, ważność linków i przechowywanie danych
 - [Agenci AI](agenci-ai.md) - wysyłka SMS-ów i odczyt doręczeń w rozmowie z aplikacją AI: zakresy,
-  połączenia pracowników, claude.ai, ChatGPT, Claude Code, Copilot Studio, widoki w rozmowie
+  połączenia pracowników, claude.ai, ChatGPT, Claude Code, Copilot Studio, widoki w rozmowie, wysyłka
+  z terminem, rozsyłka z pliku i rozmowa z klientem
 - [Rozwiązywanie problemów](problemy.md) - objaw, sprawdzenie i naprawa: panel, logowanie, tryb
   awaryjny, aktualizacja, Microsoft 365, skracacz linków, agenci AI, zgłaszanie problemów
 - [Przykład w PHP](https://github.com/sqlik/multiinfo-gate/tree/main/examples/php) - strona

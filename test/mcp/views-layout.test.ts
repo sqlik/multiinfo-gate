@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { button, buttons, field, fields, messageBox, numbers, phoneLabel, section, smsCounter, tile, tiles, txt } from '../../src/mcp/views/client/bridge.js';
-import { BUILT_VIEWS, viewFiles } from '../../src/mcp/views/index.ts';
+import { button, buttons, field, fields, messageBox, numbers, phoneLabel, section, share, smsCounter, tile, tiles, txt, wideField } from '../../src/mcp/views/client/bridge.js';
+import { BUILT_VIEWS, viewFiles, viewHtml } from '../../src/mcp/views/index.ts';
 import { VIEW_STYLE } from '../../src/mcp/views/style.ts';
 
 describe('style kart widoków', () => {
@@ -19,6 +19,23 @@ describe('style kart widoków', () => {
     expect(VIEW_STYLE).toMatch(/\.msg\{[^}]*background:var\(--surface\)/);
   });
 
+  it('pole na całą szerokość siatki pól (próba B, B4)', () => {
+    expect(VIEW_STYLE).toContain('.field.wide{grid-column:1/-1}');
+    expect(wideField('Termin', txt('2026-11-20 08:00'), 'podpowiedź')).toBe(
+      '<div class="field wide"><span class="lbl">Termin</span><div class="txt">2026-11-20 08:00</div><p class="note">podpowiedź</p></div>');
+  });
+
+  it('podpis kafla zawija się zamiast urywać wielokropkiem (próba B, B2)', () => {
+    expect(VIEW_STYLE).toMatch(/\.tile \.s\{[^}]*white-space:normal/);
+    expect(VIEW_STYLE).not.toMatch(/\.tile \.s\{[^}]*text-overflow:ellipsis/);
+  });
+
+  it('komunikat zawija długi tekst bez spacji i stoi w elemencie blokowym, który mieści rozwijane szczegóły błędu', () => {
+    expect(VIEW_STYLE).toMatch(/\.notice\{[^}]*overflow-wrap:anywhere/);
+    expect(VIEW_STYLE).toMatch(/\.why \.mono\{[^}]*white-space:pre-wrap/);
+    for (const id of BUILT_VIEWS) expect(viewHtml(id)).toContain('<div id="komunikat" class="notice" role="status" hidden></div>');
+  });
+
   it('style nie zawierają klas dawnego układu', () => {
     for (const old of ['.box', '.kv', '.split2', '.phone', '.bubble', '.chips', '.recips', '.who']) {
       expect(VIEW_STYLE, old).not.toContain(`${old}{`);
@@ -27,6 +44,15 @@ describe('style kart widoków', () => {
 });
 
 describe('elementy układu kart', () => {
+  it('share: udział z jednym miejscem po przecinku, a zaokrąglenie nie ukrywa niedoręczeń (próba B, B14)', () => {
+    expect(share(1, 3)).toBe('33,3 %');
+    expect(share(0, 10)).toBe('0,0 %');
+    expect(share(10, 10)).toBe('100,0 %');
+    expect(share(9896, 9899)).toBe('ponad 99,9 %');
+    expect(share(3, 9899)).toBe('poniżej 0,1 %');
+    expect(share(5, 0)).toBe('-');
+  });
+
   it('phoneLabel: numer w zapisie panelu, bez plusa i odstępów', () => {
     expect(phoneLabel('48601000072')).toBe('48601000072');
     expect(phoneLabel(null)).toBe('');

@@ -120,6 +120,15 @@ describe('POST /v1/packages', () => {
     expect(pkg.deliveryReport).toBe(0);
   });
 
+  it('zapisuje, czy nadpis podano jawnie: jawny 1, domyślny i pusty 0', async () => {
+    const explicit = await post({ ...body(), orig: 'Firma Alert' });
+    expect(packages.get(explicit.json().id)!.origExplicit).toBe(1);
+    const fallback = await post(body());
+    expect(packages.get(fallback.json().id)!).toMatchObject({ orig: 'Firma Info', origExplicit: 0 });
+    const empty = await post({ ...body(), orig: '' });
+    expect(packages.get(empty.json().id)!.origExplicit).toBe(0);
+  });
+
   it('puste pola odbiorcy traktuje jak pominięte: treść wspólna, bez identyfikatora', async () => {
     const res = await post({ defaultText: 'Tresc domyslna', orig: '', startAt: null, recipients: [{ to: '48601135134', text: '', clientId: '' }] });
     expect(res.statusCode).toBe(202);
@@ -220,7 +229,19 @@ describe('raport rozsyłki', () => {
     const id = (await post(body())).json().id;
     const res = await app.inject({ method: 'POST', url: `/v1/packages/${id}/report`, headers: { authorization: `Bearer ${apiKey}` } });
     expect(res.statusCode).toBe(409);
-    expect(res.json().error.code).toBe('package_not_completed');
+    expect(res.json().error).toEqual({
+      code: 'package_not_completed', message: 'Raport jest dostępny po zakończeniu rozsyłki. Stan rozsyłki: queued.',
+    });
+  });
+
+  it('POST odmawia raportu rozsyłki anulowanej i wyjaśnia, że raport nie powstanie', async () => {
+    const id = (await post(body())).json().id as string;
+    packages.setCancelled(id, NOW);
+    const res = await app.inject({ method: 'POST', url: `/v1/packages/${id}/report`, headers: { authorization: `Bearer ${apiKey}` } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toEqual({
+      code: 'package_not_completed', message: 'Rozsyłka została anulowana, dlatego raport doręczeń nie powstanie.',
+    });
   });
 
   it('GET zwraca 409 ze stanem, gdy raport nie jest gotowy', async () => {
@@ -229,7 +250,17 @@ describe('raport rozsyłki', () => {
     const res = await get(`/v1/packages/${id}/report`);
     expect(res.statusCode).toBe(409);
     expect(res.json()).toEqual({
-      error: { code: 'report_not_ready', message: 'Raport nie jest gotowy; stan: pending.' }, report: { status: 'pending' },
+      error: { code: 'report_not_ready', message: 'Raport nie jest jeszcze gotowy. Stan raportu: pending.' }, report: { status: 'pending' },
+    });
+  });
+
+  it('GET dla rozsyłki anulowanej: 409 z wyjaśnieniem, że raport nie powstanie, jak POST', async () => {
+    const id = (await post(body())).json().id as string;
+    packages.setCancelled(id, NOW);
+    const res = await get(`/v1/packages/${id}/report`);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({
+      error: { code: 'report_not_ready', message: 'Rozsyłka została anulowana, dlatego raport doręczeń nie powstanie.' }, report: { status: 'none' },
     });
   });
 
@@ -294,6 +325,25 @@ describe('GET /v1/packages/:id', () => {
     ]);
     packages.setReport(id, { status: 'ready' });
     expect((await get(`/v1/packages/${id}`)).json().summary).toEqual({ delivered: 1, failed: 0, other: 1 });
+  });
+
+  it('POST /v1/packages z terminem: 202, status scheduled, startAt i handoverAt', async () => {
+    const startAt = new Date(NOW.getTime() + 2 * 3600_000).toISOString();
+    const res = await post({ ...body(), startAt });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toMatchObject({ status: 'scheduled', startAt, handoverAt: new Date(NOW.getTime() + 110 * 60_000).toISOString() });
+  });
+
+  it('GET /v1/packages/{id}: handoverAt dla scheduled, null po przekazaniu', async () => {
+    const startAt = new Date(NOW.getTime() + 2 * 3600_000).toISOString();
+    const id = (await post({ ...body(), startAt })).json().id;
+    expect((await get(`/v1/packages/${id}`)).json()).toMatchObject({
+      status: 'scheduled', startAt, handoverAt: new Date(NOW.getTime() + 110 * 60_000).toISOString(),
+    });
+    packages.beginHandover(id);
+    expect((await get(`/v1/packages/${id}`)).json()).toMatchObject({ status: 'queued', startAt, handoverAt: null });
+    const plain = (await post(body())).json().id;
+    expect((await get(`/v1/packages/${plain}`)).json()).toMatchObject({ status: 'queued', startAt: null, handoverAt: null });
   });
 
   it('nie ujawnia cudzej rozsyłki', async () => {

@@ -117,17 +117,23 @@ export class ShortLinksRepo {
       .run(at.toISOString(), campaignId).changes;
   }
 
-  /** Przywraca kody kampanii z pominięciem kodów anulowanych wiadomości, które pozostają wyłączone. */
+  /** Przywraca kody kampanii z pominięciem kodów anulowanych wiadomości i rozsyłek, które pozostają wyłączone. */
   enableCampaign(campaignId: number): number {
     return this.db
       .prepare(`UPDATE short_links SET disabled_at = NULL WHERE campaign_id = ? AND disabled_at IS NOT NULL
-                AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.id = short_links.message_id AND m.status = 'cancelled')`)
+                AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.id = short_links.message_id AND m.status = 'cancelled')
+                AND NOT EXISTS (SELECT 1 FROM packages p WHERE p.id = short_links.package_id AND p.status = 'cancelled')`)
       .run(campaignId).changes;
   }
 
   disableMessage(messageId: string, at: Date): number {
     return this.db.prepare('UPDATE short_links SET disabled_at = ? WHERE message_id = ? AND disabled_at IS NULL')
       .run(at.toISOString(), messageId).changes;
+  }
+
+  disablePackage(packageId: string, at: Date): number {
+    return this.db.prepare('UPDATE short_links SET disabled_at = ? WHERE package_id = ? AND disabled_at IS NULL')
+      .run(at.toISOString(), packageId).changes;
   }
 
   forMessage(messageId: string): ShortLinkRow[] {

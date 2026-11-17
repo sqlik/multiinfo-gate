@@ -372,6 +372,61 @@ rozsyłki minął, a numer kontrolny nie otrzymał SMS-a, rozsyłkę można zlec
 przypadkach istnienie rozsyłki może sprawdzić administrator Polkomtel, ale nie jest to standardowa
 procedura obsługi klienta Multiinfo.
 
+## Rozsyłka nie została wysłana o czasie {#rozsylka-po-terminie}
+
+Objaw: na ekranie **Rozsyłki** rozsyłka z terminem jest oznaczona stanem „termin minął”, a API zwraca dla
+niej stan `overdue`.
+Strona główna panelu wyświetla pasek z liczbą rozsyłek, które czekają na decyzję administratora.
+Administrator otrzymuje powiadomienie „Rozsyłka po terminie”, a dziennik bramki zawiera wpis
+`rozsylka.po_terminie`.
+
+![Przegląd panelu z paskiem: 1 rozsyłka czeka na decyzję administratora, ponieważ bramka nie przekazała jej do Multiinfo w ciągu 60 minut od terminu, oraz odnośnikiem Zobacz rozsyłki](obrazki/przeglad-rozsylka-po-terminie.png)
+
+Od wersji 1.13 bramka przechowuje rozsyłkę z terminem u siebie i przekazuje ją do Multiinfo zwykle
+10 minut przed terminem. Gdy przekazanie nie nastąpi w ciągu 60 minut od terminu, bramka nie wysyła
+rozsyłki samoczynnie, ponieważ jej treść mogła stracić aktualność. Na przykład przypomnienie o wizycie
+technika o 8:00 wysłane o 11:00 wprowadziłoby klientów w błąd. Dlatego o wysłaniu albo anulowaniu
+rozsyłki decyduje administrator.
+
+| Przyczyna | Sprawdzenie | Rozwiązanie |
+|---|---|---|
+| bramka nie działała w okolicy terminu, na przykład z powodu awarii serwera albo przerwanej aktualizacji | dziennik bramki z okresu przed terminem | uruchomić bramkę, a następnie podjąć decyzję w panelu |
+| Multiinfo wstrzymało konto, na przykład po odrzuceniu certyfikatu | czerwony pasek na stronie głównej i karta konta | usunąć przyczynę według rozdziału 7.5 [Uruchomienia](uruchomienie.md) |
+| konto Multiinfo jest wyłączone w panelu | karta konta na ekranie **Konta Multiinfo** | włączyć konto |
+| integracja, która zleciła rozsyłkę, jest wyłączona | wiersz „Źródło” w szczegółach rozsyłki i lista integracji | włączyć integrację |
+
+Krótka przerwa nie wymaga decyzji administratora. Jeżeli przeszkoda ustąpi w ciągu 60 minut od
+terminu, bramka przekaże rozsyłkę do Multiinfo do natychmiastowej wysyłki.
+
+Celem procedury jest decyzja o rozsyłce, która czeka po terminie:
+
+1. Kliknij **Zobacz rozsyłki** na pasku strony głównej albo otwórz **Rozsyłki** i wybierz filtr
+   **Termin minął**.
+2. Otwórz rozsyłkę i sprawdź jej termin, źródło i liczbę odbiorców.
+3. Kliknij **Wyślij teraz**, jeżeli treść pozostaje aktualna. W przeciwnym razie kliknij
+   **Anuluj rozsyłkę**.
+4. Potwierdź decyzję w oknie panelu.
+
+![Szczegóły rozsyłki w stanie termin minął: pasek z wyjaśnieniem i przyciskami Wyślij teraz oraz Anuluj rozsyłkę, parametry z terminem i identyfikatorem w Multiinfo nieutworzonym](obrazki/rozsylka-termin-minal.png)
+
+Oczekiwany wynik: po wybraniu „Wyślij teraz” rozsyłka przechodzi w stan „w kolejce”, a Multiinfo
+rozpoczyna wysyłkę zaraz po przekazaniu. Anulowana rozsyłka otrzymuje stan „anulowana”, a aplikacja,
+która ją zleciła, otrzymuje powiadomienie `package.completed` ze stanem `cancelled`. Dziennik zdarzeń
+panelu odnotowuje decyzję wraz z nazwą administratora.
+
+Jeżeli wynik jest inny:
+
+- **Panel informuje, że bramka anulowała rozsyłkę zamiast ją wysłać.** Klucz API rozsyłki został
+  w tym czasie odwołany, utracił ważność albo nie obejmuje już jej usługi lub nadpisu. Komunikat
+  podaje przyczynę. Przywróć uprawnienia klucza, a następnie zleć rozsyłkę ponownie
+- **Panel prosi o włączenie integracji.** Integracja, która zleciła rozsyłkę, jest nadal wyłączona.
+  Włącz ją albo anuluj rozsyłkę
+- **Panel prosi o wznowienie albo włączenie konta.** Konto Multiinfo, z którego bramka wysyła
+  rozsyłkę, jest wstrzymane albo wyłączone. Wznów albo włącz konto, a następnie ponownie kliknij
+  **Wyślij teraz**. Możesz także anulować rozsyłkę
+- **Rozsyłka pozostaje w stanie „w kolejce”.** Konto Multiinfo zostało wstrzymane albo wyłączone
+  już po decyzji administratora. Bramka przekaże rozsyłkę po wznowieniu konta
+
 ## Wersja Node.js bez poprawek bezpieczeństwa {#wersja-node}
 
 Objaw: przegląd panelu pokazuje czerwony pasek z informacją, że Node.js, na którym działa bramka,
@@ -776,7 +831,8 @@ Jeżeli wynik jest inny:
 ### Agent zgłasza przekroczony limit {#agent-limit}
 
 Objaw: agent przekazuje komunikat „Przekroczono limit N żądań na minutę klucza. Spróbuj ponownie za
-minutę.” Widok może zgłosić ten sam komunikat przy odświeżeniu.
+minutę.” Widok wyświetla wtedy komunikat „Bramka wstrzymała odświeżanie z powodu limitu żądań klucza”
+i wznawia odświeżanie samodzielnie po wskazanym czasie.
 
 Każde wywołanie narzędzia i każde odświeżenie widoku liczy się do limitu żądań na minutę klucza API
 integracji, tak jak żądanie API. Limit jest wspólny dla wszystkich aplikacji korzystających z klucza.
@@ -794,6 +850,57 @@ podniesiesz w polu **Limit żądań na minutę** formularza klucza, opisanego w 
 Komunikat „Integracja <nazwa> wykorzystała limit N wysyłek” oznacza inną przyczynę. Szkic przekroczył
 ochronę przed burzą integracji, która liczy wyłącznie wysyłki. Komunikat podaje czas, po którym agent
 może ponowić próbę. Ustawienia ochrony opisuje rozdział 4.3 [Agentów AI](agenci-ai.md#43-ochrona-przed-burza-i-dziennik).
+
+### Widok nie wczytuje pliku {#plik-nie-wczytuje}
+
+Objaw: widok „Rozsyłka z pliku” wyświetla komunikat zamiast pierwszych wierszy pliku. Przycisk
+**Przekaż plik do bramki** jest niedostępny.
+
+Widok odczytuje plik w przeglądarce pracownika, zanim cokolwiek trafi do bramki. Komunikat wskazuje
+przyczynę:
+
+| Komunikat | Przyczyna | Rozwiązanie |
+|---|---|---|
+| Widok nie odczytuje plików .xls z programu Excel 97-2003 | plik zapisano w formacie starszych wersji Excela | zapisać plik w Excelu jako „Skoroszyt programu Excel (.xlsx)” albo „CSV UTF-8” |
+| Skoroszyt jest zabezpieczony hasłem | skoroszyt wymaga hasła przy otwarciu | usunąć hasło w Excelu albo zapisać plik jako „CSV UTF-8” |
+| Widok nie odczytał skoroszytu, ponieważ plik jest uszkodzony | plik nie jest poprawnym skoroszytem, na przykład został przerwany przy kopiowaniu | zapisać plik w Excelu ponownie albo jako „CSV UTF-8” |
+| Przeglądarka nie odczytuje skoroszytów .xlsx w widoku | przeglądarka nie obsługuje rozpakowania skoroszytu | zapisać plik jako „CSV UTF-8” albo zaktualizować przeglądarkę |
+| Rozmiar pliku przekracza 20 MB | plik jest większy niż 20 MB | usunąć zbędne kolumny albo podzielić plik |
+| Plik zawiera N wierszy danych, a bramka przyjmuje najwyżej 50 000 wierszy | plik przekracza limit odbiorców jednej wysyłki | podzielić plik i wysłać części kolejno |
+| Plik zawiera N kolumn, a bramka przyjmuje najwyżej 50 kolumn | plik zawiera zbędne kolumny albo pojedynczą wartość w odległej kolumnie | usunąć z pliku kolumny i wartości, których wysyłka nie wykorzystuje |
+| Plik nie zawiera wierszy danych | arkusz jest pusty albo zawiera wyłącznie nagłówek | wybrać właściwy arkusz z listy **Arkusz** albo uzupełnić plik |
+
+Komunikat „Bramka nie przyjęła wszystkich wierszy pliku” pojawia się po kliknięciu **Przekaż plik do
+bramki**, gdy połączenie z bramką zostało przerwane w trakcie przekazywania. Wybierz plik ponownie,
+a widok przekaże go od początku. Komunikat o limicie żądań klucza nie wymaga działania, ponieważ widok
+wznawia przekazywanie samodzielnie.
+
+Gdy widok dzieli wiersze pliku CSV na kolumny w niewłaściwych miejscach, wybierz właściwy separator z listy
+**Separator kolumn** w sekcji „Rozpoznanie pliku”. Widok podzieli wtedy wiersze ponownie.
+
+### Polskie znaki w treści są zniekształcone {#plik-polskie-znaki}
+
+Objaw: pierwsze wiersze pliku w widoku „Rozsyłka z pliku” albo gotowe wiadomości w podglądzie zawierają
+znak „�” albo przypadkowe znaki w miejscu polskich liter, na przykład „Krak�w” albo „KrakĂłw”.
+
+Widok rozpoznaje kodowanie pliku CSV samodzielnie. Odczytuje UTF-8 ze znacznikiem BOM i bez niego,
+Windows-1250, w którym zapisuje Excel dla Windows, oraz MacCentralEurope, w którym zapisuje Excel dla
+macOS. Wynik rozpoznania podaje pole **Kodowanie znaków** w sekcji „Rozpoznanie pliku”. Zniekształcone
+litery oznaczają, że plik zapisano w innym kodowaniu, na przykład ISO-8859-2, albo połączono w nim
+fragmenty z kilku plików o różnych kodowaniach.
+
+Celem procedury jest plik w kodowaniu, które widok odczytuje bez zniekształceń:
+
+1. Otwórz plik w Excelu i sprawdź, czy polskie litery wyświetlają się poprawnie.
+2. Wybierz **Plik → Zapisz jako**, a jako typ pliku **CSV UTF-8 (rozdzielany przecinkami)**.
+3. W widoku bramki wybierz zapisany plik ponownie.
+
+Oczekiwany wynik: pole **Kodowanie znaków** podaje UTF-8, a pierwsze wiersze danych zawierają poprawne
+polskie litery.
+
+Jeżeli litery są zniekształcone już w Excelu, plik powstał z błędnym kodowaniem w systemie, który go
+utworzył. Wyeksportuj dane z tego systemu ponownie w kodowaniu UTF-8 albo zapisz je bezpośrednio jako
+skoroszyt `.xlsx`, który nie wymaga rozpoznawania kodowania.
 
 ## Jak zgłosić problem {#zgloszenie}
 

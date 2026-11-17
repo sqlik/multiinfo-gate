@@ -24,7 +24,7 @@ describe('migracja 006', () => {
     expect(cols('messages')).toContain('integration_id');
     expect(cols('inbound_messages')).toEqual(expect.arrayContaining(['external_ref', 'external_integration_id']));
     expect(cols('webhook_deliveries')).toEqual(expect.arrayContaining(['integration_id', 'method', 'headers_enc', 'response_ref']));
-    expect(db.pragma('user_version', { simple: true })).toBe(14);
+    expect(db.pragma('user_version', { simple: true })).toBe(15);
   });
 });
 
@@ -92,7 +92,7 @@ describe('migracja 010 na bazie 1.8.7 z danymi', () => {
     old.close();
 
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(14);
+    expect(db.pragma('user_version', { simple: true })).toBe(15);
     expect(db.prepare('SELECT id, integration_id, mail_from, requested_by FROM messages').all())
       .toEqual([{ id: 'msg_1', integration_id: integrationId, mail_from: 'dyspozytor@firma.pl', requested_by: null }]);
     expect(db.prepare('SELECT id, integration_id, requested_by, idempotency_key FROM packages').all())
@@ -117,7 +117,7 @@ describe('migracja 011', () => {
   const cols = (db: ReturnType<typeof openDatabase>, t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((c) => c.name);
   it('zakłada konta Microsoft 365 i ustawienia kanału SMS, dokłada kolumny sposobu logowania SMTP, SMS w regułach i kolejce, wiadomości systemowe', () => {
     const db = openDatabase(':memory:');
-    expect(db.pragma('user_version', { simple: true })).toBe(14);
+    expect(db.pragma('user_version', { simple: true })).toBe(15);
     expect(cols(db, 'm365_accounts')).toEqual(expect.arrayContaining([
       'id', 'name', 'tenant', 'client_id', 'redirect_uri', 'address', 'refresh_enc', 'state', 'error_code', 'error_message',
       'error_since', 'notified_at', 'connected_at', 'connected_by', 'last_refresh_at', 'created_at', 'updated_at',
@@ -161,7 +161,7 @@ describe('migracja 011 na bazie 1.9.0 z danymi', () => {
     old.close();
 
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(14);
+    expect(db.pragma('user_version', { simple: true })).toBe(15);
     const notifications = new NotificationsRepo(db, randomBytes(32));
     expect(notifications.smtp()).toMatchObject({ host: 'smtp.firma.pl', authMode: 'password', m365AccountId: null });
     expect(db.prepare('SELECT config FROM integrations').get()).toEqual({ config });
@@ -204,7 +204,7 @@ describe('migracja 012 na bazie 1.10.0 z danymi', () => {
     old.close();
 
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(14);
+    expect(db.pragma('user_version', { simple: true })).toBe(15);
     const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>).map((r) => r.name);
     expect(tables).toEqual(expect.arrayContaining([
       'link_domains', 'api_key_link_domains', 'api_key_link_targets', 'campaigns', 'campaign_hours', 'campaign_targets', 'short_links',
@@ -264,7 +264,7 @@ describe('migracja 013 na bazie 1.11.3 z grupami', () => {
     old.close();
 
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(14);
+    expect(db.pragma('user_version', { simple: true })).toBe(15);
     const rows = db.prepare('SELECT name, config, updated_at FROM integrations ORDER BY id').all() as Array<{ name: string; config: string; updated_at: string }>;
     expect(JSON.parse(rows[0]!.config)).toEqual({ ...lists, recipients: [
       { phone: '48601000013', name: '' }, { phone: '48601000011', name: '' }, { phone: '48601000012', name: '' },
@@ -284,9 +284,9 @@ describe('migracja 013 na bazie 1.11.3 z grupami', () => {
 describe('migracja 014', () => {
   const cols = (db: ReturnType<typeof openDatabase>, t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((c) => c.name);
 
-  it('migracja 014 ustawia user_version 14 i tworzy sześć tabel', () => {
+  it('migracja 014 tworzy sześć tabel', () => {
     const db = openDatabase(':memory:');
-    expect(db.pragma('user_version', { simple: true })).toBe(14);
+    expect(db.pragma('user_version', { simple: true })).toBe(15);
     const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>).map((r) => r.name);
     expect(tables).toEqual(expect.arrayContaining(['oauth_clients', 'agent_connections', 'oauth_codes', 'oauth_tokens', 'agent_drafts', 'download_links']));
     expect(cols(db, 'oauth_clients')).toEqual(['client_id', 'kind', 'name', 'redirect_uris', 'source_ip', 'created_at', 'fetched_at', 'connected_at']);
@@ -339,5 +339,58 @@ describe('migracja 014', () => {
     expect([message.agentConnectionId, message.integrationId, message.requestedBy]).toEqual([null, null, 'Ewa Nowak']);
     const pkg = new PackagesRepo(db).get('pkg_1')!;
     expect([pkg.agentConnectionId, pkg.requestedBy]).toEqual([null, 'Ewa Nowak']);
+  });
+});
+
+describe('migracja 015', () => {
+  it('migracja 015: user_version 15', () => {
+    const db = openDatabase(':memory:');
+    expect(db.pragma('user_version', { simple: true })).toBe(15);
+  });
+
+  it('migracja 015: agent_drafts przyjmuje kind file, szkice sprzed migracji zachowane, file_line i file_send_id istnieją', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mig-015-'));
+    try {
+      const path = join(root, 'gate.sqlite');
+      const old = openDatabaseRaw(path);
+      applyMigrations(old, { migrations: [...TWELVE, '013-odbiorcy-grupy.sql', '014-agenci-ai.sql'] });
+      expect(old.pragma('user_version', { simple: true })).toBe(14);
+      const { integrationId } = seedAgentIntegration(old, randomBytes(32));
+      const connectionId = new AgentConnectionsRepo(old).insert({
+        integrationId, name: 'Ewa Nowak', method: 'oauth', expiresAt: null, createdBy: 'admin', createdAt: new Date('2026-11-15T08:00:00Z'),
+      });
+      old.prepare(`INSERT INTO agent_drafts (id, connection_id, kind, payload, created_at, expires_at, sent_at, result, confirm_hash)
+        VALUES ('drf_1', ?, 'group', '{"text":"Awaria w hali B"}', '2026-11-15T08:00:00Z', '2026-11-15T08:30:00Z', '2026-11-15T08:05:00Z', '{"kind":"group"}', 'skrot')`).run(connectionId);
+      old.close();
+
+      const db = openDatabase(path);
+      expect(db.pragma('user_version', { simple: true })).toBe(15);
+      expect(db.prepare('SELECT * FROM agent_drafts').all()).toEqual([{
+        id: 'drf_1', connection_id: connectionId, kind: 'group', payload: '{"text":"Awaria w hali B"}', created_at: '2026-11-15T08:00:00Z',
+        expires_at: '2026-11-15T08:30:00Z', sent_at: '2026-11-15T08:05:00Z', result: '{"kind":"group"}', confirm_hash: 'skrot',
+      }]);
+      const add = db.prepare(`INSERT INTO agent_drafts (id, connection_id, kind, payload, created_at, expires_at) VALUES (?, ?, ?, '{}', '2026-11-16', '2026-11-16')`);
+      expect(() => add.run('drf_2', connectionId, 'file')).not.toThrow();
+      expect(() => add.run('drf_3', connectionId, 'zapis')).toThrow(/CHECK/);
+      const plan = db.prepare('EXPLAIN QUERY PLAN DELETE FROM agent_drafts WHERE expires_at < ?').all('2026-11-16') as { detail: string }[];
+      expect(plan.map((p) => p.detail).join(' ')).toMatch(/idx_agent_drafts_expires/);
+      const cols = (t: string) => (db.prepare(`PRAGMA table_info(${t})`).all() as Array<{ name: string }>).map((c) => c.name);
+      expect(cols('packages')).toContain('file_send_id');
+      expect(cols('package_recipients')).toContain('file_line');
+      expect(cols('agent_files')).toEqual(['id', 'connection_id', 'name', 'columns', 'phone_column', 'total_rows', 'received_rows', 'complete', 'created_at', 'expires_at']);
+      expect(cols('agent_file_rows')).toEqual(['file_id', 'seq', 'line', 'cells', 'problem']);
+      expect(cols('file_sends')).toEqual(['id', 'api_key_id', 'integration_id', 'connection_id', 'requested_by', 'name', 'recipients', 'start_at', 'created_at']);
+      expect(db.pragma('foreign_key_check')).toEqual([]);
+      expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
+      db.close();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('indeks packages_pending obejmuje stan i termin rozsyłki', () => {
+    const db = openDatabase(':memory:');
+    const cols = (db.prepare("PRAGMA index_info('packages_pending')").all() as Array<{ name: string }>).map((c) => c.name);
+    expect(cols).toEqual(['status', 'start_at']);
   });
 });

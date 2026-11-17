@@ -33,7 +33,7 @@ export const VIEW_STYLE = [
   '.sec{padding:20px 0;border-top:1px solid var(--rule)}.sec:first-child{padding-top:4px;border-top:0}.sec:last-child{padding-bottom:0}',
   '.sec h3{margin:0 0 12px;font-size:14px;font-weight:600;color:var(--ink)}',
   '.lead{margin:-6px 0 12px;font-size:12.5px;color:var(--muted)}',
-  '.note{margin:8px 0 0;font-size:12.5px;color:var(--muted)}',
+  '.note{margin:8px 0 0;font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}',
   '.say{margin:0;font-size:14px}',
   '.muted{color:var(--muted)}',
   `.mono{font-family:${MONO};font-size:12.5px}`,
@@ -41,13 +41,38 @@ export const VIEW_STYLE = [
   // Pola i informacje w dwóch równych kolumnach, etykieta nad wartością.
   '.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 24px}',
   '@media (max-width:560px){.fields{grid-template-columns:1fr}}',
+  '.field.wide{grid-column:1/-1}',
   '.field{min-width:0}.field .lbl,.lbl-block{display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px}',
   '.txt{font-size:14px;min-height:22px;overflow-wrap:anywhere}',
-  '.sel,.inp{display:block;width:100%;height:var(--h);font:inherit;font-size:14px;border:1px solid var(--rule);border-radius:var(--r);padding:0 10px;background:var(--surface);color:var(--ink)}',
-  '.sel{padding:0 6px;cursor:pointer}.sel:disabled,.inp:disabled{cursor:default;color:var(--muted)}',
+  // Pola mają obwódkę w kolorze akcji, jak okno treści SMS-a; pole wyłączone ma szarą obwódkę.
+  '.sel,.inp{display:block;width:100%;height:var(--h);font:inherit;font-size:14px;border:1px solid var(--signal);border-radius:var(--r);padding:0 10px;background:var(--surface);color:var(--ink)}',
+  '.sel{padding:0 6px;cursor:pointer}.sel:disabled,.inp:disabled{cursor:default;color:var(--muted);border-color:var(--rule)}',
+  // Lista wyboru z własną strzałką w odstępie od prawej krawędzi, jednakową w każdej przeglądarce. Strzałka
+  // powstaje z dwóch gradientów, ponieważ widok nie wczytuje obrazów.
+  'select.sel{-webkit-appearance:none;appearance:none;padding:0 34px 0 10px;background-repeat:no-repeat;background-size:5px 5px;'
+    + 'background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;'
+    + 'background-image:linear-gradient(45deg,transparent calc(50% - .75px),var(--muted) calc(50% - .75px),var(--muted) calc(50% + .75px),transparent calc(50% + .75px)),'
+    + 'linear-gradient(-45deg,transparent calc(50% - .75px),var(--muted) calc(50% - .75px),var(--muted) calc(50% + .75px),transparent calc(50% + .75px))}',
+  // Wybór pliku: przycisk i nazwa pliku wyśrodkowane w pionie w ramce o wysokości pól; pole systemowe jest ukryte.
+  '.pick{position:relative;display:flex;align-items:center;gap:10px;height:var(--h);padding:0 4px;border:1px solid var(--signal);border-radius:var(--r);background:var(--surface);cursor:pointer;min-width:0}',
+  '.pick input{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none}',
+  '.pick .pick-btn{flex:none;display:inline-flex;align-items:center;height:26px;padding:0 10px}.pick:hover .pick-btn{background:var(--rule-soft)}',
+  '.pick-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;color:var(--muted)}.pick-name.set{color:var(--ink)}',
+  '.pick:has(input:focus-visible){outline:2px solid var(--signal);outline-offset:2px}',
+  // W trakcie przekazywania pliku pole wyboru jest wyłączone jak pozostałe pola: szara obwódka i przycisk.
+  '.pick:has(input:disabled){cursor:default;border-color:var(--rule)}.pick:has(input:disabled) .pick-btn{background:var(--rule-soft);color:var(--faint)}',
+  // Wartość obok pola wyboru stoi na wysokości tekstu w polu.
+  '.align .field .txt{display:flex;align-items:center;min-height:var(--h)}',
+  '.check{display:flex;align-items:center;gap:8px;width:fit-content;margin-top:16px;font-size:14px;cursor:pointer}',
+  '.check input{width:16px;height:16px;margin:0;accent-color:var(--signal);cursor:pointer}',
+  '.scroll{overflow-x:auto}.scroll td{white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}',
+  // Kolumna numeru w tabeli podglądu pliku: nagłówek w kolorze akcji.
+  'th.ph{color:var(--signal-dark);border-bottom-color:var(--signal);box-shadow:inset 0 -1px 0 var(--signal)}',
+  ':root[data-theme="dark"] th.ph{color:var(--signal)}',
+  '@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) th.ph{color:var(--signal)}}',
   'textarea.inp{height:auto;min-height:68px;padding:8px 10px;resize:vertical}',
   // Przełącznik: równe pola, ta sama wysokość co pola i przyciski.
-  '.seg2{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);height:var(--h);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden}',
+  '.seg2{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);height:var(--h);border:1px solid var(--signal);border-radius:var(--r);overflow:hidden}',
   '.seg2.narrow{max-width:460px;margin-bottom:12px}',
   '.seg2 button{border:0;background:var(--surface);color:var(--muted);font:inherit;font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px}',
   '.seg2 button+button{border-left:1px solid var(--rule)}.seg2 button:hover{background:var(--rule-soft)}',
@@ -69,7 +94,7 @@ export const VIEW_STYLE = [
   '.tile{border:1px solid var(--rule);border-radius:var(--r);padding:12px 14px;min-width:0}',
   '.tile .lbl{font-size:12.5px;color:var(--muted)}',
   '.tile .v{font-size:20px;font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-  '.tile .s{font-size:12px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+  '.tile .s{font-size:12px;color:var(--faint);white-space:normal;overflow-wrap:anywhere}',
   '.tile.ok{background:var(--ok-bg);border-color:var(--ok-bg)}.tile.ok .lbl,.tile.ok .v,.tile.ok .s{color:var(--ok-ink)}',
   // Przyciski: działanie główne w kolorze akcji, nieodwracalne w kolorze ostrzegawczym, pomocnicze z obwódką.
   // Najechanie zmienia tło, a działanie niedostępne ma szare tło bez koloru znaczenia.
@@ -89,7 +114,8 @@ export const VIEW_STYLE = [
   '.badge{display:inline-block;font-size:13px;padding:3px 10px;border-radius:var(--r)}',
   '.b-ok{background:var(--ok-bg);color:var(--ok-ink)}.b-wait{background:var(--wait-bg);color:var(--wait-ink)}',
   '.b-fail{background:var(--fail-bg);color:var(--fail-ink)}.b-plain{background:var(--rule-soft);color:var(--muted)}',
-  '.notice{margin:0;padding:8px 12px;border-radius:var(--r);font-size:13px}.sec .notice{margin-top:12px}',
+  '.notice{margin:0;padding:8px 12px;border-radius:var(--r);font-size:13px;overflow-wrap:anywhere}.sec .notice{margin-top:12px}',
+  '.why{margin-top:6px}.why summary{cursor:pointer}.why .mono{margin-top:4px;white-space:pre-wrap}',
   '.n-ok{background:var(--ok-bg);color:var(--ok-ink)}.n-wait{background:var(--wait-bg);color:var(--wait-ink)}',
   '.n-fail{background:var(--fail-bg);color:var(--fail-ink)}.n-plain{background:var(--rule-soft);color:var(--muted)}',
   '.foot{padding:0 20px 16px}',
@@ -111,7 +137,7 @@ export const VIEW_STYLE = [
   'table{width:100%;border-collapse:collapse;font-size:13.5px}',
   'th{text-align:left;font-weight:600;color:var(--muted);font-size:12.5px;border-bottom:1px solid var(--rule);padding:6px 8px}',
   'td{border-bottom:1px solid var(--rule-soft);padding:8px;vertical-align:top;overflow-wrap:anywhere}tr:last-child td{border-bottom:0}',
-  '.num{text-align:right;white-space:nowrap}.nw{white-space:nowrap}',
+  '.num{text-align:right;white-space:nowrap}.nw{white-space:nowrap}.fit{width:1%;white-space:nowrap}',
   // Lista odebranych SMS-ów: wiersz z numerem, godziną i stanem odpowiedzi, treść pod spodem, rozwinięcie po kliknięciu.
   '.inbox{border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;margin-top:16px}',
   '.it+.it{border-top:1px solid var(--rule)}',
@@ -124,4 +150,14 @@ export const VIEW_STYLE = [
   '.it-text{margin-top:4px;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.it[open] .it-text{white-space:normal;overflow-wrap:anywhere}',
   '.it-body{padding:4px 16px 16px;background:var(--ground)}.it-meta{margin:0 0 12px;font-size:12.5px;color:var(--muted)}',
   '.it-body textarea.inp{background:var(--surface)}',
+  // Rozmowa z numerem: SMS-y klienta po lewej, SMS-y firmy po prawej, dzień nad pierwszym SMS-em dnia.
+  '.chat-head{display:flex;justify-content:space-between;gap:12px;margin:12px 0 8px;font-size:12.5px;color:var(--muted)}.sec h3+.chat-head,.lead+.chat-head{margin-top:0}',
+  '.chat{display:flex;flex-direction:column;gap:8px}',
+  '.day{align-self:center;margin-top:8px;font-size:12px;color:var(--faint)}.day:first-child{margin-top:0}',
+  '.bub{max-width:80%;padding:8px 12px;border:1px solid var(--rule);border-radius:var(--r);overflow-wrap:anywhere}',
+  '.bub.in{align-self:flex-start;background:var(--surface)}.bub.out{align-self:flex-end;background:var(--ground)}',
+  '.bub.new{border-color:var(--signal);box-shadow:inset 0 0 0 1px var(--signal)}',
+  '.bub-text{font-size:14px;white-space:pre-wrap}',
+  '.bub-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin-top:4px;font-size:12px;color:var(--faint)}.bub.out .bub-meta{justify-content:flex-end}',
+  '.bub-meta .badge{font-size:12px;padding:1px 8px}',
 ].join('\n');

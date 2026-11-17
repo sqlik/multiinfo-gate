@@ -17,7 +17,7 @@ export function integrationLink(deps: Pick<AdminDeps, 'integrations'>, id: numbe
 /** Źródło wiadomości albo rozsyłki słowami (`sourceLabel`); powiadomienie bramki jest oznaczone źródłem „bramka”. */
 export function sourceWords(
   deps: Pick<AdminDeps, 'integrations' | 'agentConnections'>,
-  row: { integrationId: number | null; agentConnectionId: number | null; requestedBy: string | null; system?: number },
+  row: { integrationId: number | null; agentConnectionId: number | null; requestedBy: string | null; system?: number; fileSendId?: string | null },
 ): string {
   if (row.system === 1) return 'bramka';
   return sourceLabel({ integrations: deps.integrations, connectionsRepo: deps.agentConnections }, row);

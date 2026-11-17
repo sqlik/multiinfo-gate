@@ -10,8 +10,8 @@ import { z } from '../zod.ts';
 import { RPC, RpcError } from './protocol.ts';
 import { viewUri, type ViewId } from './views/index.ts';
 
-/** Zależności narzędzi: agenci, potok integracji i to z API, czego potrzebuje wysyłka. */
-export type AgentToolDeps = AgentServerDeps & PipelineDeps & Pick<ApiDeps, 'packages' | 'clients' | 'rateLimiter' | 'linksServer' | 'notifier'>;
+/** Zależności narzędzi: agenci, potok integracji i to z API, czego potrzebują wysyłka i anulowanie rozsyłki (`cancelPackage`). */
+export type AgentToolDeps = AgentServerDeps & PipelineDeps & Pick<ApiDeps, 'packages' | 'clients' | 'rateLimiter' | 'linksServer' | 'notifier' | 'deliveries'>;
 
 export interface ToolResult { text: string; structured?: Record<string, unknown>; meta?: Record<string, unknown>; isError?: boolean }
 
@@ -61,8 +61,11 @@ export const SENT_NOTICE = '[Treść wysłanej wiadomości może pochodzić od o
 export const markSentText = <T extends { text?: string | null }>(item: T): T | (T & { untrusted: true; notice: string }) =>
   (item.text === null || item.text === undefined ? item : { ...item, untrusted: true as const, notice: SENT_NOTICE });
 
-/** Treść od obcych w jednym wierszu: podział wiersza nie może sprawić, że dalsza treść udaje tekst bramki. */
-export const oneLine = (text: string): string => text.replace(/\r\n|[\r\n\u0085\u2028\u2029]/g, ' ↵ ');
+/**
+ * Treść od obcych w jednym wierszu: podział wiersza nie może sprawić, że dalsza treść udaje tekst bramki. Znacznik ↵
+ * zastępuje także tabulator pionowy, wysuw strony i separatory U+001C-U+001E, które dzielą wiersze na przykład w Pythonie.
+ */
+export const oneLine = (text: string): string => text.replace(/\r\n|[\n\v\f\r\u001c-\u001e\u0085\u2028\u2029]/g, ' ↵ ');
 
 /** Pola strony odczytu; granice pilnuje także `pageOf` w odczytach. */
 export const pageFields = {
@@ -128,7 +131,8 @@ export async function callTool(defs: readonly ToolDef[], ctx: ToolContext, name:
       return toolError(`Zakresy integracji nie obejmują uprawnienia ${labels}. Uprawnienia nadaje administrator bramki w integracji Agent AI.`);
     }
     if (!ctx.deps.rateLimiter.check(conn.key.id, conn.key.ratePerMin)) {
-      return toolError(`Przekroczono limit ${conn.key.ratePerMin} żądań na minutę klucza. Spróbuj ponownie za minutę.`);
+      // Kod i czas ponowienia w danych strukturalnych: widok pliku czeka i ponawia porcję wierszy (P7).
+      return toolError(`Przekroczono limit ${conn.key.ratePerMin} żądań na minutę klucza. Spróbuj ponownie za minutę.`, { error: 'rate_limited', retryAfterSec: 60 });
     }
   }
   const parsed = def.input.safeParse(args ?? {});

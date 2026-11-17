@@ -5,8 +5,17 @@ import type { IntegrationsRepo } from '../store/integrations.ts';
  * Źródło wysyłki dla człowieka i agenta: „API”, „integracja <nazwa>”, „Power Automate <nazwa>”,
  * „agent <integracja> · <połączenie>” albo „grupa <nazwa> · agent <integracja> · <połączenie>”.
  * Połączenie znika razem z integracją agenta, dlatego wtedy nazwę osoby podaje zapisane `requested_by`.
+ * Rozsyłka wysyłki z pliku otrzymuje dopisek „· plik”.
  */
 export function sourceLabel(
+  deps: { integrations: Pick<IntegrationsRepo, 'get'>; connectionsRepo: Pick<AgentConnectionsRepo, 'get'> },
+  row: { integrationId: number | null; agentConnectionId: number | null; requestedBy: string | null; fileSendId?: string | null },
+): string {
+  const label = baseLabel(deps, row);
+  return row.fileSendId ? `${label} · plik` : label;
+}
+
+function baseLabel(
   deps: { integrations: Pick<IntegrationsRepo, 'get'>; connectionsRepo: Pick<AgentConnectionsRepo, 'get'> },
   row: { integrationId: number | null; agentConnectionId: number | null; requestedBy: string | null },
 ): string {

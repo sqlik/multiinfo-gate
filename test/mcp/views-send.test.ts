@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { button, buttons, field, tile, tiles, txt } from '../../src/mcp/views/client/bridge.js';
+import { button, buttons, field, num, tile, tiles, txt, wideField } from '../../src/mcp/views/client/bridge.js';
 import { renderStatus } from '../../src/mcp/views/client/co-moge.js';
 import { renderGroup } from '../../src/mcp/views/client/grupa.js';
 import { renderTrace, sayAt, startTrace } from '../../src/mcp/views/client/przebieg.js';
-import { linkMarkup, renderSend } from '../../src/mcp/views/client/send.js';
+import { linkMarkup, renderSend, startSend } from '../../src/mcp/views/client/send.js';
+import { SERVER_INSTRUCTIONS } from '../../src/mcp/instructions.ts';
 import { TOOLS } from '../../src/mcp/tools/index.ts';
 import { BUILT_VIEWS, viewHtml } from '../../src/mcp/views/index.ts';
 
@@ -94,9 +95,9 @@ describe('widok wysyłki SMS', () => {
 
   it('renderSend: nadawca, usługa i domena zawsze jako lista wyboru, także z jedną pozycją', () => {
     const html = renderSend({ ...PREVIEW, links: { ...PREVIEW.links, domains: ['l.firma.pl'] } }, {});
-    expect(html).toContain('<select class="sel" name="orig"><option value="" selected>numer usługi Serwis (12345)</option><option value="SERWIS-ABC">SERWIS-ABC</option></select>');
-    expect(html).toContain('<select class="sel" name="service"><option value="12345" selected>Serwis (12345)</option></select>');
-    expect(html).toContain('<select class="sel" name="domain"><option value="l.firma.pl" selected>l.firma.pl</option></select>');
+    expect(html).toContain('<select class="sel" aria-label="Nadawca" name="orig"><option value="" selected>numer usługi Serwis (12345)</option><option value="SERWIS-ABC">SERWIS-ABC</option></select>');
+    expect(html).toContain('<select class="sel" aria-label="Usługa Multiinfo" name="service"><option value="12345" selected>Serwis (12345)</option></select>');
+    expect(html).toContain('<select class="sel" aria-label="Domena linków" name="domain"><option value="l.firma.pl" selected>l.firma.pl</option></select>');
   });
 
   it('renderSend: przełączniki kodowania i skracania w ustawieniach, rozsyłka powyżej 500 odbiorców', () => {
@@ -125,6 +126,8 @@ describe('widok wysyłki SMS', () => {
     expect(html).toContain('<p class="note">Okno ochrony przed burzą kończy się o 11:00</p>');
     const open = renderSend({ ...PREVIEW, guard: { calls: 30, recipients: null, resetsAt: null } }, {});
     expect(open).toContain(tile('Zostało odbiorców', 'bez limitu', 'w oknie ochrony'));
+    // Próba B (B15): liczba odbiorców w oknie z odstępem tysięcy, jak w widoku pliku.
+    expect(renderSend({ ...PREVIEW, guard: { calls: 30, recipients: 40101, resetsAt: null } }, {})).toContain(tile('Zostało odbiorców', num(40101), 'w oknie ochrony'));
     expect(open).toContain('<p class="note">Okno ochrony przed burzą otworzy się przy pierwszej wysyłce</p>');
   });
 
@@ -132,7 +135,7 @@ describe('widok wysyłki SMS', () => {
     const live = renderSend(PREVIEW, { sent: SENT, deliveries: { counts: { delivered: 5, sent: 7 }, done: false } });
     expect(sections(live).at(-1)).toBe('Wysyłka');
     expect(live).not.toContain('data-act="send"');
-    expect(live).toContain('<select class="sel" name="orig" disabled>');
+    expect(live).toContain('<select class="sel" aria-label="Nadawca" name="orig" disabled>');
     expect(live).toContain(tile('Doręczone', '5 z 12', 'stan odświeża się sam', 'ok'));
     expect(live).toContain('<div class="sent">Przyjęto 12 SMS-ów. Doręczone: <b>5</b> z 12 · w drodze 7 · stan odświeża się sam</div>');
     const bare = renderSend(PREVIEW, { sent: SENT, deliveries: { unavailable: true } });
@@ -160,7 +163,7 @@ describe('widok SMS do grupy', () => {
   it('renderGroup: grupa i nadawca jako listy wyboru, nadawca grupy w oknie treści, bez nadpisu numer usługi', () => {
     const own = renderGroup({ ...GROUP, orig: 'SERWIS-ABC' }, []);
     expect(own).toContain('Nadawca na telefonie: <b>SERWIS-ABC</b>');
-    expect(own).toContain('<select class="sel" name="group"><option value="SERWIS" selected>SERWIS</option><option value="FLOTA">FLOTA</option></select>');
+    expect(own).toContain('<select class="sel" aria-label="Grupa" name="group"><option value="SERWIS" selected>SERWIS</option><option value="FLOTA">FLOTA</option></select>');
     expect(own).toContain('<select class="sel" aria-label="Nadawca SMS-a"><option selected>SERWIS-ABC</option></select>');
     expect(own).toContain('Nadawcę i szablon treści określa grupa. Wysyłka nie wymaga potwierdzenia SMS-em zwrotnym.');
     expect(renderGroup(GROUP, [])).toContain('Nadawca na telefonie: <b>numer usługi Serwis (12345)</b>');
@@ -178,7 +181,7 @@ describe('widok SMS do grupy', () => {
     const sent = { kind: 'group', ids: ['msg_1', 'msg_2'], group: 'SERWIS', repeated: false };
     const live = renderGroup(GROUP, [], { sent, deliveries: { counts: { delivered: 1, sent: 1 }, done: false } });
     expect(live).not.toContain('data-act="send"');
-    expect(live).toContain('<select class="sel" name="group" disabled>');
+    expect(live).toContain('<select class="sel" aria-label="Grupa" name="group" disabled>');
     expect(live).toContain('Przyjęto SMS do grupy SERWIS: 2 wiadomości. Doręczone: <b>1</b> z 2 · w drodze 1 · stan odświeża się sam');
     expect(live).toContain(tile('Doręczone', '1 z 2', 'stan odświeża się sam', 'ok'));
     const bare = renderGroup(GROUP, [], { sent, deliveries: { unavailable: true } });
@@ -240,7 +243,7 @@ describe('widok przebiegu doręczenia', () => {
   it('renderTrace: po odmowie anulowania przycisk wyszarzony, a komunikat odmowy zostaje przy pozycji', () => {
     const html = renderTrace([{ ...ENTRY, status: 'throttled', statusLabel: 'wstrzymana limitem', cancellable: true }], { refused: new Map([['msg_1', REFUSAL]]) });
     expect(html).toContain(cancelButton(true));
-    expect(html).toContain(`<p class="notice n-fail" data-say="0" role="status">${REFUSAL}</p>`);
+    expect(html).toContain(`<div class="notice n-fail" data-say="0" role="status">${REFUSAL}</div>`);
     expect(html).not.toContain('można ją jeszcze anulować');
   });
 
@@ -258,7 +261,7 @@ describe('widok przebiegu doręczenia', () => {
     w.deliver({ jsonrpc: '2.0', id: call.id, result: { isError: true, content: [{ type: 'text', text: REFUSAL }] } });
     await tick();
     expect(w.nodes.tresc.innerHTML).toContain(cancelButton(true));
-    expect(w.nodes.tresc.innerHTML).toContain(`role="status">${REFUSAL}</p>`);
+    expect(w.nodes.tresc.innerHTML).toContain(`role="status">${REFUSAL}</div>`);
   });
 });
 
@@ -292,7 +295,7 @@ describe('komunikaty akcji przebiegu', () => {
   it('renderTrace: ukryty komunikat każdej pozycji pod jej przyciskami, przed panelem ponownej wysyłki', () => {
     const html = renderTrace([{ ...ENTRY, cancellable: true }, ENTRY]);
     const [first, second] = html.split('</section>');
-    expect(first).toContain('<p class="notice" data-say="0" role="status" hidden></p>');
+    expect(first).toContain('<div class="notice" data-say="0" role="status" hidden></div>');
     expect(first!.indexOf('data-act="resend"')).toBeLessThan(first!.indexOf('data-say="0"'));
     expect(first!.indexOf('data-say="0"')).toBeLessThan(first!.indexOf('data-resend="0"'));
     expect(second).toContain('data-say="1"');
@@ -318,5 +321,86 @@ describe('dokumenty widoków wysyłki, grupy i przebiegu', () => {
       expect(viewHtml(view)).toContain('<script type="module">');
     }
     expect(viewHtml('przebieg')).toContain('function renderSend');
+  });
+});
+
+describe('wysyłka z terminem w widokach', () => {
+  const SCHEDULE = { startAt: '2026-11-20T07:00:00.000Z', handoverAt: '2026-11-20T06:50:00.000Z' };
+  const CANCEL_HINT = 'Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem';
+  const SCHEDULED = { ...PREVIEW, recipients: 1, route: 'package', schedule: SCHEDULE };
+  const PACKAGE_SENT = { kind: 'package', id: 'pkg_9', recipients: 1, repeated: false, schedule: SCHEDULE };
+
+  it('widok wysyłki z terminem: wiersz Termin, przycisk Zaplanuj, po wysyłce kafel Zaplanowana na i Anuluj rozsyłkę', () => {
+    const html = renderSend(SCHEDULED, {});
+    // Próba B (B4): Termin na całą szerokość pod parą Nadawca i Usługa, a nie w kolumnie obok listy.
+    expect(html).toContain(wideField('Termin', txt('2026-11-20 08:00'), CANCEL_HINT));
+    expect(html.indexOf('lbl">Usługa Multiinfo<')).toBeLessThan(html.indexOf('lbl">Termin<'));
+    expect(html.indexOf('lbl">Nadawca<')).toBeLessThan(html.indexOf('lbl">Usługa Multiinfo<'));
+    expect(html).toContain(button('Zaplanuj rozsyłkę do 1 odbiorcy', { act: 'send', kind: 'primary' }));
+    expect(html).toContain('<p class="lead">Rozsyłka z terminem, raport doręczeń po zakończeniu rozsyłki</p>');
+    expect(renderSend(PREVIEW, {})).not.toContain('<span class="lbl">Termin</span>');
+
+    const after = renderSend(SCHEDULED, { sent: PACKAGE_SENT });
+    expect(after).toContain(tile('Zaplanowana na', '08:00', '2026-11-20, anulowanie do 07:50'));
+    expect(after).toContain('<div class="sent">Zaplanowano rozsyłkę <span class="mono">pkg_9</span> do 1 odbiorcy na 2026-11-20 08:00</div>');
+    expect(after).toContain(button('Anuluj rozsyłkę', { act: 'cancel-package', kind: 'danger' }));
+    expect(after).not.toContain('Sprawdź postęp rozsyłki');
+    const cancelled = renderSend(SCHEDULED, { sent: PACKAGE_SENT, cancelled: true });
+    expect(cancelled).toContain('<div class="sent">Rozsyłka <span class="mono">pkg_9</span> została anulowana</div>');
+    expect(cancelled).toContain(tile('Rozsyłka', 'anulowana', 'przed przekazaniem do Multiinfo'));
+    expect(cancelled).not.toContain('data-act="cancel-package"');
+  });
+
+  it('widok grupy z terminem: wiersz Termin, przycisk Zaplanuj, po wysyłce kafel Zaplanowana na i Anuluj rozsyłkę', () => {
+    const scheduled = { ...GROUP, schedule: SCHEDULE };
+    const html = renderGroup(scheduled, []);
+    expect(html).toContain(wideField('Termin', txt('2026-11-20 08:00'), CANCEL_HINT));
+    expect(html.indexOf('lbl">Grupa<')).toBeLessThan(html.indexOf('lbl">Nadawca SMS-a<'));
+    expect(html.indexOf('lbl">Nadawca SMS-a<')).toBeLessThan(html.indexOf('lbl">Termin<'));
+    expect(html).toContain(button('Zaplanuj wysyłkę do 2 osób', { act: 'send', kind: 'primary' }));
+    expect(html).toContain('Odbiorcy rozsyłki z terminem pochodzą z listy grupy w chwili zatwierdzenia');
+    const after = renderGroup(scheduled, [], { sent: { ...PACKAGE_SENT, recipients: 2 } });
+    expect(after).toContain(tile('Zaplanowana na', '08:00', '2026-11-20, anulowanie do 07:50'));
+    expect(after).toContain('<div class="sent">Zaplanowano rozsyłkę <span class="mono">pkg_9</span> do 2 odbiorców na 2026-11-20 08:00</div>');
+    expect(after).toContain(button('Anuluj rozsyłkę', { act: 'cancel-package', kind: 'danger' }));
+  });
+
+  it('startSend: „Anuluj rozsyłkę” po zaplanowaniu woła cancel_package i pokazuje anulowanie', async () => {
+    const w = viewWindow();
+    startSend(w.win, { version: '1.13.0' });
+    w.deliver({ jsonrpc: '2.0', id: w.sent[0]!.id, result: { protocolVersion: '2026-01-26', hostInfo: { name: 'a', version: '1' }, hostCapabilities: { serverTools: {} }, hostContext: {} } });
+    await tick();
+    w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [], structuredContent: SCHEDULED, _meta: { confirm: 'mig_cf_x' } } });
+    w.click({ act: 'send' });
+    await tick();
+    const send = w.sent.filter((m) => m.method === 'tools/call').at(-1)!;
+    w.deliver({ jsonrpc: '2.0', id: send.id, result: { content: [], structuredContent: PACKAGE_SENT } });
+    await tick();
+    w.click({ act: 'cancel-package' });
+    await tick();
+    const cancel = w.sent.filter((m) => m.method === 'tools/call').at(-1)!;
+    expect(cancel.params).toEqual({ name: 'cancel_package', arguments: { id: 'pkg_9' } });
+    w.deliver({ jsonrpc: '2.0', id: cancel.id, result: { content: [{ type: 'text', text: 'Rozsyłka pkg_9 została anulowana.' }], structuredContent: { id: 'pkg_9', status: 'cancelled' } } });
+    await tick();
+    expect(w.nodes.tresc.innerHTML).toContain('została anulowana</div>');
+    expect(w.nodes.tresc.innerHTML).not.toContain('data-act="cancel-package"');
+    // Próba B (B3): sekcja „Wysyłka” pokazuje anulowanie, dlatego komunikat nie powtarza wyniku narzędzia.
+    expect(w.nodes.komunikat.hidden).toBe(true);
+    expect(w.nodes.komunikat.textContent).toBe('');
+  });
+
+  it('instrukcje serwera i Co mogę?: termin, anulowanie, granica 30 dni, list_packages', () => {
+    expect(SERVER_INSTRUCTIONS).toContain('startAt');
+    expect(SERVER_INSTRUCTIONS).toContain('najwyżej 30 dni naprzód');
+    expect(SERVER_INSTRUCTIONS).toContain('cancel_package');
+    expect(SERVER_INSTRUCTIONS).toContain('list_packages');
+    const status = renderStatus({
+      available: true, connection: 'Ewa Nowak', integration: 'Agent AI - biuro handlowe', scopes: [{ id: 'send', label: 'Wysyłka SMS' }], expiresAt: null,
+      services: [{ id: '12345', label: 'Serwis' }], maxParts: 3, overflow: 'reject', ratePerMin: 60, groups: 0,
+      guard: { calls: 0, callLimit: 30, recipients: 0, recipientLimit: 1000, windowMinutes: 60, resetsAt: null },
+      schedule: { maxDays: 30 },
+    });
+    expect(status).toContain('<h3>Wysyłka z terminem</h3>');
+    expect(status).toContain(`Termin może przypadać najwyżej 30 dni naprzód. ${CANCEL_HINT}.`);
   });
 });

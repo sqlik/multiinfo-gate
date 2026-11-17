@@ -1,10 +1,13 @@
-import { sentByAgent } from '../../agents/reads.ts';
+import { ownPackage, sentByAgent } from '../../agents/reads.ts';
 import { cancelMessage } from '../../api/cancel-message.ts';
+import { cancelPackage } from '../../api/cancel-package.ts';
+import { cancelFileSend, FILE_SEND_PREFIX } from '../../integrations/agent-file.ts';
 import { PLACEHOLDER_CODE } from '../../links/codes.ts';
 import { linkFieldsSchema, linkRequest } from '../../api/link-fields.ts';
 import { PACKAGE_RECIPIENTS_MAX } from '../../api/packages.ts';
+import { CANCEL_WINDOW_TEXT } from '../../api/schedule.ts';
 import {
-  AgentError, prepareGroup, prepareSms, sendDraft, type GroupPreview, type GuardLeft, type SendOutcome, type SmsPreview,
+  AgentError, prepareGroup, prepareSms, sendDraft, type GroupPreview, type GuardLeft, type Schedule, type SendOutcome, type SmsPreview,
 } from '../../integrations/agent.ts';
 import { plural } from '../../text/plural.ts';
 import { warsawShort } from '../../time/warsaw.ts';
@@ -15,15 +18,24 @@ const parts = (n: number) => plural(n, 'część', 'części', 'części');
 const chars = (n: number) => plural(n, 'znak', 'znaki', 'znaków');
 const encodingName = (e: 'gsm' | 'ucs2') => (e === 'gsm' ? 'GSM' : 'Unicode');
 
-function guardLine(guard: GuardLeft, what = 'Ochrona przed burzą'): string {
+export function guardLine(guard: GuardLeft, what = 'Ochrona przed burzą'): string {
   const recipients = guard.recipients === null ? '' : ` i wysłać SMS-y do ${plural(guard.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}`;
   return `${what}: w bieżącym oknie można jeszcze wykonać ${plural(guard.calls, 'wysyłkę', 'wysyłki', 'wysyłek')}${recipients}.`;
 }
 
+/** Termin w podglądzie: chwila rozpoczęcia, chwila przekazania i okno anulowania. */
+export function scheduleLines(schedule: Schedule | null): string[] {
+  if (schedule === null) return [];
+  return [
+    `Termin rozpoczęcia rozsyłki: ${warsawShort(schedule.startAt)} czasu polskiego. Bramka przekaże rozsyłkę do Multiinfo ${warsawShort(schedule.handoverAt)}.`,
+    `${CANCEL_WINDOW_TEXT}.`,
+  ];
+}
+
 /** Ostatnie zdanie podglądu: w aplikacji z widokami wysyła człowiek, bez widoków agent prosi o potwierdzenie. */
-function confirmLine(ctx: ToolContext, tool: string): string {
+export function confirmLine(ctx: ToolContext, tool: string, scheduled = false): string {
   return ctx.apps
-    ? 'Wysyłkę zatwierdza człowiek przyciskiem „Wyślij” w podglądzie bramki.'
+    ? `Wysyłkę zatwierdza człowiek przyciskiem „${scheduled ? 'Zaplanuj' : 'Wyślij'}” w podglądzie bramki.`
     : `Pokaż użytkownikowi treść, liczbę odbiorców i nadawcę, a po wyraźnym potwierdzeniu wywołaj ${tool} z identyfikatorem szkicu.`;
 }
 
@@ -40,7 +52,9 @@ function smsText(ctx: ToolContext, p: SmsPreview): string {
   const lines = [
     `Podgląd SMS-a, szkic ${p.draftId} ważny do ${warsawShort(p.expiresAt)} czasu polskiego. Nic nie zostało wysłane.`,
     `Odbiorcy: ${p.recipients}.` + (p.duplicatesRemoved > 0 ? ` Bramka usunęła powtórzone numery: ${p.duplicatesRemoved}.` : '')
-      + (p.route === 'messages' ? ' Bramka wyśle pojedyncze wiadomości z raportem doręczenia każdej.' : ' Bramka wyśle rozsyłkę ze wspólną treścią.'),
+      + (p.route === 'messages' ? ' Bramka wyśle pojedyncze wiadomości z raportem doręczenia każdej.'
+        : p.schedule === null ? ' Bramka wyśle rozsyłkę ze wspólną treścią.' : ' Bramka zaplanuje rozsyłkę ze wspólną treścią.'),
+    ...scheduleLines(p.schedule),
     `Nadawca: ${sender}. Usługa Multiinfo: ${service && service.label !== service.id ? `${service.label} (${service.id})` : p.serviceId}.`,
     `Treść, ${parts(p.parts)}, ${chars(p.characters)}, kodowanie ${encodingName(p.encoding)}:`,
     p.text,
@@ -57,7 +71,7 @@ function smsText(ctx: ToolContext, p: SmsPreview): string {
     }
     if (p.links.notice) lines.push(p.links.notice);
   }
-  lines.push(guardLine(p.guard), confirmLine(ctx, 'send_prepared'));
+  lines.push(guardLine(p.guard), confirmLine(ctx, 'send_prepared', p.schedule !== null));
   return lines.join('\n');
 }
 
@@ -66,19 +80,25 @@ function groupText(ctx: ToolContext, p: GroupPreview): string {
   return [
     `Podgląd SMS-a do grupy ${p.group.name}, szkic ${p.draftId} ważny do ${warsawShort(p.expiresAt)} czasu polskiego. Nic nie zostało wysłane.`,
     `Odbiorcy: ${p.recipients} z listy grupy. Numery i nazwy odbiorców pokazuje podgląd bramki.`,
+    ...(p.schedule === null ? [] : [`Bramka zaplanuje rozsyłkę z odbiorcami grupy z chwili zatwierdzenia, a późniejsze zmiany składu grupy jej nie dotyczą.`]),
+    ...scheduleLines(p.schedule),
     `Treść po szablonie grupy, ${parts(p.parts)}, ${chars(p.characters)}, kodowanie ${encodingName(p.encoding)}:`,
     p.text,
     ...(p.truncated ? ['Treść została skrócona do limitu części grupy.'] : []),
     guardLine(p.guard),
     guardLine(p.groupGuard, `Ochrona przed burzą grupy ${p.group.name}`),
     ...(others.length > 0 ? [`Inne grupy dostępne dla połączenia: ${others.join(', ')}.`] : []),
-    confirmLine(ctx, 'send_prepared'),
+    confirmLine(ctx, 'send_prepared', p.schedule !== null),
   ].join('\n');
 }
 
 function outcomeText(ctx: ToolContext, o: SendOutcome): string {
   const repeated = o.repeated ? ' Ten szkic został wysłany wcześniej, dlatego bramka zwraca poprzedni wynik bez ponownej wysyłki.' : '';
   const reads = connOf(ctx).scopes.has('read_sent');
+  if (o.kind === 'package' && o.schedule) {
+    return `Zaplanowano rozsyłkę ${o.id} do ${plural(o.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')} na ${warsawShort(o.schedule.startAt)} czasu polskiego. `
+      + `Bramka przekaże ją do Multiinfo ${warsawShort(o.schedule.handoverAt)}, a do tej chwili rozsyłkę anuluje narzędzie cancel_package.${repeated}`;
+  }
   if (o.kind === 'package') {
     return `Przyjęto rozsyłkę ${o.id} do ${plural(o.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}.${repeated}`
       + (reads ? ' Postęp pokazuje narzędzie package_status.' : '');
@@ -98,7 +118,11 @@ export function checkDraftKind(ctx: ToolContext, draftId: string, reply: boolean
     : new AgentError('draft_kind', 'Szkic jest odpowiedzią na odebrany SMS. Odpowiedź wysyła narzędzie send_reply.');
 }
 
-const smsInput = z.object({
+/** Opis pola terminu w narzędziach wysyłki. */
+export const START_AT_DESCRIPTION = 'Termin rozpoczęcia wysyłki, na przykład 2026-11-20 08:00. Czas bez strefy oznacza czas polski, a termin może przypadać najwyżej 30 dni naprzód. '
+  + 'Wysyłka z terminem jest zawsze rozsyłką, którą można anulować do chwili przekazania do Multiinfo, zwykle 10 minut przed terminem.';
+
+export const smsInput = z.object({
   to: z.array(z.string().describe('Numer telefonu odbiorcy')).optional()
     .describe(`Numery odbiorców, najwyżej ${PACKAGE_RECIPIENTS_MAX} bez powtórzeń. Bramka ujednolica zapis numerów i usuwa powtórzenia.`),
   campaignRecipients: z.object({
@@ -114,6 +138,7 @@ const smsInput = z.object({
   campaign: linkFieldsSchema.campaign.describe('Nazwa kampanii krótkich linków, domyślnie nazwa integracji'),
   linkDomain: linkFieldsSchema.linkDomain.describe('Domena krótkich linków spośród domen klucza'),
   linkValidityDays: linkFieldsSchema.linkValidityDays.describe('Ważność krótkich linków w dniach, od 1 do 365'),
+  startAt: z.string().optional().describe(START_AT_DESCRIPTION),
 });
 
 export const prepareSmsTool: ToolDef = {
@@ -135,6 +160,7 @@ export const prepareSmsTool: ToolDef = {
       ...(input.orig !== undefined ? { orig: input.orig } : {}),
       ...(input.encoding !== undefined ? { encoding: input.encoding } : {}),
       links: linkRequest(input),
+      ...(input.startAt !== undefined ? { startAt: input.startAt } : {}),
     }, ctx.now, { apps: ctx.apps });
     // Numery trafiają wyłącznie do widoku przez _meta, dlatego tylko w sesji z widokami: bez widoku nikt ich nie zobaczy,
     // a lista rozsyłki obejmuje do 5000 numerów.
@@ -145,6 +171,7 @@ export const prepareSmsTool: ToolDef = {
 const groupInput = z.object({
   group: z.string().min(1).describe('Nazwa albo prefiks grupy SMS, na przykład SERWIS'),
   text: z.string().min(1).describe('Treść SMS-a przed szablonem grupy'),
+  startAt: z.string().optional().describe(START_AT_DESCRIPTION),
 });
 
 export const prepareGroupSmsTool: ToolDef = {
@@ -158,7 +185,9 @@ export const prepareGroupSmsTool: ToolDef = {
   view: 'grupa',
   run(ctx, raw) {
     const input = raw as z.infer<typeof groupInput>;
-    const { confirm, preview, recipients } = prepareGroup(ctx.deps, connOf(ctx), input, ctx.now, { apps: ctx.apps });
+    const { confirm, preview, recipients } = prepareGroup(ctx.deps, connOf(ctx), {
+      group: input.group, text: input.text, ...(input.startAt !== undefined ? { startAt: input.startAt } : {}),
+    }, ctx.now, { apps: ctx.apps });
     return {
       text: groupText(ctx, preview), structured: asRecord(preview),
       // Numery i nazwy trafiają wyłącznie do widoku przez _meta, którego agenci claude.ai i ChatGPT nie widzą. Bez widoku
@@ -168,7 +197,7 @@ export const prepareGroupSmsTool: ToolDef = {
   },
 };
 
-const sendInput = z.object({
+export const sendInput = z.object({
   draftId: z.string().min(1).describe('Identyfikator szkicu z podglądu'),
   confirm: z.string().optional().describe('Klucz potwierdzenia z podglądu w widoku bramki'),
 });
@@ -212,5 +241,38 @@ export const cancelMessageTool: ToolDef = {
     }
     const result = await cancelMessage(ctx.deps, conn.key.id, id, ctx.now, `agent ${conn.integration.name} · ${conn.connection.name}`);
     return { text: `Wiadomość ${result.id} została anulowana.`, structured: asRecord(result) };
+  },
+};
+
+const cancelPackageInput = z.object({ id: z.string().min(1).describe('Identyfikator rozsyłki albo wysyłki z pliku, który zaczyna się od fsd_') });
+
+export const cancelPackageTool: ToolDef = {
+  name: 'cancel_package',
+  title: 'Anuluj rozsyłkę',
+  description: 'Anuluje rozsyłkę z terminem wysłaną przez tę integrację, którą bramka przechowuje do chwili przekazania do Multiinfo, zwykle 10 minut przed terminem. '
+    + 'Identyfikator wysyłki z pliku anuluje wszystkie jej rozsyłki przed przekazaniem. '
+    + 'Rozsyłki z innych źródeł anuluje administrator w panelu bramki. Rozsyłki przekazanej do Multiinfo nie można anulować.',
+  scopes: ['send', 'send_group'],
+  input: cancelPackageInput,
+  annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  run(ctx, raw) {
+    const { id } = raw as z.infer<typeof cancelPackageInput>;
+    const conn = connOf(ctx);
+    if (id.startsWith(FILE_SEND_PREFIX)) {
+      const result = cancelFileSend(ctx.deps, conn, id, ctx.now);
+      const total = result.cancelled + result.handedOver;
+      const passed = result.handedOver === 0 ? ''
+        : ` Rozsyłki przekazane wcześniej do Multiinfo: ${result.handedOver}. Multiinfo nie pozwala ich anulować.`;
+      return { text: `Anulowano ${result.cancelled} z ${total} ${total === 1 ? 'rozsyłki' : 'rozsyłek'} wysyłki z pliku ${result.id}.${passed}`, structured: result };
+    }
+    const pkg = ctx.deps.packages.get(id);
+    if (!pkg || pkg.apiKeyId !== conn.key.id) throw new AgentError('package_unknown', `Nie znaleziono rozsyłki ${id}.`);
+    // Agent anuluje wyłącznie własne rozsyłki: przemycone polecenie nie może zatrzymać rozsyłki z innej integracji klucza.
+    if (!ownPackage(ctx.deps, conn, pkg)) {
+      throw new AgentError('not_own',
+        `Agent anuluje wyłącznie rozsyłki wysłane przez integrację ${conn.integration.name}. Pozostałe rozsyłki anuluje administrator w panelu bramki.`);
+    }
+    const result = cancelPackage(ctx.deps, pkg, ctx.now, { actor: `agent ${conn.integration.name} · ${conn.connection.name}` });
+    return { text: `Rozsyłka ${result.id} została anulowana.`, structured: asRecord(result) };
   },
 };

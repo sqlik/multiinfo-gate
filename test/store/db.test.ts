@@ -48,12 +48,12 @@ describe('openDatabase', () => {
   it('jest idempotentne - ponowne otwarcie nie powiela migracji', () => {
     const path = join(dir, 'idem.sqlite');
     const first = openDatabase(path);
-    expect(first.pragma('user_version', { simple: true })).toBe(14);
+    expect(first.pragma('user_version', { simple: true })).toBe(15);
     first.close();
 
     // Druga migracja na tej samej bazie wywróciłaby się na CREATE TABLE.
     const second = openDatabase(path);
-    expect(second.pragma('user_version', { simple: true })).toBe(14);
+    expect(second.pragma('user_version', { simple: true })).toBe(15);
     second.close();
   });
 
@@ -95,9 +95,9 @@ describe('openDatabase', () => {
     ).toThrow();
   });
 
-  it('stosuje migracje 002-014 i podnosi user_version do 14', () => {
+  it('stosuje migracje 002-015 i podnosi user_version do 15', () => {
     const db = openDatabase(':memory:');
-    expect(db.pragma('user_version', { simple: true })).toBe(14);
+    expect(db.pragma('user_version', { simple: true })).toBe(15);
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as Array<{ name: string }>;
     const names = tables.map((t) => t.name);
     for (const t of ['message_events', 'packages', 'package_recipients', 'webhook_deliveries']) expect(names).toContain(t);
@@ -105,14 +105,14 @@ describe('openDatabase', () => {
     expect(cols.map((c) => c.name)).toContain('trace');
   });
 
-  it('dokłada migracje 002-014 do bazy z Etapu 1', () => {
+  it('dokłada migracje 002-015 do bazy z Etapu 1', () => {
     const path = join(dir, 'etap1.sqlite');
     const old = new Database(path);
     old.exec(readFileSync(new URL('../../src/store/migrations/001-initial.sql', import.meta.url), 'utf8'));
     old.pragma('user_version = 1');
     old.close();
     const db = openDatabase(path);
-    expect(db.pragma('user_version', { simple: true })).toBe(14);
+    expect(db.pragma('user_version', { simple: true })).toBe(15);
     const cols = db.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>;
     expect(cols.map((c) => c.name)).toContain('trace');
     const keyCols = db.prepare('PRAGMA table_info(api_keys)').all() as Array<{ name: string }>;
@@ -130,26 +130,26 @@ describe('otwarcie bez migracji i stan schematu', () => {
 
   it('migrationState podaje bieżącą i docelową wersję schematu', () => {
     const db = openDatabaseRaw(':memory:');
-    expect(migrationState(db)).toEqual({ current: 0, target: 14 });
+    expect(migrationState(db)).toEqual({ current: 0, target: 15 });
     applyMigrations(db);
-    expect(migrationState(db)).toEqual({ current: 14, target: 14 });
+    expect(migrationState(db)).toEqual({ current: 15, target: 15 });
   });
 
   it('baza z nowszego wydania kończy otwarcie błędem NewerDatabaseError', () => {
     const path = join(dir, 'nowsza.sqlite');
     const raw = new Database(path);
-    raw.pragma('user_version = 15');
+    raw.pragma('user_version = 16');
     raw.close();
     try {
       openDatabase(path);
       expect.unreachable('otwarcie nowszej bazy powinno się nie udać');
     } catch (error) {
       expect(error).toBeInstanceOf(NewerDatabaseError);
-      expect((error as NewerDatabaseError).current).toBe(15);
-      expect((error as NewerDatabaseError).target).toBe(14);
+      expect((error as NewerDatabaseError).current).toBe(16);
+      expect((error as NewerDatabaseError).target).toBe(15);
     }
     const check = new Database(path);
-    expect(check.pragma('user_version', { simple: true })).toBe(15);
+    expect(check.pragma('user_version', { simple: true })).toBe(16);
     check.close();
   });
 

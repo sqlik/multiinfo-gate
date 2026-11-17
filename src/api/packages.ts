@@ -2,10 +2,12 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from '../zod.ts';
 import { packageLinks } from '../links/campaigns.ts';
 import type { PackageRow, RecipientRow } from '../store/packages.ts';
-import { authenticate, refuseIntegrationsOnly } from './auth.ts';
+import { authenticate, refuseIntegrationsOnly, type AuthContext } from './auth.ts';
+import { cancelPackage } from './cancel-package.ts';
 import { dropEmptyFields } from './empty-fields.ts';
 import { ApiError } from './errors.ts';
 import { linkFieldsSchema, linkRequest } from './link-fields.ts';
+import { handoverAt } from './schedule.ts';
 import type { ApiDeps } from './server.ts';
 import { submitPackage } from './submit-package.ts';
 import { csvCell } from '../text/csv.ts';
@@ -58,6 +60,18 @@ export function reportCsv(rows: RecipientRow[]): string {
   return `${[CSV_HEADER, ...lines].join('\r\n')}\r\n`;
 }
 
+const FILE_CSV_HEADER = `wiersz_pliku;${CSV_HEADER}`;
+
+/**
+ * Raport wysyłki z pliku w postaci CSV: odbiorcy wszystkich jej rozsyłek w podanej kolejności, z numerem wiersza
+ * w pliku na początku, dzięki czemu pracownik łączy wynik z wierszem swojego arkusza.
+ */
+export function fileReportCsv(rows: Array<RecipientRow & { fileLine: number | null }>): string {
+  const lines = rows.map((r) =>
+    [r.fileLine, r.dest, r.clientId, r.miId, r.status, r.miStatus, r.statusChangedAt].map(csvCell).join(';'));
+  return `${[FILE_CSV_HEADER, ...lines].join('\r\n')}\r\n`;
+}
+
 const reportRow = (r: RecipientRow) => ({
   to: r.dest, clientId: r.clientId, miId: r.miId, status: r.status, miStatus: r.miStatus, changedAt: r.statusChangedAt,
 });
@@ -107,20 +121,37 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
     return links === undefined ? view : { ...view, links };
   });
 
-  const owned = (id: string, authorization: string | undefined): PackageRow => {
-    const auth = authenticate(authorization, deps.apiKeys);
+  const ownedBy = (auth: AuthContext, id: string): PackageRow => {
     const pkg = deps.packages.get(id);
     if (!pkg || pkg.apiKeyId !== auth.apiKeyId) {
       throw new ApiError(404, 'package_not_found', 'Nie znaleziono rozsyłki o tym identyfikatorze.');
     }
     return pkg;
   };
+  const owned = (id: string, authorization: string | undefined): PackageRow => ownedBy(authenticate(authorization, deps.apiKeys), id);
+
+  /**
+   * Anulowanie rozsyłki przechowywanej przez bramkę. Klucz wyłącznie dla integracji anuluje każdą rozsyłkę swoich
+   * integracji, także zaplanowaną przez agenta AI, tak jak odczytuje je trasą `GET` (spec 4.5).
+   */
+  app.post<{ Params: { id: string } }>('/v1/packages/:id/cancel', async (request) => {
+    const auth = authenticate(request.headers.authorization, deps.apiKeys);
+    if (!deps.rateLimiter.check(auth.apiKeyId, auth.ratePerMin)) {
+      throw new ApiError(429, 'rate_limited', `Przekroczono limit ${auth.ratePerMin} żądań na minutę.`);
+    }
+    const pkg = ownedBy(auth, request.params.id);
+    const key = deps.apiKeys.get(auth.apiKeyId);
+    return cancelPackage(deps, pkg, now(), { actor: `klucz ${key?.name ?? auth.apiKeyId}`, ip: request.ip });
+  });
 
   /** Zamówienie raportu - także ponowne, gdy poprzedni wygasł albo się nie udał. */
   app.post<{ Params: { id: string } }>('/v1/packages/:id/report', async (request, reply) => {
     const pkg = owned(request.params.id, request.headers.authorization);
+    if (pkg.status === 'cancelled') {
+      throw new ApiError(409, 'package_not_completed', 'Rozsyłka została anulowana, dlatego raport doręczeń nie powstanie.');
+    }
     if (pkg.status !== 'completed') {
-      throw new ApiError(409, 'package_not_completed', `Raport jest dostępny po zakończeniu rozsyłki; stan: ${pkg.status}.`);
+      throw new ApiError(409, 'package_not_completed', `Raport jest dostępny po zakończeniu rozsyłki. Stan rozsyłki: ${pkg.status}.`);
     }
     deps.packages.setReport(pkg.id, { status: 'pending' });
     deps.jobs.enqueue('package.report', { packageId: pkg.id }, now());
@@ -133,8 +164,11 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
     async (request, reply) => {
       const pkg = owned(request.params.id, request.headers.authorization);
       if (pkg.reportStatus !== 'ready') {
+        const message = pkg.status === 'cancelled'
+          ? 'Rozsyłka została anulowana, dlatego raport doręczeń nie powstanie.'
+          : `Raport nie jest jeszcze gotowy. Stan raportu: ${pkg.reportStatus}.`;
         return reply.code(409).send({
-          error: { code: 'report_not_ready', message: `Raport nie jest gotowy; stan: ${pkg.reportStatus}.` },
+          error: { code: 'report_not_ready', message },
           report: { status: pkg.reportStatus },
         });
       }
@@ -161,6 +195,8 @@ function present(p: PackageRow, summary: { delivered: number; failed: number; ot
     serviceId: p.serviceId,
     orig: p.orig,
     startAt: p.startAt,
+    // Chwila przekazania do Multiinfo ma znaczenie tylko przed przekazaniem.
+    handoverAt: p.status === 'scheduled' && p.startAt !== null ? handoverAt(p.startAt, p.createdAt) : null,
     createdAt: p.createdAt,
     completedAt: p.completedAt,
     providerCode: p.providerCode,

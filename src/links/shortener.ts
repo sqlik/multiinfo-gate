@@ -71,9 +71,13 @@ export const plainText = (text: string): PreparedText => unchanged(text, null);
 export function onceSettings(deps: ShortenerDeps): ShortenerDeps {
   const cache = new Map<number, KeyLinkSettings>();
   const domains = new Map<string, LinkDomainRow | undefined>();
+  const byId = new Map<number, LinkDomainRow | undefined>();
   return {
     linkDomains: {
-      get: (id: number) => deps.linkDomains.get(id),
+      get: (id: number) => {
+        if (!byId.has(id)) byId.set(id, deps.linkDomains.get(id));
+        return byId.get(id);
+      },
       byDomain: (domain: string) => {
         if (!domains.has(domain)) domains.set(domain, deps.linkDomains.byDomain(domain));
         return domains.get(domain);

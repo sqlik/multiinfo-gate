@@ -1369,6 +1369,9 @@ zawiera treści wiadomości, haseł ani pełnych kluczy. Zdarzenia warte uwagi:
 | `webhook.odmowa_sieci_wewnetrznej` | adres webhooka wskazuje sieć wewnętrzną, a `MIG_WEBHOOK_ALLOW_PRIVATE` nie jest ustawione; dostawa porzucona |
 | `status.porzucony` | Multiinfo nie podało stanu ostatecznego przez siedem dni od przekazania; wiadomość zakończona jako `expired` |
 | `rozsylka.zakonczona`, `rozsylka.nieudana` | zakończenie rozsyłki |
+| `rozsylka.przekazanie_odlozone` | żądanie przekazania zaplanowanej rozsyłki nie dotarło do Multiinfo; rozsyłka czeka w stanie `scheduled`, a bramka ponowi przekazanie |
+| `rozsylka.anulowana_przed_przekazaniem` | bramka anulowała zaplanowaną rozsyłkę w chwili przekazania z powodu usuniętego konta, usuniętego albo odwołanego klucza API, klucza po terminie ważności albo klucza bez usługi lub nadpisu rozsyłki; pole `reason` podaje przyczynę |
+| `rozsylka.po_terminie` | bramka nie przekazała zaplanowanej rozsyłki w ciągu 60 minut od terminu; rozsyłka czeka na decyzję administratora według punktu [Rozsyłka nie została wysłana o czasie](problemy.md#rozsylka-po-terminie) |
 | `odbior.start`, `odbior.stop` | bramka zaczęła albo przestała pytać Multiinfo o wiadomości z usługi (zmiana subskrypcji przy kluczach) |
 | `odbior.wiadomosc`, `odbior.duplikat` | odebrano wiadomość od abonenta; duplikat to ta sama wiadomość wydana przez Multiinfo ponownie, pominięta |
 | `odbior.blad` | błąd sieci albo Multiinfo przy pytaniu o wiadomości; bramka ponowi z rosnącym odstępem |

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { openDatabase } from '../../src/store/db.ts';
 import { M365AccountsRepo } from '../../src/store/m365-accounts.ts';
 import { NotificationsRepo } from '../../src/store/notifications.ts';
-import { NOTIFICATION_EVENTS, RULE_DEFAULTS } from '../../src/notifications/rules.ts';
+import { NOTIFICATION_EVENTS, RULE_DEFAULTS, eventDescription, eventLabel } from '../../src/notifications/rules.ts';
 
 const NOW = new Date('2026-09-02T10:00:00Z');
 let repo: NotificationsRepo;
@@ -41,6 +41,12 @@ describe('reguły', () => {
     repo.saveRule('integration_error', { enabled: 1, maxPerHour: 2, groupHours: 3, params: {} });
     expect(repo.rule('integration_error')).toMatchObject({ maxPerHour: 2, groupHours: 3 });
     expect(db.prepare('SELECT COUNT(*) AS n FROM notification_rules').get()).toEqual({ n: NOTIFICATION_EVENTS.length });
+  });
+
+  it('reguła package_overdue: włączona, 5 na godzinę, etykieta i opis ze spec 4.4', () => {
+    expect(repo.rule('package_overdue')).toMatchObject({ enabled: 1, maxPerHour: 5, groupHours: 0, sms: 0 });
+    expect(eventLabel('package_overdue')).toBe('Rozsyłka po terminie');
+    expect(eventDescription('package_overdue')).toBe('bramka nie przekazała zaplanowanej rozsyłki w ciągu 60 minut od terminu, decyzję podejmuje administrator');
   });
 });
 

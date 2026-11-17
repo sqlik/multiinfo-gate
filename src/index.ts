@@ -10,7 +10,9 @@ import { buildApiServer, type AgentServerDeps } from './api/server.ts';
 import { ConnectionService } from './agents/connections.ts';
 import { AgentConnectionsRepo } from './store/agent-connections.ts';
 import { AgentDraftsRepo } from './store/agent-drafts.ts';
+import { AgentFilesRepo } from './store/agent-files.ts';
 import { DownloadLinksRepo } from './store/download-links.ts';
+import { FileSendsRepo } from './store/file-sends.ts';
 import { OAuthRepo } from './store/oauth.ts';
 import { McpSessions } from './mcp/sessions.ts';
 import { loadEnv, MissingMasterKeyError, type AppConfig } from './config/env.ts';
@@ -190,13 +192,14 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   });
   const oauth = new OAuthRepo(db);
   const drafts = new AgentDraftsRepo(db);
+  const files = new AgentFilesRepo(db);
   const downloads = new DownloadLinksRepo(db);
   const worker = new Worker({
     accounts, apiKeys, messages, events, deliveries, packages, jobs, clients, inbound,
     reportsDir: join(config.dataDir, 'reports'), log, allowPrivateWebhooks: config.webhookAllowPrivate,
     integrationEmit, integrations, integrationEvents, guards, notifier, notifications, scanner, releases,
     mailIn: mailInPoller, mailInRepo: mailIn, m365: { tokens: m365Tokens, accounts: m365Accounts }, m365KeepAlive: m365Tokens,
-    links: { campaigns, shortLinks }, oauth, drafts, downloads,
+    links: { campaigns, shortLinks }, oauth, drafts, files, downloads, audit,
   });
 
   const receiver = new Receiver({
@@ -206,16 +209,17 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   });
 
   const agentConnectionsRepo = new AgentConnectionsRepo(db);
+  const fileSends = new FileSendsRepo(db);
   const agentConnections = new ConnectionService({ connections: agentConnectionsRepo, oauth, integrations, apiKeys, accounts });
   const agents: AgentServerDeps = {
     settings, oauth, connectionsRepo: agentConnectionsRepo, connections: agentConnections, audit, notifier, masterKey: config.masterKey,
-    resolve: systemResolver, log, drafts, downloads, sessions: new McpSessions(),
+    resolve: systemResolver, log, drafts, files, fileSends, downloads, sessions: new McpSessions(),
   };
   const api = buildApiServer({
     accounts, apiKeys, messages, events, packages, jobs, clients, inbound, rateLimiter: new RateLimiter(), log,
     inboundHealth: () => receiver.health(),
     integrations, integrationEvents, guards, engine, sources: new SourceMatcher(systemResolver),
-    hookLimiter: new RateLimiter(), trustedProxies: config.trustedProxies, notifier,
+    hookLimiter: new RateLimiter(), trustedProxies: config.trustedProxies, notifier, deliveries, audit,
     allowPrivateWebhooks: config.webhookAllowPrivate, ...links, agents,
   });
   // Tokeny sprawdzenia domeny wystawia panel, a odpowiada na nie serwer przekierowań.
@@ -223,7 +227,7 @@ async function startNormal(config: AppConfig, log: Logger, install: InstallKind 
   const admin = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, sessions, clients,
     inbound, inboundServices, integrations, receiver, inboundHealth: () => receiver.health(),
-    integrationEvents, guards, agentConnections: agentConnectionsRepo, connectionService: agentConnections, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
+    integrationEvents, guards, agentConnections: agentConnectionsRepo, fileSends, connectionService: agentConnections, mailIn, mailboxConnect: imapConnect, engine, notifications, settings, notifier, mailer: nodemailerMailer,
     trustedProxies: config.trustedProxies,
     masterKey: config.masterKey, allowPrivateWebhooks: config.webhookAllowPrivate, allowPrivateMail: config.mailAllowPrivate,
     allowPrivateLinks: config.linksAllowPrivate, log, install, nodeVersion, m365, m365Accounts, m365Tokens, ...links, domainChecks,

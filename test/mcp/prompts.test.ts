@@ -121,4 +121,9 @@ describe('teksty narzędzi, scenariuszy i instrukcji', () => {
       expect(SERVER_INSTRUCTIONS).toContain(fragment);
     }
   });
+
+  it('instrukcje serwera: rozsyłkę anuluje także pracownik przyciskiem w widoku, bez wywołania narzędzia w rozmowie (próba B, B5)', () => {
+    expect(SERVER_INSTRUCTIONS).toContain('Rozsyłkę może też anulować pracownik przyciskiem „Anuluj rozsyłkę” w widoku bramki.');
+    expect(SERVER_INSTRUCTIONS).toContain('Takie anulowanie nie pojawia się w rozmowie jako wywołanie narzędzia.');
+  });
 });

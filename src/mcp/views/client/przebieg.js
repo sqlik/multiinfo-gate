@@ -2,8 +2,8 @@
 // i kod operatora. „Anuluj wiadomość” jest zawsze widoczny: czerwony przed przekazaniem do sieci operatora, a w pozostałych
 // stanach i po odmowie bramki wyszarzony z przyczyną. „Wyślij ponownie” przygotowuje SMS z tą samą treścią.
 import {
-  applyTheme, badge, button, buttons, cancelledText, createBridge, esc, field, fields, messageBox, note, phoneLabel, sayIn, section, smsCounter,
-  stamp, textOf, txt,
+  applyTheme, badge, button, buttons, cancelledText, createBridge, esc, failure, field, fields, messageBox, note, phoneLabel, sayIn, section,
+  showNotice, smsCounter, stamp, textOf, txt,
 } from './bridge.js';
 import { latinText, measure } from './measure.js';
 import { mountSend } from './send.js';
@@ -65,8 +65,8 @@ function traceEntry(e, i, refused) {
     button('Anuluj wiadomość', { act: 'cancel', kind: 'danger', disabled: !e.cancellable || refusal !== null, data: { index: i } }),
     e.text ? button('Wyślij ponownie', { act: 'resend', kind: 'primary', data: { index: i } }) : '',
   );
-  const notice = refusal === null ? `${note(cancelReason(e))}<p class="notice" data-say="${i}" role="status" hidden></p>`
-    : `<p class="notice n-fail" data-say="${i}" role="status">${esc(refusal)}</p>`;
+  const notice = refusal === null ? `${note(cancelReason(e))}<div class="notice" data-say="${i}" role="status" hidden></div>`
+    : `<div class="notice n-fail" data-say="${i}" role="status">${esc(refusal)}</div>`;
   return section(title, details + (e.text ? contentBox(e) : '') + timeline + actions + notice + `<div class="resend" data-resend="${i}"></div>`);
 }
 
@@ -75,12 +75,9 @@ function traceEntry(e, i, refused) {
  * ponieważ odświeżenie po anulowaniu rysuje pozycje od nowa.
  */
 export function sayAt(root, index) {
-  return (tone, text) => {
+  return (tone, text, detail = '') => {
     const notice = root.querySelector(`[data-say="${index}"]`);
-    if (!notice) return;
-    notice.hidden = !text;
-    notice.className = `notice n-${tone}`;
-    notice.textContent = text;
+    if (notice) showNotice(notice, tone, text, detail);
   };
 }
 
@@ -140,7 +137,7 @@ export function startTrace(win, env) {
     try {
       await task();
     } catch (error) {
-      tell('fail', error instanceof Error ? error.message : String(error));
+      tell('fail', ...failure(error));
     } finally {
       button.disabled = false;
     }

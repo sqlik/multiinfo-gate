@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Multiinfo Gate",
-    "version": "1.12.0",
+    "version": "1.13.0",
     "description": "Bramka SMS między aplikacjami a platformą Multiinfo operatora Plus. Opis obejmuje każde wywołanie API bramki: wysyłkę, odczyt wysłanych wiadomości, anulowanie, rozsyłkę wraz z raportem, odczyt wiadomości przychodzących oraz stan bramki. Powiadomienia webhook idą w drugą stronę, więc opisuje je dokumentacja bramki. Przyjęcie wiadomości i rozsyłki jest asynchroniczne: bramka odpowiada kodem 202 po zapisaniu żądania w kolejce, a wysyłka do Multiinfo następuje później.",
     "license": {
       "name": "MIT",
@@ -1078,7 +1078,7 @@
                   "startAt": {
                     "type": "string",
                     "format": "date-time",
-                    "description": "Termin rozpoczęcia rozsyłki w formacie ISO 8601. Termin musi przypadać w przyszłości, a Multiinfo rozpoczyna wysyłkę o tej godzinie. Pominięty oznacza wysyłkę od razu.",
+                    "description": "Termin rozpoczęcia rozsyłki w formacie ISO 8601, najwyżej 30 dni od chwili wysyłki. Termin musi przypadać w przyszłości. Bramka przechowuje rozsyłkę w stanie scheduled i przekazuje ją do Multiinfo zwykle 10 minut przed terminem, a Multiinfo rozpoczyna wysyłkę o tej godzinie. Do chwili przekazania rozsyłkę można anulować. Pominięty oznacza wysyłkę od razu.",
                     "example": "2026-08-27T08:00:00.000Z"
                   }
                 }
@@ -1121,7 +1121,7 @@
                     },
                     "status": {
                       "type": "string",
-                      "description": "Stan rozsyłki zaraz po przyjęciu",
+                      "description": "Stan rozsyłki zaraz po przyjęciu: queued dla rozsyłki bez terminu, scheduled dla rozsyłki z terminem",
                       "example": "queued"
                     },
                     "recipients": {
@@ -1139,6 +1139,16 @@
                     "multipart": {
                       "type": "boolean",
                       "description": "Czy którakolwiek treść jest dzielona na części"
+                    },
+                    "startAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Zamówiony termin rozpoczęcia. Pole występuje tylko w rozsyłce z terminem"
+                    },
+                    "handoverAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Chwila przekazania rozsyłki do Multiinfo, do której można ją anulować. Pole występuje tylko w stanie scheduled"
                     },
                     "links": {
                       "type": "object",
@@ -1227,7 +1237,7 @@
             }
           },
           "400": {
-            "description": "Błąd w body żądania: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts, invalid_orig, service_required, start_at_in_past, link_domain_not_allowed",
+            "description": "Błąd w body żądania: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts, invalid_orig, service_required, start_at_in_past, start_at_too_far, link_domain_not_allowed",
             "content": {
               "application/json": {
                 "schema": {
@@ -1378,6 +1388,128 @@
         }
       }
     },
+    "/v1/packages/{id}/cancel": {
+      "post": {
+        "operationId": "anulujRozsylke",
+        "summary": "Anulowanie rozsyłki",
+        "description": "Anuluje rozsyłkę z terminem, którą bramka przechowuje w stanie scheduled albo overdue. Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem. Dla rozsyłki już anulowanej bramka zwraca ten sam wynik. Anulowanie wysyła webhook package.completed ze stanem cancelled, a krótkie linki rozsyłki przestają działać.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Identyfikator rozsyłki zwrócony przy jej utworzeniu",
+            "schema": {
+              "type": "string",
+              "pattern": "^pkg_[A-Za-z0-9]+$"
+            },
+            "example": "pkg_7c1e9a2b3d4f5a6b7c8d"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rozsyłka anulowana",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "status"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "Identyfikator rozsyłki"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "cancelled"
+                      ],
+                      "description": "Stan po anulowaniu"
+                    }
+                  }
+                },
+                "example": {
+                  "id": "pkg_7c1e9a2b3d4f5a6b7c8d",
+                  "status": "cancelled"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Klucz API brakujący, nieznany, odwołany albo wygasły: missing_api_key, invalid_api_key, revoked_api_key, expired_api_key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "missing_api_key",
+                    "message": "Brak klucza API w nagłówku Authorization. Podaj „Bearer <klucz>” albo sam klucz."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak rozsyłki albo rozsyłka innego klucza; bramka nie rozróżnia tych dwóch sytuacji",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "package_not_found",
+                    "message": "Nie znaleziono rozsyłki o tym identyfikatorze."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Rozsyłka przekazana do Multiinfo albo zakończona: package_not_cancellable. Komunikat opisuje stan rozsyłki",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "package_not_cancellable",
+                    "message": "Rozsyłka została już przekazana do Multiinfo, które nie pozwala jej anulować."
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Przekroczony limit żądań klucza na minutę",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OdpowiedzBledu"
+                },
+                "example": {
+                  "error": {
+                    "code": "rate_limited",
+                    "message": "Przekroczono limit 60 żądań na minutę."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/packages/{id}/report": {
       "post": {
         "operationId": "zamowRaportRozsylki",
@@ -1486,7 +1618,7 @@
             }
           },
           "409": {
-            "description": "Rozsyłka jeszcze trwa, dlatego zamówienie raportu nie jest możliwe",
+            "description": "Rozsyłka jeszcze trwa albo została anulowana, dlatego zamówienie raportu nie jest możliwe",
             "content": {
               "application/json": {
                 "schema": {
@@ -1495,7 +1627,7 @@
                 "example": {
                   "error": {
                     "code": "package_not_completed",
-                    "message": "Raport jest dostępny po zakończeniu rozsyłki; stan: sending."
+                    "message": "Raport jest dostępny po zakończeniu rozsyłki. Stan rozsyłki: sending."
                   }
                 }
               }
@@ -1656,7 +1788,7 @@
                 "example": {
                   "error": {
                     "code": "report_not_ready",
-                    "message": "Raport nie jest gotowy; stan: pending."
+                    "message": "Raport nie jest jeszcze gotowy. Stan raportu: pending."
                   },
                   "report": {
                     "status": "pending"
@@ -2628,7 +2760,7 @@
                   "startAt": {
                     "type": "string",
                     "format": "date-time",
-                    "description": "Termin rozpoczęcia rozsyłki w formacie ISO 8601. Termin musi przypadać w przyszłości, a Multiinfo rozpoczyna wysyłkę o tej godzinie. Pominięty oznacza wysyłkę od razu.",
+                    "description": "Termin rozpoczęcia rozsyłki w formacie ISO 8601, najwyżej 30 dni od chwili wysyłki. Termin musi przypadać w przyszłości. Bramka przechowuje rozsyłkę w stanie scheduled i przekazuje ją do Multiinfo zwykle 10 minut przed terminem, a Multiinfo rozpoczyna wysyłkę o tej godzinie. Do chwili przekazania rozsyłkę można anulować. Pominięty oznacza wysyłkę od razu.",
                     "example": "2026-08-27T08:00:00.000Z"
                   },
                   "requestedBy": {
@@ -2677,7 +2809,7 @@
                     },
                     "status": {
                       "type": "string",
-                      "description": "Stan rozsyłki zaraz po przyjęciu",
+                      "description": "Stan rozsyłki zaraz po przyjęciu: queued dla rozsyłki bez terminu, scheduled dla rozsyłki z terminem",
                       "example": "queued"
                     },
                     "recipients": {
@@ -2695,6 +2827,16 @@
                     "multipart": {
                       "type": "boolean",
                       "description": "Czy którakolwiek treść jest dzielona na części"
+                    },
+                    "startAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Zamówiony termin rozpoczęcia. Pole występuje tylko w rozsyłce z terminem"
+                    },
+                    "handoverAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Chwila przekazania rozsyłki do Multiinfo, do której można ją anulować. Pole występuje tylko w stanie scheduled"
                     },
                     "links": {
                       "type": "object",
@@ -2783,7 +2925,7 @@
             }
           },
           "400": {
-            "description": "Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts, start_at_in_past, link_domain_not_allowed",
+            "description": "Błąd w body żądania albo treść ponad limit części integracji: invalid_body, invalid_phone, text_required, invalid_client_id, too_many_parts, start_at_in_past, start_at_too_far, link_domain_not_allowed",
             "content": {
               "application/json": {
                 "schema": {
@@ -3645,6 +3787,7 @@
           "serviceId",
           "orig",
           "startAt",
+          "handoverAt",
           "createdAt",
           "completedAt",
           "providerCode",
@@ -3661,6 +3804,8 @@
           "status": {
             "type": "string",
             "enum": [
+              "scheduled",
+              "overdue",
               "queued",
               "open",
               "sending",
@@ -3668,7 +3813,7 @@
               "cancelled",
               "failed"
             ],
-            "description": "Stan rozsyłki"
+            "description": "Stan rozsyłki: scheduled - bramka przechowuje rozsyłkę z terminem do chwili przekazania do Multiinfo, overdue - termin minął o ponad 60 minut, a rozsyłka czeka na decyzję administratora bramki, queued - przyjęta, oczekuje na utworzenie w Multiinfo, open - utworzona w Multiinfo, oczekuje na rozpoczęcie, sending - w trakcie wysyłki, completed - wysyłka zakończona, cancelled - anulowana w bramce albo w Multiinfo, failed - odrzucona przez Multiinfo albo bez potwierdzenia utworzenia, przyczynę podaje opis błędu. Stany completed, cancelled i failed są ostateczne"
           },
           "recipients": {
             "type": "integer",
@@ -3706,6 +3851,12 @@
             "format": "date-time",
             "nullable": true,
             "description": "Zamówiony termin rozpoczęcia"
+          },
+          "handoverAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Chwila przekazania rozsyłki do Multiinfo, do której można ją anulować. W stanie innym niż scheduled pole przyjmuje wartość null"
           },
           "createdAt": {
             "type": "string",

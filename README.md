@@ -79,6 +79,13 @@ każdą wysyłkę zatwierdza pracownik przyciskiem w podglądzie. Agent działa 
 „Agent AI”, która określa zakresy, limit części i ochronę przed burzą. Pracownik łączy aplikację
 z bramką kodem jednorazowym z panelu, bez hasła.
 
+Wersja 1.13 wprowadza wysyłkę z terminem przechowywaną przez bramkę. Bramka przekazuje zaplanowaną
+rozsyłkę do Multiinfo zwykle 10 minut przed terminem. Do tej chwili rozsyłkę można anulować w API,
+w konektorze Power Automate, u agenta i w panelu. Pracownik wysyła też w rozmowie z agentem rozsyłkę
+z pliku CSV albo Excel do 50 000 odbiorców. Treść SMS-a składa się z pól pliku, a agent nie widzi przy
+tym danych z pliku. Widok „Rozmowa z numerem” przedstawia wymianę SMS-ów z jednym klientem i pozwala
+odpowiedzieć w tym samym miejscu.
+
 ## Co trzeba mieć
 
 - Konto Multiinfo z użytkownikiem API i certyfikatem (`.pfx` z hasłem)
@@ -106,7 +113,7 @@ Strona dokumentacji: [sqlik.github.io/multiinfo-gate](https://sqlik.github.io/mu
 - [Integracje z aplikacjami](https://sqlik.github.io/multiinfo-gate/integracje/) - adres wejściowy dla aplikacji z własnym formatem, Mail2SMS, szablony Liquid, gotowe ustawienia, powiadomienia administratora mailem i SMS-em
 - [Power Automate](https://sqlik.github.io/multiinfo-gate/power-automate/) - konektor do Microsoft Power Automate: integracja w panelu, import pliku, pierwszy przepływ, rozsyłka z Excela, rozwiązywanie problemów
 - [Skracacz linków i kampanie](https://sqlik.github.io/multiinfo-gate/skracacz/) - krótkie linki własnej domeny, obowiązkowa lista domen docelowych, wyniki kampanii, parametry UTM, ważność linków i przechowywanie danych
-- [Agenci AI](https://sqlik.github.io/multiinfo-gate/agenci-ai/) - wysyłka SMS-ów i odczyt doręczeń w rozmowie z aplikacją AI: zakresy, połączenia pracowników, claude.ai, ChatGPT, Claude Code, Copilot Studio, widoki w rozmowie
+- [Agenci AI](https://sqlik.github.io/multiinfo-gate/agenci-ai/) - wysyłka SMS-ów i odczyt doręczeń w rozmowie z aplikacją AI: zakresy, połączenia pracowników, claude.ai, ChatGPT, Claude Code, Copilot Studio, widoki w rozmowie, wysyłka z terminem, rozsyłka z pliku i rozmowa z klientem
 - [Rozwiązywanie problemów](https://sqlik.github.io/multiinfo-gate/problemy/) - objaw, sprawdzenie i naprawa: panel, logowanie, tryb awaryjny, aktualizacja, Microsoft 365, skracacz linków, agenci AI, zgłaszanie problemów
 - [Przykład w PHP](examples/php/) - strona testowa i kod do skopiowania
 

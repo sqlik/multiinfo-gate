@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig } from '../../src/integrations/config.ts';
+import {
+  defaultAgentConfig, defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig, defaultPowerAutomateConfig, defaultSmsGroupConfig,
+} from '../../src/integrations/config.ts';
 import { presetById } from '../../src/integrations/presets/index.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
@@ -247,5 +249,96 @@ describe('GET /integracje/:id', () => {
 
   it('nieistniejąca integracja to 404', async () => {
     expect((await page('/integracje/999')).statusCode).toBe(404);
+  });
+});
+
+describe('POST /integracje/:id/usun - rozsyłki czekające na przekazanie', () => {
+  const HOUR = 3_600_000;
+  let integrationId: number;
+  let accountId: number;
+
+  function seedPackage(id: string, status: 'scheduled' | 'overdue' | 'open', integration: number | null = integrationId): void {
+    h.packages.insert({
+      id, apiKeyId, accountId, serviceId: '24138', defaultText: 'Awaria pompy P2.', orig: null, costCenter: null,
+      startAt: new Date(NOW.getTime() + HOUR).toISOString(), deliveryReport: 1, encoding: 'gsm', multipart: 0,
+      createdAt: NOW.toISOString(), status, integrationId: integration, requestedBy: 'Ewa Nowak',
+    }, [{ dest: '48601000001', text: null, clientId: null }]);
+  }
+
+  beforeEach(() => {
+    accountId = h.apiKeys.get(apiKeyId)!.accountId;
+    integrationId = h.integrations.insert({
+      name: 'Dyspozytornia', kind: 'power_automate', apiKeyId, serviceId: null, orig: null, preset: 'power-automate',
+      enabled: 1, config: defaultPowerAutomateConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+  });
+
+  it('okno potwierdzenia podaje liczbę rozsyłek, które czekają na przekazanie', async () => {
+    seedPackage('pkg_1', 'scheduled');
+    seedPackage('pkg_2', 'overdue');
+    seedPackage('pkg_3', 'open');
+    const res = await page(`/integracje/${integrationId}`);
+    expect(res.body).toContain('Bramka anuluje też 2 rozsyłki tej integracji, które czekają na przekazanie do Multiinfo.');
+  });
+
+  it('okno potwierdzenia bez rozsyłek czekających nie wspomina o anulowaniu', async () => {
+    seedPackage('pkg_3', 'open');
+    const res = await page(`/integracje/${integrationId}`);
+    expect(res.body).not.toContain('Bramka anuluje');
+  });
+
+  it('usunięcie integracji anuluje jej rozsyłki scheduled i overdue, komunikat podaje liczbę', async () => {
+    seedPackage('pkg_1', 'scheduled');
+    seedPackage('pkg_2', 'overdue');
+    seedPackage('pkg_3', 'open');
+    seedPackage('pkg_4', 'scheduled', null);
+    const res = await post(`/integracje/${integrationId}/usun`);
+    expect(res.statusCode).toBe(302);
+    expect(h.integrations.get(integrationId)).toBeUndefined();
+    expect(['pkg_1', 'pkg_2', 'pkg_3', 'pkg_4'].map((id) => h.packages.get(id)!.status)).toEqual(['cancelled', 'cancelled', 'open', 'scheduled']);
+    const cancelled = h.audit.list(10, 0).filter((e) => e.action === 'rozsylka.anulowanie');
+    expect(cancelled.map((e) => e.target).sort()).toEqual(['rozsylka:pkg_1', 'rozsylka:pkg_2']);
+    expect(cancelled[0]).toMatchObject({ actor: 'janek' });
+    expect((await page(res.headers.location as string)).body)
+      .toContain('Integracja Dyspozytornia usunięta. Bramka anulowała 2 rozsyłki, które czekały na przekazanie do Multiinfo.');
+  });
+
+  it('rozsyłka anulowana przy usunięciu integracji otrzymuje powód w polu error i w dzienniku panelu', async () => {
+    seedPackage('pkg_1', 'scheduled');
+    await post(`/integracje/${integrationId}/usun`);
+    const reason = 'Integracja zlecająca rozsyłkę została usunięta przed przekazaniem do Multiinfo';
+    expect(h.packages.get('pkg_1')).toMatchObject({ status: 'cancelled', error: reason });
+    expect(h.audit.list(10, 0).find((e) => e.action === 'rozsylka.anulowanie')).toMatchObject({ meta: expect.objectContaining({ powod: reason }) });
+    expect((await page('/rozsylki/pkg_1')).body).toContain('Powód anulowania</div>');
+  });
+
+  it('rozsyłka agenta do grupy: okno usuwania integracji agenta ją liczy, a usunięcie ją anuluje', async () => {
+    const agent = h.integrations.insert({
+      name: 'Agent AI - biuro handlowe', kind: 'agent', apiKeyId, serviceId: null, orig: null, preset: 'agent-ai',
+      enabled: 1, config: defaultAgentConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const group = h.integrations.insert({
+      name: 'SERWIS', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa',
+      enabled: 1, config: defaultSmsGroupConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const conn = h.agentConnections.insert({ integrationId: agent, name: 'Ewa Nowak', method: 'token', expiresAt: null, createdBy: 'janek', createdAt: NOW });
+    seedPackage('pkg_grupa', 'scheduled', group);
+    h.db.prepare('UPDATE packages SET agent_connection_id = ? WHERE id = ?').run(conn, 'pkg_grupa');
+    expect((await page(`/integracje/${agent}`)).body)
+      .toContain('Bramka anuluje też 1 rozsyłkę tej integracji, która czeka na przekazanie do Multiinfo.');
+    expect((await page(`/integracje/${group}`)).body)
+      .toContain('Bramka anuluje też 1 rozsyłkę tej integracji, która czeka na przekazanie do Multiinfo.');
+    await post(`/integracje/${agent}/usun`);
+    expect(h.integrations.get(agent)).toBeUndefined();
+    expect(h.packages.get('pkg_grupa')).toMatchObject({ status: 'cancelled', error: 'Integracja zlecająca rozsyłkę została usunięta przed przekazaniem do Multiinfo' });
+  });
+
+  it('jedna rozsyłka: odmiana w oknie i w komunikacie', async () => {
+    seedPackage('pkg_1', 'scheduled');
+    expect((await page(`/integracje/${integrationId}`)).body)
+      .toContain('Bramka anuluje też 1 rozsyłkę tej integracji, która czeka na przekazanie do Multiinfo.');
+    const res = await post(`/integracje/${integrationId}/usun`);
+    expect((await page(res.headers.location as string)).body)
+      .toContain('Integracja Dyspozytornia usunięta. Bramka anulowała 1 rozsyłkę, która czekała na przekazanie do Multiinfo.');
   });
 });

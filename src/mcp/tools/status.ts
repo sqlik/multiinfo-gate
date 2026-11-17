@@ -1,6 +1,10 @@
 import { effectiveExpiry } from '../../agents/connections.ts';
+import { CONVERSATION_MAX, CONVERSATION_WINDOW_MS } from '../../agents/conversation.ts';
 import { SCOPE_LABELS } from '../../agents/scopes.ts';
+import { CANCEL_WINDOW_TEXT, START_AT_MAX_MS } from '../../api/schedule.ts';
 import { senderOptions } from '../../integrations/agent.ts';
+import { FILE_MEGABYTES_MAX, FILE_ROWS_MAX } from '../../store/agent-files.ts';
+import { formatCount } from '../../text/numbers.ts';
 import { warsawStamp } from '../../time/warsaw.ts';
 import { z } from '../../zod.ts';
 import type { ToolContext, ToolDef, ToolResult } from '../tools.ts';
@@ -47,6 +51,12 @@ export const connectionStatusTool: ToolDef = {
     const window = deps.guards.peek(conn.integration.id, windowMinutes, now);
     const resetsAt = window.windowStart === null ? null : new Date(Date.parse(window.windowStart) + windowMinutes * MIN).toISOString();
     const groups = deps.integrations.listForKey(conn.key.id).filter((i) => i.kind === 'sms_group' && i.enabled === 1).length;
+    const schedule = conn.scopes.has('send') || conn.scopes.has('send_group') ? { maxDays: START_AT_MAX_MS / 86_400_000 } : null;
+    // Rozsyłka z pliku należy do zakresu „Wysyłka SMS-ów”.
+    const file = conn.scopes.has('send') ? { rows: FILE_ROWS_MAX, megabytes: FILE_MEGABYTES_MAX } : null;
+    // Rozmowa z numerem należy do zakresu „Odczyt odebranych”, a odpowiedź w niej do zakresu „Odpowiedź nadawcy”.
+    const conversation = conn.scopes.has('read_inbound')
+      ? { days: CONVERSATION_WINDOW_MS / 86_400_000, max: CONVERSATION_MAX, reply: conn.scopes.has('reply') } : null;
 
     const lines = [
       `Połączenie: ${conn.connection.name}, integracja ${conn.integration.name}.`,
@@ -59,13 +69,19 @@ export const connectionStatusTool: ToolDef = {
       `Ochrona przed burzą: wykorzystano ${window.count} z ${limit} wysyłek i ${window.recipients} z ${recipientLimit} odbiorców w oknie ${windowMinutes} minut.`
         + (resetsAt === null ? '' : ` Okno kończy się ${warsawStamp(resetsAt)} czasu polskiego.`),
       `Grupy SMS klucza: ${groups}.`,
+      ...(schedule === null ? [] : [`Wysyłka z terminem przyjmuje termin najwyżej ${schedule.maxDays} dni naprzód. ${CANCEL_WINDOW_TEXT}. Rozsyłkę anuluje narzędzie cancel_package.`
+        + (conn.scopes.has('read_sent') ? ' Zaplanowane rozsyłki pokazuje narzędzie list_packages.' : '')]),
+      ...(file === null ? [] : [`Rozsyłkę z pliku CSV, TXT albo XLSX do ${formatCount(file.rows)} wierszy danych i ${file.megabytes} MB otwiera narzędzie open_file_send. `
+        + 'Działa ona wyłącznie w aplikacjach, które wyświetlają widoki bramki.']),
+      ...(conversation === null ? [] : [`Rozmowę z jednym numerem z ostatnich ${conversation.days} dni pokazuje narzędzie conversation.`
+        + (conversation.reply ? ' Odpowiedź w rozmowie przygotowuje narzędzie prepare_conversation_reply.' : '')]),
     ];
     return {
       text: lines.join('\n'),
       structured: {
         available: true, connection: conn.connection.name, integration: conn.integration.name, scopes, expiresAt, services, senders: options.senders, orig: options.orig,
         maxParts: config.maxParts, overflow: config.overflow, ratePerMin: conn.key.ratePerMin,
-        guard: { calls: window.count, callLimit: limit, recipients: window.recipients, recipientLimit, windowMinutes, resetsAt }, groups,
+        guard: { calls: window.count, callLimit: limit, recipients: window.recipients, recipientLimit, windowMinutes, resetsAt }, groups, schedule, file, conversation,
       },
     };
   },

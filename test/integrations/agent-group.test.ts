@@ -247,3 +247,34 @@ describe('odbiorcy kampanii', () => {
     expect(agentError(() => toCampaign('unopened')).code).toBe('scope');
   });
 });
+
+describe('SMS do grupy z terminem', () => {
+  const SCHEDULE = { startAt: '2026-11-20T07:00:00.000Z', handoverAt: '2026-11-20T06:50:00.000Z' };
+  const scheduled = () => prepareGroup(deps, ctx(), { group: 'serwis', text: TEXT, startAt: '2026-11-20 08:00' }, NOW);
+  const windowOf = (id: number) => (deps.integrations.get(id)!.config as SmsGroupConfig).throttle.windowMinutes;
+
+  it('prepare_group_sms z terminem i wysyłka: jedna rozsyłka z odbiorcami grupy z podglądu, treścią po szablonie, nadawcą i usługą grupy, integration_id grupy, zużyte okna agenta i grupy', () => {
+    const { preview } = scheduled();
+    expect(preview.schedule).toEqual(SCHEDULE);
+    expect(prepare().preview.schedule).toBeNull();
+    const out = sendDraft(deps, ctx(), preview.draftId, NOW);
+    expect(out).toMatchObject({ kind: 'package', recipients: 2, repeated: false, schedule: SCHEDULE });
+    const id = (out as { id: string }).id;
+    expect(deps.packages.get(id)).toMatchObject({
+      status: 'scheduled', startAt: SCHEDULE.startAt, integrationId: serwis, agentConnectionId: seed.connectionId, requestedBy: 'Ewa Nowak',
+      defaultText: preview.text, orig: preview.orig, serviceId: preview.service.id,
+    });
+    expect(deps.packages.recipients(id).map((r) => r.dest)).toEqual(['48601000021', '48601000022']);
+    expect(count('messages')).toBe(0);
+    expect(deps.guards.peek(seed.integrationId, 60, NOW)).toMatchObject({ count: 1, recipients: 2 });
+    expect(deps.guards.peek(serwis, windowOf(serwis), NOW).count).toBe(1);
+    expect(deps.integrationEvents.list(serwis, 10)).toEqual([expect.objectContaining({ result: 'sent', packageId: id })]);
+  });
+
+  it('zmiana składu grupy po wysyłce z terminem nie zmienia odbiorców rozsyłki', () => {
+    const { preview } = scheduled();
+    const out = sendDraft(deps, ctx(), preview.draftId, NOW) as { id: string };
+    setGroup(serwis, { recipients: [{ phone: '48601000029', name: 'Nowy serwisant' }] });
+    expect(deps.packages.recipients(out.id).map((r) => r.dest)).toEqual(['48601000021', '48601000022']);
+  });
+});

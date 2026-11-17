@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { openDatabase } from '../../src/store/db.ts';
 import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
-import { PackagesRepo } from '../../src/store/packages.ts';
+import { PENDING_STATUSES, PackagesRepo } from '../../src/store/packages.ts';
+import { IntegrationsRepo } from '../../src/store/integrations.ts';
+import { defaultPowerAutomateConfig } from '../../src/integrations/config.ts';
 import { accountInput, testKey } from './helpers.ts';
 
 const NOW = new Date('2026-08-25T10:00:00Z');
@@ -23,7 +25,7 @@ function setup() {
     { dest: '48601135134', text: null, clientId: null },
     { dest: '48501052442', text: 'Indywidualna', clientId: 'faktura-114' },
   ]);
-  return { repo, apiKeyId, accountId };
+  return { repo, apiKeyId, accountId, db };
 }
 
 describe('PackagesRepo', () => {
@@ -182,5 +184,142 @@ describe('PackagesRepo: odczyty agenta', () => {
       reasons: [{ miStatus: 20, description: 'Numer odbiorcy znajduje się na czarnej liście', count: 1 }],
       deliveredByHour: [{ hour: '2026-08-25 12:00', count: 1 }],
     });
+  });
+});
+
+describe('PackagesRepo: rozsyłka z terminem', () => {
+  const T = (min: number) => new Date(NOW.getTime() + min * 60_000).toISOString();
+  function add(ctx: ReturnType<typeof setup>, id: string, status: 'scheduled' | 'queued', startAt: string | null, extra: { integrationId?: number; apiKeyId?: number } = {}) {
+    ctx.repo.insert({
+      id, apiKeyId: extra.apiKeyId ?? ctx.apiKeyId, accountId: ctx.accountId, serviceId: '24138', defaultText: 'Przegląd floty', orig: null,
+      costCenter: null, startAt, deliveryReport: 1, encoding: 'gsm', multipart: 0, createdAt: NOW.toISOString(), status,
+      integrationId: extra.integrationId ?? null,
+    }, [{ dest: '48601000011', text: null, clientId: null }]);
+  }
+
+  it('zapisuje rozsyłkę w stanie podanym przy zapisie', () => {
+    const ctx = setup();
+    add(ctx, 'pkg_s', 'scheduled', T(60));
+    expect(ctx.repo.get('pkg_s')!.status).toBe('scheduled');
+  });
+
+  it('beginHandover: pierwsze wywołanie true, drugie false', () => {
+    const ctx = setup();
+    add(ctx, 'pkg_s', 'scheduled', T(60));
+    expect(ctx.repo.beginHandover('pkg_s')).toBe(true);
+    expect(ctx.repo.get('pkg_s')!.status).toBe('queued');
+    expect(ctx.repo.beginHandover('pkg_s')).toBe(false);
+  });
+
+  it('cancelPending po beginHandover: false; beginHandover po cancelPending: false', () => {
+    const ctx = setup();
+    add(ctx, 'pkg_a', 'scheduled', T(60));
+    add(ctx, 'pkg_b', 'scheduled', T(60));
+    expect(ctx.repo.beginHandover('pkg_a')).toBe(true);
+    expect(ctx.repo.cancelPending('pkg_a', NOW, null)).toBe(false);
+    expect(ctx.repo.get('pkg_a')!.status).toBe('queued');
+    expect(ctx.repo.cancelPending('pkg_b', NOW, 'Klucz API został odwołany')).toBe(true);
+    expect(ctx.repo.beginHandover('pkg_b')).toBe(false);
+    expect(ctx.repo.get('pkg_b')).toMatchObject({ status: 'cancelled', completedAt: NOW.toISOString(), error: 'Klucz API został odwołany' });
+  });
+
+  it('cancelPending anuluje także rozsyłkę po terminie, ale nie rozsyłkę bez terminu w kolejce', () => {
+    const ctx = setup();
+    add(ctx, 'pkg_o', 'scheduled', T(-120));
+    ctx.repo.markOverdue(new Date(T(-60)));
+    expect(ctx.repo.cancelPending('pkg_o', NOW, null)).toBe(true);
+    expect(ctx.repo.get('pkg_o')).toMatchObject({ status: 'cancelled', error: null });
+    expect(ctx.repo.cancelPending('pkg_1', NOW, null)).toBe(false);
+    expect(ctx.repo.get('pkg_1')!.status).toBe('queued');
+  });
+
+  it('returnToScheduled cofa przekazanie, które nie dotarło do Multiinfo', () => {
+    const ctx = setup();
+    add(ctx, 'pkg_s', 'scheduled', T(60));
+    ctx.repo.beginHandover('pkg_s');
+    expect(ctx.repo.returnToScheduled('pkg_s')).toBe(true);
+    expect(ctx.repo.get('pkg_s')!.status).toBe('scheduled');
+  });
+
+  it('returnToScheduled nie cofa rozsyłki z mi_package_id', () => {
+    const ctx = setup();
+    add(ctx, 'pkg_s', 'scheduled', T(60));
+    ctx.repo.beginHandover('pkg_s');
+    ctx.db.prepare("UPDATE packages SET mi_package_id = '28197391' WHERE id = 'pkg_s'").run();
+    expect(ctx.repo.returnToScheduled('pkg_s')).toBe(false);
+    expect(ctx.repo.get('pkg_s')!.status).toBe('queued');
+    expect(ctx.repo.returnToScheduled('pkg_1')).toBe(false);
+  });
+
+  it('markOverdue: wyłącznie scheduled z terminem starszym niż granica, zwraca przeniesione wiersze', () => {
+    const ctx = setup();
+    add(ctx, 'pkg_old', 'scheduled', T(-61));
+    add(ctx, 'pkg_edge', 'scheduled', T(-60));
+    add(ctx, 'pkg_future', 'scheduled', T(30));
+    add(ctx, 'pkg_queued', 'queued', T(-120));
+    const moved = ctx.repo.markOverdue(new Date(T(-60)));
+    expect(moved.map((p) => [p.id, p.status])).toEqual([['pkg_old', 'overdue']]);
+    expect(ctx.repo.get('pkg_edge')!.status).toBe('scheduled');
+    expect(ctx.repo.get('pkg_future')!.status).toBe('scheduled');
+    expect(ctx.repo.get('pkg_queued')!.status).toBe('queued');
+    expect(ctx.repo.markOverdue(new Date(T(-60)))).toEqual([]);
+  });
+
+  it('sendNow: overdue → queued; z scheduled false', () => {
+    const ctx = setup();
+    add(ctx, 'pkg_o', 'scheduled', T(-120));
+    add(ctx, 'pkg_s', 'scheduled', T(60));
+    ctx.repo.markOverdue(new Date(T(-60)));
+    expect(ctx.repo.sendNow('pkg_o')).toBe(true);
+    expect(ctx.repo.get('pkg_o')!.status).toBe('queued');
+    expect(ctx.repo.sendNow('pkg_o')).toBe(false);
+    expect(ctx.repo.sendNow('pkg_s')).toBe(false);
+    expect(ctx.repo.get('pkg_s')!.status).toBe('scheduled');
+  });
+
+  it('list z filtrem statuses i kluczem', () => {
+    const ctx = setup();
+    const otherKey = new ApiKeysRepo(ctx.db, testKey()).insert({
+      accountId: ctx.accountId, name: 'k2', keyHash: 'h2', keyPrefix: 'p2', defaultServiceId: '24138', defaultOrig: null,
+      maxParts: 9, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'],
+    });
+    add(ctx, 'pkg_s', 'scheduled', T(60));
+    add(ctx, 'pkg_o', 'scheduled', T(-120));
+    add(ctx, 'pkg_x', 'scheduled', T(60), { apiKeyId: otherKey });
+    ctx.repo.markOverdue(new Date(T(-60)));
+    const ids = (statuses: Array<'scheduled' | 'overdue' | 'queued'>, apiKeyId?: number) =>
+      ctx.repo.list({ statuses, ...(apiKeyId === undefined ? {} : { apiKeyId }), limit: 10, offset: 0 }).map((p) => p.id).sort();
+    expect(ids(['scheduled'])).toEqual(['pkg_s', 'pkg_x']);
+    expect(ids(['scheduled', 'overdue'], ctx.apiKeyId)).toEqual(['pkg_o', 'pkg_s']);
+    expect(ids(['queued'], ctx.apiKeyId)).toEqual(['pkg_1']);
+    expect(ctx.repo.list({ statuses: [], limit: 10, offset: 0 })).toHaveLength(4);
+  });
+
+  it('countByStatus liczy rozsyłki w stanie', () => {
+    const ctx = setup();
+    add(ctx, 'pkg_s1', 'scheduled', T(60));
+    add(ctx, 'pkg_s2', 'scheduled', T(-120));
+    ctx.repo.markOverdue(new Date(T(-60)));
+    expect(ctx.repo.countByStatus('scheduled')).toBe(1);
+    expect(ctx.repo.countByStatus('overdue')).toBe(1);
+    expect(ctx.repo.countByStatus('queued')).toBe(1);
+  });
+
+  it('pendingOfIntegration zwraca rozsyłki integracji w stanach scheduled i overdue', () => {
+    const ctx = setup();
+    const integrationId = new IntegrationsRepo(ctx.db, testKey()).insert({
+      name: 'Dyspozytornia', kind: 'power_automate', apiKeyId: ctx.apiKeyId, serviceId: null, orig: null, preset: 'power-automate',
+      enabled: 1, config: defaultPowerAutomateConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    add(ctx, 'pkg_s', 'scheduled', T(60), { integrationId });
+    add(ctx, 'pkg_o', 'scheduled', T(-120), { integrationId });
+    add(ctx, 'pkg_q', 'queued', null, { integrationId });
+    add(ctx, 'pkg_other', 'scheduled', T(60));
+    ctx.repo.markOverdue(new Date(T(-60)));
+    expect(ctx.repo.pendingOfIntegration(integrationId).map((p) => p.id).sort()).toEqual(['pkg_o', 'pkg_s']);
+  });
+
+  it('PENDING_STATUSES obejmuje scheduled i overdue', () => {
+    expect([...PENDING_STATUSES].sort()).toEqual(['overdue', 'scheduled']);
   });
 });

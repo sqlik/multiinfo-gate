@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { APPS_PROTOCOL_VERSION, createBridge, esc, stamp } from '../../src/mcp/views/client/bridge.js';
+import {
+  APPS_PROTOCOL_VERSION, createBridge, esc, failure, HOST_ERROR, HOST_TOOL_ERROR, retryable, retryText, sayIn, stamp,
+} from '../../src/mcp/views/client/bridge.js';
 
 interface Sent { jsonrpc: string; id?: number; method?: string; params?: Record<string, unknown>; result?: unknown; error?: { code: number; message: string } }
 
@@ -80,13 +82,43 @@ describe('most widoku z aplikacją AI', () => {
     await expect(second).resolves.toMatchObject({ content: [{ text: 'drugie' }] });
   });
 
-  it('bridge: odpowiedź z błędem odrzuca obietnicę komunikatem', async () => {
+  it('bridge: błąd aplikacji przy tools/call odrzuca obietnicę polskim komunikatem, a tekst aplikacji trafia do szczegółów', async () => {
     const { sent, deliver, bridge } = await connected();
     const call = bridge.callTool('connection_status', {});
     await flush();
     const req = sent.find((m) => m.method === 'tools/call')!;
-    deliver({ jsonrpc: '2.0', id: req.id, error: { code: -32603, message: 'Serwer MCP jest niedostępny' } });
-    await expect(call).rejects.toThrow('Serwer MCP jest niedostępny');
+    const raw = 'Error POSTing to endpoint: {"title":"Error 502: Bad gateway","status":502}';
+    deliver({ jsonrpc: '2.0', id: req.id, error: { code: 502, message: raw } });
+    const error = await call.then(() => null, (e: unknown) => e as Error & { detail?: string });
+    expect(error!.message).toBe(HOST_TOOL_ERROR);
+    expect(error!.detail).toBe(raw);
+    expect(failure(error)).toEqual([HOST_TOOL_ERROR, raw]);
+    // Błąd połączenia przy wywołaniu narzędzia odświeżanie ponawia, a inne błędy kończą odświeżanie.
+    expect(retryable(error)).toBe(true);
+    expect(retryText(15_000)).toBe('Aplikacja AI zgłosiła błąd połączenia z bramką. Widok ponowi odczyt za 15 s.');
+
+    // Błąd innego żądania niż tools/call nie dotyczy połączenia z bramką; błąd bez tekstu nie ma szczegółów.
+    const sending = bridge.sendMessage('Popraw treść SMS-a');
+    await flush();
+    const msg = sent.find((m) => m.method === 'ui/message')!;
+    deliver({ jsonrpc: '2.0', id: msg.id, error: { code: -32603 } });
+    const other = await sending.then(() => null, (e: unknown) => e as Error & { detail?: string });
+    expect(failure(other)).toEqual([HOST_ERROR, '']);
+    expect(retryable(other)).toBe(false);
+    expect(failure('zwykły tekst')).toEqual(['zwykły tekst', '']);
+    expect(retryable(new Error('zwykły błąd'))).toBe(false);
+  });
+
+  it('sayIn: komunikat jako tekst, a szczegóły błędu w elemencie rozwijanym z ucieczką', () => {
+    const notice = { hidden: true, className: '', textContent: '', innerHTML: '' };
+    const say = sayIn({ getElementById: () => notice });
+    say('fail', 'Bramka <b>nie</b> odpowiada');
+    expect(notice).toMatchObject({ hidden: false, className: 'notice n-fail', textContent: 'Bramka <b>nie</b> odpowiada' });
+    say('fail', HOST_TOOL_ERROR, '{"detail":"<origin>"}');
+    expect(notice.innerHTML).toBe(`${esc(HOST_TOOL_ERROR)}<details class="why"><summary>Szczegóły błędu</summary>`
+      + '<div class="mono">{&quot;detail&quot;:&quot;&lt;origin&gt;&quot;}</div></details>');
+    say('plain', '');
+    expect(notice).toMatchObject({ hidden: true, textContent: '' });
   });
 
   it('bridge: ui/resource-teardown dostaje pusty wynik, nieznane żądanie aplikacji -32601', async () => {
@@ -99,7 +131,9 @@ describe('most widoku z aplikacją AI', () => {
 
   it('bridge: bez hostCapabilities.serverTools callTool odrzuca obietnicę komunikatem', async () => {
     const { sent, bridge } = await connected({ message: {} });
-    await expect(bridge.callTool('connection_status', {})).rejects.toThrow(/nie pozwala widokowi wywoływać narzędzi bramki/);
+    const refused = await bridge.callTool('connection_status', {}).then(() => null, (e: unknown) => e);
+    expect((refused as Error).message).toMatch(/nie pozwala widokowi wywoływać narzędzi bramki/);
+    expect(retryable(refused)).toBe(false);
     expect(sent.some((m) => m.method === 'tools/call')).toBe(false);
   });
 

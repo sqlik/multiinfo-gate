@@ -1,11 +1,14 @@
 import { timingSafeEqual } from 'node:crypto';
 import { generateSecret, hashSecret } from '../agents/codes.ts';
 import type { ConnectionContext, ConnectionService } from '../agents/connections.ts';
+import { AgentError } from '../agents/errors.ts';
+import { instant } from '../agents/reads.ts';
 import { SCOPE_LABELS } from '../agents/scopes.ts';
 import { ApiError } from '../api/errors.ts';
 import { MESSAGE_RECIPIENTS_MAX } from '../api/messages.ts';
 import { keyOrigs, resolveOrig } from '../api/orig.ts';
 import { PACKAGE_RECIPIENTS_MAX } from '../api/packages.ts';
+import { checkStartAt, handoverAt } from '../api/schedule.ts';
 import type { ApiDeps } from '../api/server.ts';
 import { packageEncoding, submitPackage } from '../api/submit-package.ts';
 import { submitMessages } from '../api/submit.ts';
@@ -16,22 +19,14 @@ import type { LinkMode } from '../store/api-keys.ts';
 import { measureText, type EncodingRequest } from '../text/measure.ts';
 import { InvalidPhoneError, normalizePhone, normalizeRecipient } from '../text/phone.ts';
 import { segmentText } from '../text/segment.ts';
+import { warsawShort, warsawStamp } from '../time/warsaw.ts';
 import type { AgentScope, GroupMember, SmsGroupConfig } from './config.ts';
 import { foldText } from './group/prefix.ts';
 import { buildAgentGroupContext, dispatch, renderGroupText, type Noter, type PipelineDeps, type SmsGroupIntegration } from './pipeline.ts';
 import { payloadForLog } from './power-automate.ts';
 import { TemplateError } from './templates.ts';
 
-/**
- * Błąd potoku agenta z komunikatem dla człowieka. Narzędzie MCP zamienia go na błąd narzędzia, a przy limicie
- * dopisuje czas do ponowienia.
- */
-export class AgentError extends Error {
-  constructor(readonly code: string, message: string, readonly retryAfterSec?: number) {
-    super(message);
-    this.name = 'AgentError';
-  }
-}
+export { AgentError };
 
 /**
  * Zależności potoku: wspólna droga wysyłki, rozsyłki, dziennik i powiadomienia, szkice oraz rozstrzyganie
@@ -54,6 +49,9 @@ export interface ServiceOption { id: string; label: string }
 /** Pozostałe wysyłki i odbiorcy w oknie ochrony przed burzą; `recipients` null, gdy integracja nie liczy odbiorców (grupa SMS). */
 export interface GuardLeft { calls: number; recipients: number | null; resetsAt: string | null }
 
+/** Termin wysyłki agenta: chwila rozpoczęcia rozsyłki i chwila jej przekazania do Multiinfo. */
+export interface Schedule { startAt: string; handoverAt: string }
+
 export interface PrepareSmsInput {
   to?: string[];
   campaignRecipients?: { campaign: string; segment: 'unopened' | 'opened' };
@@ -62,6 +60,8 @@ export interface PrepareSmsInput {
   orig?: string | null;
   encoding?: EncodingRequest;
   links?: LinkRequest;
+  /** Termin rozpoczęcia w czasie polskim albo ze strefą; wysyłka z terminem jest zawsze rozsyłką. */
+  startAt?: string;
 }
 
 export interface SmsPreview {
@@ -70,6 +70,7 @@ export interface SmsPreview {
   serviceId: string; services: ServiceOption[]; orig: string | null; senders: SenderOption[];
   links: { shortened: number; domain: string | null; domains: string[]; campaign: string | null; utm: boolean; mode: LinkMode; notice: string | null } | null;
   guard: GuardLeft;
+  schedule: Schedule | null;
 }
 
 export interface ReplyItem { inboundId: string; group: string; text: string }
@@ -80,11 +81,12 @@ export interface GroupPreview {
   text: string; parts: number; characters: number; encoding: 'gsm' | 'ucs2'; truncated: boolean; guard: GuardLeft; groupGuard: GuardLeft;
   /** Nadawca wysyłki do grupy; null oznacza numer usługi `service`. */
   orig: string | null; service: ServiceOption;
+  schedule: Schedule | null;
 }
 
 export type SendOutcome =
   | { kind: 'messages'; ids: string[]; repeated: boolean }
-  | { kind: 'package'; id: string; recipients: number; repeated: boolean }
+  | { kind: 'package'; id: string; recipients: number; repeated: boolean; schedule: Schedule | null }
   | { kind: 'group'; ids: string[]; group: string; repeated: boolean };
 
 /** Wynik przygotowania: klucz potwierdzenia trafia wyłącznie do `_meta` wyniku narzędzia, nigdy do podglądu. */
@@ -99,14 +101,62 @@ interface SmsDraftPayload {
   clientIds?: Array<string | null>;
   /** Treść z podglądu po skróceniu linków i limicie części; wysyłka z inną treścią odpada. */
   shown?: string;
+  /** Termin rozsyłki w ISO; bez terminu pole nie występuje. */
+  startAt?: string;
 }
 interface ReplyDraftPayload { inboundId: string; to: string; group: string; text: string; serviceId: string; orig: string | null; shown?: string }
 /**
  * Szkic grupy: odbiorcy i treść po szablonie grupy w chwili przygotowania, tak jak widział je człowiek, wraz z nadawcą,
  * usługą i treścią po limicie części z podglądu.
  */
-interface GroupDraftPayload { groupId: number; group: string; to: string[]; text: string; orig?: string | null; serviceId?: string; shown?: string }
-type StoredOutcome = { kind: 'messages'; ids: string[] } | { kind: 'package'; id: string; recipients: number } | { kind: 'group'; ids: string[]; group: string };
+interface GroupDraftPayload {
+  groupId: number; group: string; to: string[]; text: string; orig?: string | null; serviceId?: string; shown?: string;
+  /** Termin rozsyłki do grupy w ISO; bez terminu pole nie występuje. */
+  startAt?: string;
+}
+type StoredOutcome =
+  | { kind: 'messages'; ids: string[] } | { kind: 'package'; id: string; recipients: number; schedule?: Schedule | null } | { kind: 'group'; ids: string[]; group: string };
+
+/** Zapisany wynik szkicu jako wynik wysyłki; rozsyłka sprzed 1.13 nie zapisywała terminu. */
+const asOutcome = (o: StoredOutcome, repeated: boolean): SendOutcome =>
+  (o.kind === 'package' ? { ...o, schedule: o.schedule ?? null, repeated } : { ...o, repeated });
+
+const LOCAL_MINUTE = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::\d{2})?$/;
+
+/**
+ * Termin wysyłki agenta: data z godziną w czasie polskim albo chwila ze strefą, najwyżej 30 dni naprzód. Sam dzień
+ * nie wystarcza, a godzina, której w Polsce nie ma przy zmianie czasu, nie przechodzi sprawdzenia powrotem do czasu
+ * polskiego. Odmowy granic terminu mają kody API (`start_at_in_past`, `start_at_too_far`).
+ */
+export function scheduleOf(raw: string | undefined, now: Date): Schedule | null {
+  if (raw === undefined) return null;
+  const value = raw.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new AgentError('invalid', 'Termin rozsyłki musi zawierać datę i godzinę, na przykład 2026-11-20 08:00 w czasie polskim.');
+  }
+  let at: string;
+  try {
+    at = instant('startAt', value);
+  } catch (e) {
+    // Ogólny przykład odczytu („2026-11-14”) podaje sam dzień, którego termin nie przyjmuje.
+    if (e instanceof AgentError) throw new AgentError('invalid', 'Pole startAt musi być datą z godziną, na przykład 2026-11-20 08:00 w czasie polskim.');
+    throw e;
+  }
+  const local = LOCAL_MINUTE.exec(value);
+  if (local) {
+    const [, y, mo, d, h, mi] = local as unknown as [string, string, string, string, string, string];
+    if (warsawStamp(at).slice(0, 16) !== `${y}-${mo}-${d} ${h}:${mi}`) {
+      throw new AgentError('invalid', `Godzina ${h}:${mi} w dniu ${d}.${mo}.${y} nie istnieje w czasie polskim z powodu zmiany czasu. Podaj inną godzinę.`);
+    }
+  }
+  try {
+    checkStartAt(new Date(at), now);
+  } catch (e) {
+    if (e instanceof ApiError) throw new AgentError(e.code, e.message);
+    throw e;
+  }
+  return { startAt: at, handoverAt: handoverAt(at, now.toISOString()) };
+}
 
 const recipientsWord = (n: number): string => `${n} ${n === 1 ? 'odbiorca' : 'odbiorców'}`;
 /** Liczba odbiorców w dopełniaczu: „do 1 odbiorcy”, „do 2 odbiorców”. */
@@ -241,10 +291,10 @@ function groupThrottledError(group: SmsGroupIntegration, resetsAt: string | null
 }
 
 /** Limit części i zachowanie przy nadmiarze; `whose` nazywa właściciela limitu w komunikacie. */
-interface PartsLimit { maxParts: number; overflow: 'truncate' | 'reject'; whose: string }
+export interface PartsLimit { maxParts: number; overflow: 'truncate' | 'reject'; whose: string }
 
 /** Limit części wysyłki agenta: limit integracji, ale nigdy więcej niż limit klucza. */
-function agentLimit(ctx: ConnectionContext): PartsLimit {
+export function agentLimit(ctx: ConnectionContext): PartsLimit {
   const { maxParts, overflow } = ctx.integration.config;
   return { maxParts: Math.min(maxParts, ctx.key.maxParts), overflow, whose: maxParts <= ctx.key.maxParts ? 'integracji' : 'klucza API' };
 }
@@ -288,7 +338,7 @@ function normalize(raw: string, countryCode: string): string {
   }
 }
 
-function checkService(ctx: ConnectionContext, serviceId: string): void {
+export function checkService(ctx: ConnectionContext, serviceId: string): void {
   if (!ctx.auth.allowedServiceIds.includes(serviceId)) {
     throw new AgentError('service_not_allowed',
       `Klucz integracji nie obejmuje usługi ${serviceId}. Dostępne usługi: ${ctx.auth.allowedServiceIds.join(', ')}.`);
@@ -296,7 +346,7 @@ function checkService(ctx: ConnectionContext, serviceId: string): void {
 }
 
 /** Nadawca szkicu: pominięty to wartość domyślna, null to numer usługi, tekst to nadpis z listy klucza. */
-function pickOrig(deps: AgentDeps, ctx: ConnectionContext, input: string | null | undefined, fallback: string | null): string | null {
+export function pickOrig(deps: AgentDeps, ctx: ConnectionContext, input: string | null | undefined, fallback: string | null): string | null {
   if (input === undefined) return fallback;
   if (input === null) {
     if (fallback !== null) {
@@ -308,9 +358,9 @@ function pickOrig(deps: AgentDeps, ctx: ConnectionContext, input: string | null 
   return input;
 }
 
-const newConfirm = (apps: boolean | undefined) => (apps ? generateSecret(CONFIRM_PREFIX) : null);
+export const newConfirm = (apps: boolean | undefined) => (apps ? generateSecret(CONFIRM_PREFIX) : null);
 
-const scopeError = (scope: AgentScope): AgentError =>
+export const scopeError = (scope: AgentScope): AgentError =>
   new AgentError('scope', `Zakresy integracji nie obejmują uprawnienia „${SCOPE_LABELS[scope]}”. Uprawnienia nadaje administrator bramki w integracji Agent AI.`);
 
 /**
@@ -378,8 +428,9 @@ function groupSender(deps: AgentDeps, ctx: ConnectionContext, group: SmsGroupInt
  * Podgląd sprawdza okna ochrony integracji agenta i grupy.
  */
 export function prepareGroup(
-  deps: AgentDeps, ctx: ConnectionContext, input: { group: string; text: string }, now: Date, opts: { apps?: boolean } = {},
+  deps: AgentDeps, ctx: ConnectionContext, input: { group: string; text: string; startAt?: string }, now: Date, opts: { apps?: boolean } = {},
 ): { preview: GroupPreview; recipients: GroupMember[]; confirm: string | null } {
+  const schedule = scheduleOf(input.startAt, now);
   const { group, names } = findGroup(deps, ctx, input.group);
   const members = groupMembers(group.config);
   if (members.length === 0) {
@@ -406,6 +457,7 @@ export function prepareGroup(
   const sender = groupSender(deps, ctx, group);
   const payload: GroupDraftPayload = {
     groupId: group.id, group: group.name, to: phones, text, orig: sender.orig, serviceId: sender.service.id, shown: shaped.prepared.text,
+    ...(schedule === null ? {} : { startAt: schedule.startAt }),
   };
   const draftId = deps.drafts.insert({ connectionId: ctx.connection.id, kind: 'group', payload, createdAt: now, expiresAt, confirmHash: confirm?.hash ?? null });
   return {
@@ -414,7 +466,7 @@ export function prepareGroup(
     preview: {
       draftId, expiresAt: expiresAt.toISOString(), group: { id: group.id, name: group.name }, groups: names, recipients: members.length,
       text: shaped.prepared.text, parts: shaped.parts, characters: shaped.characters, encoding: shaped.encoding, truncated: shaped.truncated,
-      guard, groupGuard, ...sender,
+      guard, groupGuard, ...sender, schedule,
     },
   };
 }
@@ -434,6 +486,7 @@ export function prepareSms(
     ? (input.to ?? []).map((dest) => ({ dest, clientId: null }))
     : campaignRecipients(deps, ctx, input.campaignRecipients);
   if (raw.length === 0) throw new AgentError('no_recipient', 'Podaj co najmniej jeden numer odbiorcy.');
+  const schedule = scheduleOf(input.startAt, now);
   const clients = new Map<string, string | null>();
   for (const r of raw) {
     const phone = normalize(r.dest, ctx.account.defaultCountryCode);
@@ -444,7 +497,8 @@ export function prepareSms(
     throw new AgentError('too_many_recipients',
       `Wysyłka może objąć najwyżej ${PACKAGE_RECIPIENTS_MAX} odbiorców, a lista bez powtórzeń zawiera ${to.length} numerów.`);
   }
-  const route = to.length <= MESSAGE_RECIPIENTS_MAX ? 'messages' : 'package';
+  // Wysyłka z terminem jest zawsze rozsyłką: bramka przechowuje ją do przekazania, a podgląd doręczeń na żywo nie ma sensu.
+  const route = schedule === null && to.length <= MESSAGE_RECIPIENTS_MAX ? 'messages' : 'package';
   const options = senderOptions(deps, ctx);
   const serviceId = input.serviceId ?? options.serviceId;
   checkService(ctx, serviceId);
@@ -463,6 +517,7 @@ export function prepareSms(
   const payload: SmsDraftPayload = {
     route, to, text: input.text, links, serviceId, orig, encoding, shown: shaped.prepared.text,
     ...(clientIds.some((c) => c !== null) ? { clientIds } : {}),
+    ...(schedule === null ? {} : { startAt: schedule.startAt }),
   };
   const draftId = deps.drafts.insert({ connectionId: ctx.connection.id, kind: 'sms', payload, createdAt: now, expiresAt, confirmHash: confirm?.hash ?? null });
   return {
@@ -477,6 +532,7 @@ export function prepareSms(
         campaign: info === null ? null : info.campaign ?? ctx.integration.name, utm: settings.utm, mode: settings.mode, notice: shaped.template.notice,
       },
       guard,
+      schedule,
     },
   };
 }
@@ -526,7 +582,7 @@ export function prepareReplies(deps: AgentDeps, ctx: ConnectionContext, items: R
  * Ochrona przed burzą integracji agenta: wywołania i odbiorcy w oknie. Odmowa zapisuje wpis w dzienniku,
  * pierwsza w oknie zgłasza `integration_throttled`, a agent otrzymuje czas do ponowienia.
  */
-function throttleAgent(deps: AgentDeps, ctx: ConnectionContext, count: number, note: Noter, now: Date): void {
+export function throttleAgent(deps: AgentDeps, ctx: ConnectionContext, count: number, note: Noter, now: Date): void {
   const integration = ctx.integration;
   const { limit, windowMinutes, recipients } = integration.config.throttle;
   const gate = deps.guards.throttle(integration.id, limit, windowMinutes, now, { count, limit: recipients });
@@ -567,6 +623,10 @@ function sendGroup(deps: AgentDeps, ctx: ConnectionContext, draftId: string, pay
     note('error', { reason: `${label}: lista odbiorców albo ustawienia grupy zmieniły się od podglądu` });
     throw new AgentError('draft_stale', `Lista odbiorców albo ustawienia grupy ${group.name} zmieniły się od chwili podglądu. Przygotuj SMS do grupy ponownie.`);
   }
+  if (payload.startAt !== undefined && Date.parse(payload.startAt) <= now.getTime()) {
+    note('error', { reason: `${label}: termin rozsyłki minął od podglądu` });
+    throw new AgentError('draft_stale', 'Termin rozsyłki minął od chwili podglądu. Przygotuj SMS do grupy ponownie z nowym terminem.');
+  }
 
   const left = guardLeft(deps, ctx, now);
   if (left.calls < 1 || (left.recipients !== null && left.recipients < count)) throttleAgent(deps, ctx, count, note, now);
@@ -590,6 +650,19 @@ function sendGroup(deps: AgentDeps, ctx: ConnectionContext, draftId: string, pay
   let outcome: StoredOutcome | { kind: 'error'; code: string; detail: string };
   try {
     outcome = deps.messages.transaction(() => {
+      // Z terminem: jedna rozsyłka z odbiorcami i treścią z podglądu. Późniejsza zmiana składu grupy jej nie dotyczy.
+      if (payload.startAt !== undefined) {
+        const shaped = shape(deps, ctx, payload.text, {}, 'auto', 'messages', groupLimit(ctx, group));
+        const pkg = submitPackage(deps, ctx.auth, {
+          recipients: payload.to.map((to) => ({ to })), defaultText: payload.text, deliveryReport: true, encoding: 'auto', links: {},
+          prepared: { defaultText: shaped.prepared, recipients: [] }, serviceId: sender.service.id, ...(group.orig ? { orig: group.orig } : {}),
+          startAt: payload.startAt, maxParts: groupLimit(ctx, group).maxParts, integrationId: group.id, agentConnectionId: ctx.connection.id,
+          requestedBy: ctx.connection.name, idempotencyKey: draftId, campaignFallback: group.name,
+        }, now);
+        const result: StoredOutcome = { kind: 'package', id: pkg.id, recipients: pkg.recipients, schedule: scheduleOfAccepted(pkg) };
+        deps.drafts.markSent(draftId, result, now);
+        return result;
+      }
       const sent = dispatch(deps, group, ctx.key, payload.text, payload.to, groupLimit(ctx, group), groupNote, now, {
         agentConnectionId: ctx.connection.id, requestedBy: ctx.connection.name, idempotencyKey: draftId,
       });
@@ -611,15 +684,21 @@ function sendGroup(deps: AgentDeps, ctx: ConnectionContext, draftId: string, pay
   }
   // Wysyłka jest już w kolejce, dlatego błąd zapisu wpisu nie może zamienić wyniku w błąd.
   try {
-    note('sent', { reason: `${label}, ${recipientsWord(count)}`, ...(outcome.kind === 'group' ? { messageId: outcome.ids[0]! } : {}) });
+    if (outcome.kind === 'package') {
+      const reason = `Rozsyłka z terminem ${warsawShort(payload.startAt!)}, ${recipientsWord(count)}`;
+      groupNote('sent', { reason, packageId: outcome.id });
+      note('sent', { reason: `${label}, ${recipientsWord(count)}, termin ${warsawShort(payload.startAt!)}`, packageId: outcome.id });
+    } else {
+      note('sent', { reason: `${label}, ${recipientsWord(count)}`, ...(outcome.kind === 'group' ? { messageId: outcome.ids[0]! } : {}) });
+    }
   } catch (error) {
     deps.log?.error('integracja.dziennik_blad', { integrationId: ctx.integration.id, error });
   }
-  return { ...(outcome as Extract<StoredOutcome, { kind: 'group' }>), repeated: false };
+  return asOutcome(outcome, false);
 }
 
 /** Porównanie klucza potwierdzenia ze skrótem w stałym czasie. */
-function confirmMatches(hash: string, confirm: string | undefined): boolean {
+export function confirmMatches(hash: string, confirm: string | undefined): boolean {
   if (confirm === undefined) return false;
   const given = Buffer.from(hashSecret(confirm), 'hex');
   const stored = Buffer.from(hash, 'hex');
@@ -637,7 +716,9 @@ export function sendDraft(deps: AgentDeps, ctx: ConnectionContext, draftId: stri
   if (draft.confirmHash !== null && !confirmMatches(draft.confirmHash, confirm)) {
     throw new AgentError('confirm_required', 'Wysyłkę zatwierdza przycisk w widoku bramki.');
   }
-  if (draft.sentAt !== null) return { ...(draft.result as StoredOutcome), repeated: true };
+  // Wysyłkę z pliku zatwierdza wyłącznie przycisk w widoku przez send_file_sms.
+  if (draft.kind === 'file') throw new AgentError('draft_kind', 'Szkic jest wysyłką z pliku, którą zatwierdza przycisk w widoku bramki.');
+  if (draft.sentAt !== null) return asOutcome(draft.result as StoredOutcome, true);
   if (Date.parse(draft.expiresAt) <= now.getTime()) {
     throw new AgentError('draft_expired', `Podgląd wygasł po 30 minutach. Przygotuj ${draft.kind === 'reply' ? 'odpowiedź' : 'SMS'} ponownie.`);
   }
@@ -685,6 +766,9 @@ export function sendDraft(deps: AgentDeps, ctx: ConnectionContext, draftId: stri
     if ((shown !== undefined && shaped.prepared.text !== shown) || (orig === null && senderOptions(deps, fresh).orig !== null)) {
       throw new AgentError('draft_stale', `Ustawienia wysyłki zmieniły się od chwili podglądu. Przygotuj ${sms ? 'SMS' : 'odpowiedź'} ponownie.`);
     }
+    if (sms?.startAt !== undefined && Date.parse(sms.startAt) <= now.getTime()) {
+      throw new AgentError('draft_stale', 'Termin rozsyłki minął od chwili podglądu. Przygotuj SMS ponownie z nowym terminem.');
+    }
   } catch (e) {
     fail(e);
   }
@@ -707,8 +791,9 @@ export function sendDraft(deps: AgentDeps, ctx: ConnectionContext, draftId: stri
             recipients: sms.to.map((to, i) => ({ to, ...(sms.clientIds?.[i] ? { clientId: sms.clientIds[i] } : {}) })),
             defaultText: sms.text, deliveryReport: true, encoding: sms.encoding, links: sms.links,
             prepared: { defaultText: shaped.prepared, recipients: [] }, serviceId: sms.serviceId, ...orig, ...via,
+            ...(sms.startAt === undefined ? {} : { startAt: sms.startAt }),
           }, now);
-          result = { kind: 'package', id: pkg.id, recipients: pkg.recipients };
+          result = { kind: 'package', id: pkg.id, recipients: pkg.recipients, schedule: scheduleOfAccepted(pkg) };
         } else {
           const sent = submitMessages(deps, fresh.auth, {
             to: sms.to, text: sms.text, prepared: shaped.prepared, links: sms.links, encoding: sms.encoding, serviceId: sms.serviceId, ...orig, ...via,
@@ -734,7 +819,8 @@ export function sendDraft(deps: AgentDeps, ctx: ConnectionContext, draftId: stri
 
   // Wysyłka jest już w kolejce, dlatego błąd zapisu wpisu nie może zamienić wyniku w błąd.
   try {
-    const reason = sms ? `${label}, ${recipientsWord(count)}` : label;
+    const term = sms?.startAt === undefined ? '' : `, termin ${warsawShort(sms.startAt)}`;
+    const reason = sms ? `${label}, ${recipientsWord(count)}${term}` : label;
     note('sent', {
       reason: truncated ? `${reason}; skrócono do ${agentLimit(fresh).maxParts} części` : reason,
       ...(outcome.kind === 'package' ? { packageId: outcome.id } : { messageId: outcome.ids[0]! }),
@@ -742,5 +828,10 @@ export function sendDraft(deps: AgentDeps, ctx: ConnectionContext, draftId: stri
   } catch (error) {
     deps.log?.error('integracja.dziennik_blad', { integrationId: integration.id, error });
   }
-  return { ...outcome, repeated: false };
+  return asOutcome(outcome, false);
+}
+
+/** Termin przyjętej rozsyłki z odpowiedzi `submitPackage`; chwila przekazania istnieje wyłącznie w stanie `scheduled`. */
+export function scheduleOfAccepted(pkg: { startAt?: string; handoverAt?: string }): Schedule | null {
+  return pkg.startAt !== undefined && pkg.handoverAt !== undefined ? { startAt: pkg.startAt, handoverAt: pkg.handoverAt } : null;
 }

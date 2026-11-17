@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../src/api/errors.ts';
 import { groupTargets } from '../../src/links/campaigns.ts';
 import { isCode } from '../../src/links/codes.ts';
@@ -216,6 +216,15 @@ describe('prepareLinks', () => {
     const { apiKeyId, deps } = setup();
     const once = onceSettings({ ...deps, linksServer: { available: () => false } });
     expect(prepareLinks(once, apiKeyId, 'Oferta https://firma.pl/o', {}, {}).notice).toBe('domain_unavailable');
+  });
+
+  it('onceSettings odczytuje domenę skracacza raz na wywołanie, a nie przy każdej treści', () => {
+    const { apiKeyId, deps } = setup();
+    const get = vi.spyOn(deps.linkDomains, 'get');
+    const once = onceSettings(deps);
+    for (let i = 0; i < 3; i++) prepareLinks(once, apiKeyId, `Faktura https://firma.pl/f/${i}`, {}, {});
+    expect(get.mock.calls.length).toBeGreaterThan(0);
+    expect(new Set(get.mock.calls.map(([id]) => id)).size).toBe(get.mock.calls.length);
   });
 
   it('nie zmienia SMS-a powiadomień bramki i nie odczytuje ustawień klucza', () => {

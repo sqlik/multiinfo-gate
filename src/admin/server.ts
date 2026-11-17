@@ -11,6 +11,7 @@ import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import type { AccountsRepo } from '../store/accounts.ts';
 import type { AgentConnectionsRepo } from '../store/agent-connections.ts';
+import type { FileSendsRepo } from '../store/file-sends.ts';
 import type { ConnectionService } from '../agents/connections.ts';
 import type { AdminUsersRepo } from '../store/admin-users.ts';
 import type { ApiKeysRepo } from '../store/api-keys.ts';
@@ -90,6 +91,8 @@ export interface AdminDeps {
   guards: IntegrationGuardsRepo;
   /** Połączenia agentów AI: liczba aktywnych na liście integracji, sekcja „Połączenia” i źródło wysyłek. */
   agentConnections: AgentConnectionsRepo;
+  /** Wysyłki z pliku agentów AI: nazwa pliku w szczegółach rozsyłki. */
+  fileSends: Pick<FileSendsRepo, 'get'>;
   /** Kody, tokeny, odwołanie i usunięcie połączeń agentów z panelu. */
   connectionService: ConnectionService;
   /** Skracacz: domeny, kampanie i kody; SMS testowy kanału powiadomień przekazuje je do wspólnej drogi wysyłki. */

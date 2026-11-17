@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { Database } from 'better-sqlite3';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDownload, DOWNLOAD_TTL_MS, failedCsv, unopenedCsv } from '../../src/agents/downloads.ts';
-import { reportCsv } from '../../src/api/packages.ts';
+import { fileReportCsv, reportCsv } from '../../src/api/packages.ts';
 import { buildApiServer, type AgentServerDeps, type ApiDeps } from '../../src/api/server.ts';
 import { AgentError } from '../../src/integrations/agent.ts';
 import { openersCsv } from '../../src/links/campaigns.ts';
@@ -158,5 +158,48 @@ describe('linki do pobrania', () => {
     expect(error).toBeInstanceOf(AgentError);
     expect((error as AgentError).message).toBe('Adres bramki nie jest ustawiony, dlatego bramka nie może utworzyć linku do pobrania.');
     expect(db.prepare('SELECT COUNT(*) AS n FROM download_links').get()).toEqual({ n: 0 });
+  });
+
+  it('raport wysyłki z pliku: jeden CSV rozsyłek według wiersza pliku, przed zakończeniem i dla innego klucza 404', async () => {
+    const fileSendId = deps.agents.fileSends.insert({
+      apiKeyId: seed.keyId, integrationId: seed.integrationId, connectionId: seed.connectionId, requestedBy: 'Ewa Nowak',
+      name: 'przypomnienia-listopad.xlsx', recipients: 3, startAt: null, createdAt: AGENT_SEED_AT.toISOString(),
+    });
+    const add = (id: string, encoding: 'gsm' | 'ucs2', recipients: Array<[string, number, string | null]>): void => deps.packages.insert({
+      id, apiKeyId: seed.keyId, accountId: seed.accountId, serviceId: '24138', defaultText: null, orig: null, costCenter: null, startAt: null,
+      deliveryReport: 1, encoding, multipart: 0, createdAt: AGENT_SEED_AT.toISOString(), fileSendId,
+    }, recipients.map(([dest, fileLine, clientId]) => ({ dest, text: 'Przypomnienie o fakturze.', clientId, fileLine })));
+    add('pkg_gsm', 'gsm', [['48601000011', 2, 'K-17'], ['48601000013', 5, null]]);
+    add('pkg_ucs', 'ucs2', [['48601000012', 3, '=SUMA(A1)']]);
+    const link = createDownload(deps.agents, BASE, { apiKeyId: seed.keyId, connectionId: seed.connectionId }, 'package_report', fileSendId, NOW);
+    expect((await get(link.url)).statusCode).toBe(404);
+
+    for (const [id, rows] of [['pkg_gsm', [report('48601000011', 21, 'delivered', '1'), report('48601000013', 12, 'expired', '3')]],
+      ['pkg_ucs', [report('48601000012', 11, 'failed', '2')]]] as const) {
+      deps.packages.setCompleted(id, AGENT_SEED_AT);
+      deps.packages.applyReport(id, [...rows]);
+      deps.packages.setReport(id, { status: 'ready' });
+    }
+    const res = await get(link.url);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-disposition']).toBe(`attachment; filename="raport-${fileSendId}.csv"`);
+    expect(res.body.split('\r\n')).toEqual([
+      'wiersz_pliku;numer;identyfikator_klienta;id_multiinfo;status;status_multiinfo;czas',
+      '2;48601000011;K-17;1;delivered;21;2026-11-15 08:30:00',
+      `3;48601000012;"'=SUMA(A1)";2;failed;11;2026-11-15 08:30:00`,
+      '5;48601000013;;3;expired;12;2026-11-15 08:30:00',
+      '',
+    ]);
+    const rows = [...deps.packages.recipients('pkg_gsm'), ...deps.packages.recipients('pkg_ucs')].sort((a, b) => a.fileLine! - b.fileLine!);
+    expect(res.body).toBe(fileReportCsv(rows));
+    const failed = await get(createDownload(deps.agents, BASE, { apiKeyId: seed.keyId, connectionId: seed.connectionId }, 'package_failed', fileSendId, NOW).url);
+    expect(failed.headers['content-disposition']).toBe(`attachment; filename="niedoreczeni-${fileSendId}.csv"`);
+    expect(failed.body.split('\r\n').slice(1, -1).map((l) => l.split(';')[0])).toEqual(['3', '5']);
+
+    const other = deps.apiKeys.insert({
+      accountId: seed.accountId, name: 'inny', keyHash: 'h2', keyPrefix: 'p2', defaultServiceId: '24138', defaultOrig: null,
+      maxParts: 9, ratePerMin: 60, webhookUrl: null, webhookSecret: null, serviceIds: ['24138'],
+    });
+    expect((await get(createDownload(deps.agents, BASE, { apiKeyId: other, connectionId: seed.connectionId }, 'package_report', fileSendId, NOW).url)).statusCode).toBe(404);
   });
 });

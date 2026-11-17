@@ -128,6 +128,8 @@ describe('dokumenty widoków', () => {
       { uri: 'ui://multiinfo-gate/kampania', name: 'kampania', title: 'Wyniki kampanii', mimeType: APP_MIME, _meta: meta },
       { uri: 'ui://multiinfo-gate/rozsylka', name: 'rozsylka', title: 'Postęp rozsyłki', mimeType: APP_MIME, _meta: meta },
       { uri: 'ui://multiinfo-gate/odpowiedzi', name: 'odpowiedzi', title: 'Odpowiedzi klientów', mimeType: APP_MIME, _meta: meta },
+      { uri: 'ui://multiinfo-gate/plik', name: 'plik', title: 'Rozsyłka z pliku', mimeType: APP_MIME, _meta: meta },
+      { uri: 'ui://multiinfo-gate/rozmowa', name: 'rozmowa', title: 'Rozmowa z numerem', mimeType: APP_MIME, _meta: meta },
     ]);
   });
 

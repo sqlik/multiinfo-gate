@@ -2,7 +2,9 @@ import type { Database } from 'better-sqlite3';
 import type { ReportRow } from '../multiinfo/report.ts';
 import { describeReportStatus, mapStatus, type GatewayStatus } from '../multiinfo/status.ts';
 
-export type PackageStatus = 'queued' | 'open' | 'sending' | 'completed' | 'cancelled' | 'failed';
+export type PackageStatus = 'scheduled' | 'overdue' | 'queued' | 'open' | 'sending' | 'completed' | 'cancelled' | 'failed';
+/** Rozsyłki przechowywane przez bramkę przed przekazaniem do Multiinfo. */
+export const PENDING_STATUSES: ReadonlySet<PackageStatus> = new Set(['scheduled', 'overdue']);
 export type ReportStatus = 'none' | 'pending' | 'ready' | 'failed';
 
 export interface PackageRow {
@@ -24,6 +26,10 @@ export interface PackageRow {
   requestHash: string | null;
   /** Kampania skracacza; tylko rozsyłki z co najmniej jednym krótkim linkiem. */
   campaignId: number | null;
+  /** 1 dla nadpisu podanego jawnie, 0 dla nadpisu domyślnego klucza albo konta. */
+  origExplicit: 0 | 1;
+  /** Wysyłka z pliku, której częścią jest rozsyłka; `null` dla pozostałych rozsyłek. */
+  fileSendId: string | null;
 }
 
 export interface PackageInput {
@@ -31,22 +37,31 @@ export interface PackageInput {
   defaultText: string | null; orig: string | null; costCenter: string | null; startAt: string | null;
   deliveryReport: 0 | 1; encoding: 'gsm' | 'ucs2'; multipart: 0 | 1; createdAt: string;
   integrationId?: number | null; requestedBy?: string | null; idempotencyKey?: string | null; requestHash?: string | null;
-  campaignId?: number | null; agentConnectionId?: number | null;
+  campaignId?: number | null; agentConnectionId?: number | null; origExplicit?: 0 | 1; fileSendId?: string | null;
+  /** Stan początkowy: `scheduled` dla rozsyłki z terminem, domyślnie `queued`. */
+  status?: PackageStatus;
 }
 
 export interface RecipientInput {
   dest: string; text: string | null; clientId: string | null;
   /** Liczba krótkich kodów w treści odbiorcy; pominięcie oznacza 0. */
   links?: number;
+  /** Numer wiersza w pliku wysyłki z pliku; pominięcie oznacza odbiorcę spoza pliku. */
+  fileLine?: number | null;
 }
 
 export interface RecipientRow extends RecipientInput {
   links: number;
+  fileLine: number | null;
   seq: number; miId: string | null; miStatus: number | null;
   status: GatewayStatus | null; statusChangedAt: string | null;
 }
 
-export interface PackageFilter { apiKeyId?: number; limit: number; offset: number }
+export interface PackageFilter {
+  apiKeyId?: number; statuses?: PackageStatus[]; limit: number; offset: number;
+  /** Oprócz stanów z `statuses` rozsyłki przekazane do Multiinfo (`open`) z terminem po tej chwili. */
+  openStartingAfter?: string;
+}
 
 export interface ReportPatch {
   status: ReportStatus; reportId?: string | null; expiresAt?: string | null; path?: string | null;
@@ -61,11 +76,12 @@ interface Raw {
   report_status: ReportStatus; report_id: string | null; report_expires_at: string | null; report_path: string | null;
   created_at: string; completed_at: string | null; integration_id: number | null; requested_by: string | null;
   idempotency_key: string | null; request_hash: string | null; campaign_id: number | null; agent_connection_id: number | null;
+  orig_explicit: 0 | 1; file_send_id: string | null;
 }
 
 interface RawRecipient {
   seq: number; dest: string; text: string | null; client_id: string | null; mi_id: string | null;
-  mi_status: number | null; status: GatewayStatus | null; status_changed_at: string | null; links: number;
+  mi_status: number | null; status: GatewayStatus | null; status_changed_at: string | null; links: number; file_line: number | null;
 }
 
 function toRow(r: Raw): PackageRow {
@@ -78,13 +94,14 @@ function toRow(r: Raw): PackageRow {
     reportStatus: r.report_status, reportId: r.report_id, reportExpiresAt: r.report_expires_at,
     reportPath: r.report_path, createdAt: r.created_at, completedAt: r.completed_at,
     integrationId: r.integration_id, requestedBy: r.requested_by, agentConnectionId: r.agent_connection_id,
-    idempotencyKey: r.idempotency_key, requestHash: r.request_hash, campaignId: r.campaign_id,
+    idempotencyKey: r.idempotency_key, requestHash: r.request_hash, campaignId: r.campaign_id, origExplicit: r.orig_explicit,
+    fileSendId: r.file_send_id,
   };
 }
 
 const toRecipient = (r: RawRecipient): RecipientRow => ({
   seq: r.seq, dest: r.dest, text: r.text, clientId: r.client_id, miId: r.mi_id,
-  miStatus: r.mi_status, status: r.status, statusChangedAt: r.status_changed_at, links: r.links,
+  miStatus: r.mi_status, status: r.status, statusChangedAt: r.status_changed_at, links: r.links, fileLine: r.file_line,
 });
 
 /** Statusy odbiorcy liczone w podsumowaniu jako nieudane. */
@@ -122,15 +139,16 @@ export class PackagesRepo {
       this.db.prepare(
         `INSERT INTO packages (id, api_key_id, account_id, service_id, default_text, orig, cost_center, start_at,
            delivery_report, encoding, multipart, recipients_count, created_at, integration_id, requested_by,
-           idempotency_key, request_hash, campaign_id, agent_connection_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           idempotency_key, request_hash, campaign_id, agent_connection_id, status, orig_explicit, file_send_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(input.id, input.apiKeyId, input.accountId, input.serviceId, input.defaultText, input.orig,
         input.costCenter, input.startAt, input.deliveryReport, input.encoding, input.multipart,
         recipients.length, input.createdAt, input.integrationId ?? null, input.requestedBy ?? null,
-        input.idempotencyKey ?? null, input.requestHash ?? null, input.campaignId ?? null, input.agentConnectionId ?? null);
+        input.idempotencyKey ?? null, input.requestHash ?? null, input.campaignId ?? null, input.agentConnectionId ?? null,
+        input.status ?? 'queued', input.origExplicit ?? 0, input.fileSendId ?? null);
       const add = this.db.prepare(
-        'INSERT INTO package_recipients (package_id, seq, dest, text, client_id, links) VALUES (?, ?, ?, ?, ?, ?)');
-      recipients.forEach((r, i) => add.run(input.id, i + 1, r.dest, r.text, r.clientId, r.links ?? 0));
+        'INSERT INTO package_recipients (package_id, seq, dest, text, client_id, links, file_line) VALUES (?, ?, ?, ?, ?, ?, ?)');
+      recipients.forEach((r, i) => add.run(input.id, i + 1, r.dest, r.text, r.clientId, r.links ?? 0, r.fileLine ?? null));
     });
     create();
   }
@@ -140,13 +158,103 @@ export class PackagesRepo {
     return row ? toRow(row) : undefined;
   }
 
+  /** Rozsyłki wysyłki z pliku w kolejności utworzenia, czyli w kolejności pierwszych odbiorców w pliku. */
+  listByFileSend(fileSendId: string): PackageRow[] {
+    return (this.db.prepare('SELECT * FROM packages WHERE file_send_id = ? ORDER BY rowid').all(fileSendId) as Raw[]).map(toRow);
+  }
+
+  /** Pusta lista stanów oznacza wszystkie stany. */
   list(filter: PackageFilter): PackageRow[] {
-    const where = filter.apiKeyId === undefined ? '' : ' WHERE api_key_id = ?';
-    const params: number[] = filter.apiKeyId === undefined ? [] : [filter.apiKeyId];
+    const conditions: string[] = [];
+    const params: Array<number | string> = [];
+    if (filter.apiKeyId !== undefined) {
+      conditions.push('api_key_id = ?');
+      params.push(filter.apiKeyId);
+    }
+    if (filter.statuses !== undefined && filter.statuses.length > 0) {
+      const inStatuses = `status IN (${filter.statuses.map(() => '?').join(', ')})`;
+      params.push(...filter.statuses);
+      if (filter.openStartingAfter === undefined) conditions.push(inStatuses);
+      else {
+        conditions.push(`(${inStatuses} OR (status = 'open' AND start_at > ?))`);
+        params.push(filter.openStartingAfter);
+      }
+    }
+    const where = conditions.length === 0 ? '' : ` WHERE ${conditions.join(' AND ')}`;
     const rows = this.db
       .prepare(`SELECT * FROM packages${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`)
       .all(...params, filter.limit, filter.offset) as Raw[];
     return rows.map(toRow);
+  }
+
+  countByStatus(status: PackageStatus): number {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM packages WHERE status = ?').get(status) as { n: number }).n;
+  }
+
+  /**
+   * Zaplanowane i spóźnione rozsyłki integracji, na przykład przed jej usunięciem. Rozsyłka agenta do grupy ma
+   * w `integration_id` grupę, dlatego integrację agenta obejmują także rozsyłki zlecone przez jej połączenia.
+   */
+  pendingOfIntegration(integrationId: number): PackageRow[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM packages
+        WHERE (integration_id = ? OR agent_connection_id IN (SELECT id FROM agent_connections WHERE integration_id = ?))
+          AND status IN ('scheduled', 'overdue') ORDER BY start_at, id`)
+      .all(integrationId, integrationId) as Raw[];
+    return rows.map(toRow);
+  }
+
+  /** Czy kampania obejmuje rozsyłkę wysyłki z pliku, której numery i adresy linków pochodzą z pliku pracownika. */
+  campaignHasFileSend(campaignId: number): boolean {
+    return this.db.prepare('SELECT 1 FROM packages WHERE campaign_id = ? AND file_send_id IS NOT NULL LIMIT 1').get(campaignId) !== undefined;
+  }
+
+  /** Integracja agenta, którego połączenie zleciło rozsyłkę; `null` dla rozsyłki spoza agenta albo po usunięciu połączenia. */
+  agentIntegrationOf(id: string): number | null {
+    const row = this.db
+      .prepare('SELECT c.integration_id AS integrationId FROM packages p JOIN agent_connections c ON c.id = p.agent_connection_id WHERE p.id = ?')
+      .get(id) as { integrationId: number } | undefined;
+    return row?.integrationId ?? null;
+  }
+
+  /*
+   * Przejścia rozsyłki przechowywanej przez bramkę. Każde zmienia stan wyłącznie z oczekiwanego stanu
+   * i zwraca, czy się powiodło, dlatego anulowanie i przekazanie w tej samej chwili nie mogą powieść się oba.
+   */
+
+  /** `scheduled → queued` tuż przed żądaniem `package.aspx`. */
+  beginHandover(id: string): boolean {
+    return this.db.prepare("UPDATE packages SET status = 'queued' WHERE id = ? AND status = 'scheduled'").run(id).changes === 1;
+  }
+
+  /**
+   * `queued → scheduled`, gdy żądanie przekazania nie dotarło do Multiinfo. Wraca wyłącznie rozsyłka z terminem,
+   * a rozsyłka z identyfikatorem Multiinfo nie wraca nigdy.
+   */
+  returnToScheduled(id: string): boolean {
+    return this.db
+      .prepare("UPDATE packages SET status = 'scheduled' WHERE id = ? AND status = 'queued' AND start_at IS NOT NULL AND mi_package_id IS NULL")
+      .run(id).changes === 1;
+  }
+
+  /** `scheduled → overdue` dla rozsyłek z terminem wcześniejszym niż `startedBefore`; zwraca przeniesione rozsyłki. */
+  markOverdue(startedBefore: Date): PackageRow[] {
+    const rows = this.db
+      .prepare("UPDATE packages SET status = 'overdue' WHERE status = 'scheduled' AND start_at < ? RETURNING *")
+      .all(startedBefore.toISOString()) as Raw[];
+    return rows.map(toRow).sort((a, b) => (a.startAt ?? '').localeCompare(b.startAt ?? '') || a.id.localeCompare(b.id));
+  }
+
+  /** `scheduled|overdue → cancelled` z chwilą zakończenia i powodem w polu `error`. */
+  cancelPending(id: string, at: Date, reason: string | null): boolean {
+    return this.db
+      .prepare("UPDATE packages SET status = 'cancelled', completed_at = ?, error = ? WHERE id = ? AND status IN ('scheduled', 'overdue')")
+      .run(at.toISOString(), reason, id).changes === 1;
+  }
+
+  /** `overdue → queued` po decyzji administratora „Wyślij teraz”. */
+  sendNow(id: string): boolean {
+    return this.db.prepare("UPDATE packages SET status = 'queued' WHERE id = ? AND status = 'overdue'").run(id).changes === 1;
   }
 
   recipients(id: string, limit = 100_000, offset = 0): RecipientRow[] {

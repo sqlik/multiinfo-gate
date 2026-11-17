@@ -4,6 +4,7 @@ import type { CertificateView } from '../../src/multiinfo/client.ts';
 import { authenticator } from 'otplib';
 import { buildAdminServer } from '../../src/admin/server.ts';
 import { SessionStore, hashPassword } from '../../src/admin/session.ts';
+import { FileSendsRepo } from '../../src/store/file-sends.ts';
 import { openDatabase } from '../../src/store/db.ts';
 import { AccountsRepo } from '../../src/store/accounts.ts';
 import { ApiKeysRepo } from '../../src/store/api-keys.ts';
@@ -196,7 +197,7 @@ export async function startAdminHarness(
   };
   const app = buildAdminServer({
     accounts, apiKeys, messages, events, jobs, users, audit, deliveries, packages, inbound, inboundServices, integrations, receiver,
-    integrationEvents, guards, agentConnections, connectionService, mailIn, mailboxConnect: fakeConnect(mailbox), engine: new TemplateEngine(), notifications, settings, notifier,
+    integrationEvents, guards, agentConnections, fileSends: new FileSendsRepo(db), connectionService, mailIn, mailboxConnect: fakeConnect(mailbox), engine: new TemplateEngine(), notifications, settings, notifier,
     m365, m365Accounts, m365Tokens, ...links, domainChecks,
     domainFetch: ((input, init) => domainNet.fetch(input, init)) as typeof fetch,
     mailer: async (settings, mail) => { mailSettings.push(settings); if (harness.mailError) throw harness.mailError; mails.push(mail); },

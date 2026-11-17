@@ -7,8 +7,8 @@ import { GATE_VERSION } from '../../version.ts';
 import { APP_MIME } from '../apps.ts';
 import { VIEW_STYLE } from './style.ts';
 
-/** Widoki MCP Apps bramki. Zadanie 15 dopisuje dokumenty widoków kampanii, rozsyłki i odpowiedzi. */
-export type ViewId = 'wysylka' | 'grupa' | 'przebieg' | 'co-moge' | 'kampania' | 'rozsylka' | 'odpowiedzi';
+/** Widoki MCP Apps bramki. */
+export type ViewId = 'wysylka' | 'grupa' | 'przebieg' | 'co-moge' | 'kampania' | 'rozsylka' | 'odpowiedzi' | 'plik' | 'rozmowa';
 
 export const viewUri = (id: ViewId): string => `ui://multiinfo-gate/${id}`;
 
@@ -24,7 +24,7 @@ interface ViewDef {
 }
 
 const REFRESH = '<button type="button" id="odswiez" class="btn">Odśwież</button>';
-const NOTICE = '<div class="foot"><p id="komunikat" class="notice" role="status" hidden></p></div>';
+const NOTICE = '<div class="foot"><div id="komunikat" class="notice" role="status" hidden></div></div>';
 const waiting = (text: string) => `<main id="tresc" class="body"><p class="muted">${text}</p></main>${NOTICE}`;
 
 const VIEWS: Partial<Record<ViewId, ViewDef>> = {
@@ -50,6 +50,14 @@ const VIEWS: Partial<Record<ViewId, ViewDef>> = {
   },
   odpowiedzi: {
     title: 'Odpowiedzi klientów', files: ['measure.js', 'odpowiedzi.js'], entry: 'startReplies', tools: REFRESH, body: waiting('Oczekiwanie na odebrane SMS-y z bramki'),
+  },
+  plik: {
+    title: 'Rozsyłka z pliku', files: ['measure.js', 'chart.js', 'doreczenia.js', 'send.js', 'plik-csv.js', 'plik-xlsx.js', 'plik-tabela.js', 'plik.js'],
+    entry: 'startFile', tools: '<span id="na-zywo" class="live" role="status"></span>', body: waiting('Oczekiwanie na widok rozsyłki z pliku'),
+  },
+  rozmowa: {
+    title: 'Rozmowa z numerem', files: ['rozmowa.js'], entry: 'startConversation',
+    tools: `<span id="na-zywo" class="live" role="status"></span>${REFRESH}`, body: waiting('Oczekiwanie na rozmowę z bramki'),
   },
 };
 

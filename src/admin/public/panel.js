@@ -1,7 +1,8 @@
 // Jedyny JavaScript panelu: zamykanie paska komunikatu (x, Esc), okno potwierdzenia
-// dla formularzy z data-confirm i przycisk kopiowania (data-copy). Bez tego pliku pasek
-// zostaje do następnego przejścia, formularz wysyła się bez pytania, a adres trzeba
-// zaznaczyć ręcznie - panel działa, tylko mniej wygodnie.
+// dla formularzy z data-confirm (napisy przycisków z data-confirm-ok i data-confirm-cancel)
+// i przycisk kopiowania (data-copy). Bez tego pliku pasek zostaje do następnego przejścia,
+// formularz wysyła się bez pytania, a adres trzeba zaznaczyć ręcznie - panel działa,
+// tylko mniej wygodnie.
 (function () {
   var flash = document.querySelector('.flash');
   var closeFlash = function () { if (flash) { flash.remove(); flash = null; } };
@@ -28,7 +29,7 @@
     var cancel = document.createElement('button');
     cancel.type = 'button';
     cancel.className = 'btn btn-s';
-    cancel.textContent = 'Anuluj';
+    cancel.textContent = form.getAttribute('data-confirm-cancel') || 'Anuluj';
     var ok = document.createElement('button');
     ok.type = 'button';
     ok.className = 'btn btn-p';

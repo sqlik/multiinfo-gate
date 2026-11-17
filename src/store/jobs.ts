@@ -111,6 +111,13 @@ export class JobsRepo {
       .run(iso(runAt), reason, id);
   }
 
+  /** Usuwa zadania tego rodzaju dla rozsyłki, na przykład przekazanie anulowanej rozsyłki; zwraca liczbę usuniętych. */
+  removeFor(type: JobType, packageId: string): number {
+    return this.db
+      .prepare("DELETE FROM jobs WHERE type = ? AND json_extract(payload, '$.packageId') = ?")
+      .run(type, packageId).changes;
+  }
+
   /** Kończy zadanie niepowodzeniem bez dalszych prób. */
   fail(id: number, error: string): void {
     this.db.prepare('UPDATE jobs SET last_error = ? WHERE id = ?').run(error, id);

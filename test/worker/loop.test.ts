@@ -102,9 +102,38 @@ describe('Worker.tick - tura utrzymaniowa', () => {
     expect(pruneBefore).toHaveBeenCalledWith(new Date(clock.getTime() - 86_400_000));
   });
 
+  it('tura utrzymaniowa wykonuje krok spoznione co minutę, a błąd kroku nie zatrzymuje pozostałych', async () => {
+    const accountId = deps.accounts.list()[0]!.id;
+    deps.packages.insert({
+      id: 'pkg_po_terminie', apiKeyId, accountId, serviceId: '24138', defaultText: 'Przegląd floty', orig: null, costCenter: null,
+      startAt: new Date(clock.getTime() - 61 * 60_000).toISOString(), deliveryReport: 1, encoding: 'gsm', multipart: 0,
+      createdAt: new Date(clock.getTime() - 2 * 3600_000).toISOString(), status: 'scheduled',
+    }, [{ dest: '48601000011', text: null, clientId: null }]);
+    const notify = vi.fn();
+    const prune = vi.fn(() => ({ codes: 0, tokens: 0, clients: 0 }));
+    const error = vi.fn();
+    const worker = new Worker({ ...deps, notifier: { notify }, oauth: { prune }, log: { error, warn: vi.fn(), info: vi.fn(), debug: vi.fn() } },
+      { now: () => clock, maintenanceMs: 60_000 });
+    await worker.tick();
+    expect(deps.packages.get('pkg_po_terminie')!.status).toBe('overdue');
+    expect(notify).toHaveBeenCalledWith('package_overdue', 'package:pkg_po_terminie', expect.any(String), clock);
+    vi.spyOn(deps.packages, 'markOverdue').mockImplementation(() => { throw new Error('baza zajęta'); });
+    clock = new Date(clock.getTime() + 60_000);
+    await worker.tick();
+    expect(error).toHaveBeenCalledWith('worker.utrzymanie_blad', expect.objectContaining({ step: 'spoznione' }));
+    expect(prune).toHaveBeenCalledTimes(2);
+  });
+
   it('krok pobrania usuwa linki do pobrania po terminie', async () => {
     const pruneBefore = vi.fn(() => 0);
     const worker = new Worker({ ...deps, downloads: { pruneBefore } }, { now: () => clock, maintenanceMs: 60_000 });
+    await worker.tick();
+    expect(pruneBefore).toHaveBeenCalledWith(clock);
+  });
+
+  it('krok pliki usuwa szkice plików agentów po terminie', async () => {
+    const pruneBefore = vi.fn(() => 0);
+    const worker = new Worker({ ...deps, files: { pruneBefore } }, { now: () => clock, maintenanceMs: 60_000 });
     await worker.tick();
     expect(pruneBefore).toHaveBeenCalledWith(clock);
   });

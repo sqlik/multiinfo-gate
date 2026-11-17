@@ -2,8 +2,8 @@
 // podsumowanie z ochroną przed burzą i zatwierdzenie. Zmiana ustawienia tworzy nowy szkic, a „Wyślij” woła
 // send_prepared z kluczem potwierdzenia z _meta. Po wysyłce widok sam odświeża stan doręczeń.
 import {
-  applyTheme, button, buttons, cancelledText, createBridge, esc, field, fields, forwardedText, messageBox, note, numbers, plural, sayIn, section,
-  smsCounter, stamp, textOf, tile, tiles, txt,
+  applyTheme, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, failure, field, fields, forwardedText, messageBox, note, num,
+  numbers, plural, sayIn, section, smsCounter, stamp, textOf, tile, tiles, txt, wideField,
 } from './bridge.js';
 import { deliveryLine, deliveryTile, NO_READ_SENT, watchDeliveries } from './doreczenia.js';
 import { latinText, measure } from './measure.js';
@@ -17,7 +17,7 @@ export const APPROVAL_TEXT = 'Wysyłkę zatwierdza człowiek w tym widoku. Agent
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const disabled = (off) => (off ? ' disabled' : '');
-const option = (value, label, selected) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(label)}</option>`;
+export const option = (value, label, selected) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(label)}</option>`;
 const sms = (n) => plural(n, 'SMS', 'SMS-y', 'SMS-ów');
 const parts = (n) => plural(n, 'część', 'części', 'części');
 /** Godzina w czasie polskim: GG:MM. */
@@ -38,11 +38,38 @@ export function linkMarkup(text, preview) {
   return out + esc(text.slice(at));
 }
 
-/** Kafel ochrony przed burzą: ile odbiorców zostało w oknie, a bez limitu odbiorców „bez limitu”. */
-export const recipientsLeftTile = (guard, sub) => tile('Zostało odbiorców', guard.recipients === null ? 'bez limitu' : guard.recipients, sub);
+/** Wiersz terminu w ustawieniach wysyłki i wysyłki do grupy. */
+export const scheduleField = (schedule) => wideField('Termin', txt(stamp(schedule.startAt)), CANCEL_WINDOW);
+
+/** Kafel po zaplanowaniu: godzina terminu, a w podpisie dzień i chwila, do której można anulować; po anulowaniu stan rozsyłki. */
+export const scheduledTile = (schedule, cancelled) => (cancelled ? tile('Rozsyłka', 'anulowana', 'przed przekazaniem do Multiinfo')
+  : tile('Zaplanowana na', clock(schedule.startAt), `${stamp(schedule.startAt).slice(0, 10)}, anulowanie do ${clock(schedule.handoverAt)}`));
+
+/** Sekcja po zaplanowaniu rozsyłki: termin i przycisk anulowania, który działa do chwili przekazania do Multiinfo. */
+export function scheduledSection(sent, state) {
+  const repeated = sent.repeated ? note(REPEATED_NOTE) : '';
+  if (state.cancelled) return section('Wysyłka', `<div class="sent">Rozsyłka <span class="mono">${esc(sent.id)}</span> została anulowana</div>${repeated}`);
+  return section('Wysyłka', `<div class="sent">Zaplanowano rozsyłkę <span class="mono">${esc(sent.id)}</span> do `
+    + `${plural(sent.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')} na ${esc(stamp(sent.schedule.startAt))}</div>`
+    + buttons(button('Anuluj rozsyłkę', { act: 'cancel-package', kind: 'danger', disabled: state.busy === true })) + repeated);
+}
+
+/**
+ * Anulowanie zaplanowanej rozsyłki z widoku wysyłki albo grupy; `s.cancelled` po skutecznym anulowaniu. Anulowanie
+ * pokazuje sekcja „Wysyłka”, dlatego komunikat zostaje pusty i nie powtarza wyniku narzędzia.
+ */
+export async function cancelScheduled(bridge, say, s) {
+  const result = await bridge.callTool('cancel_package', { id: s.sent.id });
+  if (result.isError) return say('fail', textOf(result));
+  s.cancelled = true;
+  return say('plain', '');
+}
+
+/** Kafel ochrony przed burzą: ile odbiorców zostało w oknie z odstępem tysięcy, a bez limitu odbiorców „bez limitu”. */
+export const recipientsLeftTile = (guard, sub) => tile('Zostało odbiorców', guard.recipients === null ? 'bez limitu' : num(guard.recipients), sub);
 
 /** Lista wyboru: zawsze lista, także z jedną pozycją; po wysyłce wyłączona. */
-const select = (name, options, locked) => `<select class="sel" name="${name}"${disabled(locked)}>${options.join('')}</select>`;
+export const select = (name, options, locked) => `<select class="sel" name="${name}"${disabled(locked)}>${options.join('')}</select>`;
 
 /** Przełącznik z równymi polami; `items` to [etykieta, atrybuty data-*, włączony]. */
 const segment = (items, locked) => `<div class="seg2">${items.map(([label, attrs, on]) => `<button type="button"${on ? ' class="on"' : ''} ${attrs}`
@@ -81,6 +108,7 @@ function settings(p, locked) {
     field('Nadawca', select('orig', p.senders.map((s) => option(s.value ?? '', s.label, s.value === p.orig)), locked),
       p.orig === null ? 'Integracja, klucz i konto nie określają nadpisu domyślnego, dlatego SMS zostanie wysłany z numeru usługi, a odbiorca będzie mógł odpowiedzieć' : ''),
     field('Usługa Multiinfo', select('service', services.map((s) => option(s.id, service(s), s.id === p.serviceId)), locked)),
+    p.schedule ? scheduleField(p.schedule) : '',
     encodingField(p, locked),
     ...linkFields(p, locked),
   ));
@@ -122,7 +150,8 @@ export function renderSend(p, state = {}) {
     + (p.truncated ? note('Treść została skrócona do limitu części integracji') : '')
     + (p.links?.shortened > 0 ? `<p class="note"><span class="slot">${PLACEHOLDER}</span> oznacza kod zastępczy. Każdy odbiorca otrzyma przy wysyłce link z własnym kodem.</p>` : '')
     + (p.links?.notice ? note(p.links.notice) : ''));
-  const route = p.route === 'messages' ? 'Pojedyncze wiadomości z raportem doręczenia każdej' : 'Rozsyłka ze wspólną treścią, raport doręczeń po zakończeniu rozsyłki';
+  const route = p.route === 'messages' ? 'Pojedyncze wiadomości z raportem doręczenia każdej'
+    : `${p.schedule ? 'Rozsyłka z terminem' : 'Rozsyłka ze wspólną treścią'}, raport doręczeń po zakończeniu rozsyłki`;
   const recipients = section(`Odbiorcy: ${plural(p.recipients, 'numer', 'numery', 'numerów')}`,
     numbers((state.recipients ?? []).map((r) => ({ phone: r.phone, label: r.clientId })))
     + (p.duplicatesRemoved > 0 ? note(`Bramka usunęła powtórzone numery: ${p.duplicatesRemoved}`) : ''), route);
@@ -131,26 +160,26 @@ export function renderSend(p, state = {}) {
     tile('Części SMS razem', p.recipients * p.parts, `${p.recipients} × ${parts(p.parts)}`),
     tile('Zostało wysyłek', p.guard.calls, 'w oknie ochrony'),
     recipientsLeftTile(p.guard, 'w oknie ochrony'),
-    sent ? deliveryTile(sent.ids?.length ?? 0, sent.kind === 'messages' ? state.deliveries : null, accepted)
+    sent?.schedule ? scheduledTile(sent.schedule, state.cancelled === true)
+      : sent ? deliveryTile(sent.ids?.length ?? 0, sent.kind === 'messages' ? state.deliveries : null, accepted)
       : tile('Podgląd ważny do', clock(p.expiresAt), 'potem nowy podgląd'),
   ) + note(p.guard.resetsAt ? `Okno ochrony przed burzą kończy się o ${clock(p.guard.resetsAt)}` : 'Okno ochrony przed burzą otworzy się przy pierwszej wysyłce'));
-  const label = p.route === 'package' ? `Wyślij rozsyłkę do ${plural(p.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}` : `Wyślij ${sms(p.recipients)}`;
+  const label = p.schedule ? `Zaplanuj rozsyłkę do ${plural(p.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}`
+    : p.route === 'package' ? `Wyślij rozsyłkę do ${plural(p.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}` : `Wyślij ${sms(p.recipients)}`;
   const busy = state.sending === true || state.busy === true;
-  const finish = sent ? sentSection(sent, state)
+  const finish = sent?.schedule ? scheduledSection(sent, state) : sent ? sentSection(sent, state)
     : section('Zatwierdzenie', `<p class="say">${APPROVAL_TEXT}</p>`
       + buttons(button(state.sending ? 'Wysyłanie…' : label, { act: 'send', kind: 'primary', disabled: busy }),
         button('Popraw treść w rozmowie', { act: 'fix', disabled: busy })));
   return content + settings(p, locked) + recipients + summary + finish;
 }
 
-const errorText = (error) => (error instanceof Error ? error.message : String(error));
-
 /**
  * Panel wysyłki w elemencie `root`: przyjmuje wynik prepare_sms z danymi wejściowymi, tworzy nowe szkice po
  * zmianie ustawień, wysyła i odświeża doręczenia. Zwraca `show(result, input)`.
  */
 export function mountSend(root, { bridge, say, win }) {
-  const s = { input: null, preview: null, recipients: [], confirm: null, busy: false, sending: false, sent: null, deliveries: null, progress: null };
+  const s = { input: null, preview: null, recipients: [], confirm: null, busy: false, sending: false, sent: null, deliveries: null, progress: null, cancelled: false };
   const draw = () => {
     if (s.preview) root.innerHTML = renderSend(s.preview, { ...s, editable: s.input !== null });
   };
@@ -161,7 +190,7 @@ export function mountSend(root, { bridge, say, win }) {
     try {
       await task();
     } catch (error) {
-      say('fail', errorText(error));
+      say('fail', ...failure(error));
     } finally {
       s.busy = false;
       s.sending = false;
@@ -178,7 +207,7 @@ export function mountSend(root, { bridge, say, win }) {
     }
     Object.assign(s, {
       preview: result.structuredContent, recipients: result._meta?.recipients ?? [], confirm: result._meta?.confirm ?? null,
-      sent: null, deliveries: null, progress: null,
+      sent: null, deliveries: null, progress: null, cancelled: false,
     });
     say('plain', '');
     draw();
@@ -224,6 +253,7 @@ export function mountSend(root, { bridge, say, win }) {
     if (act === 'send') send();
     else if (act === 'fix') fix();
     else if (act === 'progress') progress();
+    else if (act === 'cancel-package') run(() => cancelScheduled(bridge, say, s));
     else if (act === 'encoding' && !button.classList.contains('on')) prepare({ encoding: button.dataset.enc });
     else if (act === 'shorten' && !button.classList.contains('on')) prepare({ shortenLinks: button.dataset.on === '1' });
   });

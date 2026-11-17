@@ -21,6 +21,9 @@ export function stamp(iso) {
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
+/** Okno anulowania rozsyłki z terminem, jak w panelu, API i konektorze. */
+export const CANCEL_WINDOW = 'Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem';
+
 /** Liczba z odstępem tysięcy, jak w panelu kampanii: 1 240. */
 export const num = (n) => Number(n).toLocaleString('pl-PL', { useGrouping: 'always' });
 
@@ -51,7 +54,15 @@ export const section = (title, body, lead = '') => `<section class="sec"><h3>${e
   + `${lead ? `<p class="lead">${esc(lead)}</p>` : ''}${body}</section>`;
 
 /** Pole albo informacja: etykieta nad wartością i opcjonalna podpowiedź pod nią. `control` jest gotowym HTML. */
-export const field = (label, control, hint = '') => `<div class="field"><span class="lbl">${esc(label)}</span>${control}${hint ? note(hint) : ''}</div>`;
+export const field = (label, control, hint = '', wide = false) =>
+  `<div class="field${wide ? ' wide' : ''}"><span class="lbl">${esc(label)}</span>${named(label, control)}${hint ? note(hint) : ''}</div>`;
+
+/** Lista albo pole z etykietą pola jako nazwą dostępną, dzięki czemu czytnik ekranu ogłasza nazwę pola. */
+const named = (label, control) => String(control)
+  .replace(/^<(select|input)( class="[^"]*")?(?![^>]*\baria-label=)/, (_, tag, cls = '') => `<${tag}${cls} aria-label="${esc(label)}"`);
+
+/** Pole w osobnym wierszu na całą szerokość siatki: wartość z podpowiedzią obok pary list wyglądałaby nierówno. */
+export const wideField = (label, control, hint = '') => field(label, control, hint, true);
 
 /** Pola i informacje w dwóch równych kolumnach; puste pozycje są pomijane. */
 export const fields = (...items) => `<div class="fields">${items.filter(Boolean).join('')}</div>`;
@@ -62,6 +73,18 @@ export const txt = (value) => `<div class="txt">${esc(value)}</div>`;
 /** Kafel podsumowania: etykieta, wartość i opis jako tekst; `tone` 'ok' wyróżnia stan pomyślny. */
 export const tile = (label, value, sub, tone = '') => `<div class="tile${tone ? ` ${tone}` : ''}"><div class="lbl">${esc(label)}</div>`
   + `<div class="v">${esc(value)}</div><div class="s">${esc(sub)}</div></div>`;
+
+/**
+ * Udział w procentach z jednym miejscem po przecinku. Wartość niezerowa nie zaokrągla się do „0,0 %”, a niepełna do
+ * „100,0 %”, dlatego 3 niedoręczone z 9899 nie znikają w kafelku.
+ */
+export function share(part, whole) {
+  if (whole === 0) return '-';
+  const value = (part / whole) * 100;
+  if (part > 0 && value < 0.05) return 'poniżej 0,1 %';
+  if (part < whole && value >= 99.95) return 'ponad 99,9 %';
+  return `${value.toFixed(1).replace('.', ',')} %`;
+}
 
 /** Cztery równe kafle w rzędzie, w wąskiej ramce dwa. */
 export const tiles = (...items) => `<div class="tiles">${items.join('')}</div>`;
@@ -104,14 +127,55 @@ export const messageBox = ({ sender, counter, body }) => '<div class="msg"><div 
   + `<span>${sender ? `Nadawca na telefonie: <b>${esc(sender)}</b>` : ''}</span><span>${counter}</span></div>`
   + `<div class="msg-text">${body}</div></div>`;
 
+/**
+ * Komunikat po błędzie aplikacji AI przy wywołaniu narzędzia bramki, na przykład po odpowiedzi 502, gdy bramka jest
+ * chwilowo niedostępna. Oryginalny tekst aplikacji, zwykle angielski, widok pokazuje w rozwijanych szczegółach.
+ */
+export const HOST_TOOL_ERROR = 'Aplikacja AI zgłosiła błąd połączenia z bramką. Spróbuj ponownie za kilka minut, '
+  + 'a gdy błąd się powtarza, zwróć się do administratora bramki.';
+/** Komunikat po błędzie aplikacji AI przy innym żądaniu widoku niż wywołanie narzędzia. */
+export const HOST_ERROR = 'Aplikacja AI zgłosiła błąd i nie wykonała prośby widoku';
+
+/**
+ * Błąd aplikacji AI z odpowiedzi JSON-RPC: polski komunikat i tekst aplikacji w `detail`. Błąd przy wywołaniu
+ * narzędzia jest błędem połączenia z bramką, dlatego odświeżanie na żywo ponawia odczyt (`retryable`).
+ */
+export function hostError(method, raw) {
+  const error = new Error(method === 'tools/call' ? HOST_TOOL_ERROR : HOST_ERROR);
+  error.detail = typeof raw === 'string' ? raw : '';
+  error.retryable = method === 'tools/call';
+  return error;
+}
+
+/** Błąd połączenia, po którym odświeżanie na żywo ponawia odczyt, na przykład 502 przy restarcie bramki. */
+export const retryable = (error) => error instanceof Error && error.retryable === true;
+
+/** Komunikat odświeżania po błędzie połączenia, z odstępem do kolejnego odczytu. */
+export const retryText = (ms) => `Aplikacja AI zgłosiła błąd połączenia z bramką. Widok ponowi odczyt za ${ms / 1000} s.`;
+
+/** Odmowa limitu żądań klucza w wyniku narzędzia: czas oczekiwania w ms według retryAfterSec, a w przeciwnym razie null. */
+export const rateLimitWait = (result) => (result?.isError === true && result.structuredContent?.error === 'rate_limited'
+  ? Math.max(1, Number(result.structuredContent.retryAfterSec) || 60) * 1000 : null);
+
+/** Komunikat przy odświeżaniu wstrzymanym przez limit żądań klucza; odświeżanie widoku liczy się do tego limitu. */
+export const rateLimitText = (ms) => `Bramka wstrzymała odświeżanie z powodu limitu żądań klucza. Widok wznowi je za ${Math.round(ms / 1000)} s.`;
+
+/** Tekst i szczegóły błędu do komunikatu: `say('fail', ...failure(error))`. */
+export const failure = (error) => (error instanceof Error ? [error.message, typeof error.detail === 'string' ? error.detail : ''] : [String(error), '']);
+
+/** Komunikat w elemencie: tekst, a przy błędzie aplikacji AI także jej oryginalny tekst w rozwijanych szczegółach. */
+export function showNotice(notice, tone, text, detail = '') {
+  notice.hidden = !text;
+  notice.className = `notice n-${tone}`;
+  if (text && detail) {
+    notice.innerHTML = `${esc(text)}<details class="why"><summary>Szczegóły błędu</summary><div class="mono">${esc(detail)}</div></details>`;
+  } else notice.textContent = text;
+}
+
 /** Komunikat pod widokiem w elemencie #komunikat; pusty tekst ukrywa komunikat. */
 export function sayIn(doc) {
   const notice = doc.getElementById('komunikat');
-  return (tone, text) => {
-    notice.hidden = !text;
-    notice.className = `notice n-${tone}`;
-    notice.textContent = text;
-  };
+  return (tone, text, detail = '') => showNotice(notice, tone, text, detail);
 }
 
 /**
@@ -159,7 +223,7 @@ export function createBridge(win, handlers = {}) {
   function request(method, params) {
     const id = nextId++;
     return new Promise((resolve, reject) => {
-      pending.set(id, { resolve, reject });
+      pending.set(id, { method, resolve, reject });
       post({ id, method, params });
     });
   }
@@ -195,8 +259,11 @@ export function createBridge(win, handlers = {}) {
     const entry = pending.get(msg.id);
     if (!entry) return;
     pending.delete(msg.id);
-    if (isObject(msg.error)) entry.reject(new Error(typeof msg.error.message === 'string' ? msg.error.message : 'Aplikacja AI zwróciła błąd.'));
-    else entry.resolve(isObject(msg.result) ? msg.result : {});
+    if (isObject(msg.error)) {
+      // Tekst błędu pochodzi od aplikacji, na przykład surowa odpowiedź 502 serwera pośredniczącego, dlatego widok
+      // pokazuje polski komunikat, a tekst aplikacji tylko w szczegółach.
+      entry.reject(hostError(entry.method, msg.error.message));
+    } else entry.resolve(isObject(msg.result) ? msg.result : {});
   });
 
   function notifySize(size) {

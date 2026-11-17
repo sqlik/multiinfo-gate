@@ -2,7 +2,8 @@
 // kliknięcia w kolejnych godzinach, cele linków, odbiorcy bez otwarcia porcjami, pliki CSV i przypomnienie.
 // Po usunięciu szczegółów kampanii zostają liczby i kliknięcia w kolejnych godzinach.
 import {
-  applyTheme, button, buttons, cancelledText, createBridge, esc, forwardedText, note, num, numbers, openDownload, sayIn, section, stamp, textOf, tile, tiles,
+  applyTheme, button, buttons, cancelledText, createBridge, esc, failure, forwardedText, note, num, numbers, openDownload, sayIn, section, share,
+  stamp, textOf, tile, tiles,
 } from './bridge.js';
 import { barChart } from './chart.js';
 
@@ -10,6 +11,13 @@ import { barChart } from './chart.js';
  * Stały tekst prośby o przypomnienie, bez nazwy kampanii: nazwę może nadać agent w prepare_sms, a ChatGPT wstawia
  * wiadomość z widoku jako wiadomość użytkownika. Agent zna kampanię z własnego wywołania campaign_results.
  */
+/** Dane kampanii dla widoku: odbiorców i cele linków kampanii z wysyłką z pliku bramka przekazuje wyłącznie w `_meta`. */
+const campaignData = (result) => {
+  const d = result.structuredContent;
+  if (d?.hiddenItems !== true) return d;
+  return { ...d, targets: result._meta?.targets ?? [], unopened: d.unopened && { ...d.unopened, items: result._meta?.unopened ?? [] } };
+};
+
 export const REMIND_MESSAGE = 'Przygotuj przypomnienie dla odbiorców bez otwarcia kampanii pokazanej w widoku wyników';
 
 /** Prośba do człowieka, gdy aplikacja AI nie przyjęła wiadomości z widoku. Nazwa kampanii zostaje w widoku. */
@@ -23,7 +31,6 @@ const HOUR_MS = 3_600_000;
 /** Najwięcej dni wykresu dziennego: ważność linków wynosi najwyżej 365 dni. */
 const CAMPAIGN_DAYS_MAX = 366;
 
-const percentOf = (part, whole) => `${((part / whole) * 100).toFixed(1).replace('.', ',')} %`;
 const dayMark = (day) => `${day.slice(8, 10)}.${day.slice(5, 7)}`;
 
 function nextDay(day) {
@@ -40,8 +47,8 @@ function campaignTiles(d) {
   const base = d.delivered > 0 ? { whole: d.delivered, of: 'doręczonych' } : { whole: d.sent, of: 'wysłanych' };
   return tiles(
     tile('Wysłane', num(d.sent), period),
-    tile('Doręczone', num(d.delivered), d.delivered === 0 ? 'brak raportu doręczeń' : `${percentOf(d.delivered, d.sent)} wysłanych`),
-    tile('Otwarcia', num(d.opens), base.whole === 0 ? '-' : `${percentOf(d.opens, base.whole)} ${base.of}`),
+    tile('Doręczone', num(d.delivered), d.delivered === 0 ? 'brak raportu doręczeń' : `${share(d.delivered, d.sent)} wysłanych`),
+    tile('Otwarcia', num(d.opens), base.whole === 0 ? '-' : `${share(d.opens, base.whole)} ${base.of}`),
     tile('Kliknięcia', num(d.clicks), d.opens === 0 ? 'brak otwarć' : `${(d.clicks / d.opens).toFixed(2).replace('.', ',')} na otwarcie`),
   );
 }
@@ -129,7 +136,7 @@ export function startCampaign(win, env) {
       root.textContent = textOf(result);
       return undefined;
     }
-    s.data = result.structuredContent;
+    s.data = campaignData(result);
     say('plain', '');
     return draw();
   };
@@ -140,7 +147,7 @@ export function startCampaign(win, env) {
     try {
       await task();
     } catch (error) {
-      say('fail', error instanceof Error ? error.message : String(error));
+      say('fail', ...failure(error));
     } finally {
       s.busy = false;
       draw();
@@ -175,7 +182,7 @@ export function startCampaign(win, env) {
         const loaded = (s.input?.offset ?? 0) + s.data.unopened.items.length;
         const result = await bridge.callTool('campaign_results', { ...query(), offset: loaded });
         if (result.isError) return say('fail', textOf(result));
-        const next = result.structuredContent;
+        const next = campaignData(result);
         s.data = { ...next, unopened: next.unopened && { ...next.unopened, items: [...s.data.unopened.items, ...next.unopened.items] } };
         return say('plain', '');
       });

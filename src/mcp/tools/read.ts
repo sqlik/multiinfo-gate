@@ -1,7 +1,9 @@
 import { statusLabel } from '../../admin/views/status-labels.ts';
 import { createDownload } from '../../agents/downloads.ts';
-import { deliveryTrace, listSent, packageStatus, type PackageStatusData, type TraceEntry } from '../../agents/reads.ts';
+import { deliveryTrace, listPackages, listSent, packageStatus, type PackageStatusData, type TraceEntry } from '../../agents/reads.ts';
+import { CANCEL_WINDOW_TEXT } from '../../api/schedule.ts';
 import { AgentError } from '../../integrations/agent.ts';
+import { FILE_SEND_PREFIX, fileReportReady, fileSendCancelled, fileSendOf } from '../../integrations/agent-file.ts';
 import { plural } from '../../text/plural.ts';
 import { warsawShort } from '../../time/warsaw.ts';
 import { z } from '../../zod.ts';
@@ -85,6 +87,12 @@ export const deliveryTraceTool: ToolDef = {
 
 function packageText(p: PackageStatusData): string {
   const lines = [`Rozsyłka ${p.id}: ${p.statusLabel}, ${plural(p.recipients, 'odbiorca', 'odbiorców', 'odbiorców')}, przyjęta ${p.created.local}, źródło: ${p.source}.`];
+  if (p.schedule !== null) lines.push(`Termin rozpoczęcia: ${p.schedule.startAt.local} czasu polskiego.`);
+  if (p.schedule?.handoverAt) lines.push(`Bramka przekaże rozsyłkę do Multiinfo ${p.schedule.handoverAt.local}. ${CANCEL_WINDOW_TEXT}.`);
+  if (p.status === 'overdue') {
+    lines.push('Bramka nie przekazała rozsyłki do Multiinfo w ciągu 60 minut od terminu. Decyzję o wysłaniu albo anulowaniu podejmuje administrator bramki.');
+  }
+  if (p.cancellable) lines.push('Rozsyłkę anuluje narzędzie cancel_package.');
   if (!p.final && p.remaining !== null) lines.push(`Do wysłania pozostało ${p.remaining} z ${p.recipients}.`);
   if (p.report === null) {
     lines.push(p.final ? 'Raport doręczeń nie jest jeszcze gotowy.' : 'Raport doręczeń będzie dostępny po zakończeniu wysyłania.');
@@ -92,7 +100,11 @@ function packageText(p: PackageStatusData): string {
     lines.push(`Stany według raportu: ${counts(p.report.byStatus)}.`);
     if (p.report.reasons.length > 0) lines.push('Przyczyny niedoręczeń:', ...p.report.reasons.map((r) => `- ${r.description}: ${r.count}`));
   }
-  if (p.hasMore) lines.push('Kolejnych odbiorców pokazuje następna strona z większą wartością offset, a pełną listę plik z narzędzia package_report.');
+  if (p.fileSendId !== null) lines.push(`Rozsyłka należy do wysyłki z pliku ${p.fileSendId}. Stan całej wysyłki podaje narzędzie file_send_status.`);
+  if (p.hiddenItems) {
+    lines.push('Rozsyłka pochodzi z wysyłki z pliku, dlatego numery odbiorców widzi wyłącznie pracownik w widoku bramki. '
+      + 'Pełną listę zawiera plik z narzędzia package_report.');
+  } else if (p.hasMore) lines.push('Kolejnych odbiorców pokazuje następna strona z większą wartością offset, a pełną listę plik z narzędzia package_report.');
   return lines.join('\n');
 }
 
@@ -110,7 +122,39 @@ export const packageStatusTool: ToolDef = {
   run(ctx, raw) {
     const q = raw as z.infer<typeof packageInput>;
     const data = packageStatus(ctx.deps, connOf(ctx), q.packageId, { offset: q.offset ?? 0, limit: q.limit ?? 25 });
+    // Wartości z pliku pracownika nie trafiają do modelu: odbiorców otrzymuje wyłącznie widok przez `_meta`.
+    if (data.hiddenItems) return { text: packageText(data), structured: asRecord({ ...data, items: [] }), meta: { items: data.items } };
     return { text: packageText(data), structured: asRecord(data) };
+  },
+};
+
+const PACKAGE_STATUSES = ['scheduled', 'overdue', 'queued', 'open', 'sending', 'completed', 'cancelled', 'failed'] as const;
+
+const listPackagesInput = z.object({
+  status: z.enum(PACKAGE_STATUSES).optional()
+    .describe('Stan rozsyłki, na przykład scheduled dla zaplanowanych, overdue dla rozsyłek po terminie albo completed dla zakończonych'),
+  ...pageFields,
+});
+
+export const listPackagesTool: ToolDef = {
+  name: 'list_packages',
+  title: 'Rozsyłki',
+  description: 'Pokazuje rozsyłki klucza integracji, także z innych integracji, od najnowszej: stan, liczbę odbiorców, termin i źródło. '
+    + 'Filtr scheduled odpowiada na pytanie, jakie rozsyłki są zaplanowane. Obejmuje także rozsyłki przekazane już do Multiinfo, '
+    + 'które czekają na termin. Takich rozsyłek bramka nie anuluje.',
+  scopes: ['read_sent'],
+  input: listPackagesInput,
+  annotations: READ,
+  run(ctx, raw) {
+    const q = raw as z.infer<typeof listPackagesInput>;
+    const data = listPackages(ctx.deps, connOf(ctx), { ...(q.status === undefined ? {} : { status: q.status }), offset: q.offset ?? 0, limit: q.limit ?? 25 }, ctx.now);
+    const lines = data.items.length === 0 ? ['Bramka nie znalazła rozsyłek spełniających warunki.'] : [
+      `Rozsyłki na tej stronie: ${data.items.length}.`,
+      ...data.items.map((p) => `${p.id}: ${p.statusLabel}, ${plural(p.recipients, 'odbiorca', 'odbiorców', 'odbiorców')}, przyjęta ${p.created.local}`
+        + `${p.startAt === null ? '' : `, termin ${p.startAt.local}`}, źródło: ${p.source}${p.fileSendId === null ? '' : `, wysyłka z pliku ${p.fileSendId}`}.`),
+      ...(data.hasMore ? ['Kolejne rozsyłki pokazuje następna strona z większą wartością offset.'] : []),
+    ];
+    return { text: lines.join('\n'), structured: asRecord(data) };
   },
 };
 
@@ -118,26 +162,49 @@ export const packageStatusTool: ToolDef = {
 export const DOWNLOAD_WARNING = 'Plik zawiera numery telefonów odbiorców. Przekaż link wyłącznie osobie uprawnionej do tych danych.';
 
 const reportInput = z.object({
-  packageId: z.string().min(1).describe('Identyfikator rozsyłki'),
+  packageId: z.string().min(1).describe('Identyfikator rozsyłki albo wysyłki z pliku, który zaczyna się od fsd_'),
   file: z.enum(['report', 'failed']).describe('Plik: report z pełnym raportem albo failed z odbiorcami bez doręczenia'),
 });
 
 export const packageReportTool: ToolDef = {
   name: 'package_report',
   title: 'Raport rozsyłki do pobrania',
-  description: 'Tworzy link do pliku CSV z raportem rozsyłki albo z listą odbiorców bez doręczenia. Link jest ważny godzinę.',
+  description: 'Tworzy link do pliku CSV z raportem rozsyłki albo z listą odbiorców bez doręczenia. Link jest ważny godzinę. '
+    + 'Dla identyfikatora wysyłki z pliku narzędzie tworzy jeden plik wszystkich jej rozsyłek z numerem wiersza w pliku.',
   scopes: ['read_sent'],
   input: reportInput,
   annotations: { readOnlyHint: true, openWorldHint: false },
   run(ctx, raw) {
     const q = raw as z.infer<typeof reportInput>;
     const conn = connOf(ctx);
+    const kind = q.file === 'report' ? 'package_report' : 'package_failed';
+    if (q.packageId.startsWith(FILE_SEND_PREFIX)) {
+      // Wysyłka z pliku: jeden plik CSV wszystkich jej rozsyłek z numerem wiersza w pliku (spec 5.8).
+      const f = fileSendOf(ctx.deps, conn, q.packageId);
+      const packages = ctx.deps.packages.listByFileSend(f.id);
+      if (fileSendCancelled(packages)) {
+        throw new AgentError('package_cancelled', `Wysyłka z pliku ${f.id} została anulowana, dlatego raport doręczeń nie powstanie.`);
+      }
+      if (!fileReportReady(packages)) {
+        throw new AgentError('report_not_ready', `Raport wysyłki z pliku ${f.id} nie jest jeszcze gotowy. Bramka tworzy go po zakończeniu wszystkich rozsyłek `
+          + 'i odbiorze ich raportów doręczeń, a stan wysyłki pokazuje narzędzie file_send_status.');
+      }
+      const link = createDownload(ctx.deps, ctx.base, { apiKeyId: conn.key.id, connectionId: conn.connection.id }, kind, f.id, ctx.now);
+      const what = q.file === 'report' ? `raportu wysyłki z pliku ${f.id}` : `listy odbiorców wysyłki z pliku ${f.id} bez doręczenia`;
+      return {
+        text: `Link do pliku CSV ${what}, ważny do ${warsawShort(link.expiresAt)} czasu polskiego:\n${link.url}\n${DOWNLOAD_WARNING}`,
+        structured: { packageId: f.id, file: q.file, ...link },
+      };
+    }
     const p = ctx.deps.packages.get(q.packageId);
     if (!p || p.apiKeyId !== conn.key.id) throw new AgentError('package_unknown', `Nie znaleziono rozsyłki ${q.packageId}.`);
+    if (p.status === 'cancelled') {
+      throw new AgentError('package_cancelled', `Rozsyłka ${p.id} została anulowana, dlatego raport doręczeń nie powstanie.`);
+    }
     if (p.reportStatus !== 'ready') {
       throw new AgentError('report_not_ready', `Raport rozsyłki ${p.id} nie jest jeszcze gotowy. Stan rozsyłki pokazuje narzędzie package_status.`);
     }
-    const link = createDownload(ctx.deps, ctx.base, { apiKeyId: conn.key.id, connectionId: conn.connection.id }, q.file === 'report' ? 'package_report' : 'package_failed', p.id, ctx.now);
+    const link = createDownload(ctx.deps, ctx.base, { apiKeyId: conn.key.id, connectionId: conn.connection.id }, kind, p.id, ctx.now);
     const what = q.file === 'report' ? `raportu rozsyłki ${p.id}` : `listy odbiorców rozsyłki ${p.id} bez doręczenia`;
     return {
       text: `Link do pliku CSV ${what}, ważny do ${warsawShort(link.expiresAt)} czasu polskiego:\n${link.url}\n${DOWNLOAD_WARNING}`,

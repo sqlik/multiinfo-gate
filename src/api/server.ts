@@ -18,7 +18,9 @@ import type { MessagesRepo } from '../store/messages.ts';
 import type { PackagesRepo } from '../store/packages.ts';
 import type { InboundMessagesRepo } from '../store/inbound-messages.ts';
 import type { AgentDraftsRepo } from '../store/agent-drafts.ts';
+import type { AgentFilesRepo } from '../store/agent-files.ts';
 import type { DownloadLinksRepo } from '../store/download-links.ts';
+import type { FileSendsRepo } from '../store/file-sends.ts';
 import { registerDownloadRoute } from '../agents/downloads.ts';
 import { registerOAuthRoutes, type OAuthDeps } from '../oauth/routes.ts';
 import { AGENT_TOOLS, registerMcpRoutes } from '../mcp/server.ts';
@@ -28,6 +30,8 @@ import { RPC, rpcError } from '../mcp/protocol.ts';
 import type { CampaignsRepo } from '../store/campaigns.ts';
 import type { LinkDomainsRepo } from '../store/link-domains.ts';
 import type { ShortLinksRepo } from '../store/short-links.ts';
+import type { AuditRepo } from '../store/audit.ts';
+import type { WebhookDeliveriesRepo } from '../store/webhook-deliveries.ts';
 import type { ClientPool } from '../worker/clients.ts';
 import { AuthError } from './auth.ts';
 import { registerCampaignRoutes } from './campaigns.ts';
@@ -45,6 +49,10 @@ import type { RateLimiter } from './rate-limit.ts';
 /** Agenci AI: serwer autoryzacji OAuth, a od zadania 6 serwer MCP. */
 export interface AgentServerDeps extends OAuthDeps {
   drafts: AgentDraftsRepo;
+  /** Szkice plików z odbiorcami przekazanych przez widok rozsyłki z pliku. */
+  files: AgentFilesRepo;
+  /** Wysyłki z pliku; zapis i odczyt rozsyłek wysyłki dopisuje potok wysyłki z pliku. */
+  fileSends: FileSendsRepo;
   downloads: DownloadLinksRepo;
   /** Sesje MCP ery poprzedniej. */
   sessions: McpSessions;
@@ -61,6 +69,10 @@ export interface ApiDeps {
   events: MessageEventsRepo;
   packages: PackagesRepo;
   jobs: JobsRepo;
+  /** Webhook `package.completed` po anulowaniu zaplanowanej rozsyłki. */
+  deliveries: WebhookDeliveriesRepo;
+  /** Dziennik panelu: anulowanie zaplanowanej rozsyłki z nazwą klucza. */
+  audit: Pick<AuditRepo, 'record'>;
   /** Anulowanie woła Multiinfo synchronicznie - to jedyna trasa API, która tego potrzebuje. */
   clients: ClientPool;
   inbound: InboundMessagesRepo;
@@ -128,7 +140,9 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
       // Serwer MCP odpowiada błędem JSON-RPC także wtedy, gdy Fastify odrzuci treść przed trasą.
       const status = (error as { statusCode?: number }).statusCode;
       if (status === 400) return reply.code(400).send(rpcError(null, RPC.parse, 'Treść żądania nie jest poprawnym dokumentem JSON.'));
-      if (status === 413) return reply.code(413).send(rpcError(null, RPC.invalidRequest, `Treść żądania przekracza ${sizeLabel(API_BODY_LIMIT)}.`));
+      if (status === 413) {
+        return reply.code(413).send(rpcError(null, RPC.invalidRequest, `Treść żądania przekracza ${sizeLabel(_request.routeOptions.bodyLimit ?? API_BODY_LIMIT)}.`));
+      }
       if (status === 415) return reply.code(415).send(rpcError(null, RPC.invalidRequest, 'Treść żądania musi mieć format JSON (Content-Type: application/json).'));
     }
     if (_request.url.startsWith('/oauth/')) {
@@ -173,6 +187,7 @@ export function buildApiServer(deps: ApiDeps): FastifyInstance {
     registerMcpRoutes(app, { ...deps, ...deps.agents }, deps.agents.tools ?? AGENT_TOOLS);
     registerDownloadRoute(app, {
       connections: deps.agents.connections, downloads: deps.agents.downloads, packages: deps.packages, shortLinks: deps.shortLinks, campaigns: deps.campaigns,
+      fileSends: deps.agents.fileSends,
       ...(deps.log ? { log: deps.log } : {}), ...(deps.now ? { now: deps.now } : {}),
     });
   }

@@ -1,5 +1,6 @@
 import { packageStatusLabel, stageLabel, statusLabel } from '../admin/views/status-labels.ts';
 import { presentMessage } from '../api/messages.ts';
+import { handoverAt } from '../api/schedule.ts';
 import type { ApiDeps } from '../api/server.ts';
 import { AgentError } from '../integrations/agent.ts';
 import { sourceLabel } from '../integrations/source-label.ts';
@@ -27,12 +28,28 @@ export interface PackageStatusData {
   id: string; status: PackageStatus; statusLabel: string; final: boolean; recipients: number; remaining: number | null; created: Stamp; source: string;
   report: { byStatus: Record<string, number>; reasons: Array<{ description: string; count: number }>; deliveredByHour: Array<{ hour: string; count: number }> } | null;
   items: Array<{ to: string; clientId: string | null; status: string; statusLabel: string; changed: Stamp | null }>; hasMore: boolean;
+  /** Termin rozsyłki; chwila przekazania wyłącznie w stanie `scheduled`. */
+  schedule: { startAt: Stamp; handoverAt: Stamp | null } | null;
+  /** Agent może anulować rozsyłkę: własna, czekająca na przekazanie, przy zakresie wysyłki. */
+  cancellable: boolean;
+  /** Rozsyłka wysyłki z pliku: numery i identyfikatory klientów pochodzą z pliku, dlatego widzi je tylko człowiek. */
+  hiddenItems: boolean;
+  /** Wysyłka z pliku `fsd_…`, do której należy rozsyłka. */
+  fileSendId: string | null;
+}
+
+export interface PackageListItem {
+  id: string; status: PackageStatus; statusLabel: string; recipients: number; created: Stamp; startAt: Stamp | null; source: string;
+  /** Wysyłka z pliku `fsd_…`, do której należy rozsyłka, dla file_send_status, package_report i cancel_package. */
+  fileSendId: string | null;
 }
 
 export interface CampaignResultsData {
   name: string; sent: number; delivered: number; opens: number; clicks: number; bots: number; first: Stamp; last: Stamp; detailsPurged: boolean;
   opensByDay: Array<{ day: string; opens: number }>; clicksByHour: Array<{ hour: string; clicks: number }>; targets: CampaignTarget[];
   unopened: { total: number; items: Array<{ to: string; clientId: string | null }>; hasMore: boolean } | null;
+  /** Kampania obejmuje wysyłkę z pliku: numery, identyfikatory klientów i adresy linków widzi tylko człowiek. */
+  hiddenItems: boolean;
 }
 
 export type AnswersTo = { messageId: string } | { packageId: string } | null;
@@ -59,14 +76,14 @@ const PAGE_MAX = 200;
 const PAGE_DEFAULT = 25;
 /** Porcja odebranych przeglądanych przy zestawieniu odpowiedzi na jedną wysyłkę. */
 const SCAN_BATCH = 500;
-const FINAL_PACKAGE: ReadonlySet<PackageStatus> = new Set(['completed', 'cancelled', 'failed']);
+export const FINAL_PACKAGE: ReadonlySet<PackageStatus> = new Set(['completed', 'cancelled', 'failed']);
 /**
  * Stany przed przekazaniem do sieci operatora: kolejka bramki, status 0 Multiinfo i wstrzymanie limitem. Wiadomość
  * przekazaną do sieci Multiinfo odrzuca przy anulowaniu kodem -41, dlatego przebieg nie proponuje wtedy „Anuluj”.
  */
 const BEFORE_NETWORK: ReadonlySet<string> = new Set(['queued', 'throttled']);
 
-const stamp = (iso: string): Stamp => ({ at: new Date(iso).toISOString(), local: warsawShort(iso) });
+export const stamp = (iso: string): Stamp => ({ at: new Date(iso).toISOString(), local: warsawShort(iso) });
 
 /** Strona odczytu w granicach: `limit` od 1 do 200, domyślnie 25, `offset` nieujemny. */
 function pageOf(p: Page): Page {
@@ -82,7 +99,7 @@ const ZONED_TIME = /(?:Z|[+-]\d{2}:?\d{2})$/i;
  * Chwila z pola zapytania. Data i godzina bez strefy oznaczają czas polski, ponieważ agent przepisuje „od wczoraj
  * 14:00” z rozmowy. Sam dzień oznacza jego początek, a jako koniec przedziału koniec tego dnia w Polsce.
  */
-function instant(name: string, value: string, end = false): string {
+export function instant(name: string, value: string, end = false): string {
   const v = value.trim();
   const local = LOCAL_TIME.exec(v);
   try {
@@ -103,7 +120,7 @@ function instant(name: string, value: string, end = false): string {
 }
 
 /** Numer w dowolnym zapisie do postaci, w jakiej bramka zapisuje odbiorców i nadawców. */
-function phone(ctx: ConnectionContext, raw: string): string {
+export function phone(ctx: ConnectionContext, raw: string): string {
   try {
     return normalizeRecipient(raw, ctx.account.defaultCountryCode);
   } catch (e) {
@@ -175,6 +192,12 @@ export function sentByAgent(deps: Pick<ReadDeps, 'connectionsRepo'>, ctx: Connec
   return m.agentConnectionId !== null && deps.connectionsRepo.get(m.agentConnectionId)?.integrationId === ctx.integration.id;
 }
 
+/** Rozsyłka wysłana przez integrację agenta albo przez połączenie tej integracji, także do grupy; tylko taką agent anuluje. */
+export function ownPackage(deps: Pick<ReadDeps, 'connectionsRepo'>, ctx: ConnectionContext, p: PackageRow): boolean {
+  if (p.integrationId === ctx.integration.id) return true;
+  return p.agentConnectionId !== null && deps.connectionsRepo.get(p.agentConnectionId)?.integrationId === ctx.integration.id;
+}
+
 function messageEntry(deps: ReadDeps, ctx: ConnectionContext, m: MessageRow): TraceEntry {
   const agentSent = sentByAgent(deps, ctx, m);
   return {
@@ -189,7 +212,7 @@ function messageEntry(deps: ReadDeps, ctx: ConnectionContext, m: MessageRow): Tr
 }
 
 /** Stan odbiorcy rozsyłki: z raportu, a bez pozycji w raporcie - oczekiwanie na raport albo jego brak. */
-function recipientState(r: RecipientRow, reported: boolean): { status: string; statusLabel: string } {
+export function recipientState(r: RecipientRow, reported: boolean): { status: string; statusLabel: string } {
   if (r.status !== null) return { status: r.status, statusLabel: statusLabel(r.status) };
   return reported ? { status: 'unknown', statusLabel: 'brak w raporcie' } : { status: 'pending', statusLabel: 'czeka na raport' };
 }
@@ -265,6 +288,38 @@ export function packageStatus(deps: ReadDeps, ctx: ConnectionContext, packageId:
       to: r.dest, clientId: r.clientId, ...recipientState(r, reported), changed: r.status === null ? null : reportStamp(r.statusChangedAt),
     })),
     hasMore: rows.length > limit,
+    schedule: p.startAt === null ? null : {
+      startAt: stamp(p.startAt), handoverAt: p.status === 'scheduled' ? stamp(handoverAt(p.startAt, p.createdAt)) : null,
+    },
+    cancellable: (p.status === 'scheduled' || p.status === 'overdue') && (ctx.scopes.has('send') || ctx.scopes.has('send_group')) && ownPackage(deps, ctx, p),
+    hiddenItems: p.fileSendId !== null,
+    fileSendId: p.fileSendId,
+  };
+}
+
+/** Rozsyłka przekazana do Multiinfo z terminem, który jeszcze nie nadszedł, na przykład sprzed wersji 1.13. */
+const HANDED_OVER_LABEL = 'przekazana do Multiinfo, czeka na termin';
+
+/**
+ * Rozsyłki klucza od najnowszej, z filtrem stanu i porcjami, na przykład zaplanowane na pytanie „Co mamy zaplanowane?”.
+ * Filtr `scheduled` obejmuje także rozsyłki przekazane do Multiinfo przed terminem, których bramka już nie anuluje.
+ */
+export function listPackages(
+  deps: ReadDeps, ctx: ConnectionContext, q: { status?: PackageStatus | undefined } & Page, now: Date,
+): { items: PackageListItem[]; hasMore: boolean } {
+  const { offset, limit } = pageOf(q);
+  const nowIso = now.toISOString();
+  const rows = deps.packages.list({
+    apiKeyId: ctx.key.id, ...(q.status === undefined ? {} : { statuses: [q.status] }),
+    ...(q.status === 'scheduled' ? { openStartingAfter: nowIso } : {}), limit: limit + 1, offset,
+  });
+  const label = (p: PackageRow): string => (p.status === 'open' && p.startAt !== null && p.startAt > nowIso ? HANDED_OVER_LABEL : packageStatusLabel(p.status));
+  return {
+    items: rows.slice(0, limit).map((p) => ({
+      id: p.id, status: p.status, statusLabel: label(p), recipients: p.recipientsCount, created: stamp(p.createdAt),
+      startAt: p.startAt === null ? null : stamp(p.startAt), source: sourceLabel(deps, p), fileSendId: p.fileSendId,
+    })),
+    hasMore: rows.length > limit,
   };
 }
 
@@ -302,6 +357,7 @@ export function campaignResults(deps: ReadDeps, ctx: ConnectionContext, name: st
     unopened: unopened === null ? null : {
       total: unopened.total, items: unopened.items.map((r) => ({ to: r.dest, clientId: r.clientId })), hasMore: unopened.total > offset + limit,
     },
+    hiddenItems: deps.packages.campaignHasFileSend(c.id),
   };
 }
 

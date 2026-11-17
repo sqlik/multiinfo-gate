@@ -79,12 +79,14 @@ describe('wywołanie narzędzia', () => {
     await expect(callTool([prepareSms], ctx, 'nieznane', {})).rejects.toMatchObject({ code: -32602 });
   });
 
-  it('limit żądań klucza: wywołanie ponad limit daje błąd narzędzia z czasem ponowienia', async () => {
+  it('odmowa limitu żądań klucza: structuredContent rate_limited z retryAfterSec 60', async () => {
     const ctx = context();
     const limited = { ...ctx, conn: { ...ctx.conn!, key: { ...ctx.conn!.key, ratePerMin: 2 } } };
     for (let n = 0; n < 2; n += 1) expect((await callTool([prepareSms], limited, 'prepare_sms', { text: 'x' })).isError).toBeUndefined();
+    // Widok pliku po odmowie czeka retryAfterSec i ponawia tę samą porcję wierszy (P7).
     expect(await callTool([prepareSms], limited, 'prepare_sms', { text: 'x' })).toEqual({
-      content: [{ type: 'text', text: 'Przekroczono limit 2 żądań na minutę klucza. Spróbuj ponownie za minutę.' }], isError: true,
+      content: [{ type: 'text', text: 'Przekroczono limit 2 żądań na minutę klucza. Spróbuj ponownie za minutę.' }],
+      structuredContent: { error: 'rate_limited', retryAfterSec: 60 }, isError: true,
     });
   });
 
