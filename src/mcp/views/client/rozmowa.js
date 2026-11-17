@@ -2,7 +2,7 @@
 // w dwóch kolumnach według kierunku, odświeżanie co 15 s przez 15 minut, prośba o odpowiedź po nowym SMS-ie klienta
 // i szkic odpowiedzi na dole, który wysyła send_reply z kluczem potwierdzenia z podglądu.
 import {
-  applyTheme, badge, button, buttons, cancelledText, createBridge, esc, forwardedText, note, phoneLabel, pluralWord, sayIn, section, stamp, textOf,
+  applyTheme, badge, button, buttons, cancelledText, createBridge, esc, failure, forwardedText, note, phoneLabel, pluralWord, sayIn, section, stamp, textOf,
 } from './bridge.js';
 
 export const CONVERSATION_REFRESH_MS = 15_000;
@@ -20,7 +20,7 @@ const STATE_TONE = { delivered: 'ok', failed: 'fail', blocked: 'fail', expired: 
 /**
  * Odświeżanie rozmowy przez conversation z `args` co 15 s, najwyżej 15 minut. `args` może być funkcją, która podaje
  * argumenty przy każdym odczycie. `handlers.onData` otrzymuje każdy odczyt, a `handlers.onEnd` powód końca: timeout
- * albo error z tekstem. Wynikiem jest funkcja, która zatrzymuje odświeżanie bez wywołania `onEnd`.
+ * albo error z tekstem i szczegółami błędu aplikacji AI. Wynikiem jest funkcja, która zatrzymuje odświeżanie bez wywołania `onEnd`.
  */
 export function watchConversation(bridge, win, args, handlers, now = () => Date.now()) {
   const started = now();
@@ -31,11 +31,12 @@ export function watchConversation(bridge, win, args, handlers, now = () => Date.
     try {
       result = await bridge.callTool('conversation', typeof args === 'function' ? args() : args);
     } catch (error) {
-      result = { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
+      if (!stopped) handlers.onEnd('error', ...failure(error));
+      return;
     }
     if (stopped) return;
     if (result.isError || !result.structuredContent) {
-      handlers.onEnd('error', textOf(result));
+      handlers.onEnd('error', textOf(result), '');
       return;
     }
     handlers.onData(result.structuredContent);
@@ -142,11 +143,11 @@ export function startConversation(win, env) {
     s.data = { ...s.data, items: merge(data.items, true), lastInboundId: data.lastInboundId ?? s.data.lastInboundId, sent: data.sent, canReply: data.canReply };
     draw();
   };
-  const end = (why, text) => {
+  const end = (why, text, detail) => {
     s.stop = null;
     live.textContent = LIVE_TEXT[why] ?? '';
     refreshButton.hidden = false;
-    if (why === 'error') say('fail', text);
+    if (why === 'error') say('fail', text, detail);
   };
   const watch = () => {
     s.stop?.();
@@ -176,7 +177,7 @@ export function startConversation(win, env) {
     try {
       await task();
     } catch (error) {
-      say('fail', error instanceof Error ? error.message : String(error));
+      say('fail', ...failure(error));
     } finally {
       s.busy = false;
       draw();

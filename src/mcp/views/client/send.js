@@ -2,8 +2,8 @@
 // podsumowanie z ochroną przed burzą i zatwierdzenie. Zmiana ustawienia tworzy nowy szkic, a „Wyślij” woła
 // send_prepared z kluczem potwierdzenia z _meta. Po wysyłce widok sam odświeża stan doręczeń.
 import {
-  applyTheme, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, field, fields, forwardedText, messageBox, note, num, numbers, plural, sayIn,
-  section, smsCounter, stamp, textOf, tile, tiles, txt, wideField,
+  applyTheme, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, failure, field, fields, forwardedText, messageBox, note, num,
+  numbers, plural, sayIn, section, smsCounter, stamp, textOf, tile, tiles, txt, wideField,
 } from './bridge.js';
 import { deliveryLine, deliveryTile, NO_READ_SENT, watchDeliveries } from './doreczenia.js';
 import { latinText, measure } from './measure.js';
@@ -174,8 +174,6 @@ export function renderSend(p, state = {}) {
   return content + settings(p, locked) + recipients + summary + finish;
 }
 
-const errorText = (error) => (error instanceof Error ? error.message : String(error));
-
 /**
  * Panel wysyłki w elemencie `root`: przyjmuje wynik prepare_sms z danymi wejściowymi, tworzy nowe szkice po
  * zmianie ustawień, wysyła i odświeża doręczenia. Zwraca `show(result, input)`.
@@ -192,7 +190,7 @@ export function mountSend(root, { bridge, say, win }) {
     try {
       await task();
     } catch (error) {
-      say('fail', errorText(error));
+      say('fail', ...failure(error));
     } finally {
       s.busy = false;
       s.sending = false;

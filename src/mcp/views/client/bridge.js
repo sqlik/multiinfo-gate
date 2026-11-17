@@ -123,14 +123,31 @@ export const messageBox = ({ sender, counter, body }) => '<div class="msg"><div 
   + `<span>${sender ? `Nadawca na telefonie: <b>${esc(sender)}</b>` : ''}</span><span>${counter}</span></div>`
   + `<div class="msg-text">${body}</div></div>`;
 
+/**
+ * Komunikat po błędzie aplikacji AI przy wywołaniu narzędzia bramki, na przykład po odpowiedzi 502, gdy bramka jest
+ * chwilowo niedostępna. Oryginalny tekst aplikacji, zwykle angielski, widok pokazuje w rozwijanych szczegółach.
+ */
+export const HOST_TOOL_ERROR = 'Aplikacja AI zgłosiła błąd połączenia z bramką. Spróbuj ponownie za kilka minut, '
+  + 'a gdy błąd się powtarza, zwróć się do administratora bramki.';
+/** Komunikat po błędzie aplikacji AI przy innym żądaniu widoku niż wywołanie narzędzia. */
+export const HOST_ERROR = 'Aplikacja AI zgłosiła błąd i nie wykonała prośby widoku';
+
+/** Tekst i szczegóły błędu do komunikatu: `say('fail', ...failure(error))`. */
+export const failure = (error) => (error instanceof Error ? [error.message, typeof error.detail === 'string' ? error.detail : ''] : [String(error), '']);
+
+/** Komunikat w elemencie: tekst, a przy błędzie aplikacji AI także jej oryginalny tekst w rozwijanych szczegółach. */
+export function showNotice(notice, tone, text, detail = '') {
+  notice.hidden = !text;
+  notice.className = `notice n-${tone}`;
+  if (text && detail) {
+    notice.innerHTML = `${esc(text)}<details class="why"><summary>Szczegóły błędu</summary><div class="mono">${esc(detail)}</div></details>`;
+  } else notice.textContent = text;
+}
+
 /** Komunikat pod widokiem w elemencie #komunikat; pusty tekst ukrywa komunikat. */
 export function sayIn(doc) {
   const notice = doc.getElementById('komunikat');
-  return (tone, text) => {
-    notice.hidden = !text;
-    notice.className = `notice n-${tone}`;
-    notice.textContent = text;
-  };
+  return (tone, text, detail = '') => showNotice(notice, tone, text, detail);
 }
 
 /**
@@ -178,7 +195,7 @@ export function createBridge(win, handlers = {}) {
   function request(method, params) {
     const id = nextId++;
     return new Promise((resolve, reject) => {
-      pending.set(id, { resolve, reject });
+      pending.set(id, { method, resolve, reject });
       post({ id, method, params });
     });
   }
@@ -214,8 +231,13 @@ export function createBridge(win, handlers = {}) {
     const entry = pending.get(msg.id);
     if (!entry) return;
     pending.delete(msg.id);
-    if (isObject(msg.error)) entry.reject(new Error(typeof msg.error.message === 'string' ? msg.error.message : 'Aplikacja AI zwróciła błąd.'));
-    else entry.resolve(isObject(msg.result) ? msg.result : {});
+    if (isObject(msg.error)) {
+      // Tekst błędu pochodzi od aplikacji, na przykład surowa odpowiedź 502 serwera pośredniczącego, dlatego widok
+      // pokazuje polski komunikat, a tekst aplikacji tylko w szczegółach.
+      const error = new Error(entry.method === 'tools/call' ? HOST_TOOL_ERROR : HOST_ERROR);
+      error.detail = typeof msg.error.message === 'string' ? msg.error.message : '';
+      entry.reject(error);
+    } else entry.resolve(isObject(msg.result) ? msg.result : {});
   });
 
   function notifySize(size) {

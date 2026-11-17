@@ -2,7 +2,8 @@
 // kliknięcia w kolejnych godzinach, cele linków, odbiorcy bez otwarcia porcjami, pliki CSV i przypomnienie.
 // Po usunięciu szczegółów kampanii zostają liczby i kliknięcia w kolejnych godzinach.
 import {
-  applyTheme, button, buttons, cancelledText, createBridge, esc, forwardedText, note, num, numbers, openDownload, sayIn, section, share, stamp, textOf, tile, tiles,
+  applyTheme, button, buttons, cancelledText, createBridge, esc, failure, forwardedText, note, num, numbers, openDownload, sayIn, section, share,
+  stamp, textOf, tile, tiles,
 } from './bridge.js';
 import { barChart } from './chart.js';
 
@@ -139,7 +140,7 @@ export function startCampaign(win, env) {
     try {
       await task();
     } catch (error) {
-      say('fail', error instanceof Error ? error.message : String(error));
+      say('fail', ...failure(error));
     } finally {
       s.busy = false;
       draw();

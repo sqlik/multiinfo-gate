@@ -243,7 +243,7 @@ describe('widok przebiegu doręczenia', () => {
   it('renderTrace: po odmowie anulowania przycisk wyszarzony, a komunikat odmowy zostaje przy pozycji', () => {
     const html = renderTrace([{ ...ENTRY, status: 'throttled', statusLabel: 'wstrzymana limitem', cancellable: true }], { refused: new Map([['msg_1', REFUSAL]]) });
     expect(html).toContain(cancelButton(true));
-    expect(html).toContain(`<p class="notice n-fail" data-say="0" role="status">${REFUSAL}</p>`);
+    expect(html).toContain(`<div class="notice n-fail" data-say="0" role="status">${REFUSAL}</div>`);
     expect(html).not.toContain('można ją jeszcze anulować');
   });
 
@@ -261,7 +261,7 @@ describe('widok przebiegu doręczenia', () => {
     w.deliver({ jsonrpc: '2.0', id: call.id, result: { isError: true, content: [{ type: 'text', text: REFUSAL }] } });
     await tick();
     expect(w.nodes.tresc.innerHTML).toContain(cancelButton(true));
-    expect(w.nodes.tresc.innerHTML).toContain(`role="status">${REFUSAL}</p>`);
+    expect(w.nodes.tresc.innerHTML).toContain(`role="status">${REFUSAL}</div>`);
   });
 });
 
@@ -295,7 +295,7 @@ describe('komunikaty akcji przebiegu', () => {
   it('renderTrace: ukryty komunikat każdej pozycji pod jej przyciskami, przed panelem ponownej wysyłki', () => {
     const html = renderTrace([{ ...ENTRY, cancellable: true }, ENTRY]);
     const [first, second] = html.split('</section>');
-    expect(first).toContain('<p class="notice" data-say="0" role="status" hidden></p>');
+    expect(first).toContain('<div class="notice" data-say="0" role="status" hidden></div>');
     expect(first!.indexOf('data-act="resend"')).toBeLessThan(first!.indexOf('data-say="0"'));
     expect(first!.indexOf('data-say="0"')).toBeLessThan(first!.indexOf('data-resend="0"'));
     expect(second).toContain('data-say="1"');

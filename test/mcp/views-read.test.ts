@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { badge, button, buttons, field, forwardedText, num, tile, tiles, txt } from '../../src/mcp/views/client/bridge.js';
+import { badge, button, buttons, esc, field, forwardedText, HOST_TOOL_ERROR, num, tile, tiles, txt } from '../../src/mcp/views/client/bridge.js';
 import { barChart } from '../../src/mcp/views/client/chart.js';
 import { renderStatus } from '../../src/mcp/views/client/co-moge.js';
 import { REMIND_MESSAGE, remindFallback, renderCampaign } from '../../src/mcp/views/client/kampania.js';
@@ -599,10 +599,18 @@ describe('widok rozmowy z numerem', () => {
       const timers: Array<{ fn: () => Promise<void>; ms: number }> = [];
       const events: unknown[] = [];
       let clock = 0;
-      const bridge = { callTool: async (name: string, args: unknown) => { calls.push({ name, args }); return results.shift(); } };
+      const bridge = {
+        callTool: async (name: string, args: unknown) => {
+          calls.push({ name, args });
+          const next = results.shift();
+          if (next instanceof Error) throw next;
+          return next;
+        },
+      };
       const win = { setTimeout: (fn: () => Promise<void>, ms: number) => { timers.push({ fn, ms }); } };
       const stop = watchConversation(bridge, win, { phone: '48601000081' }, {
-        onData: (d: { lastInboundId: string }) => events.push(d.lastInboundId), onEnd: (why: string) => events.push(`koniec: ${why}`),
+        onData: (d: { lastInboundId: string }) => events.push(d.lastInboundId),
+        onEnd: (why: string, ...why2: string[]) => events.push(why2.length > 0 ? [`koniec: ${why}`, ...why2] : `koniec: ${why}`),
       }, () => clock);
       return { calls, timers, events, stop, step: async () => { clock += advance.shift() ?? 0; await timers.shift()!.fn(); } };
     };
@@ -618,7 +626,12 @@ describe('widok rozmowy z numerem', () => {
 
     const broken = run([{ isError: true, content: [{ type: 'text', text: 'Połączenie jest chwilowo niedostępne.' }] }], [CONVERSATION_REFRESH_MS]);
     await broken.step();
-    expect(broken.events).toEqual(['koniec: error']);
+    expect(broken.events).toEqual([['koniec: error', 'Połączenie jest chwilowo niedostępne.', '']]);
+
+    // Błąd aplikacji AI, na przykład 502 przy niedostępnej bramce: polski komunikat, a tekst aplikacji w szczegółach.
+    const host = run([Object.assign(new Error(HOST_TOOL_ERROR), { detail: 'Error POSTing to endpoint: 502' })], [CONVERSATION_REFRESH_MS]);
+    await host.step();
+    expect(host.events).toEqual([['koniec: error', HOST_TOOL_ERROR, 'Error POSTing to endpoint: 502']]);
 
     // Zatrzymane odświeżanie nie wywołuje już narzędzia, na przykład po ręcznym „Odśwież”.
     const stopped = run([{ structuredContent: CONVERSATION }], [CONVERSATION_REFRESH_MS]);
@@ -675,6 +688,23 @@ describe('widok rozmowy z numerem', () => {
     await tick();
     expect(w.nodes.odswiez.hidden).toBe(true);
     expect(w.timers.length).toBe(before + 1);
+  });
+
+  it('widok: błąd aplikacji AI przy odświeżaniu, na przykład 502 przy niedostępnej bramce, daje polski komunikat i szczegóły', async () => {
+    const w = viewWindow();
+    startConversation(w.win, { version: '1.13.0' });
+    await w.ready();
+    w.deliver(result(CONVERSATION));
+    void w.timers.at(-1)!.fn();
+    await tick();
+    const raw = 'Error POSTing to endpoint: {"title":"Error 502: Bad gateway","detail":"<origin>"}';
+    w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, error: { code: 502, message: raw } });
+    await tick();
+    expect(w.nodes['na-zywo'].textContent).toBe('odświeżanie zatrzymane');
+    expect(w.nodes.odswiez.hidden).toBe(false);
+    expect(w.nodes.komunikat.className).toBe('notice n-fail');
+    expect(w.nodes.komunikat.innerHTML).toBe(`${esc(HOST_TOOL_ERROR)}<details class="why"><summary>Szczegóły błędu</summary>`
+      + `<div class="mono">${esc(raw)}</div></details>`);
   });
 
   it('Co mogę?: rozmowa z numerem przy odczycie odebranych, zdanie o odpowiedzi przy odpowiedzi nadawcy', () => {

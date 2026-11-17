@@ -2,7 +2,8 @@
 // zwarta lista odebranych SMS-ów z listami wyboru grupy i stanu odpowiedzi oraz pole odpowiedzi rozwijane przy
 // pozycji. Odpowiedź zmieniona względem szkicu agenta otrzymuje nowy szkic przez prepare_replies, a wysyła ją send_reply.
 import {
-  applyTheme, badge, button, buttons, cancelledText, createBridge, esc, field, fields, note, phoneLabel, plural, sayIn, section, stamp, textOf,
+  applyTheme, badge, button, buttons, cancelledText, createBridge, esc, failure, field, fields, note, phoneLabel, plural, sayIn, section, stamp,
+  textOf,
 } from './bridge.js';
 import { measure } from './measure.js';
 
@@ -148,7 +149,7 @@ export function startReplies(win, env) {
     try {
       await task();
     } catch (error) {
-      say('fail', error instanceof Error ? error.message : String(error));
+      say('fail', ...failure(error));
     } finally {
       s.busy = false;
       draw();

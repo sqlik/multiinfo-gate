@@ -1,7 +1,7 @@
 // Widok „Co mogę?”: uprawnienia, usługi, limity i ważność połączenia według wyniku connection_status.
 // Odświeżenie woła to samo narzędzie przez aplikację AI, bez kolejnego pytania do agenta.
 import {
-  applyTheme, badge, CANCEL_WINDOW, createBridge, field, fields, note, num, plural, pluralWord, section, stamp, textOf, tile, tiles, txt,
+  applyTheme, badge, CANCEL_WINDOW, createBridge, failure, field, fields, note, num, plural, pluralWord, section, stamp, textOf, tile, tiles, txt,
 } from './bridge.js';
 
 const connectionFields = (data) => [field('Nazwa połączenia', txt(data.connection)), field('Integracja', txt(data.integration))];
@@ -84,7 +84,7 @@ export function start(win, env) {
     try {
       await run();
     } catch (error) {
-      say('fail', error instanceof Error ? error.message : String(error));
+      say('fail', ...failure(error));
     } finally {
       button.disabled = false;
     }

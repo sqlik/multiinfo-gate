@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { button, buttons, field, fields, messageBox, numbers, phoneLabel, section, share, smsCounter, tile, tiles, txt, wideField } from '../../src/mcp/views/client/bridge.js';
-import { BUILT_VIEWS, viewFiles } from '../../src/mcp/views/index.ts';
+import { BUILT_VIEWS, viewFiles, viewHtml } from '../../src/mcp/views/index.ts';
 import { VIEW_STYLE } from '../../src/mcp/views/style.ts';
 
 describe('style kart widoków', () => {
@@ -28,6 +28,12 @@ describe('style kart widoków', () => {
   it('podpis kafla zawija się zamiast urywać wielokropkiem (próba B, B2)', () => {
     expect(VIEW_STYLE).toMatch(/\.tile \.s\{[^}]*white-space:normal/);
     expect(VIEW_STYLE).not.toMatch(/\.tile \.s\{[^}]*text-overflow:ellipsis/);
+  });
+
+  it('komunikat zawija długi tekst bez spacji i stoi w elemencie blokowym, który mieści rozwijane szczegóły błędu', () => {
+    expect(VIEW_STYLE).toMatch(/\.notice\{[^}]*overflow-wrap:anywhere/);
+    expect(VIEW_STYLE).toMatch(/\.why \.mono\{[^}]*white-space:pre-wrap/);
+    for (const id of BUILT_VIEWS) expect(viewHtml(id)).toContain('<div id="komunikat" class="notice" role="status" hidden></div>');
   });
 
   it('style nie zawierają klas dawnego układu', () => {

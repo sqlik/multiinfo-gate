@@ -2,8 +2,8 @@
 // lista odbiorców z _meta, podsumowanie z oknami ochrony agenta i grupy oraz zatwierdzenie. Zmiana grupy tworzy
 // nowy szkic, a „Wyślij do N osób” woła send_prepared, po czym widok sam odświeża stan doręczeń.
 import {
-  applyTheme, button, buttons, cancelledText, createBridge, esc, field, fields, forwardedText, messageBox, note, numbers, plural, sayIn, section,
-  smsCounter, textOf, tile, tiles,
+  applyTheme, button, buttons, cancelledText, createBridge, esc, failure, field, fields, forwardedText, messageBox, note, numbers, plural, sayIn,
+  section, smsCounter, textOf, tile, tiles,
 } from './bridge.js';
 import { deliveryLine, deliveryTile, NO_READ_SENT, watchDeliveries } from './doreczenia.js';
 import { latinText } from './measure.js';
@@ -87,7 +87,7 @@ export function startGroup(win, env) {
     try {
       await task();
     } catch (error) {
-      say('fail', error instanceof Error ? error.message : String(error));
+      say('fail', ...failure(error));
     } finally {
       s.busy = false;
       s.sending = false;

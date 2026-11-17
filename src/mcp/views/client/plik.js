@@ -5,8 +5,8 @@
 // pokazuje jako podgląd z gotowymi wiadomościami, a po wysyłce i z wyniku file_send_status jako postęp wysyłki.
 
 import {
-  applyTheme, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, field, fields, forwardedText, messageBox, note, num, numbers, openDownload,
-  pluralWord, sayIn, section, share, smsCounter, stamp, textOf, tile, tiles, txt, wideField,
+  applyTheme, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, failure, field, fields, forwardedText, messageBox, note, num,
+  numbers, openDownload, pluralWord, sayIn, section, share, smsCounter, stamp, textOf, tile, tiles, txt, wideField,
 } from './bridge.js';
 import { stackBar } from './chart.js';
 import { latinText, measure } from './measure.js';
@@ -288,10 +288,11 @@ export function watchFileSend(bridge, win, id, handlers, now = () => Date.now())
     try {
       result = await bridge.callTool('file_send_status', { id });
     } catch (error) {
-      result = { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
+      handlers.onEnd('error', ...failure(error));
+      return;
     }
     if (result.isError || !result.structuredContent) {
-      handlers.onEnd('error', textOf(result));
+      handlers.onEnd('error', textOf(result), '');
       return;
     }
     handlers.onData(result.structuredContent, result._meta);
@@ -360,17 +361,17 @@ export function mountFileSend(root, { bridge, say, win, live }) {
     try {
       await task();
     } catch (error) {
-      say('fail', error instanceof Error ? error.message : String(error));
+      say('fail', ...failure(error));
     } finally {
       f.busy = false;
       f.sending = false;
       draw();
     }
   };
-  const end = (why, text) => {
+  const end = (why, text, detail) => {
     f.watching = false;
     live.textContent = LIVE_TEXT[why] ?? '';
-    if (why === 'error') say('fail', text);
+    if (why === 'error') say('fail', text, detail);
   };
   const watch = () => {
     // Wysyłka przed przekazaniem nie zmienia stanu przez wiele godzin, dlatego widok nie odświeża jej na żywo.
@@ -576,14 +577,14 @@ export function startFile(win, env) {
       return say(result.forwarded ? 'ok' : 'plain', result.forwarded
         ? forwardedText('Informacja o wczytaniu pliku') : 'Bramka przyjęła plik. Napisz w rozmowie, jaką treść SMS-a przygotować.');
     } catch (error) {
-      return say('fail', error instanceof Error ? error.message : String(error));
+      return say('fail', ...failure(error));
     } finally {
       s.busy = false;
       draw();
     }
   }
 
-  const fail = (error) => say('fail', error instanceof Error ? error.message : String(error));
+  const fail = (error) => say('fail', ...failure(error));
 
   root.addEventListener('change', (event) => {
     const t = event.target;

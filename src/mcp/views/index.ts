@@ -24,7 +24,7 @@ interface ViewDef {
 }
 
 const REFRESH = '<button type="button" id="odswiez" class="btn">Odśwież</button>';
-const NOTICE = '<div class="foot"><p id="komunikat" class="notice" role="status" hidden></p></div>';
+const NOTICE = '<div class="foot"><div id="komunikat" class="notice" role="status" hidden></div></div>';
 const waiting = (text: string) => `<main id="tresc" class="body"><p class="muted">${text}</p></main>${NOTICE}`;
 
 const VIEWS: Partial<Record<ViewId, ViewDef>> = {

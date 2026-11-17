@@ -2,8 +2,8 @@
 // przyczyny niedoręczeń, doręczenia w kolejnych godzinach i pliki CSV. Widok sam odświeża stan co 30 s,
 // a odbiorców doładowuje porcjami.
 import {
-  applyTheme, badge, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, field, fields, note, num, openDownload, phoneLabel, sayIn, section,
-  share, stamp, textOf, tile, tiles, txt,
+  applyTheme, badge, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, failure, field, fields, note, num, openDownload, phoneLabel,
+  sayIn, section, share, stamp, textOf, tile, tiles, txt,
 } from './bridge.js';
 import { barChart, stackBar } from './chart.js';
 import { STATE_LABELS } from './doreczenia.js';
@@ -54,10 +54,11 @@ export function watchPackage(bridge, win, args, handlers, now = () => Date.now()
     try {
       result = await bridge.callTool('package_status', typeof args === 'function' ? args() : args);
     } catch (error) {
-      result = { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
+      handlers.onEnd('error', ...failure(error));
+      return;
     }
     if (result.isError || !result.structuredContent) {
-      handlers.onEnd('error', textOf(result));
+      handlers.onEnd('error', textOf(result), '');
       return;
     }
     handlers.onData(result.structuredContent);
@@ -161,10 +162,10 @@ export function startPackage(win, env) {
     const limit = Math.min(PAGE_MAX, Math.max(s.input?.limit ?? 25, s.data.items.length));
     return { packageId: s.data.id, ...(limit === 25 ? {} : { limit }) };
   };
-  const end = (why, text) => {
+  const end = (why, text, detail) => {
     s.watching = false;
     live.textContent = LIVE_TEXT[why] ?? '';
-    if (why === 'error') say('fail', text);
+    if (why === 'error') say('fail', text, detail);
   };
   const watch = () => {
     // Rozsyłka przed przekazaniem nie zmienia stanu przez wiele godzin, dlatego widok nie odświeża jej na żywo.
@@ -193,7 +194,7 @@ export function startPackage(win, env) {
     try {
       await task();
     } catch (error) {
-      say('fail', error instanceof Error ? error.message : String(error));
+      say('fail', ...failure(error));
     } finally {
       s.busy = false;
       draw();
