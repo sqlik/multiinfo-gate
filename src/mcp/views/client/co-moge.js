@@ -44,7 +44,7 @@ export function renderStatus(data, env = {}) {
   const schedule = data.schedule
     ? section('Wysyłka z terminem', note(`Termin może przypadać najwyżej ${data.schedule.maxDays} dni naprzód. ${CANCEL_WINDOW}.`)) : '';
   const file = data.file
-    ? section('Rozsyłka z pliku', note(`Plik CSV, TXT albo XLSX do ${num(data.file.rows)} wierszy danych i ${data.file.megabytes} MB wybiera pracownik w widoku bramki. `
+    ? section('Rozsyłka z pliku', note(`Pracownik wybiera w widoku bramki plik CSV, TXT albo XLSX do ${num(data.file.rows)} wierszy danych i ${data.file.megabytes} MB. `
       + 'Wartości z pliku widzi wyłącznie pracownik, a agent otrzymuje nazwy kolumn i liczby.')) : '';
   const conversation = data.conversation
     ? section('Rozmowa z numerem', note(`Widok rozmowy pokazuje SMS-y klienta i firmy z ostatnich ${data.conversation.days} dni, najwyżej `

@@ -179,7 +179,7 @@ const fileSmsInput = smsInput.pick({
 }).extend({
   text: z.string().min(1).describe('Treść SMS-a z polami w postaci {Nazwa kolumny}, na przykład {Kontrahent}. Bramka wstawi wartość z każdego wiersza pliku.'),
   clientIdColumn: z.string().min(1).optional()
-    .describe('Nazwa kolumny z identyfikatorem klienta, który bramka przekaże do raportu rozsyłki. Identyfikator może zawierać do 20 znaków: litery bez polskich znaków, cyfry, kropki, podkreślenia i myślniki.'),
+    .describe('Nazwa kolumny z identyfikatorem klienta, który bramka przekaże do raportu rozsyłki. Identyfikator może zawierać do 20 znaków: litery bez polskich znaków, cyfry, kropki, podkreślenia i łączniki.'),
 });
 
 export const prepareFileSmsTool: ToolDef = {

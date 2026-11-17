@@ -80,11 +80,11 @@ każdą wysyłkę zatwierdza pracownik przyciskiem w podglądzie. Agent działa 
 z bramką kodem jednorazowym z panelu, bez hasła.
 
 Wersja 1.13 wprowadza wysyłkę z terminem przechowywaną przez bramkę. Bramka przekazuje zaplanowaną
-rozsyłkę do Multiinfo zwykle 10 minut przed terminem, dzięki czemu do tej chwili można ją anulować
-w API, w konektorze Power Automate, u agenta i w panelu. Pracownik wysyła też w rozmowie z agentem
-rozsyłkę z pliku CSV albo Excel do 50 000 odbiorców z treścią złożoną z pól pliku, a agent nie widzi
-przy tym danych z pliku. Widok „Rozmowa z numerem” przedstawia wymianę SMS-ów z jednym klientem
-i pozwala odpowiedzieć w tym samym miejscu.
+rozsyłkę do Multiinfo zwykle 10 minut przed terminem. Do tej chwili rozsyłkę można anulować w API,
+w konektorze Power Automate, u agenta i w panelu. Pracownik wysyła też w rozmowie z agentem rozsyłkę
+z pliku CSV albo Excel do 50 000 odbiorców. Treść SMS-a składa się z pól pliku, a agent nie widzi przy
+tym danych z pliku. Widok „Rozmowa z numerem” przedstawia wymianę SMS-ów z jednym klientem i pozwala
+odpowiedzieć w tym samym miejscu.
 
 ## Co trzeba mieć
 

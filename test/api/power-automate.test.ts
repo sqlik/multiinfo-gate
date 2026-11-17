@@ -124,6 +124,8 @@ describe('buildPowerAutomateConnector', () => {
     expect(startAt['x-ms-summary']).toBe('Początek wysyłki');
     expect(startAt.description).toContain('30 dni');
     expect(startAt.description).toContain('Anuluj rozsyłkę');
+    // Zdanie ze specyfikacji 4.3 dosłownie, jak w dokumentacji API i w widokach.
+    expect(startAt.description).toContain('Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem.');
   });
 
   it('każda operacja odpowiada trasie prawdziwego serwera', () => {

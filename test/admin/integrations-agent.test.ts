@@ -101,6 +101,7 @@ describe('katalog i formularz', () => {
     expect(form).toContain('Może też anulować wiadomość tej integracji, której Multiinfo nie przekazało jeszcze do sieci operatora, oraz jej zaplanowaną rozsyłkę.');
     expect(form).toContain('rozsyłki z pliku do 50 000 odbiorców, także z terminem');
     expect(form).toContain('i rozmowę z jednym numerem');
+    expect(form).toContain('Może też anulować zaplanowany SMS do grupy tej integracji, zanim bramka przekaże go do Multiinfo.');
     expect(form).not.toContain('abonentowi');
   });
 });

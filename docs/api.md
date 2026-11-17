@@ -1071,10 +1071,9 @@ treści wspólnej `defaultText`.
 
 **Rozsyłka z terminem.** Multiinfo nie pozwala anulować rozsyłki, którą już przyjęło. Dlatego od wersji
 1.13 bramka przechowuje rozsyłkę z polem `startAt` u siebie w stanie `scheduled` i przekazuje ją do
-Multiinfo w chwili `handoverAt`, zwykle 10 minut przed terminem. Multiinfo rozpoczyna wysyłkę o wskazanej
-godzinie. Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed
-terminem, a opisuje je rozdział 5.5. Termin bliższy niż 10 minut jest dozwolony, ale bramka przekazuje
-wtedy rozsyłkę od razu.
+Multiinfo w chwili `handoverAt`, a Multiinfo rozpoczyna wysyłkę o wskazanej godzinie. Anulowanie jest
+możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem, a opisuje je
+rozdział 5.5. Termin bliższy niż 10 minut jest dozwolony, ale bramka przekazuje wtedy rozsyłkę od razu.
 
 Przy przekazaniu bramka ponownie sprawdza klucz API. Gdy klucz został odwołany, utracił ważność albo
 nie obejmuje już usługi lub nadpisu rozsyłki, bramka anuluje rozsyłkę i podaje przyczynę w polu `error`.

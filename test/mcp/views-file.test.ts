@@ -614,7 +614,7 @@ describe('podgląd, wysyłka i postęp rozsyłki z pliku', () => {
     };
     const html = renderStatus({ ...base, file: { rows: 50_000, megabytes: 20 } }, {});
     expect(html).toContain('<h3>Rozsyłka z pliku</h3>');
-    expect(html).toContain(`Plik CSV, TXT albo XLSX do ${num(50_000)} wierszy danych i 20 MB wybiera pracownik w widoku bramki. `
+    expect(html).toContain(`Pracownik wybiera w widoku bramki plik CSV, TXT albo XLSX do ${num(50_000)} wierszy danych i 20 MB. `
       + 'Wartości z pliku widzi wyłącznie pracownik, a agent otrzymuje nazwy kolumn i liczby.');
     expect(renderStatus({ ...base, file: null }, {})).not.toContain('Rozsyłka z pliku');
   });

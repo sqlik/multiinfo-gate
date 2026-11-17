@@ -455,9 +455,9 @@ otworzyli link, pokazuje panel bramki w szczegółach kampanii.
 
 Pole **Początek wysyłki** w parametrach zaawansowanych akcji „Wyślij rozsyłkę” określa godzinę, o której
 Multiinfo rozpocznie wysyłkę. Od wersji 1.13 bramka przechowuje taką rozsyłkę u siebie i przekazuje ją do
-Multiinfo zwykle 10 minut przed terminem. Dzięki temu rozsyłkę można anulować, na przykład gdy dyspozytor
-zmieni plan jutrzejszych wizyt. Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo,
-zwykle 10 minut przed terminem. Termin może przypadać najwyżej 30 dni od chwili wysyłki.
+Multiinfo krótko przed terminem. Dzięki temu rozsyłkę można anulować, na przykład gdy dyspozytor zmieni
+plan jutrzejszych wizyt. Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle
+10 minut przed terminem. Termin może przypadać najwyżej 30 dni od chwili wysyłki.
 
 Pole przyjmuje czas w formacie ISO 8601 w strefie UTC, na przykład `2026-11-20T07:00:00Z` dla godziny
 8:00 czasu polskiego zimą. Czas polski zamienia na UTC wyrażenie

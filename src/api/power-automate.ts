@@ -276,8 +276,9 @@ const DESCRIPTIONS_BY_PATH: Record<string, string> = {
     + ' Wiadomość niedoręczona do tego czasu otrzymuje stan expired. Puste pole oznacza, że bramka nie ustawia czasu'
     + ' ważności',
   startAt: 'Termin rozpoczęcia rozsyłki w formacie ISO 8601, na przykład 2026-11-04T07:00:00Z, najwyżej 30 dni naprzód.'
-    + ' Termin musi przypadać w przyszłości. Bramka przechowuje rozsyłkę do terminu i przekazuje ją do Multiinfo zwykle'
-    + ' 10 minut wcześniej. Do tej chwili rozsyłkę anuluje akcja „Anuluj rozsyłkę”. Puste pole oznacza wysyłkę od razu',
+    + ' Termin musi przypadać w przyszłości. Bramka przechowuje rozsyłkę do terminu i przekazuje ją do Multiinfo krótko'
+    + ' przed nim. Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem.'
+    + ' Rozsyłkę anuluje akcja „Anuluj rozsyłkę”. Puste pole oznacza wysyłkę od razu',
   requestedBy: 'Kto zlecił wysyłkę, na przykład adres e-mail osoby z formularza albo autora wpisu na liście SharePoint.'
     + ' Bramka zapisuje go w dzienniku integracji oraz przy wiadomości albo rozsyłce. Nie trafia do treści SMS-a',
   encoding: 'Automatyczne wybiera GSM-7, a przy polskich znakach Unicode. Przy GSM Multiinfo zastępuje polskie znaki'

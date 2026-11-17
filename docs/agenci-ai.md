@@ -608,8 +608,9 @@ numeru i do grupy. Stan zaplanowanej rozsyłki przedstawia widok postępu rozsy�
 ### 8.1. Przechowywanie do przekazania
 
 Multiinfo nie pozwala anulować rozsyłki, którą już przyjęło. Dlatego bramka przechowuje rozsyłkę
-z terminem u siebie i przekazuje ją do Multiinfo zwykle 10 minut przed terminem, a Multiinfo rozpoczyna
-wysyłkę o wskazanej godzinie. Do chwili przekazania rozsyłkę można anulować na trzy sposoby:
+z terminem u siebie i przekazuje ją do Multiinfo krótko przed terminem, a Multiinfo rozpoczyna wysyłkę
+o wskazanej godzinie. Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle
+10 minut przed terminem. Rozsyłkę można anulować na trzy sposoby:
 
 - pracownik prosi agenta, na przykład „Anuluj rozsyłkę na poniedziałek”
 - pracownik klika **Anuluj rozsyłkę** w widoku postępu rozsyłki
@@ -638,7 +639,8 @@ o dokładną godzinę.
 
 Termin bliższy niż 10 minut jest dozwolony, ale bramka przekazuje wtedy rozsyłkę do Multiinfo od razu.
 Taką rozsyłkę wysyła Multiinfo o wskazanej godzinie, a anulowanie przestaje być możliwe tuż po
-zatwierdzeniu.
+zatwierdzeniu. Gdy do terminu pozostaje mniej niż minuta, a przy rozsyłce do kilku tysięcy odbiorców
+mniej niż dwie minuty, bramka wysyła rozsyłkę natychmiast, bez terminu.
 
 ### 8.3. Grupa, połączenie i integracja
 
@@ -649,8 +651,8 @@ wiadomość powinien otrzymać także nowy członek ekipy, anuluj rozsyłkę i p
 Odwołanie połączenia pracownika nie anuluje jego zaplanowanych rozsyłek, ponieważ każdą z nich zatwierdził
 człowiek. Taką rozsyłkę anuluje w razie potrzeby administrator w panelu bramki. Wyłączenie integracji
 „Agent AI” wstrzymuje przekazanie jej rozsyłek, także SMS-ów do grupy zleconych przez agenta, a usunięcie
-integracji anuluje je od razu. Odwołany albo wygasły
-klucz API integracji powoduje anulowanie rozsyłki w chwili przekazania.
+integracji anuluje je od razu. Odwołany albo wygasły klucz API integracji powoduje anulowanie rozsyłki
+w chwili przekazania.
 
 Jeżeli bramka nie przekaże rozsyłki w ciągu 60 minut od terminu, na przykład z powodu wyłączonej integracji
 albo przerwy w pracy bramki, rozsyłka przechodzi w stan „Termin minął”. Bramka nie wysyła jej wtedy
@@ -666,8 +668,8 @@ faktury dla {Kontrahent} na kwotę {Kwota} do {Termin}.”. Bramka składa z ka�
 i wysyła go na numer z kolumny Numer.
 
 Plik odczytuje widok w przeglądarce pracownika, a wiersze trafiają z widoku bezpośrednio do bramki. Agent
-otrzymuje wyłącznie nazwy kolumn i liczby, dlatego numery, kwoty ani nazwy kontrahentów do niego nie
-trafiają. Rozsyłka z pliku wymaga zakresu „Wysyłka SMS-ów” oraz aplikacji z widokami, na przykład
+otrzymuje wyłącznie nazwy kolumn i liczby, dlatego numery telefonów, kwoty i nazwy kontrahentów do niego
+nie trafiają. Rozsyłka z pliku wymaga zakresu „Wysyłka SMS-ów” oraz aplikacji z widokami, na przykład
 claude.ai albo ChatGPT.
 
 ### 9.1. Przebieg wysyłki

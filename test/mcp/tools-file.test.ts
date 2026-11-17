@@ -226,6 +226,10 @@ describe('file_summary, prepare_file_sms i send_file_sms', () => {
     expect(byName.get('prepare_file_sms')!._meta).toEqual({ ui: { resourceUri: 'ui://multiinfo-gate/plik' } });
     expect(byName.get('send_file_sms')!._meta).toEqual({ ui: { visibility: ['app'] } });
     expect(byName.get('send_file_sms')!.annotations).toMatchObject({ destructiveHint: true, openWorldHint: true });
+    // Znak „-” w identyfikatorze klienta nazywa się łącznikiem, jak w dokumentacji i w konektorze.
+    const clientId = JSON.stringify((byName.get('prepare_file_sms')!.inputSchema as { properties: Record<string, unknown> }).properties.clientIdColumn);
+    expect(clientId).toContain('kropki, podkreślenia i łączniki');
+    expect(clientId).not.toContain('myślnik');
   });
 });
 
