@@ -136,6 +136,12 @@ describe('widok rozsyłki z pliku', () => {
     expect(FILE_LOADED).toBe(FILE_LOADED_MESSAGE);
   });
 
+  it('transferFile: odmowa wiadomości przez aplikację AI po komplecie wierszy nie jest błędem przekazania', async () => {
+    const bridge = fakeBridge();
+    const declining = { ...bridge, sendMessage: async () => { throw hostError('ui/message', 'User declined the message'); } };
+    expect(await transferFile(declining, FILE, { wait: async () => undefined })).toEqual({ error: null, forwarded: false });
+  });
+
   it('transferFile: błąd porcji inny niż limit żądań przerywa przesyłanie bez wiadomości do rozmowy', async () => {
     const bridge = fakeBridge();
     const failing = {

@@ -39,7 +39,7 @@ const PICKER = '<label class="pick"><input type="file" id="plik" accept=".csv,.t
  * Przesłanie wierszy porcjami w kolejności offsetów: najwyżej `size` wierszy i `bytes` bajtów w porcji. Nagłówek
  * pliku przechodzi wyłącznie w pierwszej porcji. Odmowa limitu żądań klucza wstrzymuje przesyłanie
  * na `retryAfterSec` i ponawia tę samą porcję. Po komplecie widok wysyła do rozmowy stałą wiadomość.
- * Wynik: { error, forwarded }.
+ * Wynik: { error, forwarded }, a `forwarded` jest równe false także wtedy, gdy aplikacja AI odmówiła wiadomości.
  */
 export async function transferFile(bridge, file, { size = UPLOAD_CHUNK, bytes = UPLOAD_BYTES, wait, onChunk = () => undefined }) {
   const total = file.rows.length;
@@ -64,7 +64,8 @@ export async function transferFile(bridge, file, { size = UPLOAD_CHUNK, bytes = 
     if (last || !(out.received > offset)) return { error: 'Bramka nie przyjęła wszystkich wierszy pliku. Wybierz plik ponownie.', forwarded: false };
     offset = out.received;
   }
-  return { error: null, forwarded: await bridge.sendMessage(FILE_LOADED) };
+  // Bramka przyjęła już plik, dlatego odmowa wiadomości przez aplikację AI oznacza tylko brak wiadomości w rozmowie.
+  return { error: null, forwarded: await bridge.sendMessage(FILE_LOADED).catch(() => false) };
 }
 
 const selectOf = (id, options) => `<select class="sel" id="${id}">${options.join('')}</select>`;
