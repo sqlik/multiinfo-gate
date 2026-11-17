@@ -59,6 +59,8 @@ export const VIEW_STYLE = [
   '.pick .pick-btn{flex:none;display:inline-flex;align-items:center;height:26px;padding:0 10px}.pick:hover .pick-btn{background:var(--rule-soft)}',
   '.pick-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;color:var(--muted)}.pick-name.set{color:var(--ink)}',
   '.pick:has(input:focus-visible){outline:2px solid var(--signal);outline-offset:2px}',
+  // W trakcie przekazywania pliku pole wyboru jest wyłączone jak pozostałe pola: szara obwódka i przycisk.
+  '.pick:has(input:disabled){cursor:default;border-color:var(--rule)}.pick:has(input:disabled) .pick-btn{background:var(--rule-soft);color:var(--faint)}',
   // Wartość obok pola wyboru stoi na wysokości tekstu w polu.
   '.align .field .txt{display:flex;align-items:center;min-height:var(--h)}',
   '.check{display:flex;align-items:center;gap:8px;width:fit-content;margin-top:16px;font-size:14px;cursor:pointer}',

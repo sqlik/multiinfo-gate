@@ -204,6 +204,48 @@ describe('widok rozsyłki z pliku', () => {
     expect(w.node('stan').innerHTML).toContain('data-act="upload" disabled');
   });
 
+  it('widok: plik wybrany w trakcie odczytu poprzedniego zastępuje go, rozpoznanie i przekazanie dotyczą ostatniego pliku', async () => {
+    const gate = gateway();
+    const w = viewWindow(gate);
+    startFile(w.win, { version: '1.13.0' });
+    const csv = (rows: string[]) => new Uint8Array(Buffer.from(['Numer;Kontrahent', ...rows].join('\r\n')));
+    const a = csv(['48601000011;Plik A - stara lista']);
+    const b = csv(['48601000022;Plik B - właściwa lista']);
+    let releaseA: () => void = () => undefined;
+    const slowA = new Promise<void>((resolve) => { releaseA = resolve; });
+    w.change({ id: 'plik', files: [{ name: 'lista-pazdziernik.csv', size: a.length, arrayBuffer: async () => { await slowA; return a.buffer.slice(0); } }] });
+    w.pick('lista-listopad.csv', b);
+    await until(() => w.node('stan').innerHTML.includes('Plik B - właściwa lista'));
+    releaseA();
+    for (let i = 0; i < 50; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(w.node('plik-nazwa').textContent).toBe('lista-listopad.csv');
+    expect(w.node('stan').innerHTML).toContain('Plik B - właściwa lista');
+    expect(w.node('stan').innerHTML).not.toContain('Plik A - stara lista');
+    w.click('upload');
+    await until(() => gate.calls.length > 0);
+    expect(gate.calls[0]).toMatchObject({ name: 'lista-listopad.csv' });
+    expect(JSON.stringify(gate.calls[0]!.rows)).toContain('48601000022');
+  });
+
+  it('widok: pole wyboru pliku wyłączone w trakcie przekazywania, wybór w tym czasie pomijany z wyczyszczeniem pola', async () => {
+    const w = viewWindow(gateway());
+    startFile(w.win, { version: '1.13.0' });
+    w.pick('przypomnienia.csv', new Uint8Array(Buffer.from('Numer;Kontrahent\r\n48601000011;Hurtownia Łódź')));
+    await until(() => w.node('stan').innerHTML.includes('Przekaż plik do bramki'));
+    const input = w.node('plik') as unknown as { disabled?: boolean };
+    expect(input.disabled).toBeFalsy();
+    w.click('upload');
+    expect(input.disabled).toBe(true);
+    // Zdarzenie wyboru, które mimo to dotrze w trakcie przekazywania, nie zmienia pliku, a pole wraca do stanu bez wyboru,
+    // dzięki czemu ponowny wybór tego samego pliku po przekazaniu wywoła zdarzenie.
+    const late = { id: 'plik', value: 'C:\\fakepath\\inna-lista.csv', files: [{ name: 'inna-lista.csv', size: 10, arrayBuffer: async () => new ArrayBuffer(0) }] };
+    w.change(late);
+    expect(late.value).toBe('');
+    expect(w.node('plik-nazwa').textContent).toBe('przypomnienia.csv');
+    await until(() => w.node('komunikat').textContent.includes('została przekazana aplikacji AI'));
+    expect(input.disabled).toBe(false);
+  });
+
   it('widok: plik .xls daje komunikat bez wywołań narzędzi bramki', async () => {
     const w = viewWindow(gateway());
     startFile(w.win, { version: '1.13.0' });
@@ -227,6 +269,7 @@ describe('widok rozsyłki z pliku', () => {
 
   it('style: pole wyboru pliku i listy wyśrodkowane w pionie, strzałka listy z odstępem, obwódki pól we wszystkich widokach w kolorze akcji', () => {
     expect(VIEW_STYLE).toMatch(/\.pick\{position:relative;display:flex;align-items:center;[^}]*border:1px solid var\(--signal\)/);
+    expect(VIEW_STYLE).toMatch(/\.pick:has\(input:disabled\)\{[^}]*border-color:var\(--rule\)/);
     expect(VIEW_STYLE).toMatch(/select\.sel\{[^}]*appearance:none;[^}]*padding:0 34px 0 10px;/);
     // Decyzja Tomka 2026-11-17: obwódki pól jak okno treści SMS-a we wszystkich widokach, pole wyłączone szare.
     expect(VIEW_STYLE).toMatch(/\.sel,\.inp\{[^}]*border:1px solid var\(--signal\)/);

@@ -556,7 +556,12 @@ export function startFile(win, env) {
     draw();
   }
 
+  /** Numer kolejnego wyboru pliku: odczyt wcześniejszego pliku, który skończy się później, nie zmienia rozpoznania. */
+  let picks = 0;
+
   async function read(picked) {
+    picks += 1;
+    const pick = picks;
     Object.assign(s, { name: picked.name, source: null, rows: [], table: null, phoneColumn: null, done: false, progress: null });
     const name = doc.getElementById('plik-nazwa');
     name.textContent = picked.name;
@@ -564,7 +569,10 @@ export function startFile(win, env) {
     draw();
     if (picked.size > FILE_BYTES_MAX) return say('fail', FILE_TOO_BIG);
     say('wait', 'Widok odczytuje plik');
-    const result = await readFileBytes(picked.name, new Uint8Array(await picked.arrayBuffer()));
+    const bytes = new Uint8Array(await picked.arrayBuffer());
+    if (pick !== picks) return undefined;
+    const result = await readFileBytes(picked.name, bytes);
+    if (pick !== picks) return undefined;
     if (result.error) return say('fail', result.error);
     s.source = result;
     s.rows = result.rows;
@@ -572,9 +580,15 @@ export function startFile(win, env) {
     return say('plain', '');
   }
 
+  /** Pole wyboru pliku jest wyłączone w trakcie przekazywania, dlatego plik nie zmienia się w połowie przesyłania. */
+  const lockPicker = (locked) => {
+    doc.getElementById('plik').disabled = locked;
+  };
+
   async function upload() {
     const t = s.table;
     s.busy = true;
+    lockPicker(true);
     s.done = false;
     s.progress = { sent: 0, total: t.data.length };
     say('wait', 'Widok przekazuje plik do bramki');
@@ -598,6 +612,7 @@ export function startFile(win, env) {
       return say('fail', ...failure(error));
     } finally {
       s.busy = false;
+      lockPicker(false);
       draw();
     }
   }
@@ -607,8 +622,12 @@ export function startFile(win, env) {
   root.addEventListener('change', (event) => {
     const t = event.target;
     if (sending.change(t)) return undefined;
-    // Podczas przekazywania widok nie zmienia pliku ani rozpoznania.
-    if (s.busy) return draw();
+    // Podczas przekazywania widok nie zmienia pliku ani rozpoznania. Pole wyboru wraca do stanu bez wyboru,
+    // dzięki czemu ponowny wybór tego samego pliku po przekazaniu wywoła zdarzenie.
+    if (s.busy) {
+      if (t.id === 'plik') t.value = '';
+      return draw();
+    }
     if (t.id === 'plik') {
       if (t.files && t.files.length > 0) void read(t.files[0]).catch(fail);
     } else if (t.id === 'arkusz' && s.source?.kind === 'xlsx') {
