@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { AgentError } from '../../src/agents/errors.ts';
 import { PA_RECIPIENT_LIMIT_MAX } from '../../src/integrations/config.ts';
 import {
-  AgentFilesRepo, CELL_CHARS_MAX, COLUMN_NAME_MAX, COLUMNS_MAX, FILE_NAME_MAX, FILE_ROWS_MAX, FILE_TTL_MS, UPLOAD_ROWS_MAX,
+  AgentFilesRepo, CELL_CHARS_MAX, COLUMN_NAME_MAX, COLUMNS_MAX, FILE_MEGABYTES_MAX, FILE_NAME_MAX, FILE_ROWS_MAX, FILE_TTL_MS, UPLOAD_ROWS_MAX,
 } from '../../src/store/agent-files.ts';
 import { AgentConnectionsRepo } from '../../src/store/agent-connections.ts';
 import { openDatabase } from '../../src/store/db.ts';
@@ -123,6 +123,31 @@ describe('AgentFilesRepo', () => {
     limitError(() => files.append(id, 0, [row(2, ['48601000011', 'x'.repeat(1001), '', ''])]), '1000 znaków');
     expect(files.get(id, ewa)!.receivedRows).toBe(0);
     expect(files.append(id, 0, [row(2, ['48601000011', 'x'.repeat(1000), '', ''])])).toEqual({ received: 1 });
+  });
+
+  it('łączny rozmiar wartości szkicu: porcja ponad 20 MB daje file_limit i nie zostaje zapisana', () => {
+    const columns = Array.from({ length: COLUMNS_MAX }, (_, i) => `K${i + 1}`);
+    const id = files.create({ connectionId: ewa, name: 'duzy.csv', columns, phoneColumn: 0, totalRows: 1000, now: NOW });
+    const cell = 'x'.repeat(CELL_CHARS_MAX);
+    const chunk = (from: number) => Array.from({ length: 100 }, (_, j) => ({ line: from + j + 2, cells: [`48601${String(from + j).padStart(6, '0')}`, ...columns.slice(1).map(() => cell)] }));
+    const stored = () => (db.prepare('SELECT COALESCE(SUM(LENGTH(cells)), 0) AS n FROM agent_file_rows').get() as { n: number }).n;
+    let offset = 0;
+    let error: unknown;
+    while (offset < 1000) {
+      try {
+        files.append(id, offset, chunk(offset));
+        offset += 100;
+      } catch (e) {
+        error = e;
+        break;
+      }
+    }
+    expect(error).toMatchObject({
+      code: 'file_limit', message: `Dane pliku przekraczają ${FILE_MEGABYTES_MAX} MB, a bramka przyjmuje najwyżej ${FILE_MEGABYTES_MAX} MB danych z jednego pliku.`,
+    });
+    expect(offset).toBe(400);
+    expect(stored()).toBeLessThanOrEqual(FILE_MEGABYTES_MAX * 1024 * 1024);
+    expect(files.get(id, ewa)!.receivedRows).toBe(400);
   });
 
   it('pruneBefore usuwa szkic pliku po 24 h razem z wierszami', () => {

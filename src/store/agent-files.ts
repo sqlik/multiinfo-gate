@@ -132,11 +132,15 @@ export class AgentFilesRepo {
         throw new AgentError('upload_overflow', `Porcja przekracza liczbę wierszy zapowiedzianą w pierwszej porcji pliku, czyli ${formatCount(file.total_rows)}.`);
       }
       const width = (JSON.parse(file.columns) as string[]).length;
+      const cells = rows.map((row) => (row.cells.length === width ? JSON.stringify(row.cells) : null));
+      // Limit pliku sprawdza także bramka, ponieważ narzędzie może wywołać aplikacja z pominięciem widoku,
+      // a podgląd i wysyłka wczytują cały szkic do pamięci.
+      const stored = (this.db.prepare('SELECT COALESCE(SUM(LENGTH(cells)), 0) AS n FROM agent_file_rows WHERE file_id = ?').get(id) as { n: number }).n;
+      if (cells.reduce((sum, c) => sum + (c?.length ?? 0), stored) > FILE_MEGABYTES_MAX * 1024 * 1024) {
+        throw limit(`Dane pliku przekraczają ${FILE_MEGABYTES_MAX} MB, a bramka przyjmuje najwyżej ${FILE_MEGABYTES_MAX} MB danych z jednego pliku.`);
+      }
       const insert = this.db.prepare('INSERT INTO agent_file_rows (file_id, seq, line, cells, problem) VALUES (?, ?, ?, ?, ?)');
-      rows.forEach((row, i) => {
-        const fits = row.cells.length === width;
-        insert.run(id, offset + i, row.line, fits ? JSON.stringify(row.cells) : null, fits ? null : 'columns');
-      });
+      rows.forEach((row, i) => insert.run(id, offset + i, row.line, cells[i], cells[i] === null ? 'columns' : null));
       const received = offset + rows.length;
       this.db.prepare('UPDATE agent_files SET received_rows = ? WHERE id = ?').run(received, id);
       return { received };
