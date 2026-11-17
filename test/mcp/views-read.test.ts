@@ -553,7 +553,7 @@ const wrote = (id: string, at: string, text: string, over: Record<string, unknow
   kind: 'out', id, at: stamp(at), text, stored: true, status: 'delivered', statusLabel: 'doręczona', source: 'API', packageId: null, untrusted: true, notice: SENT, ...over,
 });
 const CONVERSATION = {
-  phone: '48601000081', hasEarlier: true, earliest: '2026-10-15T08:00:00.000Z', lastInboundId: 'in_2', sent: 'all', canReply: true,
+  phone: '48601000081', hasEarlier: true, earliest: '2026-10-15T08:00:00.000Z', lastInboundId: 'in_2', sent: 'all', canReply: true, readAt: stamp('2026-11-15T07:10:00.000Z'),
   items: [
     wrote('msg_1', '2026-11-14T08:00:00.000Z', 'Przegląd klimatyzacji w czwartek o 9:00. Prosimy o potwierdzenie.'),
     said('in_1', '2026-11-14T15:12:00.000Z', '<img src=x onerror=alert(1)>'),
@@ -614,6 +614,22 @@ describe('widok rozmowy z numerem', () => {
     const sent = renderConversation({ ...CONVERSATION, draft: REPLY_DRAFT }, { replySent: 'msg_9' });
     expect(sent).toContain('Odpowiedź została przyjęta do wysyłki jako wiadomość <span class="mono">msg_9</span>');
     expect(sent).not.toContain('Wyślij odpowiedź');
+  });
+
+  it('widok ze stroną wcześniejszych SMS-ów: odświeżenie nie oznacza jako nowych SMS-ów odebranych przed odczytem', async () => {
+    const w = viewWindow();
+    startConversation(w.win, { version: '1.13.0' });
+    await w.ready({ serverTools: {}, message: {} });
+    // Agent pokazał stronę wcześniejszą z października, a odczyt nastąpił 15 listopada o 07:10.
+    const earlier = { ...CONVERSATION, hasEarlier: false, earliest: null, lastInboundId: 'in_0', items: [said('in_0', '2026-10-10T08:00:00.000Z', 'Proszę o kontakt w sprawie przeglądu.')] };
+    w.deliver(result(earlier));
+    void w.timers.shift()!.fn();
+    await tick();
+    const latest = { ...CONVERSATION, readAt: stamp('2026-11-15T07:10:15.000Z'), items: [...CONVERSATION.items, said('in_3', '2026-11-15T07:10:10.000Z', 'Czy można o 8:00?')], lastInboundId: 'in_3' };
+    w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, result: { content: [], structuredContent: latest } });
+    await tick();
+    // SMS-y z 14 i 15 listopada sprzed odczytu są zwykłymi pozycjami, a SMS z 07:10:10 przyszedł po odczycie.
+    expect(bubbles(w.nodes.tresc.innerHTML)).toEqual(['in', 'out', 'in', 'in', 'out', 'in new']);
   });
 
   it('widok: Poproś o odpowiedź wysyła stałą wiadomość bez treści i numeru', async () => {

@@ -127,20 +127,23 @@ export function startConversation(win, env) {
   const refreshButton = doc.getElementById('odswiez');
   const say = sayIn(doc);
   const s = {
-    data: null, seen: new Set(), fresh: new Set(), asked: false, confirm: null, replySent: null, busy: false, stop: null, retrying: false,
+    data: null, seen: new Set(), fresh: new Set(), asked: false, confirm: null, replySent: null, busy: false, stop: null, retrying: false, since: null,
   };
   refreshButton.hidden = true;
   const draw = () => {
     if (s.data) root.innerHTML = renderConversation(s.data, s);
   };
 
-  /** Pozycje odczytu w miejsce pozycji o tym samym identyfikatorze; nieznany SMS klienta z odświeżenia jest nowy. */
+  /**
+   * Pozycje odczytu w miejsce pozycji o tym samym identyfikatorze. Nowy jest nieznany SMS klienta z odświeżenia odebrany
+   * po odczycie, który pokazał widok; SMS-y sprzed odczytu, na przykład spoza strony wcześniejszej, są zwykłymi pozycjami.
+   */
   const merge = (incoming, markNew) => {
     const byId = new Map(s.data.items.map((i) => [i.id, i]));
     for (const item of incoming) {
       if (item.kind === 'in' && !s.seen.has(item.id)) {
         s.seen.add(item.id);
-        if (markNew) {
+        if (markNew && (s.since === null || item.at.at > s.since)) {
           s.fresh.add(item.id);
           s.asked = false;
         }
@@ -183,7 +186,7 @@ export function startConversation(win, env) {
     }
     Object.assign(s, {
       data, seen: new Set(data.items.filter((i) => i.kind === 'in').map((i) => i.id)), fresh: new Set(), asked: false,
-      confirm: result._meta?.confirm ?? null, replySent: null,
+      confirm: result._meta?.confirm ?? null, replySent: null, since: data.readAt?.at ?? null,
     });
     say('plain', '');
     draw();

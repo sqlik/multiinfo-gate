@@ -131,6 +131,15 @@ describe('conversation', () => {
     expect(agentError(() => conversation(deps, ctx(), { phone: CLIENT, before: 'wczoraj' }, NOW)).code).toBe('invalid');
   });
 
+  it('chwila odczytu według zegara bramki, także dla strony wcześniejszej i rozmowy bez SMS-ów', () => {
+    setup(['read_inbound']);
+    inbound('in_a', -HOUR);
+    const readAt = { at: NOW.toISOString(), local: expect.any(String) };
+    expect(conversation(deps, ctx(), { phone: CLIENT }, NOW).readAt).toEqual(readAt);
+    expect(conversation(deps, ctx(), { phone: CLIENT, before: at(-2 * HOUR) }, NOW).readAt).toEqual(readAt);
+    expect(conversation(deps, ctx(), { phone: '48601000099' }, NOW).readAt).toEqual(readAt);
+  });
+
   it('numer krótki zapisany jako nadawca, na przykład 8080: rozmowa po identyfikatorze i po numerze z wyniku, jak przy odświeżaniu widoku', () => {
     setup(['read_inbound']);
     inbound('in_k', -HOUR, { sender: '8080' });

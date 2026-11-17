@@ -23,8 +23,10 @@ export interface ConversationItem {
   scheduled?: boolean;
 }
 
+/** Rozmowa; `readAt` jest chwilą odczytu według zegara bramki, od której widok oznacza SMS-y klienta jako nowe. */
 export interface ConversationData {
   phone: string; items: ConversationItem[]; hasEarlier: boolean; earliest: string | null; lastInboundId: string | null; sent: 'all' | 'replies';
+  readAt: Stamp;
 }
 
 const EPOCH = new Date(0);
@@ -118,7 +120,9 @@ export function conversation(deps: ReadDeps, ctx: ConnectionContext, q: { phone?
     return found.length === 0 ? null : found.reduce((a, b) => (a > b ? a : b));
   };
 
-  const empty: ConversationData = { phone: dest, items: [], hasEarlier: false, earliest: null, lastInboundId: null, sent: all ? 'all' : 'replies' };
+  const empty: ConversationData = {
+    phone: dest, items: [], hasEarlier: false, earliest: null, lastInboundId: null, sent: all ? 'all' : 'replies', readAt: stamp(now.toISOString()),
+  };
   let until = now.toISOString();
   let anchor = until;
   if (q.before !== undefined) {
