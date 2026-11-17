@@ -12,6 +12,13 @@ export const OVERDUE_AFTER_MS = 60 * 60_000;
 export const START_AT_MAX_MS = 30 * 86_400_000;
 /** Bliższy termin względem chwili przekazania oznacza wysyłkę natychmiastową, bez terminu po stronie Multiinfo. */
 export const MI_START_MARGIN_MS = 60_000;
+/** Czas przyjmowania rozsyłki przez Multiinfo na odbiorcę, około 50 s dla 5000 odbiorców. */
+export const MI_START_MARGIN_PER_RECIPIENT_MS = 10;
+
+/** Margines terminu rozsyłki: minuta i czas, w którym Multiinfo przyjmuje listę odbiorców, do 110 s przy 5000. */
+export function miStartMarginMs(recipients: number): number {
+  return MI_START_MARGIN_MS + recipients * MI_START_MARGIN_PER_RECIPIENT_MS;
+}
 
 /** Zdanie o oknie anulowania dla panelu, API, konektora i widoków; bez wyprzedzenia anulowanie trwa do terminu. */
 export const CANCEL_WINDOW_TEXT = HANDOVER_LEAD_MS > 0

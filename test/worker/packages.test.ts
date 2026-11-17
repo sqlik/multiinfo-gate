@@ -640,10 +640,31 @@ describe('handlePackageCreate - rozsyłka zaplanowana', () => {
     expect(sentFields()).not.toHaveProperty('startAt');
   });
 
-  it('termin dokładnie 60 s po przekazaniu: termin trafia do Multiinfo', async () => {
+  it('margines terminu 60 s plus 10 ms na odbiorcę: dwóch odbiorców i termin za 60 s - wysyłka natychmiastowa', async () => {
     createPackage.mockResolvedValue('14');
     await handlePackageCreate(scheduled(at(MIN)), deps, NOW);
-    expect(sentFields().startAt).toEqual(at(MIN));
+    expect(sentFields()).not.toHaveProperty('startAt');
+  });
+
+  it('margines terminu: dwóch odbiorców i termin za 60,02 s - termin trafia do Multiinfo', async () => {
+    createPackage.mockResolvedValue('14');
+    await handlePackageCreate(scheduled(at(MIN + 20)), deps, NOW);
+    expect(sentFields().startAt).toEqual(at(MIN + 20));
+  });
+
+  it('margines terminu przy 5000 odbiorcach: termin za 109 s bez terminu po stronie Multiinfo, za 110 s z terminem', async () => {
+    createPackage.mockResolvedValue('14');
+    const recipients = Array.from({ length: 5000 }, (_, i) => ({ dest: `4860100${String(i).padStart(4, '0')}`, text: null, clientId: null }));
+    for (const [id, delay] of [['pkg_a', 109_000], ['pkg_b', 110_000]] as const) {
+      deps.packages.insert({
+        id, apiKeyId, accountId, serviceId: '24138', defaultText: 'Przegląd floty w czwartek o 8:00', orig: null, costCenter: null,
+        startAt: at(delay).toISOString(), deliveryReport: 1, encoding: 'gsm', multipart: 0, createdAt: NOW.toISOString(), status: 'scheduled',
+      }, recipients);
+      const payload = { packageId: id, scheduled: true };
+      await handlePackageCreate({ id: deps.jobs.enqueue('package.create', payload, NOW), type: 'package.create', payload, attempts: 0, lastError: null }, deps, NOW);
+    }
+    expect(createPackage.mock.calls[0]![0]).not.toHaveProperty('startAt');
+    expect(createPackage.mock.calls[1]![0]).toMatchObject({ startAt: at(110_000) });
   });
 
   it('bramka nie działała 90 min: overdue, jedno powiadomienie package_overdue, zadanie usunięte, zero żądań package.aspx', async () => {

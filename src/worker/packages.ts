@@ -4,7 +4,7 @@ import { cancelPackage } from '../api/cancel-package.ts';
 import { ApiError } from '../api/errors.ts';
 import { authFromKey } from '../api/submit.ts';
 import { keyOrigs } from '../api/orig.ts';
-import { MI_START_MARGIN_MS, OVERDUE_AFTER_MS } from '../api/schedule.ts';
+import { OVERDUE_AFTER_MS, miStartMarginMs } from '../api/schedule.ts';
 import { silentLogger, type Logger } from '../log.ts';
 import { parseReport } from '../multiinfo/report.ts';
 import { PACKAGE_NOT_RETRIED } from '../multiinfo/client.ts';
@@ -304,7 +304,7 @@ export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date)
 }
 
 /**
- * Żądanie `package.aspx`. Termin trafia do Multiinfo, gdy przypada co najmniej `MI_START_MARGIN_MS` później;
+ * Żądanie `package.aspx`. Termin trafia do Multiinfo, gdy przypada co najmniej `miStartMarginMs` później;
  * bliższy albo miniony termin oznacza wysyłkę natychmiastową. Pierwsze pytanie o postęp przypada minutę po terminie,
  * ponieważ do terminu Multiinfo trzyma rozsyłkę bez zmian. Zaplanowana rozsyłka, której żądanie nie dotarło
  * do Multiinfo, a zadanie zostało w kolejce, wraca do `scheduled`.
@@ -333,7 +333,7 @@ async function createAtMultiinfo(
       log.error('rozsylka.znacznik_przekazania', { packageId: pkg.id, error: error instanceof Error ? error.message : String(error) });
     }
   };
-  const startAt = pkg.startAt !== null && Date.parse(pkg.startAt) - now.getTime() >= MI_START_MARGIN_MS ? new Date(pkg.startAt) : undefined;
+  const startAt = pkg.startAt !== null && Date.parse(pkg.startAt) - now.getTime() >= miStartMarginMs(pkg.recipientsCount) ? new Date(pkg.startAt) : undefined;
 
   try {
     const miPackageId = await deps.clients.for(pkg.accountId).createPackage({
