@@ -160,7 +160,7 @@ function fileText(ctx: ToolContext, p: FilePreview): string {
       + `SMS-y w kodowaniu GSM: ${formatCount(p.encodings.gsm)}, w kodowaniu Unicode: ${formatCount(p.encodings.ucs2)}.`
       + (p.packages > 0 ? ` Bramka ${p.schedule === null ? 'wyśle' : 'zaplanuje'} ${plural(p.packages, 'rozsyłkę', 'rozsyłki', 'rozsyłek')}.` : ''),
     p.fields.length > 0 ? `Pola w treści: ${columnList(p.fields)}.` : 'Treść nie zawiera pól, dlatego każdy odbiorca otrzyma tę samą treść.',
-    ...(total > 0 ? [`Wiersze wyłączone z wysyłki: ${formatCount(total)}. Przyczyny: ${excluded.map(([r, n]) => `${REASON_LABELS[r]} ${formatCount(n)}`).join(', ')}.`] : []),
+    ...(total > 0 ? [`Wiersze wyłączone z wysyłki: ${formatCount(total)}. Przyczyny: ${excluded.map(([r, n]) => `${REASON_LABELS[r]} - ${rows(n)}`).join(', ')}.`] : []),
     ...(p.duplicates > 0 ? [`Wiersze z tym samym numerem i tą samą treścią: ${formatCount(p.duplicates)}. Bramka wyśle każdą taką wiadomość raz.`] : []),
     ...(p.sameNumberDifferentText > 0
       ? [`Numery z różnymi treściami: ${formatCount(p.sameNumberDifferentText)}. Każdy z nich otrzyma wszystkie przeznaczone dla niego SMS-y.`] : []),

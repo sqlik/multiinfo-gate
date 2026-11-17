@@ -295,7 +295,8 @@ describe('podgląd, wysyłka i postęp rozsyłki z pliku', () => {
     expect(html).toContain('<tr><td class="fit">9</td><td class="fit">-</td><td>wiersz niezgodny z nagłówkiem</td></tr>');
     expect(html).toContain('<tr><td class="fit">15</td><td class="fit">puste</td><td>błędny numer telefonu</td></tr>');
     expect(html).toContain('Wiersze wyłączone z wysyłki: 4');
-    expect(html).toContain('błędny numer telefonu 2, puste pole użyte w treści 1, wiersz niezgodny z nagłówkiem 1');
+    // Próba B (B6): liczba wierszy po myślniku z rzeczownikiem.
+    expect(html).toContain('Przyczyny: błędny numer telefonu - 2 wiersze, puste pole użyte w treści - 1 wiersz, wiersz niezgodny z nagłówkiem - 1 wiersz');
     expect(html).toContain('Wiersze z tym samym numerem i tą samą treścią: 3. Bramka wyśle każdą taką wiadomość raz.');
     // Ostrzeżenie o numerach z różnymi treściami z listą numerów.
     expect(html).toContain('<p class="notice n-wait">Numery z różnymi treściami: 2. Każdy z tych numerów otrzyma wszystkie przeznaczone dla niego SMS-y.</p>');

@@ -184,6 +184,8 @@ describe('file_summary, prepare_file_sms i send_file_sms', () => {
     expect(prepared._meta!.confirm).toMatch(/^mig_cf_/);
     expect(prepared._meta!.samples.map((s: { line: number }) => s.line)).toEqual([2, 3]);
     expect(prepared._meta!.excludedRows).toEqual([{ line: 4, reason: 'invalid_phone', phone: 'brak numeru' }]);
+    // Próba B (B6): liczba wierszy po myślniku z rzeczownikiem, a nie doklejona do przyczyny.
+    expect(textOf(prepared)).toContain('Wiersze wyłączone z wysyłki: 1. Przyczyny: błędny numer telefonu - 1 wiersz.');
     expect(textOf(prepared)).toContain('Wysyłkę zatwierdza człowiek przyciskiem „Wyślij” w podglądzie bramki.');
     const draftId = prepared.structuredContent!.draftId as string;
     const sent = await mcp.call('send_file_sms', { draftId, confirm: prepared._meta!.confirm });

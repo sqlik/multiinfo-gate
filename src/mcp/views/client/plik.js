@@ -226,7 +226,7 @@ const phoneCell = (phone) => (phone === null || phone === undefined ? '-' : phon
 function excludedSection(p, meta) {
   const total = REASONS.reduce((sum, [r]) => sum + (p.excluded[r] ?? 0), 0);
   if (total === 0) return '';
-  const counts = REASONS.filter(([r]) => (p.excluded[r] ?? 0) > 0).map(([r, label]) => `${label} ${num(p.excluded[r])}`).join(', ');
+  const counts = REASONS.filter(([r]) => (p.excluded[r] ?? 0) > 0).map(([r, label]) => `${label} - ${num(p.excluded[r])} ${pluralWord(p.excluded[r], 'wiersz', 'wiersze', 'wierszy')}`).join(', ');
   const rows = meta.excludedRows ?? [];
   const list = rows.length === 0 ? '' : foldList('Lista wierszy wyłączonych', rows.length, 'wiersz', 'wiersze', 'wierszy', '<table><tr><th class="fit">Wiersz pliku</th><th class="fit">Numer w pliku</th><th>Powód</th></tr>'
     + rows.map((r) => `<tr><td class="fit">${esc(r.line)}</td><td class="fit">${esc(phoneCell(r.phone))}</td>`
