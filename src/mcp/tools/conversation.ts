@@ -1,6 +1,7 @@
 import { conversation, CONVERSATION_WINDOW_MS, type ConversationData, type ConversationItem } from '../../agents/conversation.ts';
 import { instant } from '../../agents/reads.ts';
 import { prepareReplies } from '../../integrations/agent.ts';
+import { normalizeRecipient } from '../../text/phone.ts';
 import { plural } from '../../text/plural.ts';
 import { warsawShort } from '../../time/warsaw.ts';
 import { z } from '../../zod.ts';
@@ -53,7 +54,16 @@ function conversationLines(data: ConversationData, canReply: boolean, before?: s
 /** Dane rozmowy dla widoku i agenta; `canReply` decyduje w widoku o przycisku „Poproś o odpowiedź”. */
 const structuredOf = (data: ConversationData, canReply: boolean) => ({ ...data, items: data.items.map(marked), canReply });
 
-const canReplyOf = (ctx: ToolContext): boolean => connOf(ctx).scopes.has('reply');
+/** Odpowiedź wymaga zakresu reply i numeru, na który bramka wysyła SMS-y; numer krótki, na przykład 8080, go nie spełnia. */
+const canReplyOf = (ctx: ToolContext, data: ConversationData): boolean => {
+  const conn = connOf(ctx);
+  if (!conn.scopes.has('reply')) return false;
+  try {
+    return normalizeRecipient(data.phone, conn.account.defaultCountryCode) === data.phone;
+  } catch {
+    return false;
+  }
+};
 
 const conversationInput = z.object({
   phone: z.string().optional().describe('Numer klienta'),
@@ -73,7 +83,7 @@ export const conversationTool: ToolDef = {
   run(ctx, raw) {
     const q = raw as z.infer<typeof conversationInput>;
     const data = conversation(ctx.deps, connOf(ctx), q, ctx.now);
-    const canReply = canReplyOf(ctx);
+    const canReply = canReplyOf(ctx, data);
     return { text: conversationLines(data, canReply, q.before).join('\n'), structured: structuredOf(data, canReply) };
   },
 };

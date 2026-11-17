@@ -102,6 +102,20 @@ describe('narzędzie conversation', () => {
     expect(textOf(earlier).split('\n')[0]).toBe(`Rozmowa z numerem ${CLIENT}: 1 pozycja sprzed 16.10.2026 11:00, od najstarszej.`);
   });
 
+  it('conversation z numerem krótkim: rozmowa bez możliwości odpowiedzi, ponieważ bramka nie wyśle SMS-a na numer krótki', async () => {
+    setup(['read_inbound', 'reply']);
+    deps.inbound.insertIfNew({
+      id: 'in_k', accountId: seed.accountId, serviceId: '24138', miId: 'in_k', sender: '8080', dest: '24138', kind: 'text', body: 'START', bodyHash: 'h', protocolId: 0,
+      codingScheme: 0, connectorId: null, relatedMessageId: null, receivedAt: at(-HOUR), createdAt: at(-HOUR), system: 0,
+    });
+    const mcp = await mcpSession(app, seed.secret);
+    const first = await mcp.call('conversation', { inboundId: 'in_k' });
+    expect(first.structuredContent).toMatchObject({ phone: '8080', canReply: false });
+    const again = await mcp.call('conversation', { phone: '8080' });
+    expect(again.isError).toBeUndefined();
+    expect(again.structuredContent).toMatchObject({ phone: '8080', canReply: false });
+  });
+
   it('conversation bez SMS-ów i z nieznanym odebranym SMS-em', async () => {
     setup(['read_inbound']);
     const mcp = await mcpSession(app, seed.secret);

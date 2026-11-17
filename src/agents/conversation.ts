@@ -4,6 +4,7 @@ import { sourceLabel } from '../integrations/source-label.ts';
 import type { InboundRow } from '../store/inbound-messages.ts';
 import type { MessageRow } from '../store/messages.ts';
 import type { PackageRow, RecipientRow } from '../store/packages.ts';
+import { stripPhone } from '../text/phone.ts';
 import type { ConnectionContext } from './connections.ts';
 import { answersTo, instant, phone, recipientState, stamp, type ReadDeps, type Stamp } from './reads.ts';
 
@@ -62,17 +63,33 @@ function recipientItem(deps: ReadDeps, p: PackageRow, r: RecipientRow): Conversa
   };
 }
 
+/**
+ * Numer podany przez agenta albo widok. Numer, którego bramka nie przyjmuje jako odbiorcy, na przykład numer krótki
+ * 8080, wskazuje rozmowę w postaci zapisanej jako nadawca, gdy klucz widzi odebrany SMS z tego numeru.
+ */
+function givenPhone(deps: ReadDeps, ctx: ConnectionContext, raw: string): string {
+  try {
+    return phone(ctx, raw);
+  } catch (e) {
+    const sender = stripPhone(raw);
+    const known = /^\d{3,15}$/.test(sender)
+      && deps.inbound.list({ accountId: ctx.account.id, serviceIds: ctx.auth.allowedServiceIds, sender, limit: 1, offset: 0 }).length > 0;
+    if (e instanceof AgentError && known) return sender;
+    throw e;
+  }
+}
+
 /** Numer rozmowy z wejścia: nadawca odebranego SMS-a albo podany numer; oba muszą wskazywać ten sam numer. */
 function phoneOf(deps: ReadDeps, ctx: ConnectionContext, q: { phone?: string | undefined; inboundId?: string | undefined }): string {
   if (q.inboundId === undefined) {
     if (q.phone === undefined) throw new AgentError('invalid', 'Podaj numer klienta albo identyfikator odebranego SMS-a.');
-    return phone(ctx, q.phone);
+    return givenPhone(deps, ctx, q.phone);
   }
   const row = deps.inbound.get(q.inboundId);
   if (!row || !visible(ctx, row)) {
     throw new AgentError('inbound_unknown', `Odebrany SMS ${q.inboundId} nie istnieje albo nie należy do usług klucza integracji.`);
   }
-  if (q.phone !== undefined && phone(ctx, q.phone) !== row.sender) {
+  if (q.phone !== undefined && givenPhone(deps, ctx, q.phone) !== row.sender) {
     throw new AgentError('invalid', `Odebrany SMS ${q.inboundId} pochodzi z innego numeru niż podany. Podaj numer albo identyfikator odebranego SMS-a.`);
   }
   return row.sender;

@@ -131,6 +131,17 @@ describe('conversation', () => {
     expect(agentError(() => conversation(deps, ctx(), { phone: CLIENT, before: 'wczoraj' }, NOW)).code).toBe('invalid');
   });
 
+  it('numer krótki zapisany jako nadawca, na przykład 8080: rozmowa po identyfikatorze i po numerze z wyniku, jak przy odświeżaniu widoku', () => {
+    setup(['read_inbound']);
+    inbound('in_k', -HOUR, { sender: '8080' });
+    const first = conversation(deps, ctx(), { inboundId: 'in_k' }, NOW);
+    expect(first.phone).toBe('8080');
+    expect(ids(conversation(deps, ctx(), { phone: first.phone }, NOW))).toEqual(['in_k']);
+    expect(ids(conversation(deps, ctx(), { phone: first.phone, before: at(0) }, NOW))).toEqual(['in_k']);
+    expect(ids(conversation(deps, ctx(), { inboundId: 'in_k', phone: '8080' }, NOW))).toEqual(['in_k']);
+    expect(agentError(() => conversation(deps, ctx(), { phone: '12' }, NOW)).code).toBe('invalid_phone');
+  });
+
   it('bez read_sent: z wysłanych tylko odpowiedzi i wysyłka, na którą odpowiada pierwszy odebrany SMS', () => {
     setup(['read_inbound', 'reply']);
     pkg('pkg_1', ['48601000099', CLIENT], -3 * HOUR);

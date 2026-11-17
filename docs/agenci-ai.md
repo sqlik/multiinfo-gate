@@ -868,6 +868,9 @@ Rozmowa obejmuje ostatnie 30 dni i najwyżej 100 pozycji, a wcześniejsze SMS-y 
 odpowiedzi oraz wysyłkę, na którą odpowiada pierwszy SMS klienta. Połączenie z tym zakresem widzi
 wszystkie wiadomości wysłane przez klucz na ten numer, także w rozsyłkach.
 
+Rozmowę z numerem krótkim, na przykład 8080, widok pokazuje bez przycisku **Poproś o odpowiedź**, ponieważ
+bramka nie wysyła SMS-ów na numery krótkie.
+
 Okno rozmowy jest dłuższe niż przypisanie odpowiedzi do wysyłki z rozdziału 12. Rozmowa pokazuje wszystkie
 SMS-y z 30 dni, a zestawienie odpowiedzi na rozsyłkę przypisuje odebrany SMS do wysyłki najpóźniej po
 7 dniach.
