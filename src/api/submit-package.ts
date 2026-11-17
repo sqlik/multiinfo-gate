@@ -19,7 +19,8 @@ export type SubmitPackageDeps = Pick<ApiDeps, 'accounts' | 'packages' | 'jobs' |
   & { apiKeys: Pick<ApiKeysRepo, 'linkSettings'> };
 
 export interface PackageSubmitInput {
-  recipients: Array<{ to: string; text?: string | undefined; clientId?: string | undefined }>;
+  /** `fileLine`: numer wiersza w pliku, wyłącznie w rozsyłkach wysyłki z pliku. */
+  recipients: Array<{ to: string; text?: string | undefined; clientId?: string | undefined; fileLine?: number | undefined }>;
   defaultText?: string | undefined;
   serviceId?: string | undefined;
   orig?: string | undefined;
@@ -43,6 +44,8 @@ export interface PackageSubmitInput {
   campaignFallback?: string | undefined;
   /** Połączenie agenta AI, które zleciło rozsyłkę; brak dla pozostałych źródeł. */
   agentConnectionId?: number | undefined;
+  /** Wysyłka z pliku, której częścią jest rozsyłka; brak dla pozostałych źródeł. */
+  fileSendId?: string | undefined;
 }
 
 export interface PackageAccepted {
@@ -64,7 +67,7 @@ function scheduleFields(status: PackageStatus, startAt: string | null, createdAt
  * Identyfikator klienta idzie do Plusa w nawiasach kwadratowych przed przecinkiem
  * oddzielającym treść - nie może zawierać nic, co ten zapis rozbije.
  */
-const CLIENT_ID = /^[A-Za-z0-9._-]{1,20}$/;
+export const CLIENT_ID = /^[A-Za-z0-9._-]{1,20}$/;
 
 /**
  * Kodowanie całej rozsyłki: package.aspx przyjmuje jedno kodowanie dla wszystkich treści.
@@ -116,7 +119,7 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
     if (r.text === undefined && input.defaultText === undefined) {
       throw new ApiError(400, 'text_required', `recipients.${index}: brak treści i brak treści domyślnej.`);
     }
-    return { dest, text: r.text ?? null, clientId: r.clientId ?? null };
+    return { dest, text: r.text ?? null, clientId: r.clientId ?? null, ...(r.fileLine === undefined ? {} : { fileLine: r.fileLine }) };
   });
   const integrationId = input.integrationId ?? null;
 
@@ -216,7 +219,7 @@ export function submitPackage(deps: SubmitPackageDeps, auth: AuthContext, input:
       encoding, multipart: multipart ? 1 : 0, createdAt: timing.createdAt, status,
       integrationId, requestedBy: input.requestedBy ?? null, agentConnectionId: input.agentConnectionId ?? null,
       idempotencyKey: input.idempotencyKey ?? null, requestHash: input.idempotencyKey === undefined ? null : requestHash,
-      campaignId,
+      campaignId, fileSendId: input.fileSendId ?? null,
     }, stored);
     if (campaignId !== null) deps.campaigns.addSent(campaignId, stored.filter((r) => (r.links ?? 0) > 0).length);
     if (timing.startAt === null) deps.jobs.enqueue('package.create', { packageId: id }, now);

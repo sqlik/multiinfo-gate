@@ -284,10 +284,10 @@ function groupThrottledError(group: SmsGroupIntegration, resetsAt: string | null
 }
 
 /** Limit części i zachowanie przy nadmiarze; `whose` nazywa właściciela limitu w komunikacie. */
-interface PartsLimit { maxParts: number; overflow: 'truncate' | 'reject'; whose: string }
+export interface PartsLimit { maxParts: number; overflow: 'truncate' | 'reject'; whose: string }
 
 /** Limit części wysyłki agenta: limit integracji, ale nigdy więcej niż limit klucza. */
-function agentLimit(ctx: ConnectionContext): PartsLimit {
+export function agentLimit(ctx: ConnectionContext): PartsLimit {
   const { maxParts, overflow } = ctx.integration.config;
   return { maxParts: Math.min(maxParts, ctx.key.maxParts), overflow, whose: maxParts <= ctx.key.maxParts ? 'integracji' : 'klucza API' };
 }
@@ -331,7 +331,7 @@ function normalize(raw: string, countryCode: string): string {
   }
 }
 
-function checkService(ctx: ConnectionContext, serviceId: string): void {
+export function checkService(ctx: ConnectionContext, serviceId: string): void {
   if (!ctx.auth.allowedServiceIds.includes(serviceId)) {
     throw new AgentError('service_not_allowed',
       `Klucz integracji nie obejmuje usługi ${serviceId}. Dostępne usługi: ${ctx.auth.allowedServiceIds.join(', ')}.`);
@@ -339,7 +339,7 @@ function checkService(ctx: ConnectionContext, serviceId: string): void {
 }
 
 /** Nadawca szkicu: pominięty to wartość domyślna, null to numer usługi, tekst to nadpis z listy klucza. */
-function pickOrig(deps: AgentDeps, ctx: ConnectionContext, input: string | null | undefined, fallback: string | null): string | null {
+export function pickOrig(deps: AgentDeps, ctx: ConnectionContext, input: string | null | undefined, fallback: string | null): string | null {
   if (input === undefined) return fallback;
   if (input === null) {
     if (fallback !== null) {
@@ -351,9 +351,9 @@ function pickOrig(deps: AgentDeps, ctx: ConnectionContext, input: string | null 
   return input;
 }
 
-const newConfirm = (apps: boolean | undefined) => (apps ? generateSecret(CONFIRM_PREFIX) : null);
+export const newConfirm = (apps: boolean | undefined) => (apps ? generateSecret(CONFIRM_PREFIX) : null);
 
-const scopeError = (scope: AgentScope): AgentError =>
+export const scopeError = (scope: AgentScope): AgentError =>
   new AgentError('scope', `Zakresy integracji nie obejmują uprawnienia „${SCOPE_LABELS[scope]}”. Uprawnienia nadaje administrator bramki w integracji Agent AI.`);
 
 /**
@@ -575,7 +575,7 @@ export function prepareReplies(deps: AgentDeps, ctx: ConnectionContext, items: R
  * Ochrona przed burzą integracji agenta: wywołania i odbiorcy w oknie. Odmowa zapisuje wpis w dzienniku,
  * pierwsza w oknie zgłasza `integration_throttled`, a agent otrzymuje czas do ponowienia.
  */
-function throttleAgent(deps: AgentDeps, ctx: ConnectionContext, count: number, note: Noter, now: Date): void {
+export function throttleAgent(deps: AgentDeps, ctx: ConnectionContext, count: number, note: Noter, now: Date): void {
   const integration = ctx.integration;
   const { limit, windowMinutes, recipients } = integration.config.throttle;
   const gate = deps.guards.throttle(integration.id, limit, windowMinutes, now, { count, limit: recipients });
@@ -691,7 +691,7 @@ function sendGroup(deps: AgentDeps, ctx: ConnectionContext, draftId: string, pay
 }
 
 /** Porównanie klucza potwierdzenia ze skrótem w stałym czasie. */
-function confirmMatches(hash: string, confirm: string | undefined): boolean {
+export function confirmMatches(hash: string, confirm: string | undefined): boolean {
   if (confirm === undefined) return false;
   const given = Buffer.from(hashSecret(confirm), 'hex');
   const stored = Buffer.from(hash, 'hex');
@@ -709,6 +709,8 @@ export function sendDraft(deps: AgentDeps, ctx: ConnectionContext, draftId: stri
   if (draft.confirmHash !== null && !confirmMatches(draft.confirmHash, confirm)) {
     throw new AgentError('confirm_required', 'Wysyłkę zatwierdza przycisk w widoku bramki.');
   }
+  // Wysyłkę z pliku zatwierdza wyłącznie przycisk w widoku przez send_file_sms.
+  if (draft.kind === 'file') throw new AgentError('draft_kind', 'Szkic jest wysyłką z pliku, którą zatwierdza przycisk w widoku bramki.');
   if (draft.sentAt !== null) return asOutcome(draft.result as StoredOutcome, true);
   if (Date.parse(draft.expiresAt) <= now.getTime()) {
     throw new AgentError('draft_expired', `Podgląd wygasł po 30 minutach. Przygotuj ${draft.kind === 'reply' ? 'odpowiedź' : 'SMS'} ponownie.`);
@@ -823,6 +825,6 @@ export function sendDraft(deps: AgentDeps, ctx: ConnectionContext, draftId: stri
 }
 
 /** Termin przyjętej rozsyłki z odpowiedzi `submitPackage`; chwila przekazania istnieje wyłącznie w stanie `scheduled`. */
-function scheduleOfAccepted(pkg: { startAt?: string; handoverAt?: string }): Schedule | null {
+export function scheduleOfAccepted(pkg: { startAt?: string; handoverAt?: string }): Schedule | null {
   return pkg.startAt !== undefined && pkg.handoverAt !== undefined ? { startAt: pkg.startAt, handoverAt: pkg.handoverAt } : null;
 }

@@ -28,6 +28,8 @@ export interface PackageRow {
   campaignId: number | null;
   /** 1 dla nadpisu podanego jawnie, 0 dla nadpisu domyślnego klucza albo konta. */
   origExplicit: 0 | 1;
+  /** Wysyłka z pliku, której częścią jest rozsyłka; `null` dla pozostałych rozsyłek. */
+  fileSendId: string | null;
 }
 
 export interface PackageInput {
@@ -35,7 +37,7 @@ export interface PackageInput {
   defaultText: string | null; orig: string | null; costCenter: string | null; startAt: string | null;
   deliveryReport: 0 | 1; encoding: 'gsm' | 'ucs2'; multipart: 0 | 1; createdAt: string;
   integrationId?: number | null; requestedBy?: string | null; idempotencyKey?: string | null; requestHash?: string | null;
-  campaignId?: number | null; agentConnectionId?: number | null; origExplicit?: 0 | 1;
+  campaignId?: number | null; agentConnectionId?: number | null; origExplicit?: 0 | 1; fileSendId?: string | null;
   /** Stan początkowy: `scheduled` dla rozsyłki z terminem, domyślnie `queued`. */
   status?: PackageStatus;
 }
@@ -44,10 +46,13 @@ export interface RecipientInput {
   dest: string; text: string | null; clientId: string | null;
   /** Liczba krótkich kodów w treści odbiorcy; pominięcie oznacza 0. */
   links?: number;
+  /** Numer wiersza w pliku wysyłki z pliku; pominięcie oznacza odbiorcę spoza pliku. */
+  fileLine?: number | null;
 }
 
 export interface RecipientRow extends RecipientInput {
   links: number;
+  fileLine: number | null;
   seq: number; miId: string | null; miStatus: number | null;
   status: GatewayStatus | null; statusChangedAt: string | null;
 }
@@ -67,12 +72,12 @@ interface Raw {
   report_status: ReportStatus; report_id: string | null; report_expires_at: string | null; report_path: string | null;
   created_at: string; completed_at: string | null; integration_id: number | null; requested_by: string | null;
   idempotency_key: string | null; request_hash: string | null; campaign_id: number | null; agent_connection_id: number | null;
-  orig_explicit: 0 | 1;
+  orig_explicit: 0 | 1; file_send_id: string | null;
 }
 
 interface RawRecipient {
   seq: number; dest: string; text: string | null; client_id: string | null; mi_id: string | null;
-  mi_status: number | null; status: GatewayStatus | null; status_changed_at: string | null; links: number;
+  mi_status: number | null; status: GatewayStatus | null; status_changed_at: string | null; links: number; file_line: number | null;
 }
 
 function toRow(r: Raw): PackageRow {
@@ -86,12 +91,13 @@ function toRow(r: Raw): PackageRow {
     reportPath: r.report_path, createdAt: r.created_at, completedAt: r.completed_at,
     integrationId: r.integration_id, requestedBy: r.requested_by, agentConnectionId: r.agent_connection_id,
     idempotencyKey: r.idempotency_key, requestHash: r.request_hash, campaignId: r.campaign_id, origExplicit: r.orig_explicit,
+    fileSendId: r.file_send_id,
   };
 }
 
 const toRecipient = (r: RawRecipient): RecipientRow => ({
   seq: r.seq, dest: r.dest, text: r.text, clientId: r.client_id, miId: r.mi_id,
-  miStatus: r.mi_status, status: r.status, statusChangedAt: r.status_changed_at, links: r.links,
+  miStatus: r.mi_status, status: r.status, statusChangedAt: r.status_changed_at, links: r.links, fileLine: r.file_line,
 });
 
 /** Statusy odbiorcy liczone w podsumowaniu jako nieudane. */
@@ -129,16 +135,16 @@ export class PackagesRepo {
       this.db.prepare(
         `INSERT INTO packages (id, api_key_id, account_id, service_id, default_text, orig, cost_center, start_at,
            delivery_report, encoding, multipart, recipients_count, created_at, integration_id, requested_by,
-           idempotency_key, request_hash, campaign_id, agent_connection_id, status, orig_explicit)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           idempotency_key, request_hash, campaign_id, agent_connection_id, status, orig_explicit, file_send_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(input.id, input.apiKeyId, input.accountId, input.serviceId, input.defaultText, input.orig,
         input.costCenter, input.startAt, input.deliveryReport, input.encoding, input.multipart,
         recipients.length, input.createdAt, input.integrationId ?? null, input.requestedBy ?? null,
         input.idempotencyKey ?? null, input.requestHash ?? null, input.campaignId ?? null, input.agentConnectionId ?? null,
-        input.status ?? 'queued', input.origExplicit ?? 0);
+        input.status ?? 'queued', input.origExplicit ?? 0, input.fileSendId ?? null);
       const add = this.db.prepare(
-        'INSERT INTO package_recipients (package_id, seq, dest, text, client_id, links) VALUES (?, ?, ?, ?, ?, ?)');
-      recipients.forEach((r, i) => add.run(input.id, i + 1, r.dest, r.text, r.clientId, r.links ?? 0));
+        'INSERT INTO package_recipients (package_id, seq, dest, text, client_id, links, file_line) VALUES (?, ?, ?, ?, ?, ?, ?)');
+      recipients.forEach((r, i) => add.run(input.id, i + 1, r.dest, r.text, r.clientId, r.links ?? 0, r.fileLine ?? null));
     });
     create();
   }
@@ -146,6 +152,11 @@ export class PackagesRepo {
   get(id: string): PackageRow | undefined {
     const row = this.db.prepare('SELECT * FROM packages WHERE id = ?').get(id) as Raw | undefined;
     return row ? toRow(row) : undefined;
+  }
+
+  /** Rozsyłki wysyłki z pliku w kolejności utworzenia, czyli w kolejności pierwszych odbiorców w pliku. */
+  listByFileSend(fileSendId: string): PackageRow[] {
+    return (this.db.prepare('SELECT * FROM packages WHERE file_send_id = ? ORDER BY rowid').all(fileSendId) as Raw[]).map(toRow);
   }
 
   /** Pusta lista stanów oznacza wszystkie stany. */

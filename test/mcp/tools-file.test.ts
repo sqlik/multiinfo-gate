@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApiServer } from '../../src/api/server.ts';
 import type { AgentConfig } from '../../src/integrations/config.ts';
+import { FILE_COLUMNS_NOTICE } from '../../src/integrations/agent-file.ts';
 import { FILE_LOADED_MESSAGE } from '../../src/mcp/tools/file.ts';
 import { AgentFilesRepo } from '../../src/store/agent-files.ts';
 import { openDatabase } from '../../src/store/db.ts';
@@ -134,5 +135,88 @@ describe('open_file_send', () => {
 
   it('stała wiadomość widoku po przekazaniu pliku jest tekstem ze specyfikacji', () => {
     expect(FILE_LOADED_MESSAGE).toBe('Plik z odbiorcami jest wczytany w widoku bramki. Przygotuj treść SMS-a z polami pliku.');
+  });
+});
+
+const TEXT = 'Przypominamy o płatności faktury dla {Kontrahent} na kwotę {Kwota} do {Termin}.';
+const ROWS = [
+  { line: 2, cells: VALUES },
+  { line: 3, cells: ['48601000012', 'Serwis Nowak', '99,00 zł', '01.12.2026'] },
+  { line: 4, cells: ['brak numeru', 'Biuro Zielińska', '10,00 zł', '02.12.2026'] },
+];
+type Session = Awaited<ReturnType<typeof mcpSession>>;
+const loaded = async (mcp: Session) => mcp.call('upload_file_rows', { ...header, offset: 0, rows: ROWS, done: true });
+
+describe('file_summary, prepare_file_sms i send_file_sms', () => {
+  it('file_summary: nazwy kolumn, kolumna numeru, liczba wierszy i składnia pól {Nazwa kolumny} dla agenta', async () => {
+    setup();
+    const mcp = await mcpSession(app, seed.secret, { apps: true });
+    await loaded(mcp);
+    const result = await mcp.call('file_summary');
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({ columns: COLUMNS, phoneColumn: 'Numer', rows: 3, invalidPhones: 1, notice: FILE_COLUMNS_NOTICE });
+    const text = textOf(result);
+    expect(text).toContain(`${FILE_COLUMNS_NOTICE} „Numer”, „Kontrahent”, „Kwota”, „Termin”`);
+    expect(text).toContain('{Nazwa kolumny}');
+    expect(text).toContain('prepare_file_sms');
+    expect(text).toContain(`Kolumna numeru telefonu: ${FILE_COLUMNS_NOTICE} „Numer”.`);
+  });
+
+  it('file_summary bez pliku: file_missing z prośbą o wybór pliku w widoku', async () => {
+    setup();
+    const result = await (await mcpSession(app, seed.secret, { apps: true })).call('file_summary');
+    expect(result).toMatchObject({ isError: true, structuredContent: { error: 'file_missing' } });
+  });
+
+  it('prepare_file_sms i send_file_sms przez MCP: podgląd z kluczem w _meta, wysyłka przyciskiem widoku', async () => {
+    setup();
+    const mcp = await mcpSession(app, seed.secret, { apps: true });
+    await loaded(mcp);
+    const prepared = await mcp.call('prepare_file_sms', { text: TEXT });
+    expect(prepared.isError).toBeUndefined();
+    expect(prepared.structuredContent).toMatchObject({ recipients: 2, fields: ['Kontrahent', 'Kwota', 'Termin'], excluded: { invalid_phone: 1 }, blocked: null });
+    expect(prepared._meta!.confirm).toMatch(/^mig_cf_/);
+    expect(prepared._meta!.samples.map((s: { line: number }) => s.line)).toEqual([2, 3]);
+    expect(prepared._meta!.excludedRows).toEqual([{ line: 4, reason: 'invalid_phone' }]);
+    expect(textOf(prepared)).toContain('Wysyłkę zatwierdza człowiek przyciskiem „Wyślij” w podglądzie bramki.');
+    const draftId = prepared.structuredContent!.draftId as string;
+    const sent = await mcp.call('send_file_sms', { draftId, confirm: prepared._meta!.confirm });
+    expect(sent.isError).toBeUndefined();
+    expect(sent.structuredContent).toMatchObject({ draftId, kind: 'file', recipients: 2, repeated: false });
+    expect(textOf(sent)).toMatch(/^Przyjęto wysyłkę z pliku fsd_\S+ do 2 odbiorców w 1 rozsyłce\./);
+  });
+
+  it('prepare_file_sms i send_file_sms bez widoków: views_required', async () => {
+    setup();
+    const mcp = await mcpSession(app, seed.secret);
+    for (const [name, args] of [['prepare_file_sms', { text: TEXT }], ['send_file_sms', { draftId: 'drf_obcy' }]] as const) {
+      const result = await mcp.call(name, args);
+      expect(result).toMatchObject({ isError: true, structuredContent: { error: 'views_required' } });
+    }
+  });
+
+  it('send_prepared ze szkicem pliku i send_file_sms ze szkicem SMS-a: draft_kind', async () => {
+    setup();
+    const mcp = await mcpSession(app, seed.secret, { apps: true });
+    await loaded(mcp);
+    const file = await mcp.call('prepare_file_sms', { text: TEXT });
+    const viaPrepared = await mcp.call('send_prepared', { draftId: file.structuredContent!.draftId, confirm: file._meta!.confirm });
+    expect(viaPrepared).toMatchObject({ isError: true, structuredContent: { error: 'draft_kind' } });
+    const sms = await mcp.call('prepare_sms', { to: ['48601000011'], text: 'Serwis zaprasza na przeglad floty w czwartek.' });
+    const viaFile = await mcp.call('send_file_sms', { draftId: sms.structuredContent!.draftId, confirm: sms._meta!.confirm });
+    expect(viaFile).toMatchObject({ isError: true, structuredContent: { error: 'draft_kind' } });
+    expect((db.prepare('SELECT COUNT(*) AS n FROM packages').get() as { n: number }).n).toBe(0);
+    expect((db.prepare('SELECT COUNT(*) AS n FROM messages').get() as { n: number }).n).toBe(0);
+  });
+
+  it('tools/list z widokami: file_summary, prepare_file_sms z widokiem plik, send_file_sms tylko dla widoku', async () => {
+    setup();
+    const tools = await (await mcpSession(app, seed.secret, { apps: true })).tools();
+    const byName = new Map(tools.map((t) => [t.name, t]));
+    expect(byName.get('file_summary')!._meta).toBeUndefined();
+    expect(byName.get('file_summary')!.annotations).toMatchObject({ readOnlyHint: true });
+    expect(byName.get('prepare_file_sms')!._meta).toEqual({ ui: { resourceUri: 'ui://multiinfo-gate/plik' } });
+    expect(byName.get('send_file_sms')!._meta).toEqual({ ui: { visibility: ['app'] } });
+    expect(byName.get('send_file_sms')!.annotations).toMatchObject({ destructiveHint: true, openWorldHint: true });
   });
 });

@@ -17,13 +17,13 @@ const parts = (n: number) => plural(n, 'część', 'części', 'części');
 const chars = (n: number) => plural(n, 'znak', 'znaki', 'znaków');
 const encodingName = (e: 'gsm' | 'ucs2') => (e === 'gsm' ? 'GSM' : 'Unicode');
 
-function guardLine(guard: GuardLeft, what = 'Ochrona przed burzą'): string {
+export function guardLine(guard: GuardLeft, what = 'Ochrona przed burzą'): string {
   const recipients = guard.recipients === null ? '' : ` i wysłać SMS-y do ${plural(guard.recipients, 'odbiorcy', 'odbiorców', 'odbiorców')}`;
   return `${what}: w bieżącym oknie można jeszcze wykonać ${plural(guard.calls, 'wysyłkę', 'wysyłki', 'wysyłek')}${recipients}.`;
 }
 
 /** Termin w podglądzie: chwila rozpoczęcia, chwila przekazania i okno anulowania. */
-function scheduleLines(schedule: Schedule | null): string[] {
+export function scheduleLines(schedule: Schedule | null): string[] {
   if (schedule === null) return [];
   return [
     `Termin rozpoczęcia rozsyłki: ${warsawShort(schedule.startAt)} czasu polskiego. Bramka przekaże rozsyłkę do Multiinfo ${warsawShort(schedule.handoverAt)}.`,
@@ -32,7 +32,7 @@ function scheduleLines(schedule: Schedule | null): string[] {
 }
 
 /** Ostatnie zdanie podglądu: w aplikacji z widokami wysyła człowiek, bez widoków agent prosi o potwierdzenie. */
-function confirmLine(ctx: ToolContext, tool: string, scheduled = false): string {
+export function confirmLine(ctx: ToolContext, tool: string, scheduled = false): string {
   return ctx.apps
     ? `Wysyłkę zatwierdza człowiek przyciskiem „${scheduled ? 'Zaplanuj' : 'Wyślij'}” w podglądzie bramki.`
     : `Pokaż użytkownikowi treść, liczbę odbiorców i nadawcę, a po wyraźnym potwierdzeniu wywołaj ${tool} z identyfikatorem szkicu.`;
@@ -118,10 +118,10 @@ export function checkDraftKind(ctx: ToolContext, draftId: string, reply: boolean
 }
 
 /** Opis pola terminu w narzędziach wysyłki. */
-const START_AT_DESCRIPTION = 'Termin rozpoczęcia wysyłki, na przykład 2026-11-20 08:00. Czas bez strefy oznacza czas polski, a termin może przypadać najwyżej 30 dni naprzód. '
+export const START_AT_DESCRIPTION = 'Termin rozpoczęcia wysyłki, na przykład 2026-11-20 08:00. Czas bez strefy oznacza czas polski, a termin może przypadać najwyżej 30 dni naprzód. '
   + 'Wysyłka z terminem jest zawsze rozsyłką, którą można anulować do chwili przekazania do Multiinfo, zwykle 10 minut przed terminem.';
 
-const smsInput = z.object({
+export const smsInput = z.object({
   to: z.array(z.string().describe('Numer telefonu odbiorcy')).optional()
     .describe(`Numery odbiorców, najwyżej ${PACKAGE_RECIPIENTS_MAX} bez powtórzeń. Bramka ujednolica zapis numerów i usuwa powtórzenia.`),
   campaignRecipients: z.object({
@@ -196,7 +196,7 @@ export const prepareGroupSmsTool: ToolDef = {
   },
 };
 
-const sendInput = z.object({
+export const sendInput = z.object({
   draftId: z.string().min(1).describe('Identyfikator szkicu z podglądu'),
   confirm: z.string().optional().describe('Klucz potwierdzenia z podglądu w widoku bramki'),
 });
