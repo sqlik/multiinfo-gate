@@ -239,8 +239,8 @@ function excludedSection(p, meta) {
   if (total === 0) return '';
   const counts = REASONS.filter(([r]) => (p.excluded[r] ?? 0) > 0).map(([r, label]) => `${label} - ${num(p.excluded[r])} ${pluralWord(p.excluded[r], 'wiersz', 'wiersze', 'wierszy')}`).join(', ');
   const rows = meta.excludedRows ?? [];
-  const list = rows.length === 0 ? '' : foldList('Lista wierszy wyłączonych', rows.length, 'wiersz', 'wiersze', 'wierszy', '<table><tr><th class="fit">Wiersz pliku</th><th class="fit">Numer w pliku</th><th>Powód</th></tr>'
-    + rows.map((r) => `<tr><td class="fit">${esc(r.line)}</td><td class="fit">${esc(phoneCell(r.phone))}</td>`
+  const list = rows.length === 0 ? '' : foldList('Lista wierszy wyłączonych', rows.length, 'wiersz', 'wiersze', 'wierszy', '<table><tr><th class="fit">Wiersz pliku</th><th>Numer w pliku</th><th>Powód</th></tr>'
+    + rows.map((r) => `<tr><td class="fit">${esc(r.line)}</td><td>${esc(phoneCell(r.phone))}</td>`
       + `<td>${esc(REASON_LABELS[r.reason] ?? r.reason)}</td></tr>`).join('') + '</table>');
   const more = meta.excludedMore > 0 ? note(`Lista zawiera pierwsze ${num(rows.length)} wierszy. Pozostałe wiersze wyłączone: ${num(meta.excludedMore)}.`) : '';
   return section(`Wiersze wyłączone z wysyłki: ${num(total)}`, note(`Przyczyny: ${counts}`) + list + more);

@@ -33,7 +33,7 @@ export const VIEW_STYLE = [
   '.sec{padding:20px 0;border-top:1px solid var(--rule)}.sec:first-child{padding-top:4px;border-top:0}.sec:last-child{padding-bottom:0}',
   '.sec h3{margin:0 0 12px;font-size:14px;font-weight:600;color:var(--ink)}',
   '.lead{margin:-6px 0 12px;font-size:12.5px;color:var(--muted)}',
-  '.note{margin:8px 0 0;font-size:12.5px;color:var(--muted)}',
+  '.note{margin:8px 0 0;font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}',
   '.say{margin:0;font-size:14px}',
   '.muted{color:var(--muted)}',
   `.mono{font-family:${MONO};font-size:12.5px}`,

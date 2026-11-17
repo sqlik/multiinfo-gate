@@ -336,6 +336,8 @@ describe('widok rozsyłki z pliku', () => {
     expect(VIEW_STYLE).toMatch(/\.seg2\{[^}]*border:1px solid var\(--signal\)/);
     expect(VIEW_STYLE).not.toContain('.accent');
     expect(VIEW_STYLE).toMatch(/th\.ph\{[^}]*color:var\(--signal-dark\)/);
+    // Nazwa kolumny bez spacji w zdaniu o nazwach kolumn zawija się zamiast poszerzać widok.
+    expect(VIEW_STYLE).toMatch(/\.note\{[^}]*overflow-wrap:anywhere/);
   });
 });
 
@@ -392,10 +394,11 @@ describe('podgląd, wysyłka i postęp rozsyłki z pliku', () => {
     // Wiersze wyłączone w liście rozwijanej z numerem wiersza i powodem.
     expect(html).toContain('<details class="it">');
     // Próba B (B7): wartość z kolumny numeru obok wiersza, kolumny dopasowane do treści i wyrównane do lewej.
-    expect(html).toContain('<tr><th class="fit">Wiersz pliku</th><th class="fit">Numer w pliku</th><th>Powód</th></tr>');
-    expect(html).toContain('<tr><td class="fit">7</td><td class="fit">12345</td><td>błędny numer telefonu</td></tr>');
-    expect(html).toContain('<tr><td class="fit">9</td><td class="fit">-</td><td>wiersz niezgodny z nagłówkiem</td></tr>');
-    expect(html).toContain('<tr><td class="fit">15</td><td class="fit">puste</td><td>błędny numer telefonu</td></tr>');
+    // Wartość z kolumny numeru może być długim tekstem, dlatego zawija się w komórce zamiast ukrywać kolumnę „Powód”.
+    expect(html).toContain('<tr><th class="fit">Wiersz pliku</th><th>Numer w pliku</th><th>Powód</th></tr>');
+    expect(html).toContain('<tr><td class="fit">7</td><td>12345</td><td>błędny numer telefonu</td></tr>');
+    expect(html).toContain('<tr><td class="fit">9</td><td>-</td><td>wiersz niezgodny z nagłówkiem</td></tr>');
+    expect(html).toContain('<tr><td class="fit">15</td><td>puste</td><td>błędny numer telefonu</td></tr>');
     expect(html).toContain('Wiersze wyłączone z wysyłki: 4');
     // Próba B (B6): liczba wierszy po myślniku z rzeczownikiem.
     expect(html).toContain('Przyczyny: błędny numer telefonu - 2 wiersze, puste pole użyte w treści - 1 wiersz, wiersz niezgodny z nagłówkiem - 1 wiersz');
