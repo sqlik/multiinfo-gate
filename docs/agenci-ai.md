@@ -828,7 +828,8 @@ liczbę rozsyłek anulowanych i przekazanych wcześniej.
 
 Przycisk **Pobierz raport CSV** tworzy jeden plik dla wszystkich rozsyłek wysyłki. Pierwsza kolumna
 `wiersz_pliku` podaje numer wiersza w pliku źródłowym, dzięki czemu wynik doręczenia łatwo dopasować do
-arkusza. Raport jest dostępny po zakończeniu wszystkich rozsyłek i odbiorze ich raportów doręczeń. Przycisk
+arkusza. Wiersze z tym samym numerem i tą samą gotową treścią bramka wysyła jeden raz, dlatego raport
+zawiera wyłącznie pierwszy z nich, także gdy wiersze różnią się identyfikatorem klienta. Raport jest dostępny po zakończeniu wszystkich rozsyłek i odbiorze ich raportów doręczeń. Przycisk
 **Pobierz CSV niedoręczonych** tworzy plik wyłącznie z odbiorcami bez doręczenia. Oba pliki udostępniają
 linki do pobrania opisane w rozdziale 11. Wysyłka anulowana w całości nie otrzymuje raportu, ponieważ
 żadna jej rozsyłka nie trafiła do Multiinfo.
