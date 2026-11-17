@@ -98,7 +98,9 @@ describe('katalog i formularz', () => {
 
   it('podpowiedź wysyłki obiecuje anulowanie tylko przed przekazaniem do sieci operatora', async () => {
     const form = (await get(NEW_FORM)).body;
-    expect(form).toContain('Może też anulować wiadomość wysłaną przez tę integrację, której Multiinfo nie przekazało jeszcze do sieci operatora.');
+    expect(form).toContain('Może też anulować wiadomość tej integracji, której Multiinfo nie przekazało jeszcze do sieci operatora, oraz jej zaplanowaną rozsyłkę.');
+    expect(form).toContain('rozsyłki z pliku do 50 000 odbiorców, także z terminem');
+    expect(form).toContain('i rozmowę z jednym numerem');
     expect(form).not.toContain('abonentowi');
   });
 });

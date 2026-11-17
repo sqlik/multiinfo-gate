@@ -1338,6 +1338,8 @@ ChatGPT i Claude Code. Pracownik wysyła SMS-y, sprawdza przebieg doręczenia i 
 w rozmowie z agentem, a aplikacja wyświetla w rozmowie widoki bramki. Każde polecenie agenta przechodzi
 przez integrację „Agent AI”, która określa zakresy, nadawcę, usługę, limit części i ochronę przed
 burzą. Podobnie jak pozostałe integracje prowadzi ona dziennik i powiadamia administratora.
+Od wersji 1.13 agent planuje wysyłkę na wskazany termin, przygotowuje rozsyłkę z pliku CSV albo Excel
+do 50 000 odbiorców i przedstawia rozmowę z jednym klientem.
 
 Wymagania, połączenia pracowników, konfigurację w poszczególnych aplikacjach i widoki w rozmowie
 przedstawia artykuł [Agenci AI](agenci-ai.md). Rozdział 5c opisuje integrację w układzie pozostałych
@@ -1377,7 +1379,7 @@ Tryb zaawansowany odsłania dodatkowo sekcję **Ochrona i dziennik**:
 | Pole | Znaczenie |
 |---|---|
 | Limit burzy | liczba wysyłek zatwierdzonych w oknie czasowym, domyślnie 30 wysyłek w ciągu 60 minut; liczą się także odpowiedzi i SMS-y do grup |
-| Limit odbiorców | liczba numerów ze wszystkich wysyłek w tym samym oknie, od 1 do 50 000, domyślnie 1000 |
+| Limit odbiorców | liczba numerów ze wszystkich wysyłek w tym samym oknie, od 1 do 50 000, domyślnie 1000; rozsyłka z pliku zajmuje tyle miejsc, ilu obejmuje odbiorców |
 | Wpisów w dzienniku | pojemność dziennika integracji, od 20 do 2000 wpisów |
 | Przechowuj ładunki w dzienniku | zachowuje treść i odbiorców każdej wysyłki przez 7 dni w postaci zaszyfrowanej |
 
@@ -2303,6 +2305,7 @@ z serwerem, a ponowienia przebiegają tak samo.
 | Konto Microsoft 365 wymaga logowania (Microsoft odrzucił token konta, na przykład po zmianie hasła albo odwołaniu sesji) | włączone | włączony | 5 | brak | - |
 | Mail z powiadomieniem niewysłany (mail do administratora nie został wysłany mimo wszystkich ponowień) | włączone | włączony | 1 | nie dotyczy | powiadomienie wyłącznie SMS-em |
 | Połączenie agenta AI (pracownik połączył aplikację AI z bramką kodem jednorazowym albo bramka wstrzymała sprawdzanie kodów po serii nieudanych prób) | włączone | wyłączony | 10 | brak | - |
+| Rozsyłka po terminie (bramka nie przekazała zaplanowanej rozsyłki w ciągu 60 minut od terminu, decyzję podejmuje administrator) | włączone | wyłączony | 5 | brak | - |
 
 Każdą regułę można wyłączyć, zmienić jej limit na godzinę i grupowanie. Pole **SMS** włącza
 wysyłkę powiadomienia także SMS-em, zgodnie z rozdziałem 9.5. Limit burzy zgłasza się
@@ -2319,6 +2322,12 @@ powoduje nowe powiadomienie. Gdy przez to konto wychodzą maile powiadomień, br
 SMS, ponieważ mail nie zostałby wysłany. Reguła **Mail z powiadomieniem niewysłany** zgłasza
 mail, którego worker nie wysłał mimo wszystkich ponowień. Reguła milczy, gdy przyczyną jest
 konto Microsoft 365 wymagające logowania, ponieważ tę przyczynę zgłosiła już reguła konta.
+
+Reguła **Rozsyłka po terminie** zgłasza każdą rozsyłkę z terminem, której bramka nie przekazała do
+Multiinfo w ciągu 60 minut od terminu. Powiadomienie podaje identyfikator rozsyłki, liczbę odbiorców
+i termin. Bramka nie wysyła takiej rozsyłki samoczynnie, ponieważ jej treść mogła stracić aktualność.
+Decyzję o wysłaniu albo anulowaniu podejmuje administrator w szczegółach rozsyłki, zgodnie z punktem
+[Rozsyłka nie została wysłana o czasie](problemy.md#rozsylka-po-terminie).
 
 ![Ekran Powiadomienia, zakładka Reguły: tabela zdarzeń z włączeniem, polem SMS, limitem na godzinę, grupowaniem i parametrami](obrazki/powiadomienia-reguly.png)
 

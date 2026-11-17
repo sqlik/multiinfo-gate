@@ -29,6 +29,10 @@ otwarcia. Pola skracania w wysyłkach opisuje rozdział 3, wyniki kampanii rozdz
 `link.opened` rozdział 6.2. Przygotowanie domeny i ustawienia klucza przedstawia artykuł
 [Skracacz linków i kampanie](skracacz.md).
 
+Od wersji 1.13 bramka przechowuje rozsyłkę z terminem do chwili przekazania do Multiinfo, dzięki czemu
+aplikacja może ją anulować. Rozsyłka z terminem otrzymuje nowe stany `scheduled` i `overdue`, opisane
+w rozdziale 5.2, a anulowanie opisuje rozdział 5.5.
+
 Dokument opisuje każde wywołanie w tym samym układzie: przeznaczenie, pełne żądanie w siedmiu
 wariantach do wyboru zakładką (curl, surowy HTTP, PHP, Python, Node.js, PowerShell, C#),
 odpowiedź oraz błędy tego wywołania wraz z zalecanym postępowaniem. To samo API opisuje plik
@@ -1034,7 +1038,7 @@ kolejnymi wywołaniami.
 | `recipients[].clientId` | nie | 1-20 znaków z zakresu `A-Z a-z 0-9 . _ -`; zwracany w raporcie |
 | `orig`, `serviceId`, `encoding`, `deliveryReport`, `costCenter` | nie | znaczenie jak w rozdziale 3 |
 | `shortenLinks`, `campaign`, `linkDomain`, `linkValidityDays` | nie | skracanie linków jak w rozdziale 3; pominięta nazwa kampanii oznacza identyfikator rozsyłki, a ważność liczy się od `startAt` albo od przyjęcia rozsyłki |
-| `startAt` | nie | ISO 8601 w przyszłości; Multiinfo rozpoczyna wysyłkę o tej godzinie |
+| `startAt` | nie | termin rozpoczęcia w ISO 8601, w przyszłości i najwyżej 30 dni od chwili wysyłki; bramka przechowuje rozsyłkę do chwili przekazania do Multiinfo, a Multiinfo rozpoczyna wysyłkę o tej godzinie |
 
 Kodowanie jest wspólne dla całej rozsyłki. Jeżeli którakolwiek treść wymaga UCS-2, wszystkie
 wiadomości są wysyłane w UCS-2, czyli po 70 znaków na część zamiast 160. Każda treść musi mieścić
@@ -1054,9 +1058,39 @@ razem. Ten sam klucz z inną rozsyłką kończy się kodem `409 idempotency_conf
 { "id": "pkg_7c1e9a2b3d4f5a6b7c8d", "status": "queued", "recipients": 2, "encoding": "gsm", "multipart": false }
 ```
 
+Rozsyłka z polem `startAt` otrzymuje stan `scheduled`, a odpowiedź podaje dodatkowo termin i chwilę
+przekazania do Multiinfo:
+
+```json
+{ "id": "pkg_7c1e9a2b3d4f5a6b7c8d", "status": "scheduled", "recipients": 2, "encoding": "gsm", "multipart": false, "startAt": "2026-11-20T07:00:00.000Z", "handoverAt": "2026-11-20T06:50:00.000Z" }
+```
+
 Rozsyłka ze skróconymi linkami zawiera blok `links` opisany w rozdziale 3. Pole `shortened` podaje
 liczbę krótkich linków wszystkich odbiorców. Każdy odbiorca otrzymuje własne kody, także przy
 treści wspólnej `defaultText`.
+
+**Rozsyłka z terminem.** Multiinfo nie pozwala anulować rozsyłki, którą już przyjęło. Dlatego od wersji
+1.13 bramka przechowuje rozsyłkę z polem `startAt` u siebie w stanie `scheduled` i przekazuje ją do
+Multiinfo w chwili `handoverAt`, zwykle 10 minut przed terminem. Multiinfo rozpoczyna wysyłkę o wskazanej
+godzinie. Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed
+terminem, a opisuje je rozdział 5.5. Termin bliższy niż 10 minut jest dozwolony, ale bramka przekazuje
+wtedy rozsyłkę od razu.
+
+Przy przekazaniu bramka ponownie sprawdza klucz API. Gdy klucz został odwołany, utracił ważność albo
+nie obejmuje już usługi lub nadpisu rozsyłki, bramka anuluje rozsyłkę i podaje przyczynę w polu `error`.
+Wstrzymane albo wyłączone konto Multiinfo oraz wyłączona integracja zlecająca wstrzymują przekazanie,
+a rozsyłka czeka w stanie `scheduled`. Jeżeli przeszkoda ustąpi w ciągu 60 minut od terminu, bramka
+przekaże rozsyłkę do natychmiastowej wysyłki. W przeciwnym razie rozsyłka przechodzi w stan `overdue`
+i czeka na decyzję administratora w panelu bramki. API nie pozwala wysłać takiej rozsyłki, ale pozwala ją
+anulować.
+
+Treść zaplanowanej rozsyłki pozostaje w bazie bramki do chwili przekazania, także na koncie bez
+przechowywania treści wiadomości. Po przekazaniu albo anulowaniu bramka usuwa ją z takiego konta tak samo
+jak treść każdej innej rozsyłki.
+
+Aplikacja zbudowana dla wersji wcześniejszej niż 1.13 otrzymuje dla rozsyłki z terminem stan `scheduled`
+zamiast `queued`, aż do chwili przekazania. Stany `scheduled` i `overdue` nie są ostateczne, dlatego
+aplikacja powinna traktować je tak jak `queued`.
 
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
@@ -1066,6 +1100,7 @@ treści wspólnej `defaultText`.
 | 400 | `invalid_client_id` | `clientId` poza dozwolonym wzorcem | użyć wyłącznie liter, cyfr, kropki, podkreślenia i myślnika, do 20 znaków |
 | 400 | `too_many_parts` | treść przekracza limit części | skrócić treść |
 | 400 | `invalid_orig`, `service_required`, `start_at_in_past` | jak nazwa kodu | poprawić pole |
+| 400 | `start_at_too_far` | `startAt` przypada później niż 30 dni od chwili wysyłki | wybrać bliższy termin |
 | 400 | `link_domain_not_allowed` | `linkDomain` spoza domen skracacza klucza | użyć domeny z `GET /v1/key` albo pominąć pole |
 | 403 | `service_not_allowed`, `orig_not_allowed` | usługa albo nadpis spoza uprawnień klucza | użyć wartości przypisanych do klucza |
 | 403 | `integrations_only_key` | klucz z opcją „Tylko integracje” wysyła wyłącznie przez integracje | użyć innego klucza albo integracji z Power Automate |
@@ -1161,6 +1196,7 @@ treści wspólnej `defaultText`.
   "serviceId": "24138",
   "orig": "Firma Info",
   "startAt": null,
+  "handoverAt": null,
   "createdAt": "2026-08-26T10:00:00.000Z",
   "completedAt": "2026-08-26T10:03:40.000Z",
   "providerCode": null,
@@ -1185,13 +1221,19 @@ Rozsyłka ze skróconymi linkami zawiera dodatkowo blok `links` z polami `campai
 takie jak w rozdziale 4.1, a `shortened` i `opens` obejmują wszystkich odbiorców rozsyłki.
 Odbiorców, którzy otworzyli link, zwraca odczyt kampanii z rozdziału 5c.
 
+Pole `startAt` podaje termin rozpoczęcia rozsyłki, a pole `handoverAt` chwilę jej przekazania do
+Multiinfo, do której rozsyłkę można anulować. Pole `handoverAt` zawiera wartość wyłącznie w stanie
+`scheduled`, a w pozostałych stanach przyjmuje wartość `null`.
+
 | `status` | Znaczenie |
 |---|---|
+| `scheduled` | rozsyłka z terminem przechowywana przez bramkę do chwili przekazania do Multiinfo; można ją anulować |
+| `overdue` | termin minął o ponad 60 minut, a bramka nie przekazała rozsyłki do Multiinfo; rozsyłka czeka na decyzję administratora i można ją anulować |
 | `queued` | przyjęta, oczekuje na utworzenie w Multiinfo |
 | `open` | utworzona w Multiinfo, oczekuje na rozpoczęcie |
 | `sending` | w trakcie wysyłki; `remaining` maleje |
 | `completed` | wysyłka zakończona; bramka zamawia raport samoczynnie |
-| `cancelled` | anulowana po stronie Multiinfo |
+| `cancelled` | anulowana w bramce przed przekazaniem albo po stronie Multiinfo |
 | `failed` | odrzucona przez Multiinfo albo bez potwierdzenia utworzenia; przyczyna w `providerCode` i `error` |
 
 Kod `providerCode` równy -72 oznacza, że Multiinfo nie potwierdziło utworzenia rozsyłki. Bramka
@@ -1478,6 +1520,107 @@ tego odbiorcy.
 |---|---|---|---|
 | 404 | `package_not_found` | brak rozsyłki | sprawdzić identyfikator |
 | 409 | `report_not_ready` | raport w stanie `none`, `pending` albo `failed`; odpowiedź zawiera `report.status` | przy `pending` powtórzyć po minucie; przy `failed` zamówić ponownie (5.3) |
+
+### 5.5. Anulowanie rozsyłki: `POST /v1/packages/{id}/cancel`
+
+**Przeznaczenie.** Zatrzymanie rozsyłki z terminem, której bramka nie przekazała jeszcze do Multiinfo.
+Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem.
+Dotyczy rozsyłek w stanie `scheduled` oraz `overdue`. Multiinfo nie pozwala anulować rozsyłki, którą
+już przyjęło, dlatego rozsyłki przekazanej nie można zatrzymać.
+
+=== "curl"
+
+    ```bash
+    curl -s -X POST https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/cancel \
+      -H "Authorization: Bearer <TWOJ-KLUCZ>"
+    ```
+
+=== "HTTP"
+
+    ```http
+    POST /v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/cancel HTTP/1.1
+    Host: <TWOJA-DOMENA>
+    Authorization: Bearer <TWOJ-KLUCZ>
+    ```
+
+=== "PHP"
+
+    ```php
+    <?php
+    $ch = curl_init('https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/cancel');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => '',
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer <TWOJ-KLUCZ>'],
+        CURLOPT_RETURNTRANSFER => true,
+    ]);
+    $odpowiedz = json_decode(curl_exec($ch), true);
+    echo $odpowiedz['status'];
+    ```
+
+=== "Python"
+
+    ```python
+    import json, urllib.request
+
+    req = urllib.request.Request(
+        "https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/cancel",
+        headers={"Authorization": "Bearer <TWOJ-KLUCZ>"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as res:
+        odpowiedz = json.load(res)
+    print(odpowiedz["status"])
+    ```
+
+=== "Node.js"
+
+    ```js
+    const res = await fetch("https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/cancel", {
+      method: "POST",
+      headers: { Authorization: "Bearer <TWOJ-KLUCZ>" },
+    });
+    const odpowiedz = await res.json();
+    console.log(odpowiedz.status);
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    $naglowki = @{ Authorization = "Bearer <TWOJ-KLUCZ>" }
+    $odpowiedz = Invoke-RestMethod -Method Post -Uri "https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/cancel" -Headers $naglowki
+    $odpowiedz.status
+    ```
+
+=== "C#"
+
+    ```csharp
+    using System.Net.Http.Headers;
+    using System.Text.Json;
+
+    using var http = new HttpClient();
+    http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<TWOJ-KLUCZ>");
+
+    var res = await http.PostAsync("https://<TWOJA-DOMENA>/v1/packages/pkg_7c1e9a2b3d4f5a6b7c8d/cancel", null);
+    var odpowiedz = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+    Console.WriteLine(odpowiedz.RootElement.GetProperty("status"));
+    ```
+
+**Odpowiedź `200`:** `{ "id": "pkg_7c1e9a2b3d4f5a6b7c8d", "status": "cancelled" }`
+
+Ponowne anulowanie rozsyłki już anulowanej zwraca ten sam wynik. Anulowanie wysyła powiadomienie
+`package.completed` ze stanem `cancelled`, tak samo jak anulowanie rozsyłki przez Multiinfo. Krótkie linki
+anulowanej rozsyłki prowadzą od tej chwili do strony „Link wygasł”. Na koncie bez przechowywania treści
+wiadomości bramka usuwa treści rozsyłki. Dziennik zdarzeń panelu odnotowuje anulowanie z nazwą klucza.
+
+Klucz anuluje wyłącznie własne rozsyłki. Klucz z opcją „Tylko integracje” anuluje rozsyłki zlecone przez
+swoje integracje z Power Automate, tak jak odczytuje je wywołaniem z rozdziału 5.2.
+
+| HTTP | `error.code` | Przyczyna | Postępowanie |
+|---|---|---|---|
+| 404 | `package_not_found` | brak rozsyłki albo rozsyłka innego klucza | sprawdzić identyfikator |
+| 409 | `package_not_cancellable` | rozsyłka została już przekazana do Multiinfo albo zakończona; `message` opisuje stan, na przykład „Rozsyłka została już przekazana do Multiinfo, które nie pozwala jej anulować.” | anulowanie nie jest możliwe |
+| 429 | `rate_limited` | przekroczony limit żądań na minutę | odczekać minutę |
 
 ## 5a. Wiadomości przychodzące
 
@@ -2367,7 +2510,7 @@ klucza na minutę, wspólny dla całego API.
 | 400 | `invalid_body` | pusty numer, brak treści albo pole niezgodne ze schematem; `message` wymienia pola | poprawić wskazane pola |
 | 400 | `invalid_phone` | numeru nie można znormalizować; `message` podaje powód | podać numer w postaci `48601000001` |
 | 400 | `too_many_parts` | treść dłuższa niż limit części integracji przy ustawieniu „nie wysyłaj”; `message` podaje liczbę części i limit | skrócić treść albo poprosić administratora o zmianę limitu |
-| 400 | `text_required`, `invalid_client_id`, `start_at_in_past` | rozsyłka jak w rozdziale 5.1 | jak w rozdziale 9 |
+| 400 | `text_required`, `invalid_client_id`, `start_at_in_past`, `start_at_too_far` | rozsyłka jak w rozdziale 5.1 | jak w rozdziale 9 |
 | 400 | `valid_to_in_past`, `valid_to_too_far` | jak w rozdziale 3.2 | jak w rozdziale 3.2 |
 | 403 | `service_not_allowed`, `orig_not_allowed` | usługa albo nadpis integracji spoza uprawnień klucza | poprosić administratora o poprawienie integracji albo uprawnień klucza |
 | 404 | `integration_not_found` | brak integracji, integracja innego klucza albo innego rodzaju | sprawdzić identyfikator na liście integracji |
@@ -2762,7 +2905,7 @@ Do tego dochodzą pola zależne od zdarzenia:
 | `message.sent` | `status: "sent"`, `to`, `parts` - Multiinfo przyjęło wiadomość do wysyłki |
 | `message.delivered` | `status: "delivered"`, `to`, `miStatus`, `miSubstatus`, `error: null` |
 | `message.failed` | `status` (`failed`, `blocked`, `expired` albo `cancelled`), `to`, `error`; przy odmowie Multiinfo `providerCode`, przy raporcie doręczenia `miStatus` i `miSubstatus` |
-| `package.completed` | `recipients`, `status` (`completed`, `failed`, `cancelled`); po pobraniu raportu `report: "ready"` i `summary`, przy nieudanym raporcie `report: "failed"`; przy odmowie `providerCode` i `error` |
+| `package.completed` | `recipients`, `status` (`completed`, `failed`, `cancelled`); po pobraniu raportu `report: "ready"` i `summary`, przy nieudanym raporcie `report: "failed"`; przy odmowie `providerCode` i `error`; stan `cancelled` także po anulowaniu rozsyłki z terminem w bramce (5.5) |
 | `message.received` | `serviceId`, `from`, `to`, `kind`, `text` albo `hex`, `receivedAt`, `relatedMessageId` - pola jak w 5a.2; `id` to identyfikator wiadomości przychodzącej `in_...` |
 | `link.opened` | `messageId`, `packageId`, `seq`, `campaign`, `to`, `clientId`, `target`, `shortUrl`, `openedAt` - bez pola `id`; opis niżej |
 
@@ -2862,6 +3005,7 @@ harmonogramu wyżej.
 | Ważność klucza | data przy kluczu | `401 expired_api_key`; przedłuża administrator |
 | Ważność wiadomości (`validTo`) | do 72 godzin od przyjęcia | `400 valid_to_too_far` |
 | Odbiorcy jednej rozsyłki | 5000 | `400 invalid_body` |
+| Termin rozsyłki (`startAt`) | najwyżej 30 dni od chwili wysyłki | `400 start_at_too_far` |
 | Numery w tablicy `to` | 500 | `400 invalid_body` |
 | Liczba części treści w wywołaniu integracji z Power Automate | 1-9, ustawiana w integracji | skrócenie treści albo `400 too_many_parts`, zależnie od ustawienia integracji (5b.5) |
 | Wywołania wysyłające integracji z Power Automate | ochrona przed burzą ustawiana w integracji, domyślnie 30 na 10 minut | `429 integration_throttled` (5b.5) |
@@ -2887,6 +3031,7 @@ użytkownikowi końcowemu.
 | 400 | `service_required` | klucz bez usługi domyślnej, `serviceId` nie podano | podać `serviceId` |
 | 400 | `valid_to_in_past`, `valid_to_too_far` | `validTo` w przeszłości albo dalej niż 72 godziny | poprawić `validTo` |
 | 400 | `start_at_in_past` | `startAt` rozsyłki w przeszłości | poprawić `startAt` albo pominąć |
+| 400 | `start_at_too_far` | `startAt` rozsyłki później niż 30 dni od chwili wysyłki | wybrać bliższy termin |
 | 400 | `in_reply_to_unknown` | `inReplyTo` wskazuje wiadomość, której nie ma w tej usłudze | użyć identyfikatora z `message.received` tej samej usługi |
 | 400 | `in_reply_to_single` | `inReplyTo` razem z listą odbiorców | jeden odbiorca |
 | 400 | `in_reply_to_recipient` | odbiorca odpowiedzi to nie nadawca wskazanej wiadomości | w `to` podać `from` z `message.received` |
@@ -2899,6 +3044,7 @@ użytkownikowi końcowemu.
 | 404 | `message_not_found`, `package_not_found`, `inbound_not_found`, `integration_not_found`, `campaign_not_found` | brak obiektu albo obiekt innego klucza | sprawdzić identyfikator |
 | 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią, numerem albo rozsyłką, a także klucz użyty wcześniej w innej integracji | użyć nowego klucza idempotencji |
 | 409 | `already_final`, `already_passed` | anulowanie niemożliwe (4.3) | brak |
+| 409 | `package_not_cancellable` | rozsyłka przekazana do Multiinfo albo zakończona, dlatego anulowanie nie jest możliwe (5.5) | brak |
 | 409 | `integration_disabled`, `group_empty` | integracja z Power Automate wyłączona w panelu albo bez odbiorców grupy (5b.6) | poprosić administratora o włączenie integracji albo uzupełnienie listy |
 | 409 | `package_not_completed`, `report_not_ready` | raport rozsyłki jeszcze niedostępny albo rozsyłka anulowana | powtórzyć po minucie, przy anulowanej rozsyłce zrezygnować z raportu |
 | 413 | `body_too_large` | body przekracza 512 KB, a przy utworzeniu rozsyłki 4 MB | zmniejszyć body albo podzielić rozsyłkę |

@@ -26,7 +26,7 @@ konektora do pierwszego przepływu z SMS-em do jednego numeru.
 
 ## 1. Jakie możliwości oferuje konektor
 
-Konektor udostępnia sześć akcji:
+Konektor udostępnia siedem akcji:
 
 | Akcja | Zastosowanie |
 |---|---|
@@ -35,6 +35,7 @@ Konektor udostępnia sześć akcji:
 | Wyślij SMS do grupy | ta sama treść do każdego numeru z listy odbiorców zapisanej w integracji, na przykład do ekipy serwisowej |
 | Sprawdź stan wiadomości | bieżący stan wiadomości: oczekująca w kolejce, wysłana, doręczona albo niedoręczona |
 | Sprawdź stan rozsyłki | stan rozsyłki i jej raportu |
+| Anuluj rozsyłkę | zatrzymanie rozsyłki z terminem, której bramka nie przekazała jeszcze do Multiinfo, na przykład po zmianie planu wizyt |
 | Pobierz raport rozsyłki | stan doręczenia każdej wiadomości z rozsyłki wraz z identyfikatorem odbiorcy |
 
 Wybór akcji zależy od źródła odbiorców:
@@ -450,6 +451,42 @@ Rozsyłka z krótkimi linkami zawiera w danych wyjściowych akcji „Sprawdź st
 **Krótkie linki** z liczbą kliknięć oraz liczbą odbiorców, którzy otworzyli link. Odbiorców, którzy
 otworzyli link, pokazuje panel bramki w szczegółach kampanii.
 
+### 8.4. Rozsyłka z terminem i anulowanie
+
+Pole **Początek wysyłki** w parametrach zaawansowanych akcji „Wyślij rozsyłkę” określa godzinę, o której
+Multiinfo rozpocznie wysyłkę. Od wersji 1.13 bramka przechowuje taką rozsyłkę u siebie i przekazuje ją do
+Multiinfo zwykle 10 minut przed terminem. Dzięki temu rozsyłkę można anulować, na przykład gdy dyspozytor
+zmieni plan jutrzejszych wizyt. Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo,
+zwykle 10 minut przed terminem. Termin może przypadać najwyżej 30 dni od chwili wysyłki.
+
+Pole przyjmuje czas w formacie ISO 8601 w strefie UTC, na przykład `2026-11-20T07:00:00Z` dla godziny
+8:00 czasu polskiego zimą. Czas polski zamienia na UTC wyrażenie
+`convertToUtc('2026-11-20 08:00', 'Central European Standard Time')`, które uwzględnia także czas letni.
+
+Akcja „Wyślij rozsyłkę” z terminem zwraca **Stan rozsyłki** `scheduled` oraz **Przekazanie do Multiinfo**, czyli
+chwilę, do której można anulować rozsyłkę. Akcja „Sprawdź stan rozsyłki” podaje te same pola. Rozsyłka
+z terminem przyjmuje dwa stany, których nie zna konektor sprzed wersji 1.13:
+
+| Stan | Znaczenie |
+|---|---|
+| `scheduled` | bramka przechowuje rozsyłkę do chwili przekazania do Multiinfo, a akcja „Anuluj rozsyłkę” może ją zatrzymać |
+| `overdue` | bramka nie przekazała rozsyłki w ciągu 60 minut od terminu, na przykład z powodu wyłączonej integracji, dlatego rozsyłka czeka na decyzję administratora bramki |
+
+Celem procedury jest anulowanie rozsyłki z terminem w przepływie:
+
+1. Dodaj akcję **Anuluj rozsyłkę**.
+2. W polu **Identyfikator rozsyłki** wstaw **Identyfikator rozsyłki** z akcji „Wyślij rozsyłkę”.
+
+Oczekiwany wynik: akcja kończy się powodzeniem i zwraca **Stan rozsyłki** `cancelled`. Ponowne anulowanie tej
+samej rozsyłki zwraca ten sam wynik. W panelu bramki rozsyłka otrzymuje stan „anulowana”.
+
+Jeżeli wynik jest inny:
+
+- **Błąd `409` z kodem `package_not_cancellable`.** Bramka przekazała już rozsyłkę do Multiinfo, które
+  nie pozwala jej anulować, albo rozsyłka została zakończona. Komunikat opisuje stan rozsyłki
+- **Błąd `404` z kodem `package_not_found`.** Identyfikator wskazuje rozsyłkę innego klucza albo zawiera
+  błąd
+
 ## 9. SMS do grupy
 
 Przykładowy scenariusz: zgłoszenie awarii trafia jednym SMS-em do wszystkich techników ekipy
@@ -530,9 +567,10 @@ zmian.
 
 ## 11. Aktualizacja łącznika
 
-Nowy plik konektora należy pobrać po aktualizacji bramki, jeżeli opis wydania wymienia zmiany
-w konektorze. Na przykład wydanie 1.11 dodaje do akcji wysyłających pola skracania linków. Aktualizacja łącznika zachowuje zapisane przepływy, ponieważ akcje konektora
-zachowują stałe nazwy wewnętrzne.
+Nowy plik konektora należy pobrać po aktualizacji bramki, jeżeli opis wydania wymienia zmiany w
+konektorze. Na przykład wydanie 1.11 dodaje do akcji wysyłających pola skracania linków, a wydanie 1.13
+akcję „Anuluj rozsyłkę” oraz stany rozsyłki z terminem. Aktualizacja łącznika zachowuje zapisane
+przepływy, ponieważ akcje konektora zachowują stałe nazwy wewnętrzne.
 
 1. Pobierz nowy plik z panelu bramki (rozdział 4).
 2. W Power Automate otwórz listę **Łączniki niestandardowe** (rozdział 5, krok 2).
@@ -574,6 +612,8 @@ kodów wraz z ich znaczeniem znajdziesz w rozdziale 5b.6 [API](api.md).
 | błąd `413` z kodem `body_too_large` | lista odbiorców rozsyłki z treściami przekracza 4 MB | podzielić listę na kilka rozsyłek |
 | błąd `403` z kodem `service_not_allowed` albo `orig_not_allowed` | usługa albo nadpis integracji wykracza poza uprawnienia klucza | poprosić administratora o korektę integracji albo uprawnień klucza |
 | błąd `403` z kodem `integrations_only_key` w akcji HTTP | klucz z opcją **Tylko integracje** nie pozwala wysyłać przez API z pominięciem integracji | użyć akcji konektora zamiast akcji HTTP |
+| błąd `400` z kodem `start_at_too_far` | pole **Początek wysyłki** przypada później niż 30 dni od chwili wysyłki | wybrać bliższy termin |
+| błąd `409` z kodem `package_not_cancellable` w akcji „Anuluj rozsyłkę” | rozsyłka została już przekazana do Multiinfo albo zakończona | brak, Multiinfo nie pozwala anulować przekazanej rozsyłki (rozdział 8.4) |
 | błąd `409` z kodem `idempotency_conflict` | ten sam klucz idempotencji użyto wcześniej z innymi danymi albo w innej integracji | podać inny klucz idempotencji |
 | akcja jest ponawiana przez kilka minut i kończy się błędem `429` z kodem `integration_throttled` | przekroczono limit wywołań albo limit odbiorców ochrony przed burzą integracji | postąpić zgodnie z rozdziałem 10.2 |
 | błąd `429` z kodem `rate_limited` | przekroczono limit żądań klucza na minutę | zastąpić pętlę rozsyłką albo poprosić administratora o podniesienie limitu klucza |
