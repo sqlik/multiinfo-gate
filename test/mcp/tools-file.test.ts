@@ -328,6 +328,19 @@ describe('postęp, anulowanie i raport wysyłki z pliku', () => {
     expect(await mcp.call('cancel_package', { id: foreign })).toMatchObject({ isError: true, structuredContent: { error: 'not_own' } });
   });
 
+  it('wysyłka z pliku anulowana w całości: package_report wyjaśnia, że raport nie powstanie, a stan kończy odświeżanie', async () => {
+    setup(['send', 'read_sent']);
+    const mcp = await mcpSession(app, seed.secret, { apps: true });
+    const { id } = await fileSend(mcp, START);
+    expect((await mcp.call('cancel_package', { id })).structuredContent).toEqual({ id, cancelled: 2, handedOver: 0 });
+    const report = await mcp.call('package_report', { packageId: id, file: 'report' });
+    expect(report).toMatchObject({ isError: true, structuredContent: { error: 'package_cancelled' } });
+    expect(textOf(report)).toBe(`Wysyłka z pliku ${id} została anulowana, dlatego raport doręczeń nie powstanie.`);
+    const status = await mcp.call('file_send_status', { id });
+    expect(status.structuredContent).toMatchObject({ cancelled: true, reportReady: false, final: true });
+    expect(textOf(status)).toContain('Wysyłka z pliku została anulowana, dlatego raport doręczeń nie powstanie.');
+  });
+
   it('package_report z identyfikatorem wysyłki z pliku: jeden CSV z kolumną wiersz_pliku; przed zakończeniem report_not_ready', async () => {
     setup(['send', 'read_sent']);
     const mcp = await mcpSession(app, seed.secret, { apps: true });

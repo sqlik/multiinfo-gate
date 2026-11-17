@@ -830,7 +830,8 @@ Przycisk **Pobierz raport CSV** tworzy jeden plik dla wszystkich rozsyłek wysy�
 `wiersz_pliku` podaje numer wiersza w pliku źródłowym, dzięki czemu wynik doręczenia łatwo dopasować do
 arkusza. Raport jest dostępny po zakończeniu wszystkich rozsyłek i odbiorze ich raportów doręczeń. Przycisk
 **Pobierz CSV niedoręczonych** tworzy plik wyłącznie z odbiorcami bez doręczenia. Oba pliki udostępniają
-linki do pobrania opisane w rozdziale 11.
+linki do pobrania opisane w rozdziale 11. Wysyłka anulowana w całości nie otrzymuje raportu, ponieważ
+żadna jej rozsyłka nie trafiła do Multiinfo.
 
 W panelu bramki rozsyłki wysyłki z pliku są oznaczone źródłem zakończonym dopiskiem „· plik”, a ich
 szczegóły zawierają wiersz „Plik” z nazwą pliku i liczbą rozsyłek wysyłki. Agent podaje stan wysyłki z

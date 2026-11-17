@@ -3,7 +3,7 @@ import { createDownload } from '../../agents/downloads.ts';
 import { deliveryTrace, listPackages, listSent, packageStatus, type PackageStatusData, type TraceEntry } from '../../agents/reads.ts';
 import { CANCEL_WINDOW_TEXT } from '../../api/schedule.ts';
 import { AgentError } from '../../integrations/agent.ts';
-import { FILE_SEND_PREFIX, fileReportReady, fileSendOf } from '../../integrations/agent-file.ts';
+import { FILE_SEND_PREFIX, fileReportReady, fileSendCancelled, fileSendOf } from '../../integrations/agent-file.ts';
 import { plural } from '../../text/plural.ts';
 import { warsawShort } from '../../time/warsaw.ts';
 import { z } from '../../zod.ts';
@@ -181,7 +181,11 @@ export const packageReportTool: ToolDef = {
     if (q.packageId.startsWith(FILE_SEND_PREFIX)) {
       // Wysyłka z pliku: jeden plik CSV wszystkich jej rozsyłek z numerem wiersza w pliku (spec 5.8).
       const f = fileSendOf(ctx.deps, conn, q.packageId);
-      if (!fileReportReady(ctx.deps.packages.listByFileSend(f.id))) {
+      const packages = ctx.deps.packages.listByFileSend(f.id);
+      if (fileSendCancelled(packages)) {
+        throw new AgentError('package_cancelled', `Wysyłka z pliku ${f.id} została anulowana, dlatego raport doręczeń nie powstanie.`);
+      }
+      if (!fileReportReady(packages)) {
         throw new AgentError('report_not_ready', `Raport wysyłki z pliku ${f.id} nie jest jeszcze gotowy. Bramka tworzy go po zakończeniu wszystkich rozsyłek `
           + 'i odbiorze ich raportów doręczeń, a stan wysyłki pokazuje narzędzie file_send_status.');
       }

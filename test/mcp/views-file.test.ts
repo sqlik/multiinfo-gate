@@ -414,6 +414,11 @@ describe('podgląd, wysyłka i postęp rozsyłki z pliku', () => {
     expect(filePending(STATUS)).toBe(false);
     expect(fileSettled(STATUS)).toBe(false);
     expect(fileSettled({ ...STATUS, reportReady: true })).toBe(true);
+    // Wysyłka anulowana w całości: odświeżanie się kończy, a raport nie powstanie.
+    const cancelled = { ...STATUS, byStatus: { cancelled: 2 }, statusLabels: { cancelled: 'anulowana' }, delivered: 0, failed: 0, other: 0, notSent: 1200, final: true, cancelled: true };
+    expect(fileSettled(cancelled)).toBe(true);
+    expect(renderFileProgress(cancelled, { name: 'a.csv' })).toContain('Wysyłka została anulowana, dlatego raport doręczeń nie powstanie');
+    expect(renderFileProgress(cancelled, { name: 'a.csv' })).not.toContain('Raport CSV wszystkich rozsyłek będzie dostępny');
 
     // Odświeżanie co 30 s do raportu wszystkich rozsyłek.
     let n = 0;

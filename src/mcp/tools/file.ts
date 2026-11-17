@@ -256,9 +256,12 @@ function fileStatusText(d: FileSendStatusData): string {
     lines.push(`Odbiorcy według raportów doręczeń: doręczone ${formatCount(d.delivered)}, niedoręczone ${formatCount(d.failed)}, pozostałe ${formatCount(d.other)}.`);
   }
   if (d.notSent > 0) lines.push(`Odbiorcy rozsyłek anulowanych albo zakończonych błędem: ${formatCount(d.notSent)}.`);
-  lines.push(d.reportReady
-    ? 'Raport CSV wszystkich rozsyłek tworzy narzędzie package_report z identyfikatorem wysyłki z pliku.'
-    : 'Raport CSV będzie dostępny po zakończeniu wszystkich rozsyłek wysyłki i odbiorze ich raportów doręczeń.');
+  if (d.cancelled) lines.push('Wysyłka z pliku została anulowana, dlatego raport doręczeń nie powstanie.');
+  else {
+    lines.push(d.reportReady
+      ? 'Raport CSV wszystkich rozsyłek tworzy narzędzie package_report z identyfikatorem wysyłki z pliku.'
+      : 'Raport CSV będzie dostępny po zakończeniu wszystkich rozsyłek wysyłki i odbiorze ich raportów doręczeń.');
+  }
   return lines.join('\n');
 }
 

@@ -270,7 +270,7 @@ export function renderFilePreview(p, meta = {}, state = {}) {
 }
 
 /** Raport CSV wysyłki z pliku jest gotowy, dlatego stan nie zmieni się już sam z siebie. */
-export const fileSettled = (d) => d.reportReady === true;
+export const fileSettled = (d) => d.reportReady === true || d.cancelled === true;
 
 /** Wszystkie rozsyłki czekają w bramce na termin albo na decyzję administratora. */
 export const filePending = (d) => d.packages > 0 && Object.keys(d.byStatus ?? {}).every((s) => s === 'scheduled' || s === 'overdue');
@@ -338,7 +338,8 @@ export function renderFileProgress(d, state = {}) {
     )
     + note(`Rozsyłki według stanu: ${states}`)
     + (d.notSent > 0 ? note(`Odbiorcy rozsyłek anulowanych albo zakończonych błędem: ${num(d.notSent)}`) : '')
-    + (d.reportReady ? '' : note('Raport CSV wszystkich rozsyłek będzie dostępny po ich zakończeniu i odbiorze raportów doręczeń'))
+    + (d.cancelled === true ? note('Wysyłka została anulowana, dlatego raport doręczeń nie powstanie')
+      : d.reportReady ? '' : note('Raport CSV wszystkich rozsyłek będzie dostępny po ich zakończeniu i odbiorze raportów doręczeń'))
     + buttons(
       d.reportReady ? button('Pobierz raport CSV', { act: 'csv', kind: 'primary', disabled: busy, data: { file: 'report' } }) : '',
       d.reportReady && undelivered > 0 ? button('Pobierz CSV niedoręczonych', { act: 'csv', disabled: busy, data: { file: 'failed' } }) : '',

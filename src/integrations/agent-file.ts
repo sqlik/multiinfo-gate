@@ -487,6 +487,8 @@ export interface FileSendStatusData {
   cancellable: number;
   /** Raport CSV jest dostępny, gdy wszystkie rozsyłki mają stan ostateczny, a zakończone mają gotowy raport (P10). */
   reportReady: boolean; final: boolean;
+  /** Wszystkie rozsyłki anulowane przed przekazaniem do Multiinfo, dlatego raport doręczeń nie powstanie. */
+  cancelled: boolean;
 }
 
 /** Przedrostek identyfikatora wysyłki z pliku; narzędzia rozsyłek przyjmują go w miejscu identyfikatora rozsyłki. */
@@ -510,7 +512,12 @@ function ownFileSend(deps: Pick<ReadDeps, 'connectionsRepo'>, ctx: ConnectionCon
 /** Raport CSV wysyłki z pliku jest gotowy (P10). */
 export function fileReportReady(packages: Array<{ status: PackageStatus; reportStatus: string }>): boolean {
   return packages.length > 0 && packages.every((p) => FINAL_PACKAGE.has(p.status))
-    && packages.every((p) => p.status !== 'completed' || p.reportStatus === 'ready');
+    && packages.every((p) => p.status !== 'completed' || p.reportStatus === 'ready') && !fileSendCancelled(packages);
+}
+
+/** Wysyłka z pliku anulowana w całości: żadna rozsyłka nie trafiła do Multiinfo, dlatego raport doręczeń nie powstanie. */
+export function fileSendCancelled(packages: Array<{ status: PackageStatus }>): boolean {
+  return packages.length > 0 && packages.every((p) => p.status === 'cancelled');
 }
 
 /** Stan wysyłki z pliku wzorem package_status: rozsyłki według stanów, odbiorcy według raportów, termin i anulowanie. */
@@ -541,6 +548,7 @@ export function fileSendStatus(deps: FileSendDeps, ctx: ConnectionContext, id: s
     },
     cancellable: canCancel ? packages.filter((p) => PENDING_STATUSES.has(p.status)).length : 0,
     reportReady: fileReportReady(packages), final: packages.length > 0 && packages.every((p) => FINAL_PACKAGE.has(p.status)),
+    cancelled: fileSendCancelled(packages),
   };
 }
 
