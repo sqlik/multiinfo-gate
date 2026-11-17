@@ -2,7 +2,7 @@
 // podział wierszy na porcje przesyłane do bramki.
 
 import { decodeBytes, detectSeparator, parseCsv } from './plik-csv.js';
-import { BROKEN, readSheet, readWorkbook } from './plik-xlsx.js';
+import { BROKEN, COLUMNS_MAX, readSheet, readWorkbook } from './plik-xlsx.js';
 
 /** Nazwy nagłówka kolumny numeru po złożeniu wielkości liter i polskich znaków. */
 export const PHONE_HEADERS = ['numer', 'telefon', 'tel', 'komorka', 'nr telefonu', 'phone', 'msisdn', 'numer telefonu', 'nr tel', 'telefon komorkowy'];
@@ -11,7 +11,7 @@ export const PHONE_HEADERS = ['numer', 'telefon', 'tel', 'komorka', 'nr telefonu
 export const UPLOAD_CHUNK = 2500;
 /** Największa wielkość wierszy porcji w JSON; porcja 5000 wierszy i 952 KB przeszła w obu aplikacjach AI. */
 export const UPLOAD_BYTES = 900 * 1024;
-/** Limity pliku, jak FILE_ROWS_MAX i FILE_MEGABYTES_MAX w bramce. */
+/** Limity pliku, jak FILE_ROWS_MAX i FILE_MEGABYTES_MAX w bramce; limit kolumn COLUMNS_MAX w czytniku skoroszytu. */
 export const ROWS_MAX = 50_000;
 export const FILE_BYTES_MAX = 20 * 1024 * 1024;
 
@@ -48,10 +48,11 @@ const fold = (name) => name.toLowerCase().replace(/[ąćęłńóśźż]/g, (ch) 
 
 const isEmptyRow = (cells) => cells.every((c) => String(c ?? '').trim() === '');
 
-/** Liczba kolumn tabeli: do ostatniej niepustej komórki w którymkolwiek wierszu. */
+/** Liczba kolumn tabeli: do ostatniej niepustej komórki w którymkolwiek wierszu, także odległej komórki skoroszytu. */
 function tableWidth(rows) {
   let width = 0;
   for (const r of rows) {
+    if ((r.width ?? 0) > width) width = r.width;
     for (let i = r.cells.length - 1; i >= width; i -= 1) {
       if (String(r.cells[i] ?? '').trim() !== '') {
         width = i + 1;
@@ -87,11 +88,13 @@ function guessHeader(filled, width) {
  */
 export function analyze(rows, { header } = {}) {
   const filled = rows.filter((r) => !isEmptyRow(r.cells));
-  if (filled.length === 0) return { header: false, columns: [], data: [], phoneCandidates: [] };
+  if (filled.length === 0) return { header: false, columns: [], data: [], phoneCandidates: [], width: 0 };
   const width = tableWidth(filled);
-  const useHeader = header ?? guessHeader(filled, width);
+  // Plik szerszy niż COLUMNS_MAX bramka odrzuci, dlatego tabela obejmuje pierwsze kolumny, a `width` liczbę kolumn pliku.
+  const kept = Math.min(width, COLUMNS_MAX);
+  const useHeader = header ?? guessHeader(filled, kept);
   const seen = new Set();
-  const columns = Array.from({ length: width }, (_, i) => {
+  const columns = Array.from({ length: kept }, (_, i) => {
     const raw = useHeader ? String(filled[0].cells[i] ?? '').trim() : '';
     const name = raw || `Kolumna ${columnLetter(i)}`;
     if (!seen.has(fold(name))) {
@@ -103,9 +106,9 @@ export function analyze(rows, { header } = {}) {
     return renamed;
   });
   const data = (useHeader ? filled.slice(1) : filled).map((r) => ({
-    line: r.line, cells: Array.from({ length: width }, (_, i) => String(r.cells[i] ?? '')),
+    line: r.line, cells: Array.from({ length: kept }, (_, i) => String(r.cells[i] ?? '')),
   }));
-  return { header: useHeader, columns, data, phoneCandidates: phoneCandidates(columns, data, useHeader) };
+  return { header: useHeader, columns, data, phoneCandidates: phoneCandidates(columns, data, useHeader), width };
 }
 
 /** Kolumna numeru po nazwie nagłówka, a bez nazwy z listy po zawartości: co najmniej 90% poprawnych numerów. */

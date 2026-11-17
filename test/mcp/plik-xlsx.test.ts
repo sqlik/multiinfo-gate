@@ -57,8 +57,9 @@ describe('odczyt XLSX w widoku', () => {
     });
     expect(rows).toEqual([
       { line: 1, cells: ['Numer', 'Kontrahent', 'Kwota', 'Suma'] },
-      { line: 3, cells: ['48601000011', 'Hurtownia Łódź & Syn', '', '3', 'Numerx', 'PRAWDA', 'FAŁSZ', ''] },
-      { line: 4, cells: ['48601000012', 'Linia\r\nnowa', '', ''] },
+      // Puste komórki na końcu wiersza nie poszerzają go, a analiza tabeli dopełnia wiersze do szerokości pliku.
+      { line: 3, cells: ['48601000011', 'Hurtownia Łódź & Syn', '', '3', 'Numerx', 'PRAWDA', 'FAŁSZ'] },
+      { line: 4, cells: ['48601000012', 'Linia\r\nnowa'] },
     ]);
   });
 
@@ -139,6 +140,18 @@ describe('odczyt XLSX w widoku', () => {
   it('xlsx: archiwum bez skoroszytu albo uszkodzone daje błąd z komunikatem', async () => {
     await expect(readWorkbook(new Uint8Array(makeZipFiles({ 'content.xml': '<office/>' })))).rejects.toThrow('Plik nie jest skoroszytem programu Excel w formacie .xlsx');
     await expect(readWorkbook(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3]))).rejects.toThrow('Widok nie odczytał skoroszytu');
+  });
+
+  it('xlsx: adres komórki za kolumną XFD to plik uszkodzony; pusta komórka z formatem nie poszerza wiersza; odległa wartość tylko jako szerokość', async () => {
+    const BROKEN = 'Widok nie odczytał skoroszytu, ponieważ plik jest uszkodzony. Zapisz go w Excelu ponownie albo jako „CSV UTF-8”.';
+    const beyond = await readWorkbook(xlsx({ sheets: [{ name: 'Listopad', xml: '<row r="1"><c r="A1" t="inlineStr"><is><t>Numer</t></is></c><c r="AAAAAAA1" t="inlineStr"><is><t>x</t></is></c></row>' }] }));
+    expect(() => readSheet(beyond, 0)).toThrow(BROKEN);
+    const rows = await cells({ sheets: [{ name: 'Listopad', xml: '<row r="1"><c r="A1" t="inlineStr"><is><t>Numer</t></is></c><c r="XFD1" s="0"/></row>'
+      + '<row r="2"><c r="A2"><v>48601000011</v></c><c r="XFD2" t="inlineStr"><is><t>x</t></is></c></row>' }] });
+    expect(rows[0]).toEqual({ line: 1, cells: ['Numer'] });
+    expect(rows[1]!.cells.length).toBeLessThanOrEqual(51);
+    expect(rows[1]).toMatchObject({ line: 2, width: 16_384 });
+    expect(rows[1]!.cells[0]).toBe('48601000011');
   });
 
   it('xlsx: uszkodzone dane deflate arkusza dają polski komunikat o uszkodzonym pliku zamiast błędu rozpakowania', async () => {

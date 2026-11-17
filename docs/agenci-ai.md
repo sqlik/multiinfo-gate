@@ -714,7 +714,7 @@ Jeżeli wynik jest inny:
 | Arkusze | pierwszy arkusz skoroszytu, a pozostałe do wyboru z listy **Arkusz** |
 | Wiersz nagłówka | pierwszy niepusty wiersz, chyba że zawiera numer telefonu albo pustą komórkę nad kolumną z numerami; kolumny pliku bez nagłówka otrzymują nazwy „Kolumna A”, „Kolumna B” i kolejne |
 | Puste wiersze | pomijane |
-| Limity | 50 000 wierszy danych i 20 MB |
+| Limity | 50 000 wierszy danych, 50 kolumn i 20 MB |
 
 Widok rozpoznaje kolumnę numeru najpierw po nazwie nagłówka, na przykład Numer, Telefon, Komórka albo
 MSISDN, bez względu na wielkość liter. Gdy nazwa nie wskazuje kolumny, widok wybiera kolumnę, w której co

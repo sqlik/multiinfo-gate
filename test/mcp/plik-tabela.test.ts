@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   analyze, columnLetter, FILE_BYTES_MAX, looksLikePhone, nextChunk, PHONE_HEADERS, readFileBytes, ROWS_MAX, UPLOAD_BYTES, UPLOAD_CHUNK,
 } from '../../src/mcp/views/client/plik-tabela.js';
-import { FILE_MEGABYTES_MAX, FILE_ROWS_MAX, UPLOAD_ROWS_MAX } from '../../src/store/agent-files.ts';
+import { COLUMNS_MAX, FILE_MEGABYTES_MAX, FILE_ROWS_MAX, UPLOAD_ROWS_MAX } from '../../src/store/agent-files.ts';
+import { COLUMNS_MAX as VIEW_COLUMNS_MAX } from '../../src/mcp/views/client/plik-xlsx.js';
 import { makeZipFiles } from '../helpers/zip.ts';
 
 const row = (line: number, ...cells: string[]) => ({ line, cells });
@@ -11,6 +12,7 @@ const OLE = Uint8Array.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 
 describe('rozpoznanie tabeli z pliku', () => {
   it('limity widoku zgodne z bramką, porcja z punktu kontrolnego A', () => {
     expect(ROWS_MAX).toBe(FILE_ROWS_MAX);
+    expect(VIEW_COLUMNS_MAX).toBe(COLUMNS_MAX);
     expect(FILE_BYTES_MAX).toBe(FILE_MEGABYTES_MAX * 1024 * 1024);
     expect(UPLOAD_CHUNK).toBe(2500);
     expect(UPLOAD_CHUNK).toBeLessThanOrEqual(UPLOAD_ROWS_MAX);
@@ -64,18 +66,18 @@ describe('rozpoznanie tabeli z pliku', () => {
     const withHeader = analyze([row(1, '', ''), row(2, 'Numer', 'Kontrahent'), row(3, '48601000011', 'Hurtownia Łódź'), row(4, ' ', ''), row(5, '48601000012', 'Apteka Źródło')]);
     expect(withHeader).toEqual({
       header: true, columns: ['Numer', 'Kontrahent'],
-      data: [row(3, '48601000011', 'Hurtownia Łódź'), row(5, '48601000012', 'Apteka Źródło')], phoneCandidates: [0],
+      data: [row(3, '48601000011', 'Hurtownia Łódź'), row(5, '48601000012', 'Apteka Źródło')], phoneCandidates: [0], width: 2,
     });
     const noHeader = analyze([row(1, 'Hurtownia Łódź', '+48 601 000 011'), row(2, 'Apteka Źródło', '48601000012')]);
     expect(noHeader).toEqual({
       header: false, columns: ['Kolumna A', 'Kolumna B'],
-      data: [row(1, 'Hurtownia Łódź', '+48 601 000 011'), row(2, 'Apteka Źródło', '48601000012')], phoneCandidates: [1],
+      data: [row(1, 'Hurtownia Łódź', '+48 601 000 011'), row(2, 'Apteka Źródło', '48601000012')], phoneCandidates: [1], width: 2,
     });
     // Pracownik zmienia rozpoznanie polem wyboru: wartości pierwszego wiersza nie stają się nazwami kolumn.
     expect(analyze([row(1, 'Numer', 'Kontrahent'), row(2, '48601000011', 'Hurtownia')], { header: false })).toMatchObject({
       header: false, columns: ['Kolumna A', 'Kolumna B'], data: [row(1, 'Numer', 'Kontrahent'), row(2, '48601000011', 'Hurtownia')],
     });
-    expect(analyze([row(1, '', '')])).toEqual({ header: false, columns: [], data: [], phoneCandidates: [] });
+    expect(analyze([row(1, '', '')])).toEqual({ header: false, columns: [], data: [], phoneCandidates: [], width: 0 });
   });
 
   it('numer z kropkami jak w bramce: plik bez nagłówka z takimi numerami otrzymuje nazwy Kolumna A, B, C', () => {
@@ -98,6 +100,18 @@ describe('rozpoznanie tabeli z pliku', () => {
     expect(analyze([row(1, 'Telefon', '', 'Kwota'), ...data]).header).toBe(true);
     // Nagłówek z nazwą nad kolumną numeru rozpoznaną po zawartości pozostaje nagłówkiem.
     expect(analyze([row(1, 'Komórka służbowa', 'Kontrahent', 'Kwota'), ...data]).header).toBe(true);
+  });
+
+  it('plik szerszy niż 50 kolumn: tabela z pierwszymi 50 kolumnami i szerokością pliku, także z odległej komórki skoroszytu', () => {
+    const wide = analyze([row(1, ...Array.from({ length: 60 }, (_, i) => `K${i + 1}`)), row(2, '48601000011', ...Array.from({ length: 59 }, () => 'x'))]);
+    expect(wide.width).toBe(60);
+    expect(wide.columns).toHaveLength(VIEW_COLUMNS_MAX);
+    expect(wide.data[0]!.cells).toHaveLength(VIEW_COLUMNS_MAX);
+    // Wiersz skoroszytu z wartością w odległej kolumnie przechowuje tylko jej szerokość.
+    const far = analyze([row(1, 'Numer', 'Kontrahent'), { line: 2, cells: ['48601000011', 'Hurtownia'], width: 16_384 }]);
+    expect(far.width).toBe(16_384);
+    expect(far.columns).toHaveLength(VIEW_COLUMNS_MAX);
+    expect(analyze([row(1, 'Numer'), row(2, '48601000011')]).width).toBe(1);
   });
 
   it('pusta i powtórzona nazwa kolumny w nagłówku', () => {

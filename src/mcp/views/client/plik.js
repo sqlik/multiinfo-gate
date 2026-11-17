@@ -14,7 +14,7 @@ import {
   analyze, FILE_BYTES_MAX, FILE_TOO_BIG, nextChunk, readFileBytes, ROWS_MAX, UPLOAD_BYTES, UPLOAD_CHUNK,
 } from './plik-tabela.js';
 import { parseCsv, SEPARATOR_CHARS } from './plik-csv.js';
-import { readSheet } from './plik-xlsx.js';
+import { COLUMNS_MAX, readSheet } from './plik-xlsx.js';
 import { APPROVAL_TEXT, clock, FIX_MESSAGE, option, recipientsLeftTile, REPEATED_NOTE, scheduleField, select } from './send.js';
 
 /** Wiadomość do rozmowy po przekazaniu pliku: stały tekst bramki, jak FILE_LOADED_MESSAGE w narzędziach. */
@@ -72,6 +72,10 @@ const selectOf = (id, options) => `<select class="sel" id="${id}">${options.join
 /** Komunikat w sekcji, gdy pliku nie można przekazać; null, gdy można. */
 function blocker(t) {
   if (t.data.length === 0) return 'Plik nie zawiera wierszy danych';
+  if (t.width > COLUMNS_MAX) {
+    return `Plik zawiera ${num(t.width)} ${pluralWord(t.width, 'kolumnę', 'kolumny', 'kolumn')}, a bramka przyjmuje najwyżej ${COLUMNS_MAX} kolumn. `
+      + 'Usuń z pliku kolumny, których wysyłka nie wykorzystuje, także pojedyncze wartości w odległych kolumnach.';
+  }
   if (t.data.length > ROWS_MAX) {
     return `Plik zawiera ${num(t.data.length)} wierszy danych, a bramka przyjmuje najwyżej ${num(ROWS_MAX)} wierszy. Podziel plik na mniejsze części.`;
   }
@@ -526,7 +530,7 @@ export function startFile(win, env) {
 
   root.innerHTML = '<div class="align">' + section('Plik z odbiorcami', fields(
     field('Plik CSV, TXT albo XLSX', PICKER),
-    field('Limity pliku', txt(`${num(ROWS_MAX)} wierszy danych i ${FILE_BYTES_MAX / 1024 / 1024} MB`)),
+    field('Limity pliku', txt(`${num(ROWS_MAX)} wierszy danych, ${COLUMNS_MAX} kolumn i ${FILE_BYTES_MAX / 1024 / 1024} MB`)),
   )) + '<div id="stan"></div></div>';
   const state = doc.getElementById('stan');
   const draw = () => {

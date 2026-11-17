@@ -7,6 +7,11 @@ const NOT_WORKBOOK = 'Plik nie jest skoroszytem programu Excel w formacie .xlsx.
 export const BROKEN = 'Widok nie odczytał skoroszytu, ponieważ plik jest uszkodzony. Zapisz go w Excelu ponownie albo jako „CSV UTF-8”.';
 const NO_INFLATE = 'Przeglądarka nie odczytuje skoroszytów .xlsx w widoku. Zapisz plik w Excelu jako „CSV UTF-8” i wybierz go ponownie.';
 
+/** Największa liczba kolumn pliku, jak COLUMNS_MAX w bramce. Wartości w dalszych kolumnach czytnik pomija. */
+export const COLUMNS_MAX = 50;
+/** Liczba kolumn arkusza Excela: ostatnia kolumna to XFD. */
+const SHEET_COLUMNS = 16_384;
+
 /** Największa łączna wielkość rozpakowanych plików XML skoroszytu. */
 const UNZIPPED_MAX = 300 * 1024 * 1024;
 
@@ -274,7 +279,9 @@ function columnIndex(ref) {
 
 /**
  * Wiersze arkusza `index` z listy `book.sheets` jako teksty sformatowane według formatu komórki. Numer wiersza
- * pochodzi z atrybutu `r`, kolumna z adresu komórki, a brakujące komórki w wierszu są pustymi tekstami.
+ * pochodzi z atrybutu `r`, kolumna z adresu komórki, a brakujące komórki przed wartością są pustymi tekstami.
+ * Pusta komórka, na przykład z samym formatem, nie poszerza wiersza. Wartość w kolumnie od COLUMNS_MAX czytnik
+ * zapisuje wyłącznie jako szerokość wiersza `width`, dzięki czemu odległa komórka nie zajmuje pamięci ramki.
  */
 export function readSheet(book, index) {
   const sheet = book.sheets[index];
@@ -282,6 +289,7 @@ export function readSheet(book, index) {
   if (xml === null) throw new Error(BROKEN);
   const rows = [];
   let row = null;
+  let nextColumn = 0;
   let cell = null;
   let inValue = false;
   let inFormula = false;
@@ -301,6 +309,11 @@ export function readSheet(book, index) {
       const number = Number(value);
       out = Number.isFinite(number) ? formatNumber(number, book.formats[style] ?? 'General', book.date1904) : value;
     }
+    if (out === '') return;
+    if (cell.column >= COLUMNS_MAX) {
+      row.width = Math.max(row.width ?? 0, cell.column + 1);
+      return;
+    }
     while (row.cells.length < cell.column) row.cells.push('');
     row.cells[cell.column] = out;
   };
@@ -310,10 +323,14 @@ export function readSheet(book, index) {
       if (name === 'row') {
         const r = Number(attributes(raw).r);
         row = { line: Number.isInteger(r) && r > 0 ? r : (rows.at(-1)?.line ?? 0) + 1, cells: [] };
+        nextColumn = 0;
       } else if (name === 'c' && row) {
         const a = attributes(raw);
-        const column = columnIndex(a.r);
-        cell = { column: column >= 0 ? column : row.cells.length, type: a.t ?? 'n', style: Number(a.s ?? 0), value: '', inline: '' };
+        const address = columnIndex(a.r);
+        if (address >= SHEET_COLUMNS) throw new Error(BROKEN);
+        const column = address >= 0 ? address : nextColumn;
+        nextColumn = column + 1;
+        cell = { column, type: a.t ?? 'n', style: Number(a.s ?? 0), value: '', inline: '' };
       } else if (cell) {
         if (name === 'v') inValue = true;
         else if (name === 'f') inFormula = true;

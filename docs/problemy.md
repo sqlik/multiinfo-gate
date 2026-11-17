@@ -866,6 +866,7 @@ przyczynę:
 | Przeglądarka nie odczytuje skoroszytów .xlsx w widoku | przeglądarka nie obsługuje rozpakowania skoroszytu | zapisać plik jako „CSV UTF-8” albo zaktualizować przeglądarkę |
 | Rozmiar pliku przekracza 20 MB | plik jest większy niż 20 MB | usunąć zbędne kolumny albo podzielić plik |
 | Plik zawiera N wierszy danych, a bramka przyjmuje najwyżej 50 000 wierszy | plik przekracza limit odbiorców jednej wysyłki | podzielić plik i wysłać części kolejno |
+| Plik zawiera N kolumn, a bramka przyjmuje najwyżej 50 kolumn | plik zawiera zbędne kolumny albo pojedynczą wartość w odległej kolumnie | usunąć z pliku kolumny i wartości, których wysyłka nie wykorzystuje |
 | Plik nie zawiera wierszy danych | arkusz jest pusty albo zawiera wyłącznie nagłówek | wybrać właściwy arkusz z listy **Arkusz** albo uzupełnić plik |
 
 Komunikat „Bramka nie przyjęła wszystkich wierszy pliku” pojawia się po kliknięciu **Przekaż plik do

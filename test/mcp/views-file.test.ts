@@ -182,6 +182,9 @@ describe('widok rozsyłki z pliku', () => {
     const over = renderLoaded(loaded([{ line: 1, cells: ['Numer'] }, ...many]));
     expect(over).toContain('data-act="upload" disabled');
     expect(over).toContain(`Plik zawiera ${num(50_001)} wierszy danych, a bramka przyjmuje najwyżej ${num(50_000)} wierszy. Podziel plik na mniejsze części.`);
+    const wide = renderLoaded(loaded([{ line: 1, cells: ['Numer', 'Kontrahent'] }, { line: 2, cells: ['48601000011', 'Hurtownia'], width: 16_384 } as { line: number; cells: string[] }]));
+    expect(wide).toContain('data-act="upload" disabled');
+    expect(wide).toContain(`Plik zawiera ${num(16_384)} kolumny, a bramka przyjmuje najwyżej 50 kolumn. Usuń z pliku kolumny, których wysyłka nie wykorzystuje, także pojedyncze wartości w odległych kolumnach.`);
   });
 
   it('widok: przesyłanie dopiero po Przekaż plik do bramki, porcje UPLOAD_CHUNK, stała wiadomość po przesłaniu', async () => {
