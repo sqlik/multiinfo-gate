@@ -32,7 +32,7 @@ const separatorValue = (c) => (c === '\t' ? 'tab' : c);
 const separatorChar = (v) => (v === 'tab' ? '\t' : v);
 
 /** Pole wyboru pliku: ukryte pole systemowe, przycisk i nazwa pliku wyśrodkowane w pionie w jednej ramce. */
-const PICKER = '<label class="pick"><input type="file" id="plik" accept=".csv,.txt,.xlsx">'
+const PICKER = '<label class="pick"><input type="file" id="plik" accept=".csv,.txt,.xlsx,.xls">'
   + '<span class="btn pick-btn">Wybierz plik</span><span class="pick-name" id="plik-nazwa">Nie wybrano pliku</span></label>';
 
 /**

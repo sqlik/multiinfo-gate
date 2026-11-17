@@ -191,7 +191,7 @@ describe('widok rozsyłki z pliku', () => {
     const gate = gateway();
     const w = viewWindow(gate);
     startFile(w.win, { version: '1.13.0' });
-    expect(w.node('tresc').innerHTML).toContain('accept=".csv,.txt,.xlsx"');
+    expect(w.node('tresc').innerHTML).toContain('accept=".csv,.txt,.xlsx,.xls"');
     const csv = ['Numer;Kontrahent;Kwota', ...Array.from({ length: 6000 }, (_, i) => `486010${String(i).padStart(5, '0')};Hurtownia Łódź;1 234,50 zł`)].join('\r\n');
     w.pick('przypomnienia.csv', new Uint8Array(Buffer.from(csv)));
     await until(() => w.node('stan').innerHTML.includes('Agent zobaczy wyłącznie nazwy kolumn: Numer, Kontrahent, Kwota'));
