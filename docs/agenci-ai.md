@@ -646,7 +646,8 @@ wiadomość powinien otrzymać także nowy członek ekipy, anuluj rozsyłkę i p
 
 Odwołanie połączenia pracownika nie anuluje jego zaplanowanych rozsyłek, ponieważ każdą z nich zatwierdził
 człowiek. Taką rozsyłkę anuluje w razie potrzeby administrator w panelu bramki. Wyłączenie integracji
-wstrzymuje przekazanie jej rozsyłek, a usunięcie integracji anuluje je od razu. Odwołany albo wygasły
+„Agent AI” wstrzymuje przekazanie jej rozsyłek, także SMS-ów do grupy zleconych przez agenta, a usunięcie
+integracji anuluje je od razu. Odwołany albo wygasły
 klucz API integracji powoduje anulowanie rozsyłki w chwili przekazania.
 
 Jeżeli bramka nie przekaże rozsyłki w ciągu 60 minut od terminu, na przykład z powodu wyłączonej integracji

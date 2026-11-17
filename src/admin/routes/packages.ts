@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { cancelPackage } from '../../api/cancel-package.ts';
 import { ApiError } from '../../api/errors.ts';
 import { reportCsv } from '../../api/packages.ts';
-import { cancelReason } from '../../worker/packages.ts';
+import { cancelReason, disabledOrderingIntegration } from '../../worker/packages.ts';
 import type { Renderer } from '../render.ts';
 import type { AdminDeps } from '../server.ts';
 import { connectionLink, integrationLink, sourceWords } from '../views/deliveries.ts';
@@ -127,8 +127,8 @@ export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps,
         }
         return reply.redirect(back, 302);
       }
-      const integration = row.integrationId === null ? undefined : deps.integrations?.get(row.integrationId);
-      if (integration?.enabled === 0) {
+      const integration = disabledOrderingIntegration(deps, row);
+      if (integration) {
         render.flash(request, 'warn', `Integracja ${integration.name}, która zleciła rozsyłkę, jest wyłączona. Należy ją włączyć albo anulować rozsyłkę.`);
         return reply.redirect(back, 302);
       }

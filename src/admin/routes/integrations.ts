@@ -978,7 +978,7 @@ export function registerIntegrationRoutes(app: FastifyInstance, deps: AdminDeps,
     let cancelled = 0;
     for (const pkg of deps.packages.pendingOfIntegration(row.id)) {
       try {
-        cancelPackage(deps, pkg, now(), { actor, ip: request.ip });
+        cancelPackage(deps, pkg, now(), { actor, ip: request.ip, reason: 'Integracja zlecająca rozsyłkę została usunięta przed przekazaniem do Multiinfo' });
         cancelled += 1;
       } catch (e) {
         if (!(e instanceof ApiError)) throw e;

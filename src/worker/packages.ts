@@ -13,6 +13,7 @@ import { pauseForCertificate } from './certificate.ts';
 import { unzipFirstFile } from '../multiinfo/zip.ts';
 import type { Job } from '../store/jobs.ts';
 import type { AccountRow } from '../store/accounts.ts';
+import type { IntegrationRow } from '../store/integrations.ts';
 import type { PackageRow } from '../store/packages.ts';
 import { warsawShort } from '../time/warsaw.ts';
 import { SEND_BACKOFF_MS, type WorkerDeps } from './send.ts';
@@ -171,13 +172,26 @@ export function cancelReason(deps: Pick<WorkerDeps, 'accounts' | 'apiKeys'>, pkg
 }
 
 /**
+ * Wyłączona integracja zlecająca rozsyłkę: integracja rozsyłki albo integracja agenta, którego połączenie ją zleciło.
+ * Rozsyłka agenta do grupy ma w `integration_id` grupę, a wyłączenie integracji agenta wstrzymuje ją tak samo.
+ */
+export function disabledOrderingIntegration(deps: Pick<WorkerDeps, 'integrations' | 'packages'>, pkg: PackageRow): IntegrationRow | undefined {
+  const agentIntegrationId = pkg.agentConnectionId === null ? null : deps.packages.agentIntegrationOf(pkg.id);
+  for (const id of [pkg.integrationId, agentIntegrationId]) {
+    const row = id === null ? undefined : deps.integrations?.get(id);
+    if (row?.enabled === 0) return row;
+  }
+  return undefined;
+}
+
+/**
  * Przeszkoda, która wstrzymuje przekazanie bez anulowania: konto wstrzymane albo wyłączone, integracja zlecająca
  * wyłączona. Odwołanie połączenia agenta nie wstrzymuje, ponieważ wysyłkę zatwierdził człowiek.
  */
 function waitReason(deps: WorkerDeps, pkg: PackageRow, account: AccountRow): string | null {
   if (account.pausedReason) return account.pausedReason;
   if (account.active === 0) return 'Konto jest wyłączone.';
-  if (pkg.integrationId !== null && deps.integrations?.get(pkg.integrationId)?.enabled === 0) return 'Integracja zlecająca rozsyłkę jest wyłączona.';
+  if (disabledOrderingIntegration(deps, pkg)) return 'Integracja zlecająca rozsyłkę jest wyłączona.';
   return null;
 }
 

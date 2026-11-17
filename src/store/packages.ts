@@ -182,12 +182,25 @@ export class PackagesRepo {
     return (this.db.prepare('SELECT COUNT(*) AS n FROM packages WHERE status = ?').get(status) as { n: number }).n;
   }
 
-  /** Zaplanowane i spóźnione rozsyłki integracji, na przykład przed jej usunięciem. */
+  /**
+   * Zaplanowane i spóźnione rozsyłki integracji, na przykład przed jej usunięciem. Rozsyłka agenta do grupy ma
+   * w `integration_id` grupę, dlatego integrację agenta obejmują także rozsyłki zlecone przez jej połączenia.
+   */
   pendingOfIntegration(integrationId: number): PackageRow[] {
     const rows = this.db
-      .prepare("SELECT * FROM packages WHERE integration_id = ? AND status IN ('scheduled', 'overdue') ORDER BY start_at, id")
-      .all(integrationId) as Raw[];
+      .prepare(`SELECT * FROM packages
+        WHERE (integration_id = ? OR agent_connection_id IN (SELECT id FROM agent_connections WHERE integration_id = ?))
+          AND status IN ('scheduled', 'overdue') ORDER BY start_at, id`)
+      .all(integrationId, integrationId) as Raw[];
     return rows.map(toRow);
+  }
+
+  /** Integracja agenta, którego połączenie zleciło rozsyłkę; `null` dla rozsyłki spoza agenta albo po usunięciu połączenia. */
+  agentIntegrationOf(id: string): number | null {
+    const row = this.db
+      .prepare('SELECT c.integration_id AS integrationId FROM packages p JOIN agent_connections c ON c.id = p.agent_connection_id WHERE p.id = ?')
+      .get(id) as { integrationId: number } | undefined;
+    return row?.integrationId ?? null;
   }
 
   /*

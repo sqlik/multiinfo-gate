@@ -8,7 +8,7 @@ import {
   PACKAGE_POLL_MS, PACKAGE_POLL_TAIL_MS, REPORT_BUSY_LIMIT_MS, REPORT_RETRY_MS,
   handlePackageCreate, handlePackagePoll, handlePackageReport, overdueSweep,
 } from '../../src/worker/packages.ts';
-import { defaultPowerAutomateConfig } from '../../src/integrations/config.ts';
+import { defaultAgentConfig, defaultPowerAutomateConfig, defaultSmsGroupConfig } from '../../src/integrations/config.ts';
 import { AgentConnectionsRepo } from '../../src/store/agent-connections.ts';
 import { IntegrationEventsRepo } from '../../src/store/integration-events.ts';
 import { IntegrationsRepo } from '../../src/store/integrations.ts';
@@ -721,6 +721,29 @@ describe('handlePackageCreate - rozsyłka zaplanowana', () => {
     await handlePackageCreate(deferred!, deps, at(5 * MIN));
     expect(createPackage).toHaveBeenCalledTimes(1);
     expect(sentFields().startAt).toEqual(start);
+    expect(deps.packages.get('pkg_1')!.status).toBe('open');
+  });
+
+  it('rozsyłka agenta do grupy czeka, gdy integracja agenta jest wyłączona, i zostaje przekazana po jej włączeniu', async () => {
+    const agent = deps.integrations!.insert({
+      name: 'Agent AI - biuro handlowe', kind: 'agent', apiKeyId, serviceId: null, orig: null, preset: 'agent-ai',
+      enabled: 0, config: defaultAgentConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const group = deps.integrations!.insert({
+      name: 'SERWIS', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa',
+      enabled: 1, config: defaultSmsGroupConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const agentConnectionId = new AgentConnectionsRepo(db).insert({
+      integrationId: agent, name: 'Ewa Nowak', method: 'token', expiresAt: null, createdBy: 'admin', createdAt: NOW,
+    });
+    await handlePackageCreate(scheduled(at(10 * MIN), { integrationId: group, agentConnectionId }), deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    expect(deps.packages.get('pkg_1')!.status).toBe('scheduled');
+    const [deferred] = deps.jobs.claim(at(MIN), 10);
+    expect(deferred).toMatchObject({ lastError: 'Integracja zlecająca rozsyłkę jest wyłączona.' });
+    db.prepare('UPDATE integrations SET enabled = 1 WHERE id = ?').run(agent);
+    createPackage.mockResolvedValue('14');
+    await handlePackageCreate(deferred!, deps, at(MIN));
     expect(deps.packages.get('pkg_1')!.status).toBe('open');
   });
 

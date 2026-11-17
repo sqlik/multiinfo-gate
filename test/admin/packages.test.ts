@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { defaultAgentConfig, defaultPowerAutomateConfig } from '../../src/integrations/config.ts';
+import { defaultAgentConfig, defaultPowerAutomateConfig, defaultSmsGroupConfig } from '../../src/integrations/config.ts';
 import { FileSendsRepo } from '../../src/store/file-sends.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
@@ -491,6 +491,25 @@ describe('rozsyłka z terminem przechowywana przez bramkę', () => {
     expect(jobs()).toEqual([]);
     expect((await page('/rozsylki/pkg_o')).body)
       .toContain('Integracja Dyspozytornia, która zleciła rozsyłkę, jest wyłączona. Należy ją włączyć albo anulować rozsyłkę.');
+  });
+
+  it('POST wyslij-teraz dla rozsyłki agenta do grupy przy wyłączonej integracji agenta: ostrzeżenie, stan bez zmian', async () => {
+    const agent = h.integrations.insert({
+      name: 'Agent AI - biuro handlowe', kind: 'agent', apiKeyId, serviceId: null, orig: null, preset: 'agent-ai',
+      enabled: 0, config: defaultAgentConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const group = h.integrations.insert({
+      name: 'SERWIS', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa',
+      enabled: 1, config: defaultSmsGroupConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const conn = h.agentConnections.insert({ integrationId: agent, name: 'Ewa Nowak', method: 'token', expiresAt: null, createdBy: 'janek', createdAt: NOW });
+    seedPending('pkg_o', 'overdue', group);
+    h.db.prepare('UPDATE packages SET agent_connection_id = ? WHERE id = ?').run(conn, 'pkg_o');
+    await post('/rozsylki/pkg_o/wyslij-teraz');
+    expect(h.packages.get('pkg_o')!.status).toBe('overdue');
+    expect(jobs()).toEqual([]);
+    expect((await page('/rozsylki/pkg_o')).body)
+      .toContain('Integracja Agent AI - biuro handlowe, która zleciła rozsyłkę, jest wyłączona. Należy ją włączyć albo anulować rozsyłkę.');
   });
 
   it('POST wyslij-teraz przy koncie wstrzymanym: ostrzeżenie, stan overdue bez zmian, bez zadania przekazania', async () => {

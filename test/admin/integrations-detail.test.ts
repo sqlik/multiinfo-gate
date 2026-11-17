@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig, defaultPowerAutomateConfig } from '../../src/integrations/config.ts';
+import {
+  defaultAgentConfig, defaultInboundConfig, defaultMailInConfig, defaultOutboundConfig, defaultPowerAutomateConfig, defaultSmsGroupConfig,
+} from '../../src/integrations/config.ts';
 import { presetById } from '../../src/integrations/presets/index.ts';
 import { startAdminHarness, seedAccount, type AdminHarness } from '../helpers/admin-app.ts';
 
@@ -299,6 +301,36 @@ describe('POST /integracje/:id/usun - rozsyłki czekające na przekazanie', () =
     expect(cancelled[0]).toMatchObject({ actor: 'janek' });
     expect((await page(res.headers.location as string)).body)
       .toContain('Integracja Dyspozytornia usunięta. Bramka anulowała 2 rozsyłki, które czekały na przekazanie do Multiinfo.');
+  });
+
+  it('rozsyłka anulowana przy usunięciu integracji otrzymuje powód w polu error i w dzienniku panelu', async () => {
+    seedPackage('pkg_1', 'scheduled');
+    await post(`/integracje/${integrationId}/usun`);
+    const reason = 'Integracja zlecająca rozsyłkę została usunięta przed przekazaniem do Multiinfo';
+    expect(h.packages.get('pkg_1')).toMatchObject({ status: 'cancelled', error: reason });
+    expect(h.audit.list(10, 0).find((e) => e.action === 'rozsylka.anulowanie')).toMatchObject({ meta: expect.objectContaining({ powod: reason }) });
+    expect((await page('/rozsylki/pkg_1')).body).toContain('Powód anulowania</div>');
+  });
+
+  it('rozsyłka agenta do grupy: okno usuwania integracji agenta ją liczy, a usunięcie ją anuluje', async () => {
+    const agent = h.integrations.insert({
+      name: 'Agent AI - biuro handlowe', kind: 'agent', apiKeyId, serviceId: null, orig: null, preset: 'agent-ai',
+      enabled: 1, config: defaultAgentConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const group = h.integrations.insert({
+      name: 'SERWIS', kind: 'sms_group', apiKeyId, serviceId: null, orig: null, preset: 'sms-grupa',
+      enabled: 1, config: defaultSmsGroupConfig(), secrets: {}, storePayloads: 0, createdAt: NOW,
+    });
+    const conn = h.agentConnections.insert({ integrationId: agent, name: 'Ewa Nowak', method: 'token', expiresAt: null, createdBy: 'janek', createdAt: NOW });
+    seedPackage('pkg_grupa', 'scheduled', group);
+    h.db.prepare('UPDATE packages SET agent_connection_id = ? WHERE id = ?').run(conn, 'pkg_grupa');
+    expect((await page(`/integracje/${agent}`)).body)
+      .toContain('Bramka anuluje też 1 rozsyłkę tej integracji, która czeka na przekazanie do Multiinfo.');
+    expect((await page(`/integracje/${group}`)).body)
+      .toContain('Bramka anuluje też 1 rozsyłkę tej integracji, która czeka na przekazanie do Multiinfo.');
+    await post(`/integracje/${agent}/usun`);
+    expect(h.integrations.get(agent)).toBeUndefined();
+    expect(h.packages.get('pkg_grupa')).toMatchObject({ status: 'cancelled', error: 'Integracja zlecająca rozsyłkę została usunięta przed przekazaniem do Multiinfo' });
   });
 
   it('jedna rozsyłka: odmiana w oknie i w komunikacie', async () => {
