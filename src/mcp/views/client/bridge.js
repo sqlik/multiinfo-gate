@@ -153,6 +153,13 @@ export const retryable = (error) => error instanceof Error && error.retryable ==
 /** Komunikat odświeżania po błędzie połączenia, z odstępem do kolejnego odczytu. */
 export const retryText = (ms) => `Aplikacja AI zgłosiła błąd połączenia z bramką. Widok ponowi odczyt za ${ms / 1000} s.`;
 
+/** Odmowa limitu żądań klucza w wyniku narzędzia: czas oczekiwania w ms według retryAfterSec, a w przeciwnym razie null. */
+export const rateLimitWait = (result) => (result?.isError === true && result.structuredContent?.error === 'rate_limited'
+  ? Math.max(1, Number(result.structuredContent.retryAfterSec) || 60) * 1000 : null);
+
+/** Komunikat przy odświeżaniu wstrzymanym przez limit żądań klucza; odświeżanie widoku liczy się do tego limitu. */
+export const rateLimitText = (ms) => `Bramka wstrzymała odświeżanie z powodu limitu żądań klucza. Widok wznowi je za ${Math.round(ms / 1000)} s.`;
+
 /** Tekst i szczegóły błędu do komunikatu: `say('fail', ...failure(error))`. */
 export const failure = (error) => (error instanceof Error ? [error.message, typeof error.detail === 'string' ? error.detail : ''] : [String(error), '']);
 

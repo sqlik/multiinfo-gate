@@ -1,6 +1,6 @@
 // Doręczenia po wysyłce, wspólne dla widoków wysyłki, grupy i przebiegu: odczyt list_messages z identyfikatorem
 // szkicu co 15 s, do stanów ostatecznych albo 15 minut, oraz zdanie z liczbami w stanach.
-import { esc, retryable, tile } from './bridge.js';
+import { esc, rateLimitWait, retryable, tile } from './bridge.js';
 
 export const DELIVERY_REFRESH_MS = 15_000;
 export const DELIVERY_REFRESH_MAX_MS = 900_000;
@@ -48,6 +48,13 @@ export function watchDeliveries(bridge, win, draftId, onUpdate, now = () => Date
         return;
       }
       result = { isError: true };
+    }
+    // Odmowa limitu żądań klucza nie oznacza braku uprawnienia: odczyt wraca po retryAfterSec.
+    const limited = rateLimitWait(result);
+    if (limited !== null) {
+      if (now() - started < DELIVERY_REFRESH_MAX_MS) win.setTimeout(tick, limited);
+      else if (last) onUpdate({ ...last, done: true });
+      return;
     }
     if (result.isError) {
       last = last ? { ...last, done: true } : { unavailable: true };

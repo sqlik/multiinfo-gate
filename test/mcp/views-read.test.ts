@@ -621,6 +621,20 @@ describe('widok rozmowy z numerem', () => {
     expect(sent).not.toContain('Wyślij odpowiedź');
   });
 
+  it('widok: odmowa limitu żądań klucza przy odświeżaniu daje komunikat i odczyt po retryAfterSec', async () => {
+    const w = viewWindow();
+    startConversation(w.win, { version: '1.13.0' });
+    await w.ready({ serverTools: {}, message: {} });
+    w.deliver(result(CONVERSATION));
+    void w.timers.shift()!.fn();
+    await tick();
+    w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, result: { isError: true, content: [{ type: 'text', text: 'Przekroczono limit.' }], structuredContent: { error: 'rate_limited', retryAfterSec: 45 } } });
+    await tick();
+    expect(w.nodes.komunikat.textContent).toBe('Bramka wstrzymała odświeżanie z powodu limitu żądań klucza. Widok wznowi je za 45 s.');
+    expect(w.timers.map((t) => t.ms)).toEqual([45_000]);
+    expect(w.nodes['na-zywo'].textContent).toBe('● na żywo, co 15 s');
+  });
+
   it('widok ze stroną wcześniejszych SMS-ów: odświeżenie nie oznacza jako nowych SMS-ów odebranych przed odczytem', async () => {
     const w = viewWindow();
     startConversation(w.win, { version: '1.13.0' });

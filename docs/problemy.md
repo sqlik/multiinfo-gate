@@ -831,7 +831,8 @@ Jeżeli wynik jest inny:
 ### Agent zgłasza przekroczony limit {#agent-limit}
 
 Objaw: agent przekazuje komunikat „Przekroczono limit N żądań na minutę klucza. Spróbuj ponownie za
-minutę.” Widok może zgłosić ten sam komunikat przy odświeżeniu.
+minutę.” Widok wyświetla wtedy komunikat „Bramka wstrzymała odświeżanie z powodu limitu żądań klucza”
+i wznawia odświeżanie samodzielnie po wskazanym czasie.
 
 Każde wywołanie narzędzia i każde odświeżenie widoku liczy się do limitu żądań na minutę klucza API
 integracji, tak jak żądanie API. Limit jest wspólny dla wszystkich aplikacji korzystających z klucza.

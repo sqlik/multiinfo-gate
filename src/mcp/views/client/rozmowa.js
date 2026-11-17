@@ -2,8 +2,8 @@
 // w dwóch kolumnach według kierunku, odświeżanie co 15 s przez 15 minut, prośba o odpowiedź po nowym SMS-ie klienta
 // i szkic odpowiedzi na dole, który wysyła send_reply z kluczem potwierdzenia z podglądu.
 import {
-  applyTheme, badge, button, buttons, cancelledText, createBridge, esc, failure, forwardedText, note, phoneLabel, pluralWord, retryable, retryText,
-  sayIn, section, stamp, textOf,
+  applyTheme, badge, button, buttons, cancelledText, createBridge, esc, failure, forwardedText, note, phoneLabel, pluralWord, rateLimitText,
+  rateLimitWait, retryable, retryText, sayIn, section, stamp, textOf,
 } from './bridge.js';
 
 export const CONVERSATION_REFRESH_MS = 15_000;
@@ -27,7 +27,7 @@ const STATE_TONE = { delivered: 'ok', failed: 'fail', blocked: 'fail', expired: 
  * Odświeżanie rozmowy przez conversation z `args` co 15 s, najwyżej 15 minut. `args` może być funkcją, która podaje
  * argumenty przy każdym odczycie. `handlers.onData` otrzymuje każdy odczyt, a `handlers.onEnd` powód końca: timeout
  * albo error z tekstem i szczegółami błędu aplikacji AI. Po błędzie połączenia `handlers.onRetry` otrzymuje szczegóły
- * błędu, a odświeżanie ponawia odczyt. Wynikiem jest funkcja, która zatrzymuje odświeżanie bez wywołania `onEnd`.
+ * błędu, a po odmowie limitu żądań klucza także komunikat, a odświeżanie ponawia odczyt. Wynikiem jest funkcja, która zatrzymuje odświeżanie bez wywołania `onEnd`.
  */
 export function watchConversation(bridge, win, args, handlers, now = () => Date.now()) {
   const started = now();
@@ -47,6 +47,13 @@ export function watchConversation(bridge, win, args, handlers, now = () => Date.
       return;
     }
     if (stopped) return;
+    // Odmowa limitu żądań klucza wstrzymuje odświeżanie na retryAfterSec, a widok informuje o tym pracownika.
+    const limited = rateLimitWait(result);
+    if (limited !== null && now() - started < CONVERSATION_REFRESH_MAX_MS) {
+      handlers.onRetry?.('', rateLimitText(limited));
+      win.setTimeout(tick, limited);
+      return;
+    }
     if (result.isError || !result.structuredContent) {
       handlers.onEnd('error', textOf(result), '');
       return;
@@ -165,9 +172,10 @@ export function startConversation(win, env) {
     s.data = { ...s.data, items: merge(data.items, true), lastInboundId: data.lastInboundId ?? s.data.lastInboundId, sent: data.sent, canReply: data.canReply };
     draw();
   };
-  const retry = (detail) => {
+  /** Ponowienie odczytu po błędzie połączenia albo po odmowie limitu żądań klucza z własnym komunikatem. */
+  const retry = (detail, text = retryText(CONVERSATION_REFRESH_MS)) => {
     s.retrying = true;
-    say('wait', retryText(CONVERSATION_REFRESH_MS), detail);
+    say('wait', text, detail);
   };
   const end = (why, text, detail) => {
     s.stop = null;

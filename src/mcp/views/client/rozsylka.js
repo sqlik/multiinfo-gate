@@ -3,7 +3,7 @@
 // a odbiorców doładowuje porcjami.
 import {
   applyTheme, badge, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, failure, field, fields, note, num, openDownload, phoneLabel,
-  retryable, retryText, sayIn, section, share, stamp, textOf, tile, tiles, txt,
+  rateLimitText, rateLimitWait, retryable, retryText, sayIn, section, share, stamp, textOf, tile, tiles, txt,
 } from './bridge.js';
 import { barChart, stackBar } from './chart.js';
 import { STATE_LABELS } from './doreczenia.js';
@@ -65,6 +65,13 @@ export function watchPackage(bridge, win, args, handlers, now = () => Date.now()
         handlers.onRetry?.(failure(error)[1]);
         win.setTimeout(tick, PACKAGE_REFRESH_MS);
       } else handlers.onEnd('error', ...failure(error));
+      return;
+    }
+    // Odmowa limitu żądań klucza wstrzymuje odświeżanie na retryAfterSec, a widok informuje o tym pracownika.
+    const limited = rateLimitWait(result);
+    if (limited !== null && now() - started < PACKAGE_REFRESH_MAX_MS) {
+      handlers.onRetry?.('', rateLimitText(limited));
+      win.setTimeout(tick, limited);
       return;
     }
     if (result.isError || !result.structuredContent) {
@@ -172,9 +179,10 @@ export function startPackage(win, env) {
     const limit = Math.min(PAGE_MAX, Math.max(s.input?.limit ?? 25, s.data.items.length));
     return { packageId: s.data.id, ...(limit === 25 ? {} : { limit }) };
   };
-  const retry = (detail) => {
+  /** Ponowienie odczytu po błędzie połączenia albo po odmowie limitu żądań klucza z własnym komunikatem. */
+  const retry = (detail, text = retryText(PACKAGE_REFRESH_MS)) => {
     s.retrying = true;
-    say('wait', retryText(PACKAGE_REFRESH_MS), detail);
+    say('wait', text, detail);
   };
   const end = (why, text, detail) => {
     s.watching = false;

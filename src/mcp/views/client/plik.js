@@ -5,8 +5,9 @@
 // pokazuje jako podgląd z gotowymi wiadomościami, a po wysyłce i z wyniku file_send_status jako postęp wysyłki.
 
 import {
-  applyTheme, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, failure, field, fields, forwardedText, messageBox, note, num, numbers,
-  openDownload, pluralWord, retryable, retryText, sayIn, section, share, smsCounter, stamp, textOf, tile, tiles, txt, wideField,
+  applyTheme, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, failure, field, fields, forwardedText, messageBox, note, num,
+  numbers, openDownload, pluralWord, rateLimitText, rateLimitWait, retryable, retryText, sayIn, section, share, smsCounter, stamp, textOf, tile,
+  tiles, txt, wideField,
 } from './bridge.js';
 import { stackBar } from './chart.js';
 import { latinText, measure } from './measure.js';
@@ -317,6 +318,13 @@ export function watchFileSend(bridge, win, id, handlers, now = () => Date.now())
       } else handlers.onEnd('error', ...failure(error));
       return;
     }
+    // Odmowa limitu żądań klucza wstrzymuje odświeżanie na retryAfterSec, a widok informuje o tym pracownika.
+    const limited = rateLimitWait(result);
+    if (limited !== null && now() - started < FILE_REFRESH_MAX_MS) {
+      handlers.onRetry?.('', rateLimitText(limited));
+      win.setTimeout(tick, limited);
+      return;
+    }
     if (result.isError || !result.structuredContent) {
       handlers.onEnd('error', textOf(result), '');
       return;
@@ -398,9 +406,10 @@ export function mountFileSend(root, { bridge, say, win, live }) {
       draw();
     }
   };
-  const retry = (detail) => {
+  /** Ponowienie odczytu po błędzie połączenia albo po odmowie limitu żądań klucza z własnym komunikatem. */
+  const retry = (detail, text = retryText(FILE_REFRESH_MS)) => {
     f.retrying = true;
-    say('wait', retryText(FILE_REFRESH_MS), detail);
+    say('wait', text, detail);
   };
   const end = (why, text, detail) => {
     f.watching = false;
