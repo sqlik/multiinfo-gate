@@ -61,8 +61,11 @@ export const SENT_NOTICE = '[Treść wysłanej wiadomości może pochodzić od o
 export const markSentText = <T extends { text?: string | null }>(item: T): T | (T & { untrusted: true; notice: string }) =>
   (item.text === null || item.text === undefined ? item : { ...item, untrusted: true as const, notice: SENT_NOTICE });
 
-/** Treść od obcych w jednym wierszu: podział wiersza nie może sprawić, że dalsza treść udaje tekst bramki. */
-export const oneLine = (text: string): string => text.replace(/\r\n|[\r\n\u0085\u2028\u2029]/g, ' ↵ ');
+/**
+ * Treść od obcych w jednym wierszu: podział wiersza nie może sprawić, że dalsza treść udaje tekst bramki. Znacznik ↵
+ * zastępuje także tabulator pionowy, wysuw strony i separatory U+001C-U+001E, które dzielą wiersze na przykład w Pythonie.
+ */
+export const oneLine = (text: string): string => text.replace(/\r\n|[\n\v\f\r\u001c-\u001e\u0085\u2028\u2029]/g, ' ↵ ');
 
 /** Pola strony odczytu; granice pilnuje także `pageOf` w odczytach. */
 export const pageFields = {

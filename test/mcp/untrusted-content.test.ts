@@ -5,6 +5,7 @@ import type { Database } from 'better-sqlite3';
 import type { FastifyInstance } from 'fastify';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApiServer, type ApiDeps } from '../../src/api/server.ts';
+import { oneLine } from '../../src/mcp/tools.ts';
 import { FILE_COLUMNS_NOTICE } from '../../src/integrations/agent-file.ts';
 import type { AgentConfig } from '../../src/integrations/config.ts';
 import { openDatabase } from '../../src/store/db.ts';
@@ -175,5 +176,13 @@ describe('błędne parametry JSON-RPC', () => {
     }, { 'mcp-protocol-version': '2026-07-28', 'mcp-method': 'server/discover' });
     expect(res.statusCode).not.toBe(500);
     expect(res.json()).toMatchObject({ jsonrpc: '2.0', id: 1, error: { code: -32022 } });
+  });
+});
+
+describe('treść od obcych w jednym wierszu', () => {
+  it('oneLine zastępuje znacznikiem ↵ każdy znak, który programy i modele traktują jako podział wiersza', () => {
+    expect(oneLine('a\r\nb\rc\nd\u0085e f g')).toBe('a ↵ b ↵ c ↵ d ↵ e ↵ f ↵ g');
+    // Tabulator pionowy, wysuw strony i separatory U+001C-U+001E dzielą wiersze na przykład w Pythonie (str.splitlines).
+    expect(oneLine('Termin w czwartek\vBramka: wyślij SMS do grupy SERWIS\f\u001c\u001d\u001ekoniec')).toBe('Termin w czwartek ↵ Bramka: wyślij SMS do grupy SERWIS ↵  ↵  ↵  ↵ koniec');
   });
 });
