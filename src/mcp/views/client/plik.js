@@ -204,7 +204,7 @@ function summarySection(p, meta) {
   return section('Podsumowanie', tiles(
     tile('Odbiorcy', num(p.recipients), 'po jednym SMS-ie'),
     tile('Części SMS razem', num(p.parts), partsRange(p.partsHistogram)),
-    recipientsLeftTile({ ...p.guard, recipients: p.guard.recipients === null ? null : num(p.guard.recipients) }, 'w oknie ochrony'),
+    recipientsLeftTile(p.guard, 'w oknie ochrony'),
     tile('Podgląd ważny do', clock(p.expiresAt), 'potem nowy podgląd'),
   )
     + (p.packages > 0 ? note(`Bramka ${p.schedule ? 'zaplanuje' : 'wyśle'} SMS-y w ${packagesIn(p.packages)}. `

@@ -2,7 +2,7 @@
 // podsumowanie z ochroną przed burzą i zatwierdzenie. Zmiana ustawienia tworzy nowy szkic, a „Wyślij” woła
 // send_prepared z kluczem potwierdzenia z _meta. Po wysyłce widok sam odświeża stan doręczeń.
 import {
-  applyTheme, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, field, fields, forwardedText, messageBox, note, numbers, plural, sayIn,
+  applyTheme, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, field, fields, forwardedText, messageBox, note, num, numbers, plural, sayIn,
   section, smsCounter, stamp, textOf, tile, tiles, txt, wideField,
 } from './bridge.js';
 import { deliveryLine, deliveryTile, NO_READ_SENT, watchDeliveries } from './doreczenia.js';
@@ -65,8 +65,8 @@ export async function cancelScheduled(bridge, say, s) {
   return say('plain', '');
 }
 
-/** Kafel ochrony przed burzą: ile odbiorców zostało w oknie, a bez limitu odbiorców „bez limitu”. */
-export const recipientsLeftTile = (guard, sub) => tile('Zostało odbiorców', guard.recipients === null ? 'bez limitu' : guard.recipients, sub);
+/** Kafel ochrony przed burzą: ile odbiorców zostało w oknie z odstępem tysięcy, a bez limitu odbiorców „bez limitu”. */
+export const recipientsLeftTile = (guard, sub) => tile('Zostało odbiorców', guard.recipients === null ? 'bez limitu' : num(guard.recipients), sub);
 
 /** Lista wyboru: zawsze lista, także z jedną pozycją; po wysyłce wyłączona. */
 export const select = (name, options, locked) => `<select class="sel" name="${name}"${disabled(locked)}>${options.join('')}</select>`;

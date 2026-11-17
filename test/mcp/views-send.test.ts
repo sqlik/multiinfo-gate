@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { button, buttons, field, tile, tiles, txt, wideField } from '../../src/mcp/views/client/bridge.js';
+import { button, buttons, field, num, tile, tiles, txt, wideField } from '../../src/mcp/views/client/bridge.js';
 import { renderStatus } from '../../src/mcp/views/client/co-moge.js';
 import { renderGroup } from '../../src/mcp/views/client/grupa.js';
 import { renderTrace, sayAt, startTrace } from '../../src/mcp/views/client/przebieg.js';
@@ -126,6 +126,8 @@ describe('widok wysyłki SMS', () => {
     expect(html).toContain('<p class="note">Okno ochrony przed burzą kończy się o 11:00</p>');
     const open = renderSend({ ...PREVIEW, guard: { calls: 30, recipients: null, resetsAt: null } }, {});
     expect(open).toContain(tile('Zostało odbiorców', 'bez limitu', 'w oknie ochrony'));
+    // Próba B (B15): liczba odbiorców w oknie z odstępem tysięcy, jak w widoku pliku.
+    expect(renderSend({ ...PREVIEW, guard: { calls: 30, recipients: 40101, resetsAt: null } }, {})).toContain(tile('Zostało odbiorców', num(40101), 'w oknie ochrony'));
     expect(open).toContain('<p class="note">Okno ochrony przed burzą otworzy się przy pierwszej wysyłce</p>');
   });
 
