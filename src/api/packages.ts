@@ -147,8 +147,11 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
   /** Zamówienie raportu - także ponowne, gdy poprzedni wygasł albo się nie udał. */
   app.post<{ Params: { id: string } }>('/v1/packages/:id/report', async (request, reply) => {
     const pkg = owned(request.params.id, request.headers.authorization);
+    if (pkg.status === 'cancelled') {
+      throw new ApiError(409, 'package_not_completed', 'Rozsyłka została anulowana, dlatego raport doręczeń nie powstanie.');
+    }
     if (pkg.status !== 'completed') {
-      throw new ApiError(409, 'package_not_completed', `Raport jest dostępny po zakończeniu rozsyłki; stan: ${pkg.status}.`);
+      throw new ApiError(409, 'package_not_completed', `Raport jest dostępny po zakończeniu rozsyłki. Stan rozsyłki: ${pkg.status}.`);
     }
     deps.packages.setReport(pkg.id, { status: 'pending' });
     deps.jobs.enqueue('package.report', { packageId: pkg.id }, now());

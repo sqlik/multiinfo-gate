@@ -1300,6 +1300,7 @@ służy do ponowienia zamówienia, gdy poprzedni raport ma stan `failed`.
 |---|---|---|---|
 | 404 | `package_not_found` | brak rozsyłki | sprawdzić identyfikator |
 | 409 | `package_not_completed` | rozsyłka jeszcze trwa | odczekać do stanu `completed` |
+| 409 | `package_not_completed` | rozsyłka została anulowana | nie ponawiać zamówienia, ponieważ raport anulowanej rozsyłki nie powstaje |
 
 ### 5.4. Pobranie raportu: `GET /v1/packages/{id}/report`
 
@@ -2899,7 +2900,7 @@ użytkownikowi końcowemu.
 | 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią, numerem albo rozsyłką, a także klucz użyty wcześniej w innej integracji | użyć nowego klucza idempotencji |
 | 409 | `already_final`, `already_passed` | anulowanie niemożliwe (4.3) | brak |
 | 409 | `integration_disabled`, `group_empty` | integracja z Power Automate wyłączona w panelu albo bez odbiorców grupy (5b.6) | poprosić administratora o włączenie integracji albo uzupełnienie listy |
-| 409 | `package_not_completed`, `report_not_ready` | raport rozsyłki jeszcze niedostępny | powtórzyć po minucie |
+| 409 | `package_not_completed`, `report_not_ready` | raport rozsyłki jeszcze niedostępny albo rozsyłka anulowana | powtórzyć po minucie, przy anulowanej rozsyłce zrezygnować z raportu |
 | 413 | `body_too_large` | body przekracza 512 KB, a przy utworzeniu rozsyłki 4 MB | zmniejszyć body albo podzielić rozsyłkę |
 | 415 | `unsupported_media_type` | body w formacie innym niż JSON | wysłać body z nagłówkiem `Content-Type: application/json` |
 | 429 | `rate_limited` | przekroczony limit żądań klucza na minutę | odczekać minutę |

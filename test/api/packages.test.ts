@@ -229,7 +229,19 @@ describe('raport rozsyłki', () => {
     const id = (await post(body())).json().id;
     const res = await app.inject({ method: 'POST', url: `/v1/packages/${id}/report`, headers: { authorization: `Bearer ${apiKey}` } });
     expect(res.statusCode).toBe(409);
-    expect(res.json().error.code).toBe('package_not_completed');
+    expect(res.json().error).toEqual({
+      code: 'package_not_completed', message: 'Raport jest dostępny po zakończeniu rozsyłki. Stan rozsyłki: queued.',
+    });
+  });
+
+  it('POST odmawia raportu rozsyłki anulowanej i wyjaśnia, że raport nie powstanie', async () => {
+    const id = (await post(body())).json().id as string;
+    packages.setCancelled(id, NOW);
+    const res = await app.inject({ method: 'POST', url: `/v1/packages/${id}/report`, headers: { authorization: `Bearer ${apiKey}` } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toEqual({
+      code: 'package_not_completed', message: 'Rozsyłka została anulowana, dlatego raport doręczeń nie powstanie.',
+    });
   });
 
   it('GET zwraca 409 ze stanem, gdy raport nie jest gotowy', async () => {

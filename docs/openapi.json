@@ -1618,7 +1618,7 @@
             }
           },
           "409": {
-            "description": "Rozsyłka jeszcze trwa, dlatego zamówienie raportu nie jest możliwe",
+            "description": "Rozsyłka jeszcze trwa albo została anulowana, dlatego zamówienie raportu nie jest możliwe",
             "content": {
               "application/json": {
                 "schema": {
@@ -1627,7 +1627,7 @@
                 "example": {
                   "error": {
                     "code": "package_not_completed",
-                    "message": "Raport jest dostępny po zakończeniu rozsyłki; stan: sending."
+                    "message": "Raport jest dostępny po zakończeniu rozsyłki. Stan rozsyłki: sending."
                   }
                 }
               }

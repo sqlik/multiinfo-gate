@@ -128,6 +128,15 @@ describe('narzędzia odczytu przez POST /mcp', () => {
     expect(deps.agents!.downloads.get('x', NOW)).toBeUndefined();
   });
 
+  it('package_report: rozsyłka anulowana daje wyjaśnienie, że raport nie powstanie', async () => {
+    const mcp = await mcpSession(app, seed.secret);
+    pkg(false);
+    deps.packages.setCancelled('pkg_1', NOW);
+    const result = await mcp.call('package_report', { packageId: 'pkg_1', file: 'report' });
+    expect(result).toMatchObject({ isError: true, structuredContent: { error: 'package_cancelled' } });
+    expect(textOf(result)).toBe('Rozsyłka pkg_1 została anulowana, dlatego raport doręczeń nie powstanie.');
+  });
+
   it('package_status: widok rozsylka, tekst z liczbami w stanach i przyczynami', async () => {
     pkg();
     const mcp = await mcpSession(app, seed.secret, { apps: true });

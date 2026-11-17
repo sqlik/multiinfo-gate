@@ -1384,9 +1384,9 @@ export function buildOpenApiDocument(): OpenApiDocument {
               'Nie znaleziono rozsyłki o tym identyfikatorze.',
             ),
             '409': blad(
-              'Rozsyłka jeszcze trwa, dlatego zamówienie raportu nie jest możliwe',
+              'Rozsyłka jeszcze trwa albo została anulowana, dlatego zamówienie raportu nie jest możliwe',
               'package_not_completed',
-              'Raport jest dostępny po zakończeniu rozsyłki; stan: sending.',
+              'Raport jest dostępny po zakończeniu rozsyłki. Stan rozsyłki: sending.',
             ),
           },
         },

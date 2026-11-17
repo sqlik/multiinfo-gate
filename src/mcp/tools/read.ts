@@ -187,6 +187,9 @@ export const packageReportTool: ToolDef = {
     }
     const p = ctx.deps.packages.get(q.packageId);
     if (!p || p.apiKeyId !== conn.key.id) throw new AgentError('package_unknown', `Nie znaleziono rozsyłki ${q.packageId}.`);
+    if (p.status === 'cancelled') {
+      throw new AgentError('package_cancelled', `Rozsyłka ${p.id} została anulowana, dlatego raport doręczeń nie powstanie.`);
+    }
     if (p.reportStatus !== 'ready') {
       throw new AgentError('report_not_ready', `Raport rozsyłki ${p.id} nie jest jeszcze gotowy. Stan rozsyłki pokazuje narzędzie package_status.`);
     }
