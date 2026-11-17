@@ -27,7 +27,7 @@ function headLine(item: ConversationItem): string {
   const state = `${item.statusLabel}, źródło: ${item.source}:`;
   return item.packageId === null
     ? `Wiadomość ${item.id} do klienta, utworzona ${item.at.local}, ${state}`
-    : `Rozsyłka ${item.packageId} do klienta, przyjęta ${item.at.local}, ${state}`;
+    : `Rozsyłka ${item.packageId} do klienta, ${item.scheduled === true ? 'termin' : 'przyjęta'} ${item.at.local}, ${state}`;
 }
 
 /**

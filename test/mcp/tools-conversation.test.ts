@@ -72,6 +72,19 @@ describe('narzędzie conversation', () => {
     expect(data.items[2]).not.toHaveProperty('untrusted');
   });
 
+  it('conversation: rozsyłka z terminem opisana terminem, rozsyłka bez terminu chwilą przyjęcia', async () => {
+    setup(['read_sent', 'read_inbound']);
+    const pkg = (id: string, startAt: string | null, createdAt: string) => deps.packages.insert({
+      id, apiKeyId: seed.keyId, accountId: seed.accountId, serviceId: '24138', defaultText: 'Przegląd klimatyzacji jutro o 9:00.', orig: null,
+      costCenter: null, startAt, deliveryReport: 1, encoding: 'gsm', multipart: 0, createdAt, status: startAt === null ? 'queued' : 'scheduled',
+    }, [{ dest: CLIENT, text: null, clientId: null }]);
+    pkg('pkg_teraz', null, at(-2 * HOUR));
+    pkg('pkg_jutro', at(24 * HOUR), at(-HOUR));
+    const lines = textOf(await (await mcpSession(app, seed.secret)).call('conversation', { phone: CLIENT })).split('\n');
+    expect(lines).toContain('Rozsyłka pkg_teraz do klienta, przyjęta 15.11.2026 08:00, czeka na raport, źródło: API:');
+    expect(lines).toContain('Rozsyłka pkg_jutro do klienta, termin 16.11.2026 10:00, zaplanowana, źródło: API:');
+  });
+
   it('conversation bez read_sent zapowiada zawężenie wysłanych, a „Wcześniejsze” wskazuje pole before', async () => {
     setup(['read_inbound']);
     inbound('in_old', -40 * 86_400_000);

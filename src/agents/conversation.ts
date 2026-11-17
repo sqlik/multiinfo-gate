@@ -18,6 +18,8 @@ export const CONVERSATION_MAX = 100;
 export interface ConversationItem {
   kind: 'in' | 'out'; id: string; at: Stamp; text: string | null; stored: boolean;
   status: string | null; statusLabel: string | null; source: string | null; packageId: string | null;
+  /** Chwila `at` jest terminem rozsyłki, a nie chwilą przyjęcia. */
+  scheduled?: boolean;
 }
 
 export interface ConversationData {
@@ -54,7 +56,10 @@ function recipientItem(deps: ReadDeps, p: PackageRow, r: RecipientRow): Conversa
     ? { status: p.status, statusLabel: packageStatusLabel(p.status) }
     : recipientState(r, p.reportStatus === 'ready');
   // Rozsyłka z terminem trafia do klienta o terminie, dlatego rozmowa pokazuje i układa ją według terminu (próba B, B16).
-  return { kind: 'out', id: `${p.id}#${r.seq}`, at: stamp(p.startAt ?? p.createdAt), text, stored: text !== null, ...state, source: sourceLabel(deps, p), packageId: p.id };
+  return {
+    kind: 'out', id: `${p.id}#${r.seq}`, at: stamp(p.startAt ?? p.createdAt), text, stored: text !== null, ...state, source: sourceLabel(deps, p),
+    packageId: p.id, ...(p.startAt === null ? {} : { scheduled: true }),
+  };
 }
 
 /** Numer rozmowy z wejścia: nadawca odebranego SMS-a albo podany numer; oba muszą wskazywać ten sam numer. */
