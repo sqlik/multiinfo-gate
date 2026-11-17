@@ -43,8 +43,9 @@ export const VIEW_STYLE = [
   '@media (max-width:560px){.fields{grid-template-columns:1fr}}',
   '.field{min-width:0}.field .lbl,.lbl-block{display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px}',
   '.txt{font-size:14px;min-height:22px;overflow-wrap:anywhere}',
-  '.sel,.inp{display:block;width:100%;height:var(--h);font:inherit;font-size:14px;border:1px solid var(--rule);border-radius:var(--r);padding:0 10px;background:var(--surface);color:var(--ink)}',
-  '.sel{padding:0 6px;cursor:pointer}.sel:disabled,.inp:disabled{cursor:default;color:var(--muted)}',
+  // Pola mają obwódkę w kolorze akcji, jak okno treści SMS-a; pole wyłączone ma szarą obwódkę.
+  '.sel,.inp{display:block;width:100%;height:var(--h);font:inherit;font-size:14px;border:1px solid var(--signal);border-radius:var(--r);padding:0 10px;background:var(--surface);color:var(--ink)}',
+  '.sel{padding:0 6px;cursor:pointer}.sel:disabled,.inp:disabled{cursor:default;color:var(--muted);border-color:var(--rule)}',
   // Lista wyboru z własną strzałką w odstępie od prawej krawędzi, jednakową w każdej przeglądarce. Strzałka
   // powstaje z dwóch gradientów, ponieważ widok nie wczytuje obrazów.
   'select.sel{-webkit-appearance:none;appearance:none;padding:0 34px 0 10px;background-repeat:no-repeat;background-size:5px 5px;'
@@ -52,21 +53,23 @@ export const VIEW_STYLE = [
     + 'background-image:linear-gradient(45deg,transparent calc(50% - .75px),var(--muted) calc(50% - .75px),var(--muted) calc(50% + .75px),transparent calc(50% + .75px)),'
     + 'linear-gradient(-45deg,transparent calc(50% - .75px),var(--muted) calc(50% - .75px),var(--muted) calc(50% + .75px),transparent calc(50% + .75px))}',
   // Wybór pliku: przycisk i nazwa pliku wyśrodkowane w pionie w ramce o wysokości pól; pole systemowe jest ukryte.
-  '.pick{position:relative;display:flex;align-items:center;gap:10px;height:var(--h);padding:0 4px;border:1px solid var(--rule);border-radius:var(--r);background:var(--surface);cursor:pointer;min-width:0}',
+  '.pick{position:relative;display:flex;align-items:center;gap:10px;height:var(--h);padding:0 4px;border:1px solid var(--signal);border-radius:var(--r);background:var(--surface);cursor:pointer;min-width:0}',
   '.pick input{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none}',
   '.pick .pick-btn{flex:none;display:inline-flex;align-items:center;height:26px;padding:0 10px}.pick:hover .pick-btn{background:var(--rule-soft)}',
   '.pick-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;color:var(--muted)}.pick-name.set{color:var(--ink)}',
   '.pick:has(input:focus-visible){outline:2px solid var(--signal);outline-offset:2px}',
-  // Pola widoku rozsyłki z pliku mają obwódkę w kolorze akcji, jak okno treści SMS-a.
-  '.accent .sel,.accent .pick{border-color:var(--signal)}',
   // Wartość obok pola wyboru stoi na wysokości tekstu w polu.
-  '.accent .field .txt{display:flex;align-items:center;min-height:var(--h)}',
+  '.align .field .txt{display:flex;align-items:center;min-height:var(--h)}',
   '.check{display:flex;align-items:center;gap:8px;width:fit-content;margin-top:16px;font-size:14px;cursor:pointer}',
   '.check input{width:16px;height:16px;margin:0;accent-color:var(--signal);cursor:pointer}',
   '.scroll{overflow-x:auto}.scroll td{white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}',
+  // Kolumna numeru w tabeli podglądu pliku: nagłówek w kolorze akcji.
+  'th.ph{color:var(--signal-dark);border-bottom-color:var(--signal);box-shadow:inset 0 -1px 0 var(--signal)}',
+  ':root[data-theme="dark"] th.ph{color:var(--signal)}',
+  '@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) th.ph{color:var(--signal)}}',
   'textarea.inp{height:auto;min-height:68px;padding:8px 10px;resize:vertical}',
   // Przełącznik: równe pola, ta sama wysokość co pola i przyciski.
-  '.seg2{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);height:var(--h);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden}',
+  '.seg2{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);height:var(--h);border:1px solid var(--signal);border-radius:var(--r);overflow:hidden}',
   '.seg2.narrow{max-width:460px;margin-bottom:12px}',
   '.seg2 button{border:0;background:var(--surface);color:var(--muted);font:inherit;font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px}',
   '.seg2 button+button{border-left:1px solid var(--rule)}.seg2 button:hover{background:var(--rule-soft)}',

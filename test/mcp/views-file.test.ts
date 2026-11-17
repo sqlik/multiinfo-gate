@@ -149,6 +149,8 @@ describe('widok rozsyłki z pliku', () => {
     expect(html).toContain('Hurtownia 4');
     expect(html).not.toContain('Hurtownia 5');
     expect(html).toContain('<select class="sel" id="numer"><option value="0" selected>Numer</option><option value="1">Kontrahent</option>');
+    // Kolumna numeru wyróżniona w nagłówku tabeli podglądu.
+    expect(html).toContain('<tr><th class="ph">Numer</th><th>Kontrahent</th>');
     expect(html).toContain('<input type="checkbox" id="naglowek" checked>');
     expect(html).toContain('Pierwszy wiersz zawiera nazwy kolumn');
     expect(html).toContain('<div class="txt">7</div>');
@@ -162,6 +164,7 @@ describe('widok rozsyłki z pliku', () => {
     const html = renderLoaded(loaded(rows, { source: { kind: 'xlsx', sheet: 1, book: { sheets: [{ name: 'Listopad' }, { name: 'Grudzień <b>' }] } } }));
     expect(html).toContain('<select class="sel" id="numer"><option value="" selected>Wybierz kolumnę z numerami</option><option value="0">Telefon</option><option value="1">Tel</option></select>');
     expect(html).toContain('Numery telefonów występują w kilku kolumnach, dlatego wybierz właściwą z listy');
+    expect(html).not.toContain('class="ph"');
     expect(html).toContain('<select class="sel" id="arkusz"><option value="0">Listopad</option><option value="1" selected>Grudzień &lt;b&gt;</option></select>');
     expect(html).toContain('<button type="button" class="btn btn-primary" data-act="upload" disabled>Przekaż plik do bramki</button>');
     const many = Array.from({ length: ROWS_MAX + 1 }, (_, i) => ({ line: i + 2, cells: ['48601000011'] }));
@@ -212,9 +215,14 @@ describe('widok rozsyłki z pliku', () => {
     expect(html).not.toMatch(/próba A/i);
   });
 
-  it('style: pole wyboru pliku i listy wyśrodkowane w pionie, strzałka listy z odstępem, obwódki pól pliku w kolorze akcji', () => {
-    expect(VIEW_STYLE).toContain('.pick{position:relative;display:flex;align-items:center;');
+  it('style: pole wyboru pliku i listy wyśrodkowane w pionie, strzałka listy z odstępem, obwódki pól we wszystkich widokach w kolorze akcji', () => {
+    expect(VIEW_STYLE).toMatch(/\.pick\{position:relative;display:flex;align-items:center;[^}]*border:1px solid var\(--signal\)/);
     expect(VIEW_STYLE).toMatch(/select\.sel\{[^}]*appearance:none;[^}]*padding:0 34px 0 10px;/);
-    expect(VIEW_STYLE).toContain('.accent .sel,.accent .pick{border-color:var(--signal)}');
+    // Decyzja Tomka 2026-11-17: obwódki pól jak okno treści SMS-a we wszystkich widokach, pole wyłączone szare.
+    expect(VIEW_STYLE).toMatch(/\.sel,\.inp\{[^}]*border:1px solid var\(--signal\)/);
+    expect(VIEW_STYLE).toMatch(/\.sel:disabled,\.inp:disabled\{[^}]*border-color:var\(--rule\)/);
+    expect(VIEW_STYLE).toMatch(/\.seg2\{[^}]*border:1px solid var\(--signal\)/);
+    expect(VIEW_STYLE).not.toContain('.accent');
+    expect(VIEW_STYLE).toMatch(/th\.ph\{[^}]*color:var\(--signal-dark\)/);
   });
 });

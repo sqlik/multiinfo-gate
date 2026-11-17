@@ -102,7 +102,7 @@ export function renderLoaded(s) {
     xlsx ? field('Format pliku', txt('Skoroszyt programu Excel (.xlsx)')) : field('Separator kolumn', txt(SEPARATORS[s.source.separator] ?? s.source.separator)),
   ) + `<label class="check"><input type="checkbox" id="naglowek"${t.header ? ' checked' : ''}> Pierwszy wiersz zawiera nazwy kolumn</label>`
     + (stop ? `<p class="notice n-fail">${esc(stop)}</p>` : '');
-  const head = `<tr>${t.columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>`;
+  const head = `<tr>${t.columns.map((c, i) => `<th${i === s.phoneColumn ? ' class="ph"' : ''}>${esc(c)}</th>`).join('')}</tr>`;
   const body = t.data.slice(0, PREVIEW_ROWS).map((r) => `<tr>${r.cells.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('');
   const disabled = s.busy || s.done || !picked || stop !== null;
   return section('Rozpoznanie pliku', recognition)
@@ -119,7 +119,7 @@ export function startFile(win, env) {
   const say = sayIn(doc);
   const s = { name: '', source: null, rows: [], table: null, phoneColumn: null, busy: false, done: false, progress: null };
 
-  root.innerHTML = '<div class="accent">' + section('Plik z odbiorcami', fields(
+  root.innerHTML = '<div class="align">' + section('Plik z odbiorcami', fields(
     field('Plik CSV, TXT albo XLSX', PICKER),
     field('Limity pliku', txt(`${num(ROWS_MAX)} wierszy danych i ${FILE_BYTES_MAX / 1024 / 1024} MB`)),
   )) + '<div id="stan"></div></div>';
