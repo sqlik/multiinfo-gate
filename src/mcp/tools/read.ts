@@ -134,13 +134,14 @@ export const listPackagesTool: ToolDef = {
   name: 'list_packages',
   title: 'Rozsyłki',
   description: 'Pokazuje rozsyłki klucza integracji, także z innych integracji, od najnowszej: stan, liczbę odbiorców, termin i źródło. '
-    + 'Filtr scheduled odpowiada na pytanie, jakie rozsyłki są zaplanowane.',
+    + 'Filtr scheduled odpowiada na pytanie, jakie rozsyłki są zaplanowane. Obejmuje także rozsyłki przekazane już do Multiinfo, '
+    + 'które czekają na termin. Takich rozsyłek bramka nie anuluje.',
   scopes: ['read_sent'],
   input: listPackagesInput,
   annotations: READ,
   run(ctx, raw) {
     const q = raw as z.infer<typeof listPackagesInput>;
-    const data = listPackages(ctx.deps, connOf(ctx), { ...(q.status === undefined ? {} : { status: q.status }), offset: q.offset ?? 0, limit: q.limit ?? 25 });
+    const data = listPackages(ctx.deps, connOf(ctx), { ...(q.status === undefined ? {} : { status: q.status }), offset: q.offset ?? 0, limit: q.limit ?? 25 }, ctx.now);
     const lines = data.items.length === 0 ? ['Bramka nie znalazła rozsyłek spełniających warunki.'] : [
       `Rozsyłki na tej stronie: ${data.items.length}.`,
       ...data.items.map((p) => `${p.id}: ${p.statusLabel}, ${plural(p.recipients, 'odbiorca', 'odbiorców', 'odbiorców')}, przyjęta ${p.created.local}`

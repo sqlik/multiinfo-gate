@@ -287,13 +287,26 @@ export function packageStatus(deps: ReadDeps, ctx: ConnectionContext, packageId:
   };
 }
 
-/** Rozsyłki klucza od najnowszej, z filtrem stanu i porcjami, na przykład zaplanowane na pytanie „Co mamy zaplanowane?”. */
-export function listPackages(deps: ReadDeps, ctx: ConnectionContext, q: { status?: PackageStatus | undefined } & Page): { items: PackageListItem[]; hasMore: boolean } {
+/** Rozsyłka przekazana do Multiinfo z terminem, który jeszcze nie nadszedł, na przykład sprzed wersji 1.13. */
+const HANDED_OVER_LABEL = 'przekazana do Multiinfo, czeka na termin';
+
+/**
+ * Rozsyłki klucza od najnowszej, z filtrem stanu i porcjami, na przykład zaplanowane na pytanie „Co mamy zaplanowane?”.
+ * Filtr `scheduled` obejmuje także rozsyłki przekazane do Multiinfo przed terminem, których bramka już nie anuluje.
+ */
+export function listPackages(
+  deps: ReadDeps, ctx: ConnectionContext, q: { status?: PackageStatus | undefined } & Page, now: Date,
+): { items: PackageListItem[]; hasMore: boolean } {
   const { offset, limit } = pageOf(q);
-  const rows = deps.packages.list({ apiKeyId: ctx.key.id, ...(q.status === undefined ? {} : { statuses: [q.status] }), limit: limit + 1, offset });
+  const nowIso = now.toISOString();
+  const rows = deps.packages.list({
+    apiKeyId: ctx.key.id, ...(q.status === undefined ? {} : { statuses: [q.status] }),
+    ...(q.status === 'scheduled' ? { openStartingAfter: nowIso } : {}), limit: limit + 1, offset,
+  });
+  const label = (p: PackageRow): string => (p.status === 'open' && p.startAt !== null && p.startAt > nowIso ? HANDED_OVER_LABEL : packageStatusLabel(p.status));
   return {
     items: rows.slice(0, limit).map((p) => ({
-      id: p.id, status: p.status, statusLabel: packageStatusLabel(p.status), recipients: p.recipientsCount, created: stamp(p.createdAt),
+      id: p.id, status: p.status, statusLabel: label(p), recipients: p.recipientsCount, created: stamp(p.createdAt),
       startAt: p.startAt === null ? null : stamp(p.startAt), source: sourceLabel(deps, p),
     })),
     hasMore: rows.length > limit,

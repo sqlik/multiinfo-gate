@@ -57,7 +57,11 @@ export interface RecipientRow extends RecipientInput {
   status: GatewayStatus | null; statusChangedAt: string | null;
 }
 
-export interface PackageFilter { apiKeyId?: number; statuses?: PackageStatus[]; limit: number; offset: number }
+export interface PackageFilter {
+  apiKeyId?: number; statuses?: PackageStatus[]; limit: number; offset: number;
+  /** Oprócz stanów z `statuses` rozsyłki przekazane do Multiinfo (`open`) z terminem po tej chwili. */
+  openStartingAfter?: string;
+}
 
 export interface ReportPatch {
   status: ReportStatus; reportId?: string | null; expiresAt?: string | null; path?: string | null;
@@ -168,8 +172,13 @@ export class PackagesRepo {
       params.push(filter.apiKeyId);
     }
     if (filter.statuses !== undefined && filter.statuses.length > 0) {
-      conditions.push(`status IN (${filter.statuses.map(() => '?').join(', ')})`);
+      const inStatuses = `status IN (${filter.statuses.map(() => '?').join(', ')})`;
       params.push(...filter.statuses);
+      if (filter.openStartingAfter === undefined) conditions.push(inStatuses);
+      else {
+        conditions.push(`(${inStatuses} OR (status = 'open' AND start_at > ?))`);
+        params.push(filter.openStartingAfter);
+      }
     }
     const where = conditions.length === 0 ? '' : ` WHERE ${conditions.join(' AND ')}`;
     const rows = this.db

@@ -192,15 +192,25 @@ describe('list_packages i package_status z terminem przez POST /mcp', () => {
     }, [{ dest: '48601000011', text: null, clientId: null }, { dest: '48601000012', text: null, clientId: null }]);
   }
 
-  it('list_packages z filtrem scheduled: rozsyłki klucza od najnowszej z terminem (widoczność bez read_sent w tools-send)', async () => {
+  it('list_packages z filtrem scheduled: rozsyłki klucza od najnowszej z terminem, także przekazane do Multiinfo przed terminem', async () => {
     scheduled('pkg_1', 'scheduled', AGENT_SEED_AT.toISOString());
     scheduled('pkg_2', 'open', new Date(AGENT_SEED_AT.getTime() + 60_000).toISOString());
     scheduled('pkg_3', 'scheduled', new Date(AGENT_SEED_AT.getTime() + 120_000).toISOString());
+    scheduled('pkg_4', 'open', new Date(AGENT_SEED_AT.getTime() + 180_000).toISOString());
+    deps.packages.insert({
+      id: 'pkg_5', apiKeyId: seed.keyId, accountId: seed.accountId, serviceId: '24138', defaultText: 'Awaria pompy P2.', orig: null,
+      costCenter: null, startAt: null, deliveryReport: 1, encoding: 'gsm', multipart: 0, createdAt: AGENT_SEED_AT.toISOString(), status: 'open',
+    }, [{ dest: '48601000011', text: null, clientId: null }]);
+    deps.packages.setCreated('pkg_2', '28197391');
+    // Rozsyłka sprzed terminu w przeszłości nie jest już zaplanowana.
+    db.prepare("UPDATE packages SET start_at = '2026-11-15T07:00:00.000Z' WHERE id = 'pkg_4'").run();
     const result = await (await mcpSession(app, seed.secret)).call('list_packages', { status: 'scheduled' });
-    expect(result.structuredContent!.items.map((i: { id: string }) => i.id)).toEqual(['pkg_3', 'pkg_1']);
+    expect(result.structuredContent!.items.map((i: { id: string }) => i.id)).toEqual(['pkg_3', 'pkg_2', 'pkg_1']);
+    expect(result.structuredContent!.items[1]).toMatchObject({ status: 'open', statusLabel: 'przekazana do Multiinfo, czeka na termin' });
     expect(textOf(result)).toBe([
-      'Rozsyłki na tej stronie: 2.',
+      'Rozsyłki na tej stronie: 3.',
       'pkg_3: zaplanowana, 2 odbiorców, przyjęta 15.11.2026 09:02, termin 20.11.2026 08:00, źródło: agent Agent AI - dyspozytornia.',
+      'pkg_2: przekazana do Multiinfo, czeka na termin, 2 odbiorców, przyjęta 15.11.2026 09:01, termin 20.11.2026 08:00, źródło: agent Agent AI - dyspozytornia.',
       'pkg_1: zaplanowana, 2 odbiorców, przyjęta 15.11.2026 09:00, termin 20.11.2026 08:00, źródło: agent Agent AI - dyspozytornia.',
     ].join('\n'));
     const empty = await (await mcpSession(app, seed.secret)).call('list_packages', { status: 'overdue' });

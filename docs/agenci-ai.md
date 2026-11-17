@@ -616,7 +616,9 @@ wysyłkę o wskazanej godzinie. Do chwili przekazania rozsyłkę można anulowa�
 - administrator klika **Anuluj rozsyłkę** w szczegółach rozsyłki w panelu bramki
 
 Agent anuluje wyłącznie rozsyłki swojej integracji. Na pytanie „Co mamy zaplanowane?” agent odpowiada
-listą rozsyłek klucza ze stanem i terminem, jeżeli połączenie obejmuje zakres „Odczyt wysłanych”.
+listą rozsyłek klucza ze stanem i terminem, jeżeli połączenie obejmuje zakres „Odczyt wysłanych”. Lista
+obejmuje także rozsyłki przekazane już do Multiinfo, które czekają na termin, na przykład zlecone przed
+wersją 1.13. Takich rozsyłek bramka nie anuluje, dlatego lista oznacza je osobnym stanem.
 
 Ekran **Rozsyłki** w panelu bramki pokazuje termin każdej rozsyłki, a filtry **Zaplanowane** i **Termin
 minął** zawężają listę do rozsyłek, które czekają w bramce.

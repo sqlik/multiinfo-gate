@@ -425,13 +425,16 @@ describe('rozsyłki z terminem', () => {
     scheduled('pkg_1', 'scheduled', { createdAt: at(-3 * 3_600_000) });
     scheduled('pkg_2', 'open', { createdAt: at(-2 * 3_600_000) });
     scheduled('pkg_3', 'scheduled', { createdAt: at(-3_600_000), integrationId: null });
-    const all = listPackages(deps, ctx(), { offset: 0, limit: 25 });
+    const all = listPackages(deps, ctx(), { offset: 0, limit: 25 }, NOW);
     expect(all.items.map((i) => i.id)).toEqual(['pkg_3', 'pkg_2', 'pkg_1']);
-    const only = listPackages(deps, ctx(), { status: 'scheduled', offset: 0, limit: 1 });
+    const only = listPackages(deps, ctx(), { status: 'scheduled', offset: 0, limit: 1 }, NOW);
     expect(only).toMatchObject({ hasMore: true, items: [{
       id: 'pkg_3', status: 'scheduled', statusLabel: 'zaplanowana', recipients: 1, source: 'API',
       created: { at: at(-3_600_000) }, startAt: { at: '2026-11-20T07:00:00.000Z', local: '20.11.2026 08:00' },
     }] });
-    expect(listPackages(deps, ctx(), { status: 'scheduled', offset: 1, limit: 1 }).items[0]).toMatchObject({ id: 'pkg_1', source: 'agent Agent AI - dyspozytornia' });
+    // Rozsyłka przekazana do Multiinfo przed terminem należy do zaplanowanych z osobnym opisem stanu.
+    expect(listPackages(deps, ctx(), { status: 'scheduled', offset: 1, limit: 1 }, NOW).items[0])
+      .toMatchObject({ id: 'pkg_2', status: 'open', statusLabel: 'przekazana do Multiinfo, czeka na termin' });
+    expect(listPackages(deps, ctx(), { status: 'scheduled', offset: 2, limit: 1 }, NOW).items[0]).toMatchObject({ id: 'pkg_1', source: 'agent Agent AI - dyspozytornia' });
   });
 });
