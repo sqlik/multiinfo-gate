@@ -674,6 +674,33 @@ describe('handlePackageCreate - rozsyłka zaplanowana', () => {
     expect(notify).toHaveBeenCalledWith('package_overdue', 'package:pkg_1', expect.stringContaining('od terminu 25.08.2026 12:10.'), expect.any(Date));
   });
 
+  it('Multiinfo niedostępne dłużej niż harmonogram ponowień: rozsyłka czeka w scheduled, a 60 min po terminie przechodzi w overdue', async () => {
+    createPackage.mockRejectedValue(new ProviderError(-71, 'Nie udało się połączyć: ECONNREFUSED', 'transient'));
+    const start = at(10 * MIN);
+    scheduled(start);
+    let t = NOW;
+    for (let i = 0; i <= SEND_BACKOFF_MS.length; i += 1) {
+      const [next] = deps.jobs.claim(t, 10);
+      expect(next, `próba ${i + 1}`).toBeDefined();
+      await handlePackageCreate(next!, deps, t);
+      t = new Date(t.getTime() + (SEND_BACKOFF_MS[i] ?? 0));
+    }
+    expect(t.getTime() - start.getTime()).toBeLessThan(60 * MIN);
+    expect(createPackage).toHaveBeenCalledTimes(SEND_BACKOFF_MS.length + 1);
+    expect(deps.packages.get('pkg_1')!.status).toBe('scheduled');
+    expect(deps.jobs.depth()).toBe(1);
+    expect(overdueSweep(deps, new Date(start.getTime() + 61 * MIN))).toBe(1);
+    expect(notify).toHaveBeenCalledWith('package_overdue', 'package:pkg_1', expect.any(String), expect.any(Date));
+  });
+
+  it('wyczerpane ponowienia 32 min po terminie: rozsyłka nadal scheduled, zadanie w kolejce', async () => {
+    createPackage.mockRejectedValue(new ProviderError(-71, 'Nie udało się połączyć: ECONNREFUSED', 'transient'));
+    seed({ startAt: at(-32 * MIN).toISOString(), status: 'scheduled' });
+    await handlePackageCreate(job('package.create', SEND_BACKOFF_MS.length, { scheduled: true }), deps, NOW);
+    expect(deps.packages.get('pkg_1')!.status).toBe('scheduled');
+    expect(deps.jobs.depth()).toBe(1);
+  });
+
   it('konto wyłączone w panelu wstrzymuje przekazanie jak konto wstrzymane', async () => {
     db.prepare('UPDATE accounts SET active = 0').run();
     await handlePackageCreate(scheduled(at(10 * MIN)), deps, NOW);

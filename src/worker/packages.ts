@@ -69,10 +69,13 @@ function fail(deps: WorkerDeps, job: Job, pkg: PackageRow, code: number | null, 
  * błąd przejściowy ponawia według harmonogramu wysyłki, trwały kończy zadanie
  * przez `onPermanent` - bo utworzenie kończy rozsyłkę, a raport tylko raport.
  * Wynik `pending` oznacza, że zadanie zostało w kolejce, a `done`, że `onPermanent` je zakończyło.
+ * Z `retryTailMs` błąd przejściowy po wyczerpaniu harmonogramu nie kończy zadania, tylko ponawia je w tym odstępie:
+ * zaplanowana rozsyłka, której żądanie nie dotarło do Multiinfo, czeka do granicy spóźnienia.
  */
 function handleProviderFailure(
   error: unknown, job: Job, deps: WorkerDeps, pkg: PackageRow, now: Date, log: Logger,
   onPermanent: (code: number | null, message: string) => void,
+  retryTailMs?: number,
 ): 'pending' | 'done' {
   const provider = error instanceof ProviderError ? error : null;
   const message = error instanceof Error ? error.message : String(error);
@@ -91,7 +94,7 @@ function handleProviderFailure(
 
   // Awaria sieci, nieprzewidziany wyjątek albo błąd przejściowy - ponawiamy.
   const code = provider?.code ?? -71;
-  const delay = SEND_BACKOFF_MS[job.attempts];
+  const delay = SEND_BACKOFF_MS[job.attempts] ?? retryTailMs;
   if (delay === undefined) {
     onPermanent(code, `Wyczerpano ponowienia. Ostatni błąd: ${message}`);
     return 'done';
@@ -334,7 +337,11 @@ async function createAtMultiinfo(
       packageId: pkg.id, accountId: pkg.accountId, miPackageId, recipients: pkg.recipientsCount, attempt: job.attempts + 1,
     });
   } catch (error) {
-    const outcome = handleProviderFailure(error, job, deps, pkg, now, log, (code, message) => fail(deps, job, pkg, code, message, now, log));
+    // Zaplanowana rozsyłka, której żądanie nie dotarło do Multiinfo, czeka do granicy spóźnienia także po wyczerpaniu
+    // harmonogramu ponowień. Po 60 min od terminu przegląd spóźnionych przenosi ją w `overdue`.
+    const outcome = handleProviderFailure(
+      error, job, deps, pkg, now, log, (code, message) => fail(deps, job, pkg, code, message, now, log), scheduled && !sent ? PAUSED_RECHECK_MS : undefined,
+    );
     if (scheduled && outcome === 'pending' && !sent && deps.packages.returnToScheduled(pkg.id)) {
       log.info('rozsylka.przekazanie_odlozone', { packageId: pkg.id, attempt: job.attempts + 1 });
     }
