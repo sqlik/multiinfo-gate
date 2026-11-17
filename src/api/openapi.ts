@@ -1456,7 +1456,7 @@ export function buildOpenApiDocument(): OpenApiDocument {
                 'application/json': {
                   schema: { $ref: '#/components/schemas/OdpowiedzBleduRaportu' },
                   example: {
-                    error: { code: 'report_not_ready', message: 'Raport nie jest gotowy; stan: pending.' },
+                    error: { code: 'report_not_ready', message: 'Raport nie jest jeszcze gotowy. Stan raportu: pending.' },
                     report: { status: 'pending' },
                   },
                 },

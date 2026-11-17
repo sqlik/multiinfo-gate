@@ -250,7 +250,17 @@ describe('raport rozsyłki', () => {
     const res = await get(`/v1/packages/${id}/report`);
     expect(res.statusCode).toBe(409);
     expect(res.json()).toEqual({
-      error: { code: 'report_not_ready', message: 'Raport nie jest gotowy; stan: pending.' }, report: { status: 'pending' },
+      error: { code: 'report_not_ready', message: 'Raport nie jest jeszcze gotowy. Stan raportu: pending.' }, report: { status: 'pending' },
+    });
+  });
+
+  it('GET dla rozsyłki anulowanej: 409 z wyjaśnieniem, że raport nie powstanie, jak POST', async () => {
+    const id = (await post(body())).json().id as string;
+    packages.setCancelled(id, NOW);
+    const res = await get(`/v1/packages/${id}/report`);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({
+      error: { code: 'report_not_ready', message: 'Rozsyłka została anulowana, dlatego raport doręczeń nie powstanie.' }, report: { status: 'none' },
     });
   });
 

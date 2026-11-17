@@ -1519,7 +1519,7 @@ tego odbiorcy.
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
 | 404 | `package_not_found` | brak rozsyłki | sprawdzić identyfikator |
-| 409 | `report_not_ready` | raport w stanie `none`, `pending` albo `failed`; odpowiedź zawiera `report.status` | przy `pending` powtórzyć po minucie; przy `failed` zamówić ponownie (5.3) |
+| 409 | `report_not_ready` | raport w stanie `none`, `pending` albo `failed`; odpowiedź zawiera `report.status`, a przy rozsyłce anulowanej `message` wyjaśnia, że raport nie powstanie | przy `pending` powtórzyć po minucie; przy `failed` zamówić ponownie (5.3) |
 
 ### 5.5. Anulowanie rozsyłki: `POST /v1/packages/{id}/cancel`
 

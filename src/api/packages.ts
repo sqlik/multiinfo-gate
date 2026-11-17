@@ -164,8 +164,11 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
     async (request, reply) => {
       const pkg = owned(request.params.id, request.headers.authorization);
       if (pkg.reportStatus !== 'ready') {
+        const message = pkg.status === 'cancelled'
+          ? 'Rozsyłka została anulowana, dlatego raport doręczeń nie powstanie.'
+          : `Raport nie jest jeszcze gotowy. Stan raportu: ${pkg.reportStatus}.`;
         return reply.code(409).send({
-          error: { code: 'report_not_ready', message: `Raport nie jest gotowy; stan: ${pkg.reportStatus}.` },
+          error: { code: 'report_not_ready', message },
           report: { status: pkg.reportStatus },
         });
       }
