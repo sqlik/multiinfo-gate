@@ -517,6 +517,14 @@ describe('podgląd, wysyłka i postęp rozsyłki z pliku', () => {
     expect(renderFileProgress({ ...SCHEDULED, cancellable: 0 }, { name: 'a.csv' })).not.toContain('Anuluj wysyłkę');
     expect(filePending(SCHEDULED)).toBe(true);
     expect(filePending(STATUS)).toBe(false);
+    // Rozsyłka anulowana w panelu przed terminem nie zmienia oczekiwania pozostałych rozsyłek na termin.
+    const partly = { ...SCHEDULED, byStatus: { scheduled: 1, cancelled: 1 }, statusLabels: { scheduled: 'zaplanowana', cancelled: 'anulowana' }, notSent: 200 };
+    expect(filePending(partly)).toBe(true);
+    const partlyHtml = renderFileProgress(partly, { name: 'a.csv' });
+    expect(partlyHtml).toContain('<h3>Zaplanowana wysyłka</h3>');
+    expect(partlyHtml).not.toContain('przed raportem');
+    expect(partlyHtml).toContain('Odbiorcy rozsyłek anulowanych albo zakończonych błędem: 200');
+    expect(filePending({ ...SCHEDULED, byStatus: { cancelled: 1, failed: 1 } })).toBe(false);
     expect(fileSettled(STATUS)).toBe(false);
     expect(fileSettled({ ...STATUS, reportReady: true })).toBe(true);
     // Wysyłka anulowana w całości: odświeżanie się kończy, a raport nie powstanie.

@@ -283,8 +283,18 @@ export function renderFilePreview(p, meta = {}, state = {}) {
 /** Raport CSV wysyłki z pliku jest gotowy, dlatego stan nie zmieni się już sam z siebie. */
 export const fileSettled = (d) => d.reportReady === true || d.cancelled === true;
 
-/** Wszystkie rozsyłki czekają w bramce na termin albo na decyzję administratora. */
-export const filePending = (d) => d.packages > 0 && Object.keys(d.byStatus ?? {}).every((s) => s === 'scheduled' || s === 'overdue');
+const WAITING = new Set(['scheduled', 'overdue']);
+/** Rozsyłki anulowane albo odrzucone przed przekazaniem do Multiinfo nie zmieniają już stanu. */
+const STOPPED = new Set(['cancelled', 'failed']);
+
+/**
+ * Rozsyłki czekają w bramce na termin albo na decyzję administratora. Rozsyłka anulowana albo odrzucona przed
+ * terminem nie zmienia oczekiwania pozostałych.
+ */
+export const filePending = (d) => {
+  const states = Object.keys(d.byStatus ?? {});
+  return d.packages > 0 && states.some((s) => WAITING.has(s)) && states.every((s) => WAITING.has(s) || STOPPED.has(s));
+};
 
 const OVERDUE_TEXT = 'Bramka nie przekazała rozsyłek do Multiinfo w ciągu 60 minut od terminu. Decyzję o wysłaniu albo anulowaniu podejmuje administrator bramki.';
 
@@ -333,7 +343,8 @@ export function renderFileProgress(d, state = {}) {
     return head + section(scheduled ? 'Zaplanowana wysyłka' : 'Termin minął', fields(
       d.schedule ? field('Zaplanowana na', txt(stamp(d.schedule.startAt.at))) : '',
       scheduled && d.schedule?.handoverAt ? field('Przekazanie do Multiinfo', txt(stamp(d.schedule.handoverAt.at))) : '',
-    ) + note(scheduled ? CANCEL_WINDOW : OVERDUE_TEXT) + buttons(cancel, refresh));
+    ) + note(scheduled ? CANCEL_WINDOW : OVERDUE_TEXT)
+      + (d.notSent > 0 ? note(`Odbiorcy rozsyłek anulowanych albo zakończonych błędem: ${num(d.notSent)}`) : '') + buttons(cancel, refresh));
   }
   const waiting = Math.max(0, d.recipients - d.delivered - d.failed - d.other - d.notSent);
   const states = Object.entries(d.byStatus).map(([s, n]) => `${d.statusLabels?.[s] ?? s} ${num(n)}`).join(', ');
