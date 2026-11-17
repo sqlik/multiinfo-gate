@@ -150,6 +150,17 @@ describe('AgentFilesRepo', () => {
     expect(files.get(id, ewa)!.receivedRows).toBe(400);
   });
 
+  it('łączny rozmiar szkicu liczony w bajtach UTF-8: znaki wielobajtowe nie omijają limitu 20 MB', () => {
+    const columns = Array.from({ length: COLUMNS_MAX }, (_, i) => `K${i + 1}`);
+    const id = files.create({ connectionId: ewa, name: 'duzy.csv', columns, phoneColumn: 0, totalRows: 1000, now: NOW });
+    const cell = '€'.repeat(CELL_CHARS_MAX);
+    const chunk = (from: number) => Array.from({ length: 100 }, (_, j) => ({ line: from + j + 2, cells: [`48601${String(from + j).padStart(6, '0')}`, ...columns.slice(1).map(() => cell)] }));
+    files.append(id, 0, chunk(0));
+    expect(() => files.append(id, 100, chunk(100))).toThrow(expect.objectContaining({ code: 'file_limit' }));
+    const bytes = (db.prepare('SELECT COALESCE(SUM(LENGTH(CAST(cells AS BLOB))), 0) AS n FROM agent_file_rows').get() as { n: number }).n;
+    expect(bytes).toBeLessThanOrEqual(FILE_MEGABYTES_MAX * 1024 * 1024);
+  });
+
   it('pruneBefore usuwa szkic pliku po 24 h razem z wierszami', () => {
     const old = create();
     files.append(old, 0, rows(2, 3));

@@ -135,8 +135,9 @@ export class AgentFilesRepo {
       const cells = rows.map((row) => (row.cells.length === width ? JSON.stringify(row.cells) : null));
       // Limit pliku sprawdza także bramka, ponieważ narzędzie może wywołać aplikacja z pominięciem widoku,
       // a podgląd i wysyłka wczytują cały szkic do pamięci.
-      const stored = (this.db.prepare('SELECT COALESCE(SUM(LENGTH(cells)), 0) AS n FROM agent_file_rows WHERE file_id = ?').get(id) as { n: number }).n;
-      if (cells.reduce((sum, c) => sum + (c?.length ?? 0), stored) > FILE_MEGABYTES_MAX * 1024 * 1024) {
+      // Obie strony w bajtach UTF-8: LENGTH tekstu liczy znaki, a wartości z polskimi literami zajmują więcej.
+      const stored = (this.db.prepare('SELECT COALESCE(SUM(LENGTH(CAST(cells AS BLOB))), 0) AS n FROM agent_file_rows WHERE file_id = ?').get(id) as { n: number }).n;
+      if (cells.reduce((sum, c) => sum + (c === null ? 0 : Buffer.byteLength(c, 'utf8')), stored) > FILE_MEGABYTES_MAX * 1024 * 1024) {
         throw limit(`Dane pliku przekraczają ${FILE_MEGABYTES_MAX} MB, a bramka przyjmuje najwyżej ${FILE_MEGABYTES_MAX} MB danych z jednego pliku.`);
       }
       const insert = this.db.prepare('INSERT INTO agent_file_rows (file_id, seq, line, cells, problem) VALUES (?, ?, ?, ?, ?)');
