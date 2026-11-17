@@ -873,6 +873,9 @@ bramki**, gdy połączenie z bramką zostało przerwane w trakcie przekazywania.
 a widok przekaże go od początku. Komunikat o limicie żądań klucza nie wymaga działania, ponieważ widok
 wznawia przekazywanie samodzielnie.
 
+Gdy widok dzieli wiersze pliku CSV na kolumny w niewłaściwych miejscach, wybierz właściwy separator z listy
+**Separator kolumn** w sekcji „Rozpoznanie pliku”. Widok podzieli wtedy wiersze ponownie.
+
 ### Polskie znaki w treści są zniekształcone {#plik-polskie-znaki}
 
 Objaw: pierwsze wiersze pliku w widoku „Rozsyłka z pliku” albo gotowe wiadomości w podglądzie zawierają

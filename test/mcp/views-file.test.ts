@@ -166,7 +166,7 @@ describe('widok rozsyłki z pliku', () => {
     expect(html).toContain('Pierwszy wiersz zawiera nazwy kolumn');
     expect(html).toContain('<div class="txt">7</div>');
     expect(html).toContain('<div class="txt">UTF-8</div>');
-    expect(html).toContain('<div class="txt">średnik</div>');
+    expect(html).toContain('<select class="sel" id="separator"><option value=";" selected>średnik</option><option value="tab">tabulator</option><option value=",">przecinek</option></select>');
     expect(html).toContain('<button type="button" class="btn btn-primary" data-act="upload">Przekaż plik do bramki</button>');
   });
 
@@ -245,6 +245,22 @@ describe('widok rozsyłki z pliku', () => {
     expect(w.node('plik-nazwa').textContent).toBe('przypomnienia.csv');
     await until(() => w.node('komunikat').textContent.includes('została przekazana aplikacji AI'));
     expect(input.disabled).toBe(false);
+  });
+
+  it('widok: separator kolumn do zmiany z listy, zmiana dzieli wiersze pliku na nowo', async () => {
+    const w = viewWindow(gateway());
+    startFile(w.win, { version: '1.13.0' });
+    // Każdy wiersz zawiera tyle samo przecinków i średników, dlatego widok wybiera średnik, a pracownik zmienia go na przecinek.
+    w.pick('kontrahenci.csv', new Uint8Array(Buffer.from('Numer,Kontrahent;uwagi\r\n48601000011,Hurtownia Łódź;brak\r\n48601000012,Serwis Kraków;brak\r\n')));
+    await until(() => w.node('stan').innerHTML.includes('id="separator"'));
+    expect(w.node('stan').innerHTML).toContain('<option value=";" selected>średnik</option>');
+    w.change({ id: 'separator', value: ',' });
+    expect(w.node('stan').innerHTML).toContain('<option value="," selected>przecinek</option>');
+    expect(w.node('stan').innerHTML).toContain('Agent zobaczy wyłącznie nazwy kolumn: Numer, Kontrahent;uwagi');
+    expect(w.node('stan').innerHTML).toContain('<td>Hurtownia Łódź;brak</td>');
+    w.change({ id: 'separator', value: 'tab' });
+    expect(w.node('stan').innerHTML).toContain('<option value="tab" selected>tabulator</option>');
+    expect(w.node('stan').innerHTML).toContain('Agent zobaczy wyłącznie nazwy kolumn: Numer,Kontrahent;uwagi</p>');
   });
 
   it('widok: uszkodzony skoroszyt daje komunikat o uszkodzonym pliku, bez tekstu wyjątku i bez rozpoznania', async () => {

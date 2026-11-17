@@ -676,10 +676,10 @@ Celem procedury jest rozsyłka z treścią złożoną z pól pliku.
 
 1. Napisz w rozmowie, na przykład „Wyślij z pliku przypomnienia o płatności”. Agent otworzy widok
    „Rozsyłka z pliku”.
-2. Kliknij pole wyboru pliku i wskaż plik CSV, TXT albo XLSX. Widok odczyta plik i pokaże sekcję
+2. Kliknij **Wybierz plik** i wskaż plik CSV, TXT albo XLSX. Widok odczyta plik i pokaże sekcję
    „Rozpoznanie pliku” oraz pierwsze wiersze danych.
-3. Sprawdź kolumnę numeru i pole **Pierwszy wiersz zawiera nazwy kolumn**. W skoroszycie z kilkoma
-   arkuszami sprawdź także pole **Arkusz**.
+3. Sprawdź kolumnę numeru i pole **Pierwszy wiersz zawiera nazwy kolumn**. W pliku CSV sprawdź także
+   pole **Separator kolumn**, a w skoroszycie z kilkoma arkuszami pole **Arkusz**.
 4. Kliknij **Przekaż plik do bramki**. Widok przekaże wiersze do bramki porcjami, a następnie wyśle do
    rozmowy wiadomość „Plik z odbiorcami jest wczytany w widoku bramki. Przygotuj treść SMS-a z polami
    pliku.”.
@@ -709,7 +709,7 @@ Jeżeli wynik jest inny:
 | Element | Obsługa w widoku |
 |---|---|
 | Formaty | `.csv` i `.txt` z separatorem oraz skoroszyt `.xlsx`; plik `.xls` z Excela 97-2003 wymaga zapisania jako `.xlsx` albo „CSV UTF-8” |
-| Separator | średnik, przecinek albo tabulator, rozpoznawany na podstawie pierwszych wierszy; pole w cudzysłowie może zawierać separator i podział wiersza |
+| Separator | średnik, przecinek albo tabulator rozpoznany na podstawie pierwszych wierszy albo wiersza `sep=` z eksportu dla Excela, do zmiany na liście **Separator kolumn**; pole w cudzysłowie może zawierać separator i podział wiersza |
 | Kodowanie | UTF-8 ze znacznikiem BOM i bez niego, Windows-1250 z Excela dla Windows oraz MacCentralEurope z Excela dla macOS |
 | Arkusze | pierwszy arkusz skoroszytu, a pozostałe do wyboru z listy **Arkusz** |
 | Wiersz nagłówka | pierwszy niepusty wiersz, chyba że zawiera numer telefonu albo pustą komórkę nad kolumną z numerami; kolumny pliku bez nagłówka otrzymują nazwy „Kolumna A”, „Kolumna B” i kolejne |

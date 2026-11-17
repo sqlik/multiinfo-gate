@@ -54,6 +54,10 @@ describe('odczyt CSV w widoku: separator i pola', () => {
     expect(detectSeparator('Numer\tKontrahent\n48601000011\tHurtownia, oddział Kraków\n')).toBe('\t');
     expect(detectSeparator('Numer\n48601000011\n')).toBe(';');
     expect(detectSeparator('a;b,c\n')).toBe(';');
+    // Polski Excel nie ujmuje w cudzysłów pól z przecinkami: przecinki przeważają liczbą, ale tylko średnik dzieli
+    // każdy wiersz na tyle samo pól co nagłówek.
+    const rows = Array.from({ length: 30 }, (_, i) => `48601000${100 + i};Hurtownia ${i}, oddział Kraków;1234,50;płatność po terminie, wysłano monit, kontakt z księgową`);
+    expect(detectSeparator(['Numer;Kontrahent;Kwota;Uwagi', ...rows].join('\r\n'))).toBe(';');
     expect(parseCsv('Numer,Kontrahent\n48601000011,"Kowalski; Nowak s.c., oddział Kraków"\n', ',')).toEqual([
       { line: 1, cells: ['Numer', 'Kontrahent'] },
       { line: 2, cells: ['48601000011', 'Kowalski; Nowak s.c., oddział Kraków'] },

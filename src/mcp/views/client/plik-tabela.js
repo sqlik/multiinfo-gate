@@ -136,9 +136,12 @@ export async function readFileBytes(name, bytes) {
       return { error: (error instanceof Error && error.message) || BROKEN };
     }
   }
-  const { text, encoding } = decodeBytes(bytes);
-  const separator = detectSeparator(text);
-  return { kind: 'csv', encoding, separator, rows: parseCsv(text, separator) };
+  const decoded = decodeBytes(bytes);
+  // Eksporty przygotowane dla Excela zaczynają się wierszem „sep=;”, który wskazuje separator i nie należy do danych.
+  const hint = /^sep=([^\r\n])\r?\n/i.exec(decoded.text);
+  const text = hint ? decoded.text.slice(hint[0].length) : decoded.text;
+  const separator = hint ? hint[1] : detectSeparator(text);
+  return { kind: 'csv', encoding: decoded.encoding, separator, text, rows: parseCsv(text, separator) };
 }
 
 const encoder = new TextEncoder();

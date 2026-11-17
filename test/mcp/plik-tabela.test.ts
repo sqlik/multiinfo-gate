@@ -37,7 +37,9 @@ describe('rozpoznanie tabeli z pliku', () => {
 
   it('readFileBytes: CSV z kodowaniem i separatorem, XLSX z listą arkuszy i pierwszym arkuszem', async () => {
     const csv = await readFileBytes('lista.txt', new Uint8Array(Buffer.from('Numer\tKontrahent\n48601000011\tHurtownia Łódź\n')));
-    expect(csv).toEqual({ kind: 'csv', encoding: 'utf-8', separator: '\t', rows: [row(1, 'Numer', 'Kontrahent'), row(2, '48601000011', 'Hurtownia Łódź')] });
+    expect(csv).toEqual({
+      kind: 'csv', encoding: 'utf-8', separator: '\t', text: 'Numer\tKontrahent\n48601000011\tHurtownia Łódź\n', rows: [row(1, 'Numer', 'Kontrahent'), row(2, '48601000011', 'Hurtownia Łódź')],
+    });
     const book = makeZipFiles({
       'xl/workbook.xml': '<workbook xmlns:r="r"><sheets><sheet name="Listopad" r:id="rId1"/></sheets></workbook>',
       'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
@@ -47,6 +49,15 @@ describe('rozpoznanie tabeli z pliku', () => {
     const read = await readFileBytes('lista.txt', new Uint8Array(book));
     expect(read).toMatchObject({ kind: 'xlsx', sheet: 0, rows: [row(2, '', 'Telefon')] });
     expect('book' in read && read.book.sheets).toEqual([{ name: 'Listopad', path: 'xl/worksheets/sheet1.xml' }]);
+  });
+
+  it('readFileBytes: wiersz sep=; z eksportu dla Excela wskazuje separator i nie jest nagłówkiem, wiersze numerowane jak w Excelu', async () => {
+    const file = await readFileBytes('kontrahenci.csv', new Uint8Array(Buffer.from('sep=,\r\nNumer,Kontrahent\r\n48601000011,Hurtownia Łódź\r\n48601000012,Serwis Kraków\r\n')));
+    expect(file).toMatchObject({ separator: ',', rows: [row(1, 'Numer', 'Kontrahent'), row(2, '48601000011', 'Hurtownia Łódź'), row(3, '48601000012', 'Serwis Kraków')] });
+    const table = analyze((file as { rows: Array<{ line: number; cells: string[] }> }).rows);
+    expect(table.columns).toEqual(['Numer', 'Kontrahent']);
+    expect(table.phoneCandidates).toEqual([0]);
+    expect(await readFileBytes('k.csv', new Uint8Array(Buffer.from('SEP=;\nNumer;Kontrahent\n')))).toMatchObject({ separator: ';', rows: [row(1, 'Numer', 'Kontrahent')] });
   });
 
   it('nagłówek: pierwszy niepusty wiersz; numer w pierwszym wierszu oznacza brak nagłówka i nazwy Kolumna A, Kolumna B', () => {

@@ -13,6 +13,7 @@ import { latinText, measure } from './measure.js';
 import {
   analyze, FILE_BYTES_MAX, FILE_TOO_BIG, nextChunk, readFileBytes, ROWS_MAX, UPLOAD_BYTES, UPLOAD_CHUNK,
 } from './plik-tabela.js';
+import { parseCsv, SEPARATOR_CHARS } from './plik-csv.js';
 import { readSheet } from './plik-xlsx.js';
 import { APPROVAL_TEXT, clock, FIX_MESSAGE, option, recipientsLeftTile, REPEATED_NOTE, scheduleField, select } from './send.js';
 
@@ -26,6 +27,9 @@ const ENCODINGS = {
   'utf-8': 'UTF-8', 'utf-16le': 'UTF-16', 'utf-16be': 'UTF-16', 'windows-1250': 'Windows-1250', 'x-mac-ce': 'MacCentralEurope z Excela dla macOS',
 };
 const SEPARATORS = { ';': 'średnik', ',': 'przecinek', '\t': 'tabulator' };
+/** Wartość separatora na liście: tabulator jako „tab”, ponieważ znak tabulatora w atrybucie jest nieczytelny. */
+const separatorValue = (c) => (c === '\t' ? 'tab' : c);
+const separatorChar = (v) => (v === 'tab' ? '\t' : v);
 
 /** Pole wyboru pliku: ukryte pole systemowe, przycisk i nazwa pliku wyśrodkowane w pionie w jednej ramce. */
 const PICKER = '<label class="pick"><input type="file" id="plik" accept=".csv,.txt,.xlsx">'
@@ -102,7 +106,9 @@ export function renderLoaded(s) {
     field('Wiersze danych', txt(num(t.data.length))),
     xlsx ? field('Arkusz', selectOf('arkusz', s.source.book.sheets.map((sheet, i) => option(i, sheet.name, i === s.source.sheet))))
       : field('Kodowanie znaków', txt(ENCODINGS[s.source.encoding] ?? s.source.encoding)),
-    xlsx ? field('Format pliku', txt('Skoroszyt programu Excel (.xlsx)')) : field('Separator kolumn', txt(SEPARATORS[s.source.separator] ?? s.source.separator)),
+    xlsx ? field('Format pliku', txt('Skoroszyt programu Excel (.xlsx)'))
+      : field('Separator kolumn', selectOf('separator', [...new Set([...SEPARATOR_CHARS, s.source.separator])]
+        .map((c) => option(separatorValue(c), SEPARATORS[c] ?? c, c === s.source.separator)))),
   ) + `<label class="check"><input type="checkbox" id="naglowek"${t.header ? ' checked' : ''}> Pierwszy wiersz zawiera nazwy kolumn</label>`
     + (stop ? `<p class="notice n-fail">${esc(stop)}</p>` : '');
   const head = `<tr>${t.columns.map((c, i) => `<th${i === s.phoneColumn ? ' class="ph"' : ''}>${esc(c)}</th>`).join('')}</tr>`;
@@ -638,6 +644,11 @@ export function startFile(win, env) {
       } catch (error) {
         fail(error);
       }
+    } else if (t.id === 'separator' && s.source?.kind === 'csv') {
+      const separator = separatorChar(t.value);
+      s.source = { ...s.source, separator };
+      s.rows = parseCsv(s.source.text, separator);
+      apply(analyze(s.rows));
     } else if (t.id === 'naglowek' && s.table) apply(analyze(s.rows, { header: t.checked }), true);
     else if (t.id === 'numer' && s.table) {
       s.phoneColumn = t.value === '' ? null : Number(t.value);

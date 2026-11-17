@@ -41,19 +41,46 @@ export function decodeBytes(bytes) {
 /** Liczba wierszy, z których widok rozpoznaje separator. */
 const SEPARATOR_LINES = 20;
 
-/** Separator kolumn według liczby wystąpień poza cudzysłowami w pierwszych wierszach; przy remisie średnik. */
+/** Separatory w kolejności pierwszeństwa przy remisie. */
+export const SEPARATOR_CHARS = [';', '\t', ','];
+
+/**
+ * Separator kolumn z pierwszych wierszy: ten, który dzieli najwięcej wierszy na tyle samo pól co pierwszy
+ * wiersz, a przy remisie ten z większą liczbą pól i kolejny według SEPARATOR_CHARS. Znaki w cudzysłowach
+ * pomijane. Dzięki temu przecinki w polach bez cudzysłowów, typowe dla polskiego Excela, nie przeważają
+ * nad średnikiem. Plik bez separatora w pierwszym wierszu ma jedną kolumnę i średnik.
+ */
 export function detectSeparator(text) {
-  const counts = { ';': 0, '\t': 0, ',': 0 };
+  const zero = () => ({ ';': 0, '\t': 0, ',': 0 });
+  const lines = [];
+  let counts = zero();
   let quoted = false;
-  let lines = 0;
-  for (let i = 0; i < text.length && lines < SEPARATOR_LINES; i += 1) {
+  for (let i = 0; i < text.length && lines.length < SEPARATOR_LINES; i += 1) {
     const c = text[i];
     if (c === '"') quoted = !quoted;
     else if (quoted) continue;
-    else if (c === '\n') lines += 1;
-    else if (c === ';' || c === '\t' || c === ',') counts[c] += 1;
+    else if (c === '\n') {
+      lines.push(counts);
+      counts = zero();
+    } else if (c === ';' || c === '\t' || c === ',') counts[c] += 1;
   }
-  return [';', '\t', ','].reduce((best, s) => (counts[s] > counts[best] ? s : best), ';');
+  if (lines.length < SEPARATOR_LINES) lines.push(counts);
+  const used = lines.filter((l) => SEPARATOR_CHARS.some((sep) => l[sep] > 0));
+  if (used.length === 0) return ';';
+  let best = ';';
+  let bestScore = 0;
+  let bestFields = 0;
+  for (const sep of SEPARATOR_CHARS) {
+    const fields = used[0][sep];
+    if (fields === 0) continue;
+    const score = used.filter((l) => l[sep] === fields).length;
+    if (score > bestScore || (score === bestScore && fields > bestFields)) {
+      best = sep;
+      bestScore = score;
+      bestFields = fields;
+    }
+  }
+  return best;
 }
 
 /** Koniec pola bez cudzysłowu: separator, znak nowego wiersza albo koniec tekstu. */
