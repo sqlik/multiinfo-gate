@@ -6,7 +6,7 @@
 
 import {
   applyTheme, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, field, fields, forwardedText, messageBox, note, num, numbers, openDownload,
-  pluralWord, sayIn, section, smsCounter, stamp, textOf, tile, tiles, txt,
+  pluralWord, sayIn, section, share, smsCounter, stamp, textOf, tile, tiles, txt, wideField,
 } from './bridge.js';
 import { stackBar } from './chart.js';
 import { latinText, measure } from './measure.js';
@@ -183,8 +183,7 @@ function settingsSection(p, meta, state, locked) {
   const wanted = state.input?.clientIdColumn;
   const chosen = wanted === undefined || wanted === null ? null : columns.find((c) => foldColumn(c) === foldColumn(wanted)) ?? null;
   return section('Ustawienia wysyłki', fields(
-    field('Plik', txt(meta.name ?? '-')),
-    p.schedule ? scheduleField(p.schedule) : '',
+    wideField('Plik', txt(meta.name ?? '-')),
     field('Nadawca', select('orig', p.senders.map((s) => option(s.value ?? '', s.label, s.value === p.orig)), locked),
       p.orig === null ? 'Integracja, klucz i konto nie określają nadpisu domyślnego, dlatego SMS zostanie wysłany z numeru usługi, a odbiorca będzie mógł odpowiedzieć' : ''),
     field('Usługa Multiinfo', select('service', services.map((s) => option(s.id, service(s), s.id === p.serviceId)), locked)),
@@ -193,13 +192,15 @@ function settingsSection(p, meta, state, locked) {
     'Wartość z tej kolumny trafia do raportu rozsyłki jako identyfikator klienta'),
     field('Kodowanie', txt(encodingText(p.encodings)),
       'Bramka dzieli odbiorców na rozsyłki według kodowania, dlatego polska litera w jednym wierszu nie zmienia kodowania pozostałych SMS-ów'),
+    p.schedule ? scheduleField(p.schedule) : '',
   ));
 }
 
 function summarySection(p, meta) {
   const repeated = p.sameNumberDifferentText > 0
     ? `<p class="notice n-wait">Numery z różnymi treściami: ${esc(num(p.sameNumberDifferentText))}. Każdy z tych numerów otrzyma wszystkie przeznaczone dla niego SMS-y.</p>`
-      + numbers((meta.repeatedNumbers ?? []).map((phone) => ({ phone }))) : '';
+      + foldList('Lista numerów', (meta.repeatedNumbers ?? []).length, 'numer', 'numery', 'numerów',
+        numbers((meta.repeatedNumbers ?? []).map((phone) => ({ phone })))) : '';
   return section('Podsumowanie', tiles(
     tile('Odbiorcy', num(p.recipients), 'po jednym SMS-ie'),
     tile('Części SMS razem', num(p.parts), partsRange(p.partsHistogram)),
@@ -214,17 +215,22 @@ function summarySection(p, meta) {
     + repeated);
 }
 
-/** Wiersze wyłączone: liczby według powodu i lista rozwijana z numerem wiersza w pliku. */
+/** Lista rozwijana na życzenie z liczbą pozycji w nagłówku: wiersze wyłączone, numery z różnymi treściami. */
+const foldList = (title, count, one, few, many, body) => `<div class="inbox"><details class="it"><summary><div class="it-top"><b>${esc(title)}</b>`
+  + `<span class="it-tag">${esc(num(count))} ${pluralWord(count, one, few, many)}</span></div></summary><div class="it-body">${body}</div></details></div>`;
+
+/** Wartość z kolumny numeru w liście wyłączonych: „puste” dla pustej komórki, „-” dla wiersza niezgodnego z nagłówkiem. */
+const phoneCell = (phone) => (phone === null || phone === undefined ? '-' : phone.trim() === '' ? 'puste' : phone);
+
+/** Wiersze wyłączone: liczby według powodu i lista rozwijana z numerem wiersza i wartością numeru z pliku. */
 function excludedSection(p, meta) {
   const total = REASONS.reduce((sum, [r]) => sum + (p.excluded[r] ?? 0), 0);
   if (total === 0) return '';
   const counts = REASONS.filter(([r]) => (p.excluded[r] ?? 0) > 0).map(([r, label]) => `${label} ${num(p.excluded[r])}`).join(', ');
   const rows = meta.excludedRows ?? [];
-  const list = rows.length === 0 ? '' : '<div class="inbox"><details class="it"><summary><div class="it-top"><b>Lista wierszy wyłączonych</b>'
-    + `<span class="it-tag">${esc(num(rows.length))} ${pluralWord(rows.length, 'wiersz', 'wiersze', 'wierszy')}</span></div></summary><div class="it-body">`
-    + '<table><tr><th class="num">Wiersz pliku</th><th>Powód</th></tr>'
-    + rows.map((r) => `<tr><td class="num">${esc(r.line)}</td><td>${esc(REASON_LABELS[r.reason] ?? r.reason)}</td></tr>`).join('')
-    + '</table></div></details></div>';
+  const list = rows.length === 0 ? '' : foldList('Lista wierszy wyłączonych', rows.length, 'wiersz', 'wiersze', 'wierszy', '<table><tr><th class="fit">Wiersz pliku</th><th class="fit">Numer w pliku</th><th>Powód</th></tr>'
+    + rows.map((r) => `<tr><td class="fit">${esc(r.line)}</td><td class="fit">${esc(phoneCell(r.phone))}</td>`
+      + `<td>${esc(REASON_LABELS[r.reason] ?? r.reason)}</td></tr>`).join('') + '</table>');
   const more = meta.excludedMore > 0 ? note(`Lista zawiera pierwsze ${num(rows.length)} wierszy. Pozostałe wiersze wyłączone: ${num(meta.excludedMore)}.`) : '';
   return section(`Wiersze wyłączone z wysyłki: ${num(total)}`, note(`Przyczyny: ${counts}`) + list + more);
 }
@@ -270,7 +276,6 @@ export const fileSettled = (d) => d.reportReady === true;
 export const filePending = (d) => d.packages > 0 && Object.keys(d.byStatus ?? {}).every((s) => s === 'scheduled' || s === 'overdue');
 
 const OVERDUE_TEXT = 'Bramka nie przekazała rozsyłek do Multiinfo w ciągu 60 minut od terminu. Decyzję o wysłaniu albo anulowaniu podejmuje administrator bramki.';
-const percent = (part, whole) => (whole === 0 ? '-' : `${((part / whole) * 100).toFixed(1).replace('.', ',')} %`);
 
 /**
  * Odświeżanie stanu wysyłki z pliku przez file_send_status co 30 s, do gotowego raportu, najwyżej 30 minut.
@@ -321,8 +326,8 @@ export function renderFileProgress(d, state = {}) {
   ])
     + tiles(
       tile('W trakcie', num(waiting), 'przed raportem'),
-      tile('Doręczone', num(d.delivered), percent(d.delivered, d.recipients), 'ok'),
-      tile('Niedoręczone', num(d.failed), percent(d.failed, d.recipients)),
+      tile('Doręczone', num(d.delivered), share(d.delivered, d.recipients), 'ok'),
+      tile('Niedoręczone', num(d.failed), share(d.failed, d.recipients)),
       tile('Pozostałe', num(d.other), 'bez potwierdzenia'),
     )
     + note(`Rozsyłki według stanu: ${states}`)

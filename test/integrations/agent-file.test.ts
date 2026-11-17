@@ -165,9 +165,11 @@ describe('prepareFileSms', () => {
     const { preview, meta } = prepare({ clientIdColumn: 'klient' });
     expect(preview.recipients).toBe(2);
     expect(preview.excluded).toEqual({ columns: 1, invalid_phone: 1, invalid_client_id: 1, empty_field: 1, too_many_parts: 1 });
+    // Próba B (B7): wartość z kolumny numeru dla człowieka w podglądzie, null dla wiersza niezgodnego z nagłówkiem.
     expect(meta.excludedRows).toEqual([
-      { line: 3, reason: 'columns' }, { line: 4, reason: 'invalid_phone' }, { line: 5, reason: 'invalid_client_id' },
-      { line: 6, reason: 'empty_field' }, { line: 7, reason: 'too_many_parts' },
+      { line: 3, reason: 'columns', phone: null }, { line: 4, reason: 'invalid_phone', phone: 'brak numeru' },
+      { line: 5, reason: 'invalid_client_id', phone: phone(4) }, { line: 6, reason: 'empty_field', phone: phone(5) },
+      { line: 7, reason: 'too_many_parts', phone: phone(6) },
     ]);
     expect(meta.excludedMore).toBe(0);
     expect(fileSummary(deps, ctx(), NOW).invalidPhones).toBe(1);

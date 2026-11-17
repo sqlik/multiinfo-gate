@@ -183,7 +183,7 @@ describe('file_summary, prepare_file_sms i send_file_sms', () => {
     expect(prepared.structuredContent).toMatchObject({ recipients: 2, fields: ['Kontrahent', 'Kwota', 'Termin'], excluded: { invalid_phone: 1 }, blocked: null });
     expect(prepared._meta!.confirm).toMatch(/^mig_cf_/);
     expect(prepared._meta!.samples.map((s: { line: number }) => s.line)).toEqual([2, 3]);
-    expect(prepared._meta!.excludedRows).toEqual([{ line: 4, reason: 'invalid_phone' }]);
+    expect(prepared._meta!.excludedRows).toEqual([{ line: 4, reason: 'invalid_phone', phone: 'brak numeru' }]);
     expect(textOf(prepared)).toContain('Wysyłkę zatwierdza człowiek przyciskiem „Wyślij” w podglądzie bramki.');
     const draftId = prepared.structuredContent!.draftId as string;
     const sent = await mcp.call('send_file_sms', { draftId, confirm: prepared._meta!.confirm });

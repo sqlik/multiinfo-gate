@@ -252,7 +252,7 @@ const PREVIEW = {
 const META = {
   name: 'przypomnienia-listopad.xlsx', columns: ['Numer', 'Kontrahent', 'Kwota', 'Termin', 'Klient'],
   samples: [sample(2, '48601000011', 'Hurtownia Kowalski'), sample(600, '48601000600', 'Serwis Nowak'), sample(1205, '48601001205', 'Biuro Zielińska')],
-  excludedRows: [{ line: 7, reason: 'invalid_phone' }, { line: 9, reason: 'columns' }, { line: 15, reason: 'invalid_phone' }, { line: 40, reason: 'empty_field' }],
+  excludedRows: [{ line: 7, reason: 'invalid_phone', phone: '12345' }, { line: 9, reason: 'columns', phone: null }, { line: 15, reason: 'invalid_phone', phone: '' }, { line: 40, reason: 'empty_field', phone: '48601000040' }],
   excludedMore: 0, repeatedNumbers: ['48601000015', '48601000016'],
 };
 const INPUT = { text: TEMPLATE, clientIdColumn: 'klient' };
@@ -289,14 +289,19 @@ describe('podgląd, wysyłka i postęp rozsyłki z pliku', () => {
     expect(html).toContain('Unicode, z polskimi znakami');
     // Wiersze wyłączone w liście rozwijanej z numerem wiersza i powodem.
     expect(html).toContain('<details class="it">');
-    expect(html).toContain('<tr><td class="num">7</td><td>błędny numer telefonu</td></tr>');
-    expect(html).toContain('<tr><td class="num">9</td><td>wiersz niezgodny z nagłówkiem</td></tr>');
+    // Próba B (B7): wartość z kolumny numeru obok wiersza, kolumny dopasowane do treści i wyrównane do lewej.
+    expect(html).toContain('<tr><th class="fit">Wiersz pliku</th><th class="fit">Numer w pliku</th><th>Powód</th></tr>');
+    expect(html).toContain('<tr><td class="fit">7</td><td class="fit">12345</td><td>błędny numer telefonu</td></tr>');
+    expect(html).toContain('<tr><td class="fit">9</td><td class="fit">-</td><td>wiersz niezgodny z nagłówkiem</td></tr>');
+    expect(html).toContain('<tr><td class="fit">15</td><td class="fit">puste</td><td>błędny numer telefonu</td></tr>');
     expect(html).toContain('Wiersze wyłączone z wysyłki: 4');
     expect(html).toContain('błędny numer telefonu 2, puste pole użyte w treści 1, wiersz niezgodny z nagłówkiem 1');
     expect(html).toContain('Wiersze z tym samym numerem i tą samą treścią: 3. Bramka wyśle każdą taką wiadomość raz.');
     // Ostrzeżenie o numerach z różnymi treściami z listą numerów.
     expect(html).toContain('<p class="notice n-wait">Numery z różnymi treściami: 2. Każdy z tych numerów otrzyma wszystkie przeznaczone dla niego SMS-y.</p>');
-    expect(html).toContain('<p class="nums">48601000015, 48601000016</p>');
+    // Próba B (B12): lista numerów rozwijana na życzenie, jak lista wierszy wyłączonych.
+    expect(html).toContain('<div class="inbox"><details class="it"><summary><div class="it-top"><b>Lista numerów</b><span class="it-tag">2 numery</span></div></summary>'
+      + '<div class="it-body"><p class="nums">48601000015, 48601000016</p></div></details></div>');
     // Usługa, nadawca i plik; kolumna identyfikatora klienta ustawiona według clientIdColumn bez względu na wielkość liter.
     expect(html).toContain('<select class="sel" name="orig"><option value="FIRMA" selected>FIRMA</option><option value="">numer usługi</option></select>');
     expect(html).toContain('<option value="20841" selected>Biuro handlowe (20841)</option>');
@@ -308,6 +313,11 @@ describe('podgląd, wysyłka i postęp rozsyłki z pliku', () => {
     const scheduled = renderFilePreview({ ...PREVIEW, schedule: { startAt: '2026-11-20T07:00:00.000Z', handoverAt: '2026-11-20T06:50:00.000Z' } }, META, { input: INPUT, sample: 0 });
     expect(scheduled).toContain('<div class="txt">2026-11-20 08:00</div>');
     expect(scheduled).toContain('Anulowanie jest możliwe do chwili przekazania rozsyłki do Multiinfo, zwykle 10 minut przed terminem');
+    // Próba B (B10): plik i termin w wierszach na całą szerokość, listy parami: Nadawca i Usługa, Kolumna identyfikatora i Kodowanie.
+    expect(scheduled).toContain('<div class="field wide"><span class="lbl">Plik</span><div class="txt">przypomnienia-listopad.xlsx</div></div>');
+    expect(scheduled).toContain('<div class="field wide"><span class="lbl">Termin</span>');
+    const order = ['Plik', 'Nadawca', 'Usługa Multiinfo', 'Kolumna identyfikatora klienta', 'Kodowanie', 'Termin'].map((l) => scheduled.indexOf(`lbl">${l}<`));
+    expect(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1]!))).toBe(true);
   });
 
   it('widok: blocked daje nieaktywny przycisk i wyjaśnienie; termin daje Zaplanuj; Popraw treść w rozmowie wysyła stałą wiadomość', async () => {

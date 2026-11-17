@@ -30,9 +30,9 @@ export function renderGroup(p, recipients = [], state = {}) {
     + note('Treść według szablonu treści grupy') + (p.truncated ? note('Treść została skrócona do limitu części grupy') : ''));
   const groups = `<select class="sel" name="group"${off}>${p.groups.map((g) => `<option value="${esc(g)}"${g === p.group.name ? ' selected' : ''}>${esc(g)}</option>`).join('')}</select>`;
   const settings = section('Ustawienia wysyłki', fields(
-    p.schedule ? scheduleField(p.schedule) : '',
     field('Grupa', groups),
     field('Nadawca SMS-a', `<select class="sel" aria-label="Nadawca SMS-a"${off}><option selected>${esc(sender)}</option></select>`),
+    p.schedule ? scheduleField(p.schedule) : '',
   ) + note('Nadawcę i szablon treści określa grupa. Wysyłka nie wymaga potwierdzenia SMS-em zwrotnym.'));
   const list = section(`Odbiorcy: ${people(p.recipients)}`, numbers(recipients.map((r) => ({ phone: r.phone, label: r.name })))
     + (p.schedule ? note('Odbiorcy rozsyłki z terminem pochodzą z listy grupy w chwili zatwierdzenia, a późniejsze zmiany składu grupy jej nie dotyczą') : ''),

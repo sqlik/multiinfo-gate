@@ -41,6 +41,7 @@ export const VIEW_STYLE = [
   // Pola i informacje w dwóch równych kolumnach, etykieta nad wartością.
   '.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 24px}',
   '@media (max-width:560px){.fields{grid-template-columns:1fr}}',
+  '.field.wide{grid-column:1/-1}',
   '.field{min-width:0}.field .lbl,.lbl-block{display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px}',
   '.txt{font-size:14px;min-height:22px;overflow-wrap:anywhere}',
   // Pola mają obwódkę w kolorze akcji, jak okno treści SMS-a; pole wyłączone ma szarą obwódkę.
@@ -91,7 +92,7 @@ export const VIEW_STYLE = [
   '.tile{border:1px solid var(--rule);border-radius:var(--r);padding:12px 14px;min-width:0}',
   '.tile .lbl{font-size:12.5px;color:var(--muted)}',
   '.tile .v{font-size:20px;font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-  '.tile .s{font-size:12px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+  '.tile .s{font-size:12px;color:var(--faint);white-space:normal;overflow-wrap:anywhere}',
   '.tile.ok{background:var(--ok-bg);border-color:var(--ok-bg)}.tile.ok .lbl,.tile.ok .v,.tile.ok .s{color:var(--ok-ink)}',
   // Przyciski: działanie główne w kolorze akcji, nieodwracalne w kolorze ostrzegawczym, pomocnicze z obwódką.
   // Najechanie zmienia tło, a działanie niedostępne ma szare tło bez koloru znaczenia.
@@ -133,7 +134,7 @@ export const VIEW_STYLE = [
   'table{width:100%;border-collapse:collapse;font-size:13.5px}',
   'th{text-align:left;font-weight:600;color:var(--muted);font-size:12.5px;border-bottom:1px solid var(--rule);padding:6px 8px}',
   'td{border-bottom:1px solid var(--rule-soft);padding:8px;vertical-align:top;overflow-wrap:anywhere}tr:last-child td{border-bottom:0}',
-  '.num{text-align:right;white-space:nowrap}.nw{white-space:nowrap}',
+  '.num{text-align:right;white-space:nowrap}.nw{white-space:nowrap}.fit{width:1%;white-space:nowrap}',
   // Lista odebranych SMS-ów: wiersz z numerem, godziną i stanem odpowiedzi, treść pod spodem, rozwinięcie po kliknięciu.
   '.inbox{border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;margin-top:16px}',
   '.it+.it{border-top:1px solid var(--rule)}',

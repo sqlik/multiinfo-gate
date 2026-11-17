@@ -3,7 +3,7 @@
 // a odbiorców doładowuje porcjami.
 import {
   applyTheme, badge, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, field, fields, note, num, openDownload, phoneLabel, sayIn, section,
-  stamp, textOf, tile, tiles, txt,
+  share, stamp, textOf, tile, tiles, txt,
 } from './bridge.js';
 import { barChart, stackBar } from './chart.js';
 import { STATE_LABELS } from './doreczenia.js';
@@ -68,7 +68,6 @@ export function watchPackage(bridge, win, args, handlers, now = () => Date.now()
   win.setTimeout(tick, PACKAGE_REFRESH_MS);
 }
 
-const percent = (part, whole) => (whole === 0 ? '-' : `${((part / whole) * 100).toFixed(1).replace('.', ',')} %`);
 
 function progressSection(d) {
   const passed = d.remaining === null ? null : Math.max(0, d.recipients - d.remaining);
@@ -114,9 +113,9 @@ function reportSections(d, busy) {
   const failed = keys.filter((k) => k !== 'delivered').reduce((sum, k) => sum + count(k), 0);
   return section('Wynik', stackBar(keys.map((k) => ({ tone: REPORT_TONE[k] ?? 'plain', value: count(k) })))
     + tiles(
-      tile('Doręczone', num(count('delivered')), percent(count('delivered'), d.recipients), 'ok'),
-      tile('Niedoręczone', num(count('failed')), percent(count('failed'), d.recipients)),
-      tile('Przedawnione', num(count('expired')), percent(count('expired'), d.recipients)),
+      tile('Doręczone', num(count('delivered')), share(count('delivered'), d.recipients), 'ok'),
+      tile('Niedoręczone', num(count('failed')), share(count('failed'), d.recipients)),
+      tile('Przedawnione', num(count('expired')), share(count('expired'), d.recipients)),
       tile('Razem', num(d.recipients), 'odbiorców'),
     )
     + (others.length > 0 ? note(`Pozostałe stany: ${others.join(', ')}`) : ''))

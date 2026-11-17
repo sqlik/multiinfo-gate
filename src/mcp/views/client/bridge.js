@@ -54,7 +54,11 @@ export const section = (title, body, lead = '') => `<section class="sec"><h3>${e
   + `${lead ? `<p class="lead">${esc(lead)}</p>` : ''}${body}</section>`;
 
 /** Pole albo informacja: etykieta nad wartością i opcjonalna podpowiedź pod nią. `control` jest gotowym HTML. */
-export const field = (label, control, hint = '') => `<div class="field"><span class="lbl">${esc(label)}</span>${control}${hint ? note(hint) : ''}</div>`;
+export const field = (label, control, hint = '', wide = false) =>
+  `<div class="field${wide ? ' wide' : ''}"><span class="lbl">${esc(label)}</span>${control}${hint ? note(hint) : ''}</div>`;
+
+/** Pole w osobnym wierszu na całą szerokość siatki: wartość z podpowiedzią obok pary list wyglądałaby nierówno. */
+export const wideField = (label, control, hint = '') => field(label, control, hint, true);
 
 /** Pola i informacje w dwóch równych kolumnach; puste pozycje są pomijane. */
 export const fields = (...items) => `<div class="fields">${items.filter(Boolean).join('')}</div>`;
@@ -65,6 +69,18 @@ export const txt = (value) => `<div class="txt">${esc(value)}</div>`;
 /** Kafel podsumowania: etykieta, wartość i opis jako tekst; `tone` 'ok' wyróżnia stan pomyślny. */
 export const tile = (label, value, sub, tone = '') => `<div class="tile${tone ? ` ${tone}` : ''}"><div class="lbl">${esc(label)}</div>`
   + `<div class="v">${esc(value)}</div><div class="s">${esc(sub)}</div></div>`;
+
+/**
+ * Udział w procentach z jednym miejscem po przecinku. Wartość niezerowa nie zaokrągla się do „0,0 %”, a niepełna do
+ * „100,0 %”, dlatego 3 niedoręczone z 9899 nie znikają w kafelku.
+ */
+export function share(part, whole) {
+  if (whole === 0) return '-';
+  const value = (part / whole) * 100;
+  if (part > 0 && value < 0.05) return 'poniżej 0,1 %';
+  if (part < whole && value >= 99.95) return 'ponad 99,9 %';
+  return `${value.toFixed(1).replace('.', ',')} %`;
+}
 
 /** Cztery równe kafle w rzędzie, w wąskiej ramce dwa. */
 export const tiles = (...items) => `<div class="tiles">${items.join('')}</div>`;

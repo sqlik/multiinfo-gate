@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { button, buttons, field, tile, tiles, txt } from '../../src/mcp/views/client/bridge.js';
+import { button, buttons, field, tile, tiles, txt, wideField } from '../../src/mcp/views/client/bridge.js';
 import { renderStatus } from '../../src/mcp/views/client/co-moge.js';
 import { renderGroup } from '../../src/mcp/views/client/grupa.js';
 import { renderTrace, sayAt, startTrace } from '../../src/mcp/views/client/przebieg.js';
@@ -330,13 +330,16 @@ describe('wysyłka z terminem w widokach', () => {
 
   it('widok wysyłki z terminem: wiersz Termin, przycisk Zaplanuj, po wysyłce kafel Zaplanowana na i Anuluj rozsyłkę', () => {
     const html = renderSend(SCHEDULED, {});
-    expect(html).toContain(field('Termin', txt('2026-11-20 08:00'), CANCEL_HINT));
+    // Próba B (B4): Termin na całą szerokość pod parą Nadawca i Usługa, a nie w kolumnie obok listy.
+    expect(html).toContain(wideField('Termin', txt('2026-11-20 08:00'), CANCEL_HINT));
+    expect(html.indexOf('lbl">Usługa Multiinfo<')).toBeLessThan(html.indexOf('lbl">Termin<'));
+    expect(html.indexOf('lbl">Nadawca<')).toBeLessThan(html.indexOf('lbl">Usługa Multiinfo<'));
     expect(html).toContain(button('Zaplanuj rozsyłkę do 1 odbiorcy', { act: 'send', kind: 'primary' }));
     expect(html).toContain('<p class="lead">Rozsyłka z terminem, raport doręczeń po zakończeniu rozsyłki</p>');
     expect(renderSend(PREVIEW, {})).not.toContain('<span class="lbl">Termin</span>');
 
     const after = renderSend(SCHEDULED, { sent: PACKAGE_SENT });
-    expect(after).toContain(tile('Zaplanowana na', '2026-11-20 08:00', 'anulowanie do 07:50'));
+    expect(after).toContain(tile('Zaplanowana na', '08:00', '2026-11-20, anulowanie do 07:50'));
     expect(after).toContain('<div class="sent">Zaplanowano rozsyłkę <span class="mono">pkg_9</span> do 1 odbiorcy na 2026-11-20 08:00</div>');
     expect(after).toContain(button('Anuluj rozsyłkę', { act: 'cancel-package', kind: 'danger' }));
     expect(after).not.toContain('Sprawdź postęp rozsyłki');
@@ -349,11 +352,13 @@ describe('wysyłka z terminem w widokach', () => {
   it('widok grupy z terminem: wiersz Termin, przycisk Zaplanuj, po wysyłce kafel Zaplanowana na i Anuluj rozsyłkę', () => {
     const scheduled = { ...GROUP, schedule: SCHEDULE };
     const html = renderGroup(scheduled, []);
-    expect(html).toContain(field('Termin', txt('2026-11-20 08:00'), CANCEL_HINT));
+    expect(html).toContain(wideField('Termin', txt('2026-11-20 08:00'), CANCEL_HINT));
+    expect(html.indexOf('lbl">Grupa<')).toBeLessThan(html.indexOf('lbl">Nadawca SMS-a<'));
+    expect(html.indexOf('lbl">Nadawca SMS-a<')).toBeLessThan(html.indexOf('lbl">Termin<'));
     expect(html).toContain(button('Zaplanuj wysyłkę do 2 osób', { act: 'send', kind: 'primary' }));
     expect(html).toContain('Odbiorcy rozsyłki z terminem pochodzą z listy grupy w chwili zatwierdzenia');
     const after = renderGroup(scheduled, [], { sent: { ...PACKAGE_SENT, recipients: 2 } });
-    expect(after).toContain(tile('Zaplanowana na', '2026-11-20 08:00', 'anulowanie do 07:50'));
+    expect(after).toContain(tile('Zaplanowana na', '08:00', '2026-11-20, anulowanie do 07:50'));
     expect(after).toContain('<div class="sent">Zaplanowano rozsyłkę <span class="mono">pkg_9</span> do 2 odbiorców na 2026-11-20 08:00</div>');
     expect(after).toContain(button('Anuluj rozsyłkę', { act: 'cancel-package', kind: 'danger' }));
   });
@@ -377,6 +382,9 @@ describe('wysyłka z terminem w widokach', () => {
     await tick();
     expect(w.nodes.tresc.innerHTML).toContain('została anulowana</div>');
     expect(w.nodes.tresc.innerHTML).not.toContain('data-act="cancel-package"');
+    // Próba B (B3): sekcja „Wysyłka” pokazuje anulowanie, dlatego komunikat nie powtarza wyniku narzędzia.
+    expect(w.nodes.komunikat.hidden).toBe(true);
+    expect(w.nodes.komunikat.textContent).toBe('');
   });
 
   it('instrukcje serwera i Co mogę?: termin, anulowanie, granica 30 dni, list_packages', () => {

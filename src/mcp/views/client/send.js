@@ -3,7 +3,7 @@
 // send_prepared z kluczem potwierdzenia z _meta. Po wysyłce widok sam odświeża stan doręczeń.
 import {
   applyTheme, button, buttons, CANCEL_WINDOW, cancelledText, createBridge, esc, field, fields, forwardedText, messageBox, note, numbers, plural, sayIn,
-  section, smsCounter, stamp, textOf, tile, tiles, txt,
+  section, smsCounter, stamp, textOf, tile, tiles, txt, wideField,
 } from './bridge.js';
 import { deliveryLine, deliveryTile, NO_READ_SENT, watchDeliveries } from './doreczenia.js';
 import { latinText, measure } from './measure.js';
@@ -39,11 +39,11 @@ export function linkMarkup(text, preview) {
 }
 
 /** Wiersz terminu w ustawieniach wysyłki i wysyłki do grupy. */
-export const scheduleField = (schedule) => field('Termin', txt(stamp(schedule.startAt)), CANCEL_WINDOW);
+export const scheduleField = (schedule) => wideField('Termin', txt(stamp(schedule.startAt)), CANCEL_WINDOW);
 
-/** Kafel po zaplanowaniu: termin i chwila, do której można anulować, a po anulowaniu stan rozsyłki. */
+/** Kafel po zaplanowaniu: godzina terminu, a w podpisie dzień i chwila, do której można anulować; po anulowaniu stan rozsyłki. */
 export const scheduledTile = (schedule, cancelled) => (cancelled ? tile('Rozsyłka', 'anulowana', 'przed przekazaniem do Multiinfo')
-  : tile('Zaplanowana na', stamp(schedule.startAt), `anulowanie do ${clock(schedule.handoverAt)}`));
+  : tile('Zaplanowana na', clock(schedule.startAt), `${stamp(schedule.startAt).slice(0, 10)}, anulowanie do ${clock(schedule.handoverAt)}`));
 
 /** Sekcja po zaplanowaniu rozsyłki: termin i przycisk anulowania, który działa do chwili przekazania do Multiinfo. */
 export function scheduledSection(sent, state) {
@@ -54,12 +54,15 @@ export function scheduledSection(sent, state) {
     + buttons(button('Anuluj rozsyłkę', { act: 'cancel-package', kind: 'danger', disabled: state.busy === true })) + repeated);
 }
 
-/** Anulowanie zaplanowanej rozsyłki z widoku wysyłki albo grupy; `s.cancelled` po skutecznym anulowaniu. */
+/**
+ * Anulowanie zaplanowanej rozsyłki z widoku wysyłki albo grupy; `s.cancelled` po skutecznym anulowaniu. Anulowanie
+ * pokazuje sekcja „Wysyłka”, dlatego komunikat zostaje pusty i nie powtarza wyniku narzędzia.
+ */
 export async function cancelScheduled(bridge, say, s) {
   const result = await bridge.callTool('cancel_package', { id: s.sent.id });
   if (result.isError) return say('fail', textOf(result));
   s.cancelled = true;
-  return say('ok', textOf(result));
+  return say('plain', '');
 }
 
 /** Kafel ochrony przed burzą: ile odbiorców zostało w oknie, a bez limitu odbiorców „bez limitu”. */
@@ -102,10 +105,10 @@ function settings(p, locked) {
   const service = (s) => (s.label === s.id ? s.id : `${s.label} (${s.id})`);
   const services = p.services.some((s) => s.id === p.serviceId) ? p.services : [...p.services, { id: p.serviceId, label: p.serviceId }];
   return section('Ustawienia wysyłki', fields(
-    p.schedule ? scheduleField(p.schedule) : '',
     field('Nadawca', select('orig', p.senders.map((s) => option(s.value ?? '', s.label, s.value === p.orig)), locked),
       p.orig === null ? 'Integracja, klucz i konto nie określają nadpisu domyślnego, dlatego SMS zostanie wysłany z numeru usługi, a odbiorca będzie mógł odpowiedzieć' : ''),
     field('Usługa Multiinfo', select('service', services.map((s) => option(s.id, service(s), s.id === p.serviceId)), locked)),
+    p.schedule ? scheduleField(p.schedule) : '',
     encodingField(p, locked),
     ...linkFields(p, locked),
   ));
