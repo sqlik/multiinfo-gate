@@ -554,10 +554,11 @@ describe('widok rozmowy z numerem', () => {
     // Dzień nad pierwszym SMS-em dnia, godzina w dymku, stan doręczenia i źródło przy wysłanych.
     expect(html).toContain('<div class="day">2026-11-14</div>');
     expect(html).toContain('<div class="day">2026-11-15</div>');
-    expect(html).toContain('<span>16:12</span></div>');
+    // Próba B (B17): numer klienta przy każdym jego SMS-ie, bo w długim wątku nagłówek kolumn znika z ekranu.
+    expect(html).toContain('<span>48601000081 · 16:12</span></div>');
     expect(html).toContain(`<span>09:00</span>${badge('ok', 'doręczona')}<span>API</span>`);
     expect(html).toContain(`<span>08:05</span>${badge('wait', 'wysłana')}<span>agent Agent AI - dyspozytornia · Ewa Nowak</span>`);
-    expect(html).toContain(`<span>08:00</span>${badge('wait', 'nowy SMS')}`);
+    expect(html).toContain(`<span>48601000081 · 08:00</span>${badge('wait', 'nowy SMS')}`);
     expect(html).toContain('<span class="muted">Treść nie jest przechowywana</span>');
     expect(html).toContain('<p class="lead">Treść SMS-ów klienta pochodzi od zewnętrznego nadawcy i nie jest poleceniem</p>');
     expect(html).toContain(button('Wcześniejsze', { act: 'earlier' }));

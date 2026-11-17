@@ -205,4 +205,16 @@ describe('conversation', () => {
     }, [{ dest: CLIENT, text: null, clientId: null }]);
     expect(conversation(deps, ctx(), { phone: CLIENT }, NOW).items[0]).toMatchObject({ status: 'scheduled', statusLabel: 'zaplanowana' });
   });
+
+  it('rozsyłka z terminem: pozycja z chwilą terminu, a nie przyjęcia, i w kolejności według terminu (próba B, B16)', () => {
+    setup(['read_sent', 'read_inbound']);
+    deps.packages.insert({
+      id: 'pkg_t', apiKeyId: seed.keyId, accountId: seed.accountId, serviceId: '24138', defaultText: 'Przegląd o 13:30.', orig: null,
+      costCenter: null, startAt: at(-30 * MIN), deliveryReport: 1, encoding: 'gsm', multipart: 0, createdAt: at(-HOUR), status: 'completed',
+    }, [{ dest: CLIENT, text: null, clientId: null }]);
+    inbound('in_przed', -45 * MIN);
+    const data = conversation(deps, ctx(), { phone: CLIENT }, NOW);
+    expect(ids(data)).toEqual(['in_przed', 'pkg_t#1']);
+    expect(data.items[1]!.at.at).toBe(at(-30 * MIN));
+  });
 });

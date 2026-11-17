@@ -54,12 +54,13 @@ export function watchConversation(bridge, win, args, handlers, now = () => Date.
   return () => { stopped = true; };
 }
 
-/** Dymek SMS-a: treść jako tekst, godzina, a przy wysłanych stan doręczenia i źródło. */
-function bubble(item, fresh) {
+/** Dymek SMS-a: treść jako tekst, godzina, przy SMS-ach klienta jego numer, a przy wysłanych stan doręczenia i źródło. */
+function bubble(item, fresh, phone) {
   const isNew = item.kind === 'in' && fresh.has(item.id);
   const text = !item.stored ? '<span class="muted">Treść nie jest przechowywana</span>'
     : item.text === null ? '<span class="muted">SMS bez treści tekstowej</span>' : esc(item.text);
-  const meta = [`<span>${esc(stamp(item.at.at).slice(11))}</span>`];
+  const time = stamp(item.at.at).slice(11);
+  const meta = [`<span>${esc(item.kind === 'in' ? `${phoneLabel(phone)} · ${time}` : time)}</span>`];
   if (item.kind === 'out') meta.push(badge(STATE_TONE[item.status] ?? 'wait', item.statusLabel ?? item.status), `<span>${esc(item.source)}</span>`);
   if (isNew) meta.push(badge('wait', 'nowy SMS'));
   return `<div class="bub ${item.kind === 'in' ? 'in' : 'out'}${isNew ? ' new' : ''}"${item.kind === 'in' ? ` title="${EXTERNAL_TITLE}"` : ''}>`
@@ -67,7 +68,7 @@ function bubble(item, fresh) {
 }
 
 /** SMS-y według czasu, z dniem nad pierwszym SMS-em każdego dnia. */
-function chat(items, fresh) {
+function chat(items, fresh, phone) {
   let day = null;
   const rows = [];
   for (const item of items) {
@@ -76,7 +77,7 @@ function chat(items, fresh) {
       rows.push(`<div class="day">${esc(d)}</div>`);
       day = d;
     }
-    rows.push(bubble(item, fresh));
+    rows.push(bubble(item, fresh, phone));
   }
   return `<div class="chat">${rows.join('')}</div>`;
 }
@@ -104,7 +105,7 @@ function draftSection(draft, state) {
 export function renderConversation(d, state = {}) {
   const fresh = state.fresh ?? new Set();
   const busy = state.busy === true;
-  const list = d.items.length === 0 ? note('Bramka nie znalazła SMS-ów w rozmowie z tym numerem w ostatnich 30 dniach') : chat(d.items, fresh);
+  const list = d.items.length === 0 ? note('Bramka nie znalazła SMS-ów w rozmowie z tym numerem w ostatnich 30 dniach') : chat(d.items, fresh, d.phone);
   const narrowed = d.sent === 'replies'
     ? note('Z wysłanych wiadomości widok pokazuje wyłącznie odpowiedzi i wysyłkę, na którą odpowiada pierwszy SMS klienta. '
       + 'Pozostałe wysłane wiadomości wymagają uprawnienia „Odczyt wysłanych”.') : '';

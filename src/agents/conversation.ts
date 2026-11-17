@@ -53,7 +53,8 @@ function recipientItem(deps: ReadDeps, p: PackageRow, r: RecipientRow): Conversa
   const state = r.status === null && PACKAGE_STATE.has(p.status)
     ? { status: p.status, statusLabel: packageStatusLabel(p.status) }
     : recipientState(r, p.reportStatus === 'ready');
-  return { kind: 'out', id: `${p.id}#${r.seq}`, at: stamp(p.createdAt), text, stored: text !== null, ...state, source: sourceLabel(deps, p), packageId: p.id };
+  // Rozsyłka z terminem trafia do klienta o terminie, dlatego rozmowa pokazuje i układa ją według terminu (próba B, B16).
+  return { kind: 'out', id: `${p.id}#${r.seq}`, at: stamp(p.startAt ?? p.createdAt), text, stored: text !== null, ...state, source: sourceLabel(deps, p), packageId: p.id };
 }
 
 /** Numer rozmowy z wejścia: nadawca odebranego SMS-a albo podany numer; oba muszą wskazywać ten sam numer. */
