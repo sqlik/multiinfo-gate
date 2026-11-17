@@ -226,13 +226,14 @@ describe('cancelPackage', () => {
     const id = await schedule();
     const stale = deps.packages.get(id)!;
     deps.packages.beginHandover(id);
-    expect(() => cancelPackage(deps, stale, NOW, { actor: 'admin' })).toThrow(PASSED);
+    expect(() => cancelPackage(deps, stale, NOW, { actor: 'admin' })).toThrow(notCancellableMessage('queued'));
     expect(packageWebhooks()).toEqual([]);
     expect(deps.audit.list(10, 0)).toEqual([]);
   });
 
-  it('opis stanu: przekazana dla queued, open i sending, ostateczny dla completed i failed', () => {
-    for (const s of ['queued', 'open', 'sending'] as const) expect(notCancellableMessage(s)).toBe(PASSED);
+  it('opis stanu: przekazywana dla queued, przekazana dla open i sending, ostateczny dla completed i failed', () => {
+    expect(notCancellableMessage('queued')).toBe('Bramka przekazuje rozsyłkę do Multiinfo, dlatego nie można jej już anulować.');
+    for (const s of ['open', 'sending'] as const) expect(notCancellableMessage(s)).toBe(PASSED);
     expect(notCancellableMessage('completed')).toBe('Rozsyłka została już zakończona, dlatego nie można jej anulować.');
     expect(notCancellableMessage('failed')).toBe('Rozsyłka zakończyła się błędem, dlatego nie można jej anulować.');
   });

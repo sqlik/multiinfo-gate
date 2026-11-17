@@ -1619,7 +1619,7 @@ swoje integracje z Power Automate, tak jak odczytuje je wywołaniem z rozdziału
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|
 | 404 | `package_not_found` | brak rozsyłki albo rozsyłka innego klucza | sprawdzić identyfikator |
-| 409 | `package_not_cancellable` | rozsyłka została już przekazana do Multiinfo albo zakończona; `message` opisuje stan, na przykład „Rozsyłka została już przekazana do Multiinfo, które nie pozwala jej anulować.” | anulowanie nie jest możliwe |
+| 409 | `package_not_cancellable` | bramka przekazuje rozsyłkę do Multiinfo, rozsyłka została już przekazana albo zakończona; `message` opisuje stan, na przykład „Rozsyłka została już przekazana do Multiinfo, które nie pozwala jej anulować.” | anulowanie nie jest możliwe |
 | 429 | `rate_limited` | przekroczony limit żądań na minutę | odczekać minutę |
 
 ## 5a. Wiadomości przychodzące
@@ -3044,7 +3044,7 @@ użytkownikowi końcowemu.
 | 404 | `message_not_found`, `package_not_found`, `inbound_not_found`, `integration_not_found`, `campaign_not_found` | brak obiektu albo obiekt innego klucza | sprawdzić identyfikator |
 | 409 | `idempotency_conflict` | ten sam `Idempotency-Key` z inną treścią, numerem albo rozsyłką, a także klucz użyty wcześniej w innej integracji | użyć nowego klucza idempotencji |
 | 409 | `already_final`, `already_passed` | anulowanie niemożliwe (4.3) | brak |
-| 409 | `package_not_cancellable` | rozsyłka przekazana do Multiinfo albo zakończona, dlatego anulowanie nie jest możliwe (5.5) | brak |
+| 409 | `package_not_cancellable` | rozsyłka przekazywana albo przekazana do Multiinfo lub zakończona, dlatego anulowanie nie jest możliwe (5.5) | brak |
 | 409 | `integration_disabled`, `group_empty` | integracja z Power Automate wyłączona w panelu albo bez odbiorców grupy (5b.6) | poprosić administratora o włączenie integracji albo uzupełnienie listy |
 | 409 | `package_not_completed`, `report_not_ready` | raport rozsyłki jeszcze niedostępny albo rozsyłka anulowana | powtórzyć po minucie, przy anulowanej rozsyłce zrezygnować z raportu |
 | 413 | `body_too_large` | body przekracza 512 KB, a przy utworzeniu rozsyłki 4 MB | zmniejszyć body albo podzielić rozsyłkę |

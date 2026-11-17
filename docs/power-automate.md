@@ -482,8 +482,9 @@ samej rozsyłki zwraca ten sam wynik. W panelu bramki rozsyłka otrzymuje stan �
 
 Jeżeli wynik jest inny:
 
-- **Błąd `409` z kodem `package_not_cancellable`.** Bramka przekazała już rozsyłkę do Multiinfo, które
-  nie pozwala jej anulować, albo rozsyłka została zakończona. Komunikat opisuje stan rozsyłki
+- **Błąd `409` z kodem `package_not_cancellable`.** Bramka przekazuje albo przekazała już rozsyłkę
+  do Multiinfo, które nie pozwala jej anulować, albo rozsyłka została zakończona. Komunikat opisuje
+  stan rozsyłki
 - **Błąd `404` z kodem `package_not_found`.** Identyfikator wskazuje rozsyłkę innego klucza albo zawiera
   błąd
 
@@ -613,7 +614,7 @@ kodów wraz z ich znaczeniem znajdziesz w rozdziale 5b.6 [API](api.md).
 | błąd `403` z kodem `service_not_allowed` albo `orig_not_allowed` | usługa albo nadpis integracji wykracza poza uprawnienia klucza | poprosić administratora o korektę integracji albo uprawnień klucza |
 | błąd `403` z kodem `integrations_only_key` w akcji HTTP | klucz z opcją **Tylko integracje** nie pozwala wysyłać przez API z pominięciem integracji | użyć akcji konektora zamiast akcji HTTP |
 | błąd `400` z kodem `start_at_too_far` | pole **Początek wysyłki** przypada później niż 30 dni od chwili wysyłki | wybrać bliższy termin |
-| błąd `409` z kodem `package_not_cancellable` w akcji „Anuluj rozsyłkę” | rozsyłka została już przekazana do Multiinfo albo zakończona | brak, Multiinfo nie pozwala anulować przekazanej rozsyłki (rozdział 8.4) |
+| błąd `409` z kodem `package_not_cancellable` w akcji „Anuluj rozsyłkę” | bramka przekazuje albo przekazała już rozsyłkę do Multiinfo, które nie pozwala jej anulować, albo rozsyłka została zakończona | sprawdzić stan rozsyłki akcją „Sprawdź stan rozsyłki” według rozdziału 8.3 |
 | błąd `409` z kodem `idempotency_conflict` | ten sam klucz idempotencji użyto wcześniej z innymi danymi albo w innej integracji | podać inny klucz idempotencji |
 | akcja jest ponawiana przez kilka minut i kończy się błędem `429` z kodem `integration_throttled` | przekroczono limit wywołań albo limit odbiorców ochrony przed burzą integracji | postąpić zgodnie z rozdziałem 10.2 |
 | błąd `429` z kodem `rate_limited` | przekroczono limit żądań klucza na minutę | zastąpić pętlę rozsyłką albo poprosić administratora o podniesienie limitu klucza |

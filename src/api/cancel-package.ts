@@ -28,6 +28,8 @@ const PASSED = 'Rozsyłka została już przekazana do Multiinfo, które nie pozw
 export function notCancellableMessage(status: PackageStatus): string {
   if (status === 'completed') return 'Rozsyłka została już zakończona, dlatego nie można jej anulować.';
   if (status === 'failed') return 'Rozsyłka zakończyła się błędem, dlatego nie można jej anulować.';
+  // Stan `queued` chroni żądanie w toku, także gdy zadanie przekazania czeka na wstrzymane konto.
+  if (status === 'queued') return 'Bramka przekazuje rozsyłkę do Multiinfo, dlatego nie można jej już anulować.';
   return PASSED;
 }
 
