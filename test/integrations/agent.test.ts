@@ -3,7 +3,7 @@ import type { Database } from 'better-sqlite3';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConnectionContext } from '../../src/agents/connections.ts';
 import {
-  AgentError, DRAFT_TTL_MS, guardLeft, prepareReplies, prepareSms, sendDraft, senderOptions, type AgentDeps, type PrepareSmsInput,
+  AgentError, DRAFT_TTL_MS, guardLeft, prepareReplies, prepareSms, scheduleOf, sendDraft, senderOptions, type AgentDeps, type PrepareSmsInput,
 } from '../../src/integrations/agent.ts';
 import type { AgentScope } from '../../src/integrations/config.ts';
 import { openDatabase } from '../../src/store/db.ts';
@@ -286,6 +286,22 @@ describe('wysyłka z terminem', () => {
     });
     expect(sms({ startAt: '2026-12-15 10:00' }).preview.schedule).toEqual({ startAt: '2026-12-15T09:00:00.000Z', handoverAt: '2026-12-15T08:50:00.000Z' });
     expect(count('agent_drafts')).toBe(1);
+  });
+
+  it('nieczytelny startAt: błąd z przykładem daty z godziną, który bramka przyjmuje', () => {
+    expect(agentError(() => sms({ startAt: '20.11.2026 8:00' }))).toMatchObject({
+      code: 'invalid', message: 'Pole startAt musi być datą z godziną, na przykład 2026-11-20 08:00 w czasie polskim.',
+    });
+    expect(sms({ startAt: '2026-11-20 08:00' }).preview.schedule).not.toBeNull();
+  });
+
+  it('termin dokładnie 30 dni naprzód w czasie polskim przyjęty także przez zmianę czasu, minutę później odrzucony', () => {
+    const autumn = new Date('2026-10-20T08:00:00Z'); // 10:00 czasu letniego, 25.10 zmiana na zimowy
+    expect(scheduleOf('2026-11-19 10:00', autumn)).toMatchObject({ startAt: '2026-11-19T09:00:00.000Z' });
+    expect(agentError(() => scheduleOf('2026-11-19 10:01', autumn))).toMatchObject({ code: 'start_at_too_far' });
+    const spring = new Date('2027-03-10T09:00:00Z'); // 10:00 czasu zimowego, 28.03 zmiana na letni
+    expect(scheduleOf('2027-04-09 10:00', spring)).toMatchObject({ startAt: '2027-04-09T08:00:00.000Z' });
+    expect(scheduleOf('2027-04-09T09:00:00Z', spring)).toMatchObject({ startAt: '2027-04-09T09:00:00.000Z' });
   });
 
   it('send_prepared szkicu z terminem: rozsyłka scheduled z terminem i agent_connection_id, wynik z schedule', () => {

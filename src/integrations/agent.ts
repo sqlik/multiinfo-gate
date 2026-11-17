@@ -134,7 +134,14 @@ export function scheduleOf(raw: string | undefined, now: Date): Schedule | null 
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new AgentError('invalid', 'Termin rozsyłki musi zawierać datę i godzinę, na przykład 2026-11-20 08:00 w czasie polskim.');
   }
-  const at = instant('startAt', value);
+  let at: string;
+  try {
+    at = instant('startAt', value);
+  } catch (e) {
+    // Ogólny przykład odczytu („2026-11-14”) podaje sam dzień, którego termin nie przyjmuje.
+    if (e instanceof AgentError) throw new AgentError('invalid', 'Pole startAt musi być datą z godziną, na przykład 2026-11-20 08:00 w czasie polskim.');
+    throw e;
+  }
   const local = LOCAL_MINUTE.exec(value);
   if (local) {
     const [, y, mo, d, h, mi] = local as unknown as [string, string, string, string, string, string];

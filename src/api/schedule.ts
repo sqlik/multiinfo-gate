@@ -1,3 +1,4 @@
+import { addWarsawDays } from '../time/warsaw.ts';
 import { ApiError } from './errors.ts';
 
 /**
@@ -22,12 +23,16 @@ export function handoverAt(startAt: string, createdAt: string): string {
   return new Date(Math.max(Date.parse(startAt) - HANDOVER_LEAD_MS, Date.parse(createdAt))).toISOString();
 }
 
-/** Termin musi przypadać po chwili przyjęcia i najwyżej `START_AT_MAX_MS` później. */
+/**
+ * Termin musi przypadać po chwili przyjęcia i najwyżej 30 dni później. Granica obejmuje zarówno 30 dób, jak i tę samą
+ * godzinę czasu polskiego po 30 dniach, która przez jesienną zmianę czasu przypada godzinę dalej.
+ */
 export function checkStartAt(startAt: Date, now: Date): void {
   if (startAt.getTime() <= now.getTime()) {
     throw new ApiError(400, 'start_at_in_past', 'Termin rozpoczęcia rozsyłki już minął.');
   }
-  if (startAt.getTime() > now.getTime() + START_AT_MAX_MS) {
+  const limit = Math.max(now.getTime() + START_AT_MAX_MS, addWarsawDays(now, START_AT_MAX_MS / 86_400_000).getTime());
+  if (startAt.getTime() > limit) {
     throw new ApiError(400, 'start_at_too_far', 'Termin rozpoczęcia rozsyłki może przypadać najwyżej 30 dni od chwili wysyłki.');
   }
 }
