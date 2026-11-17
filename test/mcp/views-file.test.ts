@@ -8,6 +8,7 @@ import { FIX_MESSAGE } from '../../src/mcp/views/client/send.js';
 import { analyze, ROWS_MAX, UPLOAD_CHUNK } from '../../src/mcp/views/client/plik-tabela.js';
 import { FILE_LOADED_MESSAGE } from '../../src/mcp/tools/file.ts';
 import { BUILT_VIEWS, viewFiles, viewHtml } from '../../src/mcp/views/index.ts';
+import { makeZipFiles } from '../helpers/zip.ts';
 import { VIEW_STYLE } from '../../src/mcp/views/style.ts';
 
 type Args = { fileId?: string; offset: number; rows: Array<{ line: number; cells: string[] }>; done?: boolean; totalRows?: number; columns?: string[]; name?: string; phoneColumn?: number };
@@ -244,6 +245,23 @@ describe('widok rozsyłki z pliku', () => {
     expect(w.node('plik-nazwa').textContent).toBe('przypomnienia.csv');
     await until(() => w.node('komunikat').textContent.includes('została przekazana aplikacji AI'));
     expect(input.disabled).toBe(false);
+  });
+
+  it('widok: uszkodzony skoroszyt daje komunikat o uszkodzonym pliku, bez tekstu wyjątku i bez rozpoznania', async () => {
+    const zip = new Uint8Array(makeZipFiles({
+      'xl/workbook.xml': '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Listopad" sheetId="1" r:id="rId1"/></sheets></workbook>',
+      'xl/_rels/workbook.xml.rels': '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
+      'xl/worksheets/sheet1.xml': '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Numer</t></is></c></row></sheetData></worksheet>',
+    }));
+    const name = Buffer.from('xl/worksheets/sheet1.xml');
+    const at = Buffer.from(zip).indexOf(name) + name.length;
+    for (let i = at; i < at + 8; i += 1) zip[i] = 0xff;
+    const w = viewWindow(gateway());
+    startFile(w.win, { version: '1.13.0' });
+    w.pick('przypomnienia-listopad.xlsx', zip);
+    await until(() => w.node('komunikat').className === 'notice n-fail');
+    expect(w.node('komunikat').textContent).toBe('Widok nie odczytał skoroszytu, ponieważ plik jest uszkodzony. Zapisz go w Excelu ponownie albo jako „CSV UTF-8”.');
+    expect(w.node('stan').innerHTML).toBe('');
   });
 
   it('widok: plik .xls daje komunikat bez wywołań narzędzi bramki', async () => {

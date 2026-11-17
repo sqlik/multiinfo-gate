@@ -573,7 +573,7 @@ export function startFile(win, env) {
     if (pick !== picks) return undefined;
     const result = await readFileBytes(picked.name, bytes);
     if (pick !== picks) return undefined;
-    if (result.error) return say('fail', result.error);
+    if ('error' in result) return say('fail', result.error);
     s.source = result;
     s.rows = result.rows;
     apply(analyze(s.rows));

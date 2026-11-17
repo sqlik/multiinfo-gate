@@ -2,7 +2,7 @@
 // podział wierszy na porcje przesyłane do bramki.
 
 import { decodeBytes, detectSeparator, parseCsv } from './plik-csv.js';
-import { readSheet, readWorkbook } from './plik-xlsx.js';
+import { BROKEN, readSheet, readWorkbook } from './plik-xlsx.js';
 
 /** Nazwy nagłówka kolumny numeru po złożeniu wielkości liter i polskich znaków. */
 export const PHONE_HEADERS = ['numer', 'telefon', 'tel', 'komorka', 'nr telefonu', 'phone', 'msisdn', 'numer telefonu', 'nr tel', 'telefon komorkowy'];
@@ -133,7 +133,7 @@ export async function readFileBytes(name, bytes) {
       const book = await readWorkbook(bytes);
       return { kind: 'xlsx', book, sheet: 0, rows: readSheet(book, 0) };
     } catch (error) {
-      return { error: error instanceof Error ? error.message : String(error) };
+      return { error: (error instanceof Error && error.message) || BROKEN };
     }
   }
   const { text, encoding } = decodeBytes(bytes);

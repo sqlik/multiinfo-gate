@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatNumber, readSheet, readWorkbook, unzip } from '../../src/mcp/views/client/plik-xlsx.js';
+import { readFileBytes } from '../../src/mcp/views/client/plik-tabela.js';
 import { makeZipFiles } from '../helpers/zip.ts';
 
 const NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
@@ -127,5 +128,16 @@ describe('odczyt XLSX w widoku', () => {
   it('xlsx: archiwum bez skoroszytu albo uszkodzone daje błąd z komunikatem', async () => {
     await expect(readWorkbook(new Uint8Array(makeZipFiles({ 'content.xml': '<office/>' })))).rejects.toThrow('Plik nie jest skoroszytem programu Excel w formacie .xlsx');
     await expect(readWorkbook(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3]))).rejects.toThrow('Widok nie odczytał skoroszytu');
+  });
+
+  it('xlsx: uszkodzone dane deflate arkusza dają polski komunikat o uszkodzonym pliku zamiast błędu rozpakowania', async () => {
+    const zip = xlsx({ sheets: [{ name: 'Listopad', xml: '<row r="1"><c r="A1" t="inlineStr"><is><t>Numer</t></is></c></row><row r="2"><c r="A2"><v>48601000011</v></c></row>' }] });
+    // Dane deflate arkusza zaczynają się po nagłówku lokalnym i nazwie pliku, a plik przerwany przy kopiowaniu ma w tym miejscu inne bajty.
+    const name = Buffer.from('xl/worksheets/sheet1.xml');
+    const at = Buffer.from(zip).indexOf(name) + name.length;
+    for (let i = at; i < at + 8; i += 1) zip[i] = 0xff;
+    const BROKEN = 'Widok nie odczytał skoroszytu, ponieważ plik jest uszkodzony. Zapisz go w Excelu ponownie albo jako „CSV UTF-8”.';
+    await expect(readWorkbook(zip)).rejects.toThrow(BROKEN);
+    await expect(readFileBytes('przypomnienia-listopad.xlsx', zip)).resolves.toEqual({ error: BROKEN });
   });
 });

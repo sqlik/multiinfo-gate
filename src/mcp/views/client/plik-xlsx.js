@@ -4,7 +4,7 @@
 // więcej pamięci niż odczyt kolejnych znaczników.
 
 const NOT_WORKBOOK = 'Plik nie jest skoroszytem programu Excel w formacie .xlsx. Zapisz go w Excelu jako „Skoroszyt programu Excel (.xlsx)” albo „CSV UTF-8”.';
-const BROKEN = 'Widok nie odczytał skoroszytu, ponieważ plik jest uszkodzony. Zapisz go w Excelu ponownie albo jako „CSV UTF-8”.';
+export const BROKEN = 'Widok nie odczytał skoroszytu, ponieważ plik jest uszkodzony. Zapisz go w Excelu ponownie albo jako „CSV UTF-8”.';
 const NO_INFLATE = 'Przeglądarka nie odczytuje skoroszytów .xlsx w widoku. Zapisz plik w Excelu jako „CSV UTF-8” i wybierz go ponownie.';
 
 /** Największa łączna wielkość rozpakowanych plików XML skoroszytu. */
@@ -13,14 +13,23 @@ const UNZIPPED_MAX = 300 * 1024 * 1024;
 const u16 = (b, at) => b[at] | (b[at + 1] << 8);
 const u32 = (b, at) => (b[at] | (b[at + 1] << 8) | (b[at + 2] << 16) | (b[at + 3] << 24)) >>> 0;
 
-/** Rozpakowanie metodą deflate przez DecompressionStream, z przerwaniem po przekroczeniu zadeklarowanej wielkości. */
+/**
+ * Rozpakowanie metodą deflate przez DecompressionStream, z przerwaniem po przekroczeniu zadeklarowanej wielkości.
+ * Błąd rozpakowania, w przeglądarce opisany po angielsku, czytnik zamienia na komunikat o uszkodzonym pliku.
+ */
 async function inflate(data, size) {
   if (typeof DecompressionStream !== 'function') throw new Error(NO_INFLATE);
   const reader = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
   const out = new Uint8Array(size);
   let at = 0;
   for (;;) {
-    const { done, value } = await reader.read();
+    let chunk;
+    try {
+      chunk = await reader.read();
+    } catch {
+      throw new Error(BROKEN);
+    }
+    const { done, value } = chunk;
     if (done) break;
     if (at + value.length > size) {
       await reader.cancel();
