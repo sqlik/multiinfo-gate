@@ -1613,8 +1613,9 @@ Ponowne anulowanie rozsyłki już anulowanej zwraca ten sam wynik. Anulowanie wy
 anulowanej rozsyłki prowadzą od tej chwili do strony „Link wygasł”. Na koncie bez przechowywania treści
 wiadomości bramka usuwa treści rozsyłki. Dziennik zdarzeń panelu odnotowuje anulowanie z nazwą klucza.
 
-Klucz anuluje wyłącznie własne rozsyłki. Klucz z opcją „Tylko integracje” anuluje rozsyłki zlecone przez
-swoje integracje z Power Automate, tak jak odczytuje je wywołaniem z rozdziału 5.2.
+Klucz anuluje wyłącznie własne rozsyłki, czyli zlecone z jego użyciem przez API, integracje z Power
+Automate albo agentów AI. Klucz z opcją „Tylko integracje” anuluje każdą rozsyłkę swoich integracji,
+także rozsyłkę zaplanowaną przez agenta AI.
 
 | HTTP | `error.code` | Przyczyna | Postępowanie |
 |---|---|---|---|

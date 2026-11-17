@@ -131,8 +131,8 @@ export function registerPackageRoutes(app: FastifyInstance, deps: ApiDeps): void
   const owned = (id: string, authorization: string | undefined): PackageRow => ownedBy(authenticate(authorization, deps.apiKeys), id);
 
   /**
-   * Anulowanie rozsyłki przechowywanej przez bramkę. Klucz wyłącznie dla integracji anuluje rozsyłki swoich
-   * integracji, tak jak odczytuje je trasą `GET`.
+   * Anulowanie rozsyłki przechowywanej przez bramkę. Klucz wyłącznie dla integracji anuluje każdą rozsyłkę swoich
+   * integracji, także zaplanowaną przez agenta AI, tak jak odczytuje je trasą `GET` (spec 4.5).
    */
   app.post<{ Params: { id: string } }>('/v1/packages/:id/cancel', async (request) => {
     const auth = authenticate(request.headers.authorization, deps.apiKeys);
