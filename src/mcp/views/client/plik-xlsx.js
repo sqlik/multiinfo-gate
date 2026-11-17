@@ -399,7 +399,7 @@ function formatTokens(section) {
       const stop = e < 0 ? section.length : e;
       const inner = section.slice(i + 1, stop);
       if (inner[0] === '$') tokens.push({ kind: 'lit', text: inner.slice(1).split('-')[0] });
-      else if (/^(h+|m+|s+)$/i.test(inner)) tokens.push({ kind: 'time', text: inner.toLowerCase()[0] });
+      else if (/^(h+|m+|s+)$/i.test(inner)) tokens.push({ kind: 'time', text: inner.toLowerCase()[0], elapsed: inner.length });
       i = stop;
     } else if (/^(AM\/PM|A\/P)/i.test(section.slice(i))) {
       tokens.push({ kind: 'time', text: 'h' });
@@ -421,7 +421,12 @@ function describeSection(section) {
   const hasTime = tokens.some((t) => t.kind === 'time');
   const hasDate = tokens.some((t) => t.kind === 'date' && t.text !== 'm') || (tokens.some((t) => t.text === 'm') && !hasTime);
   if (hasDate || hasTime) {
-    return { kind: 'date', date: hasDate, time: hasTime, seconds: tokens.some((t) => t.text === 's') };
+    // Czas trwania w nawiasach, na przykład [h]:mm, liczy jednostki od zera ponad dobę albo godzinę.
+    const elapsed = tokens.find((t) => t.elapsed);
+    return {
+      kind: 'date', date: hasDate, time: hasTime, hours: tokens.some((t) => t.kind === 'time' && t.text === 'h'),
+      seconds: tokens.some((t) => t.text === 's'), elapsed: elapsed ? { unit: elapsed.text, width: elapsed.elapsed } : null,
+    };
   }
   if (tokens.some((t) => t.kind === 'other' || t.kind === 'date')) return { kind: 'general' };
   const first = tokens.findIndex((t) => t.kind === 'num');
@@ -498,13 +503,26 @@ function formatDecimal(value, f) {
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
-/** Liczba seryjna daty Excela jako „30.11.2026”, „30.11.2026 14:00” albo „14:00”. */
+/** Czas trwania w sekundach według formatu [h]:mm, [h]:mm:ss, [mm]:ss albo [ss]: „36:00”, „90:00”. */
+function formatElapsed(total, f) {
+  const { unit, width } = f.elapsed;
+  const lead = (n) => String(n).padStart(width, '0');
+  const sec = f.seconds && unit !== 's' ? `:${pad2(total % 60)}` : '';
+  if (unit === 'h') return `${lead(Math.floor(total / 3600))}:${pad2(Math.floor((total % 3600) / 60))}${sec}`;
+  if (unit === 'm') return `${lead(Math.floor(total / 60))}${sec}`;
+  return lead(total);
+}
+
+/** Liczba seryjna daty Excela jako „30.11.2026”, „30.11.2026 14:00”, „14:00”, „15:07” w formacie mm:ss albo czas trwania. */
 function formatDate(value, f, date1904) {
   if (value < 0 || value > 2958465) return null;
+  const total = Math.round(value * 86400);
+  if (f.elapsed && !f.date) return formatElapsed(total, f);
   const base = date1904 ? Date.UTC(1904, 0, 1) : Date.UTC(1899, 11, 30);
-  const d = new Date(base + Math.round(value * 86400) * 1000);
+  const d = new Date(base + total * 1000);
   const date = `${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth() + 1)}.${d.getUTCFullYear()}`;
-  const time = `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}${f.seconds ? `:${pad2(d.getUTCSeconds())}` : ''}`;
+  const time = !f.hours && f.seconds ? `${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}`
+    : `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}${f.seconds ? `:${pad2(d.getUTCSeconds())}` : ''}`;
   if (f.date && f.time) return `${date} ${time}`;
   return f.date ? date : time;
 }

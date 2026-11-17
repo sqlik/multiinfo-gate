@@ -104,6 +104,17 @@ describe('odczyt XLSX w widoku', () => {
     expect(formatNumber('tekst', '0.00', false)).toBe('tekst');
   });
 
+  it('formatNumber: czas trwania [h]:mm ponad dobę, minuty i sekundy mm:ss, [mm]:ss i [h]:mm:ss jak w Excelu', () => {
+    expect(formatNumber(1.5, '[h]:mm', false)).toBe('36:00');
+    expect(formatNumber(1.5, '[hh]:mm', true)).toBe('36:00');
+    expect(formatNumber(1 / 16, '[h]:mm', false)).toBe('1:30');
+    expect(formatNumber(1.5 + 30 / 86400, '[h]:mm:ss', false)).toBe('36:00:30');
+    expect(formatNumber(1.5 / 24, '[mm]:ss', false)).toBe('90:00');
+    expect(formatNumber(15 / 1440, 'mm:ss', false)).toBe('15:00');
+    expect(formatNumber(15 / 1440 + 7 / 86400, 'mm:ss', false)).toBe('15:07');
+    expect(formatNumber(0.5, 'hh:mm', false)).toBe('12:00');
+  });
+
   it('xlsx: dwa arkusze, lista nazw, odczyt drugiego; metoda store i deflate', async () => {
     const book: Book = {
       strings: ['<si><t>Numer</t></si>'],
