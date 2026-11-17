@@ -122,6 +122,8 @@ function prepare(job: Job, deps: WorkerDeps, now: Date, log: Logger): { pkg: Pac
   }
   if (account.active === 0) {
     if (FINAL_STATUSES.has(pkg.status)) deps.jobs.complete(job.id);
+    // Rozsyłka po „Wyślij teraz” była zaplanowana, dlatego czeka na włączenie konta tak jak przed terminem.
+    else if (job.payload.sendNow === true) deps.jobs.defer(job.id, new Date(now.getTime() + PAUSED_RECHECK_MS), 'Konto jest wyłączone.');
     else fail(deps, job, pkg, null, 'Konto jest wyłączone.', now, log);
     return null;
   }
@@ -276,6 +278,10 @@ export async function handlePackageCreate(job: Job, deps: WorkerDeps, now: Date)
   if (job.payload.sendNow === true) {
     const reason = cancelReason(deps, pkg, now);
     if (reason !== null) {
+      // Rozsyłka nie trafi do Multiinfo, dlatego jak przy anulowaniu krótkie linki prowadzą do strony „Link wygasł”,
+      // a konto bez przechowywania treści ich nie zostawia.
+      deps.links?.shortLinks.disablePackage(pkg.id, now);
+      if (storeContent === 0) deps.packages.clearTexts(pkg.id);
       fail(deps, job, pkg, null, reason, now, log);
       return;
     }

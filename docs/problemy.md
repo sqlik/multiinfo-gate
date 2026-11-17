@@ -421,8 +421,11 @@ Jeżeli wynik jest inny:
   podaje przyczynę. Przywróć uprawnienia klucza, a następnie zleć rozsyłkę ponownie
 - **Panel prosi o włączenie integracji.** Integracja, która zleciła rozsyłkę, jest nadal wyłączona.
   Włącz ją albo anuluj rozsyłkę
-- **Rozsyłka pozostaje w stanie „w kolejce”.** Konto Multiinfo jest nadal wstrzymane albo wyłączone.
-  Bramka przekaże rozsyłkę po wznowieniu konta
+- **Panel prosi o wznowienie albo włączenie konta.** Konto Multiinfo, z którego bramka wysyła
+  rozsyłkę, jest wstrzymane albo wyłączone. Wznów albo włącz konto, a następnie ponownie kliknij
+  **Wyślij teraz**. Możesz także anulować rozsyłkę
+- **Rozsyłka pozostaje w stanie „w kolejce”.** Konto Multiinfo zostało wstrzymane albo wyłączone
+  już po decyzji administratora. Bramka przekaże rozsyłkę po wznowieniu konta
 
 ## Wersja Node.js bez poprawek bezpieczeństwa {#wersja-node}
 

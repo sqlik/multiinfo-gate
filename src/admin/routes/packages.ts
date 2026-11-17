@@ -132,6 +132,14 @@ export function registerPackageViewRoutes(app: FastifyInstance, deps: AdminDeps,
         render.flash(request, 'warn', `Integracja ${integration.name}, która zleciła rozsyłkę, jest wyłączona. Należy ją włączyć albo anulować rozsyłkę.`);
         return reply.redirect(back, 302);
       }
+      // Konto wstrzymane albo wyłączone zatrzymałoby rozsyłkę w stanie `queued`, którego nie można anulować,
+      // a SMS z nieaktualną treścią wyszedłby po wznowieniu konta, choćby po kilku dniach.
+      const account = deps.accounts.get(row.accountId);
+      if (account && (account.pausedReason !== null || account.active === 0)) {
+        const [state, action] = account.pausedReason !== null ? ['wstrzymane', 'wznowić'] : ['wyłączone', 'włączyć'];
+        render.flash(request, 'warn', `Konto Multiinfo ${account.name}, z którego bramka wysyła rozsyłkę, jest ${state}. Należy je ${action} albo anulować rozsyłkę.`);
+        return reply.redirect(back, 302);
+      }
     }
     const done = row.status === 'overdue' && deps.packages.transaction(() => {
       if (!deps.packages.sendNow(row.id)) return false;

@@ -778,6 +778,37 @@ describe('handlePackageCreate - rozsyłka zaplanowana', () => {
     expect(lastWebhook()).toMatchObject({ event: 'package.completed', id: 'pkg_1', status: 'failed' });
   });
 
+  it('„Wyślij teraz”: klucz odwołany po decyzji na koncie bez przechowywania treści - linki wyłączone, treści usunięte', async () => {
+    const shortLinks = new ShortLinksRepo(db);
+    const campaigns = new CampaignsRepo(db);
+    deps.links = { campaigns, shortLinks };
+    db.prepare('UPDATE accounts SET store_content = 0').run();
+    seed({ startAt: at(-120 * MIN).toISOString(), status: 'queued' });
+    const campaignId = campaigns.open(apiKeyId, 'przypomnienia-listopad', NOW);
+    const domainId = new LinkDomainsRepo(db).create({ domain: 'l.firma.pl', displayName: 'Firma', homeUrl: null, bareLinks: false }, NOW);
+    shortLinks.insert({
+      code: 'aB3xK9q', domainId, apiKeyId, campaignId, target: 'https://firma.pl/faktura/114', utm: 0, recipientKey: 'pkg_1#1',
+      messageId: null, packageId: 'pkg_1', seq: 1, dest: '48601135134', clientId: null, expiresAt: at(30 * 86_400_000).toISOString(),
+      purgeAfter: at(60 * 86_400_000).toISOString(), createdAt: NOW.toISOString(),
+    });
+    const created = job('package.create', 0, { sendNow: true });
+    db.prepare('UPDATE api_keys SET revoked_at = ?').run(NOW.toISOString());
+    await handlePackageCreate(created, deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    expect(deps.packages.get('pkg_1')).toMatchObject({ status: 'failed', defaultText: null });
+    expect(shortLinks.get('aB3xK9q')!.disabledAt).toBe(NOW.toISOString());
+    expect(deps.packages.recipients('pkg_1').map((r) => r.text)).toEqual([null, null]);
+  });
+
+  it('„Wyślij teraz”: konto wyłączone po decyzji administratora - rozsyłka czeka w queued na włączenie konta', async () => {
+    seed({ startAt: at(-120 * MIN).toISOString(), status: 'queued' });
+    db.prepare('UPDATE accounts SET active = 0').run();
+    await handlePackageCreate(job('package.create', 0, { sendNow: true }), deps, NOW);
+    expect(createPackage).not.toHaveBeenCalled();
+    expect(deps.packages.get('pkg_1')!.status).toBe('queued');
+    expect(deps.jobs.claim(at(MIN), 10)).toEqual([expect.objectContaining({ type: 'package.create', lastError: 'Konto jest wyłączone.' })]);
+  });
+
   it('„Wyślij teraz”: klucz nadal obejmuje rozsyłkę - przekazanie bez terminu po stronie Multiinfo', async () => {
     createPackage.mockResolvedValue('14');
     seed({ startAt: at(-120 * MIN).toISOString(), status: 'queued' });

@@ -493,6 +493,28 @@ describe('rozsyłka z terminem przechowywana przez bramkę', () => {
       .toContain('Integracja Dyspozytornia, która zleciła rozsyłkę, jest wyłączona. Należy ją włączyć albo anulować rozsyłkę.');
   });
 
+  it('POST wyslij-teraz przy koncie wstrzymanym: ostrzeżenie, stan overdue bez zmian, bez zadania przekazania', async () => {
+    seedPending('pkg_o', 'overdue');
+    h.accounts.pause(accountId, 'Multiinfo odrzuciło certyfikat bramki (-85).');
+    const res = await post('/rozsylki/pkg_o/wyslij-teraz');
+    expect(res.statusCode).toBe(302);
+    expect(h.packages.get('pkg_o')!.status).toBe('overdue');
+    expect(jobs()).toEqual([]);
+    expect(h.audit.list(10, 0).filter((e) => e.action === 'rozsylka.wyslanie_teraz')).toEqual([]);
+    expect((await page('/rozsylki/pkg_o')).body)
+      .toContain('Konto Multiinfo Firma Info, z którego bramka wysyła rozsyłkę, jest wstrzymane. Należy je wznowić albo anulować rozsyłkę.');
+  });
+
+  it('POST wyslij-teraz przy koncie wyłączonym: ostrzeżenie, stan overdue bez zmian, bez zadania przekazania', async () => {
+    seedPending('pkg_o', 'overdue');
+    h.db.prepare('UPDATE accounts SET active = 0').run();
+    await post('/rozsylki/pkg_o/wyslij-teraz');
+    expect(h.packages.get('pkg_o')!.status).toBe('overdue');
+    expect(jobs()).toEqual([]);
+    expect((await page('/rozsylki/pkg_o')).body)
+      .toContain('Konto Multiinfo Firma Info, z którego bramka wysyła rozsyłkę, jest wyłączone. Należy je włączyć albo anulować rozsyłkę.');
+  });
+
   it('POST wyslij-teraz dla scheduled: ostrzeżenie, stan bez zmian', async () => {
     seedPending('pkg_s', 'scheduled');
     const res = await post('/rozsylki/pkg_s/wyslij-teraz');
