@@ -776,8 +776,9 @@ Lista wierszy wyłączonych jest rozwijana i podaje numer wiersza w pliku, numer
 Przy ustawieniu integracji „skróć i wyślij” bramka skraca zbyt długie wiadomości zamiast je wyłączać,
 a podsumowanie podaje ich liczbę.
 Wiersze z tym samym numerem i tą samą gotową treścią bramka wysyła jeden raz, a podgląd podaje ich liczbę.
-Numer, przy którym plik zawiera różne treści, otrzymuje każdą z nich. Widok ostrzega wtedy o liczbie takich
-numerów i wymienia je na rozwijanej liście.
+Numer, przy którym plik zawiera różne treści, otrzymuje każdą z nich. Każda z tych wiadomości trafia do
+osobnej rozsyłki, ponieważ raport doręczeń Multiinfo wskazuje odbiorcę po numerze. Widok ostrzega o liczbie
+takich numerów i wymienia je na rozwijanej liście.
 
 ### 9.5. Ochrona przed burzą
 

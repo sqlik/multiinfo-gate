@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConnectionContext } from '../../src/agents/connections.ts';
 import { AgentError } from '../../src/integrations/agent.ts';
 import {
-  fileSummary, prepareFileSms, renderTemplate, sendFileDraft, type AgentFileDeps, type FileSmsInput,
+  fileSendStatus, fileSummary, prepareFileSms, renderTemplate, sendFileDraft, type AgentFileDeps, type FileSmsInput,
 } from '../../src/integrations/agent-file.ts';
 import type { AgentConfig } from '../../src/integrations/config.ts';
 import { openDatabase } from '../../src/store/db.ts';
@@ -198,6 +198,39 @@ describe('prepareFileSms', () => {
     expect(preview.duplicates).toBe(1);
     expect(preview.sameNumberDifferentText).toBe(1);
     expect(meta.repeatedNumbers).toEqual([phone(2)]);
+  });
+
+  it('ten sam numer z inną treścią: powtórzenie w osobnej rozsyłce, każda rozsyłka zawiera numer najwyżej raz', () => {
+    upload([row(1, 'Serwis Nowak'), row(2, 'Flota Zachód'), row(1, 'Serwis Nowak FV 12'), row(1, 'Serwis Nowak FV 13'), row(3)]);
+    const { preview, confirm } = prepare();
+    expect(preview).toMatchObject({ recipients: 5, packages: 3 });
+    const outcome = sendFileDraft(deps, ctx(), preview.draftId, NOW, confirm!);
+    const packages = deps.packages.listByFileSend(outcome.id);
+    expect(packages.map((p) => deps.packages.recipients(p.id).map((r) => r.fileLine))).toEqual([[2, 3, 6], [4], [5]]);
+  });
+
+  it('ten sam numer w dwóch wierszach: raport doręczeń przypisuje każdemu wierszowi własny SMS', () => {
+    upload([['48601000011', 'Serwis Nowak', 'FV 11/2026', '30.11.2026'], ['48601000011', 'Serwis Nowak', 'FV 12/2026', '30.11.2026']]);
+    const { preview, confirm } = prepare({ text: 'Przypominamy o fakturze {Kwota} dla {Kontrahent}.' });
+    const outcome = sendFileDraft(deps, ctx(), preview.draftId, NOW, confirm!);
+    let mi = 90000;
+    for (const pkg of deps.packages.listByFileSend(outcome.id)) {
+      deps.packages.setCreated(pkg.id, `mi-${pkg.id}`);
+      deps.packages.setCompleted(pkg.id, NOW);
+      deps.packages.applyReport(pkg.id, deps.packages.recipients(pkg.id).map((r) => {
+        const delivered = r.fileLine === 3;
+        return {
+          miId: String(++mi), dest: r.dest, miStatus: delivered ? 21 : 11, status: delivered ? 'delivered' as const : 'failed' as const,
+          rawStatus: delivered ? '21' : '11', changedAt: '2026-11-15 10:30:00', clientId: null,
+        };
+      }));
+      deps.packages.setReport(pkg.id, { status: 'ready' });
+    }
+    const byLine = new Map(deps.packages.listByFileSend(outcome.id).flatMap((p) => deps.packages.recipients(p.id)).map((r) => [r.fileLine, r]));
+    expect(byLine.get(2)!.status).toBe('failed');
+    expect(byLine.get(3)!.status).toBe('delivered');
+    expect(byLine.get(2)!.miId).not.toBe(byLine.get(3)!.miId);
+    expect(fileSendStatus(deps, ctx(), outcome.id)).toMatchObject({ delivered: 1, failed: 1 });
   });
 
   it('6000 wierszy GSM i 1200 z ł: rozsyłki 5000 GSM, 1000 GSM, 1200 Unicode w kolejności pliku', () => {

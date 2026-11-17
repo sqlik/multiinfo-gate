@@ -264,14 +264,25 @@ const hashOf = (recipients: FileRecipient[]): string =>
 
 /**
  * Rozsyłki po najwyżej 5000 odbiorców, osobno GSM i Unicode, ponieważ Multiinfo stosuje jedno kodowanie do całej
- * rozsyłki. Kolejność rozsyłek według pierwszego odbiorcy w pliku.
+ * rozsyłki. Każda rozsyłka zawiera numer najwyżej raz, a kolejne wystąpienie numeru trafia do następnej warstwy
+ * rozsyłek, ponieważ bramka przypisuje raport doręczeń odbiorcy po numerze. Kolejność rozsyłek według pierwszego
+ * odbiorcy w pliku.
  */
 function packagesOf(recipients: FileRecipient[]): FileRecipient[][] {
   const order = new Map(recipients.map((r, i) => [r, i]));
   const chunks: FileRecipient[][] = [];
   for (const unicode of [false, true]) {
-    const list = recipients.filter((r) => r.unicode === unicode);
-    for (let i = 0; i < list.length; i += PACKAGE_RECIPIENTS_MAX) chunks.push(list.slice(i, i + PACKAGE_RECIPIENTS_MAX));
+    const layers: FileRecipient[][] = [];
+    const seen = new Map<string, number>();
+    for (const r of recipients) {
+      if (r.unicode !== unicode) continue;
+      const layer = seen.get(r.dest) ?? 0;
+      seen.set(r.dest, layer + 1);
+      (layers[layer] ??= []).push(r);
+    }
+    for (const list of layers) {
+      for (let i = 0; i < list.length; i += PACKAGE_RECIPIENTS_MAX) chunks.push(list.slice(i, i + PACKAGE_RECIPIENTS_MAX));
+    }
   }
   return chunks.sort((a, b) => order.get(a[0]!)! - order.get(b[0]!)!);
 }
