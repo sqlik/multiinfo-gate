@@ -34,10 +34,14 @@ export interface PackageStatusData {
   cancellable: boolean;
   /** Rozsyłka wysyłki z pliku: numery i identyfikatory klientów pochodzą z pliku, dlatego widzi je tylko człowiek. */
   hiddenItems: boolean;
+  /** Wysyłka z pliku `fsd_…`, do której należy rozsyłka. */
+  fileSendId: string | null;
 }
 
 export interface PackageListItem {
   id: string; status: PackageStatus; statusLabel: string; recipients: number; created: Stamp; startAt: Stamp | null; source: string;
+  /** Wysyłka z pliku `fsd_…`, do której należy rozsyłka, dla file_send_status, package_report i cancel_package. */
+  fileSendId: string | null;
 }
 
 export interface CampaignResultsData {
@@ -289,6 +293,7 @@ export function packageStatus(deps: ReadDeps, ctx: ConnectionContext, packageId:
     },
     cancellable: (p.status === 'scheduled' || p.status === 'overdue') && (ctx.scopes.has('send') || ctx.scopes.has('send_group')) && ownPackage(deps, ctx, p),
     hiddenItems: p.fileSendId !== null,
+    fileSendId: p.fileSendId,
   };
 }
 
@@ -312,7 +317,7 @@ export function listPackages(
   return {
     items: rows.slice(0, limit).map((p) => ({
       id: p.id, status: p.status, statusLabel: label(p), recipients: p.recipientsCount, created: stamp(p.createdAt),
-      startAt: p.startAt === null ? null : stamp(p.startAt), source: sourceLabel(deps, p),
+      startAt: p.startAt === null ? null : stamp(p.startAt), source: sourceLabel(deps, p), fileSendId: p.fileSendId,
     })),
     hasMore: rows.length > limit,
   };

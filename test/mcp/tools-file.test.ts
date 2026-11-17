@@ -413,6 +413,18 @@ describe('odczyty rozsyłek wysyłki z pliku', () => {
     expect(status._meta).toMatchObject({ items: [{ to: '48601000011', clientId: 'KLI-0011' }, { to: '48601000012', clientId: 'KLI-0012' }] });
   });
 
+  it('list_packages i package_status podają agentowi identyfikator wysyłki z pliku dla file_send_status i cancel_package', async () => {
+    const mcp = await sentFromFile();
+    const fileSendId = (db.prepare('SELECT id FROM file_sends').get() as { id: string }).id;
+    const list = await mcp.call('list_packages', {});
+    expect(list.structuredContent!.items[0]).toMatchObject({ fileSendId });
+    expect(textOf(list)).toContain(`, wysyłka z pliku ${fileSendId}.`);
+    const packageId = (list.structuredContent!.items as Array<{ id: string }>)[0]!.id;
+    const status = await mcp.call('package_status', { packageId });
+    expect(status.structuredContent).toMatchObject({ fileSendId });
+    expect(textOf(status)).toContain(`Rozsyłka należy do wysyłki z pliku ${fileSendId}. Stan całej wysyłki podaje narzędzie file_send_status.`);
+  });
+
   it('campaign_results kampanii z wysyłki z pliku: odbiorcy bez otwarcia i cele linków tylko w _meta dla widoku', async () => {
     const mcp = await sentFromFile();
     const name = ((await mcp.call('list_campaigns', {})).structuredContent!.items as Array<{ name: string }>)[0]!.name;

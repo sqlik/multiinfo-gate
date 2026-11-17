@@ -100,6 +100,7 @@ function packageText(p: PackageStatusData): string {
     lines.push(`Stany według raportu: ${counts(p.report.byStatus)}.`);
     if (p.report.reasons.length > 0) lines.push('Przyczyny niedoręczeń:', ...p.report.reasons.map((r) => `- ${r.description}: ${r.count}`));
   }
+  if (p.fileSendId !== null) lines.push(`Rozsyłka należy do wysyłki z pliku ${p.fileSendId}. Stan całej wysyłki podaje narzędzie file_send_status.`);
   if (p.hiddenItems) {
     lines.push('Rozsyłka pochodzi z wysyłki z pliku, dlatego numery odbiorców widzi wyłącznie pracownik w widoku bramki. '
       + 'Pełną listę zawiera plik z narzędzia package_report.');
@@ -150,7 +151,7 @@ export const listPackagesTool: ToolDef = {
     const lines = data.items.length === 0 ? ['Bramka nie znalazła rozsyłek spełniających warunki.'] : [
       `Rozsyłki na tej stronie: ${data.items.length}.`,
       ...data.items.map((p) => `${p.id}: ${p.statusLabel}, ${plural(p.recipients, 'odbiorca', 'odbiorców', 'odbiorców')}, przyjęta ${p.created.local}`
-        + `${p.startAt === null ? '' : `, termin ${p.startAt.local}`}, źródło: ${p.source}.`),
+        + `${p.startAt === null ? '' : `, termin ${p.startAt.local}`}, źródło: ${p.source}${p.fileSendId === null ? '' : `, wysyłka z pliku ${p.fileSendId}`}.`),
       ...(data.hasMore ? ['Kolejne rozsyłki pokazuje następna strona z większą wartością offset.'] : []),
     ];
     return { text: lines.join('\n'), structured: asRecord(data) };
