@@ -95,9 +95,9 @@ describe('widok wysyłki SMS', () => {
 
   it('renderSend: nadawca, usługa i domena zawsze jako lista wyboru, także z jedną pozycją', () => {
     const html = renderSend({ ...PREVIEW, links: { ...PREVIEW.links, domains: ['l.firma.pl'] } }, {});
-    expect(html).toContain('<select class="sel" name="orig"><option value="" selected>numer usługi Serwis (12345)</option><option value="SERWIS-ABC">SERWIS-ABC</option></select>');
-    expect(html).toContain('<select class="sel" name="service"><option value="12345" selected>Serwis (12345)</option></select>');
-    expect(html).toContain('<select class="sel" name="domain"><option value="l.firma.pl" selected>l.firma.pl</option></select>');
+    expect(html).toContain('<select class="sel" aria-label="Nadawca" name="orig"><option value="" selected>numer usługi Serwis (12345)</option><option value="SERWIS-ABC">SERWIS-ABC</option></select>');
+    expect(html).toContain('<select class="sel" aria-label="Usługa Multiinfo" name="service"><option value="12345" selected>Serwis (12345)</option></select>');
+    expect(html).toContain('<select class="sel" aria-label="Domena linków" name="domain"><option value="l.firma.pl" selected>l.firma.pl</option></select>');
   });
 
   it('renderSend: przełączniki kodowania i skracania w ustawieniach, rozsyłka powyżej 500 odbiorców', () => {
@@ -135,7 +135,7 @@ describe('widok wysyłki SMS', () => {
     const live = renderSend(PREVIEW, { sent: SENT, deliveries: { counts: { delivered: 5, sent: 7 }, done: false } });
     expect(sections(live).at(-1)).toBe('Wysyłka');
     expect(live).not.toContain('data-act="send"');
-    expect(live).toContain('<select class="sel" name="orig" disabled>');
+    expect(live).toContain('<select class="sel" aria-label="Nadawca" name="orig" disabled>');
     expect(live).toContain(tile('Doręczone', '5 z 12', 'stan odświeża się sam', 'ok'));
     expect(live).toContain('<div class="sent">Przyjęto 12 SMS-ów. Doręczone: <b>5</b> z 12 · w drodze 7 · stan odświeża się sam</div>');
     const bare = renderSend(PREVIEW, { sent: SENT, deliveries: { unavailable: true } });
@@ -163,7 +163,7 @@ describe('widok SMS do grupy', () => {
   it('renderGroup: grupa i nadawca jako listy wyboru, nadawca grupy w oknie treści, bez nadpisu numer usługi', () => {
     const own = renderGroup({ ...GROUP, orig: 'SERWIS-ABC' }, []);
     expect(own).toContain('Nadawca na telefonie: <b>SERWIS-ABC</b>');
-    expect(own).toContain('<select class="sel" name="group"><option value="SERWIS" selected>SERWIS</option><option value="FLOTA">FLOTA</option></select>');
+    expect(own).toContain('<select class="sel" aria-label="Grupa" name="group"><option value="SERWIS" selected>SERWIS</option><option value="FLOTA">FLOTA</option></select>');
     expect(own).toContain('<select class="sel" aria-label="Nadawca SMS-a"><option selected>SERWIS-ABC</option></select>');
     expect(own).toContain('Nadawcę i szablon treści określa grupa. Wysyłka nie wymaga potwierdzenia SMS-em zwrotnym.');
     expect(renderGroup(GROUP, [])).toContain('Nadawca na telefonie: <b>numer usługi Serwis (12345)</b>');
@@ -181,7 +181,7 @@ describe('widok SMS do grupy', () => {
     const sent = { kind: 'group', ids: ['msg_1', 'msg_2'], group: 'SERWIS', repeated: false };
     const live = renderGroup(GROUP, [], { sent, deliveries: { counts: { delivered: 1, sent: 1 }, done: false } });
     expect(live).not.toContain('data-act="send"');
-    expect(live).toContain('<select class="sel" name="group" disabled>');
+    expect(live).toContain('<select class="sel" aria-label="Grupa" name="group" disabled>');
     expect(live).toContain('Przyjęto SMS do grupy SERWIS: 2 wiadomości. Doręczone: <b>1</b> z 2 · w drodze 1 · stan odświeża się sam');
     expect(live).toContain(tile('Doręczone', '1 z 2', 'stan odświeża się sam', 'ok'));
     const bare = renderGroup(GROUP, [], { sent, deliveries: { unavailable: true } });

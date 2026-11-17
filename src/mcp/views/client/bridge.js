@@ -55,7 +55,11 @@ export const section = (title, body, lead = '') => `<section class="sec"><h3>${e
 
 /** Pole albo informacja: etykieta nad wartością i opcjonalna podpowiedź pod nią. `control` jest gotowym HTML. */
 export const field = (label, control, hint = '', wide = false) =>
-  `<div class="field${wide ? ' wide' : ''}"><span class="lbl">${esc(label)}</span>${control}${hint ? note(hint) : ''}</div>`;
+  `<div class="field${wide ? ' wide' : ''}"><span class="lbl">${esc(label)}</span>${named(label, control)}${hint ? note(hint) : ''}</div>`;
+
+/** Lista albo pole z etykietą pola jako nazwą dostępną, dzięki czemu czytnik ekranu ogłasza nazwę pola. */
+const named = (label, control) => String(control)
+  .replace(/^<(select|input)( class="[^"]*")?(?![^>]*\baria-label=)/, (_, tag, cls = '') => `<${tag}${cls} aria-label="${esc(label)}"`);
 
 /** Pole w osobnym wierszu na całą szerokość siatki: wartość z podpowiedzią obok pary list wyglądałaby nierówno. */
 export const wideField = (label, control, hint = '') => field(label, control, hint, true);

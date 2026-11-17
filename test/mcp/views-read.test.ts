@@ -376,7 +376,7 @@ describe('widok odpowiedzi klientów', () => {
     const bare = renderReplies(ITEMS, [], null);
     expect(sections(bare)).toEqual(['Odebrane SMS-y: 3']);
     expect(bare).not.toContain('name="group"');
-    expect(bare).toContain('<select class="sel" name="answer">');
+    expect(bare).toContain('<select class="sel" aria-label="Stan odpowiedzi" name="answer">');
   });
 
   it('renderReplies pokazuje treść SMS-a <img src=x onerror=alert(1)> i nazwę grupy z <script> jako tekst', () => {
@@ -412,7 +412,7 @@ describe('widok odpowiedzi klientów', () => {
 
   it('renderReplies: listy wyboru grupy i stanu odpowiedzi filtrują pozycje', () => {
     const all = renderReplies(ITEMS, DRAFTS, null);
-    expect(all).toContain('<select class="sel" name="group"><option value="" selected>wszystkie grupy, 3 SMS-y</option><option value="potwierdzenia">potwierdzenia, 1 SMS</option>');
+    expect(all).toContain('<select class="sel" aria-label="Grupa szkicu" name="group"><option value="" selected>wszystkie grupy, 3 SMS-y</option><option value="potwierdzenia">potwierdzenia, 1 SMS</option>');
     expect(all).toContain('<option value="draft">ze szkicem agenta</option><option value="none">bez odpowiedzi</option><option value="sent">odpowiedź wysłana</option>');
     const group = renderReplies(ITEMS, DRAFTS, 'potwierdzenia');
     expect(items(group)).toHaveLength(1);

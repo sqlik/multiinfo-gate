@@ -165,24 +165,24 @@ describe('widok rozsyłki z pliku', () => {
     expect(html).toContain('<td>&lt;b&gt;99,00 zł&lt;/b&gt;</td>');
     expect(html).toContain('Hurtownia 4');
     expect(html).not.toContain('Hurtownia 5');
-    expect(html).toContain('<select class="sel" id="numer"><option value="0" selected>Numer</option><option value="1">Kontrahent</option>');
+    expect(html).toContain('<select class="sel" aria-label="Kolumna numeru" id="numer"><option value="0" selected>Numer</option><option value="1">Kontrahent</option>');
     // Kolumna numeru wyróżniona w nagłówku tabeli podglądu.
     expect(html).toContain('<tr><th class="ph">Numer</th><th>Kontrahent</th>');
     expect(html).toContain('<input type="checkbox" id="naglowek" checked>');
     expect(html).toContain('Pierwszy wiersz zawiera nazwy kolumn');
     expect(html).toContain('<div class="txt">7</div>');
     expect(html).toContain('<div class="txt">UTF-8</div>');
-    expect(html).toContain('<select class="sel" id="separator"><option value=";" selected>średnik</option><option value="tab">tabulator</option><option value=",">przecinek</option></select>');
+    expect(html).toContain('<select class="sel" aria-label="Separator kolumn" id="separator"><option value=";" selected>średnik</option><option value="tab">tabulator</option><option value=",">przecinek</option></select>');
     expect(html).toContain('<button type="button" class="btn btn-primary" data-act="upload">Przekaż plik do bramki</button>');
   });
 
   it('widok: kolumna numeru do wyboru, arkusze skoroszytu jako lista, limit wierszy wyłącza przekazanie', () => {
     const rows = [{ line: 1, cells: ['Telefon', 'Tel'] }, { line: 2, cells: ['48601000011', '48601000012'] }];
     const html = renderLoaded(loaded(rows, { source: { kind: 'xlsx', sheet: 1, book: { sheets: [{ name: 'Listopad' }, { name: 'Grudzień <b>' }] } } }));
-    expect(html).toContain('<select class="sel" id="numer"><option value="" selected>Wybierz kolumnę z numerami</option><option value="0">Telefon</option><option value="1">Tel</option></select>');
+    expect(html).toContain('<select class="sel" aria-label="Kolumna numeru" id="numer"><option value="" selected>Wybierz kolumnę z numerami</option><option value="0">Telefon</option><option value="1">Tel</option></select>');
     expect(html).toContain('Numery telefonów występują w kilku kolumnach, dlatego wybierz właściwą z listy');
     expect(html).not.toContain('class="ph"');
-    expect(html).toContain('<select class="sel" id="arkusz"><option value="0">Listopad</option><option value="1" selected>Grudzień &lt;b&gt;</option></select>');
+    expect(html).toContain('<select class="sel" aria-label="Arkusz" id="arkusz"><option value="0">Listopad</option><option value="1" selected>Grudzień &lt;b&gt;</option></select>');
     expect(html).toContain('<button type="button" class="btn btn-primary" data-act="upload" disabled>Przekaż plik do bramki</button>');
     const many = Array.from({ length: ROWS_MAX + 1 }, (_, i) => ({ line: i + 2, cells: ['48601000011'] }));
     const over = renderLoaded(loaded([{ line: 1, cells: ['Numer'] }, ...many]));
@@ -310,6 +310,22 @@ describe('widok rozsyłki z pliku', () => {
     expect(html).not.toMatch(/próba A/i);
   });
 
+  it('dostępność: każda lista wyboru rozpoznania pliku i podglądu ma nazwę dostępną z etykiety pola', () => {
+    const named = (html: string) => {
+      const selects = [...html.matchAll(/<select\b[^>]*>/g)].map((m) => m[0]);
+      expect(selects.length).toBeGreaterThan(0);
+      return selects.map((tag) => /\baria-label="([^"]+)"/.exec(tag)?.[1] ?? null);
+    };
+    const table = analyze([{ line: 1, cells: ['Telefon', 'Numer klienta', 'Kontrahent'] }, { line: 2, cells: ['48601000011', '48601000012', 'Hurtownia'] }]);
+    const loadedHtml = renderLoaded({
+      name: 'p.xlsx', table, phoneColumn: null, busy: false, done: false, progress: null,
+      source: { kind: 'xlsx', sheet: 0, book: { sheets: [{ name: 'Listopad' }, { name: 'Grudzień' }] } },
+    });
+    expect(named(loadedHtml)).toEqual(['Kolumna numeru', 'Arkusz']);
+    expect(named(renderLoaded(loaded([{ line: 1, cells: ['Numer'] }, { line: 2, cells: ['48601000011'] }])))).toEqual(['Kolumna numeru', 'Separator kolumn']);
+    expect(named(renderFilePreview(PREVIEW, META, { input: INPUT }))).toEqual(['Nadawca', 'Usługa Multiinfo', 'Kolumna identyfikatora klienta']);
+  });
+
   it('style: pole wyboru pliku i listy wyśrodkowane w pionie, strzałka listy z odstępem, obwódki pól we wszystkich widokach w kolorze akcji', () => {
     expect(VIEW_STYLE).toMatch(/\.pick\{position:relative;display:flex;align-items:center;[^}]*border:1px solid var\(--signal\)/);
     expect(VIEW_STYLE).toMatch(/\.pick:has\(input:disabled\)\{[^}]*border-color:var\(--rule\)/);
@@ -390,10 +406,10 @@ describe('podgląd, wysyłka i postęp rozsyłki z pliku', () => {
     expect(html).toContain('<div class="inbox"><details class="it"><summary><div class="it-top"><b>Lista numerów</b><span class="it-tag">2 numery</span></div></summary>'
       + '<div class="it-body"><p class="nums">48601000015, 48601000016</p></div></details></div>');
     // Usługa, nadawca i plik; kolumna identyfikatora klienta ustawiona według clientIdColumn bez względu na wielkość liter.
-    expect(html).toContain('<select class="sel" name="orig"><option value="FIRMA" selected>FIRMA</option><option value="">numer usługi</option></select>');
+    expect(html).toContain('<select class="sel" aria-label="Nadawca" name="orig"><option value="FIRMA" selected>FIRMA</option><option value="">numer usługi</option></select>');
     expect(html).toContain('<option value="20841" selected>Biuro handlowe (20841)</option>');
     expect(html).toContain('<div class="txt">przypomnienia-listopad.xlsx</div>');
-    expect(html).toContain('<select class="sel" name="clientIdColumn"><option value="">bez identyfikatora</option><option value="Numer">Numer</option>');
+    expect(html).toContain('<select class="sel" aria-label="Kolumna identyfikatora klienta" name="clientIdColumn"><option value="">bez identyfikatora</option><option value="Numer">Numer</option>');
     expect(html).toContain('<option value="Klient" selected>Klient</option>');
     expect(renderFilePreview(PREVIEW, META, { input: { text: TEMPLATE }, sample: 0 })).toContain('<option value="" selected>bez identyfikatora</option>');
     expect(html).not.toContain('Termin rozpoczęcia');
