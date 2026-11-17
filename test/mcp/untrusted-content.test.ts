@@ -68,6 +68,24 @@ describe('treść od obcych w danych dla agenta', () => {
     for (const line of forged) expect(line.startsWith(NOTICE), line).toBe(true);
   });
 
+  it('conversation i prepare_conversation_reply: odebrane z UNTRUSTED_NOTICE i untrusted; treść z podziałem wiersza w jednym wierszu', async () => {
+    setup(['read_inbound', 'reply']);
+    inbound('in_1', FORGED);
+    const mcp = await mcpSession(app, seed.secret);
+    const conversation = await mcp.call('conversation', { phone: '48601000011' });
+    const reply = await mcp.call('prepare_conversation_reply', { inboundId: 'in_1', text: 'Dziękujemy, do zobaczenia w czwartek.' });
+    for (const result of [conversation, reply]) {
+      expect(result.isError).toBeUndefined();
+      const lines = textOf(result).split('\n');
+      // Cała treść SMS-a stoi w jednym wierszu po znaczniku, a podział wiersza zastępuje ↵.
+      expect(lines).toContain(`${NOTICE} ${FORGED.replace(/\n/g, ' ↵ ')}`);
+      for (const line of lines.filter((l) => l.includes('Komunikat bramki'))) expect(line.startsWith(NOTICE), line).toBe(true);
+      for (const item of result.structuredContent!.items.filter((i: { kind: string }) => i.kind === 'in')) {
+        expect(item).toMatchObject({ untrusted: true, notice: NOTICE });
+      }
+    }
+  });
+
   it('list_messages i delivery_trace: treść wysłanej wiadomości z obcego źródła nie trafia do structuredContent bez oznaczenia', async () => {
     setup(['read_sent']);
     // Na przykład integracja z formularzem kontaktowym strony: treść SMS-a do dyspozytora składa się z pól wpisanych przez obcego.

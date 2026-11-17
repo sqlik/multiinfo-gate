@@ -54,6 +54,8 @@ export interface MessageFilter {
   from?: string; until?: string; limit: number; offset: number;
   /** Wiadomości systemowe na liście; domyślnie pominięte. */
   includeSystem?: boolean;
+  /** Wyłącznie odpowiedzi na odebrane SMS-y (`in_reply_to`), na przykład w rozmowie połączenia bez odczytu wysłanych. */
+  replies?: boolean;
 }
 
 export interface StatusPatch {
@@ -142,6 +144,7 @@ function whereOf(filter: Omit<MessageFilter, 'limit' | 'offset'>): { clause: str
     where.push('dest = ?');
     params.push(filter.dest);
   }
+  if (filter.replies === true) where.push('in_reply_to IS NOT NULL');
   if (filter.from !== undefined) {
     where.push('created_at >= ?');
     params.push(filter.from);

@@ -112,7 +112,7 @@ export function instant(name: string, value: string, end = false): string {
 }
 
 /** Numer w dowolnym zapisie do postaci, w jakiej bramka zapisuje odbiorców i nadawców. */
-function phone(ctx: ConnectionContext, raw: string): string {
+export function phone(ctx: ConnectionContext, raw: string): string {
   try {
     return normalizeRecipient(raw, ctx.account.defaultCountryCode);
   } catch (e) {
@@ -204,7 +204,7 @@ function messageEntry(deps: ReadDeps, ctx: ConnectionContext, m: MessageRow): Tr
 }
 
 /** Stan odbiorcy rozsyłki: z raportu, a bez pozycji w raporcie - oczekiwanie na raport albo jego brak. */
-function recipientState(r: RecipientRow, reported: boolean): { status: string; statusLabel: string } {
+export function recipientState(r: RecipientRow, reported: boolean): { status: string; statusLabel: string } {
   if (r.status !== null) return { status: r.status, statusLabel: statusLabel(r.status) };
   return reported ? { status: 'unknown', statusLabel: 'brak w raporcie' } : { status: 'pending', statusLabel: 'czeka na raport' };
 }

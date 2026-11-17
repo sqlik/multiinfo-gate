@@ -8,7 +8,7 @@ import { APP_MIME } from '../apps.ts';
 import { VIEW_STYLE } from './style.ts';
 
 /** Widoki MCP Apps bramki. */
-export type ViewId = 'wysylka' | 'grupa' | 'przebieg' | 'co-moge' | 'kampania' | 'rozsylka' | 'odpowiedzi' | 'plik';
+export type ViewId = 'wysylka' | 'grupa' | 'przebieg' | 'co-moge' | 'kampania' | 'rozsylka' | 'odpowiedzi' | 'plik' | 'rozmowa';
 
 export const viewUri = (id: ViewId): string => `ui://multiinfo-gate/${id}`;
 
@@ -54,6 +54,10 @@ const VIEWS: Partial<Record<ViewId, ViewDef>> = {
   plik: {
     title: 'Rozsyłka z pliku', files: ['measure.js', 'chart.js', 'doreczenia.js', 'send.js', 'plik-csv.js', 'plik-xlsx.js', 'plik-tabela.js', 'plik.js'],
     entry: 'startFile', tools: '<span id="na-zywo" class="live" role="status"></span>', body: waiting('Oczekiwanie na widok rozsyłki z pliku'),
+  },
+  rozmowa: {
+    title: 'Rozmowa z numerem', files: ['rozmowa.js'], entry: 'startConversation',
+    tools: `<span id="na-zywo" class="live" role="status"></span>${REFRESH}`, body: waiting('Oczekiwanie na rozmowę z bramki'),
   },
 };
 

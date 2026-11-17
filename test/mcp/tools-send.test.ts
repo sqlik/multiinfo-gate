@@ -77,7 +77,7 @@ describe('narzędzia wysyłki przez POST /mcp', () => {
     setup(['send_group', 'read_inbound']);
     const names = (await (await mcpSession(app, seed.secret)).tools()).map((t) => t.name);
     // Bez zakresu read_sent lista nie zawiera list_packages, a cancel_package obejmuje także zakres send_group.
-    expect(names).toEqual(['connection_status', 'prepare_group_sms', 'send_prepared', 'cancel_package', 'list_inbound']);
+    expect(names).toEqual(['connection_status', 'prepare_group_sms', 'send_prepared', 'cancel_package', 'list_inbound', 'conversation']);
   });
 
   it('adnotacje: przygotowania i odczyty readOnlyHint, wysyłka i anulowanie destructiveHint, wysyłka tylko dla widoku', async () => {
@@ -87,9 +87,10 @@ describe('narzędzia wysyłki przez POST /mcp', () => {
     expect([...byName.keys()]).toEqual([
       'connection_status', 'prepare_sms', 'prepare_group_sms', 'send_prepared', 'cancel_message', 'cancel_package', 'open_file_send', 'upload_file_rows',
       'file_summary', 'prepare_file_sms', 'send_file_sms', 'file_send_status', 'list_messages', 'list_packages',
-      'delivery_trace', 'package_status', 'package_report', 'list_campaigns', 'campaign_results', 'list_inbound', 'prepare_replies', 'send_reply',
+      'delivery_trace', 'package_status', 'package_report', 'list_campaigns', 'campaign_results', 'list_inbound', 'conversation', 'prepare_replies',
+      'prepare_conversation_reply', 'send_reply',
     ]);
-    for (const name of ['prepare_sms', 'prepare_group_sms', 'prepare_replies', 'list_messages', 'delivery_trace', 'package_status', 'package_report', 'file_send_status', 'list_campaigns', 'campaign_results', 'list_inbound']) {
+    for (const name of ['prepare_sms', 'prepare_group_sms', 'prepare_replies', 'prepare_conversation_reply', 'conversation', 'list_messages', 'delivery_trace', 'package_status', 'package_report', 'file_send_status', 'list_campaigns', 'campaign_results', 'list_inbound']) {
       expect(byName.get(name)!.annotations.readOnlyHint, name).toBe(true);
     }
     for (const name of ['send_prepared', 'send_reply', 'send_file_sms', 'cancel_message', 'cancel_package']) expect(byName.get(name)!.annotations.destructiveHint, name).toBe(true);

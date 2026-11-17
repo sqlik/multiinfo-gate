@@ -46,7 +46,11 @@ export function renderStatus(data, env = {}) {
   const file = data.file
     ? section('Rozsyłka z pliku', note(`Plik CSV, TXT albo XLSX do ${num(data.file.rows)} wierszy danych i ${data.file.megabytes} MB wybiera pracownik w widoku bramki. `
       + 'Wartości z pliku widzi wyłącznie pracownik, a agent otrzymuje nazwy kolumn i liczby.')) : '';
-  return connection + scopes + services + schedule + file + limits;
+  const conversation = data.conversation
+    ? section('Rozmowa z numerem', note(`Widok rozmowy pokazuje SMS-y klienta i firmy z ostatnich ${data.conversation.days} dni, najwyżej `
+      + `${data.conversation.max} pozycji naraz. Przez 15 minut od otwarcia widok samoczynnie dopisuje nowe SMS-y.`
+      + (data.conversation.reply ? ' Odpowiedź przygotowuje agent, a wysyła ją człowiek przyciskiem w widoku.' : ''))) : '';
+  return connection + scopes + services + schedule + file + conversation + limits;
 }
 
 /** Uruchomienie widoku w dokumencie: most, rysowanie wyniku i przycisk „Odśwież”. */

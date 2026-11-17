@@ -146,4 +146,14 @@ export const VIEW_STYLE = [
   '.it-text{margin-top:4px;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.it[open] .it-text{white-space:normal;overflow-wrap:anywhere}',
   '.it-body{padding:4px 16px 16px;background:var(--ground)}.it-meta{margin:0 0 12px;font-size:12.5px;color:var(--muted)}',
   '.it-body textarea.inp{background:var(--surface)}',
+  // Rozmowa z numerem: SMS-y klienta po lewej, SMS-y firmy po prawej, dzień nad pierwszym SMS-em dnia.
+  '.chat-head{display:flex;justify-content:space-between;gap:12px;margin:12px 0 8px;font-size:12.5px;color:var(--muted)}.sec h3+.chat-head,.lead+.chat-head{margin-top:0}',
+  '.chat{display:flex;flex-direction:column;gap:8px}',
+  '.day{align-self:center;margin-top:8px;font-size:12px;color:var(--faint)}.day:first-child{margin-top:0}',
+  '.bub{max-width:80%;padding:8px 12px;border:1px solid var(--rule);border-radius:var(--r);overflow-wrap:anywhere}',
+  '.bub.in{align-self:flex-start;background:var(--surface)}.bub.out{align-self:flex-end;background:var(--ground)}',
+  '.bub.new{border-color:var(--signal);box-shadow:inset 0 0 0 1px var(--signal)}',
+  '.bub-text{font-size:14px;white-space:pre-wrap}',
+  '.bub-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin-top:4px;font-size:12px;color:var(--faint)}.bub.out .bub-meta{justify-content:flex-end}',
+  '.bub-meta .badge{font-size:12px;padding:1px 8px}',
 ].join('\n');
