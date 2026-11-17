@@ -725,7 +725,8 @@ Wartości ze skoroszytu widok formatuje według formatu komórki, tak jak wyświ
 postać „30.11.2026”, a kwota w formacie walutowym postać „1 234,50 zł”. Numer telefonu zapisany w Excelu
 jako liczba trafia do bramki bez części dziesiętnej i bez zapisu wykładniczego. Odstęp tysięcy w kwocie
 jest zwykłą spacją, ponieważ spacja nierozdzielająca z Excela nie należy do alfabetu GSM i wymusiłaby
-kodowanie Unicode. Gotowe wiadomości w podglądzie pokazują wynik formatowania jeszcze przed wysyłką.
+kodowanie Unicode. Tę samą zamianę bramka wykonuje dla plików CSV zapisanych w polskim Excelu.
+Gotowe wiadomości w podglądzie pokazują wynik formatowania jeszcze przed wysyłką.
 
 ### 9.3. Pola w treści
 

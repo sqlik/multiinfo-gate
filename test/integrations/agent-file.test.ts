@@ -233,6 +233,14 @@ describe('prepareFileSms', () => {
     expect(fileSendStatus(deps, ctx(), outcome.id)).toMatchObject({ delivered: 1, failed: 1 });
   });
 
+  it('separator tysięcy U+00A0 i U+202F z CSV polskiego Excela: wartość ze zwykłą spacją, kodowanie GSM', () => {
+    upload([[phone(1), 'Serwis Nowak', '1\u00a0234,50', '30.11.2026'], [phone(2), 'Flota Zachód', '12\u202f500,00', '30.11.2026'], [phone(3), 'Serwis', '99,00', '30.11.2026']]);
+    const { preview, meta } = prepare({ text: 'Serwis przypomina o platnosci {Kwota} PLN do {Termin}.' });
+    expect(preview.encodings).toEqual({ gsm: 3, ucs2: 0 });
+    expect(preview.packages).toBe(1);
+    expect(JSON.stringify(meta)).toContain('platnosci 1 234,50 PLN');
+  });
+
   it('6000 wierszy GSM i 1200 z ł: rozsyłki 5000 GSM, 1000 GSM, 1200 Unicode w kolejności pliku', () => {
     setup({ throttle: { recipients: 50_000 } });
     const rows = [

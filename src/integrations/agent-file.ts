@@ -136,7 +136,9 @@ function compile(template: string, columns: readonly string[]): { render: (cells
     let text = literals[0]!;
     let emptyField = false;
     fields.forEach((column, i) => {
-      const value = (cells[column] ?? '').trim();
+      // Polski Excel zapisuje separator tysięcy jako spację nierozdzielającą także w CSV. Zwykła spacja zostawia
+      // wiersz w kodowaniu GSM (P11), a w SMS-ie obie wyglądają tak samo.
+      const value = (cells[column] ?? '').replace(/[\u00a0\u202f]/g, ' ').trim();
       if (value === '') emptyField = true;
       text += value + literals[i + 1]!;
     });
