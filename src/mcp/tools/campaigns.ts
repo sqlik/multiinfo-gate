@@ -45,8 +45,22 @@ function resultsText(d: CampaignResultsData): string {
     if (d.opensByDay.length > 0) lines.push('Otwarcia w kolejnych dniach:', ...d.opensByDay.map((o) => `- ${o.day}: ${o.opens}`));
     if (d.unopened) lines.push(`Odbiorcy bez otwarcia: ${d.unopened.total}.`);
   }
-  if (d.targets.length > 0) lines.push('Kliknięcia według celu linku:', ...d.targets.map((t) => `- ${t.target}: ${t.clicks}`));
+  if (d.hiddenItems) {
+    lines.push('Kampania obejmuje wysyłkę z pliku, dlatego numery odbiorców i adresy linków widzi wyłącznie pracownik w widoku bramki.');
+  } else if (d.targets.length > 0) lines.push('Kliknięcia według celu linku:', ...d.targets.map((t) => `- ${t.target}: ${t.clicks}`));
   return lines.join('\n');
+}
+
+/**
+ * Wynik dla agenta i `_meta` dla widoku. Kampania z wysyłką z pliku oddaje odbiorców bez otwarcia i cele linków
+ * wyłącznie widokowi, ponieważ pochodzą z pliku pracownika.
+ */
+function split(d: CampaignResultsData): { structured: Record<string, unknown>; meta?: Record<string, unknown> } {
+  if (!d.hiddenItems) return { structured: asRecord(d) };
+  return {
+    structured: asRecord({ ...d, targets: [], unopened: d.unopened && { ...d.unopened, items: [] } }),
+    meta: { targets: d.targets, unopened: d.unopened?.items ?? [] },
+  };
 }
 
 const resultsInput = z.object({
@@ -68,7 +82,8 @@ export const campaignResultsTool: ToolDef = {
     const q = raw as z.infer<typeof resultsInput>;
     const conn = connOf(ctx);
     const data = campaignResults(ctx.deps, conn, q.name, { offset: q.offset ?? 0, limit: q.limit ?? 25 });
-    if (q.csv === undefined) return { text: resultsText(data), structured: asRecord(data) };
+    const { structured, meta } = split(data);
+    if (q.csv === undefined) return { text: resultsText(data), structured, ...(meta ? { meta } : {}) };
     if (data.detailsPurged) {
       throw new AgentError('campaign_purged', 'Szczegóły kampanii zostały usunięte po okresie przechowywania, dlatego listy odbiorców nie można odtworzyć.');
     }
@@ -77,7 +92,7 @@ export const campaignResultsTool: ToolDef = {
     const what = q.csv === 'opened' ? 'odbiorców z otwarciem' : 'odbiorców bez otwarcia';
     return {
       text: `${resultsText(data)}\nLink do pliku CSV ${what}, ważny do ${warsawShort(download.expiresAt)} czasu polskiego:\n${download.url}\n${DOWNLOAD_WARNING}`,
-      structured: { ...data, download: { file: q.csv, ...download } },
+      structured: { ...structured, download: { file: q.csv, ...download } }, ...(meta ? { meta } : {}),
     };
   },
 };

@@ -204,6 +204,11 @@ export class PackagesRepo {
     return rows.map(toRow);
   }
 
+  /** Czy kampania obejmuje rozsyłkę wysyłki z pliku, której numery i adresy linków pochodzą z pliku pracownika. */
+  campaignHasFileSend(campaignId: number): boolean {
+    return this.db.prepare('SELECT 1 FROM packages WHERE campaign_id = ? AND file_send_id IS NOT NULL LIMIT 1').get(campaignId) !== undefined;
+  }
+
   /** Integracja agenta, którego połączenie zleciło rozsyłkę; `null` dla rozsyłki spoza agenta albo po usunięciu połączenia. */
   agentIntegrationOf(id: string): number | null {
     const row = this.db

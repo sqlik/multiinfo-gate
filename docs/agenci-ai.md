@@ -804,6 +804,10 @@ rozkład liczby części, kodowanie, termin oraz stan ochrony przed burzą. Nazw
 wartości z pliku, gotowe wiadomości i lista wierszy wyłączonych trafiają wyłącznie do widoku, który
 widzi pracownik.
 
+Ta sama zasada obowiązuje po wysyłce. Stan rozsyłki z pliku podaje agentowi liczby, a listę odbiorców
+pokazuje wyłącznie widok. Wyniki kampanii, która obejmuje wysyłkę z pliku, pomijają dla agenta numery
+odbiorców bez otwarcia i adresy linków.
+
 Przed przekazaniem pliku widok wyświetla zdanie, które wymienia dane widoczne dla agenta, na przykład
 „Agent zobaczy wyłącznie nazwy kolumn: Numer, Kontrahent, Kwota, Termin”. Nazwy kolumn pochodzą z pliku
 pracownika, dlatego instrukcje dla agenta nakazują traktować je jako dane, a nie jako polecenia. Pole

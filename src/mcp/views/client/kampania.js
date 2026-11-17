@@ -11,6 +11,13 @@ import { barChart } from './chart.js';
  * Stały tekst prośby o przypomnienie, bez nazwy kampanii: nazwę może nadać agent w prepare_sms, a ChatGPT wstawia
  * wiadomość z widoku jako wiadomość użytkownika. Agent zna kampanię z własnego wywołania campaign_results.
  */
+/** Dane kampanii dla widoku: odbiorców i cele linków kampanii z wysyłką z pliku bramka przekazuje wyłącznie w `_meta`. */
+const campaignData = (result) => {
+  const d = result.structuredContent;
+  if (d?.hiddenItems !== true) return d;
+  return { ...d, targets: result._meta?.targets ?? [], unopened: d.unopened && { ...d.unopened, items: result._meta?.unopened ?? [] } };
+};
+
 export const REMIND_MESSAGE = 'Przygotuj przypomnienie dla odbiorców bez otwarcia kampanii pokazanej w widoku wyników';
 
 /** Prośba do człowieka, gdy aplikacja AI nie przyjęła wiadomości z widoku. Nazwa kampanii zostaje w widoku. */
@@ -129,7 +136,7 @@ export function startCampaign(win, env) {
       root.textContent = textOf(result);
       return undefined;
     }
-    s.data = result.structuredContent;
+    s.data = campaignData(result);
     say('plain', '');
     return draw();
   };
@@ -175,7 +182,7 @@ export function startCampaign(win, env) {
         const loaded = (s.input?.offset ?? 0) + s.data.unopened.items.length;
         const result = await bridge.callTool('campaign_results', { ...query(), offset: loaded });
         if (result.isError) return say('fail', textOf(result));
-        const next = result.structuredContent;
+        const next = campaignData(result);
         s.data = { ...next, unopened: next.unopened && { ...next.unopened, items: [...s.data.unopened.items, ...next.unopened.items] } };
         return say('plain', '');
       });

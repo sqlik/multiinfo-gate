@@ -377,3 +377,50 @@ describe('postęp, anulowanie i raport wysyłki z pliku', () => {
       + 'a zaplanowaną wysyłkę anuluje narzędzie cancel_package. Każde z nich przyjmuje identyfikator wysyłki z pliku, który zaczyna się od fsd_.');
   });
 });
+
+describe('odczyty rozsyłek wysyłki z pliku', () => {
+  const FILE_COLUMNS = ['Numer', 'Kontrahent', 'Kwota', 'Faktura', 'Kod'];
+  const FILE_ROWS = [
+    { line: 2, cells: ['48601000011', 'Hurtownia Kowalski', '1 234,50 zł', 'https://serwis.pl/f/FV-2026-0011', 'KLI-0011'] },
+    { line: 3, cells: ['48601000012', 'Serwis Nowak', '99,00 zł', 'https://serwis.pl/f/FV-2026-0012', 'KLI-0012'] },
+  ];
+  const SECRET = ['48601000011', '48601000012', 'KLI-0011', 'KLI-0012', 'FV-2026-0011', 'FV-2026-0012', 'Hurtownia', '1 234,50'];
+  /** To, co widzi agent: content i structuredContent, bez _meta. */
+  const forAgent = (r: { content: unknown; structuredContent?: unknown }): string => JSON.stringify({ content: r.content, structuredContent: r.structuredContent });
+
+  async function sentFromFile() {
+    seed = seedAgent(db, key, { scopes: ['send', 'read_sent', 'campaigns'] });
+    const deps = agentApiDeps(db, key, { now: () => NOW, apiUrl: BASE });
+    const domainId = deps.linkDomains.create({ domain: 'l.serwis.pl', displayName: 'Serwis', homeUrl: null, bareLinks: false }, NOW);
+    deps.apiKeys.setLinkSettings(seed.keyId, { mode: 'always', domainIds: [domainId], defaultDomainId: domainId, targets: ['serwis.pl'], validityDays: 30, utm: false });
+    app = buildApiServer(deps);
+    const mcp = await mcpSession(app, seed.secret, { apps: true });
+    await mcp.call('upload_file_rows', { name: NAME, columns: FILE_COLUMNS, phoneColumn: 0, totalRows: 2, offset: 0, rows: FILE_ROWS, done: true });
+    const prepared = await mcp.call('prepare_file_sms', { text: 'Przypominamy o fakturze dla {Kontrahent} na kwote {Kwota}: {Faktura}', clientIdColumn: 'Kod' });
+    const sent = await mcp.call('send_file_sms', { draftId: prepared.structuredContent!.draftId, confirm: prepared._meta!.confirm });
+    expect(sent.isError).toBeUndefined();
+    return mcp;
+  }
+
+  it('package_status rozsyłki z pliku: numery i identyfikatory klientów tylko w _meta dla widoku', async () => {
+    const mcp = await sentFromFile();
+    const packageId = ((await mcp.call('list_packages', {})).structuredContent!.items as Array<{ id: string }>)[0]!.id;
+    const status = await mcp.call('package_status', { packageId });
+    expect(status.isError).toBeUndefined();
+    for (const value of SECRET) expect(forAgent(status), value).not.toContain(value);
+    expect(status.structuredContent).toMatchObject({ items: [], hiddenItems: true });
+    expect(textOf(status)).toContain('Rozsyłka pochodzi z wysyłki z pliku, dlatego numery odbiorców widzi wyłącznie pracownik w widoku bramki.');
+    expect(status._meta).toMatchObject({ items: [{ to: '48601000011', clientId: 'KLI-0011' }, { to: '48601000012', clientId: 'KLI-0012' }] });
+  });
+
+  it('campaign_results kampanii z wysyłki z pliku: odbiorcy bez otwarcia i cele linków tylko w _meta dla widoku', async () => {
+    const mcp = await sentFromFile();
+    const name = ((await mcp.call('list_campaigns', {})).structuredContent!.items as Array<{ name: string }>)[0]!.name;
+    const results = await mcp.call('campaign_results', { name });
+    expect(results.isError).toBeUndefined();
+    for (const value of SECRET) expect(forAgent(results), value).not.toContain(value);
+    expect(results.structuredContent).toMatchObject({ unopened: { total: 2, items: [] }, targets: [], hiddenItems: true });
+    expect(textOf(results)).toContain('Kampania obejmuje wysyłkę z pliku, dlatego numery odbiorców i adresy linków widzi wyłącznie pracownik w widoku bramki.');
+    expect(results._meta).toMatchObject({ unopened: [{ to: '48601000011' }, { to: '48601000012' }], targets: [expect.objectContaining({ kind: 'individual' })] });
+  });
+});

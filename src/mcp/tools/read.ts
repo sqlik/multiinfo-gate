@@ -100,7 +100,10 @@ function packageText(p: PackageStatusData): string {
     lines.push(`Stany według raportu: ${counts(p.report.byStatus)}.`);
     if (p.report.reasons.length > 0) lines.push('Przyczyny niedoręczeń:', ...p.report.reasons.map((r) => `- ${r.description}: ${r.count}`));
   }
-  if (p.hasMore) lines.push('Kolejnych odbiorców pokazuje następna strona z większą wartością offset, a pełną listę plik z narzędzia package_report.');
+  if (p.hiddenItems) {
+    lines.push('Rozsyłka pochodzi z wysyłki z pliku, dlatego numery odbiorców widzi wyłącznie pracownik w widoku bramki. '
+      + 'Pełną listę zawiera plik z narzędzia package_report.');
+  } else if (p.hasMore) lines.push('Kolejnych odbiorców pokazuje następna strona z większą wartością offset, a pełną listę plik z narzędzia package_report.');
   return lines.join('\n');
 }
 
@@ -118,6 +121,8 @@ export const packageStatusTool: ToolDef = {
   run(ctx, raw) {
     const q = raw as z.infer<typeof packageInput>;
     const data = packageStatus(ctx.deps, connOf(ctx), q.packageId, { offset: q.offset ?? 0, limit: q.limit ?? 25 });
+    // Wartości z pliku pracownika nie trafiają do modelu: odbiorców otrzymuje wyłącznie widok przez `_meta`.
+    if (data.hiddenItems) return { text: packageText(data), structured: asRecord({ ...data, items: [] }), meta: { items: data.items } };
     return { text: packageText(data), structured: asRecord(data) };
   },
 };

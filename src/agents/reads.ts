@@ -32,6 +32,8 @@ export interface PackageStatusData {
   schedule: { startAt: Stamp; handoverAt: Stamp | null } | null;
   /** Agent może anulować rozsyłkę: własna, czekająca na przekazanie, przy zakresie wysyłki. */
   cancellable: boolean;
+  /** Rozsyłka wysyłki z pliku: numery i identyfikatory klientów pochodzą z pliku, dlatego widzi je tylko człowiek. */
+  hiddenItems: boolean;
 }
 
 export interface PackageListItem {
@@ -42,6 +44,8 @@ export interface CampaignResultsData {
   name: string; sent: number; delivered: number; opens: number; clicks: number; bots: number; first: Stamp; last: Stamp; detailsPurged: boolean;
   opensByDay: Array<{ day: string; opens: number }>; clicksByHour: Array<{ hour: string; clicks: number }>; targets: CampaignTarget[];
   unopened: { total: number; items: Array<{ to: string; clientId: string | null }>; hasMore: boolean } | null;
+  /** Kampania obejmuje wysyłkę z pliku: numery, identyfikatory klientów i adresy linków widzi tylko człowiek. */
+  hiddenItems: boolean;
 }
 
 export type AnswersTo = { messageId: string } | { packageId: string } | null;
@@ -284,6 +288,7 @@ export function packageStatus(deps: ReadDeps, ctx: ConnectionContext, packageId:
       startAt: stamp(p.startAt), handoverAt: p.status === 'scheduled' ? stamp(handoverAt(p.startAt, p.createdAt)) : null,
     },
     cancellable: (p.status === 'scheduled' || p.status === 'overdue') && (ctx.scopes.has('send') || ctx.scopes.has('send_group')) && ownPackage(deps, ctx, p),
+    hiddenItems: p.fileSendId !== null,
   };
 }
 
@@ -347,6 +352,7 @@ export function campaignResults(deps: ReadDeps, ctx: ConnectionContext, name: st
     unopened: unopened === null ? null : {
       total: unopened.total, items: unopened.items.map((r) => ({ to: r.dest, clientId: r.clientId })), hasMore: unopened.total > offset + limit,
     },
+    hiddenItems: deps.packages.campaignHasFileSend(c.id),
   };
 }
 

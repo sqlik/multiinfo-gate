@@ -8,6 +8,11 @@ import {
 import { barChart, stackBar } from './chart.js';
 import { STATE_LABELS } from './doreczenia.js';
 
+/** Dane rozsyłki dla widoku: odbiorców rozsyłki z pliku bramka przekazuje wyłącznie w `_meta`, poza wiedzą agenta. */
+const packageData = (result) => (result.structuredContent?.hiddenItems === true
+  ? { ...result.structuredContent, items: result._meta?.items ?? [] }
+  : result.structuredContent);
+
 export const PACKAGE_REFRESH_MS = 30_000;
 export const PACKAGE_REFRESH_MAX_MS = 1_800_000;
 /** Kolejność odcinków paska po raporcie i ich kolory. */
@@ -66,7 +71,7 @@ export function watchPackage(bridge, win, args, handlers, now = () => Date.now()
       handlers.onEnd('error', textOf(result), '');
       return;
     }
-    handlers.onData(result.structuredContent);
+    handlers.onData(packageData(result));
     if (packageSettled(result.structuredContent)) handlers.onEnd('settled');
     else if (now() - started >= PACKAGE_REFRESH_MAX_MS) handlers.onEnd('timeout');
     else win.setTimeout(tick, PACKAGE_REFRESH_MS);
@@ -201,7 +206,7 @@ export function startPackage(win, env) {
       root.textContent = textOf(result);
       return undefined;
     }
-    s.data = result.structuredContent;
+    s.data = packageData(result);
     say('plain', '');
     draw();
     // Ręczne odświeżenie mogło przynieść raport przed kolejnym odczytem odświeżania.
@@ -242,7 +247,7 @@ export function startPackage(win, env) {
       run(async () => {
         const result = await bridge.callTool('package_status', { packageId: s.data.id, offset: s.data.items.length, limit: s.input?.limit ?? 25 });
         if (result.isError) return say('fail', textOf(result));
-        const next = result.structuredContent;
+        const next = packageData(result);
         s.data = { ...next, items: [...s.data.items, ...next.items] };
         return say('plain', '');
       });

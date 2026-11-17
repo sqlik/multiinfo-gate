@@ -5,7 +5,7 @@ import {
 } from '../../src/mcp/views/client/bridge.js';
 import { barChart } from '../../src/mcp/views/client/chart.js';
 import { renderStatus } from '../../src/mcp/views/client/co-moge.js';
-import { REMIND_MESSAGE, remindFallback, renderCampaign } from '../../src/mcp/views/client/kampania.js';
+import { REMIND_MESSAGE, remindFallback, renderCampaign, startCampaign } from '../../src/mcp/views/client/kampania.js';
 import { refreshQuery, renderReplies, startReplies } from '../../src/mcp/views/client/odpowiedzi.js';
 import {
   ASK_REPLY, CONVERSATION_REFRESH_MAX_MS, CONVERSATION_REFRESH_MS, renderConversation, REPLY_FIX_MESSAGE, startConversation, watchConversation,
@@ -111,6 +111,18 @@ describe('widok wyników kampanii', () => {
     expect(html).toContain('<title>2026-11-05 09:00, kliknięcia: 38</title>');
     expect(html).toContain('<title>2026-11-05 10:00, kliknięcia: 41</title>');
     expect(html).toContain('<title>2026-11-05 11:00, kliknięcia: 0</title>');
+  });
+
+  it('startCampaign: kampania z wysyłki z pliku pokazuje odbiorców bez otwarcia i cele linków z _meta', async () => {
+    const w = viewWindow();
+    startCampaign(w.win, { version: '1.13.0' });
+    await w.ready();
+    const hidden = { ...CAMPAIGN, targets: [], unopened: { ...CAMPAIGN.unopened, items: [] }, hiddenItems: true };
+    w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: {
+      content: [], structuredContent: hidden, _meta: { unopened: CAMPAIGN.unopened.items, targets: CAMPAIGN.targets },
+    } });
+    expect(w.nodes.tresc.innerHTML).toContain('48601000051');
+    expect(w.nodes.tresc.innerHTML).toContain('https://serwis.pl/przeglad');
   });
 
   it('renderCampaign po usunięciu szczegółów: tylko kliknięcia i zdanie o okresie przechowywania', () => {
@@ -269,6 +281,22 @@ describe('widok postępu rozsyłki', () => {
     expect(w.nodes.tresc.innerHTML).toContain('<td class="nw">48601000061</td><td>K-7</td>');
     expect(w.nodes.tresc.innerHTML).toContain('<td class="nw">48601000062</td><td>K-8</td>');
     expect(w.nodes.tresc.innerHTML).not.toContain('data-act="more"');
+  });
+
+  it('startPackage: rozsyłka z pliku pokazuje odbiorców z _meta, także w kolejnej porcji', async () => {
+    const w = viewWindow();
+    startPackage(w.win, { version: '1.13.0' });
+    await w.ready();
+    const hidden = { ...PACKAGE, items: [], hiddenItems: true };
+    w.deliver({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [], structuredContent: hidden, _meta: { items: PACKAGE.items } } });
+    expect(w.nodes.tresc.innerHTML).toContain('<td class="nw">48601000061</td><td>K-7</td>');
+    w.click({ act: 'more' });
+    await tick();
+    expect(w.lastCall().params).toEqual({ name: 'package_status', arguments: { packageId: 'pkg_7x2', offset: 1, limit: 25 } });
+    const nextItems = [{ ...PACKAGE.items[0], to: '48601000062', clientId: 'K-8' }];
+    w.deliver({ jsonrpc: '2.0', id: w.lastCall().id, result: { content: [], structuredContent: { ...hidden, hasMore: false }, _meta: { items: nextItems } } });
+    await tick();
+    expect(w.nodes.tresc.innerHTML).toContain('<td class="nw">48601000062</td><td>K-8</td>');
   });
 
   it('packageSettled: koniec odświeżania po raporcie albo po stanie ostatecznym bez raportu', () => {
